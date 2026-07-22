@@ -32,7 +32,7 @@ using MicroWorld::ENetResult;
 using MicroWorld::EObjectResult;
 using MicroWorld::ERuntimeResult;
 using MicroWorld::FActorComponentRegistry;
-using MicroWorld::FActorComponentRegistryBase;
+using MicroWorld::FActorComponentRegistryReference;
 using MicroWorld::FDelegateHandle;
 using MicroWorld::FGarbageCollectionBudget;
 using MicroWorld::FHostLoopback;
@@ -107,8 +107,11 @@ private:
 class FNetSpawnedActor final : public AActor
 {
 public:
-	/** Binds the component lease and the begin counter this actor increments when it starts. */
-	FNetSpawnedActor(FActorComponentRegistryBase Components, int& InBeginCount) noexcept : AActor(std::move(Components)), BeginCount(InBeginCount) {}
+	/** Binds the component reference and the begin counter this actor increments when it starts. */
+	FNetSpawnedActor(FActorComponentRegistryReference Components, int& InBeginCount) noexcept
+		: AActor(std::move(Components)), BeginCount(InBeginCount)
+	{
+	}
 
 protected:
 	/** Records that the server world began this spawned actor exactly at the barrier. */
@@ -125,7 +128,7 @@ struct FServerSpawnContext
 	/** The server engine host whose world receives the spawned actor. */
 	FHost& Host;
 
-	/** The caller-owned component lease the spawned actor holds for its lifetime. */
+	/** The caller-owned component reference the spawned actor holds for its lifetime. */
 	FActorComponentRegistry<0>& SpawnedComponents;
 
 	/** Counts how many application messages the server handler observed. */
@@ -206,8 +209,8 @@ MW_TEST_CASE(EngineNetHostClientMessageSpawnsActorOnServerWorld)
 		[&Context](const FPeerId, const std::uint8_t, TSpan<const std::uint8_t>) noexcept
 		{
 			++Context.HandlerInvocationCount;
-			const TObjectCreationResult<FNetSpawnedActor> Creation =
-				Context.Host.CreateObject<FNetSpawnedActor>(NetSpawnedActorTypeId, Context.SpawnedComponents.MakeView(), Context.SpawnedBeginCount);
+			const TObjectCreationResult<FNetSpawnedActor> Creation = Context.Host.CreateObject<FNetSpawnedActor>(
+				NetSpawnedActorTypeId, Context.SpawnedComponents.MakeReference(), Context.SpawnedBeginCount);
 			if (Creation.Result == EObjectResult::Success)
 			{
 				(void)Context.Host.GetWorld().SpawnActor(TObjectPtr<AActor>{Creation.Object});

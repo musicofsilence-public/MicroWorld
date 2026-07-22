@@ -42,17 +42,17 @@ namespace MicroWorld
 template<
 	std::size_t MaxClasses,
 	std::size_t MaxObjects,
-	std::size_t SlotBytes,
+	std::size_t SlotSizeBytes,
 	std::size_t SlotAlign,
 	std::size_t MaxRoots,
 	std::size_t MaxActors,
 	std::size_t MaxTimers,
-	std::size_t TimerCallbackBytes>
+	std::size_t InlineTimerCallbackBytes>
 class TEngineHost final
 {
 public:
 	/** Alias for the timer manager this host owns, so callers name one concrete type. */
-	using FTimerManager = TTimerManager<MaxTimers, TimerCallbackBytes>;
+	using FTimerManager = TTimerManager<MaxTimers, InlineTimerCallbackBytes>;
 
 	/**
 	 * Builds every subsystem over this host's storage and registers the three
@@ -64,7 +64,7 @@ public:
 	 */
 	explicit TEngineHost(
 		const FGarbageCollectionBudget CollectionBudget, const std::uint32_t ReclamationBudget = static_cast<std::uint32_t>(MaxObjects)) noexcept
-		: GcBudget(CollectionBudget)
+		: GarbageCollectionBudget(CollectionBudget)
 		, FrameReclamationBudget(ReclamationBudget)
 		, Store(MakeStoreStorage(), MakeClassRegistryView(Registry))
 		, Collector(Store, FGarbageCollectorStorage{Worklist.data(), static_cast<std::uint32_t>(MaxObjects)})
@@ -105,29 +105,29 @@ public:
 	const FClassDescriptor* FindClass(const FTypeId TypeId) const noexcept { return Registry.Find(TypeId); }
 
 	/**
-	 * Registers a user type by deriving its parent from T's engine base (AActor,
+	 * Registers a user type by deriving its parent from TManagedType's engine base (AActor,
 	 * UActorComponent, or UWorld) and building the descriptor with the shared managed
 	 * tracer, so callers register in one line instead of hand-building a descriptor.
 	 * Handles single-level derivation from an engine base; a deeper user hierarchy
 	 * must use the descriptor overload with an explicit FindClass parent.
 	 */
-	template<typename T>
+	template<typename TManagedType>
 	EObjectResult RegisterClass(const FTypeId TypeId, const char* const Name) noexcept
 	{
 		const FClassDescriptor* Parent = nullptr;
-		if constexpr (std::is_base_of<AActor, T>::value)
+		if constexpr (std::is_base_of<AActor, TManagedType>::value)
 		{
 			Parent = Registry.Find(AActorClassId);
 		}
-		else if constexpr (std::is_base_of<UActorComponent, T>::value)
+		else if constexpr (std::is_base_of<UActorComponent, TManagedType>::value)
 		{
 			Parent = Registry.Find(UActorComponentClassId);
 		}
-		else if constexpr (std::is_base_of<UWorld, T>::value)
+		else if constexpr (std::is_base_of<UWorld, TManagedType>::value)
 		{
 			Parent = Registry.Find(UWorldClassId);
 		}
-		const FClassDescriptor Candidate = MakeClassDescriptor<T>(TypeId, Name, Parent, &TraceManagedObjectReferences);
+		const FClassDescriptor Candidate = MakeClassDescriptor<TManagedType>(TypeId, Name, Parent, &TraceManagedObjectReferences);
 		return Registry.Register(Candidate);
 	}
 
@@ -136,15 +136,15 @@ public:
 	 * call, so callers create an instance by type id without repeating the lookup.
 	 * Returns an UnknownClass result with a null object if the id was never registered.
 	 */
-	template<typename T, typename... TArguments>
-	TObjectCreationResult<T> CreateObject(const FTypeId TypeId, TArguments&&... Arguments) noexcept
+	template<typename TManagedType, typename... TArguments>
+	TObjectCreationResult<TManagedType> CreateObject(const FTypeId TypeId, TArguments&&... Arguments) noexcept
 	{
 		const FClassDescriptor* const Descriptor = FindClass(TypeId);
 		if (Descriptor == nullptr)
 		{
-			return TObjectCreationResult<T>{EObjectResult::UnknownClass, {}};
+			return TObjectCreationResult<TManagedType>{EObjectResult::UnknownClass, {}};
 		}
-		return Store.NewObject<T>(*Descriptor, std::forward<TArguments>(Arguments)...);
+		return Store.NewObject<TManagedType>(*Descriptor, std::forward<TArguments>(Arguments)...);
 	}
 
 	/**
@@ -165,7 +165,7 @@ public:
 			return {};
 		}
 
-		const TObjectCreationResult<UWorld> Creation = Store.NewObject<UWorld>(*Descriptor, ActorRegistry.MakeView());
+		const TObjectCreationResult<UWorld> Creation = Store.NewObject<UWorld>(*Descriptor, ActorRegistry.MakeReference());
 		if (Creation.Result != EObjectResult::Success)
 		{
 			return {};
@@ -182,10 +182,10 @@ public:
 	}
 
 	/** Forwards to FObjectStore::NewObject so callers construct managed objects in this store. */
-	template<typename T, typename... TArguments>
-	TObjectCreationResult<T> NewObject(TArguments&&... Arguments) noexcept
+	template<typename TManagedType, typename... TArguments>
+	TObjectCreationResult<TManagedType> NewObject(TArguments&&... Arguments) noexcept
 	{
-		return Store.NewObject<T>(std::forward<TArguments>(Arguments)...);
+		return Store.NewObject<TManagedType>(std::forward<TArguments>(Arguments)...);
 	}
 
 	/** Returns the rooted world; only valid after CreateWorld has succeeded. */
@@ -261,7 +261,7 @@ public:
 		{
 			(void)Collector.RequestCollection();
 		}
-		(void)Collector.Advance(GcBudget);
+		(void)Collector.Advance(GarbageCollectionBudget);
 		// 7. Flush queued outbound network traffic and heartbeats after the frame settles.
 		if (Network != nullptr)
 		{
@@ -286,7 +286,7 @@ public:
 private:
 	static_assert(MaxObjects > 0, "TEngineHost needs at least one object slot for the world.");
 	static_assert(MaxRoots > 0, "TEngineHost roots its world, so it needs at least one root entry.");
-	static_assert(SlotBytes % SlotAlign == 0, "Slot stride must preserve slot alignment.");
+	static_assert(SlotSizeBytes % SlotAlign == 0, "Slot stride must preserve slot alignment.");
 
 	/** Registers the three engine base descriptors so base types are constructible. */
 	void RegisterBaseClasses() noexcept
@@ -304,7 +304,7 @@ private:
 			SlotStorage.size(),
 			SlotMetadata.data(),
 			static_cast<std::uint32_t>(MaxObjects),
-			SlotBytes,
+			SlotSizeBytes,
 			SlotAlign,
 			RootStorage.data(),
 			static_cast<std::uint32_t>(MaxRoots),
@@ -312,7 +312,7 @@ private:
 	}
 
 	/** Bounds the per-tick garbage-collection slice supplied at construction. */
-	FGarbageCollectionBudget GcBudget;
+	FGarbageCollectionBudget GarbageCollectionBudget;
 
 	/** Bounds the per-tick store slots inspected by the destruction barrier. */
 	std::uint32_t FrameReclamationBudget;
@@ -327,7 +327,7 @@ private:
 	TClassRegistry<MaxClasses> Registry;
 
 	/** Provides the first byte of equal-size, non-moving object slots. */
-	alignas(SlotAlign) std::array<std::byte, SlotBytes * MaxObjects> SlotStorage{};
+	alignas(SlotAlign) std::array<std::byte, SlotSizeBytes * MaxObjects> SlotStorage{};
 
 	/** Provides one lifecycle record per object slot. */
 	std::array<FObjectSlotMetadata, MaxObjects> SlotMetadata{};
@@ -344,7 +344,7 @@ private:
 	/** Performs bounded incremental mark/sweep over the store. */
 	FGarbageCollector Collector;
 
-	/** Owns the fixed actor registry leased to the single world. */
+	/** Owns the fixed actor registry referenced by the single world. */
 	FWorldActorRegistry<MaxActors> ActorRegistry;
 
 	/** Owns the bounded timer set advanced first in every frame. */

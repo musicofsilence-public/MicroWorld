@@ -116,10 +116,10 @@ using FInlineEnvironment = TEngineEnvironment<512, 16, 8, 2>;
 
 /**
  * Proves a world, actor, and component built entirely from inline types (no
- * caller-composed registry leases) begin, tick, and end in the same
- * deterministic order as the lease-composed managed types.
+ * caller-composed registry references) begin, tick, and end in the same
+ * deterministic order as the reference-composed managed types.
  */
-MW_TEST_CASE(EngineInlineTypesComposeAndDispatchLikeLeaseComposedTypes)
+MW_TEST_CASE(EngineInlineTypesComposeAndDispatchLikeReferenceComposedTypes)
 {
 	FSequenceCounter Sequence{};
 	FActorEventState ActorEvents{};

@@ -14,7 +14,7 @@
 namespace MicroWorld
 {
 
-UWorld::UWorld(FWorldActorRegistryBase ActorStorage) noexcept : UObject(), Actors(std::move(ActorStorage)) {}
+UWorld::UWorld(FWorldActorRegistryReference ActorStorage) noexcept : UObject(), Actors(std::move(ActorStorage)) {}
 
 UWorld::~UWorld() noexcept = default;
 

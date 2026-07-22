@@ -16,17 +16,17 @@ template<std::size_t MaxActors>
 class FWorldActorRegistry;
 
 /**
- * Move-only lease over one caller-owned fixed component registry.
+ * Move-only reference over one caller-owned fixed component registry.
  *
- * Only FActorComponentRegistry can create a lease, and only AActor can inspect
+ * Only FActorComponentRegistry can create a reference, and only AActor can inspect
  * or mutate it. This keeps the owning array and count inaccessible to callers
  * after construction while AActor remains a non-template type.
  */
-class FActorComponentRegistryBase final
+class FActorComponentRegistryReference final
 {
 public:
-	/** Transfers the only usable lease and invalidates the source. */
-	FActorComponentRegistryBase(FActorComponentRegistryBase&& Other) noexcept
+	/** Transfers the only usable reference and invalidates the source. */
+	FActorComponentRegistryReference(FActorComponentRegistryReference&& Other) noexcept
 		: Components(Other.Components), Capacity(Other.Capacity), Count(Other.Count)
 	{
 		Other.Components = nullptr;
@@ -34,30 +34,30 @@ public:
 		Other.Count = nullptr;
 	}
 
-	/** Prevents two actors from sharing one mutable registry lease. */
-	FActorComponentRegistryBase(const FActorComponentRegistryBase&) = delete;
+	/** Prevents two actors from sharing one mutable registry reference. */
+	FActorComponentRegistryReference(const FActorComponentRegistryReference&) = delete;
 
 	/** Prevents rebinding an actor's registry after construction. */
-	FActorComponentRegistryBase& operator=(const FActorComponentRegistryBase&) = delete;
+	FActorComponentRegistryReference& operator=(const FActorComponentRegistryReference&) = delete;
 
 	/** Prevents rebinding an actor's registry after construction. */
-	FActorComponentRegistryBase& operator=(FActorComponentRegistryBase&&) = delete;
+	FActorComponentRegistryReference& operator=(FActorComponentRegistryReference&&) = delete;
 
 private:
 	friend class AActor;
 	template<std::size_t>
 	friend class FActorComponentRegistry;
 
-	/** Creates an invalid lease when registry storage has already been claimed. */
-	FActorComponentRegistryBase() noexcept = default;
+	/** Creates an invalid reference when registry storage has already been claimed. */
+	FActorComponentRegistryReference() noexcept = default;
 
-	/** Creates one validated lease from its owning fixed registry. */
-	FActorComponentRegistryBase(TObjectPtr<UActorComponent>* InComponents, const std::size_t InCapacity, std::size_t& InCount) noexcept
+	/** Creates one validated reference from its owning fixed registry. */
+	FActorComponentRegistryReference(TObjectPtr<UActorComponent>* InComponents, const std::size_t InCapacity, std::size_t& InCount) noexcept
 		: Components(InComponents), Capacity(InCapacity), Count(&InCount)
 	{
 	}
 
-	/** Reports whether this lease still identifies one fixed registry. */
+	/** Reports whether this reference still identifies one fixed registry. */
 	bool IsValid() const noexcept { return Count != nullptr && (Capacity == 0 || Components != nullptr) && *Count <= Capacity; }
 
 	/** Returns the maximum number of components accepted by this registry. */
@@ -87,17 +87,17 @@ private:
 };
 
 /**
- * Move-only lease over one caller-owned fixed actor registry.
+ * Move-only reference over one caller-owned fixed actor registry.
  *
- * Only FWorldActorRegistry can create a lease, and only UWorld can inspect or
+ * Only FWorldActorRegistry can create a reference, and only UWorld can inspect or
  * mutate it. This prevents forged views, shared mutable storage, and caller
  * mutation after lifecycle dispatch begins.
  */
-class FWorldActorRegistryBase final
+class FWorldActorRegistryReference final
 {
 public:
-	/** Transfers the only usable lease and invalidates the source. */
-	FWorldActorRegistryBase(FWorldActorRegistryBase&& Other) noexcept
+	/** Transfers the only usable reference and invalidates the source. */
+	FWorldActorRegistryReference(FWorldActorRegistryReference&& Other) noexcept
 		: Actors(Other.Actors)
 		, Capacity(Other.Capacity)
 		, Count(Other.Count)
@@ -115,25 +115,25 @@ public:
 		Other.PendingDestroyCount = nullptr;
 	}
 
-	/** Prevents two worlds from sharing one mutable registry lease. */
-	FWorldActorRegistryBase(const FWorldActorRegistryBase&) = delete;
+	/** Prevents two worlds from sharing one mutable registry reference. */
+	FWorldActorRegistryReference(const FWorldActorRegistryReference&) = delete;
 
 	/** Prevents rebinding a world's registry after construction. */
-	FWorldActorRegistryBase& operator=(const FWorldActorRegistryBase&) = delete;
+	FWorldActorRegistryReference& operator=(const FWorldActorRegistryReference&) = delete;
 
 	/** Prevents rebinding a world's registry after construction. */
-	FWorldActorRegistryBase& operator=(FWorldActorRegistryBase&&) = delete;
+	FWorldActorRegistryReference& operator=(FWorldActorRegistryReference&&) = delete;
 
 private:
 	friend class UWorld;
 	template<std::size_t>
 	friend class FWorldActorRegistry;
 
-	/** Creates an invalid lease when registry storage has already been claimed. */
-	FWorldActorRegistryBase() noexcept = default;
+	/** Creates an invalid reference when registry storage has already been claimed. */
+	FWorldActorRegistryReference() noexcept = default;
 
-	/** Creates one validated lease from its owning fixed registry and pending lists. */
-	FWorldActorRegistryBase(
+	/** Creates one validated reference from its owning fixed registry and pending lists. */
+	FWorldActorRegistryReference(
 		TObjectPtr<AActor>* InActors,
 		const std::size_t InCapacity,
 		std::size_t& InCount,
@@ -151,7 +151,7 @@ private:
 	{
 	}
 
-	/** Reports whether this lease still identifies one fixed registry and its pending lists. */
+	/** Reports whether this reference still identifies one fixed registry and its pending lists. */
 	bool IsValid() const noexcept
 	{
 		const bool bHandlesPresent = Count != nullptr && PendingSpawnCount != nullptr && PendingDestroyCount != nullptr;

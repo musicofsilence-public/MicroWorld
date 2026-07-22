@@ -16,7 +16,7 @@
 namespace MicroWorld
 {
 
-AActor::AActor(FActorComponentRegistryBase ComponentStorage, const FTickConfiguration TickConfiguration) noexcept
+AActor::AActor(FActorComponentRegistryReference ComponentStorage, const FTickConfiguration TickConfiguration) noexcept
 	: UObject(), FTickable(TickConfiguration), Components(std::move(ComponentStorage))
 {
 }

@@ -38,13 +38,13 @@ public:
 	static const FClassDescriptor& StaticClassDescriptor() noexcept;
 
 	/**
-	 * Binds this actor to the unique caller-owned component registry lease that
+	 * Binds this actor to the unique caller-owned component registry reference that
 	 * will hold its registered components.
 	 *
 	 * The object store assigns canonical ownership only after construction
 	 * publishes this UObject, so callers cannot supply a second store identity.
 	 */
-	explicit AActor(FActorComponentRegistryBase ComponentStorage, FTickConfiguration TickConfiguration = {}) noexcept;
+	explicit AActor(FActorComponentRegistryReference ComponentStorage, FTickConfiguration TickConfiguration = {}) noexcept;
 
 	/** Keeps exact derived destruction behind the descriptor/store boundary. */
 	~AActor() noexcept override;
@@ -119,8 +119,8 @@ private:
 	/** Presents every registered component to the active iterative collector. */
 	void VisitReferences(FReferenceCollector& Collector) noexcept override;
 
-	/** Holds the unique caller-owned component registry lease for this actor's lifetime. */
-	FActorComponentRegistryBase Components;
+	/** Holds the unique caller-owned component registry reference for this actor's lifetime. */
+	FActorComponentRegistryReference Components;
 
 	/** Carries the weak world identity without keeping the world reachable. */
 	FObjectHandle WorldObjectHandle{};

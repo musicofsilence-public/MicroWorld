@@ -38,13 +38,13 @@ public:
 	static const FClassDescriptor& StaticClassDescriptor() noexcept;
 
 	/**
-	 * Binds this world to the unique caller-owned actor registry lease that will
+	 * Binds this world to the unique caller-owned actor registry reference that will
 	 * hold its registered actors.
 	 *
 	 * The object store assigns canonical ownership only after construction
 	 * publishes this UObject, so callers cannot supply a second store identity.
 	 */
-	explicit UWorld(FWorldActorRegistryBase ActorStorage) noexcept;
+	explicit UWorld(FWorldActorRegistryReference ActorStorage) noexcept;
 
 	/** Keeps exact derived destruction behind the descriptor/store boundary. */
 	~UWorld() noexcept override;
@@ -114,8 +114,8 @@ private:
 	/** Presents every registered actor to the active iterative collector. */
 	void VisitReferences(FReferenceCollector& Collector) noexcept override;
 
-	/** Holds the unique caller-owned actor registry lease for this world's lifetime. */
-	FWorldActorRegistryBase Actors;
+	/** Holds the unique caller-owned actor registry reference for this world's lifetime. */
+	FWorldActorRegistryReference Actors;
 
 	/** Guards the forward-only world lifecycle without scattering boolean flags. */
 	FLifecycleGuard Lifecycle;

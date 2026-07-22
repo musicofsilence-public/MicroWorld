@@ -116,8 +116,8 @@ private:
 class FHostActor final : public AActor
 {
 public:
-	/** Captures the component lease, shared sequence, and per-actor event sink. */
-	FHostActor(MicroWorld::FActorComponentRegistryBase Components, FSequenceCounter& InSequence, FActorEventState& InEvents) noexcept
+	/** Captures the component reference, shared sequence, and per-actor event sink. */
+	FHostActor(MicroWorld::FActorComponentRegistryReference Components, FSequenceCounter& InSequence, FActorEventState& InEvents) noexcept
 		: AActor(std::move(Components), HostTickConfiguration), Sequence(InSequence), Events(InEvents)
 	{
 	}
@@ -205,7 +205,7 @@ struct FHostFixture final
 	/** Records the component's begin/tick/end counts and ordering stamps. */
 	FComponentEventState ComponentEvents{};
 
-	/** Owns the component registry lease the actor holds a view into for its lifetime. */
+	/** Owns the component registry the actor holds a reference into for its lifetime. */
 	MicroWorld::FActorComponentRegistry<2> ActorComponents{};
 
 	/** Holds the constructed actor handle so the test can drive and observe its lifecycle. */
@@ -230,7 +230,7 @@ struct FHostFixture final
 		{
 			return false;
 		}
-		Actor = Host.NewObject<FHostActor>(*Host.FindClass(HostActorTypeId), ActorComponents.MakeView(), Sequence, ActorEvents).Object;
+		Actor = Host.NewObject<FHostActor>(*Host.FindClass(HostActorTypeId), ActorComponents.MakeReference(), Sequence, ActorEvents).Object;
 		Component = Host.NewObject<FHostComponent>(*Host.FindClass(HostComponentTypeId), Sequence, ComponentEvents).Object;
 		if (Actor.Get() == nullptr || Component.Get() == nullptr)
 		{
@@ -425,7 +425,8 @@ MW_TEST_CASE(EngineHostTemplateHelpersRegisterAndConstructUserTypes)
 	const TObjectPtr<UWorld> World = Host.CreateWorld();
 	MW_EXPECT_TRUE(Test, World.Get() != nullptr, "CreateWorld roots the world after the helpers register user types");
 
-	const TObjectCreationResult<FHostActor> Actor = Host.CreateObject<FHostActor>(HostActorTypeId, ActorComponents.MakeView(), Sequence, ActorEvents);
+	const TObjectCreationResult<FHostActor> Actor =
+		Host.CreateObject<FHostActor>(HostActorTypeId, ActorComponents.MakeReference(), Sequence, ActorEvents);
 	const TObjectCreationResult<FHostComponent> Component = Host.CreateObject<FHostComponent>(HostComponentTypeId, Sequence, ComponentEvents);
 	MW_EXPECT_EQ(
 		Test, EObjectResult::Success, Actor.Result, "CreateObject<FHostActor> constructs the actor through the helper-registered descriptor");

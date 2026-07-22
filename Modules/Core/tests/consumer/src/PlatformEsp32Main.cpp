@@ -59,7 +59,7 @@ class FDemoActor final : public MicroWorld::AActor
 {
 public:
 	/** Forwards store and component storage to the managed actor base. */
-	explicit FDemoActor(MicroWorld::FActorComponentRegistryBase Components) noexcept : AActor(std::move(Components)) {}
+	explicit FDemoActor(MicroWorld::FActorComponentRegistryReference Components) noexcept : AActor(std::move(Components)) {}
 
 	/** Keeps exact descriptor-driven destruction publicly instantiable. */
 	~FDemoActor() noexcept override = default;
@@ -126,10 +126,10 @@ extern "C" void app_main()
 	(void)Host.RegisterClass<FDemoComponent>(DemoComponentTypeId, "DemoComponent");
 
 	const TObjectPtr<UWorld> World = Host.CreateWorld();
-	// The actor embeds no inline registry; lease one caller-owned view at construction,
+	// The actor embeds no inline registry; take one caller-owned reference at construction,
 	// mirroring the Engine profile probe (EngineConsumerProbe.h) so the slot stays 256 bytes.
 	static FActorComponentRegistry<1> ActorComponents;
-	const TObjectPtr<FDemoActor> Actor = Host.CreateObject<FDemoActor>(DemoActorTypeId, ActorComponents.MakeView()).Object;
+	const TObjectPtr<FDemoActor> Actor = Host.CreateObject<FDemoActor>(DemoActorTypeId, ActorComponents.MakeReference()).Object;
 	const TObjectPtr<FDemoComponent> Component = Host.CreateObject<FDemoComponent>(DemoComponentTypeId).Object;
 	if (World.Get() == nullptr || Actor.Get() == nullptr || Component.Get() == nullptr)
 	{

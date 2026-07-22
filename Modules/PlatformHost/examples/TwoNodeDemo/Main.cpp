@@ -93,8 +93,11 @@ using FClientNet = TNetHost<1, 256>;
 class FDemoSpawnedActor final : public AActor
 {
 public:
-	/** Forwards the component lease and the begin counter the actor bumps on play. */
-	FDemoSpawnedActor(FActorComponentRegistryBase Components, int& InBeginCount) noexcept : AActor(std::move(Components)), BeginCount(InBeginCount) {}
+	/** Forwards the component reference and the begin counter the actor bumps on play. */
+	FDemoSpawnedActor(FActorComponentRegistryReference Components, int& InBeginCount) noexcept
+		: AActor(std::move(Components)), BeginCount(InBeginCount)
+	{
+	}
 
 	/** Keeps exact descriptor-driven destruction publicly instantiable. */
 	~FDemoSpawnedActor() noexcept override = default;
@@ -111,8 +114,8 @@ private:
 /**
  * Everything the server's channel-1 handler needs to spawn one actor into the
  * server world on each input event. The registries are pre-allocated and
- * indexed by a monotonic sequence because each FActorComponentRegistry lease is
- * one-shot (MakeView may be issued only once per registry).
+ * indexed by a monotonic sequence because each FActorComponentRegistry reference is
+ * one-shot (MakeReference may be issued only once per registry).
  */
 struct FDemoSpawnContext
 {
@@ -254,7 +257,7 @@ int main()
 			const int Slot = SpawnContext.SpawnSequence;
 			++SpawnContext.SpawnSequence;
 			const TObjectCreationResult<FDemoSpawnedActor> Creation = SpawnContext.Host.CreateObject<FDemoSpawnedActor>(
-				DemoSpawnedActorTypeId, SpawnContext.SpawnedRegistries[static_cast<std::size_t>(Slot)].MakeView(), SpawnedBeginCount);
+				DemoSpawnedActorTypeId, SpawnContext.SpawnedRegistries[static_cast<std::size_t>(Slot)].MakeReference(), SpawnedBeginCount);
 			if (Creation.Result != EObjectResult::Success)
 			{
 				return;

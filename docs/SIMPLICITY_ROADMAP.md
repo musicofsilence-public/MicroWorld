@@ -241,9 +241,12 @@ the shape is what matters here.)
 - **D10** — `TEngineHost`'s positional template arguments are tamed with named
   `constexpr` constants and `/*ParameterName*/` call-site annotations, not with
   a traits struct (deferred idea).
-- **D11** — The registry-lease vocabulary unifies on **Lease**:
-  `F...RegistryBase` → `F...RegistryLease`, `MakeView()` → `IssueLease()`. The
-  header file names stay (frozen identity).
+- **D11** — The non-owning registry-handle vocabulary unifies on **Reference**:
+  `F...RegistryBase` → `F...RegistryReference`, `MakeView()` → `MakeReference()`,
+  and the "lease" metaphor is purged from comments and test names too. The
+  header file names stay (frozen identity). (Owner decision 2026-07-22
+  superseding the original `Lease` choice, rejected as jargon — a name must be
+  plain English a student reads without a glossary; no metaphors.)
 - **D12** — `HasAssignedWorld()` / `HasAssignedActor()` keep their names; their
   docs must state plainly that they stay true after the parent expires.
 
@@ -348,7 +351,7 @@ touches them).
 
 ---
 
-### Phase 1 — Mechanical renames ⬜
+### Phase 1 — Mechanical renames 🟨
 
 Goal: every identifier states its full role. Use the rename procedure (1.3)
 for every table row. One task per module; finish a module's whole table before
@@ -425,13 +428,13 @@ the old name and must be updated in the same task.
   gates 0; keep-checks confirm `SlotSizeBytes`/`Creation.Object`/`Slot.Object`
   intact.
 
-- [ ] **1.4 Engine renames.**
+- [x] **1.4 Engine renames.**
 
   | Current | New | Declared at (hint) |
   | --- | --- | --- |
-  | `FActorComponentRegistryBase` | `FActorComponentRegistryLease` | `EngineRegistryView.h:25`; sweep `Actor.h/.cpp`, `InlineTypes.h`, tests (D11 — "Base" was the opposite of what it is) |
-  | `FWorldActorRegistryBase` | `FWorldActorRegistryLease` | `EngineRegistryView.h:96`; sweep `World.h/.cpp`, `InlineTypes.h`, tests |
-  | `MakeView()` (both registries) | `IssueLease()` | `EngineStorage.h:40,97` + every caller; header file names stay |
+  | `FActorComponentRegistryBase` | `FActorComponentRegistryReference` | `EngineRegistryView.h:25`; sweep `Actor.h/.cpp`, `InlineTypes.h`, tests (D11 — "Base" was the opposite of what it is; "Reference" per owner 2026-07-22) |
+  | `FWorldActorRegistryBase` | `FWorldActorRegistryReference` | `EngineRegistryView.h:96`; sweep `World.h/.cpp`, `InlineTypes.h`, tests |
+  | `MakeView()` (both registries) | `MakeReference()` | `EngineStorage.h:40,97` + every caller; header file names stay. Also purge the "lease" metaphor from comments/test names (D11 owner update) |
   | `TTimerManager::Advance` param `Now` | `NowMilliseconds` | `Timer.h:223` |
   | `TTimerManager::Schedule` param `Duration` | `DelayAndPeriodMilliseconds` | `Timer.h:150` (doc says it is both the first delay and the repeat period) |
   | `TEngineHost` member `GcBudget` | `GarbageCollectionBudget` | `EngineHost.h:315` |
@@ -445,6 +448,23 @@ the old name and must be updated in the same task.
 
   **Done when:** greps clean; `docs/UE5ConceptMap.md` still reads correctly
   (it does not name the leases, but check); Standard Verify passes.
+
+  Done 2026-07-22 — all 9 Engine renames applied across 19 files. The
+  `...Base`→`...Reference` and `MakeView()`→`MakeReference()` renames use
+  **Reference** (owner rejected the original `Lease` choice as jargon on
+  2026-07-22, superseding D11's first wording) with the "lease" metaphor purged
+  from every comment and both test-case names
+  (`EngineReusedRegistryReferenceFailsBeginPlay`,
+  `EngineInlineTypesComposeAndDispatchLikeReferenceComposedTypes`). The
+  `Now`→`NowMilliseconds`, `Duration`→`DelayAndPeriodMilliseconds`,
+  `GcBudget`→`GarbageCollectionBudget`, `SlotBytes`→`SlotSizeBytes`,
+  `InlineCallbackBytes`+`TimerCallbackBytes`→`InlineTimerCallbackBytes`, and
+  method-template `T`→`TManagedType` renames applied. D12 doc-strengthening of
+  `HasAssignedWorld()`/`HasAssignedActor()` was already satisfied (both already
+  state the identity survives parent expiry). Build warning-clean; ctest 11/11;
+  doc checker 122 files; `rg "Lease"`=0, `rg -i "\blease"`=0,
+  `MakeReference`/`RegistryReference`=164. Old `Lease`/`MakeView` vocabulary now
+  survives only in frozen historical `docs/ROADMAP.md` (excepted by task 8.4).
 
 - [ ] **1.5 Net renames — fix the template-prefix style violations.** These
   four types are **class templates carrying the `F` prefix**, which teaches

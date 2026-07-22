@@ -17,13 +17,13 @@ using MicroWorld::EEngineResult;
 using MicroWorld::EObjectResult;
 using MicroWorld::ERuntimeResult;
 using MicroWorld::FActorComponentRegistry;
-using MicroWorld::FActorComponentRegistryBase;
+using MicroWorld::FActorComponentRegistryReference;
 using MicroWorld::FObjectRootEntry;
 using MicroWorld::FObjectSlotMetadata;
 using MicroWorld::FObjectStore;
 using MicroWorld::FObjectStoreStorage;
 using MicroWorld::FWorldActorRegistry;
-using MicroWorld::FWorldActorRegistryBase;
+using MicroWorld::FWorldActorRegistryReference;
 using MicroWorld::MakeClassDescriptor;
 using MicroWorld::MakeClassRegistryView;
 using MicroWorld::TClassRegistry;
@@ -43,7 +43,7 @@ public:
 class FPlainActor final : public AActor
 {
 public:
-	explicit FPlainActor(FActorComponentRegistryBase Components) noexcept : AActor(std::move(Components)) {}
+	explicit FPlainActor(FActorComponentRegistryReference Components) noexcept : AActor(std::move(Components)) {}
 };
 
 constexpr MicroWorld::FTypeId PlainActorTypeId{0x00020001u};
@@ -53,7 +53,7 @@ constexpr MicroWorld::FTypeId PlainComponentTypeId{0x00020002u};
 using FRegistrationEnvironment = TEngineEnvironment<256, 16, 16, 4>;
 
 /** Builds a plain actor in the environment through its own derived descriptor. */
-TObjectPtr<FPlainActor> MakePlainActor(FRegistrationEnvironment& Env, FActorComponentRegistryBase Components) noexcept
+TObjectPtr<FPlainActor> MakePlainActor(FRegistrationEnvironment& Env, FActorComponentRegistryReference Components) noexcept
 {
 	return Env.CreateDerivedObject<FPlainActor>(PlainActorTypeId, "PlainActor", std::move(Components));
 }
@@ -106,10 +106,10 @@ MW_TEST_CASE(EngineDuplicateActorAndComponentRegistrationRejected)
 	FRegistrationEnvironment Env{};
 	FActorComponentRegistry<2> ActorComponents;
 	FWorldActorRegistry<2> WorldActors;
-	FWorldActorRegistryBase WorldActorsView = WorldActors.MakeView();
+	FWorldActorRegistryReference WorldActorsView = WorldActors.MakeReference();
 
 	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, std::move(WorldActorsView));
-	const TObjectPtr<FPlainActor> Actor = MakePlainActor(Env, ActorComponents.MakeView());
+	const TObjectPtr<FPlainActor> Actor = MakePlainActor(Env, ActorComponents.MakeReference());
 	const TObjectPtr<FPlainComponent> Component = MakePlainComponent(Env);
 
 	const EEngineResult FirstActor = World.Get()->RegisterActor(TObjectPtr<AActor>{Actor});
@@ -136,25 +136,25 @@ MW_TEST_CASE(EngineFullAndZeroCapacityRegistrationRejected)
 	// Full-capacity actor registry: capacity one, second registration rejected.
 	FActorComponentRegistry<1> ActorComponents;
 	FWorldActorRegistry<1> OneActorWorld;
-	FWorldActorRegistryBase OneActorView = OneActorWorld.MakeView();
+	FWorldActorRegistryReference OneActorView = OneActorWorld.MakeReference();
 	const TObjectPtr<UWorld> OneActorWorldObj = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, std::move(OneActorView));
-	const TObjectPtr<FPlainActor> ActorA = MakePlainActor(Env, ActorComponents.MakeView());
-	const TObjectPtr<FPlainActor> ActorB = MakePlainActor(Env, ActorComponents.MakeView());
+	const TObjectPtr<FPlainActor> ActorA = MakePlainActor(Env, ActorComponents.MakeReference());
+	const TObjectPtr<FPlainActor> ActorB = MakePlainActor(Env, ActorComponents.MakeReference());
 	const EEngineResult FirstActor = OneActorWorldObj.Get()->RegisterActor(TObjectPtr<AActor>{ActorA});
 	const EEngineResult FullActor = OneActorWorldObj.Get()->RegisterActor(TObjectPtr<AActor>{ActorB});
 
 	// Zero-capacity actor registry: first registration rejected as full.
 	FWorldActorRegistry<0> ZeroActorWorld;
-	FWorldActorRegistryBase ZeroActorView = ZeroActorWorld.MakeView();
+	FWorldActorRegistryReference ZeroActorView = ZeroActorWorld.MakeReference();
 	const TObjectPtr<UWorld> ZeroActorWorldObj = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, std::move(ZeroActorView));
 	const EEngineResult ZeroActor = ZeroActorWorldObj.Get()->RegisterActor(TObjectPtr<AActor>{ActorA});
 
 	// Full-capacity component registry: capacity one, second registration rejected.
 	FActorComponentRegistry<1> OneComponentActor;
 	FWorldActorRegistry<1> WorldActors;
-	FWorldActorRegistryBase WorldActorsView = WorldActors.MakeView();
+	FWorldActorRegistryReference WorldActorsView = WorldActors.MakeReference();
 	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, std::move(WorldActorsView));
-	const TObjectPtr<FPlainActor> HostActor = MakePlainActor(Env, OneComponentActor.MakeView());
+	const TObjectPtr<FPlainActor> HostActor = MakePlainActor(Env, OneComponentActor.MakeReference());
 	const TObjectPtr<FPlainComponent> ComponentA = MakePlainComponent(Env);
 	const TObjectPtr<FPlainComponent> ComponentB = MakePlainComponent(Env);
 	(void)World.Get()->RegisterActor(TObjectPtr<AActor>{HostActor});
@@ -163,7 +163,7 @@ MW_TEST_CASE(EngineFullAndZeroCapacityRegistrationRejected)
 
 	// Zero-capacity component registry: first registration rejected as full.
 	FActorComponentRegistry<0> ZeroComponentActor;
-	const TObjectPtr<FPlainActor> ZeroHostActor = MakePlainActor(Env, ZeroComponentActor.MakeView());
+	const TObjectPtr<FPlainActor> ZeroHostActor = MakePlainActor(Env, ZeroComponentActor.MakeReference());
 	const EEngineResult ZeroComponent = ZeroHostActor.Get()->RegisterComponent(ComponentA);
 
 	MW_EXPECT_EQ(Test, EEngineResult::Success, FirstActor, "The capacity-one actor registry accepts its first actor");
@@ -184,11 +184,11 @@ MW_TEST_CASE(EngineRegistrationAfterBeginPlayRejected)
 	FRegistrationEnvironment Env{};
 	FActorComponentRegistry<2> ActorComponents;
 	FWorldActorRegistry<2> WorldActors;
-	FWorldActorRegistryBase WorldActorsView = WorldActors.MakeView();
+	FWorldActorRegistryReference WorldActorsView = WorldActors.MakeReference();
 
 	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, std::move(WorldActorsView));
-	const TObjectPtr<FPlainActor> ActorA = MakePlainActor(Env, ActorComponents.MakeView());
-	const TObjectPtr<FPlainActor> ActorB = MakePlainActor(Env, ActorComponents.MakeView());
+	const TObjectPtr<FPlainActor> ActorA = MakePlainActor(Env, ActorComponents.MakeReference());
+	const TObjectPtr<FPlainActor> ActorB = MakePlainActor(Env, ActorComponents.MakeReference());
 	const TObjectPtr<FPlainComponent> Component = MakePlainComponent(Env);
 	(void)World.Get()->RegisterActor(TObjectPtr<AActor>{ActorA});
 	(void)ActorA.Get()->RegisterComponent(Component);
@@ -212,12 +212,12 @@ MW_TEST_CASE(EngineActorCrossOwnerRejected)
 	FActorComponentRegistry<2> ActorComponents;
 	FWorldActorRegistry<2> WorldAActors;
 	FWorldActorRegistry<2> WorldBActors;
-	FWorldActorRegistryBase WorldAView = WorldAActors.MakeView();
-	FWorldActorRegistryBase WorldBView = WorldBActors.MakeView();
+	FWorldActorRegistryReference WorldAView = WorldAActors.MakeReference();
+	FWorldActorRegistryReference WorldBView = WorldBActors.MakeReference();
 
 	const TObjectPtr<UWorld> WorldA = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, std::move(WorldAView));
 	const TObjectPtr<UWorld> WorldB = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, std::move(WorldBView));
-	const TObjectPtr<FPlainActor> Actor = MakePlainActor(Env, ActorComponents.MakeView());
+	const TObjectPtr<FPlainActor> Actor = MakePlainActor(Env, ActorComponents.MakeReference());
 
 	const EEngineResult FirstOwner = WorldA.Get()->RegisterActor(TObjectPtr<AActor>{Actor});
 	const EEngineResult SecondOwner = WorldB.Get()->RegisterActor(TObjectPtr<AActor>{Actor});
@@ -236,11 +236,11 @@ MW_TEST_CASE(EngineComponentCrossOwnerRejected)
 	FActorComponentRegistry<2> ActorAComponents;
 	FActorComponentRegistry<2> ActorBComponents;
 	FWorldActorRegistry<2> WorldActors;
-	FWorldActorRegistryBase WorldActorsView = WorldActors.MakeView();
+	FWorldActorRegistryReference WorldActorsView = WorldActors.MakeReference();
 
 	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, std::move(WorldActorsView));
-	const TObjectPtr<FPlainActor> ActorA = MakePlainActor(Env, ActorAComponents.MakeView());
-	const TObjectPtr<FPlainActor> ActorB = MakePlainActor(Env, ActorBComponents.MakeView());
+	const TObjectPtr<FPlainActor> ActorA = MakePlainActor(Env, ActorAComponents.MakeReference());
+	const TObjectPtr<FPlainActor> ActorB = MakePlainActor(Env, ActorBComponents.MakeReference());
 	const TObjectPtr<FPlainComponent> Component = MakePlainComponent(Env);
 	(void)World.Get()->RegisterActor(TObjectPtr<AActor>{ActorA});
 	(void)World.Get()->RegisterActor(TObjectPtr<AActor>{ActorB});
@@ -264,20 +264,20 @@ MW_TEST_CASE(EngineCrossStoreRegistrationRejected)
 	FObjectStore& StoreB = StoreBOwner.GetStore();
 
 	FWorldActorRegistry<2> WorldActorsA;
-	FWorldActorRegistryBase WorldActorsAView = WorldActorsA.MakeView();
+	FWorldActorRegistryReference WorldActorsAView = WorldActorsA.MakeReference();
 	FActorComponentRegistry<2> ActorComponentsA;
 	FActorComponentRegistry<2> ActorComponentsB;
 	FWorldActorRegistry<2> WorldActorsB;
-	FWorldActorRegistryBase WorldActorsBView = WorldActorsB.MakeView();
+	FWorldActorRegistryReference WorldActorsBView = WorldActorsB.MakeReference();
 
 	const TObjectPtr<UWorld> WorldA = EnvA.CreateObject<UWorld>(MicroWorld::UWorldClassId, std::move(WorldActorsAView));
 	const TObjectPtr<UWorld> WorldB = EnvA.CreateObject<UWorld>(MicroWorld::UWorldClassId, std::move(WorldActorsBView));
 	// Build an actor in StoreB and try to register it with worlds in StoreA.
 	const TObjectPtr<FPlainActor> ForeignActor =
-		StoreB.NewObject<FPlainActor>(*StoreBOwner.GetRegistry().Find(PlainActorTypeId), ActorComponentsB.MakeView()).Object;
+		StoreB.NewObject<FPlainActor>(*StoreBOwner.GetRegistry().Find(PlainActorTypeId), ActorComponentsB.MakeReference()).Object;
 	const TObjectPtr<FPlainComponent> ForeignComponent =
 		StoreB.NewObject<FPlainComponent>(*StoreBOwner.GetRegistry().Find(PlainComponentTypeId)).Object;
-	const TObjectPtr<FPlainActor> LocalActor = MakePlainActor(EnvA, ActorComponentsA.MakeView());
+	const TObjectPtr<FPlainActor> LocalActor = MakePlainActor(EnvA, ActorComponentsA.MakeReference());
 	(void)WorldA.Get()->RegisterActor(TObjectPtr<AActor>{LocalActor});
 
 	const EEngineResult ForeignActorRegistration = WorldB.Get()->RegisterActor(TObjectPtr<AActor>{ForeignActor});
@@ -296,11 +296,11 @@ MW_TEST_CASE(EngineRejectedRegistrationLeavesNoPartialState)
 	FRegistrationEnvironment Env{};
 	FActorComponentRegistry<2> ActorComponents;
 	FWorldActorRegistry<1> WorldActors;
-	FWorldActorRegistryBase WorldActorsView = WorldActors.MakeView();
+	FWorldActorRegistryReference WorldActorsView = WorldActors.MakeReference();
 
 	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, std::move(WorldActorsView));
-	const TObjectPtr<FPlainActor> ActorA = MakePlainActor(Env, ActorComponents.MakeView());
-	const TObjectPtr<FPlainActor> ActorB = MakePlainActor(Env, ActorComponents.MakeView());
+	const TObjectPtr<FPlainActor> ActorA = MakePlainActor(Env, ActorComponents.MakeReference());
+	const TObjectPtr<FPlainActor> ActorB = MakePlainActor(Env, ActorComponents.MakeReference());
 	(void)World.Get()->RegisterActor(TObjectPtr<AActor>{ActorA});
 
 	// Capacity is now exhausted; the rejected ActorB must keep no parent link.
@@ -323,11 +323,11 @@ MW_TEST_CASE(EngineEmptyAndStaleRegistrationRejectedWithoutPartialState)
 	FActorComponentRegistry<1> StaleActorComponents;
 	FWorldActorRegistry<2> WorldActors;
 
-	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, WorldActors.MakeView());
-	const TObjectPtr<FPlainActor> HostActor = MakePlainActor(Env, HostComponents.MakeView());
+	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, WorldActors.MakeReference());
+	const TObjectPtr<FPlainActor> HostActor = MakePlainActor(Env, HostComponents.MakeReference());
 	const EEngineResult HostActorResult = World.Get()->RegisterActor(HostActor);
 
-	const TObjectPtr<FPlainActor> StaleActor = MakePlainActor(Env, StaleActorComponents.MakeView());
+	const TObjectPtr<FPlainActor> StaleActor = MakePlainActor(Env, StaleActorComponents.MakeReference());
 	const EObjectResult MarkActorResult = Store.MarkPendingDestroy(StaleActor.Handle());
 	const EObjectResult DestroyActorResult = Store.ApplyPendingDestroy(1).Result;
 	const TObjectPtr<FPlainComponent> StaleComponent = MakePlainComponent(Env);
@@ -364,9 +364,9 @@ MW_TEST_CASE(EngineRegistrationRejectedDuringActiveCollection)
 	MicroWorld::FGarbageCollector Collector{
 		Store, MicroWorld::FGarbageCollectorStorage{Worklist.data(), static_cast<std::uint32_t>(Worklist.size())}};
 
-	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, WorldActors.MakeView());
-	const TObjectPtr<FPlainActor> HostActor = MakePlainActor(Env, HostComponents.MakeView());
-	const TObjectPtr<FPlainActor> CandidateActor = MakePlainActor(Env, CandidateComponents.MakeView());
+	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, WorldActors.MakeReference());
+	const TObjectPtr<FPlainActor> HostActor = MakePlainActor(Env, HostComponents.MakeReference());
+	const TObjectPtr<FPlainActor> CandidateActor = MakePlainActor(Env, CandidateComponents.MakeReference());
 	const TObjectPtr<FPlainComponent> CandidateComponent = MakePlainComponent(Env);
 	const EEngineResult HostActorResult = World.Get()->RegisterActor(HostActor);
 	const ERuntimeResult RequestResult = Collector.RequestCollection();
@@ -404,29 +404,29 @@ MW_TEST_CASE(EngineDerivedDescriptorsUseRegisteredEngineParents)
 	MW_EXPECT_TRUE(Test, !ActorDescriptor->IsChildOf(*ComponentBase), "Derived actor is not a component");
 }
 
-/** Proves reusing a one-shot registry lease fails observably before hooks run. */
-MW_TEST_CASE(EngineReusedRegistryLeaseFailsBeginPlay)
+/** Proves reusing a one-shot registry reference fails observably before hooks run. */
+MW_TEST_CASE(EngineReusedRegistryReferenceFailsBeginPlay)
 {
 	FRegistrationEnvironment Env{};
 	FWorldActorRegistry<2> SharedWorldActors;
 	FActorComponentRegistry<1> SharedActorComponents;
 	FWorldActorRegistry<1> ValidWorldActors;
 
-	const TObjectPtr<UWorld> FirstWorld = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, SharedWorldActors.MakeView());
-	const TObjectPtr<UWorld> ReusedLeaseWorld = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, SharedWorldActors.MakeView());
-	const TObjectPtr<UWorld> ActorHostWorld = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, ValidWorldActors.MakeView());
-	const TObjectPtr<FPlainActor> FirstActor = MakePlainActor(Env, SharedActorComponents.MakeView());
-	const TObjectPtr<FPlainActor> ReusedLeaseActor = MakePlainActor(Env, SharedActorComponents.MakeView());
-	const EEngineResult ActorRegistration = ActorHostWorld.Get()->RegisterActor(ReusedLeaseActor);
+	const TObjectPtr<UWorld> FirstWorld = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, SharedWorldActors.MakeReference());
+	const TObjectPtr<UWorld> ReusedReferenceWorld = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, SharedWorldActors.MakeReference());
+	const TObjectPtr<UWorld> ActorHostWorld = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, ValidWorldActors.MakeReference());
+	const TObjectPtr<FPlainActor> FirstActor = MakePlainActor(Env, SharedActorComponents.MakeReference());
+	const TObjectPtr<FPlainActor> ReusedReferenceActor = MakePlainActor(Env, SharedActorComponents.MakeReference());
+	const EEngineResult ActorRegistration = ActorHostWorld.Get()->RegisterActor(ReusedReferenceActor);
 
-	const ERuntimeResult WorldBeginResult = ReusedLeaseWorld.Get()->BeginPlay(0);
+	const ERuntimeResult WorldBeginResult = ReusedReferenceWorld.Get()->BeginPlay(0);
 	const ERuntimeResult ActorBeginResult = ActorHostWorld.Get()->BeginPlay(0);
 
-	MW_EXPECT_TRUE(Test, FirstWorld.Get() != nullptr, "The first world consumes the valid registry lease");
-	MW_EXPECT_TRUE(Test, FirstActor.Get() != nullptr, "The first actor consumes the valid registry lease");
+	MW_EXPECT_TRUE(Test, FirstWorld.Get() != nullptr, "The first world consumes the valid registry reference");
+	MW_EXPECT_TRUE(Test, FirstActor.Get() != nullptr, "The first actor consumes the valid registry reference");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ActorRegistration, "An invalid child registry remains observable at begin");
-	MW_EXPECT_EQ(Test, ERuntimeResult::CapacityExceeded, WorldBeginResult, "A world with a reused registry lease rejects BeginPlay");
-	MW_EXPECT_EQ(Test, ERuntimeResult::CapacityExceeded, ActorBeginResult, "An actor with a reused registry lease rejects BeginPlay");
+	MW_EXPECT_EQ(Test, ERuntimeResult::CapacityExceeded, WorldBeginResult, "A world with a reused registry reference rejects BeginPlay");
+	MW_EXPECT_EQ(Test, ERuntimeResult::CapacityExceeded, ActorBeginResult, "An actor with a reused registry reference rejects BeginPlay");
 }
 
 } // namespace

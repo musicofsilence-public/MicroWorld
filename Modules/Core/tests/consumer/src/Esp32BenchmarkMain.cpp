@@ -108,14 +108,14 @@ public:
 /**
  * Concrete managed actor representative of steady-state per-frame actor work.
  *
- * Embeds no inline registry; each instance leases a caller-owned component
+ * Embeds no inline registry; each instance references a caller-owned component
  * view at construction, mirroring the proven PlatformEsp32Main composition.
  */
 class FBenchActor final : public MicroWorld::AActor
 {
 public:
-	/** Forwards the component lease and the representative always-tick schedule to the base. */
-	explicit FBenchActor(MicroWorld::FActorComponentRegistryBase Components) noexcept : AActor(std::move(Components)) {}
+	/** Forwards the component reference and the representative always-tick schedule to the base. */
+	explicit FBenchActor(MicroWorld::FActorComponentRegistryReference Components) noexcept : AActor(std::move(Components)) {}
 
 	/** Keeps exact descriptor-driven destruction publicly instantiable. */
 	~FBenchActor() noexcept override = default;
@@ -426,7 +426,8 @@ extern "C" void app_main()
 	static std::array<FActorComponentRegistry<2>, RepresentativeActorCount> ActorComponentStorages{};
 	for (std::size_t ActorIndex = 0; ActorIndex < RepresentativeActorCount; ++ActorIndex)
 	{
-		const TObjectPtr<FBenchActor> Actor = Host.CreateObject<FBenchActor>(BenchActorTypeId, ActorComponentStorages[ActorIndex].MakeView()).Object;
+		const TObjectPtr<FBenchActor> Actor =
+			Host.CreateObject<FBenchActor>(BenchActorTypeId, ActorComponentStorages[ActorIndex].MakeReference()).Object;
 		if (Actor.Get() == nullptr)
 		{
 			ESP_LOGE(BenchmarkTag, "setup FAILED: actor %u creation returned null", static_cast<unsigned>(ActorIndex));

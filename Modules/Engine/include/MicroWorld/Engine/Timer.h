@@ -48,7 +48,7 @@ enum class ETimerMode : std::uint8_t
 	/** Fires once and removes the timer so its handle becomes stale. */
 	OneShot,
 
-	/** Reschedules from the accepted Now after each fire and stays in insertion order. */
+	/** Reschedules from the accepted NowMilliseconds after each fire and stays in insertion order. */
 	Looping,
 };
 
@@ -102,11 +102,11 @@ constexpr bool CanAdvanceTimerGeneration(const std::uint32_t CurrentGeneration) 
  * The caller owns the manager value and supplies every clock reading; the
  * manager stores the last accepted time and never reads a hidden clock.
  */
-template<std::size_t MaxTimers, std::size_t InlineCallbackBytes>
+template<std::size_t MaxTimers, std::size_t InlineTimerCallbackBytes>
 class TTimerManager final
 {
 	static_assert(MaxTimers < FTimerHandle::InvalidIndex, "A timer manager capacity must fit below the reserved handle index.");
-	static_assert(InlineCallbackBytes > 0, "A timer manager must reserve inline callback storage for its delegates.");
+	static_assert(InlineTimerCallbackBytes > 0, "A timer manager must reserve inline callback storage for its delegates.");
 
 public:
 	/** Stores the caller's initial clock as the scheduling baseline for every later operation. */
@@ -146,8 +146,8 @@ public:
 	 * delegate into a reusable slot and publishes a fresh generation-checked handle.
 	 */
 	ETimerResult Schedule(
-		TDelegate<void(), InlineCallbackBytes>&& Callback,
-		const DurationMilliseconds Duration,
+		TDelegate<void(), InlineTimerCallbackBytes>&& Callback,
+		const DurationMilliseconds DelayAndPeriodMilliseconds,
 		const ETimerMode Mode,
 		FTimerHandle& OutHandle) noexcept
 	{
@@ -175,8 +175,8 @@ public:
 
 		const std::size_t SlotIndex = static_cast<std::size_t>(AvailableSlot - Slots);
 		AvailableSlot->Callback = std::move(Callback);
-		AvailableSlot->DeadlineMilliseconds = SaturatingAdd(LastAcceptedNowMilliseconds, Duration);
-		AvailableSlot->PeriodMilliseconds = (Mode == ETimerMode::Looping) ? Duration : DurationMilliseconds{0};
+		AvailableSlot->DeadlineMilliseconds = SaturatingAdd(LastAcceptedNowMilliseconds, DelayAndPeriodMilliseconds);
+		AvailableSlot->PeriodMilliseconds = (Mode == ETimerMode::Looping) ? DelayAndPeriodMilliseconds : DurationMilliseconds{0};
 		AvailableSlot->LastFiredMilliseconds = TimePointMilliseconds{0};
 		AvailableSlot->Mode = Mode;
 		AvailableSlot->bActive = true;
@@ -220,17 +220,17 @@ public:
 	 * clock is rejected transactionally; a nested Advance is rejected while
 	 * another dispatch is still active.
 	 */
-	ETimerResult Advance(const TimePointMilliseconds Now) noexcept
+	ETimerResult Advance(const TimePointMilliseconds NowMilliseconds) noexcept
 	{
 		if (bDispatchActive)
 		{
 			return ETimerResult::DispatchLocked;
 		}
-		if (Now < LastAcceptedNowMilliseconds)
+		if (NowMilliseconds < LastAcceptedNowMilliseconds)
 		{
 			return ETimerResult::NonMonotonicTime;
 		}
-		LastAcceptedNowMilliseconds = Now;
+		LastAcceptedNowMilliseconds = NowMilliseconds;
 
 		const std::size_t InitialCount = ActiveTimerCount;
 		for (std::size_t SnapshotIndex = 0; SnapshotIndex < InitialCount; ++SnapshotIndex)
@@ -252,13 +252,13 @@ public:
 			{
 				continue;
 			}
-			if (Now < Slot.DeadlineMilliseconds)
+			if (NowMilliseconds < Slot.DeadlineMilliseconds)
 			{
 				continue;
 			}
-			// Guards a nonzero-period looping timer against refiring when Now has not advanced
+			// Guards a nonzero-period looping timer against refiring when NowMilliseconds has not advanced
 			// past the previously accepted timestamp, including after deadline saturation.
-			if (Slot.PeriodMilliseconds != 0 && Slot.LastFiredMilliseconds == Now)
+			if (Slot.PeriodMilliseconds != 0 && Slot.LastFiredMilliseconds == NowMilliseconds)
 			{
 				continue;
 			}
@@ -280,9 +280,9 @@ public:
 			{
 				if (Slot.PeriodMilliseconds != 0)
 				{
-					Slot.LastFiredMilliseconds = Now;
+					Slot.LastFiredMilliseconds = NowMilliseconds;
 				}
-				Slot.DeadlineMilliseconds = SaturatingAdd(Now, Slot.PeriodMilliseconds);
+				Slot.DeadlineMilliseconds = SaturatingAdd(NowMilliseconds, Slot.PeriodMilliseconds);
 			}
 		}
 		bDispatchActive = false;
@@ -302,7 +302,7 @@ private:
 	struct FTimerSlot final
 	{
 		/** Owns the callable only while this slot is active. */
-		TDelegate<void(), InlineCallbackBytes> Callback;
+		TDelegate<void(), InlineTimerCallbackBytes> Callback;
 
 		/** Stores the absolute time at which this timer next becomes due. */
 		TimePointMilliseconds DeadlineMilliseconds{0};
@@ -310,7 +310,7 @@ private:
 		/** Stores the looping repeat period; zero marks one-shot or zero-period looping. */
 		DurationMilliseconds PeriodMilliseconds{0};
 
-		/** Guards nonzero-period looping timers against refiring at the same accepted Now. */
+		/** Guards nonzero-period looping timers against refiring at the same accepted NowMilliseconds. */
 		TimePointMilliseconds LastFiredMilliseconds{0};
 
 		/** Distinguishes successive schedules that occupy this slot. */

@@ -70,7 +70,7 @@ class FConsumerActor final : public MicroWorld::AActor
 {
 public:
 	/** Forwards store and component storage to the managed actor base. */
-	explicit FConsumerActor(MicroWorld::FActorComponentRegistryBase Components) noexcept : AActor(std::move(Components)) {}
+	explicit FConsumerActor(MicroWorld::FActorComponentRegistryReference Components) noexcept : AActor(std::move(Components)) {}
 
 	/** Keeps exact descriptor-driven destruction publicly instantiable. */
 	~FConsumerActor() noexcept override = default;
@@ -143,8 +143,9 @@ inline int RunEngineConsumerProbe() noexcept
 
 	FActorComponentRegistry<1> ActorComponents;
 	FWorldActorRegistry<1> WorldActors;
-	const TObjectPtr<UWorld> World = Store.NewObject<UWorld>(*Registry.Find(UWorldClassId), WorldActors.MakeView()).Object;
-	const TObjectPtr<FConsumerActor> Actor = Store.NewObject<FConsumerActor>(*Registry.Find(ConsumerActorTypeId), ActorComponents.MakeView()).Object;
+	const TObjectPtr<UWorld> World = Store.NewObject<UWorld>(*Registry.Find(UWorldClassId), WorldActors.MakeReference()).Object;
+	const TObjectPtr<FConsumerActor> Actor =
+		Store.NewObject<FConsumerActor>(*Registry.Find(ConsumerActorTypeId), ActorComponents.MakeReference()).Object;
 	const TObjectPtr<FConsumerComponent> Component = Store.NewObject<FConsumerComponent>(*Registry.Find(ConsumerComponentTypeId)).Object;
 	if (World.Get() == nullptr || Actor.Get() == nullptr || Component.Get() == nullptr)
 	{

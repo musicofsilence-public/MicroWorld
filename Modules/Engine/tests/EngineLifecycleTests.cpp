@@ -18,14 +18,14 @@ using MicroWorld::EEngineResult;
 using MicroWorld::EObjectResult;
 using MicroWorld::ERuntimeResult;
 using MicroWorld::FActorComponentRegistry;
-using MicroWorld::FActorComponentRegistryBase;
+using MicroWorld::FActorComponentRegistryReference;
 using MicroWorld::FGarbageCollectionBudget;
 using MicroWorld::FGarbageCollector;
 using MicroWorld::FObjectStore;
 using MicroWorld::FTickConfiguration;
 using MicroWorld::FTickContext;
 using MicroWorld::FWorldActorRegistry;
-using MicroWorld::FWorldActorRegistryBase;
+using MicroWorld::FWorldActorRegistryReference;
 using MicroWorld::TObjectPtr;
 using MicroWorld::UActorComponent;
 using MicroWorld::UWorld;
@@ -74,7 +74,7 @@ class FOrderingActor final : public AActor
 public:
 	FOrderingActor(
 		FTickConfiguration TickConfiguration,
-		FActorComponentRegistryBase Components,
+		FActorComponentRegistryReference Components,
 		FSequenceCounter& InSequence,
 		FActorEventState& InEvents) noexcept
 		: AActor(std::move(Components), TickConfiguration), Sequence(InSequence), Events(InEvents)
@@ -125,7 +125,7 @@ class FMutationAttemptActor final : public AActor
 public:
 	FMutationAttemptActor(
 		FObjectStore& InStore,
-		FActorComponentRegistryBase Components,
+		FActorComponentRegistryReference Components,
 		FGarbageCollector& InCollector,
 		const MicroWorld::FClassDescriptor& InComponentDescriptor,
 		FLifecycleMutationState& InState) noexcept
@@ -163,7 +163,7 @@ private:
 template<std::size_t SlotSizeBytes, std::size_t SlotAlignmentBytes, std::uint32_t SlotCount, std::uint32_t RootCapacity>
 TObjectPtr<FOrderingActor> MakeOrderingActor(
 	TEngineEnvironment<SlotSizeBytes, SlotAlignmentBytes, SlotCount, RootCapacity>& Env,
-	FActorComponentRegistryBase Components,
+	FActorComponentRegistryReference Components,
 	FSequenceCounter& Sequence,
 	FActorEventState& Events) noexcept
 {
@@ -203,9 +203,9 @@ MW_TEST_CASE(EngineBeginPlayOrderIsActorsThenComponentsPerActor)
 	FActorComponentRegistry<2> ActorBComponents;
 	FWorldActorRegistry<2> WorldActors;
 
-	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, WorldActors.MakeView());
-	const TObjectPtr<FOrderingActor> ActorA = MakeOrderingActor(Env, ActorAComponents.MakeView(), Sequence, ActorAEvents);
-	const TObjectPtr<FOrderingActor> ActorB = MakeOrderingActor(Env, ActorBComponents.MakeView(), Sequence, ActorBEvents);
+	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, WorldActors.MakeReference());
+	const TObjectPtr<FOrderingActor> ActorA = MakeOrderingActor(Env, ActorAComponents.MakeReference(), Sequence, ActorAEvents);
+	const TObjectPtr<FOrderingActor> ActorB = MakeOrderingActor(Env, ActorBComponents.MakeReference(), Sequence, ActorBEvents);
 	const TObjectPtr<FOrderingComponent> CompA1 = MakeOrderingComponent(Env, Sequence, CompA1Events);
 	const TObjectPtr<FOrderingComponent> CompA2 = MakeOrderingComponent(Env, Sequence, CompA2Events);
 	const TObjectPtr<FOrderingComponent> CompB1 = MakeOrderingComponent(Env, Sequence, CompB1Events);
@@ -254,9 +254,9 @@ MW_TEST_CASE(EngineTickOrderIsActorsThenComponentsPerActor)
 	FActorComponentRegistry<1> ActorBComponents;
 	FWorldActorRegistry<2> WorldActors;
 
-	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, WorldActors.MakeView());
-	const TObjectPtr<FOrderingActor> ActorA = MakeOrderingActor(Env, ActorAComponents.MakeView(), Sequence, ActorAEvents);
-	const TObjectPtr<FOrderingActor> ActorB = MakeOrderingActor(Env, ActorBComponents.MakeView(), Sequence, ActorBEvents);
+	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, WorldActors.MakeReference());
+	const TObjectPtr<FOrderingActor> ActorA = MakeOrderingActor(Env, ActorAComponents.MakeReference(), Sequence, ActorAEvents);
+	const TObjectPtr<FOrderingActor> ActorB = MakeOrderingActor(Env, ActorBComponents.MakeReference(), Sequence, ActorBEvents);
 	const TObjectPtr<FOrderingComponent> CompA = MakeOrderingComponent(Env, Sequence, CompAEvents);
 	const TObjectPtr<FOrderingComponent> CompB = MakeOrderingComponent(Env, Sequence, CompBEvents);
 
@@ -303,9 +303,9 @@ MW_TEST_CASE(EngineEndPlayIsReverseRegistrationAndActorBeforeComponents)
 	FActorComponentRegistry<2> ActorBComponents;
 	FWorldActorRegistry<2> WorldActors;
 
-	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, WorldActors.MakeView());
-	const TObjectPtr<FOrderingActor> ActorA = MakeOrderingActor(Env, ActorAComponents.MakeView(), Sequence, ActorAEvents);
-	const TObjectPtr<FOrderingActor> ActorB = MakeOrderingActor(Env, ActorBComponents.MakeView(), Sequence, ActorBEvents);
+	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, WorldActors.MakeReference());
+	const TObjectPtr<FOrderingActor> ActorA = MakeOrderingActor(Env, ActorAComponents.MakeReference(), Sequence, ActorAEvents);
+	const TObjectPtr<FOrderingActor> ActorB = MakeOrderingActor(Env, ActorBComponents.MakeReference(), Sequence, ActorBEvents);
 	const TObjectPtr<FOrderingComponent> CompA1 = MakeOrderingComponent(Env, Sequence, CompA1Events);
 	const TObjectPtr<FOrderingComponent> CompA2 = MakeOrderingComponent(Env, Sequence, CompA2Events);
 
@@ -351,9 +351,9 @@ MW_TEST_CASE(EngineTickIntervalAndNoCatchUpBehavior)
 	FWorldActorRegistry<1> WorldActors;
 
 	const FTickConfiguration IntervalConfiguration{true, true, DurationMilliseconds{50}};
-	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, WorldActors.MakeView());
+	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, WorldActors.MakeReference());
 	const TObjectPtr<FOrderingActor> Actor = Env.CreateDerivedObject<FOrderingActor>(
-		OrderingActorTypeId, "OrderingActor", IntervalConfiguration, ActorComponents.MakeView(), Sequence, ActorEvents);
+		OrderingActorTypeId, "OrderingActor", IntervalConfiguration, ActorComponents.MakeReference(), Sequence, ActorEvents);
 	(void)World.Get()->RegisterActor(TObjectPtr<AActor>{Actor});
 
 	(void)World.Get()->BeginPlay(100);
@@ -390,9 +390,9 @@ MW_TEST_CASE(EngineLifecycleHooksCannotMutateManagedGraph)
 	FWorldActorRegistry<1> WorldActors;
 
 	const MicroWorld::FClassDescriptor* const ComponentDescriptor = Env.FindDescriptor(MicroWorld::UActorComponentClassId);
-	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, WorldActors.MakeView());
+	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, WorldActors.MakeReference());
 	const TObjectPtr<FMutationAttemptActor> Actor = Env.CreateDerivedObject<FMutationAttemptActor>(
-		MutationAttemptActorTypeId, "MutationAttemptActor", Store, ActorComponents.MakeView(), Collector, *ComponentDescriptor, MutationState);
+		MutationAttemptActorTypeId, "MutationAttemptActor", Store, ActorComponents.MakeReference(), Collector, *ComponentDescriptor, MutationState);
 	const EEngineResult ActorRegistration = World.Get()->RegisterActor(Actor);
 	const ERuntimeResult BeginResult = World.Get()->BeginPlay(0);
 	const ERuntimeResult AdvanceResult = World.Get()->Advance(1);

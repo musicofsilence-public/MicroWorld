@@ -25,7 +25,7 @@ namespace Detail
 	template<std::size_t MaxComponents>
 	struct TActorRegistryHolder
 	{
-		/** Owns the inline component registry leased to the derived actor's base. */
+		/** Owns the inline component registry referenced by the derived actor's base. */
 		FActorComponentRegistry<MaxComponents> Registry;
 	};
 
@@ -39,7 +39,7 @@ namespace Detail
 	template<std::size_t MaxActors>
 	struct TWorldRegistryHolder
 	{
-		/** Owns the inline actor registry leased to the derived world's base. */
+		/** Owns the inline actor registry referenced by the derived world's base. */
 		FWorldActorRegistry<MaxActors> Registry;
 	};
 
@@ -48,7 +48,7 @@ namespace Detail
 /**
  * An AActor that owns its fixed-capacity component registry inline through the
  * base-from-member idiom, so callers need not compose or pass a separate
- * FActorComponentRegistry lease.
+ * FActorComponentRegistry reference.
  *
  * Derive a concrete actor from TInlineActor<N> and register its components the
  * usual way (RegisterComponent before BeginPlay).
@@ -62,14 +62,14 @@ template<std::size_t MaxComponents>
 class TInlineActor : private Detail::TActorRegistryHolder<MaxComponents>, public AActor
 {
 public:
-	/** Leases the inline component registry to AActor after the holder base is built. */
-	explicit TInlineActor(FTickConfiguration TickConfiguration = {}) noexcept : AActor(this->Registry.MakeView(), TickConfiguration) {}
+	/** Provides a reference to the inline component registry for AActor after the holder base is built. */
+	explicit TInlineActor(FTickConfiguration TickConfiguration = {}) noexcept : AActor(this->Registry.MakeReference(), TickConfiguration) {}
 };
 
 /**
  * A UWorld that owns its fixed-capacity actor registry inline through the
  * base-from-member idiom, so callers need not compose or pass a separate
- * FWorldActorRegistry lease.
+ * FWorldActorRegistry reference.
  *
  * Use TInlineWorld<N> directly or derive from it, then register actors the
  * usual way (RegisterActor before BeginPlay).
@@ -83,8 +83,8 @@ template<std::size_t MaxActors>
 class TInlineWorld : private Detail::TWorldRegistryHolder<MaxActors>, public UWorld
 {
 public:
-	/** Leases the inline actor registry to UWorld after the holder base is built. */
-	TInlineWorld() noexcept : UWorld(this->Registry.MakeView()) {}
+	/** Provides a reference to the inline actor registry for UWorld after the holder base is built. */
+	TInlineWorld() noexcept : UWorld(this->Registry.MakeReference()) {}
 };
 
 } // namespace MicroWorld
