@@ -34,8 +34,8 @@ using MicroWorld::FTypeId;
 using MicroWorld::MakeClassDescriptor;
 using MicroWorld::TDelegate;
 using MicroWorld::TEngineHost;
-using MicroWorld::TObjectPtr;
 using MicroWorld::TObjectCreationResult;
+using MicroWorld::TObjectPtr;
 using MicroWorld::TraceManagedObjectReferences;
 using MicroWorld::UActorComponent;
 using MicroWorld::UActorComponentClassId;
@@ -411,23 +411,42 @@ MW_TEST_CASE(EngineHostTemplateHelpersRegisterAndConstructUserTypes)
 	MicroWorld::FActorComponentRegistry<2> ActorComponents{};
 	FHost Host{FGarbageCollectionBudget{1, 4, 8}};
 
-	MW_EXPECT_EQ(Test, EObjectResult::Success, Host.RegisterClass<FHostActor>(HostActorTypeId, "HostActor"), "RegisterClass<FHostActor> derives the actor parent and reports success");
-	MW_EXPECT_EQ(Test, EObjectResult::Success, Host.RegisterClass<FHostComponent>(HostComponentTypeId, "HostComponent"), "RegisterClass<FHostComponent> derives the component parent and reports success");
+	MW_EXPECT_EQ(
+		Test,
+		EObjectResult::Success,
+		Host.RegisterClass<FHostActor>(HostActorTypeId, "HostActor"),
+		"RegisterClass<FHostActor> derives the actor parent and reports success");
+	MW_EXPECT_EQ(
+		Test,
+		EObjectResult::Success,
+		Host.RegisterClass<FHostComponent>(HostComponentTypeId, "HostComponent"),
+		"RegisterClass<FHostComponent> derives the component parent and reports success");
 
 	const TObjectPtr<UWorld> World = Host.CreateWorld();
 	MW_EXPECT_TRUE(Test, World.Get() != nullptr, "CreateWorld roots the world after the helpers register user types");
 
-	const TObjectCreationResult<FHostActor> Actor =
-		Host.CreateObject<FHostActor>(HostActorTypeId, ActorComponents.MakeView(), Sequence, ActorEvents);
-	const TObjectCreationResult<FHostComponent> Component =
-		Host.CreateObject<FHostComponent>(HostComponentTypeId, Sequence, ComponentEvents);
-	MW_EXPECT_EQ(Test, EObjectResult::Success, Actor.Result, "CreateObject<FHostActor> constructs the actor through the helper-registered descriptor");
-	MW_EXPECT_EQ(Test, EObjectResult::Success, Component.Result, "CreateObject<FHostComponent> constructs the component through the helper-registered descriptor");
+	const TObjectCreationResult<FHostActor> Actor = Host.CreateObject<FHostActor>(HostActorTypeId, ActorComponents.MakeView(), Sequence, ActorEvents);
+	const TObjectCreationResult<FHostComponent> Component = Host.CreateObject<FHostComponent>(HostComponentTypeId, Sequence, ComponentEvents);
+	MW_EXPECT_EQ(
+		Test, EObjectResult::Success, Actor.Result, "CreateObject<FHostActor> constructs the actor through the helper-registered descriptor");
+	MW_EXPECT_EQ(
+		Test,
+		EObjectResult::Success,
+		Component.Result,
+		"CreateObject<FHostComponent> constructs the component through the helper-registered descriptor");
 	MW_EXPECT_TRUE(Test, Actor.Object.Get() != nullptr, "CreateObject<FHostActor> returns a non-null actor handle");
 	MW_EXPECT_TRUE(Test, Component.Object.Get() != nullptr, "CreateObject<FHostComponent> returns a non-null component handle");
 
-	MW_EXPECT_EQ(Test, EEngineResult::Success, Actor.Object.Get()->RegisterComponent(Component.Object), "The helper-constructed component attaches to the helper-constructed actor");
-	MW_EXPECT_EQ(Test, EEngineResult::Success, Host.GetWorld().RegisterActor(TObjectPtr<AActor>{Actor.Object}), "The helper-constructed actor registers with the world");
+	MW_EXPECT_EQ(
+		Test,
+		EEngineResult::Success,
+		Actor.Object.Get()->RegisterComponent(Component.Object),
+		"The helper-constructed component attaches to the helper-constructed actor");
+	MW_EXPECT_EQ(
+		Test,
+		EEngineResult::Success,
+		Host.GetWorld().RegisterActor(TObjectPtr<AActor>{Actor.Object}),
+		"The helper-constructed actor registers with the world");
 
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, Host.BeginPlay(0), "BeginPlay reports success at the helper-driven baseline");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, Host.Tick(10), "Tick at 10 ms reports success through the helper-registered actor");

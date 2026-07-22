@@ -92,11 +92,11 @@ void SetLogSink(FLogSink Sink) noexcept;
 namespace Detail
 {
 
-/** Forwards a ready-made message to the installed sink, doing nothing when none is set. */
-void DispatchLogMessage(ELogLevel Level, const char* Category, const char* Message) noexcept;
+	/** Forwards a ready-made message to the installed sink, doing nothing when none is set. */
+	void DispatchLogMessage(ELogLevel Level, const char* Category, const char* Message) noexcept;
 
-/** Formats into a bounded stack buffer then forwards to the sink, skipping work when none is set. */
-void DispatchLogFormatted(ELogLevel Level, const char* Category, const char* Format, ...) noexcept MW_LOG_PRINTF_FORMAT;
+	/** Formats into a bounded stack buffer then forwards to the sink, skipping work when none is set. */
+	void DispatchLogFormatted(ELogLevel Level, const char* Category, const char* Format, ...) noexcept MW_LOG_PRINTF_FORMAT;
 
 } // namespace Detail
 
@@ -108,12 +108,10 @@ void DispatchLogFormatted(ELogLevel Level, const char* Category, const char* For
 
 // Disabled emitters drop every argument unevaluated; enabled ones dispatch.
 #define MW_LOG_EMITF_0(Level, Category, ...) ((void)0)
-#define MW_LOG_EMITF_1(Level, Category, ...) \
-	::MicroWorld::Detail::DispatchLogFormatted(::MicroWorld::ELogLevel::Level, (Category), __VA_ARGS__)
+#define MW_LOG_EMITF_1(Level, Category, ...) ::MicroWorld::Detail::DispatchLogFormatted(::MicroWorld::ELogLevel::Level, (Category), __VA_ARGS__)
 
 #define MW_LOG_EMITM_0(Level, Category, Message) ((void)0)
-#define MW_LOG_EMITM_1(Level, Category, Message) \
-	::MicroWorld::Detail::DispatchLogMessage(::MicroWorld::ELogLevel::Level, (Category), (Message))
+#define MW_LOG_EMITM_1(Level, Category, Message) ::MicroWorld::Detail::DispatchLogMessage(::MicroWorld::ELogLevel::Level, (Category), (Message))
 
 /**
  * Logs a printf-style record at the given level and category, e.g.
@@ -121,13 +119,11 @@ void DispatchLogFormatted(ELogLevel Level, const char* Category, const char* For
  * the level is below MW_LOG_MIN_LEVEL. Use MW_LOG_MSG for a runtime string that
  * may itself contain '%'.
  */
-#define MW_LOG(Level, Category, ...) \
-	MW_LOG_CONCAT(MW_LOG_EMITF_, MW_LOG_CONCAT(MW_LOG_ENABLED_, Level))(Level, Category, __VA_ARGS__)
+#define MW_LOG(Level, Category, ...) MW_LOG_CONCAT(MW_LOG_EMITF_, MW_LOG_CONCAT(MW_LOG_ENABLED_, Level))(Level, Category, __VA_ARGS__)
 
 /**
  * Logs an already-formed message string at the given level and category without
  * printf interpretation, e.g. MW_LOG_MSG(Log, "Boot", "ready"). Stripped to
  * nothing when the level is below MW_LOG_MIN_LEVEL.
  */
-#define MW_LOG_MSG(Level, Category, Message) \
-	MW_LOG_CONCAT(MW_LOG_EMITM_, MW_LOG_CONCAT(MW_LOG_ENABLED_, Level))(Level, Category, Message)
+#define MW_LOG_MSG(Level, Category, Message) MW_LOG_CONCAT(MW_LOG_EMITM_, MW_LOG_CONCAT(MW_LOG_ENABLED_, Level))(Level, Category, Message)

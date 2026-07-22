@@ -156,8 +156,7 @@ private:
 	{
 		const bool bHandlesPresent = Count != nullptr && PendingSpawnCount != nullptr && PendingDestroyCount != nullptr;
 		const bool bArraysPresent = Capacity == 0 || (Actors != nullptr && PendingSpawn != nullptr && PendingDestroy != nullptr);
-		const bool bCountsBounded =
-			bHandlesPresent && *Count <= Capacity && *PendingSpawnCount <= Capacity && *PendingDestroyCount <= Capacity;
+		const bool bCountsBounded = bHandlesPresent && *Count <= Capacity && *PendingSpawnCount <= Capacity && *PendingDestroyCount <= Capacity;
 		return bHandlesPresent && bArraysPresent && bCountsBounded;
 	}
 

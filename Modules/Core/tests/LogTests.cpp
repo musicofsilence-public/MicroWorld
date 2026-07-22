@@ -14,57 +14,57 @@ namespace MicroWorld::Tests
 namespace
 {
 
-/** Captures the last record the sink received without dynamic storage. */
-struct FLogCapture
-{
-	/** Counts sink invocations so stripped or dropped calls are observable. */
-	int CallCount{0};
+	/** Captures the last record the sink received without dynamic storage. */
+	struct FLogCapture
+	{
+		/** Counts sink invocations so stripped or dropped calls are observable. */
+		int CallCount{0};
 
-	/** Records the level of the most recent routed record. */
-	ELogLevel Level{ELogLevel::Log};
+		/** Records the level of the most recent routed record. */
+		ELogLevel Level{ELogLevel::Log};
 
-	/** Records the category pointer of the most recent routed record. */
-	const char* Category{nullptr};
+		/** Records the category pointer of the most recent routed record. */
+		const char* Category{nullptr};
 
-	/** Owns a bounded copy of the message, since formatting buffers are transient. */
-	char Message[64]{};
-};
+		/** Owns a bounded copy of the message, since formatting buffers are transient. */
+		char Message[64]{};
+	};
 
-/** Holds the single capture the function-pointer sink writes into. */
-FLogCapture GCapture{};
+	/** Holds the single capture the function-pointer sink writes into. */
+	FLogCapture GCapture{};
 
-/** Counts side effects in log arguments so stripped calls prove non-evaluation. */
-int GArgumentEvaluations{0};
+	/** Counts side effects in log arguments so stripped calls prove non-evaluation. */
+	int GArgumentEvaluations{0};
 
-/** Records one routed log record into the shared capture. */
-void RecordingSink(ELogLevel Level, const char* Category, const char* Message)
-{
-	++GCapture.CallCount;
-	GCapture.Level = Level;
-	GCapture.Category = Category;
-	std::snprintf(GCapture.Message, sizeof(GCapture.Message), "%s", Message);
-}
+	/** Records one routed log record into the shared capture. */
+	void RecordingSink(ELogLevel Level, const char* Category, const char* Message)
+	{
+		++GCapture.CallCount;
+		GCapture.Level = Level;
+		GCapture.Category = Category;
+		std::snprintf(GCapture.Message, sizeof(GCapture.Message), "%s", Message);
+	}
 
-/** Returns a marker integer while recording that the argument was evaluated. */
-int EvaluatedInteger()
-{
-	++GArgumentEvaluations;
-	return 42;
-}
+	/** Returns a marker integer while recording that the argument was evaluated. */
+	int EvaluatedInteger()
+	{
+		++GArgumentEvaluations;
+		return 42;
+	}
 
-/** Returns a marker string while recording that the argument was evaluated. */
-const char* EvaluatedMessage()
-{
-	++GArgumentEvaluations;
-	return "probe";
-}
+	/** Returns a marker string while recording that the argument was evaluated. */
+	const char* EvaluatedMessage()
+	{
+		++GArgumentEvaluations;
+		return "probe";
+	}
 
-/** Clears shared capture and evaluation counters before one test observes them. */
-void ResetCapture() noexcept
-{
-	GCapture = FLogCapture{};
-	GArgumentEvaluations = 0;
-}
+	/** Clears shared capture and evaluation counters before one test observes them. */
+	void ResetCapture() noexcept
+	{
+		GCapture = FLogCapture{};
+		GArgumentEvaluations = 0;
+	}
 
 } // namespace
 

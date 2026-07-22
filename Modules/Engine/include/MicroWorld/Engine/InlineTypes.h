@@ -13,35 +13,35 @@ namespace MicroWorld
 namespace Detail
 {
 
-/**
- * Holds one actor's component-registry storage as a first base so the registry
- * is fully constructed before the AActor subobject and outlives it.
- *
- * This is the base-from-member idiom: a member cannot be passed to a base
- * constructor, but a base declared before AActor can. TInlineActor relies on
- * the declaration order (this holder, then AActor) for both construction and
- * reverse destruction.
- */
-template<std::size_t MaxComponents>
-struct TActorRegistryHolder
-{
-	/** Owns the inline component registry leased to the derived actor's base. */
-	FActorComponentRegistry<MaxComponents> Registry;
-};
+	/**
+	 * Holds one actor's component-registry storage as a first base so the registry
+	 * is fully constructed before the AActor subobject and outlives it.
+	 *
+	 * This is the base-from-member idiom: a member cannot be passed to a base
+	 * constructor, but a base declared before AActor can. TInlineActor relies on
+	 * the declaration order (this holder, then AActor) for both construction and
+	 * reverse destruction.
+	 */
+	template<std::size_t MaxComponents>
+	struct TActorRegistryHolder
+	{
+		/** Owns the inline component registry leased to the derived actor's base. */
+		FActorComponentRegistry<MaxComponents> Registry;
+	};
 
-/**
- * Holds one world's actor-registry storage as a first base so the registry is
- * fully constructed before the UWorld subobject and outlives it.
- *
- * The same base-from-member idiom as TActorRegistryHolder, over the world's
- * actor registry instead of an actor's component registry.
- */
-template<std::size_t MaxActors>
-struct TWorldRegistryHolder
-{
-	/** Owns the inline actor registry leased to the derived world's base. */
-	FWorldActorRegistry<MaxActors> Registry;
-};
+	/**
+	 * Holds one world's actor-registry storage as a first base so the registry is
+	 * fully constructed before the UWorld subobject and outlives it.
+	 *
+	 * The same base-from-member idiom as TActorRegistryHolder, over the world's
+	 * actor registry instead of an actor's component registry.
+	 */
+	template<std::size_t MaxActors>
+	struct TWorldRegistryHolder
+	{
+		/** Owns the inline actor registry leased to the derived world's base. */
+		FWorldActorRegistry<MaxActors> Registry;
+	};
 
 } // namespace Detail
 
