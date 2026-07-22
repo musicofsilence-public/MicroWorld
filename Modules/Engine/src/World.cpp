@@ -392,32 +392,55 @@ ERuntimeResult UWorld::ApplyPending(const TimePointMilliseconds NowMilliseconds)
 
 	ERuntimeResult FirstError = ERuntimeResult::Success;
 
-	// Destroys apply before spawns so ending actors free capacity first. The end
-	// cascade runs under the dispatch guard; store destruction marking waits until
-	// the guard releases because MarkPendingDestroy is rejected while dispatch is
-	// locked.
+	// Destroys apply before spawns so ending actors free capacity that the same
+	// barrier can immediately reuse for pending spawns. Each cascade phase aborts
+	// the whole barrier if its dispatch guard cannot be acquired.
+	const ERuntimeResult EndGuardResult = EndDoomedActorsUnderGuard(*ObjectStore, FirstError);
+	if (EndGuardResult != ERuntimeResult::Success)
 	{
-		FObjectStoreDispatchGuard DispatchGuard(*ObjectStore);
-		if (!DispatchGuard.IsAcquired())
+		return EndGuardResult;
+	}
+
+	MarkAndUnregisterDoomedActors(*ObjectStore);
+
+	const ERuntimeResult BeginGuardResult = BeginPendingSpawnsUnderGuard(*ObjectStore, NowMilliseconds, FirstError);
+	if (BeginGuardResult != ERuntimeResult::Success)
+	{
+		return BeginGuardResult;
+	}
+
+	return FirstError;
+}
+
+ERuntimeResult UWorld::EndDoomedActorsUnderGuard(FObjectStore& ObjectStore, ERuntimeResult& FirstError) noexcept
+{
+	// The end cascade holds the dispatch guard; store destruction marking waits
+	// until the guard releases because MarkPendingDestroy is rejected while
+	// dispatch is locked.
+	FObjectStoreDispatchGuard DispatchGuard(ObjectStore);
+	if (!DispatchGuard.IsAcquired())
+	{
+		return ERuntimeResult::LifecycleLocked;
+	}
+	for (std::size_t Index = 0; Index < Actors.GetPendingDestroyCount(); ++Index)
+	{
+		if (AActor* const Actor = Actors.PendingDestroyAt(Index).Get())
 		{
-			return ERuntimeResult::LifecycleLocked;
-		}
-		for (std::size_t Index = 0; Index < Actors.GetPendingDestroyCount(); ++Index)
-		{
-			if (AActor* const Actor = Actors.PendingDestroyAt(Index).Get())
+			const ERuntimeResult EndResult = DispatchActorEnd(*Actor);
+			if (FirstError == ERuntimeResult::Success && EndResult != ERuntimeResult::Success)
 			{
-				const ERuntimeResult EndResult = DispatchActorEnd(*Actor);
-				if (FirstError == ERuntimeResult::Success && EndResult != ERuntimeResult::Success)
-				{
-					FirstError = EndResult;
-				}
+				FirstError = EndResult;
 			}
 		}
 	}
+	return ERuntimeResult::Success;
+}
 
-	// Now that no dispatch guard is held, mark each doomed actor's components and
-	// then the actor itself for the destruction barrier, and unregister it from
-	// the live set while preserving the order of the survivors.
+void UWorld::MarkAndUnregisterDoomedActors(FObjectStore& ObjectStore) noexcept
+{
+	// With no dispatch guard held, mark each doomed actor's components and then the
+	// actor itself for the destruction barrier, and unregister it from the live set
+	// while preserving the order of the survivors.
 	for (std::size_t Index = 0; Index < Actors.GetPendingDestroyCount(); ++Index)
 	{
 		const TObjectPtr<AActor> DoomedActor = Actors.PendingDestroyAt(Index);
@@ -435,13 +458,19 @@ ERuntimeResult UWorld::ApplyPending(const TimePointMilliseconds NowMilliseconds)
 				break;
 			}
 		}
-		(void)ObjectStore->MarkPendingDestroy(DoomedActor.Handle());
+		(void)ObjectStore.MarkPendingDestroy(DoomedActor.Handle());
 	}
 	Actors.ClearPendingDestroy();
+}
 
+ERuntimeResult UWorld::BeginPendingSpawnsUnderGuard(
+	FObjectStore& ObjectStore, const TimePointMilliseconds NowMilliseconds, ERuntimeResult& FirstError) noexcept
+{
 	// Spawns register into the freed live capacity and begin under a fresh guard.
+	// The guard scope closes before ClearPendingSpawn so the pending list is only
+	// cleared once every queued spawn has begun.
 	{
-		FObjectStoreDispatchGuard DispatchGuard(*ObjectStore);
+		FObjectStoreDispatchGuard DispatchGuard(ObjectStore);
 		if (!DispatchGuard.IsAcquired())
 		{
 			return ERuntimeResult::LifecycleLocked;
@@ -464,8 +493,7 @@ ERuntimeResult UWorld::ApplyPending(const TimePointMilliseconds NowMilliseconds)
 		}
 	}
 	Actors.ClearPendingSpawn();
-
-	return FirstError;
+	return ERuntimeResult::Success;
 }
 
 std::size_t UWorld::PendingSpawnCount() const noexcept

@@ -1040,7 +1040,7 @@ tests must pass unchanged.
   similar duplicate/capacity scan blocks — merging them was rejected because it
   would risk silently reordering checks that tests assert on.
 
-- [ ] **5.2 Split `UWorld::ApplyPending`.** `World.cpp:343-436` (~91 body
+- [x] **5.2 Split `UWorld::ApplyPending`.** `World.cpp:343-436` (~91 body
   lines — the barrier that ends doomed actors, unregisters them, then begins
   pending spawns under a second guard).
   Extract, preserving order and guard scopes exactly:
@@ -1053,6 +1053,31 @@ tests must pass unchanged.
 
   **Done when:** `ApplyPending` ≤ 25 body lines; EngineSpawnDestroyTests and
   EngineGarbageCollectionTests pass unchanged; Standard Verify passes.
+
+  **Evidence (2026-07-22, commit pending):** `ApplyPending` reduced to a
+  ~17-logical-line orchestrator (validate + early-out + three named phase
+  calls + first-error fold). Three private member helpers added to `World.h`
+  after `DispatchActorEnd` and defined in `World.cpp`:
+  `EndDoomedActorsUnderGuard`, `MarkAndUnregisterDoomedActors`,
+  `BeginPendingSpawnsUnderGuard`. Loop bodies lifted verbatim (confirmed
+  unchanged context in the diff), so runtime behavior is byte-identical. Two
+  behavior-critical early-return semantics preserved: an end-guard acquire
+  failure aborts before mark/unregister (so `ClearPendingDestroy` never runs),
+  and a begin-guard acquire failure returns from inside the inner guard scope
+  (so `ClearPendingSpawn` never runs) — both matching the original.
+  **Deviations from the illustrative signatures (justified):** (a) helpers take
+  `FObjectStore&` (parent validates non-null once, then passes the guaranteed
+  reference — avoids redundant null-checks, `FObjectStore` already forward-
+  declared in `World.h`); (b) the cascade helpers add an `ERuntimeResult&
+  FirstError` out-param plus an `ERuntimeResult` guard-status return, so a
+  guard-fail abort is distinguishable from a folded cascade error that spans
+  both phases; (c) `EndDoomedActorsUnderGuard` drops the `TimePointMilliseconds`
+  the roadmap listed — the end cascade calls `DispatchActorEnd(AActor&)`, which
+  takes no time. **CQS note:** the two cascade helpers are commands that also
+  report guard-status and fold the first error via out-param — an intentional
+  command-with-status, consistent with the barrier's existing contract.
+  Verified: build clean, ctest 11/11 (`#1 format_check`, `#10 engine_tests`
+  including EngineSpawnDestroy + EngineGarbageCollection), doc checker 122 files.
 
 - [ ] **5.3 Split `TTimerManager::Advance` and `Schedule`.** `Timer.h:223-292`
   (~67 lines) and `:148-189` (~35 lines).

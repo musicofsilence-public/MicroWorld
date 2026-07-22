@@ -125,6 +125,21 @@ private:
 	/** Ends one actor while the world retains the first error and still ends every actor. */
 	ERuntimeResult DispatchActorEnd(AActor& Actor) noexcept;
 
+	/** Ends every doomed actor under the dispatch guard and folds the first end
+	 * failure into FirstError; returns LifecycleLocked only when the guard cannot
+	 * be acquired. */
+	ERuntimeResult EndDoomedActorsUnderGuard(FObjectStore& ObjectStore, ERuntimeResult& FirstError) noexcept;
+
+	/** Marks each doomed actor's components and itself for the destruction barrier
+	 * and removes it from the live set, run after the dispatch guard has released. */
+	void MarkAndUnregisterDoomedActors(FObjectStore& ObjectStore) noexcept;
+
+	/** Begins every pending-spawn actor under a fresh dispatch guard and folds the
+	 * first begin failure into FirstError; returns LifecycleLocked only when the
+	 * guard cannot be acquired. */
+	ERuntimeResult BeginPendingSpawnsUnderGuard(
+		FObjectStore& ObjectStore, TimePointMilliseconds NowMilliseconds, ERuntimeResult& FirstError) noexcept;
+
 	/** Presents every registered actor to the active iterative collector. */
 	void VisitReferences(FReferenceCollector& Collector) noexcept override;
 
