@@ -314,32 +314,14 @@ public:
 			return Creation;
 		}
 
-		FObjectSlotMetadata& Slot = Storage.SlotMetadata[SlotIndex];
-		// Generation 0 means "never published" (ObjectHandle.h:61-62), so a
-		// slot's first publish jumps to 1 and later reuses increment --
-		// keeping every live handle's generation nonzero.
-		const ObjectGeneration NextGeneration = Slot.Generation == 0 ? 1 : Slot.Generation + 1;
-		Slot.State = EObjectSlotState::Constructing;
+		Storage.SlotMetadata[SlotIndex].State = EObjectSlotState::Constructing;
 		bMutationLocked = true;
 
 		void* const PlacementAddress = SlotAddress(SlotIndex);
 		T* const ConstructedObject = ::new (PlacementAddress) T(std::forward<TArguments>(Arguments)...);
 		UObject* const ManagedObject = static_cast<UObject*>(ConstructedObject);
-		const FObjectHandle Handle{SlotIndex, NextGeneration};
 
-		ManagedObject->Store = this;
-		ManagedObject->Handle = Handle;
-		ManagedObject->Descriptor = &Descriptor;
-		ManagedObject->bPendingDestroy = false;
-
-		Slot.Generation = NextGeneration;
-		Slot.Descriptor = &Descriptor;
-		Slot.Object = ManagedObject;
-		Slot.bMarked = false;
-		Slot.State = EObjectSlotState::Live;
-
-		++OccupiedSlotCount;
-		ObjectPayloadByteCount += Descriptor.SizeBytes;
+		const FObjectHandle Handle = PublishObjectIntoSlot(SlotIndex, Descriptor, *ManagedObject);
 		bMutationLocked = false;
 		Creation.Result = EObjectResult::Success;
 		Creation.Object = TObjectPtr<T>(*this, Handle);
@@ -452,6 +434,24 @@ private:
 
 	/** Removes every independent root token for a lifetime that can no longer resolve. */
 	void RemoveAllRoots(FObjectHandle Handle) noexcept;
+
+	/** Rejects an index that is out of range or not a destroyable live/pending slot. */
+	EObjectResult ValidateDestroyableSlot(ObjectIndex SlotIndex) const noexcept;
+
+	/** Runs BeginDestroy and exact destruction, then drops the lifetime's root tokens. */
+	void RunDestructionCallbacks(FObjectSlotMetadata& Slot, FObjectHandle Handle) noexcept;
+
+	/** Clears the slot's live pointers and either vacates it or retires it before wrap. */
+	void RecycleOrRetireSlot(FObjectSlotMetadata& Slot) noexcept;
+
+	/** Decrements occupancy, pending, and payload totals for one destroyed object. */
+	void UpdateOccupancyCounters(bool bWasPending, std::size_t PayloadBytes) noexcept;
+
+	/** Computes the generation a reused slot publishes next (0 means never published). */
+	static ObjectGeneration NextPublishGeneration(ObjectGeneration CurrentGeneration) noexcept;
+
+	/** Wires object identity and slot metadata for a freshly constructed object and returns its handle. */
+	FObjectHandle PublishObjectIntoSlot(ObjectIndex SlotIndex, const FClassDescriptor& Descriptor, UObject& ManagedObject) noexcept;
 
 	/** Reports collector iteration capacity without exposing mutable metadata publicly. */
 	std::uint32_t CollectorSlotCapacity() const noexcept { return Storage.SlotCount; }

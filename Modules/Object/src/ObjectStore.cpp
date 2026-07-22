@@ -264,20 +264,14 @@ const FObjectSlotMetadata* FObjectStore::FindMatchingSlot(const FObjectHandle Ha
 
 EObjectResult FObjectStore::DestroySlot(const ObjectIndex SlotIndex) noexcept
 {
-	if (SlotIndex >= Storage.SlotCount)
+	const EObjectResult ValidationResult = ValidateDestroyableSlot(SlotIndex);
+	if (ValidationResult != EObjectResult::Success)
 	{
-		return EObjectResult::StaleHandle;
+		return ValidationResult;
 	}
 
 	FObjectSlotMetadata& Slot = Storage.SlotMetadata[SlotIndex];
-	if ((Slot.State != EObjectSlotState::Live && Slot.State != EObjectSlotState::PendingDestroy) || Slot.Object == nullptr
-		|| Slot.Descriptor == nullptr || Slot.Descriptor->Destroy == nullptr)
-	{
-		return EObjectResult::StaleHandle;
-	}
-
 	const FObjectHandle Handle{SlotIndex, Slot.Generation};
-	UObject* const Object = Slot.Object;
 	const FClassDescriptor* const Descriptor = Slot.Descriptor;
 	const bool bWasPending = Slot.State == EObjectSlotState::PendingDestroy;
 	// Save and restore (not clear): this destroy can nest inside another store
@@ -287,12 +281,41 @@ EObjectResult FObjectStore::DestroySlot(const ObjectIndex SlotIndex) noexcept
 	const bool bWasMutationLocked = bMutationLocked;
 
 	bMutationLocked = true;
+	RunDestructionCallbacks(Slot, Handle);
+	RecycleOrRetireSlot(Slot);
+	UpdateOccupancyCounters(bWasPending, Descriptor->SizeBytes);
+	bMutationLocked = bWasMutationLocked;
+	return EObjectResult::Success;
+}
+
+EObjectResult FObjectStore::ValidateDestroyableSlot(const ObjectIndex SlotIndex) const noexcept
+{
+	if (SlotIndex >= Storage.SlotCount)
+	{
+		return EObjectResult::StaleHandle;
+	}
+	const FObjectSlotMetadata& Slot = Storage.SlotMetadata[SlotIndex];
+	if ((Slot.State != EObjectSlotState::Live && Slot.State != EObjectSlotState::PendingDestroy) || Slot.Object == nullptr
+		|| Slot.Descriptor == nullptr || Slot.Descriptor->Destroy == nullptr)
+	{
+		return EObjectResult::StaleHandle;
+	}
+	return EObjectResult::Success;
+}
+
+void FObjectStore::RunDestructionCallbacks(FObjectSlotMetadata& Slot, const FObjectHandle Handle) noexcept
+{
+	UObject* const Object = Slot.Object;
+	const FClassDescriptor* const Descriptor = Slot.Descriptor;
 	Slot.State = EObjectSlotState::Destroying;
 	Object->bPendingDestroy = true;
 	Object->BeginDestroy();
 	Descriptor->Destroy(*Object);
 	RemoveAllRoots(Handle);
+}
 
+void FObjectStore::RecycleOrRetireSlot(FObjectSlotMetadata& Slot) noexcept
+{
 	Slot.Descriptor = nullptr;
 	Slot.Object = nullptr;
 	Slot.bMarked = false;
@@ -305,7 +328,10 @@ EObjectResult FObjectStore::DestroySlot(const ObjectIndex SlotIndex) noexcept
 		Slot.State = EObjectSlotState::Retired;
 		++RetiredSlotCount;
 	}
+}
 
+void FObjectStore::UpdateOccupancyCounters(const bool bWasPending, const std::size_t PayloadBytes) noexcept
+{
 	if (OccupiedSlotCount > 0)
 	{
 		--OccupiedSlotCount;
@@ -314,12 +340,40 @@ EObjectResult FObjectStore::DestroySlot(const ObjectIndex SlotIndex) noexcept
 	{
 		--PendingDestroyCount;
 	}
-	if (ObjectPayloadByteCount >= Descriptor->SizeBytes)
+	if (ObjectPayloadByteCount >= PayloadBytes)
 	{
-		ObjectPayloadByteCount -= Descriptor->SizeBytes;
+		ObjectPayloadByteCount -= PayloadBytes;
 	}
-	bMutationLocked = bWasMutationLocked;
-	return EObjectResult::Success;
+}
+
+ObjectGeneration FObjectStore::NextPublishGeneration(const ObjectGeneration CurrentGeneration) noexcept
+{
+	// Generation 0 means "never published" (ObjectHandle.h), so a slot's first
+	// publish jumps to 1 and later reuse increments -- keeping every live handle's
+	// generation nonzero. FindVacantSlot never returns a slot that cannot advance.
+	return CurrentGeneration == 0 ? 1 : CurrentGeneration + 1;
+}
+
+FObjectHandle FObjectStore::PublishObjectIntoSlot(const ObjectIndex SlotIndex, const FClassDescriptor& Descriptor, UObject& ManagedObject) noexcept
+{
+	FObjectSlotMetadata& Slot = Storage.SlotMetadata[SlotIndex];
+	const ObjectGeneration NextGeneration = NextPublishGeneration(Slot.Generation);
+	const FObjectHandle Handle{SlotIndex, NextGeneration};
+
+	ManagedObject.Store = this;
+	ManagedObject.Handle = Handle;
+	ManagedObject.Descriptor = &Descriptor;
+	ManagedObject.bPendingDestroy = false;
+
+	Slot.Generation = NextGeneration;
+	Slot.Descriptor = &Descriptor;
+	Slot.Object = &ManagedObject;
+	Slot.bMarked = false;
+	Slot.State = EObjectSlotState::Live;
+
+	++OccupiedSlotCount;
+	ObjectPayloadByteCount += Descriptor.SizeBytes;
+	return Handle;
 }
 
 void FObjectStore::RemoveAllRoots(const FObjectHandle Handle) noexcept

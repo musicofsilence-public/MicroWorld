@@ -932,7 +932,7 @@ tests must pass unchanged.
   mutate cursor/phase state and return a progress bool, matching the existing
   `ResetCycle`/`CompleteCycle` non-strict-CQS precedent (not introduced here).
 
-- [ ] **4.2 Split `FObjectStore::DestroySlot` and `NewObject`; consolidate the
+- [x] **4.2 Split `FObjectStore::DestroySlot` and `NewObject`; consolidate the
   generation rule.** `ObjectStore.cpp:263-317` (~52 lines) and
   `ObjectStore.h:292-344` (~50 lines).
   1. Add one documented helper owning the "retire before wrap" rule that today
@@ -950,6 +950,22 @@ tests must pass unchanged.
 
   **Done when:** both parents read as guards + named steps; ObjectStoreTests
   pass unchanged; Standard Verify passes.
+
+  Done 2026-07-22 — implemented by a **Sonnet subagent**, then reviewed and
+  re-verified by the lead. `DestroySlot` → `ValidateDestroyableSlot` (const) +
+  `RunDestructionCallbacks` (BeginDestroy/Destroy/RemoveAllRoots) +
+  `RecycleOrRetireSlot` (clear pointers, then vacate-or-retire via the existing
+  `CanAdvanceObjectGeneration`) + `UpdateOccupancyCounters`; `NewObject` keeps its
+  guards + `State=Constructing`/lock before placement-new, then delegates
+  post-construction wiring to `PublishObjectIntoSlot`. Generation rule: took the
+  roadmap's sanctioned compute/apply CQS split — a pure `NextPublishGeneration`
+  (the `0 ? 1 : +1` publish rule) plus `RecycleOrRetireSlot`'s destroy-side
+  decision, both anchored on the unchanged `CanAdvanceObjectGeneration` predicate
+  (not merged into one function). Behavior-preserving — every branch, counter,
+  callback order, and the mutation-lock save/restore reproduced; build clean,
+  ctest 11/11 (ObjectStoreTests in `microworld_object_tests` #8), doc checker 122.
+  CQS: `PublishObjectIntoSlot` mutates-and-returns the handle — the intentional
+  slot-factory shape, same as tasks 3.1/3.3/3.4.
 
 - [ ] **4.3 Smaller Object splits.**
   1. `FGarbageCollector::RequestCollection` (`GarbageCollector.cpp:73-106`,
