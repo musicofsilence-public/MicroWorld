@@ -330,9 +330,9 @@ touches them).
 
 ## 4. Phases and tasks
 
-### Phase 0 — Baseline ⬜
+### Phase 0 — Baseline ✅
 
-- [ ] **0.1 Re-record a green baseline.** Confirm the working tree is clean
+- [x] **0.1 Re-record a green baseline.** Confirm the working tree is clean
   (`git -C . status`), then run the Standard Verify (section 1.1) plus
   `python tools/CheckFolderAgents.py --root Modules --exclude build --exclude .pio --exclude __pycache__`.
   Record the results as the evidence line. The folder-agents checker is
@@ -340,6 +340,11 @@ touches them).
   failure, do not fix it now.
 
   **Done when:** build + ctest 11/11 + doc checker pass; results recorded here.
+
+  Done 2026-07-22 — clean tree at `610132e`; `cmake --build build --config Release`
+  warning-clean; `ctest` 11/11 passed; `CheckClassDocumentation.py --require-doxygen`
+  passed (122 files); `CheckFolderAgents.py` fails with exactly 24 missing AGENTS.md
+  (expected until task 9.1).
 
 ---
 
@@ -1096,7 +1101,7 @@ tests must pass unchanged.
 
 | Phase | Title | Tasks | Status |
 | --- | --- | --- | --- |
-| 0 | Baseline | 1 | ⬜ |
+| 0 | Baseline | 1 | ✅ |
 | 1 | Mechanical renames | 7 | ⬜ |
 | 2 | Why-comment repairs | 5 | ⬜ |
 | 3 | Decompose: Core & Memory | 4 | ⬜ |
