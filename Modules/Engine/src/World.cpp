@@ -124,29 +124,7 @@ ERuntimeResult UWorld::BeginPlay(const TimePointMilliseconds NowMilliseconds) no
 	}
 	LastUpdateMilliseconds = NowMilliseconds;
 
-	// Actors begin in registration order; on first failure the previously begun
-	// actors are ended in reverse so the world never observes a partially begun
-	// set and its own lifecycle becomes terminal.
-	std::size_t BegunActorCount = 0;
-	for (std::size_t Index = 0; Index < Actors.GetCount(); ++Index)
-	{
-		AActor* const Actor = Actors.At(Index).Get();
-		const ERuntimeResult ActorResult = Actor != nullptr ? DispatchActorBegin(*Actor, NowMilliseconds) : ERuntimeResult::InvalidLifecycle;
-		if (ActorResult != ERuntimeResult::Success)
-		{
-			for (std::size_t RollbackIndex = BegunActorCount; RollbackIndex > 0; --RollbackIndex)
-			{
-				if (AActor* const Begun = Actors.At(RollbackIndex - 1).Get())
-				{
-					(void)Begun->DispatchEndPlay();
-				}
-			}
-			Lifecycle.Fail();
-			return ActorResult;
-		}
-		++BegunActorCount;
-	}
-	return ERuntimeResult::Success;
+	return BeginRegisteredActorsWithRollback(NowMilliseconds);
 }
 
 ERuntimeResult UWorld::Advance(const TimePointMilliseconds NowMilliseconds) noexcept
@@ -218,6 +196,38 @@ ERuntimeResult UWorld::EndPlay() noexcept
 		return EndResult;
 	}
 
+	return EndRegisteredActorsReverse();
+}
+
+ERuntimeResult UWorld::BeginRegisteredActorsWithRollback(const TimePointMilliseconds NowMilliseconds) noexcept
+{
+	// Actors begin in registration order; on first failure the previously begun
+	// actors are ended in reverse so the world never observes a partially begun
+	// set and its own lifecycle becomes terminal.
+	std::size_t BegunActorCount = 0;
+	for (std::size_t Index = 0; Index < Actors.GetCount(); ++Index)
+	{
+		AActor* const Actor = Actors.At(Index).Get();
+		const ERuntimeResult ActorResult = Actor != nullptr ? DispatchActorBegin(*Actor, NowMilliseconds) : ERuntimeResult::InvalidLifecycle;
+		if (ActorResult != ERuntimeResult::Success)
+		{
+			for (std::size_t RollbackIndex = BegunActorCount; RollbackIndex > 0; --RollbackIndex)
+			{
+				if (AActor* const Begun = Actors.At(RollbackIndex - 1).Get())
+				{
+					(void)Begun->DispatchEndPlay();
+				}
+			}
+			Lifecycle.Fail();
+			return ActorResult;
+		}
+		++BegunActorCount;
+	}
+	return ERuntimeResult::Success;
+}
+
+ERuntimeResult UWorld::EndRegisteredActorsReverse() noexcept
+{
 	// Actors end in reverse registration order; the first error is retained but
 	// every actor still receives its EndPlay so shutdown stays symmetric.
 	ERuntimeResult FirstError = ERuntimeResult::Success;

@@ -244,26 +244,13 @@ public:
 		}
 		LastTickMilliseconds = NowMilliseconds;
 
-		if (Network != nullptr)
-		{
-			Network->TickDispatch(NowMilliseconds);
-		}
+		DispatchInboundNetwork(NowMilliseconds);
 		(void)Timers.Advance(NowMilliseconds);
-		const ERuntimeResult AdvanceResult = World->Advance(NowMilliseconds);
-		const ERuntimeResult PendingResult = World->ApplyPending(NowMilliseconds);
-		// The GC sweep skips pending-destroy slots, so this bounded slice is what frees them.
-		(void)Store.ApplyPendingDestroy(FrameReclamationBudget);
-		if (Collector.Phase() == EGarbageCollectionPhase::Idle)
-		{
-			(void)Collector.RequestCollection();
-		}
-		(void)Collector.Advance(GarbageCollectionBudget);
-		if (Network != nullptr)
-		{
-			Network->TickFlush(NowMilliseconds);
-		}
+		const ERuntimeResult FrameResult = AdvanceWorldAndApplyBarrier(*World, NowMilliseconds);
+		ReclaimAndCollect();
+		FlushOutboundNetwork(NowMilliseconds);
 
-		return AdvanceResult != ERuntimeResult::Success ? AdvanceResult : PendingResult;
+		return FrameResult;
 	}
 
 	/** Ends the world in reverse registration order; idempotent after success. */
@@ -304,6 +291,45 @@ private:
 			RootStorage.data(),
 			static_cast<std::uint32_t>(MaxRoots),
 		};
+	}
+
+	/** Frame step 1: drains inbound traffic, dispatches messages, and ages peers when a network frame is bound. */
+	void DispatchInboundNetwork(const TimePointMilliseconds NowMilliseconds) noexcept
+	{
+		if (Network != nullptr)
+		{
+			Network->TickDispatch(NowMilliseconds);
+		}
+	}
+
+	/** Frame steps 3-4: advances every actor then applies the spawn/destroy barrier, returning the
+	 * authoritative per-frame result (the advance error if any, otherwise the barrier result). */
+	ERuntimeResult AdvanceWorldAndApplyBarrier(UWorld& World, const TimePointMilliseconds NowMilliseconds) noexcept
+	{
+		const ERuntimeResult AdvanceResult = World.Advance(NowMilliseconds);
+		const ERuntimeResult PendingResult = World.ApplyPending(NowMilliseconds);
+		return AdvanceResult != ERuntimeResult::Success ? AdvanceResult : PendingResult;
+	}
+
+	/** Frame steps 5-6: reclaims the slots the barrier marked, then starts a GC cycle when idle and advances one bounded slice. */
+	void ReclaimAndCollect() noexcept
+	{
+		// The GC sweep skips pending-destroy slots, so this bounded slice is what frees them.
+		(void)Store.ApplyPendingDestroy(FrameReclamationBudget);
+		if (Collector.Phase() == EGarbageCollectionPhase::Idle)
+		{
+			(void)Collector.RequestCollection();
+		}
+		(void)Collector.Advance(GarbageCollectionBudget);
+	}
+
+	/** Frame step 7: flushes outbound traffic and heartbeats when a network frame is bound. */
+	void FlushOutboundNetwork(const TimePointMilliseconds NowMilliseconds) noexcept
+	{
+		if (Network != nullptr)
+		{
+			Network->TickFlush(NowMilliseconds);
+		}
 	}
 
 	/** Bounds the per-tick garbage-collection slice supplied at construction. */

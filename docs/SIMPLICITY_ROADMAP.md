@@ -1002,7 +1002,7 @@ tests must pass unchanged.
 
 ---
 
-### Phase 5 — Function decomposition: Engine 🟨
+### Phase 5 — Function decomposition: Engine ✅
 
 - [x] **5.1 Collapse the four validate-then-commit gauntlets.** Four functions
   are near-identical 8-step validation ladders + a commit:
@@ -1114,7 +1114,7 @@ tests must pass unchanged.
   (`#1 format_check`, `#10 engine_tests` including EngineTimerManager), doc
   checker 122 files.
 
-- [ ] **5.4 Name the `TEngineHost::Tick` frame steps and the lifecycle
+- [x] **5.4 Name the `TEngineHost::Tick` frame steps and the lifecycle
   cascades.**
   1. `TEngineHost::Tick` (`EngineHost.h:232-272`, ~38 lines, 7 sequenced
      subsystem calls) → extract `DispatchInboundNetwork(NowMilliseconds)`,
@@ -1133,6 +1133,33 @@ tests must pass unchanged.
 
   **Done when:** each parent reads as guards + named steps; EngineLifecycle,
   EngineHost and EngineNetHost tests pass unchanged; Standard Verify passes.
+
+  **Evidence (2026-07-22, commit pending):** Four extractions across five files,
+  all behavior-preserving. (1) `TEngineHost::Tick` now reads validate + monotonic
+  guard + `DispatchInboundNetwork` + `Timers.Advance` + `AdvanceWorldAndApplyBarrier`
+  + `ReclaimAndCollect` + `FlushOutboundNetwork` + `return FrameResult`; the 7-step
+  doc-comment above `Tick` is untouched as the single frame-order source of truth.
+  `AdvanceWorldAndApplyBarrier` computes the authoritative result (`AdvanceResult
+  != Success ? AdvanceResult : PendingResult`) but `Tick` returns it only after
+  `ReclaimAndCollect` + `FlushOutboundNetwork` run, so every step still runs each
+  frame exactly as before. (2) `UWorld::BeginPlay` → `BeginRegisteredActorsWithRollback`;
+  (3) `UWorld::EndPlay` → `EndRegisteredActorsReverse`; (4) `AActor::DispatchBeginPlay`
+  → `BeginComponentsWithRollback`. Each cascade helper carries its why-comment
+  verbatim and keeps the full failure path inside the helper (reverse rollback,
+  and for the actor `EndPrimaryTickLifecycle()` + `Lifecycle.Fail()`), so the
+  parent only propagates the returned error and never double-fails; `AActor`'s
+  `BeginPlay()` consumer hook correctly moved to the parent's success path.
+  **Reading (noted):** the roadmap lists four Tick extractions but `Tick` has 7
+  steps — step 2 `Timers.Advance` is already a self-documenting one-liner and
+  stays inline rather than being wrapped. **Deviation (justified):**
+  `AdvanceWorldAndApplyBarrier` takes `UWorld&` (parent resolved and null-checked
+  the world once) instead of re-resolving `WorldRoot`. **CQS note:** the
+  `AdvanceWorldAndApplyBarrier` / `*WithRollback` / `*Reverse` helpers are
+  command-with-status — they perform lifecycle work and return the outcome, the
+  pervasive `ERuntimeResult`-returning-command idiom of the functions they were
+  extracted from; reported, not a new violation. Verified: build clean, ctest
+  11/11 (`#1 format_check`, `#10 engine_tests` incl. EngineLifecycle/EngineHost/
+  EngineNetHost), doc checker 122 files. **Phase 5 complete.**
 
 ---
 
@@ -1435,7 +1462,7 @@ tests must pass unchanged.
 | 2 | Why-comment repairs | 5 | ✅ |
 | 3 | Decompose: Core & Memory | 4 | ✅ |
 | 4 | Decompose: Object & GC | 3 | ✅ |
-| 5 | Decompose: Engine | 4 | 🟨 |
+| 5 | Decompose: Engine | 4 | ✅ |
 | 6 | Decompose: Net & Platform | 6 | ⬜ |
 | 7 | Ceremony reduction | 3 | ⬜ |
 | 8 | Entry points & style contract | 4 | ⬜ |

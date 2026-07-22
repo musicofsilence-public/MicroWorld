@@ -125,6 +125,13 @@ private:
 	/** Ends one actor while the world retains the first error and still ends every actor. */
 	ERuntimeResult DispatchActorEnd(AActor& Actor) noexcept;
 
+	/** Begins every registered actor in order and, on the first failure, ends the
+	 * already-begun actors in reverse and fails the world lifecycle. */
+	ERuntimeResult BeginRegisteredActorsWithRollback(TimePointMilliseconds NowMilliseconds) noexcept;
+
+	/** Ends every registered actor in reverse order, retaining the first error while still ending every actor. */
+	ERuntimeResult EndRegisteredActorsReverse() noexcept;
+
 	/** Ends every doomed actor under the dispatch guard and folds the first end
 	 * failure into FirstError; returns LifecycleLocked only when the guard cannot
 	 * be acquired. */

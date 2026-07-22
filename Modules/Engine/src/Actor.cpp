@@ -126,6 +126,18 @@ ERuntimeResult AActor::DispatchBeginPlay(const TimePointMilliseconds NowMillisec
 	}
 	BeginPrimaryTickLifecycle(NowMilliseconds);
 
+	const ERuntimeResult ComponentsResult = BeginComponentsWithRollback(NowMilliseconds);
+	if (ComponentsResult != ERuntimeResult::Success)
+	{
+		return ComponentsResult;
+	}
+
+	BeginPlay();
+	return ERuntimeResult::Success;
+}
+
+ERuntimeResult AActor::BeginComponentsWithRollback(const TimePointMilliseconds NowMilliseconds) noexcept
+{
 	// Components begin in registration order; on first failure the previously
 	// begun components are ended in reverse so the actor never observes a
 	// partially begun set.
@@ -150,8 +162,6 @@ ERuntimeResult AActor::DispatchBeginPlay(const TimePointMilliseconds NowMillisec
 		}
 		++BegunComponentCount;
 	}
-
-	BeginPlay();
 	return ERuntimeResult::Success;
 }
 

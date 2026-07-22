@@ -115,6 +115,10 @@ private:
 	/** Ends this actor's consumer hook and components; idempotent after success. */
 	ERuntimeResult DispatchEndPlay() noexcept;
 
+	/** Begins every registered component in order and, on the first failure, ends the
+	 * already-begun components in reverse and fails the actor lifecycle. */
+	ERuntimeResult BeginComponentsWithRollback(TimePointMilliseconds NowMilliseconds) noexcept;
+
 	/** Binds one weak world handle after same-store registration validation. */
 	void AssignWorld(FObjectHandle World) noexcept;
 
