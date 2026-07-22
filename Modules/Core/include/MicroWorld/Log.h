@@ -2,19 +2,24 @@
 
 #include <cstdint>
 
-// MicroWorld logging facade.
-//
-// Design decisions (Phase 3.1, owner delegated "simplest, most reliable"):
-//   * Level gating is done in the *preprocessor*, not with `if constexpr`, so a
-//     below-floor call expands to `((void)0)` with its arguments dropped. This
-//     guarantees zero emitted code and zero format/category string literals in
-//     flash at any optimization level, and guarantees a below-floor call never
-//     evaluates its arguments.
-//   * Formatting uses a fixed-size caller-thread stack buffer plus `vsnprintf`
-//     (see src/Log.cpp). No heap, no exceptions, no hidden clock.
-//   * One process-global function-pointer sink. A null sink (the default)
-//     disables logging. MicroWorld is single-threaded; the sink is expected to
-//     be installed once at startup before any logging call.
+/**
+ * MicroWorld logging facade.
+ *
+ * Design invariants:
+ *   * Level gating happens in the preprocessor, so a below-floor call expands
+ *     to ((void)0): zero emitted code, zero format/category string literals in
+ *     flash, and its arguments are never evaluated.
+ *   * Formatting uses a fixed-size caller-stack buffer plus vsnprintf (see
+ *     src/Log.cpp): no heap, no exceptions, no hidden clock.
+ *   * One process-global function-pointer sink; a null sink (the default)
+ *     disables logging. Install it once at startup (MicroWorld is
+ *     single-threaded).
+ *
+ * Worked expansion of MW_LOG(Log, "Boot", "x=%d", X):
+ *   * level enabled  ->  ::MicroWorld::Detail::DispatchLogFormatted(
+ *                         ::MicroWorld::ELogLevel::Log, ("Boot"), "x=%d", X)
+ *   * below floor    ->  ((void)0)      // X is never evaluated
+ */
 
 // Compile-time severity ranks. Lower value = more important. The preprocessor
 // uses these to strip below-floor call sites; the enum mirrors them for the
@@ -106,7 +111,7 @@ namespace Detail
 #define MW_LOG_CONCAT_(Prefix, Suffix) Prefix##Suffix
 #define MW_LOG_CONCAT(Prefix, Suffix) MW_LOG_CONCAT_(Prefix, Suffix)
 
-// Disabled emitters drop every argument unevaluated; enabled ones dispatch.
+// A below-floor call drops its arguments UNEVALUATED; an enabled one dispatches.
 #define MW_LOG_EMIT_FORMATTED_0(Level, Category, ...) ((void)0)
 #define MW_LOG_EMIT_FORMATTED_1(Level, Category, ...) \
 	::MicroWorld::Detail::DispatchLogFormatted(::MicroWorld::ELogLevel::Level, (Category), __VA_ARGS__)

@@ -583,13 +583,13 @@ the old name and must be updated in the same task.
 
 ---
 
-### Phase 2 — Why-comment repairs ⬜
+### Phase 2 — Why-comment repairs 🟨
 
 Goal: every comment answers *why*; every trap has its why written next to it.
 Pure comment/doc edits — zero code changes. Keep each new comment to 1-2
 sentences.
 
-- [ ] **2.1 Core comments.** In `Log.h`: convert the 13-line `//` facade note
+- [x] **2.1 Core comments.** In `Log.h`: convert the 13-line `//` facade note
   (`Log.h:5-17`) into the standard `/** ... */` contract; delete the
   "(Phase 3.1, owner delegated ...)" provenance; reduce `Log.h:109` to the one
   load-bearing invariant (arguments of a below-floor call are never
@@ -599,6 +599,16 @@ sentences.
 
   **Done when:** Standard Verify passes (the doc checker still accepts the
   file).
+
+  Done 2026-07-22 — facade banner converted to a `/** ... */` contract;
+  provenance line deleted; the emitter-macro one-liner reduced to the single
+  invariant ("a below-floor call drops its arguments UNEVALUATED"); worked
+  example added. Corrected the task's illustrative call: `MW_LOG(Info, ...)`
+  named a non-existent level (levels are Error/Warning/Log/Verbose) and omitted
+  the required Category, so the committed example is `MW_LOG(Log, "Boot",
+  "x=%d", X)` with its exact enabled/stripped expansions (checked against
+  `MW_LOG_EMIT_FORMATTED_1`/`_0`). Build clean; ctest 11/11; doc checker 122
+  files; `Phase 3.1|owner delegated` and `MW_LOG(Info` grep gates both 0.
 
 - [ ] **2.2 Memory comments.** Add the missing whys:
   - `SharedPtr.h:480` — the `(sizeof(FControlBlock) + alignof(T) - 1) & ~(alignof(T) - 1)`
