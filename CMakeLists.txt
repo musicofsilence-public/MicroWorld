@@ -32,3 +32,16 @@ endif()
 if(NOT TARGET MicroWorld::PlatformHost)
     add_subdirectory(Modules/PlatformHost)
 endif()
+
+# Format gate: the repo clang-format policy is otherwise uncovered by any build
+# or checker, so dry-run it over every tracked C++ source as a ctest step. The
+# root owns it (not any single module) because the style file lives here and the
+# sweep spans every module.
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+add_test(
+    NAME microworld_format_check
+    COMMAND
+        Python3::Interpreter
+        ${CMAKE_CURRENT_SOURCE_DIR}/tools/CheckFormatting.py
+        --root ${CMAKE_CURRENT_SOURCE_DIR}
+)

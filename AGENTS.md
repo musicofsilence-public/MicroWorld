@@ -104,11 +104,16 @@ python tools/CheckDependencyBoundaries.py --self-test
 python tools/CheckProfileMap.py --self-test
 python tools/CheckFolderAgents.py --root Modules --exclude build .pio __pycache__
 python tools/CheckClassDocumentation.py --root Modules --require-doxygen
+python tools/CheckFormatting.py
 ```
 
-Formatting gate (mandatory — not covered by any other gate):
+Formatting gate (mandatory — not covered by any other gate). `CheckFormatting.py`
+is also wired into ctest as `microworld_format_check`, so it runs with every
+`ctest --test-dir build`:
 
 ```sh
+python tools/CheckFormatting.py
+# equivalent manual invocation:
 clang-format --style=file:clang-format --dry-run --Werror $(git ls-files 'Modules/**/*.h' 'Modules/**/*.cpp')
 ```
 

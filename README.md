@@ -48,4 +48,5 @@ ctest --test-dir build -C Release --output-on-failure
 Each module also configures standalone with the same command shape, for example
 `Modules/Engine` or `Modules/PlatformHost`. The CMake `-Werror` gate and the
 `tools/Check*.py` scripts enforce dependency direction, profile-map evidence,
-folder-agent coverage, and class-documentation contracts.
+folder-agent coverage, class-documentation contracts, and clang-format
+conformance (`microworld_format_check` runs with every `ctest`).

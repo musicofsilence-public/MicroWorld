@@ -8,10 +8,11 @@ Tools are read-only repository policy checks. The documentation scanner
 enforces adjacent intent contracts for C++ type definitions, the folder scanner
 ensures every non-generated package directory has local architectural guidance,
 the dependency scanner enforces package ownership and inward portable includes,
-and the profile-map scanner rejects unselected module evidence. Function and
-state documentation remains a declaration-level review requirement because a
-regex-only parser must not pretend to understand arbitrary C++. Production code
-never imports or invokes these scripts.
+the profile-map scanner rejects unselected module evidence, and the formatting
+scanner rejects C++ sources that drift from the tracked clang-format policy.
+Function and state documentation remains a declaration-level review requirement
+because a regex-only parser must not pretend to understand arbitrary C++.
+Production code never imports or invokes these scripts.
 
 `CheckFolderAgents.py` is a strict coverage check for the existing packages
 when deliberately invoked. It is not a policy requiring every future package
@@ -29,6 +30,12 @@ subdirectory to add a local guide.
   profile requires positive Core archive evidence; Memory- and Object-selected
   profiles additionally require their adjacent package archives. The current
   managed profile includes Core, Memory, Object, and Engine.
+- Formatting checks delegate to `clang-format --dry-run --Werror` with the
+  repo style file passed explicitly as `--style=file:<root>/clang-format`; the
+  file has no leading dot, so a bare `--style=file` would fall back to LLVM
+  style and falsely flag every file. The file set is tracked `*.h`/`*.cpp`
+  under `Modules/` (PlatformEsp32 sources included), discovered via
+  `git ls-files` when available.
 - Each architectural checker owns a deterministic `--self-test` covering both
   an accepted input and the violation it is intended to block.
 - Scripts return non-zero on failure so CMake or CI can use them as gates.
@@ -48,3 +55,6 @@ Use `--profile Memory` for Core+Memory, `--profile Object` for
 Core+Memory+Object, and `--profile Managed` for
 Core+Memory+Object+Engine.
 Run each new checker with `--self-test` before trusting its repository result.
+Verify clang-format conformance with
+`python tools/CheckFormatting.py --root <repo-root>` (it also runs as the
+ctest step `microworld_format_check`).
