@@ -88,6 +88,8 @@ public:
 		Network = &NetworkFrame;
 	}
 
+	/** Copying or moving would duplicate this host's unique ownership of the
+	 * store, garbage collector, registries, and timer manager. */
 	TEngineHost(const TEngineHost&) = delete;
 	TEngineHost& operator=(const TEngineHost&) = delete;
 	TEngineHost(TEngineHost&&) = delete;
@@ -242,27 +244,20 @@ public:
 		}
 		LastTickMilliseconds = NowMilliseconds;
 
-		// 1. Drain inbound network traffic and dispatch messages before the frame advances.
 		if (Network != nullptr)
 		{
 			Network->TickDispatch(NowMilliseconds);
 		}
-		// 2. Fire due timer callbacks.
 		(void)Timers.Advance(NowMilliseconds);
-		// 3. Tick every component then every actor.
 		const ERuntimeResult AdvanceResult = World->Advance(NowMilliseconds);
-		// 4. Apply pending destroys, then pending spawns, at the one structural barrier.
 		const ERuntimeResult PendingResult = World->ApplyPending(NowMilliseconds);
-		// 5. Reclaim the actors/components the barrier marked; the GC sweep skips
-		//    pending-destroy slots, so this bounded slice is what frees them.
+		// The GC sweep skips pending-destroy slots, so this bounded slice is what frees them.
 		(void)Store.ApplyPendingDestroy(FrameReclamationBudget);
-		// 6. Advance one bounded GC slice, starting a fresh cycle when idle.
 		if (Collector.Phase() == EGarbageCollectionPhase::Idle)
 		{
 			(void)Collector.RequestCollection();
 		}
 		(void)Collector.Advance(GarbageCollectionBudget);
-		// 7. Flush queued outbound network traffic and heartbeats after the frame settles.
 		if (Network != nullptr)
 		{
 			Network->TickFlush(NowMilliseconds);

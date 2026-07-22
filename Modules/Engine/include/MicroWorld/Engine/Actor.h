@@ -29,6 +29,8 @@ class UWorld;
 class AActor : public UObject, private FTickable
 {
 public:
+	/** Copying or moving would duplicate a managed object's slot identity; each
+	 * lives and dies in one object-store slot. */
 	AActor(const AActor&) = delete;
 	AActor& operator=(const AActor&) = delete;
 	AActor(AActor&&) = delete;

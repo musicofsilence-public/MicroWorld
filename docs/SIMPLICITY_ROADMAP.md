@@ -663,7 +663,7 @@ sentences.
   the save per DRY). Anchors re-derived from live code — the `.cpp` save/restore
   moved to lines 283/317. Build clean; ctest 11/11; doc checker 122 files.
 
-- [ ] **2.4 Engine comments.**
+- [x] **2.4 Engine comments.**
   - `ActorComponent.h:85` — **factual bug**: says "Advances this component's
     components and primary tick" — a component owns no components (copy-paste
     from `Actor.h:104`). Fix to: "Advances this component's primary tick for
@@ -681,6 +681,15 @@ sentences.
     objects live and die in their store slot").
 
   **Done when:** each listed site fixed; Standard Verify passes.
+
+  Done 2026-07-22 — fixed the `ActorComponent::DispatchAdvance` doc (a component
+  owns no components); deleted the six redundant numbered step-comments in
+  `EngineHost::Tick()` (the 7-step order already lives in the `Tick()` contract)
+  and kept only the step-5 GC-skip why; added the zero-length-array why once on
+  Timer's three guarded arrays; documented the copy/move blocks in
+  Actor/ActorComponent/World with a shared managed-object why, and `EngineHost`
+  with a distinct subsystem-ownership why (it is not a store-slot object). Build
+  clean; ctest 11/11; doc checker 122 files; numbered-narration grep gate 0.
 
 - [ ] **2.5 Net + Platform comments.**
   - `FrameCodec.h:109` — delete the "Write magic, source node id, ..."

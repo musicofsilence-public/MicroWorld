@@ -26,6 +26,8 @@ class FReferenceCollector;
 class UActorComponent : public UObject, private FTickable
 {
 public:
+	/** Copying or moving would duplicate a managed object's slot identity; each
+	 * lives and dies in one object-store slot. */
 	UActorComponent(const UActorComponent&) = delete;
 	UActorComponent& operator=(const UActorComponent&) = delete;
 	UActorComponent(UActorComponent&&) = delete;
@@ -82,7 +84,7 @@ private:
 	/** Begins this component's lifecycle, primary tick, and consumer hook. */
 	ERuntimeResult DispatchBeginPlay(TimePointMilliseconds NowMilliseconds) noexcept;
 
-	/** Advances this component's components and primary tick for one dispatcher step. */
+	/** Advances this component's primary tick for one dispatcher step. */
 	ERuntimeResult DispatchAdvance(TimePointMilliseconds NowMilliseconds) noexcept;
 
 	/** Ends this component's consumer hook and primary tick; idempotent after success. */

@@ -29,6 +29,8 @@ class FReferenceCollector;
 class UWorld : public UObject
 {
 public:
+	/** Copying or moving would duplicate a managed object's slot identity; each
+	 * lives and dies in one object-store slot. */
 	UWorld(const UWorld&) = delete;
 	UWorld& operator=(const UWorld&) = delete;
 	UWorld(UWorld&&) = delete;

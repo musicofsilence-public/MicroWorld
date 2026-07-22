@@ -429,6 +429,8 @@ private:
 	}
 
 	/** Owns all bounded callback storage independently of insertion order. */
+	// C++ forbids zero-length arrays; the "== 0 ? 1" guard on these three arrays
+	// keeps a zero-capacity (MaxTimers == 0) manager well-formed.
 	FTimerSlot Slots[MaxTimers == 0 ? 1 : MaxTimers];
 
 	/** Preserves deterministic insertion order while slots are removed and reused. */
