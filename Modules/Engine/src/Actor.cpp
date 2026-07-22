@@ -31,6 +31,17 @@ const FClassDescriptor& AActor::StaticClassDescriptor() noexcept
 
 EEngineResult AActor::RegisterComponent(const TObjectPtr<UActorComponent> Component) noexcept
 {
+	const EEngineResult Verdict = CheckComponentRegistrable(Component);
+	if (Verdict != EEngineResult::Success)
+	{
+		return Verdict;
+	}
+	PublishComponent(Component);
+	return EEngineResult::Success;
+}
+
+EEngineResult AActor::CheckComponentRegistrable(const TObjectPtr<UActorComponent> Component) const noexcept
+{
 	// Registration is only permitted before BeginPlay can begin dispatch.
 	if (!IsRegistrationOpen())
 	{
@@ -79,11 +90,15 @@ EEngineResult AActor::RegisterComponent(const TObjectPtr<UActorComponent> Compon
 	{
 		return EEngineResult::AlreadyOwned;
 	}
+	return EEngineResult::Success;
+}
 
+void AActor::PublishComponent(const TObjectPtr<UActorComponent> Component) noexcept
+{
 	// Atomic publish: every fallible check precedes the parent link and registry update.
+	UActorComponent* const Resolved = Component.Get();
 	Resolved->AssignOwner(GetObjectHandle());
 	Components.Add(Component);
-	return EEngineResult::Success;
 }
 
 UWorld* AActor::GetOwnerWorld() const noexcept

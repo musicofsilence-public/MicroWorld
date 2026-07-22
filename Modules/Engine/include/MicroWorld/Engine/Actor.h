@@ -100,6 +100,12 @@ protected:
 private:
 	friend class UWorld;
 
+	/** Reports the first reason a component cannot register, or Success. */
+	EEngineResult CheckComponentRegistrable(TObjectPtr<UActorComponent> Component) const noexcept;
+
+	/** Links a component to this actor and adds it to the registry after all checks pass. */
+	void PublishComponent(TObjectPtr<UActorComponent> Component) noexcept;
+
 	/** Begins this actor's lifecycle, primary tick, components, and consumer hook. */
 	ERuntimeResult DispatchBeginPlay(TimePointMilliseconds NowMilliseconds) noexcept;
 

@@ -1002,9 +1002,9 @@ tests must pass unchanged.
 
 ---
 
-### Phase 5 — Function decomposition: Engine ⬜
+### Phase 5 — Function decomposition: Engine 🟨
 
-- [ ] **5.1 Collapse the four validate-then-commit gauntlets.** Four functions
+- [x] **5.1 Collapse the four validate-then-commit gauntlets.** Four functions
   are near-identical 8-step validation ladders + a commit:
   `UWorld::RegisterActor` (`World.cpp:27-82`), `UWorld::SpawnActor`
   (`World.cpp:238-294`), `UWorld::DestroyActor` (`World.cpp:296-341`),
@@ -1022,6 +1022,23 @@ tests must pass unchanged.
 
   **Done when:** each parent ≤ ~12 body lines; EngineRegistrationTests and
   EngineSpawnDestroyTests pass unchanged; Standard Verify passes.
+
+  Done 2026-07-22 — implemented by a **Sonnet subagent**, then reviewed and
+  re-verified by the lead. Each of the four functions became a thin parent
+  (`Verdict = Check(...); if (Verdict != Success) return Verdict; commit; return
+  Success;`) over a `const` per-function checker holding the verbatim ladder:
+  `CheckActorRegistrable`/`CheckSpawnable`/`CheckDestroyable` (World) and
+  `CheckComponentRegistrable` (Actor). The two-mutation commits became
+  `PublishActor`/`PublishComponent`; `SpawnActor`/`DestroyActor` keep their single
+  commit mutation inline (no Publish). Validation order preserved exactly — the
+  diff shows every ladder body as unchanged context (no check line touched), the
+  strongest evidence the combined-error verdict tests still hold; build clean,
+  ctest 11/11 (EngineRegistration/SpawnDestroy in `microworld_engine_tests` #10),
+  doc checker 122. CQS: each parent now cleanly separates the `const` query
+  (`Check*`) from the void command (`Publish*`/inline mutation). Left intentionally
+  un-DRY (reported, not hidden): the three World checkers share structurally
+  similar duplicate/capacity scan blocks — merging them was rejected because it
+  would risk silently reordering checks that tests assert on.
 
 - [ ] **5.2 Split `UWorld::ApplyPending`.** `World.cpp:343-436` (~91 body
   lines — the barrier that ends doomed actors, unregisters them, then begins
@@ -1370,7 +1387,7 @@ tests must pass unchanged.
 | 2 | Why-comment repairs | 5 | ✅ |
 | 3 | Decompose: Core & Memory | 4 | ✅ |
 | 4 | Decompose: Object & GC | 3 | ✅ |
-| 5 | Decompose: Engine | 4 | ⬜ |
+| 5 | Decompose: Engine | 4 | 🟨 |
 | 6 | Decompose: Net & Platform | 6 | ⬜ |
 | 7 | Ceremony reduction | 3 | ⬜ |
 | 8 | Entry points & style contract | 4 | ⬜ |

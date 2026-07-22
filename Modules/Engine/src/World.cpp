@@ -26,6 +26,17 @@ const FClassDescriptor& UWorld::StaticClassDescriptor() noexcept
 
 EEngineResult UWorld::RegisterActor(const TObjectPtr<AActor> Actor) noexcept
 {
+	const EEngineResult Verdict = CheckActorRegistrable(Actor);
+	if (Verdict != EEngineResult::Success)
+	{
+		return Verdict;
+	}
+	PublishActor(Actor);
+	return EEngineResult::Success;
+}
+
+EEngineResult UWorld::CheckActorRegistrable(const TObjectPtr<AActor> Actor) const noexcept
+{
 	// Registration is only permitted before BeginPlay can begin dispatch.
 	if (Lifecycle.GetState() != ELifecycleState::Constructed)
 	{
@@ -74,11 +85,15 @@ EEngineResult UWorld::RegisterActor(const TObjectPtr<AActor> Actor) noexcept
 	{
 		return EEngineResult::AlreadyOwned;
 	}
+	return EEngineResult::Success;
+}
 
+void UWorld::PublishActor(const TObjectPtr<AActor> Actor) noexcept
+{
 	// Atomic publish: every fallible check precedes the parent link and registry update.
+	AActor* const Resolved = Actor.Get();
 	Resolved->AssignWorld(GetObjectHandle());
 	Actors.Add(Actor);
-	return EEngineResult::Success;
 }
 
 ERuntimeResult UWorld::BeginPlay(const TimePointMilliseconds NowMilliseconds) noexcept
@@ -237,6 +252,19 @@ ERuntimeResult UWorld::DispatchActorEnd(AActor& Actor) noexcept
 
 EEngineResult UWorld::SpawnActor(const TObjectPtr<AActor> Actor) noexcept
 {
+	const EEngineResult Verdict = CheckSpawnable(Actor);
+	if (Verdict != EEngineResult::Success)
+	{
+		return Verdict;
+	}
+	// World identity is bound at the barrier, not here, so a repeated request is
+	// caught as a pending-spawn duplicate rather than as an already-owned actor.
+	Actors.AddPendingSpawn(Actor);
+	return EEngineResult::Success;
+}
+
+EEngineResult UWorld::CheckSpawnable(const TObjectPtr<AActor> Actor) const noexcept
+{
 	// Deferred spawn is a play-time structural request; it only queues here and
 	// the actual registration and begin happen at the next ApplyPending barrier.
 	if (Lifecycle.GetState() != ELifecycleState::Playing)
@@ -286,14 +314,21 @@ EEngineResult UWorld::SpawnActor(const TObjectPtr<AActor> Actor) noexcept
 	{
 		return EEngineResult::AlreadyOwned;
 	}
-
-	// World identity is bound at the barrier, not here, so a repeated request is
-	// caught as a pending-spawn duplicate rather than as an already-owned actor.
-	Actors.AddPendingSpawn(Actor);
 	return EEngineResult::Success;
 }
 
 EEngineResult UWorld::DestroyActor(const TObjectPtr<AActor> Actor) noexcept
+{
+	const EEngineResult Verdict = CheckDestroyable(Actor);
+	if (Verdict != EEngineResult::Success)
+	{
+		return Verdict;
+	}
+	Actors.AddPendingDestroy(Actor);
+	return EEngineResult::Success;
+}
+
+EEngineResult UWorld::CheckDestroyable(const TObjectPtr<AActor> Actor) const noexcept
 {
 	if (Lifecycle.GetState() != ELifecycleState::Playing)
 	{
@@ -335,8 +370,6 @@ EEngineResult UWorld::DestroyActor(const TObjectPtr<AActor> Actor) noexcept
 			return EEngineResult::Duplicate;
 		}
 	}
-
-	Actors.AddPendingDestroy(Actor);
 	return EEngineResult::Success;
 }
 

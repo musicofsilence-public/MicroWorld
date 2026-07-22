@@ -104,6 +104,18 @@ public:
 	std::size_t PendingDestroyCount() const noexcept;
 
 private:
+	/** Reports the first reason an actor cannot register, or Success. */
+	EEngineResult CheckActorRegistrable(TObjectPtr<AActor> Actor) const noexcept;
+
+	/** Reports the first reason a deferred spawn cannot be queued, or Success. */
+	EEngineResult CheckSpawnable(TObjectPtr<AActor> Actor) const noexcept;
+
+	/** Reports the first reason a registered actor cannot be queued for destroy, or Success. */
+	EEngineResult CheckDestroyable(TObjectPtr<AActor> Actor) const noexcept;
+
+	/** Links an actor to this world and adds it to the registry after all checks pass. */
+	void PublishActor(TObjectPtr<AActor> Actor) noexcept;
+
 	/** Begins one actor's lifecycle while letting the world roll back on failure. */
 	ERuntimeResult DispatchActorBegin(AActor& Actor, TimePointMilliseconds NowMilliseconds) noexcept;
 
