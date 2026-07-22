@@ -64,6 +64,10 @@ public:
 		std::size_t FreeRangeStart = 0;
 		std::size_t FreeRangeSize = 0;
 
+		// First-fit scan: a start marker opens an occupied span and an end marker
+		// closes it, so a byte is free only when it lies outside every span. Grow
+		// the first aligned free run until it reaches SizeBytes, then claim it by
+		// marking its first and last bytes.
 		for (std::size_t Offset = 0; Offset < StorageCapacityBytes; ++Offset)
 		{
 			if (ReadMarker(AllocationStartMarkers, Offset))
@@ -187,6 +191,8 @@ private:
 	/** Reads one boundary marker without exposing bookkeeping to callers. */
 	static bool ReadMarker(const std::array<std::uint8_t, MarkerStorageBytes>& Markers, const std::size_t Offset) noexcept
 	{
+		// Hand-rolled bitset: one bit per usable byte, packed 8 to a std::uint8_t
+		// -- byte index = Offset / 8, bit index = Offset % 8.
 		const std::size_t MarkerByte = Offset / 8U;
 		const std::uint8_t MarkerMask = static_cast<std::uint8_t>(1U << (Offset % 8U));
 		return (Markers[MarkerByte] & MarkerMask) != 0;

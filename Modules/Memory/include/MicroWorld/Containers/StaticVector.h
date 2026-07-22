@@ -142,6 +142,8 @@ private:
 	}
 
 	/** Reserves a compile-time-bounded set of slots without constructing or allocating elements. */
+	// C++ forbids zero-length arrays; one dummy slot keeps a zero-capacity
+	// (MaxElements == 0) instantiation well-formed.
 	FStorageSlot Storage[MaxElements == 0 ? 1 : MaxElements];
 
 	/** Bounds every access and identifies exactly which element lifetimes are active. */

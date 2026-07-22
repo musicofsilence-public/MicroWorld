@@ -462,6 +462,8 @@ private:
 	}
 
 	/** Owns all bounded callable storage independently of insertion order. */
+	// C++ forbids zero-length arrays; one dummy slot keeps a zero-binding
+	// (MaxBindings == 0) instantiation well-formed.
 	FBindingSlot BindingSlots[MaxBindings == 0 ? 1 : MaxBindings];
 
 	/** Preserves deterministic insertion order while slots are removed and reused. */

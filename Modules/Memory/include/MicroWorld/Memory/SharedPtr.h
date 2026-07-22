@@ -91,7 +91,13 @@ namespace Detail
 		/** Counts live weak handles that keep this control block allocated. */
 		FReferenceCount WeakReferenceCount{0};
 
-		/** Defers final weak deallocation while the value destructor can release members. */
+		/**
+		 * True only while the final strong Reset() runs the value destructor. It
+		 * makes the weak-side Reset() defer control-block deallocation, so a value
+		 * that drops its own last weak handle mid-destruction cannot free the block
+		 * out from under the strong side (self-observer teardown; see
+		 * MemoryTests.cpp:558).
+		 */
 		bool bValueDestructionInProgress{false};
 	};
 
@@ -478,6 +484,9 @@ TSharedPointerResult<ValueType, Mode> MakeShared(IMemoryResource& Resource, Cons
 	constexpr std::size_t CombinedAlignment = alignof(FControlBlock) > alignof(ValueType) ? alignof(FControlBlock) : alignof(ValueType);
 	static_assert(
 		sizeof(FControlBlock) <= std::numeric_limits<std::size_t>::max() - (alignof(ValueType) - 1U), "Shared layout padding must fit in size_t.");
+	// Round the control-block size up to the value's alignment so the value
+	// starts on its own aligned boundary in the single shared allocation,
+	// immediately after the control block.
 	constexpr std::size_t ValueOffset = (sizeof(FControlBlock) + alignof(ValueType) - 1U) & ~(alignof(ValueType) - 1U);
 	static_assert(ValueOffset <= std::numeric_limits<std::size_t>::max() - sizeof(ValueType), "Shared allocation size must fit in size_t.");
 	constexpr std::size_t CombinedSize = ValueOffset + sizeof(ValueType);

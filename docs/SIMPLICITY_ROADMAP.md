@@ -610,7 +610,7 @@ sentences.
   `MW_LOG_EMIT_FORMATTED_1`/`_0`). Build clean; ctest 11/11; doc checker 122
   files; `Phase 3.1|owner delegated` and `MW_LOG(Info` grep gates both 0.
 
-- [ ] **2.2 Memory comments.** Add the missing whys:
+- [x] **2.2 Memory comments.** Add the missing whys:
   - `SharedPtr.h:480` — the `(sizeof(FControlBlock) + alignof(T) - 1) & ~(alignof(T) - 1)`
     expression: "rounds the control-block size up so the value starts on its
     own alignment, immediately after the control block."
@@ -629,6 +629,17 @@ sentences.
     regression test at `MemoryTests.cpp:558`).
 
   **Done when:** each listed site has its why; Standard Verify passes.
+
+  Done 2026-07-22 — five why-comments added across four files: SharedPtr
+  `ValueOffset` layout; FixedArena first-fit scan loop + `ReadMarker` bit math;
+  StaticVector and Delegate zero-length-array guards; and the
+  `TSharedControlBlock::bValueDestructionInProgress` lifecycle note (cites the
+  self-observer regression `MemoryTests.cpp:558`). Re-anchored the roadmap's
+  stale hints to live code — `alignof(ValueType)` not `T` (task 1.2), Delegate
+  uses `MaxBindings` not `MaxElements`, and the loop/marker whys corrected to the
+  real span-boundary and generic two-array mechanism. The fifth site was added
+  via a follow-up brief after my first brief under-scoped to four sites. Build
+  clean; ctest 11/11; doc checker 122 files.
 
 - [ ] **2.3 Object comments.**
   - `ClassDescriptor.h:70-80` — why the two probes exist: "a corrupted Parent
@@ -1209,7 +1220,7 @@ tests must pass unchanged.
 | --- | --- | --- | --- |
 | 0 | Baseline | 1 | ✅ |
 | 1 | Mechanical renames | 7 | ✅ |
-| 2 | Why-comment repairs | 5 | ⬜ |
+| 2 | Why-comment repairs | 5 | 🟨 |
 | 3 | Decompose: Core & Memory | 4 | ⬜ |
 | 4 | Decompose: Object & GC | 3 | ⬜ |
 | 5 | Decompose: Engine | 4 | ⬜ |
