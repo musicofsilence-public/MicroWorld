@@ -1,11 +1,11 @@
 #pragma once
 
 // =============================================================================
-// src/Esp32SocketGlue.h is the SOLE translation unit that pulls lwIP socket
+// src/Esp32SocketPlatformImplementation.h is the SOLE translation unit that pulls lwIP socket
 // headers. It is included only by Esp32UdpDriver.cpp; a public header must
 // never reach it. Every lwIP/POSIX divergence is hidden behind the helpers
 // below so Esp32UdpDriver.cpp reads one platform-free receive/send path that
-// mirrors the host driver. The glue is COMPILE-VERIFIED on ESP32-S3 (Phase 5.2)
+// mirrors the host driver. This platform implementation is COMPILE-VERIFIED on ESP32-S3 (Phase 5.2)
 // but the exact oversize-datagram receive behavior is UNVERIFIED at runtime:
 // when lwIP exposes MSG_TRUNC the sizing peek returns the true datagram length,
 // otherwise it returns the delivered length and an oversize datagram is sized
@@ -127,9 +127,9 @@ inline sockaddr_in MakeSockAddrIn(
 {
 	sockaddr_in Address{};
 	Address.sin_family = AF_INET;
-	const std::uint32_t Packed = (static_cast<std::uint32_t>(A) << 24) | (static_cast<std::uint32_t>(B) << 16) | (static_cast<std::uint32_t>(C) << 8)
-		| static_cast<std::uint32_t>(D);
-	Address.sin_addr.s_addr = htonl(Packed);
+	const std::uint32_t PackedIpv4Address = (static_cast<std::uint32_t>(A) << 24) | (static_cast<std::uint32_t>(B) << 16)
+		| (static_cast<std::uint32_t>(C) << 8) | static_cast<std::uint32_t>(D);
+	Address.sin_addr.s_addr = htonl(PackedIpv4Address);
 	Address.sin_port = htons(Port);
 	return Address;
 }
@@ -153,14 +153,15 @@ enum class ESendOutcome : std::uint8_t
  * shared `ENetResult` without inspecting lwIP error codes.
  *
  * @param Socket Open non-blocking socket.
- * @param Data First byte of the datagram to send.
+ * @param DatagramBytes First byte of the datagram to send.
  * @param Length Number of bytes to send.
  * @param To Network-ready destination address.
  * @return Normalized outcome of the single send attempt.
  */
-inline ESendOutcome SendDatagram(const FSocketHandle Socket, const std::uint8_t* const Data, const std::size_t Length, const sockaddr_in& To) noexcept
+inline ESendOutcome SendDatagram(
+	const FSocketHandle Socket, const std::uint8_t* const DatagramBytes, const std::size_t Length, const sockaddr_in& To) noexcept
 {
-	const ssize_t Sent = sendto(Socket, Data, Length, 0, reinterpret_cast<const sockaddr*>(&To), sizeof(To));
+	const ssize_t Sent = sendto(Socket, DatagramBytes, Length, 0, reinterpret_cast<const sockaddr*>(&To), sizeof(To));
 	if (Sent >= 0 && static_cast<std::size_t>(Sent) == Length)
 	{
 		return ESendOutcome::Success;

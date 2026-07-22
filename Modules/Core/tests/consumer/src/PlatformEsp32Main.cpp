@@ -5,7 +5,7 @@
 // non-blocking UDP) + TNetHost<4,256> (dedicated server) bound into TEngineHost
 // via the TNetHostFrame/INetworkFrame seam from Phase 4.4, then ticks it at a
 // fixed 20 ms cadence from app_main. Phase 5.3 additionally constructs one
-// FEsp32E32LoraDriver so its portable FrameCodec + UART glue compile and link
+// FEsp32E32LoraDriver so its portable FrameCodec + UART platform code compile and link
 // into the image; that driver is never ticked here. It is a COMPOSITION proof:
 // the lwIP stack is initialized so the UDP socket is valid, but no WiFi is
 // associated, so no UDP datagram can flow, the LoRa UART is never opened at
@@ -104,7 +104,7 @@ extern "C" void app_main()
 	static FEsp32UdpDriver Driver(5000);
 
 	// 3b. Compile-only E32 LoRa UART driver (Phase 5.3): the object is linked into the image
-	//     so its portable FrameCodec + UART glue compile, but it is never ticked here. No UART
+	//     so its portable FrameCodec + UART platform code compile, but it is never ticked here. No UART
 	//     traffic, no radio, and no upload is performed in this proof.
 	static FEsp32E32LoraDriver LoraDriver(FEsp32E32LoraConfig{UART_NUM_1, /*TxGpio*/ 17, /*RxGpio*/ 18, /*Baud*/ 9600, /*NodeId*/ 1});
 	(void)LoraDriver;

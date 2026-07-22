@@ -1,7 +1,7 @@
 #pragma once
 
 // =============================================================================
-// src/UdpSocketGlue.h is the SOLE translation unit that pulls OS socket headers.
+// src/UdpSocketPlatformImplementation.h is the SOLE translation unit that pulls OS socket headers.
 // It is included only by HostUdpDriver.cpp; a public header must never reach it.
 // Every platform divergence (handle width, close, non-blocking mode, last-error
 // classification, the MSG_PEEK-vs-MSG_TRUNC size probe) is hidden behind the
@@ -155,9 +155,9 @@ inline sockaddr_in MakeSockAddrIn(
 {
 	sockaddr_in Address{};
 	Address.sin_family = AF_INET;
-	const std::uint32_t Packed = (static_cast<std::uint32_t>(A) << 24) | (static_cast<std::uint32_t>(B) << 16) | (static_cast<std::uint32_t>(C) << 8)
-		| static_cast<std::uint32_t>(D);
-	Address.sin_addr.s_addr = htonl(Packed);
+	const std::uint32_t PackedIpv4Address = (static_cast<std::uint32_t>(A) << 24) | (static_cast<std::uint32_t>(B) << 16)
+		| (static_cast<std::uint32_t>(C) << 8) | static_cast<std::uint32_t>(D);
+	Address.sin_addr.s_addr = htonl(PackedIpv4Address);
 	Address.sin_port = htons(Port);
 	return Address;
 }
@@ -181,18 +181,19 @@ enum class ESendOutcome : std::uint8_t
  * shared `ENetResult` without inspecting platform error codes.
  *
  * @param Socket Open non-blocking socket.
- * @param Data First byte of the datagram to send.
+ * @param DatagramBytes First byte of the datagram to send.
  * @param Length Number of bytes to send.
  * @param To Network-ready destination address.
  * @return Normalized outcome of the single send attempt.
  */
-inline ESendOutcome SendDatagram(const FSocketHandle Socket, const std::uint8_t* const Data, const std::size_t Length, const sockaddr_in& To) noexcept
+inline ESendOutcome SendDatagram(
+	const FSocketHandle Socket, const std::uint8_t* const DatagramBytes, const std::size_t Length, const sockaddr_in& To) noexcept
 {
 	const int Sent =
 #ifdef _WIN32
-		sendto(Socket, reinterpret_cast<const char*>(Data), static_cast<int>(Length), 0, reinterpret_cast<const sockaddr*>(&To), sizeof(To));
+		sendto(Socket, reinterpret_cast<const char*>(DatagramBytes), static_cast<int>(Length), 0, reinterpret_cast<const sockaddr*>(&To), sizeof(To));
 #else
-		sendto(Socket, reinterpret_cast<const char*>(Data), Length, 0, reinterpret_cast<const sockaddr*>(&To), sizeof(To));
+		sendto(Socket, reinterpret_cast<const char*>(DatagramBytes), Length, 0, reinterpret_cast<const sockaddr*>(&To), sizeof(To));
 #endif
 	if (Sent >= 0 && static_cast<std::size_t>(Sent) == Length)
 	{

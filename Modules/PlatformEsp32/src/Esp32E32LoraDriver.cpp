@@ -1,6 +1,6 @@
 #include <MicroWorld/PlatformEsp32/Esp32E32LoraDriver.h>
 
-#include "E32UartGlue.h"
+#include "E32UartPlatformImplementation.h"
 
 #include <MicroWorld/Log.h>
 #include <MicroWorld/Net/FrameCodec.h>
@@ -107,8 +107,8 @@ ENetResult FEsp32E32LoraDriver::TryReceive(FNetAddress& OutFrom, TSpan<std::uint
 	const Detail::FUartPort Port = Detail::AsUartPort(UartPortNumber);
 	for (std::size_t Pumped = 0; Pumped < PumpByteCap; ++Pumped)
 	{
-		std::uint8_t Byte = 0;
-		const Detail::EUartReadStatus Status = Detail::ReadUartByte(Port, Byte);
+		std::uint8_t IncomingByte = 0;
+		const Detail::EUartReadStatus Status = Detail::ReadUartByte(Port, IncomingByte);
 		if (Status == Detail::EUartReadStatus::WouldBlock)
 		{
 			break;
@@ -117,7 +117,7 @@ ENetResult FEsp32E32LoraDriver::TryReceive(FNetAddress& OutFrom, TSpan<std::uint
 		{
 			return ENetResult::Invalid;
 		}
-		const EFrameEvent Event = Decoder.PushByte(Byte);
+		const EFrameEvent Event = Decoder.PushByte(IncomingByte);
 		if (Event == EFrameEvent::FrameReady)
 		{
 			// Deliver the held frame into the caller's destination, honoring the transactional Full contract.

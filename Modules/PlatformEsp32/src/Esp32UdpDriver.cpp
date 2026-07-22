@@ -1,6 +1,6 @@
 #include <MicroWorld/PlatformEsp32/Esp32UdpDriver.h>
 
-#include "Esp32SocketGlue.h"
+#include "Esp32SocketPlatformImplementation.h"
 
 #include <cstdint>
 
@@ -103,12 +103,12 @@ ENetResult FEsp32UdpDriver::TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t>
 		// A peer may have evicted the probed datagram; treat that race as transient.
 		return ENetResult::Unavailable;
 	}
-	const std::uint32_t Packed = ntohl(Sender.sin_addr.s_addr);
+	const std::uint32_t PackedIpv4Address = ntohl(Sender.sin_addr.s_addr);
 	OutFrom = MakeUdpAddress(
-		static_cast<std::uint8_t>(Packed >> 24),
-		static_cast<std::uint8_t>(Packed >> 16),
-		static_cast<std::uint8_t>(Packed >> 8),
-		static_cast<std::uint8_t>(Packed),
+		static_cast<std::uint8_t>(PackedIpv4Address >> 24),
+		static_cast<std::uint8_t>(PackedIpv4Address >> 16),
+		static_cast<std::uint8_t>(PackedIpv4Address >> 8),
+		static_cast<std::uint8_t>(PackedIpv4Address),
 		ntohs(Sender.sin_port));
 	OutResult.BytesReceived = Consumed.BytesReceived;
 	return ENetResult::Success;

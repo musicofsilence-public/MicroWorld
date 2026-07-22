@@ -1,11 +1,11 @@
 #pragma once
 
 // =============================================================================
-// src/E32UartGlue.h is the SOLE translation unit that pulls ESP-IDF UART headers.
+// src/E32UartPlatformImplementation.h is the SOLE translation unit that pulls ESP-IDF UART headers.
 // It is included only by Esp32E32LoraDriver.cpp; a public header must never reach
 // it. Every ESP-IDF UART divergence is hidden behind the helpers below so
 // Esp32E32LoraDriver.cpp reads one platform-free send/receive path that mirrors
-// the UDP driver. The glue is COMPILE-VERIFIED on ESP32-S3 (Phase 5.3) but the
+// the UDP driver. This platform implementation is COMPILE-VERIFIED on ESP32-S3 (Phase 5.3) but the
 // exact would-block/partial-write behavior of uart_write_bytes and the exact
 // drain behavior of uart_read_bytes are UNVERIFIED at runtime: the mapping below
 // treats a short write as a would-block candidate and any negative result as an
@@ -58,13 +58,13 @@ enum class EUartWriteOutcome : std::uint8_t
  * mapped to `WouldBlock` so the caller can treat the UART as transiently full.
  *
  * @param Port Open UART port number.
- * @param Data First byte of the framed message to send.
+ * @param FrameBytes First byte of the framed message to send.
  * @param Length Number of bytes to send.
  * @return Normalized outcome of the single write attempt.
  */
-inline EUartWriteOutcome WriteUart(const FUartPort Port, const std::uint8_t* const Data, const std::size_t Length) noexcept
+inline EUartWriteOutcome WriteUart(const FUartPort Port, const std::uint8_t* const FrameBytes, const std::size_t Length) noexcept
 {
-	const int Written = uart_write_bytes(Port, reinterpret_cast<const char*>(Data), Length);
+	const int Written = uart_write_bytes(Port, reinterpret_cast<const char*>(FrameBytes), Length);
 	if (Written < 0)
 	{
 		return EUartWriteOutcome::Error;

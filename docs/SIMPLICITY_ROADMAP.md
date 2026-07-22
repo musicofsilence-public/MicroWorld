@@ -204,7 +204,7 @@ the shape is what matters here.)
 | Object | `ObjectHandle.h`, `Object.h` |
 | Engine | `EngineStorage.h` (member-level ownership docs), `NetworkFrame.h`, the enums in `EngineResult.h` / `Timer.h` |
 | Net | `ByteReader.h`, `ByteWriter.h` |
-| Platform | `WinSockScope.h`, `HostTimeSource.h`, `Esp32TimeSource.h`, and the seam documentation in `src/UdpSocketGlue.h` |
+| Platform | `WinSockScope.h`, `HostTimeSource.h`, `Esp32TimeSource.h`, and the boundary documentation in `src/UdpSocketPlatformImplementation.h` |
 
 ### 2.4 Decisions record (settled — do not relitigate while executing)
 
@@ -235,8 +235,11 @@ the shape is what matters here.)
 - **D8** — The `TNetPacketStorage` / `TNetManager` split stays (caller-owned
   storage is the module's teaching pattern); task 6.4 documents the rationale.
   Folding storage into the manager is listed in section 6 (deferred ideas).
-- **D9** — The private `...Glue.h` seam files are renamed to
-  `...PlatformSeam.h` ("seam" is the vocabulary their own docs already use).
+- **D9** — The private `...Glue.h` platform-boundary files are renamed to
+  `...PlatformImplementation.h` (owner decision 2026-07-22, superseding the
+  original `...PlatformSeam.h`: both "Glue" and "Seam" are metaphors, and
+  "the docs already use the word seam" does not make it plain enough for a
+  student — see the no-jargon rule that also retired `Lease`).
   Public header files are never renamed (frozen identity).
 - **D10** — `TEngineHost`'s positional template arguments are tamed with named
   `constexpr` constants and `/*ParameterName*/` call-site annotations, not with
@@ -324,10 +327,10 @@ touches them).
 
 | File | LOC | Role |
 | --- | --- | --- |
-| `PlatformHost/.../HostTimeSource.h`, `WinSockScope.h`, `UdpAddress.h`, `HostUdpDriver.h` + `src/HostUdpDriver.cpp`, `src/UdpSocketGlue.h` | 45+30+69+122+178+420 | host time + UDP driver + OS seam |
+| `PlatformHost/.../HostTimeSource.h`, `WinSockScope.h`, `UdpAddress.h`, `HostUdpDriver.h` + `src/HostUdpDriver.cpp`, `src/UdpSocketPlatformImplementation.h` | 45+30+69+122+178+420 | host time + UDP driver + OS boundary |
 | `PlatformHost/examples/TwoNodeDemo/Main.cpp` | 380 | two-node client/server demo (first-contact) |
-| `PlatformEsp32/.../Esp32TimeSource.h`, `Esp32LogSink.h` + `src/Esp32LogSink.cpp`, `UdpAddress.h`, `Esp32UdpDriver.h` + `src/Esp32UdpDriver.cpp`, `src/Esp32SocketGlue.h` | 28+22+29+69+119+141+362 | ESP32 adapters |
-| `PlatformEsp32/.../Esp32E32LoraDriver.h` + `src/Esp32E32LoraDriver.cpp`, `LoraAddress.h`, `src/E32UartGlue.h` | 128+153+58+180 | E32 LoRa UART driver |
+| `PlatformEsp32/.../Esp32TimeSource.h`, `Esp32LogSink.h` + `src/Esp32LogSink.cpp`, `UdpAddress.h`, `Esp32UdpDriver.h` + `src/Esp32UdpDriver.cpp`, `src/Esp32SocketPlatformImplementation.h` | 28+22+29+69+119+141+362 | ESP32 adapters |
+| `PlatformEsp32/.../Esp32E32LoraDriver.h` + `src/Esp32E32LoraDriver.cpp`, `LoraAddress.h`, `src/E32UartPlatformImplementation.h` | 128+153+58+180 | E32 LoRa UART driver |
 
 ---
 
@@ -351,7 +354,7 @@ touches them).
 
 ---
 
-### Phase 1 — Mechanical renames 🟨
+### Phase 1 — Mechanical renames ✅
 
 Goal: every identifier states its full role. Use the rename procedure (1.3)
 for every table row. One task per module; finish a module's whole table before
@@ -542,16 +545,16 @@ the old name and must be updated in the same task.
   grep gate 0. Known nit: `ByteWriterTests` now asserts `Position()==0` twice (a
   harmless duplicate the `Written()` removal left) — pending a one-line cleanup.
 
-- [ ] **1.7 Platform renames.**
+- [x] **1.7 Platform renames.**
 
   | Current | New | Where |
   | --- | --- | --- |
   | param/local `Data` | `DatagramBytes` (UDP) / `FrameBytes` (UART) | `UdpSocketGlue.h:189`, `Esp32SocketGlue.h:161`, `E32UartGlue.h:65` |
   | local `Packed` | `PackedIpv4Address` | `HostUdpDriver.cpp:143`, `UdpSocketGlue.h:158`, `Esp32UdpDriver.cpp:106`, `Esp32SocketGlue.h:130` |
   | local `Byte` | `IncomingByte` | `Esp32E32LoraDriver.cpp:110` |
-  | file `src/UdpSocketGlue.h` | `src/UdpSocketPlatformSeam.h` | private header (D9); update `#include`s and any CMake/`library.json` listing |
-  | file `src/Esp32SocketGlue.h` | `src/Esp32SocketPlatformSeam.h` | same |
-  | file `src/E32UartGlue.h` | `src/E32UartPlatformSeam.h` | same |
+  | file `src/UdpSocketGlue.h` | `src/UdpSocketPlatformImplementation.h` | private header (D9); update `#include`s and any CMake/`library.json` listing |
+  | file `src/Esp32SocketGlue.h` | `src/Esp32SocketPlatformImplementation.h` | same |
+  | file `src/E32UartGlue.h` | `src/E32UartPlatformImplementation.h` | same |
 
   (The example `Main.cpp` renames happen in Phase 8 together with their
   restructuring — do not touch the examples here.)
@@ -561,6 +564,22 @@ the old name and must be updated in the same task.
   build — for its files the "verify" is that PlatformHost still builds green
   and a careful re-read of each ESP32 edit (compile happens on PlatformIO, out
   of scope here).
+
+  Done 2026-07-22 — three private platform headers renamed via `git mv`
+  (`UdpSocketGlue.h`/`Esp32SocketGlue.h`/`E32UartGlue.h` →
+  `...PlatformImplementation.h`), their three `#include`s repointed, and the
+  `#pragma once` banners updated; no CMake/`library.json` listed them.
+  Identifier renames: `Data`→`DatagramBytes` (UDP send) / `FrameBytes` (UART
+  send), `Packed`→`PackedIpv4Address` (four sites), `Byte`→`IncomingByte` (LoRa
+  receive-pump local; `PumpByteCap`/`ReadUartByte` left intact). The prose word
+  "glue" purged everywhere in Modules — including two hits the case-insensitive
+  gate caught beyond the three headers (`PlatformEsp32Main.cpp` and the public
+  `Esp32E32LoraDriver.h` comments); the general "seam" prose was left as-is
+  (out of scope, tracked separately). PlatformHost built green + ctest 11/11 +
+  doc checker 122; PlatformEsp32 has no host build, so each ESP32 edit was
+  verified by line-by-line re-read (pure renames, no logic or signature change).
+  Grep gates: `rg -i "glue" Modules` (excluding frozen benchmark results) 0,
+  `rg "\bPacked\b" Modules` 0.
 
 ---
 
@@ -654,9 +673,9 @@ sentences.
   - `Esp32E32LoraDriver.cpp:58` — keep only the "codec is transactional on
     failure" why; delete the "Encode the full frame into a stack buffer"
     narration.
-  - `UdpSocketGlue.h:416` / `Esp32SocketGlue.h:358` (renamed in 1.7) — the
+  - `UdpSocketPlatformImplementation.h:416` / `Esp32SocketPlatformImplementation.h:358` (renamed in 1.7) — the
     `select(Socket + 1, ...)` ritual: "POSIX nfds is highest-descriptor+1."
-  - `UdpSocketPlatformSeam.h` (was `UdpSocketGlue.h:280`) — name the oversize
+  - `UdpSocketPlatformImplementation.h` (was `UdpSocketGlue.h:280`) — name the oversize
     sentinel: introduce
     `constexpr std::size_t OversizeDatagramSentinelBytes = PeekScratchBytes + 1;`
     with a why-comment, and return it instead of the bare `PeekScratchBytes + 1`.
@@ -972,7 +991,7 @@ tests must pass unchanged.
   2. `FHostUdpDriver::TryReceive` (`HostUdpDriver.cpp:104-152`, ~46 lines; twin
      `Esp32UdpDriver.cpp:67-115`) → guards + `ProbeAndClassify` + consume +
      shared sender-decode.
-  3. `ProbeReadableDatagram` (`UdpSocketPlatformSeam.h`, was `:262-299`) —
+  3. `ProbeReadableDatagram` (`UdpSocketPlatformImplementation.h`, was `:262-299`) —
      extract per-platform `ClassifyPeekError(ErrorCode)` so each `#ifdef`
      branch is ~5 lines.
   4. `OpenBoundLoopbackUdpSocket` (was `:369-395`, + ESP32 twin) — extract the
@@ -1179,7 +1198,7 @@ tests must pass unchanged.
 | Phase | Title | Tasks | Status |
 | --- | --- | --- | --- |
 | 0 | Baseline | 1 | ✅ |
-| 1 | Mechanical renames | 7 | 🟨 |
+| 1 | Mechanical renames | 7 | ✅ |
 | 2 | Why-comment repairs | 5 | ⬜ |
 | 3 | Decompose: Core & Memory | 4 | ⬜ |
 | 4 | Decompose: Object & GC | 3 | ⬜ |

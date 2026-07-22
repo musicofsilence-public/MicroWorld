@@ -19,7 +19,7 @@ constexpr std::size_t E32MaxPayloadBytes = 58;
  * Construction parameters for one E32 LoRa UART driver.
  *
  * Holds the UART port number and TX/RX GPIO numbers as plain integers so the public header stays free of
- * the ESP-IDF `uart_port_t`/`gpio_num_t` enum types; the glue header reinterprets them on the ESP32 side.
+ * the ESP-IDF `uart_port_t`/`gpio_num_t` enum types; the platform-implementation header reinterprets them on the ESP32 side.
  */
 struct FEsp32E32LoraConfig
 {
