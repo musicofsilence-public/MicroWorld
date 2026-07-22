@@ -1244,7 +1244,7 @@ tests must pass unchanged.
   `#3`/`#4 dependency_boundaries`, `#9 net_tests` incl. NetProtocol + FrameCodec),
   doc checker 122 files.
 
-- [ ] **6.3 Split the `TNetHost` handlers.** `NetHost.h`.
+- [x] **6.3 Split the `TNetHost` handlers.** `NetHost.h`.
   1. `HandleHello` (`:571-607`, ~35 lines) → extract
      `std::size_t AdmitPeer(const FNetAddress& From, TimePointMilliseconds Now)`
      (find-or-allocate + refresh-or-init; returns `MaxPeers` on full table);
@@ -1261,6 +1261,25 @@ tests must pass unchanged.
 
   **Done when:** NetHostTests + EngineNetHostTests pass unchanged; Standard
   Verify passes.
+
+  **Evidence (2026-07-22, commit pending):** All six sub-parts done in
+  `NetHost.h`, behavior byte-identical. Each public handler is now guards + named
+  steps: `Stop` → `SendByeToAllActivePeers` + `EvictAllPeers`; `PumpReceive` →
+  `DrainInboundPackets` + `EvictTimedOutPeers`; `PumpSend` → `SendClientHelloIfDue`
+  + `SendDueHeartbeats` + `DrainOutbound`; `SendTo`'s local-peer branch →
+  `SendToLocalPeer`; `HandleHello` → guards + `AdmitPeer` + `SendWelcome`. The
+  shared `+4` slack is hoisted to `static constexpr std::size_t PumpSlackPackets =
+  4` (headroom for control bursts between pumps), used by both `SendQueueDepth =
+  2 * MaxPeers + PumpSlackPackets` and the inbound `MaxPeers + PumpSlackPackets`
+  bound — numeric values unchanged. All seven extracted helpers are private and
+  reproduce their source bodies verbatim (fields, comments, log calls, order); the
+  "peer table full" log moved into `AdmitPeer` where the reason is known. **CQS
+  note:** `AdmitPeer` (find-or-allocate returning the slot index, `MaxPeers` on a
+  full table) and `SendToLocalPeer` (dispatch + status) are command-with-status /
+  factory idioms consistent with the existing `FindFreePeerSlot`/`ResolvePeer`
+  patterns; reported, not new violations. Verified: build clean, ctest 11/11
+  (`#1 format_check`, `#9 net_tests` incl. NetHostTests, `#10 engine_tests` incl.
+  EngineNetHostTests), doc checker 122 files.
 
 - [ ] **6.4 Unify the FIFO enqueue ladder; apply the D7 verdict fix
   (behavior change).**

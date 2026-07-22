@@ -113,8 +113,11 @@ class TNetHost final
 		MaxPacketBytes >= MessageHeaderBytes + MaxControlPayloadBytes, "TNetHost packets must fit the largest control frame (header + Welcome).");
 
 public:
+	/** Extra outbound/inbound packet headroom so a burst of control traffic between pumps is not dropped. */
+	static constexpr std::size_t PumpSlackPackets = 4;
+
 	/** Outbound FIFO depth: one full broadcast plus pending heartbeats plus slack. */
-	static constexpr std::size_t SendQueueDepth = 2 * MaxPeers + 4;
+	static constexpr std::size_t SendQueueDepth = 2 * MaxPeers + PumpSlackPackets;
 
 	/** Fixed number of message-handler bindings; small because one dispatcher usually suffices. */
 	static constexpr std::size_t MaxMessageHandlers = 4;
@@ -204,26 +207,8 @@ public:
 	 */
 	void Stop() noexcept
 	{
-		if (Mode != ENetMode::Standalone)
-		{
-			FControlMessage ByeMessage{};
-			ByeMessage.Type = EControlMessageType::Bye;
-			for (std::size_t Index = 0; Index < MaxPeers; ++Index)
-			{
-				if (Peers[Index].bActive)
-				{
-					(void)QueueControl(Peers[Index].Address, ByeMessage);
-				}
-			}
-			DrainOutbound();
-		}
-		for (std::size_t Index = 0; Index < MaxPeers; ++Index)
-		{
-			if (Peers[Index].bActive)
-			{
-				EvictPeer(Index);
-			}
-		}
+		SendByeToAllActivePeers();
+		EvictAllPeers();
 		State = ENetHostState::Idle;
 		bHelloDue = false;
 	}
@@ -239,20 +224,7 @@ public:
 		{
 			return ENetResult::Success;
 		}
-		std::array<std::uint8_t, MaxPacketBytes> ReceiveBuffer{};
-		const std::size_t MaxReceives = MaxPeers + 4;
-		for (std::size_t Count = 0; Count < MaxReceives; ++Count)
-		{
-			FNetAddress From{};
-			FNetReceiveResult Result{};
-			const ENetResult ReceiveResult = OutboundManager.Receive(From, TSpan<std::uint8_t>(ReceiveBuffer.data(), ReceiveBuffer.size()), Result);
-			if (ReceiveResult != ENetResult::Success)
-			{
-				// Unavailable means the transport is drained; any other failure cannot make progress now.
-				break;
-			}
-			HandleInboundPacket(From, TSpan<const std::uint8_t>(ReceiveBuffer.data(), Result.BytesReceived), NowMilliseconds);
-		}
+		DrainInboundPackets(NowMilliseconds);
 		EvictTimedOutPeers(NowMilliseconds);
 		return ENetResult::Success;
 	}
@@ -267,26 +239,8 @@ public:
 		{
 			return ENetResult::Success;
 		}
-		if (Mode == ENetMode::Client && State == ENetHostState::Connecting)
-		{
-			if (bHelloDue || ElapsedSince(NowMilliseconds, LastHelloSendMilliseconds) >= Config.HeartbeatIntervalMilliseconds)
-			{
-				QueueHello();
-				LastHelloSendMilliseconds = NowMilliseconds;
-				bHelloDue = false;
-			}
-		}
-		for (std::size_t Index = 0; Index < MaxPeers; ++Index)
-		{
-			FNetPeerSlot& Slot = Peers[Index];
-			if (Slot.bActive && ElapsedSince(NowMilliseconds, Slot.LastSendMilliseconds) >= Config.HeartbeatIntervalMilliseconds)
-			{
-				FControlMessage HeartbeatMessage{};
-				HeartbeatMessage.Type = EControlMessageType::Heartbeat;
-				(void)QueueControl(Slot.Address, HeartbeatMessage);
-				Slot.LastSendMilliseconds = NowMilliseconds;
-			}
-		}
+		SendClientHelloIfDue(NowMilliseconds);
+		SendDueHeartbeats(NowMilliseconds);
 		DrainOutbound();
 		return ENetResult::Success;
 	}
@@ -309,12 +263,7 @@ public:
 		}
 		if (Peer.Index == LocalPeerIndex)
 		{
-			if (Mode != ENetMode::ListenServer)
-			{
-				return ENetResult::Invalid;
-			}
-			DispatchToHandler(GetLocalPeer(), Channel, Payload);
-			return ENetResult::Success;
+			return SendToLocalPeer(Channel, Payload);
 		}
 		const FNetPeerSlot* const Slot = ResolvePeer(Peer);
 		if (Slot == nullptr)
@@ -595,24 +544,10 @@ private:
 				static_cast<unsigned>(Config.ProtocolVersion));
 			return;
 		}
-		std::size_t Index = FindActivePeerIndexByAddress(From);
+		const std::size_t Index = AdmitPeer(From, NowMilliseconds);
 		if (Index == MaxPeers)
 		{
-			Index = FindFreePeerSlot();
-			if (Index == MaxPeers)
-			{
-				MW_LOG_MSG(Warning, "NetHost", "rejected Hello: peer table full");
-				return;
-			}
-			FNetPeerSlot& Slot = Peers[Index];
-			Slot.Address = From;
-			Slot.LastReceiveMilliseconds = NowMilliseconds;
-			Slot.LastSendMilliseconds = NowMilliseconds;
-			Slot.bActive = true;
-		}
-		else
-		{
-			Peers[Index].LastReceiveMilliseconds = NowMilliseconds;
+			return;
 		}
 		SendWelcome(Index, From);
 	}
@@ -736,6 +671,123 @@ private:
 				break;
 			}
 		}
+	}
+
+	/** Receives up to `MaxPeers + PumpSlackPackets` packets this pump, routing each to `HandleInboundPacket`. */
+	void DrainInboundPackets(const TimePointMilliseconds NowMilliseconds) noexcept
+	{
+		std::array<std::uint8_t, MaxPacketBytes> ReceiveBuffer{};
+		const std::size_t MaxReceives = MaxPeers + PumpSlackPackets;
+		for (std::size_t Count = 0; Count < MaxReceives; ++Count)
+		{
+			FNetAddress From{};
+			FNetReceiveResult Result{};
+			const ENetResult ReceiveResult = OutboundManager.Receive(From, TSpan<std::uint8_t>(ReceiveBuffer.data(), ReceiveBuffer.size()), Result);
+			if (ReceiveResult != ENetResult::Success)
+			{
+				// Unavailable means the transport is drained; any other failure cannot make progress now.
+				break;
+			}
+			HandleInboundPacket(From, TSpan<const std::uint8_t>(ReceiveBuffer.data(), Result.BytesReceived), NowMilliseconds);
+		}
+	}
+
+	/** Client-only: greets the server on the first connecting pump and on each heartbeat interval afterward. */
+	void SendClientHelloIfDue(const TimePointMilliseconds NowMilliseconds) noexcept
+	{
+		if (Mode != ENetMode::Client || State != ENetHostState::Connecting)
+		{
+			return;
+		}
+		if (bHelloDue || ElapsedSince(NowMilliseconds, LastHelloSendMilliseconds) >= Config.HeartbeatIntervalMilliseconds)
+		{
+			QueueHello();
+			LastHelloSendMilliseconds = NowMilliseconds;
+			bHelloDue = false;
+		}
+	}
+
+	/** Queues a heartbeat to every active peer whose last send is older than the heartbeat interval. */
+	void SendDueHeartbeats(const TimePointMilliseconds NowMilliseconds) noexcept
+	{
+		for (std::size_t Index = 0; Index < MaxPeers; ++Index)
+		{
+			FNetPeerSlot& Slot = Peers[Index];
+			if (Slot.bActive && ElapsedSince(NowMilliseconds, Slot.LastSendMilliseconds) >= Config.HeartbeatIntervalMilliseconds)
+			{
+				FControlMessage HeartbeatMessage{};
+				HeartbeatMessage.Type = EControlMessageType::Heartbeat;
+				(void)QueueControl(Slot.Address, HeartbeatMessage);
+				Slot.LastSendMilliseconds = NowMilliseconds;
+			}
+		}
+	}
+
+	/** Best-effort `Bye` to every active peer, then drains the outbound FIFO; a standalone host does nothing. */
+	void SendByeToAllActivePeers() noexcept
+	{
+		if (Mode == ENetMode::Standalone)
+		{
+			return;
+		}
+		FControlMessage ByeMessage{};
+		ByeMessage.Type = EControlMessageType::Bye;
+		for (std::size_t Index = 0; Index < MaxPeers; ++Index)
+		{
+			if (Peers[Index].bActive)
+			{
+				(void)QueueControl(Peers[Index].Address, ByeMessage);
+			}
+		}
+		DrainOutbound();
+	}
+
+	/** Evicts every active peer so each outstanding `FPeerId` goes stale. */
+	void EvictAllPeers() noexcept
+	{
+		for (std::size_t Index = 0; Index < MaxPeers; ++Index)
+		{
+			if (Peers[Index].bActive)
+			{
+				EvictPeer(Index);
+			}
+		}
+	}
+
+	/** Dispatches an application message directly to the listen server's local peer; `Invalid` in any other mode. */
+	ENetResult SendToLocalPeer(const std::uint8_t Channel, TSpan<const std::uint8_t> Payload) noexcept
+	{
+		if (Mode != ENetMode::ListenServer)
+		{
+			return ENetResult::Invalid;
+		}
+		DispatchToHandler(GetLocalPeer(), Channel, Payload);
+		return ENetResult::Success;
+	}
+
+	/** Finds this address's peer or allocates a free slot, refreshing liveness; returns `MaxPeers` when the table is full. */
+	std::size_t AdmitPeer(const FNetAddress& From, const TimePointMilliseconds NowMilliseconds) noexcept
+	{
+		std::size_t Index = FindActivePeerIndexByAddress(From);
+		if (Index == MaxPeers)
+		{
+			Index = FindFreePeerSlot();
+			if (Index == MaxPeers)
+			{
+				MW_LOG_MSG(Warning, "NetHost", "rejected Hello: peer table full");
+				return MaxPeers;
+			}
+			FNetPeerSlot& Slot = Peers[Index];
+			Slot.Address = From;
+			Slot.LastReceiveMilliseconds = NowMilliseconds;
+			Slot.LastSendMilliseconds = NowMilliseconds;
+			Slot.bActive = true;
+		}
+		else
+		{
+			Peers[Index].LastReceiveMilliseconds = NowMilliseconds;
+		}
+		return Index;
 	}
 
 	/** Owns the outbound packet bytes, lengths, and destinations for the FIFO. */
