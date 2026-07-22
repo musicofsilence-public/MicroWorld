@@ -67,13 +67,13 @@ struct FClassDescriptor
 	/** Tests finite explicit descriptor ancestry without C++ RTTI or cyclic traversal. */
 	bool IsChildOf(const FClassDescriptor& CandidateParent) const noexcept
 	{
-		const FClassDescriptor* SlowDescriptor = this;
-		const FClassDescriptor* FastDescriptor = this;
-		while (FastDescriptor != nullptr && FastDescriptor->Parent != nullptr)
+		const FClassDescriptor* AncestryProbe = this;
+		const FClassDescriptor* CycleDetectorProbe = this;
+		while (CycleDetectorProbe != nullptr && CycleDetectorProbe->Parent != nullptr)
 		{
-			SlowDescriptor = SlowDescriptor->Parent;
-			FastDescriptor = FastDescriptor->Parent->Parent;
-			if (SlowDescriptor == FastDescriptor)
+			AncestryProbe = AncestryProbe->Parent;
+			CycleDetectorProbe = CycleDetectorProbe->Parent->Parent;
+			if (AncestryProbe == CycleDetectorProbe)
 			{
 				return false;
 			}

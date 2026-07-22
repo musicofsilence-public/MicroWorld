@@ -11,20 +11,20 @@ namespace
 {
 
 	/** Resets one reentry flag on every explicit or early return from a bounded call. */
-	class FScopedFlagReset final
+	class FScopedReentryGuard final
 	{
 	public:
 		/** Marks the protected operation active for this lexical scope. */
-		explicit FScopedFlagReset(bool& InFlag) noexcept : Flag(InFlag) { Flag = true; }
+		explicit FScopedReentryGuard(bool& InFlag) noexcept : Flag(InFlag) { Flag = true; }
 
 		/** Makes the protected operation callable again after every return path. */
-		~FScopedFlagReset() noexcept { Flag = false; }
+		~FScopedReentryGuard() noexcept { Flag = false; }
 
 		/** Preserves unique responsibility for resetting one referenced flag. */
-		FScopedFlagReset(const FScopedFlagReset&) = delete;
+		FScopedReentryGuard(const FScopedReentryGuard&) = delete;
 
 		/** Prevents changing the referenced flag behind this guard. */
-		FScopedFlagReset& operator=(const FScopedFlagReset&) = delete;
+		FScopedReentryGuard& operator=(const FScopedReentryGuard&) = delete;
 
 	private:
 		/** Identifies the caller-owned flag that must be reset at scope exit. */
@@ -135,7 +135,7 @@ FGarbageCollectionResult FGarbageCollector::Advance(const FGarbageCollectionBudg
 		return CollectionResult;
 	}
 
-	FScopedFlagReset AdvanceGuard(bAdvanceActive);
+	FScopedReentryGuard AdvanceGuard(bAdvanceActive);
 	while (CurrentPhase != EGarbageCollectionPhase::Idle)
 	{
 		if (CurrentPhase == EGarbageCollectionPhase::SeedRoots)

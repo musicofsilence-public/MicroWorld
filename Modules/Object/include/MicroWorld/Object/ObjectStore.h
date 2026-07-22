@@ -98,13 +98,13 @@ struct FObjectRootEntry
 struct FObjectStoreStorage
 {
 	/** Provides the first byte of equal-size, non-moving object slots. */
-	std::byte* SlotBytes{nullptr};
+	std::byte* SlotPayloadBytes{nullptr};
 
 	/** Provides enough bytes for SlotCount consecutive SlotSizeBytes ranges. */
-	std::size_t SlotStorageSizeBytes{0};
+	std::size_t TotalSlotStorageBytes{0};
 
 	/** Provides one lifecycle record for every equal-size object slot. */
-	FObjectSlotMetadata* Slots{nullptr};
+	FObjectSlotMetadata* SlotMetadata{nullptr};
 
 	/** Fixes the number of object lifetimes that may be active concurrently. */
 	std::uint32_t SlotCount{0};
@@ -314,7 +314,7 @@ public:
 			return Creation;
 		}
 
-		FObjectSlotMetadata& Slot = Storage.Slots[SlotIndex];
+		FObjectSlotMetadata& Slot = Storage.SlotMetadata[SlotIndex];
 		const ObjectGeneration NextGeneration = Slot.Generation == 0 ? 1 : Slot.Generation + 1;
 		Slot.State = EObjectSlotState::Constructing;
 		bMutationLocked = true;
@@ -361,8 +361,8 @@ public:
 	/** Hides one live object immediately and queues it for the explicit barrier. */
 	EObjectResult MarkPendingDestroy(FObjectHandle Handle) noexcept;
 
-	/** Inspects at most MaxObjects slots and destroys pending objects encountered. */
-	FObjectMutationResult ApplyPendingDestroy(std::uint32_t MaxObjects) noexcept;
+	/** Inspects at most MaxSlotsToInspect slots and destroys pending objects encountered. */
+	FObjectMutationResult ApplyPendingDestroy(std::uint32_t MaxSlotsToInspect) noexcept;
 
 	/** Registers one independent root token after live-handle and capacity validation. */
 	EObjectResult AddRoot(FObjectHandle Handle) noexcept;
@@ -387,10 +387,10 @@ public:
 			return StrongResult;
 		}
 
-		StrongResult.Result = AddRoot(Object.Object);
+		StrongResult.Result = AddRoot(Object.TargetHandle);
 		if (StrongResult.Result == EObjectResult::Success)
 		{
-			StrongResult.Pointer = TStrongObjectPtr<T>(*this, Object.Object);
+			StrongResult.Pointer = TStrongObjectPtr<T>(*this, Object.TargetHandle);
 		}
 		return StrongResult;
 	}
@@ -416,7 +416,7 @@ private:
 		{
 			return StoreConfigurationResult;
 		}
-		if (Classes.Find(Descriptor.TypeId) != &Descriptor)
+		if (ClassRegistryLookup.Find(Descriptor.TypeId) != &Descriptor)
 		{
 			return EObjectResult::UnknownClass;
 		}
@@ -508,7 +508,7 @@ private:
 	FObjectStoreStorage Storage{};
 
 	/** Retains non-owning class lookup whose registry lifetime encloses this store. */
-	FClassRegistryView Classes{};
+	FClassRegistryView ClassRegistryLookup{};
 
 	/** Prevents operations when caller-owned storage violates fixed-slot invariants. */
 	EObjectResult StoreConfigurationResult{EObjectResult::UnsupportedObjectLayout};

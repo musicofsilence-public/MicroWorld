@@ -15,7 +15,7 @@ namespace
 	}
 
 	/** Confirms multiplication cannot wrap the storage extent calculation. */
-	bool CanMultiply(const std::size_t Left, const std::size_t Right) noexcept
+	bool MultiplicationFitsSizeType(const std::size_t Left, const std::size_t Right) noexcept
 	{
 		return Right == 0 || Left <= std::numeric_limits<std::size_t>::max() / Right;
 	}
@@ -38,15 +38,16 @@ FObjectStoreDispatchGuard::~FObjectStoreDispatchGuard() noexcept
 	}
 }
 
-FObjectStore::FObjectStore(const FObjectStoreStorage InStorage, const FClassRegistryView InClasses) noexcept : Storage(InStorage), Classes(InClasses)
+FObjectStore::FObjectStore(const FObjectStoreStorage InStorage, const FClassRegistryView InClasses) noexcept
+	: Storage(InStorage), ClassRegistryLookup(InClasses)
 {
-	const bool bHasSlotPointers = Storage.SlotCount > 0 && Storage.SlotBytes != nullptr && Storage.Slots != nullptr;
+	const bool bHasSlotPointers = Storage.SlotCount > 0 && Storage.SlotPayloadBytes != nullptr && Storage.SlotMetadata != nullptr;
 	const bool bHasSlotLayout =
 		Storage.SlotSizeBytes > 0 && IsValidAlignment(Storage.SlotAlignmentBytes) && (Storage.SlotSizeBytes % Storage.SlotAlignmentBytes) == 0;
-	const bool bStorageExtentFits =
-		CanMultiply(Storage.SlotSizeBytes, Storage.SlotCount) && Storage.SlotStorageSizeBytes >= Storage.SlotSizeBytes * Storage.SlotCount;
+	const bool bStorageExtentFits = MultiplicationFitsSizeType(Storage.SlotSizeBytes, Storage.SlotCount)
+		&& Storage.TotalSlotStorageBytes >= Storage.SlotSizeBytes * Storage.SlotCount;
 	const bool bStorageAddressAligned =
-		Storage.SlotBytes != nullptr && (reinterpret_cast<std::uintptr_t>(Storage.SlotBytes) & (Storage.SlotAlignmentBytes - 1U)) == 0;
+		Storage.SlotPayloadBytes != nullptr && (reinterpret_cast<std::uintptr_t>(Storage.SlotPayloadBytes) & (Storage.SlotAlignmentBytes - 1U)) == 0;
 	const bool bHasRootStorage = Storage.RootCapacity == 0 || Storage.Roots != nullptr;
 
 	if (!bHasSlotPointers || !bHasSlotLayout || !bStorageExtentFits || !bStorageAddressAligned || !bHasRootStorage)
@@ -56,7 +57,7 @@ FObjectStore::FObjectStore(const FObjectStoreStorage InStorage, const FClassRegi
 
 	for (std::uint32_t SlotIndex = 0; SlotIndex < Storage.SlotCount; ++SlotIndex)
 	{
-		Storage.Slots[SlotIndex] = {};
+		Storage.SlotMetadata[SlotIndex] = {};
 	}
 	for (std::uint32_t RootIndex = 0; RootIndex < Storage.RootCapacity; ++RootIndex)
 	{
@@ -117,7 +118,7 @@ EObjectResult FObjectStore::MarkPendingDestroy(const FObjectHandle Handle) noexc
 	return EObjectResult::Success;
 }
 
-FObjectMutationResult FObjectStore::ApplyPendingDestroy(const std::uint32_t MaxObjects) noexcept
+FObjectMutationResult FObjectStore::ApplyPendingDestroy(const std::uint32_t MaxSlotsToInspect) noexcept
 {
 	FObjectMutationResult Mutation{};
 	Mutation.Result = StoreConfigurationResult;
@@ -127,19 +128,19 @@ FObjectMutationResult FObjectStore::ApplyPendingDestroy(const std::uint32_t MaxO
 		Mutation.Result = EObjectResult::LifecycleLocked;
 		return Mutation;
 	}
-	if (StoreConfigurationResult != EObjectResult::Success || MaxObjects == 0 || PendingDestroyCount == 0)
+	if (StoreConfigurationResult != EObjectResult::Success || MaxSlotsToInspect == 0 || PendingDestroyCount == 0)
 	{
 		return Mutation;
 	}
 
-	const std::uint32_t VisitLimit = MaxObjects < Storage.SlotCount ? MaxObjects : Storage.SlotCount;
+	const std::uint32_t VisitLimit = MaxSlotsToInspect < Storage.SlotCount ? MaxSlotsToInspect : Storage.SlotCount;
 	while (Mutation.SlotsVisited < VisitLimit && PendingDestroyCount > 0)
 	{
 		const ObjectIndex SlotIndex = PendingDestroyScanCursor;
 		PendingDestroyScanCursor = PendingDestroyScanCursor + 1U == Storage.SlotCount ? 0 : PendingDestroyScanCursor + 1U;
 		++Mutation.SlotsVisited;
 
-		if (Storage.Slots[SlotIndex].State == EObjectSlotState::PendingDestroy)
+		if (Storage.SlotMetadata[SlotIndex].State == EObjectSlotState::PendingDestroy)
 		{
 			(void)DestroySlot(SlotIndex);
 			++Mutation.ObjectsDestroyed;
@@ -226,7 +227,8 @@ ObjectIndex FObjectStore::FindVacantSlot() const noexcept
 {
 	for (ObjectIndex SlotIndex = 0; SlotIndex < Storage.SlotCount; ++SlotIndex)
 	{
-		if (Storage.Slots[SlotIndex].State == EObjectSlotState::Vacant && CanAdvanceObjectGeneration(Storage.Slots[SlotIndex].Generation))
+		if (Storage.SlotMetadata[SlotIndex].State == EObjectSlotState::Vacant
+			&& CanAdvanceObjectGeneration(Storage.SlotMetadata[SlotIndex].Generation))
 		{
 			return SlotIndex;
 		}
@@ -236,7 +238,7 @@ ObjectIndex FObjectStore::FindVacantSlot() const noexcept
 
 void* FObjectStore::SlotAddress(const ObjectIndex SlotIndex) const noexcept
 {
-	return static_cast<void*>(Storage.SlotBytes + static_cast<std::size_t>(SlotIndex) * Storage.SlotSizeBytes);
+	return static_cast<void*>(Storage.SlotPayloadBytes + static_cast<std::size_t>(SlotIndex) * Storage.SlotSizeBytes);
 }
 
 FObjectSlotMetadata* FObjectStore::FindMatchingSlot(const FObjectHandle Handle, const bool bAllowPending) noexcept
@@ -251,7 +253,7 @@ const FObjectSlotMetadata* FObjectStore::FindMatchingSlot(const FObjectHandle Ha
 		return nullptr;
 	}
 
-	const FObjectSlotMetadata& Slot = Storage.Slots[Handle.Index];
+	const FObjectSlotMetadata& Slot = Storage.SlotMetadata[Handle.Index];
 	const bool bStateAccepted = Slot.State == EObjectSlotState::Live || (bAllowPending && Slot.State == EObjectSlotState::PendingDestroy);
 	if (!bStateAccepted || Slot.Generation != Handle.Generation || Slot.Object == nullptr)
 	{
@@ -267,7 +269,7 @@ EObjectResult FObjectStore::DestroySlot(const ObjectIndex SlotIndex) noexcept
 		return EObjectResult::StaleHandle;
 	}
 
-	FObjectSlotMetadata& Slot = Storage.Slots[SlotIndex];
+	FObjectSlotMetadata& Slot = Storage.SlotMetadata[SlotIndex];
 	if ((Slot.State != EObjectSlotState::Live && Slot.State != EObjectSlotState::PendingDestroy) || Slot.Object == nullptr
 		|| Slot.Descriptor == nullptr || Slot.Descriptor->Destroy == nullptr)
 	{
@@ -338,16 +340,17 @@ FObjectHandle FObjectStore::CollectorRootAt(const std::uint32_t RootIndex) const
 
 FObjectHandle FObjectStore::CollectorHandleAt(const ObjectIndex SlotIndex) const noexcept
 {
-	if (SlotIndex >= Storage.SlotCount || Storage.Slots[SlotIndex].State != EObjectSlotState::Live)
+	if (SlotIndex >= Storage.SlotCount || Storage.SlotMetadata[SlotIndex].State != EObjectSlotState::Live)
 	{
 		return {};
 	}
-	return FObjectHandle{SlotIndex, Storage.Slots[SlotIndex].Generation};
+	return FObjectHandle{SlotIndex, Storage.SlotMetadata[SlotIndex].Generation};
 }
 
 UObject* FObjectStore::CollectorObjectAt(const ObjectIndex SlotIndex) const noexcept
 {
-	return SlotIndex < Storage.SlotCount && Storage.Slots[SlotIndex].State == EObjectSlotState::Live ? Storage.Slots[SlotIndex].Object : nullptr;
+	return SlotIndex < Storage.SlotCount && Storage.SlotMetadata[SlotIndex].State == EObjectSlotState::Live ? Storage.SlotMetadata[SlotIndex].Object
+																											: nullptr;
 }
 
 bool FObjectStore::CollectorIsOccupied(const ObjectIndex SlotIndex) const noexcept
@@ -356,7 +359,7 @@ bool FObjectStore::CollectorIsOccupied(const ObjectIndex SlotIndex) const noexce
 	{
 		return false;
 	}
-	const EObjectSlotState State = Storage.Slots[SlotIndex].State;
+	const EObjectSlotState State = Storage.SlotMetadata[SlotIndex].State;
 	return State == EObjectSlotState::Live || State == EObjectSlotState::PendingDestroy || State == EObjectSlotState::Destroying;
 }
 
@@ -366,20 +369,20 @@ bool FObjectStore::CollectorIsPendingDestroy(const ObjectIndex SlotIndex) const 
 	{
 		return false;
 	}
-	const EObjectSlotState State = Storage.Slots[SlotIndex].State;
+	const EObjectSlotState State = Storage.SlotMetadata[SlotIndex].State;
 	return State == EObjectSlotState::PendingDestroy || State == EObjectSlotState::Destroying;
 }
 
 bool FObjectStore::CollectorIsMarked(const ObjectIndex SlotIndex) const noexcept
 {
-	return SlotIndex < Storage.SlotCount && CollectorIsOccupied(SlotIndex) && Storage.Slots[SlotIndex].bMarked;
+	return SlotIndex < Storage.SlotCount && CollectorIsOccupied(SlotIndex) && Storage.SlotMetadata[SlotIndex].bMarked;
 }
 
 void FObjectStore::CollectorSetMarked(const ObjectIndex SlotIndex, const bool bMarked) noexcept
 {
 	if (SlotIndex < Storage.SlotCount && CollectorIsOccupied(SlotIndex))
 	{
-		Storage.Slots[SlotIndex].bMarked = bMarked;
+		Storage.SlotMetadata[SlotIndex].bMarked = bMarked;
 	}
 }
 

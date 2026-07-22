@@ -399,7 +399,7 @@ the old name and must be updated in the same task.
   warning-clean; ctest 11/11; doc checker 122 files; all file-scoped old-name
   grep gates return 0.
 
-- [ ] **1.3 Object renames.**
+- [x] **1.3 Object renames.**
 
   | Current | New | Declared at (hint) |
   | --- | --- | --- |
@@ -415,6 +415,15 @@ the old name and must be updated in the same task.
 
   **Done when:** greps clean (pay attention to the cross-module
   `FObjectStoreStorage` users in `Modules/Engine`); Standard Verify passes.
+
+  Done 2026-07-22 — nine renames confined to five Object-module files; all four
+  distinct `Object` fields disambiguated (only the `FObjectHandle` smart-ptr
+  field → `TargetHandle`; `Creation.Object`, `Slot.Object`, and the param kept)
+  and `SlotSizeBytes` preserved while `SlotBytes`→`SlotPayloadBytes`. Positional
+  `FObjectStoreStorage` initializers in Engine/tests needed no change. Build
+  warning-clean; ctest 11/11; doc checker 122 files; all nine old-name grep
+  gates 0; keep-checks confirm `SlotSizeBytes`/`Creation.Object`/`Slot.Object`
+  intact.
 
 - [ ] **1.4 Engine renames.**
 
