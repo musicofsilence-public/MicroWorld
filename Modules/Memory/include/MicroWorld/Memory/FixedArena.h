@@ -13,15 +13,19 @@ namespace MicroWorld
 /**
  * Supplies reusable aligned storage with fixed caller-selected capacity.
  *
- * @tparam Bytes Number of caller-usable bytes retained by the arena.
- * @tparam Alignment Maximum power-of-two alignment guaranteed by the arena.
+ * @tparam StorageCapacityBytes Number of caller-usable bytes retained by the arena.
+ * @tparam GuaranteedAlignmentBytes Maximum power-of-two alignment guaranteed by the arena.
  */
-template<std::size_t Bytes, std::size_t Alignment>
+template<std::size_t StorageCapacityBytes, std::size_t GuaranteedAlignmentBytes>
 class TFixedArena final : public IMemoryResource
 {
-	static_assert(Bytes > 0, "A fixed arena must expose at least one byte.");
-	static_assert(Alignment > 0 && (Alignment & (Alignment - 1U)) == 0, "A fixed arena alignment must be a non-zero power of two.");
-	static_assert(Bytes <= std::numeric_limits<std::size_t>::max() - (Alignment - 1U), "A fixed arena's aligned backing storage must fit in size_t.");
+	static_assert(StorageCapacityBytes > 0, "A fixed arena must expose at least one byte.");
+	static_assert(
+		GuaranteedAlignmentBytes > 0 && (GuaranteedAlignmentBytes & (GuaranteedAlignmentBytes - 1U)) == 0,
+		"A fixed arena alignment must be a non-zero power of two.");
+	static_assert(
+		StorageCapacityBytes <= std::numeric_limits<std::size_t>::max() - (GuaranteedAlignmentBytes - 1U),
+		"A fixed arena's aligned backing storage must fit in size_t.");
 
 public:
 	/** Creates an empty resource whose storage and metadata are caller-owned. */
@@ -51,7 +55,7 @@ public:
 		{
 			return EMemoryResult::UnsupportedAlignment;
 		}
-		if (SizeBytes == 0 || SizeBytes > Bytes - UsedSizeBytes)
+		if (SizeBytes == 0 || SizeBytes > StorageCapacityBytes - UsedSizeBytes)
 		{
 			return EMemoryResult::OutOfMemory;
 		}
@@ -60,7 +64,7 @@ public:
 		std::size_t FreeRangeStart = 0;
 		std::size_t FreeRangeSize = 0;
 
-		for (std::size_t Offset = 0; Offset < Bytes; ++Offset)
+		for (std::size_t Offset = 0; Offset < StorageCapacityBytes; ++Offset)
 		{
 			if (ReadMarker(AllocationStartMarkers, Offset))
 			{
@@ -111,7 +115,7 @@ public:
 		}
 
 		const std::uintptr_t StorageAddress = reinterpret_cast<std::uintptr_t>(StorageBegin());
-		const std::uintptr_t StorageEndAddress = reinterpret_cast<std::uintptr_t>(StorageBegin() + Bytes);
+		const std::uintptr_t StorageEndAddress = reinterpret_cast<std::uintptr_t>(StorageBegin() + StorageCapacityBytes);
 		const std::uintptr_t BlockAddress = reinterpret_cast<std::uintptr_t>(Block.Address);
 
 		if (BlockAddress < StorageAddress || BlockAddress >= StorageEndAddress)
@@ -120,7 +124,7 @@ public:
 		}
 
 		const std::size_t AllocationStart = static_cast<std::size_t>(BlockAddress - StorageAddress);
-		if (Block.SizeBytes > Bytes - AllocationStart)
+		if (Block.SizeBytes > StorageCapacityBytes - AllocationStart)
 		{
 			return EMemoryResult::InvalidBlock;
 		}
@@ -153,31 +157,31 @@ public:
 	}
 
 	/** Reports the compile-time caller-usable capacity without marker storage. */
-	std::size_t CapacityBytes() const noexcept override { return Bytes; }
+	std::size_t CapacityBytes() const noexcept override { return StorageCapacityBytes; }
 
 	/** Reports the exact payload bytes retained by active allocations. */
 	std::size_t UsedBytes() const noexcept override { return UsedSizeBytes; }
 
 private:
 	/** Packs one allocation-boundary bit per usable byte into bounded metadata. */
-	static constexpr std::size_t MarkerStorageBytes = (Bytes + 7U) / 8U;
+	static constexpr std::size_t MarkerStorageBytes = (StorageCapacityBytes + 7U) / 8U;
 
-	/** Reserves enough local bytes to expose Bytes after aligning the first usable byte. */
-	static constexpr std::size_t RawStorageSizeBytes = Bytes + Alignment - 1U;
+	/** Reserves enough local bytes to expose StorageCapacityBytes after aligning the first usable byte. */
+	static constexpr std::size_t RawStorageSizeBytes = StorageCapacityBytes + GuaranteedAlignmentBytes - 1U;
 
 	/** Finds the stable aligned start without requiring padding around the virtual base. */
 	std::byte* StorageBegin() noexcept
 	{
 		const std::uintptr_t RawAddress = reinterpret_cast<std::uintptr_t>(Storage.data());
-		const std::size_t Misalignment = static_cast<std::size_t>(RawAddress & (Alignment - 1U));
-		const std::size_t AlignmentAdjustment = Misalignment == 0 ? 0 : Alignment - Misalignment;
+		const std::size_t Misalignment = static_cast<std::size_t>(RawAddress & (GuaranteedAlignmentBytes - 1U));
+		const std::size_t AlignmentAdjustment = Misalignment == 0 ? 0 : GuaranteedAlignmentBytes - Misalignment;
 		return Storage.data() + AlignmentAdjustment;
 	}
 
 	/** Confirms the arena can guarantee the requested power-of-two alignment. */
 	static bool IsSupportedAlignment(const std::size_t AlignmentBytes) noexcept
 	{
-		return AlignmentBytes > 0 && (AlignmentBytes & (AlignmentBytes - 1U)) == 0 && AlignmentBytes <= Alignment;
+		return AlignmentBytes > 0 && (AlignmentBytes & (AlignmentBytes - 1U)) == 0 && AlignmentBytes <= GuaranteedAlignmentBytes;
 	}
 
 	/** Reads one boundary marker without exposing bookkeeping to callers. */

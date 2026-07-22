@@ -10,23 +10,23 @@
 namespace MicroWorld
 {
 
-template<typename T>
+template<typename ValueType>
 class TUniquePtr;
 
-template<typename T>
+template<typename ValueType>
 struct TUniquePointerResult;
 
 /**
  * Constructs one exclusively owned value in caller-selected storage.
  *
- * @tparam T Complete value type whose construction and destruction cannot throw.
- * @tparam TArguments Constructor argument types forwarded only after allocation.
+ * @tparam ValueType Complete value type whose construction and destruction cannot throw.
+ * @tparam ConstructorArgumentTypes Constructor argument types forwarded only after allocation.
  * @param Resource Resource that must outlive the returned pointer.
- * @param Arguments Arguments forwarded to T's constructor.
+ * @param Arguments Arguments forwarded to ValueType's constructor.
  * @return Typed allocation outcome and exclusive owner on success.
  */
-template<typename T, typename... TArguments>
-TUniquePointerResult<T> MakeUnique(IMemoryResource& Resource, TArguments&&... Arguments) noexcept;
+template<typename ValueType, typename... ConstructorArgumentTypes>
+TUniquePointerResult<ValueType> MakeUnique(IMemoryResource& Resource, ConstructorArgumentTypes&&... Arguments) noexcept;
 
 /**
  * Owns one value and returns its exact allocation to its originating resource.
@@ -34,11 +34,11 @@ TUniquePointerResult<T> MakeUnique(IMemoryResource& Resource, TArguments&&... Ar
  * The resource must outlive this pointer. Ownership can only move as a complete
  * pointer/deleter contract; raw release and cross-resource reset are excluded.
  */
-template<typename T>
+template<typename ValueType>
 class TUniquePtr final
 {
-	static_assert(!std::is_array<T>::value, "TUniquePtr owns one non-array value.");
-	static_assert(std::is_nothrow_destructible<T>::value, "TUniquePtr requires noexcept destruction.");
+	static_assert(!std::is_array<ValueType>::value, "TUniquePtr owns one non-array value.");
+	static_assert(std::is_nothrow_destructible<ValueType>::value, "TUniquePtr requires noexcept destruction.");
 
 private:
 	/** Retains the resource identity and exact block behind standard unique ownership. */
@@ -51,14 +51,14 @@ private:
 		FResourceDeleter(IMemoryResource& InResource, const FMemoryBlock InAllocation) noexcept : Resource(&InResource), Allocation(InAllocation) {}
 
 		/** Destroys the value once before returning its unchanged allocation. */
-		void operator()(T* const Value) noexcept
+		void operator()(ValueType* const Value) noexcept
 		{
 			if (Value == nullptr)
 			{
 				return;
 			}
 
-			Value->~T();
+			Value->~ValueType();
 			if (Resource != nullptr)
 			{
 				static_cast<void>(Resource->Deallocate(Allocation));
@@ -73,7 +73,7 @@ private:
 	};
 
 	/** Uses the standard-library exclusive-owner state machine with a resource-aware deleter. */
-	using FStandardUniquePtr = std::unique_ptr<T, FResourceDeleter>;
+	using FStandardUniquePtr = std::unique_ptr<ValueType, FResourceDeleter>;
 
 public:
 	/** Creates an empty owner without selecting or touching a resource. */
@@ -95,7 +95,7 @@ public:
 	~TUniquePtr() noexcept = default;
 
 	/** Observes the owned value without changing its lifetime. */
-	T* Get() const noexcept { return Pointer.get(); }
+	ValueType* Get() const noexcept { return Pointer.get(); }
 
 	/** Reports whether this handle currently owns a value. */
 	bool IsValid() const noexcept { return Pointer != nullptr; }
@@ -105,7 +105,7 @@ public:
 
 private:
 	/** Adopts only a factory-validated value and its exact allocation contract. */
-	TUniquePtr(T* const Value, IMemoryResource& Resource, const FMemoryBlock Allocation) noexcept
+	TUniquePtr(ValueType* const Value, IMemoryResource& Resource, const FMemoryBlock Allocation) noexcept
 		: Pointer(Value, FResourceDeleter(Resource, Allocation))
 	{
 	}
@@ -113,45 +113,45 @@ private:
 	/**
 	 * Lets the factory create the only non-empty owner without exposing raw adoption.
 	 */
-	template<typename TObject, typename... TObjectArguments>
-	friend TUniquePointerResult<TObject> MakeUnique(IMemoryResource&, TObjectArguments&&...) noexcept;
+	template<typename FactoryValueType, typename... FactoryConstructorArgumentTypes>
+	friend TUniquePointerResult<FactoryValueType> MakeUnique(IMemoryResource&, FactoryConstructorArgumentTypes&&...) noexcept;
 
 	/** Holds the value and invokes the resource-aware deleter at most once. */
 	FStandardUniquePtr Pointer{};
 };
 
 /** Couples an explicit allocation result with the exclusive owner it created. */
-template<typename T>
+template<typename ValueType>
 struct TUniquePointerResult
 {
 	/** Distinguishes successful construction from the resource's exact failure. */
 	EMemoryResult Result{EMemoryResult::OutOfMemory};
 
 	/** Owns the constructed value only when Result is Success. */
-	TUniquePtr<T> Pointer{};
+	TUniquePtr<ValueType> Pointer{};
 };
 
-template<typename T, typename... TArguments>
-TUniquePointerResult<T> MakeUnique(IMemoryResource& Resource, TArguments&&... Arguments) noexcept
+template<typename ValueType, typename... ConstructorArgumentTypes>
+TUniquePointerResult<ValueType> MakeUnique(IMemoryResource& Resource, ConstructorArgumentTypes&&... Arguments) noexcept
 {
-	static_assert(!std::is_array<T>::value, "MakeUnique constructs one non-array value.");
-	static_assert(std::is_nothrow_constructible<T, TArguments...>::value, "MakeUnique requires noexcept construction.");
-	static_assert(std::is_nothrow_destructible<T>::value, "MakeUnique requires noexcept destruction.");
+	static_assert(!std::is_array<ValueType>::value, "MakeUnique constructs one non-array value.");
+	static_assert(std::is_nothrow_constructible<ValueType, ConstructorArgumentTypes...>::value, "MakeUnique requires noexcept construction.");
+	static_assert(std::is_nothrow_destructible<ValueType>::value, "MakeUnique requires noexcept destruction.");
 
 	FMemoryBlock Allocation{};
-	const EMemoryResult AllocationResult = Resource.TryAllocate(sizeof(T), alignof(T), Allocation);
+	const EMemoryResult AllocationResult = Resource.TryAllocate(sizeof(ValueType), alignof(ValueType), Allocation);
 	if (AllocationResult != EMemoryResult::Success)
 	{
-		TUniquePointerResult<T> FailedResult{};
+		TUniquePointerResult<ValueType> FailedResult{};
 		FailedResult.Result = AllocationResult;
 		return FailedResult;
 	}
 
-	T* const Value = ::new (Allocation.Address) T(std::forward<TArguments>(Arguments)...);
+	ValueType* const Value = ::new (Allocation.Address) ValueType(std::forward<ConstructorArgumentTypes>(Arguments)...);
 
-	TUniquePointerResult<T> SuccessfulResult{};
+	TUniquePointerResult<ValueType> SuccessfulResult{};
 	SuccessfulResult.Result = EMemoryResult::Success;
-	SuccessfulResult.Pointer = TUniquePtr<T>(Value, Resource, Allocation);
+	SuccessfulResult.Pointer = TUniquePtr<ValueType>(Value, Resource, Allocation);
 	return SuccessfulResult;
 }
 

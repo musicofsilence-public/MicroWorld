@@ -375,7 +375,7 @@ the old name and must be updated in the same task.
   `TNetHost::GetState()` untouched); build warning-clean; ctest 11/11; doc
   checker 122 files; all six old-name grep gates return 0.
 
-- [ ] **1.2 Memory renames.** These are template-parameter renames — they
+- [x] **1.2 Memory renames.** These are template-parameter renames — they
   change no call sites, only the declarations and every use *inside* the same
   file.
 
@@ -389,6 +389,15 @@ the old name and must be updated in the same task.
 
   **Done when:** greps clean; Standard Verify passes (instantiations like
   `TFixedArena<1024>` are positional, so no caller changes).
+
+  Done 2026-07-22 — template-param renames across `UniquePtr.h`/`SharedPtr.h`
+  (`T`→`ValueType`, `TArguments`→`ConstructorArgumentTypes`,
+  `TObject`/`TObjectArguments`→`FactoryValueType`/`FactoryConstructorArgumentTypes`)
+  and `FixedArena.h` (`Bytes`→`StorageCapacityBytes`,
+  `Alignment`→`GuaranteedAlignmentBytes`); `CapacityBytes()` accessor and the
+  local `AlignmentBytes`/`Mode`/`PointerMode` correctly untouched; build
+  warning-clean; ctest 11/11; doc checker 122 files; all file-scoped old-name
+  grep gates return 0.
 
 - [ ] **1.3 Object renames.**
 
