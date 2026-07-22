@@ -117,9 +117,6 @@ public:
 	/** Reports how many more bytes a valid writer can accept before the next `Full`. */
 	constexpr std::size_t Remaining() const noexcept { return Buffer.Size() - WritePosition; }
 
-	/** Alias for `Position` named for callers that read the writer as a sink. */
-	constexpr std::size_t Written() const noexcept { return WritePosition; }
-
 	/**
 	 * Returns a read-only view of the accepted prefix without exposing mutable storage.
 	 * The view is empty for an invalid `{nullptr, nonzero}` backing buffer.

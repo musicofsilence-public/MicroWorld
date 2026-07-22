@@ -499,7 +499,7 @@ the old name and must be updated in the same task.
   historical files, `friend class FNetManager` 0. The `docs/diagrams/*` files
   keep the old names — intentionally excluded from every sweep (see task 8.4).
 
-- [ ] **1.6 Net renames — abbreviations and bare literals.**
+- [x] **1.6 Net renames — abbreviations and bare literals.**
 
   In `FrameCodec.h`, apply four mechanical substring rules to identifiers
   (types, members, enum values, locals — read each hit, keep the rest of the
@@ -522,6 +522,25 @@ the old name and must be updated in the same task.
   | literal slot `0` for "the server, seen from a client" | `constexpr std::size_t ServerPeerSlotIndex = 0;` + why-comment (only meaningful in client mode) | `NetHost.h:381,493,626` |
 
   **Done when:** greps clean; Standard Verify passes.
+
+  Done 2026-07-22 — six files. `FrameCodec.h`: 13 abbreviated identifiers
+  expanded (`Src`→`Source`, `Len`→`Length`, `Hi`→`HighByte`, `Lo`→`LowByte`),
+  plus locals `Data`/`Count`→`ChecksumBytes`/`ByteCount` in `ComputeCrc16Ccitt`
+  and `Needed`→`RequiredFrameBytes` in `EncodeFrame`; comment prose and the
+  `.Data()`/`Payload*` names left intact. `NetManager.h`: member
+  `QueuedCount`→`QueuedPacketCount`, accessor `QueuedCountValue()`→`QueuedCount()`
+  (+7 test call sites); the unrelated `HostLoopback` `QueuedCount` correctly
+  untouched. `ByteWriter.h`: `Written()` deleted (it was an alias of
+  `Position()`), its one call site moved to `Position()`, `WrittenBytes()` kept.
+  `NetHost.h`: locals `Farewell`/`Beat`/`Total`→`ByeMessage`/`HeartbeatMessage`/
+  `ActiveCount`; the bare literals extracted to `static constexpr std::uint8_t
+  LocalPeerGeneration = 1` and `ServerPeerSlotIndex = 0` with why-comments —
+  declared `std::uint8_t`, not the roadmap's `std::size_t`, because `FPeerId`'s
+  fields are `std::uint8_t` and `size_t` would be a narrowing error in the
+  `FPeerId{…}` brace-init (lead correction; matches the sibling `LocalPeerIndex`).
+  Build warning-clean; ctest 11/11; doc checker 122 files; every old-identifier
+  grep gate 0. Known nit: `ByteWriterTests` now asserts `Position()==0` twice (a
+  harmless duplicate the `Written()` removal left) — pending a one-line cleanup.
 
 - [ ] **1.7 Platform renames.**
 

@@ -128,7 +128,7 @@ MW_TEST_CASE(NetManagerStartsEmptyWithFixedConfiguration)
 	MW_EXPECT_EQ(Test, false, Manager.IsFull(), "A fresh manager must not report a full FIFO");
 	MW_EXPECT_EQ(Test, static_cast<std::size_t>(2), Manager.QueueCapacity(), "Queue capacity must match the template parameter");
 	MW_EXPECT_EQ(Test, static_cast<std::size_t>(4), Manager.MaximumPacketBytes(), "Max packet bytes must match the template parameter");
-	MW_EXPECT_EQ(Test, static_cast<std::size_t>(0), Manager.QueuedCountValue(), "A fresh manager must report zero queued packets");
+	MW_EXPECT_EQ(Test, static_cast<std::size_t>(0), Manager.QueuedCount(), "A fresh manager must report zero queued packets");
 }
 
 /** Proves an oversized packet is rejected as Invalid without partial queueing. */
@@ -209,7 +209,7 @@ MW_TEST_CASE(NetManagerFullFifoRejectsFurtherQueue)
 		"First queue into an empty FIFO must succeed");
 	const ENetResult OverflowResult = Manager.QueueSend(MakeDest(0), TSpan<const std::uint8_t>(Rejected, 2));
 	MW_EXPECT_EQ(Test, ENetResult::Full, OverflowResult, "Queue into a full FIFO must return Full");
-	MW_EXPECT_EQ(Test, static_cast<std::size_t>(1), Manager.QueuedCountValue(), "Overflow must not change the queued count");
+	MW_EXPECT_EQ(Test, static_cast<std::size_t>(1), Manager.QueuedCount(), "Overflow must not change the queued count");
 
 	// Prove the accepted head survives the rejected queue.
 	Manager.AdvanceSend();
@@ -261,7 +261,7 @@ MW_TEST_CASE(NetManagerDriverFullRetainsExactHeadContents)
 
 	const ENetResult AdvanceResult = Manager.AdvanceSend();
 	MW_EXPECT_EQ(Test, ENetResult::Full, AdvanceResult, "Driver Full must propagate as Full");
-	MW_EXPECT_EQ(Test, static_cast<std::size_t>(2), Manager.QueuedCountValue(), "Driver Full must retain all queued packets");
+	MW_EXPECT_EQ(Test, static_cast<std::size_t>(2), Manager.QueuedCount(), "Driver Full must retain all queued packets");
 
 	// Clear backpressure: the next advance must send the retained first packet, not the second.
 	Driver.ForcedSendResult = ENetResult::Success;
@@ -290,7 +290,7 @@ MW_TEST_CASE(NetManagerDriverUnavailableRetainsExactHead)
 
 	const ENetResult AdvanceResult = Manager.AdvanceSend();
 	MW_EXPECT_EQ(Test, ENetResult::Unavailable, AdvanceResult, "Driver Unavailable must propagate as Unavailable");
-	MW_EXPECT_EQ(Test, static_cast<std::size_t>(1), Manager.QueuedCountValue(), "Driver Unavailable must retain the head packet");
+	MW_EXPECT_EQ(Test, static_cast<std::size_t>(1), Manager.QueuedCount(), "Driver Unavailable must retain the head packet");
 
 	Driver.ForcedSendResult = ENetResult::Success;
 	Manager.AdvanceSend();
@@ -311,7 +311,7 @@ MW_TEST_CASE(NetManagerDriverInvalidRetainsExactHead)
 
 	const ENetResult AdvanceResult = Manager.AdvanceSend();
 	MW_EXPECT_EQ(Test, ENetResult::Invalid, AdvanceResult, "Driver Invalid must propagate as Invalid");
-	MW_EXPECT_EQ(Test, static_cast<std::size_t>(1), Manager.QueuedCountValue(), "Driver Invalid must retain the head packet");
+	MW_EXPECT_EQ(Test, static_cast<std::size_t>(1), Manager.QueuedCount(), "Driver Invalid must retain the head packet");
 
 	Driver.ForcedSendResult = ENetResult::Success;
 	Manager.AdvanceSend();
@@ -333,14 +333,14 @@ MW_TEST_CASE(NetManagerRecoverySendsRetainedHeadBeforeLaterPackets)
 	Manager.QueueSend(MakeDest(0), TSpan<const std::uint8_t>(LaterPacket, 1));
 
 	MW_EXPECT_EQ(Test, ENetResult::Full, Manager.AdvanceSend(), "First advance into a full driver must return Full");
-	MW_EXPECT_EQ(Test, static_cast<std::size_t>(2), Manager.QueuedCountValue(), "Backpressure must retain both packets");
+	MW_EXPECT_EQ(Test, static_cast<std::size_t>(2), Manager.QueuedCount(), "Backpressure must retain both packets");
 
 	Driver.ForcedSendResult = ENetResult::Success;
 	const ENetResult FirstRecovery = Manager.AdvanceSend();
 	MW_EXPECT_EQ(Test, ENetResult::Success, FirstRecovery, "Recovery advance must succeed");
 	MW_EXPECT_EQ(Test, static_cast<std::size_t>(2), Driver.RecordedSendLengths[0], "Recovery must send the retained head, not the later packet");
 	MW_EXPECT_EQ(Test, static_cast<std::uint8_t>(0x99), Driver.RecordedSendBytes[0][0], "Recovery must send the retained head first byte");
-	MW_EXPECT_EQ(Test, static_cast<std::size_t>(1), Manager.QueuedCountValue(), "Recovery must remove only the head");
+	MW_EXPECT_EQ(Test, static_cast<std::size_t>(1), Manager.QueuedCount(), "Recovery must remove only the head");
 
 	Manager.AdvanceSend();
 	MW_EXPECT_EQ(Test, static_cast<std::size_t>(1), Driver.RecordedSendLengths[1], "Second advance must send the later packet");

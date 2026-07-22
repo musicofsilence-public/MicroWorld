@@ -52,7 +52,7 @@ public:
 		const std::size_t PacketSize = Packet.Size();
 		if (PacketSize == 0)
 		{
-			if (QueuedCount >= MaxPackets)
+			if (QueuedPacketCount >= MaxPackets)
 			{
 				return ENetResult::Full;
 			}
@@ -69,7 +69,7 @@ public:
 			// The packet can never fit a slot; the request is malformed.
 			return ENetResult::Invalid;
 		}
-		if (QueuedCount >= MaxPackets)
+		if (QueuedPacketCount >= MaxPackets)
 		{
 			return ENetResult::Full;
 		}
@@ -88,7 +88,7 @@ public:
 	 */
 	ENetResult AdvanceSend() noexcept
 	{
-		if (QueuedCount == 0)
+		if (QueuedPacketCount == 0)
 		{
 			return ENetResult::Unavailable;
 		}
@@ -101,7 +101,7 @@ public:
 		}
 		Storage.PacketLengths[HeadIndex] = 0;
 		HeadIndex = (HeadIndex + 1) % MaxPackets;
-		--QueuedCount;
+		--QueuedPacketCount;
 		return ENetResult::Success;
 	}
 
@@ -123,13 +123,13 @@ public:
 	static constexpr std::size_t MaximumPacketBytes() noexcept { return MaxPacketBytes; }
 
 	/** Reports how many packets are currently queued for send. */
-	constexpr std::size_t QueuedCountValue() const noexcept { return QueuedCount; }
+	constexpr std::size_t QueuedCount() const noexcept { return QueuedPacketCount; }
 
 	/** Distinguishes an empty FIFO so a caller can skip `AdvanceSend`. */
-	constexpr bool IsEmpty() const noexcept { return QueuedCount == 0; }
+	constexpr bool IsEmpty() const noexcept { return QueuedPacketCount == 0; }
 
 	/** Distinguishes a full FIFO so a caller can observe backpressure. */
-	constexpr bool IsFull() const noexcept { return QueuedCount >= MaxPackets; }
+	constexpr bool IsFull() const noexcept { return QueuedPacketCount >= MaxPackets; }
 
 private:
 	/** Copies one accepted packet, its length, and its destination address into the slot at `Index`. */
@@ -147,7 +147,7 @@ private:
 	void AdvanceTail() noexcept
 	{
 		TailIndex = (TailIndex + 1) % MaxPackets;
-		++QueuedCount;
+		++QueuedPacketCount;
 	}
 
 	/** Holds the externally referenced driver; the caller owns its lifetime. */
@@ -163,7 +163,7 @@ private:
 	std::size_t TailIndex{0};
 
 	/** Tracks occupancy so full and empty states are observable without wrap arithmetic. */
-	std::size_t QueuedCount{0};
+	std::size_t QueuedPacketCount{0};
 };
 
 } // namespace MicroWorld

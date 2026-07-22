@@ -24,7 +24,7 @@ MW_TEST_CASE(ByteWriterStartsEmptyWithObservedCapacity)
 	MW_EXPECT_EQ(Test, static_cast<std::size_t>(4), Writer.Capacity(), "Capacity must match the observed buffer");
 	MW_EXPECT_EQ(Test, static_cast<std::size_t>(0), Writer.Position(), "An empty writer must report zero position");
 	MW_EXPECT_EQ(Test, static_cast<std::size_t>(4), Writer.Remaining(), "Remaining must equal capacity before any write");
-	MW_EXPECT_EQ(Test, static_cast<std::size_t>(0), Writer.Written(), "Written must equal position before any write");
+	MW_EXPECT_EQ(Test, static_cast<std::size_t>(0), Writer.Position(), "Position must be zero before any write");
 	MW_EXPECT_EQ(Test, true, Writer.WrittenBytes().IsEmpty(), "Written prefix must be empty before any write");
 }
 

@@ -125,6 +125,12 @@ public:
 	/** Reserved peer index that routes a message to the listen server's local peer. */
 	static constexpr std::uint8_t LocalPeerIndex = 0xFE;
 
+	/** The listen server's local peer is never evicted, so its generation never advances past this initial value. */
+	static constexpr std::uint8_t LocalPeerGeneration = 1;
+
+	/** A client keeps exactly one peer — the server — in slot 0; this index is only meaningful in Client mode. */
+	static constexpr std::uint8_t ServerPeerSlotIndex = 0;
+
 	/** Multicast dispatcher type for application (channel >= 1) messages. */
 	using FMessageHandler = TMulticastDelegate<void(FPeerId, std::uint8_t, TSpan<const std::uint8_t>), MaxMessageHandlers, MessageHandlerInlineBytes>;
 
@@ -200,13 +206,13 @@ public:
 	{
 		if (Mode != ENetMode::Standalone)
 		{
-			FControlMessage Farewell{};
-			Farewell.Type = EControlMessageType::Bye;
+			FControlMessage ByeMessage{};
+			ByeMessage.Type = EControlMessageType::Bye;
 			for (std::size_t Index = 0; Index < MaxPeers; ++Index)
 			{
 				if (Peers[Index].bActive)
 				{
-					(void)QueueControl(Peers[Index].Address, Farewell);
+					(void)QueueControl(Peers[Index].Address, ByeMessage);
 				}
 			}
 			DrainOutbound();
@@ -275,9 +281,9 @@ public:
 			FNetPeerSlot& Slot = Peers[Index];
 			if (Slot.bActive && ElapsedSince(NowMilliseconds, Slot.LastSendMilliseconds) >= Config.HeartbeatIntervalMilliseconds)
 			{
-				FControlMessage Beat{};
-				Beat.Type = EControlMessageType::Heartbeat;
-				(void)QueueControl(Slot.Address, Beat);
+				FControlMessage HeartbeatMessage{};
+				HeartbeatMessage.Type = EControlMessageType::Heartbeat;
+				(void)QueueControl(Slot.Address, HeartbeatMessage);
 				Slot.LastSendMilliseconds = NowMilliseconds;
 			}
 		}
@@ -369,7 +375,7 @@ public:
 	ENetMode GetMode() const noexcept { return Mode; }
 
 	/** Reports the listen server's local-peer identity; only meaningful in `ListenServer` mode. */
-	constexpr FPeerId GetLocalPeer() const noexcept { return FPeerId{LocalPeerIndex, 1}; }
+	constexpr FPeerId GetLocalPeer() const noexcept { return FPeerId{LocalPeerIndex, LocalPeerGeneration}; }
 
 	/** Reports a connected client's server-peer identity, or an invalid id when not connected. */
 	FPeerId GetServerPeer() const noexcept
@@ -378,7 +384,7 @@ public:
 		{
 			return FPeerId{};
 		}
-		return FPeerId{0, Peers[0].Generation};
+		return FPeerId{ServerPeerSlotIndex, Peers[ServerPeerSlotIndex].Generation};
 	}
 
 	/** Reports the identity a `Welcome` assigned to this client within the server's table. */
@@ -387,15 +393,15 @@ public:
 	/** Reports how many remote peer slots are currently active. */
 	std::size_t ActivePeerCount() const noexcept
 	{
-		std::size_t Total = 0;
+		std::size_t ActiveCount = 0;
 		for (std::size_t Index = 0; Index < MaxPeers; ++Index)
 		{
 			if (Peers[Index].bActive)
 			{
-				++Total;
+				++ActiveCount;
 			}
 		}
-		return Total;
+		return ActiveCount;
 	}
 
 private:
@@ -490,7 +496,7 @@ private:
 	/** Returns a disconnected client to `Connecting` so it re-greets the server on the next send. */
 	void OnPeerLost(const std::size_t Index) noexcept
 	{
-		if (Mode == ENetMode::Client && Index == 0)
+		if (Mode == ENetMode::Client && Index == ServerPeerSlotIndex)
 		{
 			State = ENetHostState::Connecting;
 			bHelloDue = true;
@@ -623,7 +629,7 @@ private:
 				static_cast<unsigned>(Config.ProtocolVersion));
 			return;
 		}
-		FNetPeerSlot& Server = Peers[0];
+		FNetPeerSlot& Server = Peers[ServerPeerSlotIndex];
 		Server.Address = From;
 		Server.LastReceiveMilliseconds = NowMilliseconds;
 		Server.LastSendMilliseconds = NowMilliseconds;
