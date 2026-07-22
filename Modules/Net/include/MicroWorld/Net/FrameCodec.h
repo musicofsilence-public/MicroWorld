@@ -16,6 +16,11 @@ constexpr std::uint8_t FrameMagicByte = 0xA5;
 /** Fixed framing cost in bytes: one magic, one source node id, two length bytes, and two CRC bytes. */
 constexpr std::size_t FrameOverheadBytes = 6;
 
+/** Header bytes written before the payload: one magic, one source node id, and two length bytes. */
+constexpr std::size_t FrameHeaderBytes = 4;
+
+static_assert(FrameOverheadBytes == FrameHeaderBytes + 2, "Frame overhead is the header plus the two trailing CRC bytes.");
+
 namespace Detail
 {
 
@@ -69,6 +74,63 @@ inline std::uint16_t ComputeCrc16Ccitt(const TSpan<const std::uint8_t> Bytes) no
 	return Crc;
 }
 
+namespace Detail
+{
+
+	/**
+	 * Rejects every invalid encode input before the destination is touched, so a rejection is transactional.
+	 *
+	 * @param Payload Caller-owned payload bytes to frame.
+	 * @param OutFrame Caller-owned destination for the complete frame.
+	 * @return Invalid for a null-with-length span, Full for an oversize payload or a destination too small, else Success.
+	 */
+	inline ENetResult ValidateEncodeInputs(const TSpan<const std::uint8_t> Payload, const TSpan<std::uint8_t> OutFrame) noexcept
+	{
+		const std::size_t PayloadSize = Payload.Size();
+		if (PayloadSize != 0 && Payload.Data() == nullptr)
+		{
+			return ENetResult::Invalid;
+		}
+		if (OutFrame.Size() != 0 && OutFrame.Data() == nullptr)
+		{
+			return ENetResult::Invalid;
+		}
+		if (PayloadSize > 0xFFFFu)
+		{
+			return ENetResult::Full;
+		}
+		if (PayloadSize + FrameOverheadBytes > OutFrame.Size())
+		{
+			return ENetResult::Full;
+		}
+		return ENetResult::Success;
+	}
+
+	/** Writes the fixed frame header: magic byte, source node id, then the payload length as two big-endian bytes. */
+	inline void WriteFrameHeader(const std::uint8_t SourceNodeId, const std::size_t PayloadSize, const TSpan<std::uint8_t> OutFrame) noexcept
+	{
+		OutFrame[0] = FrameMagicByte;
+		OutFrame[1] = SourceNodeId;
+		OutFrame[2] = static_cast<std::uint8_t>(PayloadSize >> 8);
+		OutFrame[3] = static_cast<std::uint8_t>(PayloadSize & 0xFFu);
+	}
+
+	/** Copies the payload after the header, then appends the CRC-16 over the source id, length, and payload. */
+	inline void AppendPayloadAndChecksum(const TSpan<const std::uint8_t> Payload, const TSpan<std::uint8_t> OutFrame) noexcept
+	{
+		const std::size_t PayloadSize = Payload.Size();
+		if (PayloadSize != 0)
+		{
+			std::memcpy(&OutFrame[FrameHeaderBytes], Payload.Data(), PayloadSize);
+		}
+		// CRC covers the source node id, both length bytes, and the payload; magic and CRC are excluded.
+		const std::uint16_t Crc = ComputeCrc16Ccitt(TSpan<const std::uint8_t>(&OutFrame[1], 3 + PayloadSize));
+		OutFrame[FrameHeaderBytes + PayloadSize] = static_cast<std::uint8_t>(Crc >> 8);
+		OutFrame[FrameHeaderBytes + PayloadSize + 1] = static_cast<std::uint8_t>(Crc & 0xFFu);
+	}
+
+} // namespace Detail
+
 /**
  * Encodes one complete framed message transactionally.
  *
@@ -87,38 +149,15 @@ inline std::uint16_t ComputeCrc16Ccitt(const TSpan<const std::uint8_t> Bytes) no
 inline ENetResult EncodeFrame(
 	const std::uint8_t SourceNodeId, const TSpan<const std::uint8_t> Payload, const TSpan<std::uint8_t> OutFrame, std::size_t& OutWritten) noexcept
 {
+	const ENetResult ValidationResult = Detail::ValidateEncodeInputs(Payload, OutFrame);
+	if (ValidationResult != ENetResult::Success)
+	{
+		return ValidationResult;
+	}
 	const std::size_t PayloadSize = Payload.Size();
-	// Validate every input before touching the destination so a rejection is truly transactional.
-	if (PayloadSize != 0 && Payload.Data() == nullptr)
-	{
-		return ENetResult::Invalid;
-	}
-	if (OutFrame.Size() != 0 && OutFrame.Data() == nullptr)
-	{
-		return ENetResult::Invalid;
-	}
-	if (PayloadSize > 0xFFFFu)
-	{
-		return ENetResult::Full;
-	}
-	const std::size_t RequiredFrameBytes = PayloadSize + FrameOverheadBytes;
-	if (RequiredFrameBytes > OutFrame.Size())
-	{
-		return ENetResult::Full;
-	}
-	OutFrame[0] = FrameMagicByte;
-	OutFrame[1] = SourceNodeId;
-	OutFrame[2] = static_cast<std::uint8_t>(PayloadSize >> 8);
-	OutFrame[3] = static_cast<std::uint8_t>(PayloadSize & 0xFFu);
-	if (PayloadSize != 0)
-	{
-		std::memcpy(&OutFrame[4], Payload.Data(), PayloadSize);
-	}
-	// CRC covers the source node id, both length bytes, and the payload; magic and CRC are excluded.
-	const std::uint16_t Crc = ComputeCrc16Ccitt(TSpan<const std::uint8_t>(&OutFrame[1], 3 + PayloadSize));
-	OutFrame[4 + PayloadSize] = static_cast<std::uint8_t>(Crc >> 8);
-	OutFrame[4 + PayloadSize + 1] = static_cast<std::uint8_t>(Crc & 0xFFu);
-	OutWritten = RequiredFrameBytes;
+	Detail::WriteFrameHeader(SourceNodeId, PayloadSize, OutFrame);
+	Detail::AppendPayloadAndChecksum(Payload, OutFrame);
+	OutWritten = PayloadSize + FrameOverheadBytes;
 	return ENetResult::Success;
 }
 
@@ -180,66 +219,19 @@ public:
 		switch (State)
 		{
 			case EState::WaitingForMagic:
-				if (Byte == FrameMagicByte)
-				{
-					RunningCrc = 0xFFFFu;
-					State = EState::ReadingSourceNodeId;
-				}
-				return EFrameEvent::None;
+				return BeginFrameOnMagic(Byte);
 			case EState::ReadingSourceNodeId:
-				PendingSourceNodeId = Byte;
-				Detail::UpdateCrc16Byte(RunningCrc, Byte);
-				State = EState::ReadingLengthHighByte;
-				return EFrameEvent::None;
+				return CaptureSourceNodeId(Byte);
 			case EState::ReadingLengthHighByte:
-				PendingLengthHighByte = Byte;
-				Detail::UpdateCrc16Byte(RunningCrc, Byte);
-				State = EState::ReadingLengthLowByte;
-				return EFrameEvent::None;
+				return CaptureLengthHighByte(Byte);
 			case EState::ReadingLengthLowByte:
-			{
-				Detail::UpdateCrc16Byte(RunningCrc, Byte);
-				const std::uint16_t DeclaredLength =
-					static_cast<std::uint16_t>((static_cast<std::uint16_t>(PendingLengthHighByte) << 8) | static_cast<std::uint16_t>(Byte));
-				PendingLength = DeclaredLength;
-				// A declared length above the capacity cannot be assembled; resync at the next magic.
-				if (DeclaredLength > MaxPayloadBytes)
-				{
-					State = EState::WaitingForMagic;
-					return EFrameEvent::Discarded;
-				}
-				PayloadIndex = 0;
-				State = (DeclaredLength == 0u) ? EState::ReadingCrcHighByte : EState::ReadingPayload;
-				return EFrameEvent::None;
-			}
+				return CaptureLengthLowByte(Byte);
 			case EState::ReadingPayload:
-				PayloadStorage[PayloadIndex] = Byte;
-				++PayloadIndex;
-				Detail::UpdateCrc16Byte(RunningCrc, Byte);
-				if (PayloadIndex >= PendingLength)
-				{
-					State = EState::ReadingCrcHighByte;
-				}
-				return EFrameEvent::None;
+				return AccumulatePayloadByte(Byte);
 			case EState::ReadingCrcHighByte:
-				PendingCrcHighByte = Byte;
-				State = EState::ReadingCrcLowByte;
-				return EFrameEvent::None;
+				return CaptureChecksumHighByte(Byte);
 			case EState::ReadingCrcLowByte:
-			{
-				const std::uint16_t ReceivedCrc =
-					static_cast<std::uint16_t>((static_cast<std::uint16_t>(PendingCrcHighByte) << 8) | static_cast<std::uint16_t>(Byte));
-				State = EState::WaitingForMagic;
-				// A CRC mismatch means the candidate was corrupted; resync at the next magic.
-				if (ReceivedCrc != RunningCrc)
-				{
-					return EFrameEvent::Discarded;
-				}
-				HeldSourceNodeId = PendingSourceNodeId;
-				HeldLength = PendingLength;
-				bHasFrame = true;
-				return EFrameEvent::FrameReady;
-			}
+				return CompleteFrameIfChecksumMatches(Byte);
 			default:
 				State = EState::WaitingForMagic;
 				return EFrameEvent::None;
@@ -277,6 +269,92 @@ private:
 		/** Waiting for the low byte of the declared CRC. */
 		ReadingCrcLowByte,
 	};
+
+	/** WaitingForMagic: arm the running CRC and advance when the magic byte arrives; otherwise drop the byte. */
+	EFrameEvent BeginFrameOnMagic(const std::uint8_t Byte) noexcept
+	{
+		if (Byte == FrameMagicByte)
+		{
+			RunningCrc = 0xFFFFu;
+			State = EState::ReadingSourceNodeId;
+		}
+		return EFrameEvent::None;
+	}
+
+	/** ReadingSourceNodeId: capture the sender id, fold it into the CRC, and wait for the length high byte. */
+	EFrameEvent CaptureSourceNodeId(const std::uint8_t Byte) noexcept
+	{
+		PendingSourceNodeId = Byte;
+		Detail::UpdateCrc16Byte(RunningCrc, Byte);
+		State = EState::ReadingLengthHighByte;
+		return EFrameEvent::None;
+	}
+
+	/** ReadingLengthHighByte: capture the high length byte and fold it into the CRC. */
+	EFrameEvent CaptureLengthHighByte(const std::uint8_t Byte) noexcept
+	{
+		PendingLengthHighByte = Byte;
+		Detail::UpdateCrc16Byte(RunningCrc, Byte);
+		State = EState::ReadingLengthLowByte;
+		return EFrameEvent::None;
+	}
+
+	/** ReadingLengthLowByte: complete the declared length, reject an oversize frame, and route to payload
+	 * assembly or straight to the CRC when the length is zero. */
+	EFrameEvent CaptureLengthLowByte(const std::uint8_t Byte) noexcept
+	{
+		Detail::UpdateCrc16Byte(RunningCrc, Byte);
+		const std::uint16_t DeclaredLength =
+			static_cast<std::uint16_t>((static_cast<std::uint16_t>(PendingLengthHighByte) << 8) | static_cast<std::uint16_t>(Byte));
+		PendingLength = DeclaredLength;
+		// A declared length above the capacity cannot be assembled; resync at the next magic.
+		if (DeclaredLength > MaxPayloadBytes)
+		{
+			State = EState::WaitingForMagic;
+			return EFrameEvent::Discarded;
+		}
+		PayloadIndex = 0;
+		State = (DeclaredLength == 0u) ? EState::ReadingCrcHighByte : EState::ReadingPayload;
+		return EFrameEvent::None;
+	}
+
+	/** ReadingPayload: store one payload byte, fold it into the CRC, and advance to the CRC once the payload is full. */
+	EFrameEvent AccumulatePayloadByte(const std::uint8_t Byte) noexcept
+	{
+		PayloadStorage[PayloadIndex] = Byte;
+		++PayloadIndex;
+		Detail::UpdateCrc16Byte(RunningCrc, Byte);
+		if (PayloadIndex >= PendingLength)
+		{
+			State = EState::ReadingCrcHighByte;
+		}
+		return EFrameEvent::None;
+	}
+
+	/** ReadingCrcHighByte: capture the high CRC byte (itself excluded from the running CRC) and wait for the low byte. */
+	EFrameEvent CaptureChecksumHighByte(const std::uint8_t Byte) noexcept
+	{
+		PendingCrcHighByte = Byte;
+		State = EState::ReadingCrcLowByte;
+		return EFrameEvent::None;
+	}
+
+	/** ReadingCrcLowByte: compare the received CRC; hold the completed frame on a match, else discard and resync. */
+	EFrameEvent CompleteFrameIfChecksumMatches(const std::uint8_t Byte) noexcept
+	{
+		const std::uint16_t ReceivedCrc =
+			static_cast<std::uint16_t>((static_cast<std::uint16_t>(PendingCrcHighByte) << 8) | static_cast<std::uint16_t>(Byte));
+		State = EState::WaitingForMagic;
+		// A CRC mismatch means the candidate was corrupted; resync at the next magic.
+		if (ReceivedCrc != RunningCrc)
+		{
+			return EFrameEvent::Discarded;
+		}
+		HeldSourceNodeId = PendingSourceNodeId;
+		HeldLength = PendingLength;
+		bHasFrame = true;
+		return EFrameEvent::FrameReady;
+	}
 
 	/** Current assembly phase. */
 	EState State{EState::WaitingForMagic};

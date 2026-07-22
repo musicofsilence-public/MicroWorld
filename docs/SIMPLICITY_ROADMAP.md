@@ -1165,7 +1165,7 @@ tests must pass unchanged.
 
 ### Phase 6 — Function decomposition: Net & Platform ⬜
 
-- [ ] **6.1 Split the frame codec.** `FrameCodec.h`.
+- [x] **6.1 Split the frame codec.** `FrameCodec.h`.
   1. Derive the by-hand indices `OutFrame[4 + PayloadSize]` / `[4 + PayloadSize + 1]`
      (`FrameCodec.h:120-121`) from one named `constexpr std::size_t FrameHeaderBytes`
      (and the existing overhead constant) so the layout lives in one place.
@@ -1179,6 +1179,29 @@ tests must pass unchanged.
      (a switch that only dispatches is one action — Rule F).
 
   **Done when:** FrameCodecTests pass unchanged; Standard Verify passes.
+
+  **Evidence (2026-07-22, commit pending):** All three parts done, behavior and
+  on-wire bytes byte-identical. (1) Added `constexpr std::size_t FrameHeaderBytes
+  = 4` beside `FrameOverheadBytes` with `static_assert(FrameOverheadBytes ==
+  FrameHeaderBytes + 2, ...)` tying the two, and derived the payload memcpy dest +
+  both CRC-write offsets (`OutFrame[FrameHeaderBytes]`,
+  `OutFrame[FrameHeaderBytes + PayloadSize (+ 1)]`) from it. (2) `EncodeFrame` →
+  `Detail::ValidateEncodeInputs` (a pure query — same guard order and return codes)
+  + `Detail::WriteFrameHeader` + `Detail::AppendPayloadAndChecksum` (a reopened
+  `Detail` block below `ComputeCrc16Ccitt`); the parent recomputes the trivial
+  `PayloadSize + FrameOverheadBytes` for `OutWritten` rather than threading it back
+  through an out-param. (3) `TFrameDecoder::PushByte` is now a pure state-dispatch
+  switch delegating to seven private per-state helpers, each lifted verbatim from
+  the original `case` body. **Note:** the roadmap listed six decoder helpers, but
+  "switch only dispatches" needs one per state, so `CaptureLengthHighByte` was
+  added (the list had folded the two length-byte states into one) and the two CRC
+  states are `CaptureChecksumHighByte` + `CompleteFrameIfChecksumMatches`; the
+  `default` resync stays inline. **CQS note:** the seven decoder helpers are
+  command-with-status (mutate state, return `EFrameEvent`) — the same idiom as
+  `PushByte` itself, reproduced verbatim. The CRC-coverage span `(&OutFrame[1], 3 +
+  PayloadSize)` kept its documented literals (its adjacent comment names exactly
+  what the bytes are). Verified: build clean, ctest 11/11 (`#1 format_check`,
+  `#9 net_tests` incl. FrameCodecTests), doc checker 122 files.
 
 - [ ] **6.2 Split `ReadControlMessage`; name the byte-order helpers.**
   `NetProtocol.h`.
