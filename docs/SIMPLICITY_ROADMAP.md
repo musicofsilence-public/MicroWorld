@@ -738,7 +738,7 @@ sentences.
 
 ---
 
-### Phase 3 — Function decomposition: Core & Memory 🟨
+### Phase 3 — Function decomposition: Core & Memory ✅
 
 Goal: no production function does more than two logical actions (Rule F). For
 every extraction: new helpers are `private` members (or file-local `static`
@@ -847,7 +847,7 @@ tests must pass unchanged.
   ctest (#1) is the authoritative gate and passed, so all Phase 3 commits are
   house-formatted regardless.
 
-- [ ] **3.4 Group the delegate machinery.** `Delegate.h`.
+- [x] **3.4 Group the delegate machinery.** `Delegate.h`.
   1. Group the three erased function pointers (`FInvokeFunction`,
      `FMoveFunction`, `FDestroyFunction`, `Delegate.h:178-252`) into one
      documented `struct FErasedCallableOperations { Invoke; MoveConstruct; Destroy; };`
@@ -868,6 +868,21 @@ tests must pass unchanged.
 
   **Done when:** each parent ≤ ~15 body lines / ≤ 2 actions; DelegateTests
   pass unchanged; Standard Verify passes.
+
+  Done 2026-07-22 — implemented by a **Sonnet subagent**, then reviewed and
+  re-verified by the lead. Grouped the three erased pointers into
+  `FErasedCallableOperations` (with the "not std::function — it heap-allocates"
+  note); this also collapsed the triple assignments in `MoveFrom` (`Operations =
+  Other.Operations`) and `ClearFunctions` (`Operations = {}`). Extracted
+  `InstallErasedOperations` from `Bind`; `OccupySlot` + `RecordBroadcastOrder`
+  from `Add`; `ValidateLiveHandle` (const) + `RetireSlotAndCompactOrder` from
+  `Remove`; and replaced the two manual `bBroadcastActive` clears with a RAII
+  `FScopedBroadcastGuard` (the reentrancy guard still fires before the scoped
+  guard constructs). Behavior-preserving — every branch, result code, and slot
+  mutation order reproduced; build clean, ctest 11/11 (DelegateTests in
+  `microworld_memory_tests` #7), doc checker 122. CQS: `OccupySlot`'s
+  mutate-and-return is the intentional slot-factory shape; `ValidateLiveHandle`
+  is a clean const query with an out-param. **Phase 3 complete.**
 
 ---
 
@@ -1301,7 +1316,7 @@ tests must pass unchanged.
 | 0 | Baseline | 1 | ✅ |
 | 1 | Mechanical renames | 7 | ✅ |
 | 2 | Why-comment repairs | 5 | ✅ |
-| 3 | Decompose: Core & Memory | 4 | 🟨 |
+| 3 | Decompose: Core & Memory | 4 | ✅ |
 | 4 | Decompose: Object & GC | 3 | ⬜ |
 | 5 | Decompose: Engine | 4 | ⬜ |
 | 6 | Decompose: Net & Platform | 6 | ⬜ |

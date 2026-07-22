@@ -136,9 +136,7 @@ public:
 		{
 			Reset();
 			::new (StorageAddress()) FStoredCallable(std::forward<CallableType>(Callable));
-			InvokeFunction = &Invoke<FStoredCallable>;
-			MoveFunction = &Move<FStoredCallable>;
-			DestroyFunction = &Destroy<FStoredCallable>;
+			InstallErasedOperations<FStoredCallable>();
 			return EDelegateResult::Success;
 		}
 	}
@@ -146,27 +144,27 @@ public:
 	/** Destroys the current callable, if any, and restores the unbound state. */
 	void Reset() noexcept
 	{
-		if (DestroyFunction == nullptr)
+		if (Operations.Destroy == nullptr)
 		{
 			return;
 		}
 
-		DestroyFunction(StorageAddress());
+		Operations.Destroy(StorageAddress());
 		ClearFunctions();
 	}
 
 	/** Reports whether invocation currently has a live callable target. */
-	bool IsBound() const noexcept { return InvokeFunction != nullptr; }
+	bool IsBound() const noexcept { return Operations.Invoke != nullptr; }
 
 	/** Invokes the bound callable once or reports that no target is present. */
 	EDelegateResult Execute(ArgumentTypes... Arguments) noexcept
 	{
-		if (InvokeFunction == nullptr)
+		if (Operations.Invoke == nullptr)
 		{
 			return EDelegateResult::InvalidHandle;
 		}
 
-		InvokeFunction(StorageAddress(), std::forward<ArgumentTypes>(Arguments)...);
+		Operations.Invoke(StorageAddress(), std::forward<ArgumentTypes>(Arguments)...);
 		return EDelegateResult::Success;
 	}
 
@@ -182,6 +180,18 @@ private:
 
 	/** Ends one erased callable lifetime without knowing its concrete type. */
 	using FDestroyFunction = void (*)(void*) noexcept;
+
+	/**
+	 * Bundles the invoke, move, and destroy operations for one erased callable.
+	 * Not std::function -- that heap-allocates; these fixed pointers keep every
+	 * binding inline and allocation-free.
+	 */
+	struct FErasedCallableOperations
+	{
+		FInvokeFunction Invoke{nullptr};
+		FMoveFunction MoveConstruct{nullptr};
+		FDestroyFunction Destroy{nullptr};
+	};
 
 	/** Resolves the live callable after placement construction established its concrete type. */
 	template<typename CallableType>
@@ -213,6 +223,15 @@ private:
 		CallableAt<CallableType>(Storage)->~CallableType();
 	}
 
+	/** Points the erased operations at the concrete callable's invoke/move/destroy. */
+	template<typename StoredCallable>
+	void InstallErasedOperations() noexcept
+	{
+		Operations.Invoke = &Invoke<StoredCallable>;
+		Operations.MoveConstruct = &Move<StoredCallable>;
+		Operations.Destroy = &Destroy<StoredCallable>;
+	}
+
 	/** Exposes erased storage only to this delegate's lifetime operations. */
 	void* StorageAddress() noexcept { return static_cast<void*>(&InlineStorage); }
 
@@ -224,32 +243,19 @@ private:
 			return;
 		}
 
-		InvokeFunction = Other.InvokeFunction;
-		MoveFunction = Other.MoveFunction;
-		DestroyFunction = Other.DestroyFunction;
-		MoveFunction(StorageAddress(), Other.StorageAddress());
+		Operations = Other.Operations;
+		Operations.MoveConstruct(StorageAddress(), Other.StorageAddress());
 		Other.ClearFunctions();
 	}
 
 	/** Clears erased operations only after the associated callable lifetime has ended or moved. */
-	void ClearFunctions() noexcept
-	{
-		InvokeFunction = nullptr;
-		MoveFunction = nullptr;
-		DestroyFunction = nullptr;
-	}
+	void ClearFunctions() noexcept { Operations = {}; }
 
 	/** Retains one callable inline without beginning any concrete object lifetime by default. */
 	typename std::aligned_storage<InlineCallableBytes, InlineStorageAlignment>::type InlineStorage;
 
-	/** Selects the concrete invocation operation for the currently bound callable. */
-	FInvokeFunction InvokeFunction{nullptr};
-
-	/** Selects the concrete move operation that transfers the currently bound callable. */
-	FMoveFunction MoveFunction{nullptr};
-
-	/** Selects the concrete destruction operation that owns the currently bound callable lifetime. */
-	FDestroyFunction DestroyFunction{nullptr};
+	/** Selects the concrete invoke/move/destroy operations for the currently bound callable. */
+	FErasedCallableOperations Operations;
 };
 
 /**
@@ -306,23 +312,14 @@ public:
 		{
 			return EDelegateResult::InvalidHandle;
 		}
-
 		FBindingSlot* const AvailableSlot = FindAvailableSlot();
 		if (AvailableSlot == nullptr)
 		{
 			return EDelegateResult::CapacityExceeded;
 		}
-
 		const std::size_t SlotIndex = static_cast<std::size_t>(AvailableSlot - BindingSlots);
-		AvailableSlot->Binding = std::move(Binding);
-		AvailableSlot->bOccupied = true;
-
-		const FDelegateHandle AddedHandle{
-			static_cast<std::uint16_t>(SlotIndex),
-			AvailableSlot->Generation,
-		};
-		BroadcastOrder[ActiveBindingCount] = AddedHandle;
-		++ActiveBindingCount;
+		const FDelegateHandle AddedHandle = OccupySlot(SlotIndex, std::move(Binding));
+		RecordBroadcastOrder(AddedHandle);
 		OutHandle = AddedHandle;
 		return EDelegateResult::Success;
 	}
@@ -334,28 +331,13 @@ public:
 		{
 			return EDelegateResult::BroadcastLocked;
 		}
-		if (!Handle.IsValid() || Handle.Index >= MaxBindings)
+		std::size_t OrderIndex = 0;
+		const EDelegateResult ValidationResult = ValidateLiveHandle(Handle, OrderIndex);
+		if (ValidationResult != EDelegateResult::Success)
 		{
-			return EDelegateResult::InvalidHandle;
+			return ValidationResult;
 		}
-
-		FBindingSlot& Slot = BindingSlots[Handle.Index];
-		if (!Slot.bOccupied || Slot.Generation != Handle.Generation)
-		{
-			return EDelegateResult::StaleHandle;
-		}
-
-		const std::size_t OrderIndex = FindOrderIndex(Handle);
-		if (OrderIndex == ActiveBindingCount)
-		{
-			return EDelegateResult::StaleHandle;
-		}
-
-		Slot.Binding.Reset();
-		Slot.bOccupied = false;
-		AdvanceGenerationOrRetire(Slot);
-		RemoveOrderAt(OrderIndex);
-		--ActiveBindingCount;
+		RetireSlotAndCompactOrder(Handle.Index, OrderIndex);
 		return EDelegateResult::Success;
 	}
 
@@ -371,8 +353,7 @@ public:
 		{
 			return EDelegateResult::BroadcastLocked;
 		}
-
-		bBroadcastActive = true;
+		const FScopedBroadcastGuard BroadcastGuard{bBroadcastActive};
 		const std::size_t InitialBindingCount = ActiveBindingCount;
 		for (std::size_t OrderIndex = 0; OrderIndex < InitialBindingCount; ++OrderIndex)
 		{
@@ -381,12 +362,9 @@ public:
 			const EDelegateResult ExecuteResult = Slot.Binding.Execute(Arguments...);
 			if (ExecuteResult != EDelegateResult::Success)
 			{
-				bBroadcastActive = false;
 				return ExecuteResult;
 			}
 		}
-
-		bBroadcastActive = false;
 		return EDelegateResult::Success;
 	}
 
@@ -413,6 +391,17 @@ private:
 		bool bRetired{false};
 	};
 
+	/** Sets the broadcast-active flag for one dispatch and clears it on every exit path. */
+	struct FScopedBroadcastGuard final
+	{
+		explicit FScopedBroadcastGuard(bool& Flag) noexcept : ActiveFlag(Flag) { ActiveFlag = true; }
+		~FScopedBroadcastGuard() noexcept { ActiveFlag = false; }
+		FScopedBroadcastGuard(const FScopedBroadcastGuard&) = delete;
+		FScopedBroadcastGuard& operator=(const FScopedBroadcastGuard&) = delete;
+
+		bool& ActiveFlag;
+	};
+
 	/** Finds the lowest reusable slot while insertion order remains separately recorded. */
 	FBindingSlot* FindAvailableSlot() noexcept
 	{
@@ -427,6 +416,25 @@ private:
 		return nullptr;
 	}
 
+	/** Moves a bound delegate into a reusable slot and returns its generation-checked handle. */
+	FDelegateHandle OccupySlot(const std::size_t SlotIndex, TDelegate<void(ArgumentTypes...), InlineCallableBytes>&& Binding) noexcept
+	{
+		FBindingSlot& Slot = BindingSlots[SlotIndex];
+		Slot.Binding = std::move(Binding);
+		Slot.bOccupied = true;
+		return FDelegateHandle{
+			static_cast<std::uint16_t>(SlotIndex),
+			Slot.Generation,
+		};
+	}
+
+	/** Appends a handle to the insertion-order table the next broadcast will follow. */
+	void RecordBroadcastOrder(const FDelegateHandle Handle) noexcept
+	{
+		BroadcastOrder[ActiveBindingCount] = Handle;
+		++ActiveBindingCount;
+	}
+
 	/** Finds one live handle in the insertion-order table without trusting slot state alone. */
 	std::size_t FindOrderIndex(const FDelegateHandle Handle) const noexcept
 	{
@@ -438,6 +446,39 @@ private:
 			}
 		}
 		return ActiveBindingCount;
+	}
+
+	/** Confirms a handle still identifies a live binding and reports its insertion-order index. */
+	EDelegateResult ValidateLiveHandle(const FDelegateHandle Handle, std::size_t& OutOrderIndex) const noexcept
+	{
+		OutOrderIndex = ActiveBindingCount;
+		if (!Handle.IsValid() || Handle.Index >= MaxBindings)
+		{
+			return EDelegateResult::InvalidHandle;
+		}
+		const FBindingSlot& Slot = BindingSlots[Handle.Index];
+		if (!Slot.bOccupied || Slot.Generation != Handle.Generation)
+		{
+			return EDelegateResult::StaleHandle;
+		}
+		const std::size_t OrderIndex = FindOrderIndex(Handle);
+		if (OrderIndex == ActiveBindingCount)
+		{
+			return EDelegateResult::StaleHandle;
+		}
+		OutOrderIndex = OrderIndex;
+		return EDelegateResult::Success;
+	}
+
+	/** Clears a removed binding, advances its slot identity, and compacts insertion order. */
+	void RetireSlotAndCompactOrder(const std::size_t SlotIndex, const std::size_t OrderIndex) noexcept
+	{
+		FBindingSlot& Slot = BindingSlots[SlotIndex];
+		Slot.Binding.Reset();
+		Slot.bOccupied = false;
+		AdvanceGenerationOrRetire(Slot);
+		RemoveOrderAt(OrderIndex);
+		--ActiveBindingCount;
 	}
 
 	/** Advances a reusable slot identity or retires it before generation wrap can cause ABA. */
