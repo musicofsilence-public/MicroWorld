@@ -180,7 +180,7 @@ ERuntimeResult AActor::DispatchEndPlay() noexcept
 {
 	// EndPlay is idempotent after a successful end so repeated shutdown paths
 	// never re-enter the consumer hook or component end cascade.
-	if (Lifecycle.State() == ELifecycleState::Ended)
+	if (Lifecycle.GetState() == ELifecycleState::Ended)
 	{
 		return ERuntimeResult::Success;
 	}

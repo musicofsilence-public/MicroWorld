@@ -27,7 +27,7 @@ const FClassDescriptor& UWorld::StaticClassDescriptor() noexcept
 EEngineResult UWorld::RegisterActor(const TObjectPtr<AActor> Actor) noexcept
 {
 	// Registration is only permitted before BeginPlay can begin dispatch.
-	if (Lifecycle.State() != ELifecycleState::Constructed)
+	if (Lifecycle.GetState() != ELifecycleState::Constructed)
 	{
 		return EEngineResult::LifecycleLocked;
 	}
@@ -83,7 +83,7 @@ EEngineResult UWorld::RegisterActor(const TObjectPtr<AActor> Actor) noexcept
 
 ERuntimeResult UWorld::BeginPlay(const TimePointMilliseconds NowMilliseconds) noexcept
 {
-	if (Lifecycle.State() != ELifecycleState::Constructed)
+	if (Lifecycle.GetState() != ELifecycleState::Constructed)
 	{
 		return ERuntimeResult::InvalidLifecycle;
 	}
@@ -179,11 +179,11 @@ ERuntimeResult UWorld::EndPlay() noexcept
 {
 	// EndPlay is idempotent after a successful end so repeated shutdown paths
 	// never re-enter the actor end cascade.
-	if (Lifecycle.State() == ELifecycleState::Ended)
+	if (Lifecycle.GetState() == ELifecycleState::Ended)
 	{
 		return ERuntimeResult::Success;
 	}
-	if (Lifecycle.State() != ELifecycleState::Playing)
+	if (Lifecycle.GetState() != ELifecycleState::Playing)
 	{
 		return ERuntimeResult::InvalidLifecycle;
 	}
@@ -239,7 +239,7 @@ EEngineResult UWorld::SpawnActor(const TObjectPtr<AActor> Actor) noexcept
 {
 	// Deferred spawn is a play-time structural request; it only queues here and
 	// the actual registration and begin happen at the next ApplyPending barrier.
-	if (Lifecycle.State() != ELifecycleState::Playing)
+	if (Lifecycle.GetState() != ELifecycleState::Playing)
 	{
 		return EEngineResult::LifecycleLocked;
 	}
@@ -295,7 +295,7 @@ EEngineResult UWorld::SpawnActor(const TObjectPtr<AActor> Actor) noexcept
 
 EEngineResult UWorld::DestroyActor(const TObjectPtr<AActor> Actor) noexcept
 {
-	if (Lifecycle.State() != ELifecycleState::Playing)
+	if (Lifecycle.GetState() != ELifecycleState::Playing)
 	{
 		return EEngineResult::LifecycleLocked;
 	}

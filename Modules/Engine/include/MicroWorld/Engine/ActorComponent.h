@@ -92,7 +92,7 @@ private:
 	void AssignOwner(FObjectHandle Owner) noexcept;
 
 	/** Reports whether registration into a new owner is still permitted. */
-	bool IsRegistrationOpen() const noexcept { return Lifecycle.State() == ELifecycleState::Constructed; }
+	bool IsRegistrationOpen() const noexcept { return Lifecycle.GetState() == ELifecycleState::Constructed; }
 
 	/** UActorComponent holds no traced outgoing references; only a weak parent link. */
 	void VisitReferences(FReferenceCollector&) noexcept override {}

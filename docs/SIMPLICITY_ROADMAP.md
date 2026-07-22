@@ -355,7 +355,7 @@ for every table row. One task per module; finish a module's whole table before
 verifying. Where a "Sweep docs" note appears, the listed current docs mention
 the old name and must be updated in the same task.
 
-- [ ] **1.1 Core renames.**
+- [x] **1.1 Core renames.**
 
   | Current | New | Declared at (hint) |
   | --- | --- | --- |
@@ -369,6 +369,11 @@ the old name and must be updated in the same task.
 
   **Done when:** every row's old name greps to zero outside historical files;
   Standard Verify passes.
+
+  Done 2026-07-22 — all 7 renames applied across Core+Engine (incl. the
+  `MW_LOG_CONCAT` token-paste prefixes and Lifecycle-only `GetState()`, leaving
+  `TNetHost::GetState()` untouched); build warning-clean; ctest 11/11; doc
+  checker 122 files; all six old-name grep gates return 0.
 
 - [ ] **1.2 Memory renames.** These are template-parameter renames — they
   change no call sites, only the declarations and every use *inside* the same
@@ -1102,7 +1107,7 @@ tests must pass unchanged.
 | Phase | Title | Tasks | Status |
 | --- | --- | --- | --- |
 | 0 | Baseline | 1 | ✅ |
-| 1 | Mechanical renames | 7 | ⬜ |
+| 1 | Mechanical renames | 7 | 🟨 |
 | 2 | Why-comment repairs | 5 | ⬜ |
 | 3 | Decompose: Core & Memory | 4 | ⬜ |
 | 4 | Decompose: Object & GC | 3 | ⬜ |

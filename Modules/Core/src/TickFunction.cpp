@@ -18,7 +18,7 @@ void FTickFunction::BeginPlay(const TimePointMilliseconds NowMilliseconds) noexc
 	PreviousTickMilliseconds = NowMilliseconds;
 	NextDueMilliseconds = NowMilliseconds;
 	bPlaying = true;
-	bScheduleReset = true;
+	bMustResetSchedule = true;
 }
 
 void FTickFunction::EndPlay() noexcept
@@ -38,14 +38,14 @@ ERuntimeResult FTickFunction::SetEnabled(const bool bNewEnabled) noexcept
 	}
 
 	bEnabled = bNewEnabled;
-	bScheduleReset = true;
+	bMustResetSchedule = true;
 	return ERuntimeResult::Success;
 }
 
 ERuntimeResult FTickFunction::SetInterval(const DurationMilliseconds NewIntervalMilliseconds) noexcept
 {
 	IntervalMilliseconds = NewIntervalMilliseconds;
-	bScheduleReset = true;
+	bMustResetSchedule = true;
 	return ERuntimeResult::Success;
 }
 
@@ -66,11 +66,11 @@ FTickDecision FTickFunction::Advance(const TimePointMilliseconds NowMilliseconds
 		return {ERuntimeResult::Success, false, {}};
 	}
 
-	if (bScheduleReset)
+	if (bMustResetSchedule)
 	{
-		bScheduleReset = false;
+		bMustResetSchedule = false;
 		PreviousTickMilliseconds = NowMilliseconds;
-		NextDueMilliseconds = CalculateNextDue(NowMilliseconds);
+		NextDueMilliseconds = CalculateNextDueMilliseconds(NowMilliseconds);
 		return {ERuntimeResult::Success, true, {NowMilliseconds, 0}};
 	}
 
@@ -84,9 +84,9 @@ FTickDecision FTickFunction::Advance(const TimePointMilliseconds NowMilliseconds
 		}
 	}
 
-	const DurationMilliseconds DeltaMilliseconds = CalculateDelta(NowMilliseconds);
+	const DurationMilliseconds DeltaMilliseconds = CalculateDeltaMilliseconds(NowMilliseconds);
 	PreviousTickMilliseconds = NowMilliseconds;
-	NextDueMilliseconds = CalculateNextDue(NowMilliseconds);
+	NextDueMilliseconds = CalculateNextDueMilliseconds(NowMilliseconds);
 	return {
 		ERuntimeResult::Success,
 		true,
@@ -104,7 +104,7 @@ DurationMilliseconds FTickFunction::GetInterval() const noexcept
 	return IntervalMilliseconds;
 }
 
-TimePointMilliseconds FTickFunction::CalculateNextDue(const TimePointMilliseconds NowMilliseconds) const noexcept
+TimePointMilliseconds FTickFunction::CalculateNextDueMilliseconds(const TimePointMilliseconds NowMilliseconds) const noexcept
 {
 	const TimePointMilliseconds MaximumTime = std::numeric_limits<TimePointMilliseconds>::max();
 	if (MaximumTime - NowMilliseconds < IntervalMilliseconds)
@@ -114,7 +114,7 @@ TimePointMilliseconds FTickFunction::CalculateNextDue(const TimePointMillisecond
 	return NowMilliseconds + IntervalMilliseconds;
 }
 
-DurationMilliseconds FTickFunction::CalculateDelta(const TimePointMilliseconds NowMilliseconds) const noexcept
+DurationMilliseconds FTickFunction::CalculateDeltaMilliseconds(const TimePointMilliseconds NowMilliseconds) const noexcept
 {
 	const TimePointMilliseconds DeltaMilliseconds = NowMilliseconds - PreviousTickMilliseconds;
 	const TimePointMilliseconds MaximumDuration = std::numeric_limits<DurationMilliseconds>::max();

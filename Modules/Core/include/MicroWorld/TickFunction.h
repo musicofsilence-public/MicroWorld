@@ -48,10 +48,10 @@ public:
 
 private:
 	/** Saturates deadlines so a long-running clock cannot wrap into an early tick. */
-	TimePointMilliseconds CalculateNextDue(TimePointMilliseconds NowMilliseconds) const noexcept;
+	TimePointMilliseconds CalculateNextDueMilliseconds(TimePointMilliseconds NowMilliseconds) const noexcept;
 
 	/** Saturates elapsed time because the public tick context uses a bounded duration. */
-	DurationMilliseconds CalculateDelta(TimePointMilliseconds NowMilliseconds) const noexcept;
+	DurationMilliseconds CalculateDeltaMilliseconds(TimePointMilliseconds NowMilliseconds) const noexcept;
 
 	/** Detects caller time rollback even while ticking is disabled. */
 	TimePointMilliseconds LastObservedMilliseconds{0};
@@ -75,7 +75,7 @@ private:
 	bool bPlaying{false};
 
 	/** Forces the next accepted advance to establish a fresh zero-delta schedule. */
-	bool bScheduleReset{true};
+	bool bMustResetSchedule{true};
 };
 
 } // namespace MicroWorld

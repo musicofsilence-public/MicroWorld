@@ -114,7 +114,7 @@ private:
 	void MarkRegisteredComponentsPendingDestroy() noexcept;
 
 	/** Reports whether registration into a new owner is still permitted. */
-	bool IsRegistrationOpen() const noexcept { return Lifecycle.State() == ELifecycleState::Constructed; }
+	bool IsRegistrationOpen() const noexcept { return Lifecycle.GetState() == ELifecycleState::Constructed; }
 
 	/** Presents every registered component to the active iterative collector. */
 	void VisitReferences(FReferenceCollector& Collector) noexcept override;

@@ -54,7 +54,7 @@ public:
 	}
 
 	/** Exposes lifecycle state so owners can guard registration and idempotence. */
-	ELifecycleState State() const noexcept { return CurrentState; }
+	ELifecycleState GetState() const noexcept { return CurrentState; }
 
 private:
 	/** Centralizes the forward-only invariant instead of scattering boolean flags. */

@@ -10,13 +10,13 @@ namespace
 {
 
 	/** Holds the one process-global sink; nullptr means every log call is a no-op. */
-	FLogSink GLogSink = nullptr;
+	FLogSink InstalledLogSink = nullptr;
 
 } // namespace
 
 void SetLogSink(FLogSink Sink) noexcept
 {
-	GLogSink = Sink;
+	InstalledLogSink = Sink;
 }
 
 namespace Detail
@@ -24,16 +24,16 @@ namespace Detail
 
 	void DispatchLogMessage(ELogLevel Level, const char* Category, const char* Message) noexcept
 	{
-		if (GLogSink != nullptr)
+		if (InstalledLogSink != nullptr)
 		{
-			GLogSink(Level, Category, Message);
+			InstalledLogSink(Level, Category, Message);
 		}
 	}
 
 	void DispatchLogFormatted(ELogLevel Level, const char* Category, const char* Format, ...) noexcept
 	{
 		// Skip formatting entirely when no sink can consume the result.
-		if (GLogSink == nullptr)
+		if (InstalledLogSink == nullptr)
 		{
 			return;
 		}
@@ -46,7 +46,7 @@ namespace Detail
 		std::vsnprintf(Message, sizeof(Message), Format, Arguments);
 		va_end(Arguments);
 
-		GLogSink(Level, Category, Message);
+		InstalledLogSink(Level, Category, Message);
 	}
 
 } // namespace Detail

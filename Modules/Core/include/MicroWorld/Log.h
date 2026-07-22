@@ -107,11 +107,13 @@ namespace Detail
 #define MW_LOG_CONCAT(Prefix, Suffix) MW_LOG_CONCAT_(Prefix, Suffix)
 
 // Disabled emitters drop every argument unevaluated; enabled ones dispatch.
-#define MW_LOG_EMITF_0(Level, Category, ...) ((void)0)
-#define MW_LOG_EMITF_1(Level, Category, ...) ::MicroWorld::Detail::DispatchLogFormatted(::MicroWorld::ELogLevel::Level, (Category), __VA_ARGS__)
+#define MW_LOG_EMIT_FORMATTED_0(Level, Category, ...) ((void)0)
+#define MW_LOG_EMIT_FORMATTED_1(Level, Category, ...) \
+	::MicroWorld::Detail::DispatchLogFormatted(::MicroWorld::ELogLevel::Level, (Category), __VA_ARGS__)
 
-#define MW_LOG_EMITM_0(Level, Category, Message) ((void)0)
-#define MW_LOG_EMITM_1(Level, Category, Message) ::MicroWorld::Detail::DispatchLogMessage(::MicroWorld::ELogLevel::Level, (Category), (Message))
+#define MW_LOG_EMIT_MESSAGE_0(Level, Category, Message) ((void)0)
+#define MW_LOG_EMIT_MESSAGE_1(Level, Category, Message) \
+	::MicroWorld::Detail::DispatchLogMessage(::MicroWorld::ELogLevel::Level, (Category), (Message))
 
 /**
  * Logs a printf-style record at the given level and category, e.g.
@@ -119,11 +121,11 @@ namespace Detail
  * the level is below MW_LOG_MIN_LEVEL. Use MW_LOG_MSG for a runtime string that
  * may itself contain '%'.
  */
-#define MW_LOG(Level, Category, ...) MW_LOG_CONCAT(MW_LOG_EMITF_, MW_LOG_CONCAT(MW_LOG_ENABLED_, Level))(Level, Category, __VA_ARGS__)
+#define MW_LOG(Level, Category, ...) MW_LOG_CONCAT(MW_LOG_EMIT_FORMATTED_, MW_LOG_CONCAT(MW_LOG_ENABLED_, Level))(Level, Category, __VA_ARGS__)
 
 /**
  * Logs an already-formed message string at the given level and category without
  * printf interpretation, e.g. MW_LOG_MSG(Log, "Boot", "ready"). Stripped to
  * nothing when the level is below MW_LOG_MIN_LEVEL.
  */
-#define MW_LOG_MSG(Level, Category, Message) MW_LOG_CONCAT(MW_LOG_EMITM_, MW_LOG_CONCAT(MW_LOG_ENABLED_, Level))(Level, Category, Message)
+#define MW_LOG_MSG(Level, Category, Message) MW_LOG_CONCAT(MW_LOG_EMIT_MESSAGE_, MW_LOG_CONCAT(MW_LOG_ENABLED_, Level))(Level, Category, Message)

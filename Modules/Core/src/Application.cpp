@@ -40,7 +40,7 @@ ERuntimeResult FApplication::Advance(const TimePointMilliseconds NowMilliseconds
 
 ERuntimeResult FApplication::EndPlay() noexcept
 {
-	if (Lifecycle.State() == ELifecycleState::Ended)
+	if (Lifecycle.GetState() == ELifecycleState::Ended)
 	{
 		return ERuntimeResult::Success;
 	}
