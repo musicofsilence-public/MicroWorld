@@ -16,6 +16,16 @@ struct FTickConfiguration
 
 	/** Expresses the minimum cadence without prescribing a platform timer. */
 	DurationMilliseconds TickIntervalMilliseconds{0};
+
+	/** Builds a config that may tick, starts enabled, and repeats on the given interval. */
+	static FTickConfiguration EnabledEvery(DurationMilliseconds IntervalMilliseconds) noexcept
+	{
+		FTickConfiguration Configuration;
+		Configuration.bCanEverTick = true;
+		Configuration.bStartWithTickEnabled = true;
+		Configuration.TickIntervalMilliseconds = IntervalMilliseconds;
+		return Configuration;
+	}
 };
 
 /** Owns the bounded scheduling state for one independently tickable object. */
@@ -52,6 +62,15 @@ private:
 
 	/** Saturates elapsed time because the public tick context uses a bounded duration. */
 	DurationMilliseconds CalculateDeltaMilliseconds(TimePointMilliseconds NowMilliseconds) const noexcept;
+
+	/** Applies the first-tick schedule reset and returns its due tick. */
+	FTickDecision BeginResetSchedule(TimePointMilliseconds NowMilliseconds) noexcept;
+
+	/** Reports whether the cadence gate allows a tick at this time. */
+	bool IsTickDueNow(TimePointMilliseconds NowMilliseconds) const noexcept;
+
+	/** Advances the schedule for an accepted tick and returns it. */
+	FTickDecision ProduceDueTick(TimePointMilliseconds NowMilliseconds) noexcept;
 
 	/** Detects caller time rollback even while ticking is disabled. */
 	TimePointMilliseconds LastObservedMilliseconds{0};

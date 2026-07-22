@@ -738,7 +738,7 @@ sentences.
 
 ---
 
-### Phase 3 — Function decomposition: Core & Memory ⬜
+### Phase 3 — Function decomposition: Core & Memory 🟨
 
 Goal: no production function does more than two logical actions (Rule F). For
 every extraction: new helpers are `private` members (or file-local `static`
@@ -747,7 +747,7 @@ each with a why-focused Doxygen comment, same `noexcept`/`const` discipline as
 the parent, and the parent becomes guards + named calls. Behavior-preserving —
 tests must pass unchanged.
 
-- [ ] **3.1 Split `FTickFunction::Advance` and add named decision factories.**
+- [x] **3.1 Split `FTickFunction::Advance` and add named decision factories.**
   `TickFunction.cpp:52-95` (~41 body lines, 5 actions).
   1. Add to `FTickDecision` (in `Time.h`) three documented static factories:
      `Rejected(ERuntimeResult)`, `NotDue()`, `Ticked(TimePointMilliseconds NowMilliseconds, DurationMilliseconds DeltaMilliseconds)`
@@ -766,6 +766,22 @@ tests must pass unchanged.
 
   **Done when:** `Advance` body ≤ 15 lines, no positional `FTickDecision`
   braces remain in `Modules/Core`; Standard Verify passes.
+
+  Done 2026-07-22 — implemented by a **Sonnet subagent** (first task of the
+  direct-dispatch workflow), then reviewed and re-verified by the lead. Added
+  `FTickDecision::Rejected/NotDue/Ticked` (Time.h) and
+  `FTickConfiguration::EnabledEvery` (TickFunction.h); extracted
+  `BeginResetSchedule` / `IsTickDueNow` (const) / `ProduceDueTick` and rewrote
+  `Advance` as guards + named dispatch. 12 of 15 test initializers converted to
+  `EnabledEvery`; the 3 atypical (start-disabled / cannot-ever-tick) configs left
+  positional (YAGNI). Behavior-preserving — every original branch reproduced;
+  build clean, ctest 11/11 unchanged, doc checker 122, positional-brace grep 0.
+  Line-count note: `Advance` is 12 logical lines but ~22 physical — house style
+  braces every `if` (clang-format `AllowShortIfStatementsOnASingleLine: Never`;
+  zero brace-less guards exist in Modules), so a literal ≤15 physical would be
+  style-inconsistent; the decomposition intent is fully met. CQS:
+  `BeginResetSchedule`/`ProduceDueTick` intentionally mutate-and-return, mirroring
+  the original branches verbatim.
 
 - [ ] **3.2 Split `TFixedArena::TryAllocate` and `Deallocate`.**
   `FixedArena.h:46-103` (~55 lines, 4 actions) and `:106-153` (~45 lines, 5+
@@ -1254,7 +1270,7 @@ tests must pass unchanged.
 | 0 | Baseline | 1 | ✅ |
 | 1 | Mechanical renames | 7 | ✅ |
 | 2 | Why-comment repairs | 5 | ✅ |
-| 3 | Decompose: Core & Memory | 4 | ⬜ |
+| 3 | Decompose: Core & Memory | 4 | 🟨 |
 | 4 | Decompose: Object & GC | 3 | ⬜ |
 | 5 | Decompose: Engine | 4 | ⬜ |
 | 6 | Decompose: Net & Platform | 6 | ⬜ |

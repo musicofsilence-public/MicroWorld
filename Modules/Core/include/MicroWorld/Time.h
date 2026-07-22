@@ -45,6 +45,27 @@ struct FTickDecision
 
 	/** Carries time only for an accepted execution decision. */
 	FTickContext Context{};
+
+	/** Builds a decision that reports a scheduling error without a tick. */
+	static FTickDecision Rejected(ERuntimeResult Result) noexcept
+	{
+		FTickDecision Decision;
+		Decision.Result = Result;
+		return Decision;
+	}
+
+	/** Builds an accepted decision whose cadence says no tick is due. */
+	static FTickDecision NotDue() noexcept { return FTickDecision{}; }
+
+	/** Builds an accepted due-tick decision carrying its canonical time and delta. */
+	static FTickDecision Ticked(TimePointMilliseconds NowMilliseconds, DurationMilliseconds DeltaMilliseconds) noexcept
+	{
+		FTickDecision Decision;
+		Decision.bShouldTick = true;
+		Decision.Context.NowMilliseconds = NowMilliseconds;
+		Decision.Context.DeltaMilliseconds = DeltaMilliseconds;
+		return Decision;
+	}
 };
 
 } // namespace MicroWorld

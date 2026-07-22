@@ -53,45 +53,54 @@ FTickDecision FTickFunction::Advance(const TimePointMilliseconds NowMilliseconds
 {
 	if (!bPlaying)
 	{
-		return {ERuntimeResult::InvalidLifecycle, false, {}};
+		return FTickDecision::Rejected(ERuntimeResult::InvalidLifecycle);
 	}
 	if (NowMilliseconds < LastObservedMilliseconds)
 	{
-		return {ERuntimeResult::NonMonotonicTime, false, {}};
+		return FTickDecision::Rejected(ERuntimeResult::NonMonotonicTime);
 	}
-
 	LastObservedMilliseconds = NowMilliseconds;
+
 	if (!bEnabled)
 	{
-		return {ERuntimeResult::Success, false, {}};
+		return FTickDecision::NotDue();
 	}
-
 	if (bMustResetSchedule)
 	{
-		bMustResetSchedule = false;
-		PreviousTickMilliseconds = NowMilliseconds;
-		NextDueMilliseconds = CalculateNextDueMilliseconds(NowMilliseconds);
-		return {ERuntimeResult::Success, true, {NowMilliseconds, 0}};
+		return BeginResetSchedule(NowMilliseconds);
 	}
-
-	if (IntervalMilliseconds != 0)
+	if (!IsTickDueNow(NowMilliseconds))
 	{
-		const bool bBeforeDeadline = NowMilliseconds < NextDueMilliseconds;
-		const bool bAlreadyTickedAtThisTime = NowMilliseconds == PreviousTickMilliseconds;
-		if (bBeforeDeadline || bAlreadyTickedAtThisTime)
-		{
-			return {ERuntimeResult::Success, false, {}};
-		}
+		return FTickDecision::NotDue();
 	}
+	return ProduceDueTick(NowMilliseconds);
+}
 
+FTickDecision FTickFunction::BeginResetSchedule(const TimePointMilliseconds NowMilliseconds) noexcept
+{
+	bMustResetSchedule = false;
+	PreviousTickMilliseconds = NowMilliseconds;
+	NextDueMilliseconds = CalculateNextDueMilliseconds(NowMilliseconds);
+	return FTickDecision::Ticked(NowMilliseconds, 0);
+}
+
+bool FTickFunction::IsTickDueNow(const TimePointMilliseconds NowMilliseconds) const noexcept
+{
+	if (IntervalMilliseconds == 0)
+	{
+		return true;
+	}
+	const bool bBeforeDeadline = NowMilliseconds < NextDueMilliseconds;
+	const bool bAlreadyTickedAtThisTime = NowMilliseconds == PreviousTickMilliseconds;
+	return !(bBeforeDeadline || bAlreadyTickedAtThisTime);
+}
+
+FTickDecision FTickFunction::ProduceDueTick(const TimePointMilliseconds NowMilliseconds) noexcept
+{
 	const DurationMilliseconds DeltaMilliseconds = CalculateDeltaMilliseconds(NowMilliseconds);
 	PreviousTickMilliseconds = NowMilliseconds;
 	NextDueMilliseconds = CalculateNextDueMilliseconds(NowMilliseconds);
-	return {
-		ERuntimeResult::Success,
-		true,
-		{NowMilliseconds, DeltaMilliseconds},
-	};
+	return FTickDecision::Ticked(NowMilliseconds, DeltaMilliseconds);
 }
 
 bool FTickFunction::IsEnabled() const noexcept

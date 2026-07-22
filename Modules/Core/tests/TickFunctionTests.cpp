@@ -10,7 +10,7 @@ namespace MicroWorld::Tests
 /** Proves startup establishes a fresh schedule instead of inventing elapsed time. */
 MW_TEST_CASE(Tick_FirstAdvanceTicksWithZeroDelta)
 {
-	const FTickConfiguration Configuration{true, true, 25};
+	const FTickConfiguration Configuration = FTickConfiguration::EnabledEvery(25);
 	FTickFunction Tick(Configuration);
 	Tick.BeginPlay(100);
 
@@ -44,7 +44,7 @@ MW_TEST_CASE(Tick_EnablingDisabledTickPreservesInterval)
 /** Proves disabled time is not charged to a newly re-enabled schedule. */
 MW_TEST_CASE(Tick_ReenabledTickUsesFreshZeroDeltaSchedule)
 {
-	const FTickConfiguration Configuration{true, true, 10};
+	const FTickConfiguration Configuration = FTickConfiguration::EnabledEvery(10);
 	FTickFunction Tick(Configuration);
 	Tick.BeginPlay(100);
 	const FTickDecision FirstDecision = Tick.Advance(100);
@@ -73,7 +73,7 @@ MW_TEST_CASE(Tick_ReenabledTickUsesFreshZeroDeltaSchedule)
 /** Proves interval zero means once per caller update rather than an unbounded loop. */
 MW_TEST_CASE(Tick_ZeroIntervalTicksOnEveryAdvance)
 {
-	const FTickConfiguration Configuration{true, true, 0};
+	const FTickConfiguration Configuration = FTickConfiguration::EnabledEvery(0);
 	FTickFunction Tick(Configuration);
 	Tick.BeginPlay(20);
 
@@ -98,7 +98,7 @@ MW_TEST_CASE(Tick_ZeroIntervalTicksOnEveryAdvance)
 /** Proves a late caller produces one tick and schedules from actual execution time. */
 MW_TEST_CASE(Tick_LateIntervalTickDoesNotCatchUp)
 {
-	const FTickConfiguration Configuration{true, true, 10};
+	const FTickConfiguration Configuration = FTickConfiguration::EnabledEvery(10);
 	FTickFunction Tick(Configuration);
 	Tick.BeginPlay(0);
 	const FTickDecision FirstDecision = Tick.Advance(0);
@@ -127,8 +127,8 @@ MW_TEST_CASE(Tick_LateIntervalTickDoesNotCatchUp)
 /** Proves sibling tickables calculate elapsed time from their own execution history. */
 MW_TEST_CASE(Tick_DeltaBelongsToIndividualTickFunction)
 {
-	const FTickConfiguration FastConfiguration{true, true, 10};
-	const FTickConfiguration SlowConfiguration{true, true, 25};
+	const FTickConfiguration FastConfiguration = FTickConfiguration::EnabledEvery(10);
+	const FTickConfiguration SlowConfiguration = FTickConfiguration::EnabledEvery(25);
 	FTickFunction FastTick(FastConfiguration);
 	FTickFunction SlowTick(SlowConfiguration);
 	FastTick.BeginPlay(0);
@@ -185,7 +185,7 @@ MW_TEST_CASE(Tick_IntervalChangeDoesNotEnableTick)
 /** Proves a live cadence change starts a fresh schedule without stale delta. */
 MW_TEST_CASE(Tick_EnabledIntervalChangeResetsNextAdvance)
 {
-	const FTickConfiguration Configuration{true, true, 10};
+	const FTickConfiguration Configuration = FTickConfiguration::EnabledEvery(10);
 	FTickFunction Tick(Configuration);
 	Tick.BeginPlay(0);
 	const FTickDecision FirstDecision = Tick.Advance(0);
@@ -235,7 +235,7 @@ MW_TEST_CASE(Tick_CannotEverTickRejectsEnable)
 /** Proves rejected time rollback cannot corrupt a later valid deadline or delta. */
 MW_TEST_CASE(Tick_BackwardTimePreservesSchedule)
 {
-	const FTickConfiguration Configuration{true, true, 10};
+	const FTickConfiguration Configuration = FTickConfiguration::EnabledEvery(10);
 	FTickFunction Tick(Configuration);
 	Tick.BeginPlay(100);
 	const FTickDecision FirstDecision = Tick.Advance(100);
@@ -261,7 +261,7 @@ MW_TEST_CASE(Tick_BackwardTimePreservesSchedule)
 /** Proves wide clock gaps remain bounded by the public duration representation. */
 MW_TEST_CASE(Tick_UnrepresentableDeltaSaturatesAtMaximum)
 {
-	const FTickConfiguration Configuration{true, true, 0};
+	const FTickConfiguration Configuration = FTickConfiguration::EnabledEvery(0);
 	FTickFunction Tick(Configuration);
 	Tick.BeginPlay(0);
 	const FTickDecision FirstDecision = Tick.Advance(0);
@@ -287,7 +287,7 @@ MW_TEST_CASE(Tick_NextDueSaturatesAtMaximumTime)
 	const DurationMilliseconds Interval{10};
 	const TimePointMilliseconds MaximumTime = std::numeric_limits<TimePointMilliseconds>::max();
 	const TimePointMilliseconds StartTime = MaximumTime - 5;
-	const FTickConfiguration Configuration{true, true, Interval};
+	const FTickConfiguration Configuration = FTickConfiguration::EnabledEvery(Interval);
 	FTickFunction Tick(Configuration);
 	Tick.BeginPlay(StartTime);
 	const FTickDecision FirstDecision = Tick.Advance(StartTime);
@@ -313,7 +313,7 @@ MW_TEST_CASE(Tick_SaturatedDeadlineDoesNotRepeatWithoutElapsedTime)
 	const DurationMilliseconds Interval{10};
 	const TimePointMilliseconds MaximumTime = std::numeric_limits<TimePointMilliseconds>::max();
 	const TimePointMilliseconds StartTime = MaximumTime - 5;
-	const FTickConfiguration Configuration{true, true, Interval};
+	const FTickConfiguration Configuration = FTickConfiguration::EnabledEvery(Interval);
 	FTickFunction Tick(Configuration);
 	Tick.BeginPlay(StartTime);
 	const FTickDecision FirstDecision = Tick.Advance(StartTime);
@@ -330,7 +330,7 @@ MW_TEST_CASE(Tick_SaturatedDeadlineDoesNotRepeatWithoutElapsedTime)
 /** Proves scheduling cannot bypass the lifecycle of its owning runtime object. */
 MW_TEST_CASE(Tick_AdvanceOutsidePlayIsRejected)
 {
-	const FTickConfiguration Configuration{true, true, 0};
+	const FTickConfiguration Configuration = FTickConfiguration::EnabledEvery(0);
 	FTickFunction Tick(Configuration);
 
 	const FTickDecision BeforeBeginDecision = Tick.Advance(0);
