@@ -23,6 +23,13 @@
 namespace MicroWorld
 {
 
+#if defined(_MSC_VER)
+// C4324: padding after the alignas(SlotAlign) slot storage is intentional; the
+// host trades a few bytes for the caller-specified slot alignment.
+#pragma warning(push)
+#pragma warning(disable : 4324)
+#endif
+
 /**
  * Owns and wires every fixed-capacity runtime subsystem — class registry, object
  * store, garbage collector, world actor registry, and timer manager — behind one
@@ -346,5 +353,9 @@ private:
 	/** Roots the single world so it survives collection for this host's lifetime. */
 	TStrongObjectPtr<UWorld> WorldRoot;
 };
+
+#if defined(_MSC_VER)
+#pragma warning(pop)
+#endif
 
 } // namespace MicroWorld
