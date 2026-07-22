@@ -12,9 +12,10 @@ hardware boundaries. Platform support is verified one target at a time, not
 claimed for every board.
 
 `PROGRESS.md` is the sole live implementation status and next-milestone record;
-`docs/ROADMAP.md` is the improvement plan and task tracker. Any change to
-implementation, gate, evidence, decision, blocker, or next milestone must update
-`PROGRESS.md` in the same commit.
+`docs/SIMPLICITY_ROADMAP.md` is the active improvement plan and task tracker
+(`docs/ROADMAP.md` is the completed implementation plan, kept as a frozen
+historical record). Any change to implementation, gate, evidence, decision,
+blocker, or next milestone must update `PROGRESS.md` in the same commit.
 
 ## Repository structure
 
@@ -102,7 +103,7 @@ Checkers (run per their documented args; see `tools/AGENTS.md`):
 ```sh
 python tools/CheckDependencyBoundaries.py --self-test
 python tools/CheckProfileMap.py --self-test
-python tools/CheckFolderAgents.py --root Modules --exclude build .pio __pycache__
+python tools/CheckFolderAgents.py --root Modules --exclude build --exclude .pio --exclude __pycache__
 python tools/CheckClassDocumentation.py --root Modules --require-doxygen
 python tools/CheckFormatting.py
 ```

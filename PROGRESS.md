@@ -78,7 +78,10 @@ Phase 6.4 final acceptance is the only remaining roadmap line: all packages
 build + test on host, ESP32 images compile, the dependency/doc checkers pass,
 the two-node demo runs, and the roadmap tracker flips fully green. Phases 6.1
 (two-node demo), 6.2 (measured ESP32-S3 runtime margins), and 6.3 (this
-documentation release sweep + version bump to 0.2.0) are done. Phase 5
+documentation release sweep + version bump to 0.2.0) are done. Beyond 6.4, the
+active improvement plan is the student-facing simplicity refactor tracked in
+`docs/SIMPLICITY_ROADMAP.md` (self-explanatory naming, ≤2-action functions,
+why-comments, ceremony reduction; registered 2026-07-22). Phase 5
 platform adapters (host UDP, ESP32 UDP, and the E32 LoRa UART transport with
 its portable, host-tested `FrameCodec`) are complete and compile-only-verified
 except for the Phase 6.2 benchmark run; no UART traffic, radio, or firmware

@@ -8,8 +8,10 @@ UE5 developers can build small applications and games for these devices without
 first learning every hardware detail. Platform support is verified one target at
 a time, not claimed for every board.
 
-Current development status is in [PROGRESS.md](PROGRESS.md); the improvement plan
-is in [docs/ROADMAP.md](docs/ROADMAP.md).
+Current development status is in [PROGRESS.md](PROGRESS.md); the active
+improvement plan is in [docs/SIMPLICITY_ROADMAP.md](docs/SIMPLICITY_ROADMAP.md)
+(the completed implementation plan remains in [docs/ROADMAP.md](docs/ROADMAP.md)
+as a historical record).
 
 ## Modules
 
