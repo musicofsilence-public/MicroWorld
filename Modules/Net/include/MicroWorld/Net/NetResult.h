@@ -23,6 +23,8 @@ enum class ENetResult : std::uint8_t
 	/**
 	 * A valid operation lacks destination, queue, or transport capacity.
 	 * The request itself is well-formed; only the bounded destination or FIFO is full right now.
+	 * Encoders distinguish the two by size: oversize input that can never fit returns Invalid, while a request that only lacks room right now returns
+	 * Full.
 	 */
 	Full,
 

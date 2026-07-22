@@ -48,6 +48,9 @@ public:
 	static constexpr std::size_t MaximumPacketBytes() noexcept { return MaxPacketBytes; }
 
 private:
+	// Storage and manager are deliberately separate types: caller-owned storage is the
+	// repo-wide pattern, and keeping the FIFO mechanics in TNetManager lets one manager
+	// implementation be reused over any caller-provided backing (D8).
 	/** Grants the manager holding the same template parameters exclusive access to its FIFO slots. */
 	friend class TNetManager<MaxPackets, MaxPacketBytes>;
 

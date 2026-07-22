@@ -102,7 +102,7 @@ MW_TEST_CASE(FrameCodec_RoundTripsPayloadSizesZeroOneAndMax)
 	}
 }
 
-/** Proves EncodeFrame rejects invalid inputs and oversize destinations while leaving OutWritten unchanged. */
+/** Proves EncodeFrame rejects invalid inputs, oversize payloads, and oversize destinations while leaving OutWritten unchanged. */
 MW_TEST_CASE(FrameCodec_EncodeRejectsInvalidAndFullCases)
 {
 	const std::array<std::uint8_t, 2> Payload{0x01, 0x02};
@@ -126,6 +126,14 @@ MW_TEST_CASE(FrameCodec_EncodeRejectsInvalidAndFullCases)
 	Written = 0xDEAD;
 	Result = EncodeFrame(0x01, TSpan<const std::uint8_t>(Payload.data(), Payload.size()), TSpan<std::uint8_t>(nullptr, 4), Written);
 	MW_EXPECT_EQ(Test, ENetResult::Invalid, Result, "A null destination with nonzero length must return Invalid");
+	MW_EXPECT_EQ(Test, static_cast<std::size_t>(0xDEAD), Written, "Invalid must leave OutWritten unchanged");
+
+	// A payload larger than the 16-bit length field can never fit any frame, so it is Invalid, not Full (D7).
+	// The size guard returns before any payload byte is read, so a size-only span needs no real backing.
+	std::uint8_t OversizePayloadByte = 0x00;
+	Written = 0xDEAD;
+	Result = EncodeFrame(0x01, TSpan<const std::uint8_t>(&OversizePayloadByte, 0x10000), TSpan<std::uint8_t>(Frame.data(), Frame.size()), Written);
+	MW_EXPECT_EQ(Test, ENetResult::Invalid, Result, "A payload larger than the 16-bit length field must return Invalid");
 	MW_EXPECT_EQ(Test, static_cast<std::size_t>(0xDEAD), Written, "Invalid must leave OutWritten unchanged");
 }
 

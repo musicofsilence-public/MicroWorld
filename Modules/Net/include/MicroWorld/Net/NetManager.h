@@ -52,13 +52,7 @@ public:
 		const std::size_t PacketSize = Packet.Size();
 		if (PacketSize == 0)
 		{
-			if (QueuedPacketCount >= MaxPackets)
-			{
-				return ENetResult::Full;
-			}
-			StorePacketAt(TailIndex, To, Packet, 0);
-			AdvanceTail();
-			return ENetResult::Success;
+			return EnqueuePacket(To, Packet);
 		}
 		if (Packet.Data() == nullptr)
 		{
@@ -69,13 +63,7 @@ public:
 			// The packet can never fit a slot; the request is malformed.
 			return ENetResult::Invalid;
 		}
-		if (QueuedPacketCount >= MaxPackets)
-		{
-			return ENetResult::Full;
-		}
-		StorePacketAt(TailIndex, To, Packet, PacketSize);
-		AdvanceTail();
-		return ENetResult::Success;
+		return EnqueuePacket(To, Packet);
 	}
 
 	/**
@@ -132,6 +120,18 @@ public:
 	constexpr bool IsFull() const noexcept { return QueuedPacketCount >= MaxPackets; }
 
 private:
+	/** Copies one already-validated packet into the FIFO tail, or `Full` when no slot is free. */
+	ENetResult EnqueuePacket(const FNetAddress& To, TSpan<const std::uint8_t> Packet) noexcept
+	{
+		if (QueuedPacketCount >= MaxPackets)
+		{
+			return ENetResult::Full;
+		}
+		StorePacketAt(TailIndex, To, Packet, Packet.Size());
+		AdvanceTail();
+		return ENetResult::Success;
+	}
+
 	/** Copies one accepted packet, its length, and its destination address into the slot at `Index`. */
 	void StorePacketAt(const std::size_t Index, const FNetAddress& To, TSpan<const std::uint8_t> Packet, const std::size_t PacketSize) noexcept
 	{

@@ -1281,7 +1281,7 @@ tests must pass unchanged.
   (`#1 format_check`, `#9 net_tests` incl. NetHostTests, `#10 engine_tests` incl.
   EngineNetHostTests), doc checker 122 files.
 
-- [ ] **6.4 Unify the FIFO enqueue ladder; apply the D7 verdict fix
+- [x] **6.4 Unify the FIFO enqueue ladder; apply the D7 verdict fix
   (behavior change).**
   1. `TLoopbackMailboxes::Deliver` (`HostLoopback.h:40-76`) duplicates its
      store logic across the zero-length and normal paths — unify through one
@@ -1303,6 +1303,34 @@ tests must pass unchanged.
 
   **Done when:** the only test-expectation change is the D7 oversize verdict;
   Standard Verify passes.
+
+  **Evidence (2026-07-22, commit pending; D7 behavior change confirmed with the
+  owner at the 6.4 checkpoint):** Six files. Parts 1-3 (behavior-preserving): the
+  zero-length/normal duplication in `TLoopbackMailboxes::Deliver` and
+  `TNetManager::QueueSend` is unified through a private `EnqueuePacket` (which
+  stores with `Packet.Size()`, equal to the old explicit 0/PacketSize);
+  `Deliver` also gains `ValidateDeliverAddress`; `TLoopbackMailboxes::Receive`
+  splits into `ValidateReceiveDestination` + `HeadFitsDestination` (the original
+  two-check structure and its comment kept verbatim inside the predicate) +
+  `PopHeadInto`. Part 5: the D8 rationale is a plain `//` comment inside
+  `TNetPacketStorage` (its `/** */` contract was already at the 3-sentence cap, so
+  a Doxygen sentence would have failed the checker). **Part 4 — D7 behavior
+  change:** `EncodeFrame`'s oversize-payload verdict (`PayloadSize > 0xFFFF`)
+  flips `Full` → `Invalid`; the destination-too-small guard stays `Full`; the rule
+  ("oversize input → Invalid; out-of-capacity-now → Full") is documented on the
+  `Full` enumerator in `NetResult.h`, and both `EncodeFrame`'s and
+  `ValidateEncodeInputs`'s doc-comments were corrected to match. **Roadmap premise
+  correction:** the roadmap said to "update the one test asserting Full for
+  oversize", but no such test existed — the only `Full` assertion in
+  FrameCodecTests is the destination-too-small case, which correctly stays `Full`.
+  Per the owner's decision, a NEW allocation-free assertion (a size-only
+  `{&byte, 0x10000}` span, safe because the size guard returns before any payload
+  read) now proves oversize payload → `Invalid`. The `>0xFFFF` path is defensively
+  unreachable in practice (every buffer is far below 64 KB) and this aligns
+  `EncodeFrame` with `WriteMessage`, which already returned `Invalid` for `>0xFFFF`.
+  **CQS note:** the new `EnqueuePacket`/`ValidateDeliverAddress`/etc. helpers are
+  single-purpose commands/queries; no new violations. Verified: build clean, ctest
+  11/11 (`#1 format_check`, `#9 net_tests`), doc checker 122 files.
 
 - [ ] **6.5 Deduplicate the UDP address codec; split the UDP drivers.**
   1. The two `UdpAddress.h` files (PlatformHost + PlatformEsp32) are

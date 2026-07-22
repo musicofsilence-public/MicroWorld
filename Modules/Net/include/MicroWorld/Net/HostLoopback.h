@@ -39,23 +39,17 @@ namespace Detail
 		 */
 		ENetResult Deliver(const FNetAddress& To, const FNetAddress& From, TSpan<const std::uint8_t> Packet) noexcept
 		{
-			// Validate the destination address first: it must be exactly one byte naming a valid port.
-			if (To.Size != 1 || To.Bytes[0] >= MaxPorts)
+			const ENetResult AddressResult = ValidateDeliverAddress(To);
+			if (AddressResult != ENetResult::Success)
 			{
-				return ENetResult::Invalid;
+				return AddressResult;
 			}
 			FMailbox& Target = Mailboxes[To.Bytes[0]];
 			const std::size_t PacketSize = Packet.Size();
 			if (PacketSize == 0)
 			{
 				// A zero-length packet is a valid transport op; enqueue it so receive mirrors send.
-				if (Target.QueuedCount >= MailboxCapacity)
-				{
-					return ENetResult::Full;
-				}
-				StorePacketAt(Target, Target.TailIndex, From, Packet, 0);
-				AdvanceTail(Target);
-				return ENetResult::Success;
+				return EnqueuePacket(Target, From, Packet);
 			}
 			if (Packet.Data() == nullptr)
 			{
@@ -66,13 +60,7 @@ namespace Detail
 				// The packet can never fit a slot; the request is malformed.
 				return ENetResult::Invalid;
 			}
-			if (Target.QueuedCount >= MailboxCapacity)
-			{
-				return ENetResult::Full;
-			}
-			StorePacketAt(Target, Target.TailIndex, From, Packet, PacketSize);
-			AdvanceTail(Target);
-			return ENetResult::Success;
+			return EnqueuePacket(Target, From, Packet);
 		}
 
 		/**
@@ -83,12 +71,10 @@ namespace Detail
 		 */
 		ENetResult Receive(const std::uint8_t LocalPort, FNetAddress& OutFrom, TSpan<std::uint8_t> Destination, FNetReceiveResult& OutResult) noexcept
 		{
-			// A null destination with nonzero length is an invalid request independent of the
-			// mailbox state: validate it before the empty check so an empty mailbox still
-			// returns Invalid for a malformed destination.
-			if (Destination.Size() != 0 && Destination.Data() == nullptr)
+			const ENetResult DestinationResult = ValidateReceiveDestination(Destination);
+			if (DestinationResult != ENetResult::Success)
 			{
-				return ENetResult::Invalid;
+				return DestinationResult;
 			}
 			FMailbox& Mailbox = Mailboxes[LocalPort];
 			if (Mailbox.QueuedCount == 0)
@@ -96,31 +82,12 @@ namespace Detail
 				return ENetResult::Unavailable;
 			}
 			const std::size_t HeadSize = Mailbox.PacketLengths[Mailbox.HeadIndex];
-			const std::size_t DestinationSize = Destination.Size();
-			if (DestinationSize == 0)
-			{
-				// An empty destination cannot accept even a zero-length head packet
-				// without losing the ability to signal that a packet was delivered.
-				if (HeadSize != 0)
-				{
-					return ENetResult::Full;
-				}
-			}
-			if (HeadSize > DestinationSize)
+			if (!HeadFitsDestination(HeadSize, Destination.Size()))
 			{
 				// Keep the head packet so the caller can retry with a larger buffer.
 				return ENetResult::Full;
 			}
-			if (HeadSize > 0)
-			{
-				std::memcpy(Destination.Data(), Mailbox.PacketStorage[Mailbox.HeadIndex].data(), HeadSize);
-			}
-			OutResult.BytesReceived = HeadSize;
-			// Stamp the sender only on the success path, before the head advances past it.
-			OutFrom = Mailbox.SenderAddresses[Mailbox.HeadIndex];
-			Mailbox.PacketLengths[Mailbox.HeadIndex] = 0;
-			Mailbox.HeadIndex = (Mailbox.HeadIndex + 1) % MailboxCapacity;
-			--Mailbox.QueuedCount;
+			PopHeadInto(Mailbox, HeadSize, OutFrom, Destination, OutResult);
 			return ENetResult::Success;
 		}
 
@@ -174,6 +141,76 @@ namespace Detail
 			/** Tracks occupancy so full and empty states are observable without wrap arithmetic. */
 			std::size_t QueuedCount{0};
 		};
+
+		/** Validates a loopback destination: it must be exactly one byte naming a valid port. */
+		static ENetResult ValidateDeliverAddress(const FNetAddress& To) noexcept
+		{
+			if (To.Size != 1 || To.Bytes[0] >= MaxPorts)
+			{
+				return ENetResult::Invalid;
+			}
+			return ENetResult::Success;
+		}
+
+		/** Enqueues one already-validated packet at the tail, or `Full` when the mailbox has no free slot. */
+		static ENetResult EnqueuePacket(FMailbox& Target, const FNetAddress& From, TSpan<const std::uint8_t> Packet) noexcept
+		{
+			if (Target.QueuedCount >= MailboxCapacity)
+			{
+				return ENetResult::Full;
+			}
+			StorePacketAt(Target, Target.TailIndex, From, Packet, Packet.Size());
+			AdvanceTail(Target);
+			return ENetResult::Success;
+		}
+
+		/** Rejects a null destination with nonzero length before the mailbox state is consulted. */
+		static ENetResult ValidateReceiveDestination(TSpan<std::uint8_t> Destination) noexcept
+		{
+			// A null destination with nonzero length is an invalid request independent of the
+			// mailbox state: validate it before the empty check so an empty mailbox still
+			// returns Invalid for a malformed destination.
+			if (Destination.Size() != 0 && Destination.Data() == nullptr)
+			{
+				return ENetResult::Invalid;
+			}
+			return ENetResult::Success;
+		}
+
+		/** Reports whether the head packet fits the caller destination; false means the caller must retry larger. */
+		static bool HeadFitsDestination(const std::size_t HeadSize, const std::size_t DestinationSize) noexcept
+		{
+			if (DestinationSize == 0)
+			{
+				// An empty destination cannot accept even a zero-length head packet
+				// without losing the ability to signal that a packet was delivered.
+				if (HeadSize != 0)
+				{
+					return false;
+				}
+			}
+			return HeadSize <= DestinationSize;
+		}
+
+		/** Copies the head packet into the destination, stamps the sender and byte count, and advances the FIFO head. */
+		static void PopHeadInto(
+			FMailbox& Mailbox,
+			const std::size_t HeadSize,
+			FNetAddress& OutFrom,
+			TSpan<std::uint8_t> Destination,
+			FNetReceiveResult& OutResult) noexcept
+		{
+			if (HeadSize > 0)
+			{
+				std::memcpy(Destination.Data(), Mailbox.PacketStorage[Mailbox.HeadIndex].data(), HeadSize);
+			}
+			OutResult.BytesReceived = HeadSize;
+			// Stamp the sender only on the success path, before the head advances past it.
+			OutFrom = Mailbox.SenderAddresses[Mailbox.HeadIndex];
+			Mailbox.PacketLengths[Mailbox.HeadIndex] = 0;
+			Mailbox.HeadIndex = (Mailbox.HeadIndex + 1) % MailboxCapacity;
+			--Mailbox.QueuedCount;
+		}
 
 		/** Copies one accepted packet, its length, and its sender into the slot at `Index`. */
 		static void StorePacketAt(

@@ -84,7 +84,7 @@ namespace Detail
 	 *
 	 * @param Payload Caller-owned payload bytes to frame.
 	 * @param OutFrame Caller-owned destination for the complete frame.
-	 * @return Invalid for a null-with-length span, Full for an oversize payload or a destination too small, else Success.
+	 * @return Invalid for a null-with-length span or an oversize payload, Full for a destination too small, else Success.
 	 */
 	inline ENetResult ValidateEncodeInputs(const TSpan<const std::uint8_t> Payload, const TSpan<std::uint8_t> OutFrame) noexcept
 	{
@@ -99,7 +99,8 @@ namespace Detail
 		}
 		if (PayloadSize > 0xFFFFu)
 		{
-			return ENetResult::Full;
+			// Oversize input can never fit the 16-bit length field, so it can never succeed on retry (D7).
+			return ENetResult::Invalid;
 		}
 		if (PayloadSize + FrameOverheadBytes > OutFrame.Size())
 		{
@@ -136,11 +137,11 @@ namespace Detail
 /**
  * Encodes one complete framed message transactionally.
  *
- * Validates before writing: a null payload with nonzero length returns Invalid, an oversize
- * payload that cannot fit the length field or the destination returns Full, and a null
- * destination with nonzero length returns Invalid. On Success the full frame is written and
- * OutWritten is set to Payload.Size()+FrameOverheadBytes; on any non-Success the destination
- * and OutWritten are unchanged.
+ * Validates before writing: a null payload with nonzero length or a payload too large for the
+ * 16-bit length field returns Invalid, a payload that cannot fit the destination returns Full,
+ * and a null destination with nonzero length returns Invalid. On Success the full frame is
+ * written and OutWritten is set to Payload.Size()+FrameOverheadBytes; on any non-Success the
+ * destination and OutWritten are unchanged.
  *
  * @param SourceNodeId Sender node id stamped into byte 1 of the frame.
  * @param Payload Caller-owned bytes framed as the message body.
