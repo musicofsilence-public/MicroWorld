@@ -132,7 +132,8 @@ ENetResult FHostUdpDriver::TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> 
 	{
 		return ENetResult::Full;
 	}
-	// The datagram fits: perform one consuming read to deliver the bytes and the sender.
+	// The fits check already passed on the peeked head datagram; this
+	// consuming read removes exactly that datagram.
 	sockaddr_in Sender{};
 	const Detail::FConsumeResult Consumed = Detail::ConsumeDatagram(Detail::AsSocketHandle(SocketHandle), Destination.Data(), Capacity, Sender);
 	if (!Consumed.bSuccess)

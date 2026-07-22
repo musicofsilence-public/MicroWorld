@@ -106,7 +106,6 @@ inline ENetResult EncodeFrame(
 	{
 		return ENetResult::Full;
 	}
-	// Write magic, source node id, and big-endian length, then copy the payload verbatim.
 	OutFrame[0] = FrameMagicByte;
 	OutFrame[1] = SourceNodeId;
 	OutFrame[2] = static_cast<std::uint8_t>(PayloadSize >> 8);
@@ -137,9 +136,9 @@ enum class EFrameEvent : std::uint8_t
 /**
  * Feeds a bounded byte stream and holds the most recent CRC-valid frame in fixed storage without allocating or throwing.
  *
- * After any corruption the decoder resyncs and decodes a subsequent well-formed frame, but a length-prefixed framer
- * cannot rewind, so the frame immediately after a truncated frame may be consumed as that frame's payload and lost
- * before recovery within one frame; the caller must deliver or clear a held frame before pushing more bytes.
+ * After corruption the decoder resyncs on the next well-formed frame, but a length-prefixed framer cannot
+ * rewind, so the frame right after a truncated one may be consumed as its payload and lost; the caller must
+ * deliver or clear a held frame before pushing more bytes.
  *
  * @tparam MaxPayloadBytes Largest payload byte count the decoder accepts and holds.
  */

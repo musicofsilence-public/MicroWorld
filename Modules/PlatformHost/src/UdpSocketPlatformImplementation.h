@@ -247,13 +247,16 @@ struct FPeekProbe
  */
 constexpr std::size_t PeekScratchBytes = 1200;
 
+/** One past the peek scratch: a datagram at least this large cannot fit, so the driver's fits-vs-Full check reports Full without consuming it. */
+constexpr std::size_t OversizeDatagramSentinelBytes = PeekScratchBytes + 1;
+
 /**
  * Peeks the head datagram into an internal scratch buffer, never the caller's.
  *
  * POSIX `MSG_PEEK|MSG_TRUNC` returns the true datagram length in `BytesReady`.
  * Windows `MSG_PEEK` returns the delivered length, or `WSAEMSGSIZE` when the
  * datagram exceeds the scratch; that case is reported `Ready` with a sentinel
- * `BytesReady = PeekScratchBytes + 1` so the single fits-vs-`Full` decision in
+ * `BytesReady = OversizeDatagramSentinelBytes` so the single fits-vs-`Full` decision in
  * the driver sees one uniform "does not fit" signal. The peek never touches the
  * caller-owned destination, keeping `Full` transactional on both platforms.
  *
@@ -278,7 +281,7 @@ inline FPeekProbe ProbeReadableDatagram(const FSocketHandle Socket) noexcept
 		if (Error == WSAEMSGSIZE)
 		{
 			// Datagram exceeds even the scratch; signal "does not fit" for the driver's single decision site.
-			return FPeekProbe{EPeekStatus::Ready, PeekScratchBytes + 1};
+			return FPeekProbe{EPeekStatus::Ready, OversizeDatagramSentinelBytes};
 		}
 		return FPeekProbe{EPeekStatus::Error, 0};
 	}
@@ -414,6 +417,7 @@ inline bool WaitForReadable(const FSocketHandle Socket, const DurationMillisecon
 	timeval Timeout{};
 	Timeout.tv_sec = static_cast<long>(TimeoutMilliseconds / 1000u);
 	Timeout.tv_usec = static_cast<long>((TimeoutMilliseconds % 1000u) * 1000u);
+	// POSIX select() nfds is the highest descriptor number plus one.
 	const int Ready = select(static_cast<int>(Socket + 1), &ReadSet, nullptr, nullptr, &Timeout);
 	return Ready > 0;
 }

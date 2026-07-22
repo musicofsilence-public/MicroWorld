@@ -356,6 +356,7 @@ inline bool WaitForReadable(const FSocketHandle Socket, const DurationMillisecon
 	timeval Timeout{};
 	Timeout.tv_sec = static_cast<long>(TimeoutMilliseconds / 1000u);
 	Timeout.tv_usec = static_cast<long>((TimeoutMilliseconds % 1000u) * 1000u);
+	// POSIX select() nfds is the highest descriptor number plus one.
 	const int Ready = select(Socket + 1, &ReadSet, nullptr, nullptr, &Timeout);
 	return Ready > 0;
 }

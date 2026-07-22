@@ -55,7 +55,7 @@ ENetResult FEsp32E32LoraDriver::TrySend(const FNetAddress& To, TSpan<const std::
 	{
 		return ENetResult::Invalid;
 	}
-	// Encode the full frame into a stack buffer; the codec is transactional on failure.
+	// The codec is transactional on failure.
 	std::uint8_t Frame[E32MaxPayloadBytes + FrameOverheadBytes];
 	std::size_t Written = 0;
 	const ENetResult EncodeResult = EncodeFrame(LocalNodeIdValue, Packet, TSpan<std::uint8_t>(Frame, sizeof(Frame)), Written);
@@ -120,7 +120,8 @@ ENetResult FEsp32E32LoraDriver::TryReceive(FNetAddress& OutFrom, TSpan<std::uint
 		const EFrameEvent Event = Decoder.PushByte(IncomingByte);
 		if (Event == EFrameEvent::FrameReady)
 		{
-			// Deliver the held frame into the caller's destination, honoring the transactional Full contract.
+			// Deliver the just-decoded frame; on Full the destination is untouched and
+			// the frame stays in the decoder for the next call (transactional Full).
 			const std::size_t HeldLength = Decoder.FramePayload().Size();
 			if (HeldLength > Capacity)
 			{

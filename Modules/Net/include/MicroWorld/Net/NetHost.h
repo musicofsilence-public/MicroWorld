@@ -433,6 +433,8 @@ private:
 			return 0;
 		}
 		const TimePointMilliseconds Delta = NowMilliseconds - PastMilliseconds;
+		// DurationMilliseconds is u32 (~49 days max), so clamp a wider gap to that
+		// ceiling instead of overflowing when it is narrowed.
 		constexpr TimePointMilliseconds MaxDuration = 0xFFFFFFFFu;
 		return Delta > MaxDuration ? static_cast<DurationMilliseconds>(MaxDuration) : static_cast<DurationMilliseconds>(Delta);
 	}
@@ -489,6 +491,9 @@ private:
 	{
 		FNetPeerSlot& Slot = Peers[Index];
 		Slot.bActive = false;
+		// Generation is u8, so it wraps after 256 evictions of this slot; a stale
+		// id from exactly 256 evictions ago would re-match -- an accepted,
+		// practically-unreachable window.
 		Slot.Generation = static_cast<std::uint8_t>(Slot.Generation + 1);
 		Slot.Address = FNetAddress{};
 	}

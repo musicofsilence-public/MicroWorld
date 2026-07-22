@@ -583,7 +583,7 @@ the old name and must be updated in the same task.
 
 ---
 
-### Phase 2 — Why-comment repairs 🟨
+### Phase 2 — Why-comment repairs ✅
 
 Goal: every comment answers *why*; every trap has its why written next to it.
 Pure comment/doc edits — zero code changes. Keep each new comment to 1-2
@@ -691,7 +691,7 @@ sentences.
   with a distinct subsystem-ownership why (it is not a store-slot object). Build
   clean; ctest 11/11; doc checker 122 files; numbered-narration grep gate 0.
 
-- [ ] **2.5 Net + Platform comments.**
+- [x] **2.5 Net + Platform comments.**
   - `FrameCodec.h:109` — delete the "Write magic, source node id, ..."
     narration (the why — CRC excludes the magic — is already at line 118).
   - `FrameCodec.h:137-143` — split the 40-word decoder-contract sentence into
@@ -719,6 +719,22 @@ sentences.
     with a why-comment, and return it instead of the bare `PeekScratchBytes + 1`.
 
   **Done when:** each listed site fixed; Standard Verify passes.
+
+  Done 2026-07-22 — all ten sites landed. Deleted the FrameCodec encode
+  narration; **tightened** the decoder-contract run-on to one clearer sentence
+  rather than splitting it — a literal two-sentence split would breach the
+  enforced 3-sentence contract cap (`CheckClassDocumentation.py` counts the
+  `@tparam` period, so sentence 1 + `@tparam` already fill two of three slots;
+  owner deferred the call, chose the tighten). Added the `MaxDuration` u32-clamp
+  why and the u8 generation-wrap window (NetHost); fixed the "IPv4 loopback" →
+  "IPv4 UDP" mislabel (host `UdpAddress.h`); replaced the consuming-read
+  narration with its why in both UDP drivers; corrected the LoRa "held frame" →
+  "just-decoded frame" comment with the transactional-`Full` invariant and
+  trimmed the encode narration; documented both `select()` nfds sites; and named
+  the oversize sentinel `OversizeDatagramSentinelBytes` — **the one
+  behavior-preserving code change** in this comment phase. A stray `@tparam`
+  period regression was caught and fixed mid-review. Build clean; ctest 11/11;
+  doc checker 122; all five grep gates 0, sentinel referenced 3×.
 
 ---
 
@@ -1237,7 +1253,7 @@ tests must pass unchanged.
 | --- | --- | --- | --- |
 | 0 | Baseline | 1 | ✅ |
 | 1 | Mechanical renames | 7 | ✅ |
-| 2 | Why-comment repairs | 5 | 🟨 |
+| 2 | Why-comment repairs | 5 | ✅ |
 | 3 | Decompose: Core & Memory | 4 | ⬜ |
 | 4 | Decompose: Object & GC | 3 | ⬜ |
 | 5 | Decompose: Engine | 4 | ⬜ |

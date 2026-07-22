@@ -8,7 +8,7 @@ namespace MicroWorld
 {
 
 /**
- * Encodes an IPv4 loopback endpoint into an opaque 6-byte `FNetAddress`.
+ * Encodes an IPv4 UDP endpoint into an opaque 6-byte `FNetAddress`.
  *
  * Bytes 0-3 hold the four IPv4 octets in dotted order and bytes 4-5 hold the
  * port in network byte order (high byte first), so one address spans the UDP
