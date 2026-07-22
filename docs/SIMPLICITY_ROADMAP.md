@@ -886,9 +886,9 @@ tests must pass unchanged.
 
 ---
 
-### Phase 4 — Function decomposition: Object & GC ⬜
+### Phase 4 — Function decomposition: Object & GC 🟨
 
-- [ ] **4.1 Split `FGarbageCollector::Advance` (the largest function in the
+- [x] **4.1 Split `FGarbageCollector::Advance` (the largest function in the
   repo).** `GarbageCollector.cpp:108-247` (~137 body lines, 6 actions,
   duplicated mid-loop abort checks).
   1. Add a private member `bool bWorklistOverflowed{false};` documented as:
@@ -910,6 +910,27 @@ tests must pass unchanged.
 
   **Done when:** `Advance` ≤ 30 body lines; each helper documented; all
   GarbageCollectorTests pass unchanged; Standard Verify passes.
+
+  Done 2026-07-22 — implemented by a **Sonnet subagent**, then reviewed and
+  re-verified by the lead. `Advance` is now validate → per-phase dispatch loop →
+  aggregate (~26 logical lines): `ValidateAdvancePreconditions` (const) +
+  `AdvanceSeedRootsPhase`/`AdvanceMarkPhase`/`AdvanceSweepPhase` (each returns a
+  bool "phase advanced" signal) + `FinalizeCompletedCycle` + `AccumulateOperations`
+  (static). The overloaded `CurrentPhase == Idle` mid-loop abort sentinel is
+  replaced by an explicit `bWorklistOverflowed` flag: `DiscoverReference` sets it
+  after its existing `ResetCycle()`, `ResetCycle` clears it, and the phase loop
+  reads it once after dispatch. **Roadmap correction (lead, §5.1):** the plan's
+  flag scheme leaked a stale `true` into the next cycle (the flag is set after
+  `ResetCycle` clears it, so it survives the aborted cycle); fixed by clearing
+  `bWorklistOverflowed` once at `Advance` entry after preconditions pass — so only
+  the current call's discovery can trip it. A single post-dispatch check replaces
+  the roadmap's "one per phase head" (same effect, simpler). Behavior-preserving:
+  every branch, counter, result code, and `ResetCycle` timing reproduced; build
+  clean, ctest 11/11 (GarbageCollectorTests in `microworld_object_tests` #8), doc
+  checker 122. Line-count: 26 logical (≤30); physical higher due to mandatory
+  braces, same accepted reading as Phase 3. CQS: the `Advance*Phase` helpers
+  mutate cursor/phase state and return a progress bool, matching the existing
+  `ResetCycle`/`CompleteCycle` non-strict-CQS precedent (not introduced here).
 
 - [ ] **4.2 Split `FObjectStore::DestroySlot` and `NewObject`; consolidate the
   generation rule.** `ObjectStore.cpp:263-317` (~52 lines) and
@@ -1317,7 +1338,7 @@ tests must pass unchanged.
 | 1 | Mechanical renames | 7 | ✅ |
 | 2 | Why-comment repairs | 5 | ✅ |
 | 3 | Decompose: Core & Memory | 4 | ✅ |
-| 4 | Decompose: Object & GC | 3 | ⬜ |
+| 4 | Decompose: Object & GC | 3 | 🟨 |
 | 5 | Decompose: Engine | 4 | ⬜ |
 | 6 | Decompose: Net & Platform | 6 | ⬜ |
 | 7 | Ceremony reduction | 3 | ⬜ |

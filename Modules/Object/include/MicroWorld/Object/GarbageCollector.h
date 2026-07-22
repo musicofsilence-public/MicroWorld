@@ -184,6 +184,24 @@ private:
 	/** Releases a normally swept cycle without adding unbudgeted slot work. */
 	void CompleteCycle() noexcept;
 
+	/** Rejects an Advance call whose lifecycle or store ownership is not ready. */
+	ERuntimeResult ValidateAdvancePreconditions() const noexcept;
+
+	/** Scans root-table entries into the worklist within the root budget. */
+	bool AdvanceSeedRootsPhase(const FGarbageCollectionBudget& Budget, FGarbageCollectionResult& Result) noexcept;
+
+	/** Drains reachable objects through their finite visitors within the mark budget. */
+	bool AdvanceMarkPhase(const FGarbageCollectionBudget& Budget, FGarbageCollectionResult& Result) noexcept;
+
+	/** Inspects object slots and reclaims unreachable objects within the sweep budget. */
+	bool AdvanceSweepPhase(const FGarbageCollectionBudget& Budget, FGarbageCollectionResult& Result) noexcept;
+
+	/** Returns the swept cycle to Idle and records its completion. */
+	void FinalizeCompletedCycle(FGarbageCollectionResult& Result) noexcept;
+
+	/** Folds the per-phase operation counts into the reported total. */
+	static void AccumulateOperations(FGarbageCollectionResult& Result) noexcept;
+
 	/** Identifies the fixed object store whose roots, marks, and slots are traversed. */
 	FObjectStore* ObjectStore{nullptr};
 
@@ -207,6 +225,10 @@ private:
 
 	/** Rejects recursive Advance calls from managed reference visitors. */
 	bool bAdvanceActive{false};
+
+	/** Set by DiscoverReference when the fixed worklist cannot take one more entry; Advance reads it at each phase head instead of re-deriving the
+	 * abort from CurrentPhase. */
+	bool bWorklistOverflowed{false};
 };
 
 } // namespace MicroWorld
