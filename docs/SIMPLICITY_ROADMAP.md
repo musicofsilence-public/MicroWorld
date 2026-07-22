@@ -783,7 +783,7 @@ tests must pass unchanged.
   `BeginResetSchedule`/`ProduceDueTick` intentionally mutate-and-return, mirroring
   the original branches verbatim.
 
-- [ ] **3.2 Split `TFixedArena::TryAllocate` and `Deallocate`.**
+- [x] **3.2 Split `TFixedArena::TryAllocate` and `Deallocate`.**
   `FixedArena.h:46-103` (~55 lines, 4 actions) and `:106-153` (~45 lines, 5+
   validations + mutation).
   1. Add `constexpr std::size_t AlignSizeUp(std::size_t SizeBytes, std::size_t AlignmentBytes)`
@@ -798,6 +798,22 @@ tests must pass unchanged.
 
   **Done when:** both parents ≤ 15 body lines; helpers documented; Standard
   Verify passes (MemoryTests exercise every failure path).
+
+  Done 2026-07-22 — implemented by a **Sonnet subagent**, then reviewed and
+  re-verified by the lead. `TryAllocate` → `ValidateAllocationRequest` /
+  `FindAlignedFreeRange` (the aligned first-fit scan, alignment gated at
+  `(Offset & (AlignmentBytes - 1U)) == 0`) / `CommitAllocation`; `Deallocate` →
+  `LocateOwnedAllocation` / `ValidateExactBlockBoundaries` / `ReleaseMarkedRange`,
+  with the `UsedSizeBytes < Block.SizeBytes` guard kept in the parent to preserve
+  the original check order. Added `constexpr AlignSizeUp` to `MemoryResource.h`
+  for task 3.3 (currently unreferenced — a deliberate one-task-ahead seam, not
+  wired into the arena; `StorageBegin`'s own pointer-alignment left untouched).
+  Behavior-preserving — every branch and marker read/write order reproduced;
+  build clean, ctest 11/11 (MemoryTests unchanged), doc checker 122. Line-count
+  note: parents are 7 and 9 logical lines (≤15); Deallocate is 18 physical only
+  because house style braces every guard, same accepted reading as task 3.1. CQS:
+  validators/finders are pure queries, `CommitAllocation`/`ReleaseMarkedRange`
+  are commands — the split the task specified.
 
 - [ ] **3.3 Split `MakeShared` and `TSharedPtr::Reset`.**
   `SharedPtr.h:469-504` (~32 lines) and `:190-216` (~24 lines, 3

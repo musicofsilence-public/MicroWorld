@@ -32,6 +32,16 @@ struct FMemoryBlock
 	std::size_t SizeBytes{0};
 };
 
+/**
+ * Rounds a byte size up to the next multiple of a power-of-two alignment so a
+ * value placed at the result begins on its own aligned boundary. AlignmentBytes
+ * must be a power of two.
+ */
+constexpr std::size_t AlignSizeUp(const std::size_t SizeBytes, const std::size_t AlignmentBytes) noexcept
+{
+	return (SizeBytes + AlignmentBytes - 1U) & ~(AlignmentBytes - 1U);
+}
+
 /** Defines explicit allocation over caller-selected storage with no fallback. */
 class IMemoryResource
 {

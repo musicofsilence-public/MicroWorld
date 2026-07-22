@@ -50,7 +50,53 @@ public:
 	EMemoryResult TryAllocate(const std::size_t SizeBytes, const std::size_t AlignmentBytes, FMemoryBlock& OutBlock) noexcept override
 	{
 		OutBlock = {};
+		const EMemoryResult RequestResult = ValidateAllocationRequest(SizeBytes, AlignmentBytes);
+		if (RequestResult != EMemoryResult::Success)
+		{
+			return RequestResult;
+		}
+		std::size_t StartOffset = 0;
+		if (!FindAlignedFreeRange(SizeBytes, AlignmentBytes, StartOffset))
+		{
+			return EMemoryResult::OutOfMemory;
+		}
+		CommitAllocation(StartOffset, SizeBytes, OutBlock);
+		return EMemoryResult::Success;
+	}
 
+	/** Releases only an exact active range belonging to this arena. */
+	EMemoryResult Deallocate(const FMemoryBlock Block) noexcept override
+	{
+		std::size_t AllocationStart = 0;
+		std::size_t AllocationEnd = 0;
+		const EMemoryResult LocateResult = LocateOwnedAllocation(Block, AllocationStart, AllocationEnd);
+		if (LocateResult != EMemoryResult::Success)
+		{
+			return LocateResult;
+		}
+		const EMemoryResult BoundaryResult = ValidateExactBlockBoundaries(AllocationStart, AllocationEnd);
+		if (BoundaryResult != EMemoryResult::Success)
+		{
+			return BoundaryResult;
+		}
+		if (UsedSizeBytes < Block.SizeBytes)
+		{
+			return EMemoryResult::InvalidBlock;
+		}
+		ReleaseMarkedRange(AllocationStart, AllocationEnd, Block.SizeBytes);
+		return EMemoryResult::Success;
+	}
+
+	/** Reports the compile-time caller-usable capacity without marker storage. */
+	std::size_t CapacityBytes() const noexcept override { return StorageCapacityBytes; }
+
+	/** Reports the exact payload bytes retained by active allocations. */
+	std::size_t UsedBytes() const noexcept override { return UsedSizeBytes; }
+
+private:
+	/** Rejects an unsupported alignment or a size that cannot fit the remaining capacity. */
+	EMemoryResult ValidateAllocationRequest(const std::size_t SizeBytes, const std::size_t AlignmentBytes) const noexcept
+	{
 		if (!IsSupportedAlignment(AlignmentBytes))
 		{
 			return EMemoryResult::UnsupportedAlignment;
@@ -59,22 +105,21 @@ public:
 		{
 			return EMemoryResult::OutOfMemory;
 		}
+		return EMemoryResult::Success;
+	}
 
+	/** Scans for the first aligned run of SizeBytes free bytes and reports its start offset. */
+	bool FindAlignedFreeRange(const std::size_t SizeBytes, const std::size_t AlignmentBytes, std::size_t& OutStartOffset) const noexcept
+	{
 		bool bInsideAllocation = false;
 		std::size_t FreeRangeStart = 0;
 		std::size_t FreeRangeSize = 0;
-
-		// First-fit scan: a start marker opens an occupied span and an end marker
-		// closes it, so a byte is free only when it lies outside every span. Grow
-		// the first aligned free run until it reaches SizeBytes, then claim it by
-		// marking its first and last bytes.
 		for (std::size_t Offset = 0; Offset < StorageCapacityBytes; ++Offset)
 		{
 			if (ReadMarker(AllocationStartMarkers, Offset))
 			{
 				bInsideAllocation = true;
 			}
-
 			if (bInsideAllocation)
 			{
 				FreeRangeSize = 0;
@@ -88,57 +133,62 @@ public:
 				FreeRangeStart = Offset;
 				FreeRangeSize = 1;
 			}
-
 			if (FreeRangeSize == SizeBytes)
 			{
-				const std::size_t AllocationEnd = FreeRangeStart + SizeBytes - 1U;
-				WriteMarker(AllocationStartMarkers, FreeRangeStart, true);
-				WriteMarker(AllocationEndMarkers, AllocationEnd, true);
-				UsedSizeBytes += SizeBytes;
-
-				OutBlock.Address = static_cast<void*>(StorageBegin() + FreeRangeStart);
-				OutBlock.SizeBytes = SizeBytes;
-				return EMemoryResult::Success;
+				OutStartOffset = FreeRangeStart;
+				return true;
 			}
-
 			if (ReadMarker(AllocationEndMarkers, Offset))
 			{
 				bInsideAllocation = false;
 			}
 		}
-
-		return EMemoryResult::OutOfMemory;
+		return false;
 	}
 
-	/** Releases only an exact active range belonging to this arena. */
-	EMemoryResult Deallocate(const FMemoryBlock Block) noexcept override
+	/** Marks the found range as one allocation and hands its address back to the caller. */
+	void CommitAllocation(const std::size_t StartOffset, const std::size_t SizeBytes, FMemoryBlock& OutBlock) noexcept
+	{
+		const std::size_t AllocationEnd = StartOffset + SizeBytes - 1U;
+		WriteMarker(AllocationStartMarkers, StartOffset, true);
+		WriteMarker(AllocationEndMarkers, AllocationEnd, true);
+		UsedSizeBytes += SizeBytes;
+		OutBlock.Address = static_cast<void*>(StorageBegin() + StartOffset);
+		OutBlock.SizeBytes = SizeBytes;
+	}
+
+	/** Maps a block back to its owned byte range, rejecting anything not exactly allocated here. */
+	EMemoryResult LocateOwnedAllocation(const FMemoryBlock Block, std::size_t& OutStart, std::size_t& OutEnd) noexcept
 	{
 		if (Block.Address == nullptr || Block.SizeBytes == 0)
 		{
 			return EMemoryResult::InvalidBlock;
 		}
-
 		const std::uintptr_t StorageAddress = reinterpret_cast<std::uintptr_t>(StorageBegin());
 		const std::uintptr_t StorageEndAddress = reinterpret_cast<std::uintptr_t>(StorageBegin() + StorageCapacityBytes);
 		const std::uintptr_t BlockAddress = reinterpret_cast<std::uintptr_t>(Block.Address);
-
 		if (BlockAddress < StorageAddress || BlockAddress >= StorageEndAddress)
 		{
 			return EMemoryResult::InvalidBlock;
 		}
-
 		const std::size_t AllocationStart = static_cast<std::size_t>(BlockAddress - StorageAddress);
 		if (Block.SizeBytes > StorageCapacityBytes - AllocationStart)
 		{
 			return EMemoryResult::InvalidBlock;
 		}
-
 		const std::size_t AllocationEnd = AllocationStart + Block.SizeBytes - 1U;
 		if (!ReadMarker(AllocationStartMarkers, AllocationStart) || !ReadMarker(AllocationEndMarkers, AllocationEnd))
 		{
 			return EMemoryResult::InvalidBlock;
 		}
+		OutStart = AllocationStart;
+		OutEnd = AllocationEnd;
+		return EMemoryResult::Success;
+	}
 
+	/** Confirms no other allocation boundary falls inside the block's byte range. */
+	EMemoryResult ValidateExactBlockBoundaries(const std::size_t AllocationStart, const std::size_t AllocationEnd) const noexcept
+	{
 		for (std::size_t Offset = AllocationStart; Offset <= AllocationEnd; ++Offset)
 		{
 			const bool bUnexpectedStart = Offset != AllocationStart && ReadMarker(AllocationStartMarkers, Offset);
@@ -148,25 +198,17 @@ public:
 				return EMemoryResult::InvalidBlock;
 			}
 		}
-
-		if (UsedSizeBytes < Block.SizeBytes)
-		{
-			return EMemoryResult::InvalidBlock;
-		}
-
-		WriteMarker(AllocationStartMarkers, AllocationStart, false);
-		WriteMarker(AllocationEndMarkers, AllocationEnd, false);
-		UsedSizeBytes -= Block.SizeBytes;
 		return EMemoryResult::Success;
 	}
 
-	/** Reports the compile-time caller-usable capacity without marker storage. */
-	std::size_t CapacityBytes() const noexcept override { return StorageCapacityBytes; }
+	/** Clears the block's boundary markers and returns its bytes to the free pool. */
+	void ReleaseMarkedRange(const std::size_t AllocationStart, const std::size_t AllocationEnd, const std::size_t SizeBytes) noexcept
+	{
+		WriteMarker(AllocationStartMarkers, AllocationStart, false);
+		WriteMarker(AllocationEndMarkers, AllocationEnd, false);
+		UsedSizeBytes -= SizeBytes;
+	}
 
-	/** Reports the exact payload bytes retained by active allocations. */
-	std::size_t UsedBytes() const noexcept override { return UsedSizeBytes; }
-
-private:
 	/** Packs one allocation-boundary bit per usable byte into bounded metadata. */
 	static constexpr std::size_t MarkerStorageBytes = (StorageCapacityBytes + 7U) / 8U;
 
