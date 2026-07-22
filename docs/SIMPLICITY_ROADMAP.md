@@ -815,7 +815,7 @@ tests must pass unchanged.
   validators/finders are pure queries, `CommitAllocation`/`ReleaseMarkedRange`
   are commands — the split the task specified.
 
-- [ ] **3.3 Split `MakeShared` and `TSharedPtr::Reset`.**
+- [x] **3.3 Split `MakeShared` and `TSharedPtr::Reset`.**
   `SharedPtr.h:469-504` (~32 lines) and `:190-216` (~24 lines, 3
   responsibilities).
   1. Extract the layout arithmetic into a documented
@@ -831,6 +831,21 @@ tests must pass unchanged.
 
   **Done when:** parents read as named steps; the self-observer regression
   test (`MemoryTests.cpp:558`) still passes; Standard Verify passes.
+
+  Done 2026-07-22 — implemented by a **Sonnet subagent**, then reviewed and
+  re-verified by the lead. Extracted `Detail::TSharedAllocationLayout` (the
+  alignment/offset/size arithmetic + the two overflow `static_asserts`, offset now
+  via `AlignSizeUp` from task 3.2 — byte-identical to the old inline `& ~(align-1)`
+  form) and `Detail::ConstructSharedBlock`; `MakeShared` is now compute-layout →
+  allocate → construct → wire, its four contract asserts unchanged. `Reset` →
+  `DestroyValueInPlace` / `ReclaimControlBlockIfUnreferenced` (private statics),
+  same guard order. Behavior-preserving; build clean, ctest 11/11 with the
+  self-observer regression (`MemoryTests.cpp:558`) green, doc checker 122.
+  Tooling note: plain `clang-format -i` does NOT discover the repo's dot-less
+  `clang-format` config and silently falls back to LLVM style; the correct
+  invocation is `-style=file:"<repo>/clang-format"`. The `microworld_format_check`
+  ctest (#1) is the authoritative gate and passed, so all Phase 3 commits are
+  house-formatted regardless.
 
 - [ ] **3.4 Group the delegate machinery.** `Delegate.h`.
   1. Group the three erased function pointers (`FInvokeFunction`,

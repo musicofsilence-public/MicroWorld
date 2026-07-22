@@ -128,6 +128,43 @@ namespace Detail
 		static_cast<void>(Resource->Deallocate(Allocation));
 	}
 
+	/**
+	 * Places the value immediately after its control block in one shared
+	 * allocation, each on its own aligned boundary. ValueOffsetBytes rounds the
+	 * control-block size up to the value's alignment so the value starts aligned.
+	 */
+	template<typename ValueType>
+	struct TSharedAllocationLayout final
+	{
+		using FControlBlock = TSharedControlBlock<ValueType>;
+		static constexpr std::size_t CombinedAlignmentBytes = alignof(FControlBlock) > alignof(ValueType) ? alignof(FControlBlock)
+																										  : alignof(ValueType);
+		static_assert(
+			sizeof(FControlBlock) <= std::numeric_limits<std::size_t>::max() - (alignof(ValueType) - 1U),
+			"Shared layout padding must fit in size_t.");
+		static constexpr std::size_t ValueOffsetBytes = AlignSizeUp(sizeof(FControlBlock), alignof(ValueType));
+		static_assert(ValueOffsetBytes <= std::numeric_limits<std::size_t>::max() - sizeof(ValueType), "Shared allocation size must fit in size_t.");
+		static constexpr std::size_t CombinedSizeBytes = ValueOffsetBytes + sizeof(ValueType);
+	};
+
+	/** Constructs the control block and value in one allocation and links the block to its resource. */
+	template<typename ValueType, typename... ConstructorArgumentTypes>
+	TSharedControlBlock<ValueType>* ConstructSharedBlock(
+		IMemoryResource& Resource,
+		const FMemoryBlock Allocation,
+		const std::size_t ValueOffsetBytes,
+		ConstructorArgumentTypes&&... Arguments) noexcept
+	{
+		using FControlBlock = TSharedControlBlock<ValueType>;
+		std::byte* const AllocationBytes = static_cast<std::byte*>(Allocation.Address);
+		FControlBlock* const ControlBlock = ::new (AllocationBytes) FControlBlock{};
+		ValueType* const Value = ::new (AllocationBytes + ValueOffsetBytes) ValueType(std::forward<ConstructorArgumentTypes>(Arguments)...);
+		ControlBlock->Resource = &Resource;
+		ControlBlock->Allocation = Allocation;
+		ControlBlock->Value = Value;
+		return ControlBlock;
+	}
+
 } // namespace Detail
 
 /**
@@ -199,26 +236,15 @@ public:
 		{
 			return;
 		}
-
 		FControlBlock* const ReleasedControlBlock = ControlBlock;
 		ControlBlock = nullptr;
 		--ReleasedControlBlock->StrongReferenceCount;
-
 		if (ReleasedControlBlock->StrongReferenceCount != 0)
 		{
 			return;
 		}
-
-		ValueType* const Value = ReleasedControlBlock->Value;
-		ReleasedControlBlock->Value = nullptr;
-		ReleasedControlBlock->bValueDestructionInProgress = true;
-		Value->~ValueType();
-		ReleasedControlBlock->bValueDestructionInProgress = false;
-
-		if (ReleasedControlBlock->WeakReferenceCount == 0)
-		{
-			Detail::DestroySharedControlBlock(ReleasedControlBlock);
-		}
+		DestroyValueInPlace(ReleasedControlBlock);
+		ReclaimControlBlockIfUnreferenced(ReleasedControlBlock);
 	}
 
 	/** Reports the current strong count for diagnostics and boundary tests. */
@@ -246,6 +272,25 @@ private:
 	/** Lets the factory create the first strong owner without exposing raw adoption. */
 	template<typename FactoryValueType, ESharedPointerMode PointerMode, typename... FactoryConstructorArgumentTypes>
 	friend TSharedPointerResult<FactoryValueType, PointerMode> MakeShared(IMemoryResource&, FactoryConstructorArgumentTypes&&...) noexcept;
+
+	/** Destroys the owned value in place while blocking weak-side reclamation mid-teardown. */
+	static void DestroyValueInPlace(FControlBlock* const ReleasedControlBlock) noexcept
+	{
+		ValueType* const Value = ReleasedControlBlock->Value;
+		ReleasedControlBlock->Value = nullptr;
+		ReleasedControlBlock->bValueDestructionInProgress = true;
+		Value->~ValueType();
+		ReleasedControlBlock->bValueDestructionInProgress = false;
+	}
+
+	/** Frees the control block once no strong or weak handle can still observe it. */
+	static void ReclaimControlBlockIfUnreferenced(FControlBlock* const ReleasedControlBlock) noexcept
+	{
+		if (ReleasedControlBlock->WeakReferenceCount == 0)
+		{
+			Detail::DestroySharedControlBlock(ReleasedControlBlock);
+		}
+	}
 
 	/** Retains the allocation while this handle contributes one strong count. */
 	FControlBlock* ControlBlock{nullptr};
@@ -480,19 +525,10 @@ TSharedPointerResult<ValueType, Mode> MakeShared(IMemoryResource& Resource, Cons
 	static_assert(std::is_nothrow_constructible<ValueType, ConstructorArgumentTypes...>::value, "MakeShared requires noexcept construction.");
 	static_assert(std::is_nothrow_destructible<ValueType>::value, "MakeShared requires noexcept destruction.");
 
-	using FControlBlock = Detail::TSharedControlBlock<ValueType>;
-	constexpr std::size_t CombinedAlignment = alignof(FControlBlock) > alignof(ValueType) ? alignof(FControlBlock) : alignof(ValueType);
-	static_assert(
-		sizeof(FControlBlock) <= std::numeric_limits<std::size_t>::max() - (alignof(ValueType) - 1U), "Shared layout padding must fit in size_t.");
-	// Round the control-block size up to the value's alignment so the value
-	// starts on its own aligned boundary in the single shared allocation,
-	// immediately after the control block.
-	constexpr std::size_t ValueOffset = (sizeof(FControlBlock) + alignof(ValueType) - 1U) & ~(alignof(ValueType) - 1U);
-	static_assert(ValueOffset <= std::numeric_limits<std::size_t>::max() - sizeof(ValueType), "Shared allocation size must fit in size_t.");
-	constexpr std::size_t CombinedSize = ValueOffset + sizeof(ValueType);
+	using FLayout = Detail::TSharedAllocationLayout<ValueType>;
 
 	FMemoryBlock Allocation{};
-	const EMemoryResult AllocationResult = Resource.TryAllocate(CombinedSize, CombinedAlignment, Allocation);
+	const EMemoryResult AllocationResult = Resource.TryAllocate(FLayout::CombinedSizeBytes, FLayout::CombinedAlignmentBytes, Allocation);
 	if (AllocationResult != EMemoryResult::Success)
 	{
 		TSharedPointerResult<ValueType, Mode> FailedResult{};
@@ -500,12 +536,8 @@ TSharedPointerResult<ValueType, Mode> MakeShared(IMemoryResource& Resource, Cons
 		return FailedResult;
 	}
 
-	std::byte* const AllocationBytes = static_cast<std::byte*>(Allocation.Address);
-	FControlBlock* const ControlBlock = ::new (AllocationBytes) FControlBlock{};
-	ValueType* const Value = ::new (AllocationBytes + ValueOffset) ValueType(std::forward<ConstructorArgumentTypes>(Arguments)...);
-	ControlBlock->Resource = &Resource;
-	ControlBlock->Allocation = Allocation;
-	ControlBlock->Value = Value;
+	Detail::TSharedControlBlock<ValueType>* const ControlBlock = Detail::ConstructSharedBlock<ValueType>(
+		Resource, Allocation, FLayout::ValueOffsetBytes, std::forward<ConstructorArgumentTypes>(Arguments)...);
 
 	TSharedPointerResult<ValueType, Mode> SuccessfulResult{};
 	SuccessfulResult.Result = ESharedPointerResult::Success;
