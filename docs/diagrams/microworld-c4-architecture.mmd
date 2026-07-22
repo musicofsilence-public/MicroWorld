@@ -1,0 +1,83 @@
+---
+title: MicroWorld Architecture — C4 Container View
+---
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "fontFamily": "Segoe UI, Arial, sans-serif",
+    "primaryTextColor": "#172033",
+    "lineColor": "#52627a",
+    "clusterBkg": "#f7f9fc",
+    "clusterBorder": "#a7b4c8",
+    "edgeLabelBackground": "#ffffff"
+  },
+  "flowchart": {
+    "htmlLabels": true,
+    "curve": "basis",
+    "nodeSpacing": 48,
+    "rankSpacing": 64
+  }
+}}%%
+flowchart TB
+    DEV["<b>UE5 / Embedded Developer</b><br/><small>Builds bounded MCU applications<br/>with familiar engine concepts</small>"]
+
+    subgraph DEVICE["Microcontroller Application"]
+        direction TB
+
+        APP["<b>Application Composition Root</b><br/><small>[Application]<br/>Owns fixed storage, the World root,<br/>time, policy, and hardware adapters</small>"]
+
+        subgraph MW["MicroWorld Portable Runtime — C++17"]
+            direction LR
+            ENGINE["<b>MicroWorld Engine</b><br/><small>[Container]<br/>UWorld · AActor · UActorComponent<br/>Lifecycle · tick · weak parents</small>"]
+            NET["<b>Net</b><br/><small>[Container]<br/>Byte reader/writer · INetDriver<br/>FNetManager · host loopback</small>"]
+            OBJECT["<b>Object / GC</b><br/><small>[Container]<br/>UObject · descriptors · handles<br/>roots · bounded incremental GC</small>"]
+            MEMORY["<b>Memory</b><br/><small>[Container]<br/>Fixed arenas · ownership helpers<br/>bounded containers · delegates</small>"]
+            CORE["<b>Core</b><br/><small>[Container]<br/>Typed results · lifecycle · tick<br/>caller-supplied monotonic time</small>"]
+
+            ENGINE -->|"uses managed objects"| OBJECT
+            NET -->|"uses spans and storage"| MEMORY
+            OBJECT -->|"uses fixed storage"| MEMORY
+            MEMORY -->|"uses runtime primitives"| CORE
+        end
+
+        ADAPTERS["<b>Application Hardware Adapters</b><br/><small>[Application code]<br/>GPIO · UART · radio · display<br/>kept outside the portable runtime</small>"]
+
+        APP -->|"creates, roots, and advances"| ENGINE
+        APP -->|"provides time and capacity"| CORE
+        APP -->|"owns concrete adapters"| ADAPTERS
+    end
+
+    SDK["<b>Platform SDK / HAL</b><br/><small>[External system]<br/>ESP-IDF · STM32 HAL · Pico SDK</small>"]
+    MCU["<b>Microcontroller Hardware</b><br/><small>[External system]<br/>ESP32 · STM32 · RP2040 · similar MCUs</small>"]
+
+    DEV -->|"develops"| APP
+    ADAPTERS -->|"calls"| SDK
+    SDK -->|"controls"| MCU
+
+    PORTABLE["<b>Portable boundary</b><br/><small>No hidden clock, threads, SDK calls,<br/>exceptions, RTTI, or steady-state allocation</small>"]
+    MW -. "constrained by" .-> PORTABLE
+
+    classDef person fill:#152238,stroke:#152238,color:#ffffff,stroke-width:2px;
+    classDef application fill:#fff4d6,stroke:#d99b22,color:#38260a,stroke-width:2px;
+    classDef engine fill:#dff7ea,stroke:#16875b,color:#113c2d,stroke-width:2px;
+    classDef object fill:#e7f0ff,stroke:#3b72c4,color:#17365f,stroke-width:2px;
+    classDef memory fill:#eee9ff,stroke:#7454c8,color:#342363,stroke-width:2px;
+    classDef net fill:#e8fff4,stroke:#2f9e6b,color:#1a4d33,stroke-width:2px;
+    classDef core fill:#e5f7fb,stroke:#278ca3,color:#173f49,stroke-width:2px;
+    classDef adapter fill:#fff0e5,stroke:#c86b2d,color:#5b2b0e,stroke-width:2px;
+    classDef external fill:#eef1f5,stroke:#66758a,color:#263241,stroke-width:2px;
+    classDef note fill:#ffffff,stroke:#8a98aa,color:#334155,stroke-width:1.5px,stroke-dasharray: 5 4;
+
+    class DEV person;
+    class APP application;
+    class ENGINE engine;
+    class NET net;
+    class OBJECT object;
+    class MEMORY memory;
+    class CORE core;
+    class ADAPTERS adapter;
+    class SDK,MCU external;
+    class PORTABLE note;
+
+    style DEVICE fill:#ffffff,stroke:#607086,stroke-width:2px
+    style MW fill:#f8fbff,stroke:#355b88,stroke-width:2px

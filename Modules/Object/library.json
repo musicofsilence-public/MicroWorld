@@ -1,0 +1,19 @@
+{
+  "name": "MicroWorldObject",
+  "version": "0.2.0",
+  "description": "MicroWorld Object: bounded managed identity and collection for embedded applications",
+  "keywords": [
+    "embedded",
+    "object",
+    "gc",
+    "managed"
+  ],
+  "license": "MIT",
+  "frameworks": "*",
+  "platforms": "*",
+  "build": {
+    "includeDir": "include",
+    "srcDir": "src",
+    "libArchive": true
+  }
+}

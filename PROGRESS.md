@@ -1,0 +1,131 @@
+# MicroWorld Progress
+
+This is the live status record for MicroWorld. Headers and tests define current
+behavior; benchmark records contain measured facts.
+
+## Current state
+
+MicroWorld 0.2.0 is release-ready. All six roadmap phases are done: Core
+actor-model retirement, runtime spawn/destroy, the `TEngineHost` composition
+root with `MW_LOG`, networking with roles, real transports plus platform
+adapters, the two-node demo, and measured ESP32-S3 runtime margins. The
+composed runtime's margins were measured on physical ESP32-S3 hardware in
+Phase 6.2 (tick / GC-slice / net-pump / heap / stack — see the ESP32-S3
+results file); isolated per-package margins beyond that representative world
+remain unmeasured.
+
+| Package | State |
+| --- | --- |
+| Core | 0.2.0 — lifecycle and tick primitives |
+| Memory | 0.2.0 — implemented; isolated runtime margins unmeasured |
+| Object / GC | 0.2.0 — implemented; GC Advance-slice pause measured on ESP32-S3 (Phase 6.2): mean 25 µs/slice |
+| Engine (incl. bounded timers + runtime spawn/destroy + `TEngineHost`) | 0.2.0 — implemented; tick measured on ESP32-S3 (Phase 6.2): mean 73 µs (8 actors/16 components/8 timers) |
+| Net (byte I/O + `TNetHost` roles + `FrameCodec`) | 0.2.0 — implemented; no-traffic pump overhead measured on ESP32-S3 (Phase 6.2): mean 47 µs |
+| platform-host (host UDP) | 0.2.0 — non-portable adapter; ships the two-node demo |
+| platform-esp32 (UDP + E32 LoRa + log sink + time source) | 0.2.0 — non-portable adapter; compile-only except for the Phase 6.2 benchmark run |
+
+## Visual roadmap
+
+![MicroWorld implementation journey](docs/diagrams/microworld-implementation-roadmap.svg)
+
+[Open the high-resolution PNG](docs/diagrams/microworld-implementation-roadmap.png)
+or inspect the
+[editable Mermaid source](docs/diagrams/microworld-implementation-roadmap.mmd).
+
+## Done
+
+- Core: deterministic lifecycle/tick scheduling primitives (`FApplication`,
+  `FTickFunction`, `FLifecycleGuard`, `FTickable`), typed results, and
+  caller-supplied time. The duplicate Core World/Actor/Component/Network model
+  was retired in the Phase 1 consolidation so the managed Engine is the sole
+  Actor model (see the Engine entry below).
+- Memory: explicit resources, fixed storage, ownership helpers, containers,
+  and delegates.
+- Object: generation-safe handles, descriptors, roots, fixed object storage,
+  and bounded incremental collection.
+- Engine: managed `UWorld`, `AActor`, and `UActorComponent`; fixed registration
+  before play; deterministic lifecycle and tick order; traced downward
+  ownership and weak parent links; explicit registration failures.
+- Engine timers: bounded `TTimerManager<MaxTimers, InlineCallbackBytes>` with
+  caller-supplied time, generation-checked handles local to the issuing
+  manager, one-shot and looping scheduling (every other mode rejected
+  transactionally), deterministic insertion-order dispatch with single-pass
+  post-dispatch compaction that preserves multiple survivors and appends
+  reused slots at the logical tail, cancellation, no catch-up bursts, and no
+  observable steady-state allocation.
+- Net: bounded `FByteWriter`/`FByteReader` over caller-owned `TSpan`, one
+  non-blocking `INetDriver` with one bounded `TrySend`/`TryReceive`, one
+  caller-storage-backed fixed-capacity `FNetManager<MaxPackets,
+  MaxPacketBytes>` over a caller-supplied `FNetPacketStorage` with a
+  deterministic outbound FIFO and one direct driver receive, normalized
+  `Success`/`Full`/`Invalid`/`Unavailable` results, safe rejection of invalid
+  `{nullptr, nonzero}` backing spans, transactional failure semantics, and a
+  deterministic `FHostLoopback` driver. Net depends only on Core and Memory.
+- Net roles & sessions (Phase 4): `FNetAddress` addressing with `INetDriver` v2
+  (`TrySend`/`TryReceive` carrying a peer address) over a multi-endpoint
+  `FHostLoopback`; `NetProtocol` wire framing
+  (`[Channel][Flags][PayloadBytes LE][Payload]`) with Hello/Welcome/Heartbeat/Bye
+  control messages; header-only `TNetHost<MaxPeers, MaxPacketBytes>` delivering the
+  dedicated/listen/client/standalone roles over a bounded peer table with
+  admission, heartbeats, timeout eviction, and generation-checked `FPeerId`,
+  tick-driven with no hidden clock or allocation; and `TEngineHost` composed with
+  net through an engine-owned `INetworkFrame` seam that keeps the production engine
+  net-free. The portable net layer still depends only on Core and Memory.
+
+## Next
+
+Phase 6.4 final acceptance is the only remaining roadmap line: all packages
+build + test on host, ESP32 images compile, the dependency/doc checkers pass,
+the two-node demo runs, and the roadmap tracker flips fully green. Phases 6.1
+(two-node demo), 6.2 (measured ESP32-S3 runtime margins), and 6.3 (this
+documentation release sweep + version bump to 0.2.0) are done. Phase 5
+platform adapters (host UDP, ESP32 UDP, and the E32 LoRa UART transport with
+its portable, host-tested `FrameCodec`) are complete and compile-only-verified
+except for the Phase 6.2 benchmark run; no UART traffic, radio, or firmware
+upload beyond that benchmark has been exercised. Hardware execution requires
+explicit authorization.
+
+## Later
+
+Retries, reliability, authentication, replication, additional boards beyond the
+ESP32-S3 target, and richer engine services enter only when a real application
+needs them.
+
+## Evidence
+
+| Area | Recorded evidence | Qualification |
+| --- | --- | --- |
+| Core | 31 behavior cases and 5 CTest checks | Released Core 0.1 evidence |
+| Memory | 27 cases, including paired Clang 20 ASan/UBSan | Candidate evidence; target margins unmeasured |
+| Object | 26 cases under MSVC Release, strict GCC 16, and paired Clang 20 ASan/UBSan | Candidate evidence; target margins unmeasured |
+| Object ESP32 image | 20,172 bytes RAM and 198,877 bytes flash | Compile-only complete-image evidence |
+| Minimal Engine | 21 lifecycle/registration/GC cases; four-package dependency check passed across 42 files | Accepted implementation candidate; target runtime margins unmeasured |
+| Simple Timers | 34 timer behavior cases including mixed stable compaction and tail reuse; explicit mode allowlist, single-pass Advance compaction, and steady-state zero-allocation dispatch; strict Engine consumer built with exceptions and RTTI disabled exited 0; timer TU compiled clean under strict GCC 16 and Clang 19 warnings | Accepted implementation candidate; target runtime margins unmeasured |
+| Engine ESP32 image | 20,332 / 327,680 bytes RAM (6.2%); 208,061 / 4,194,304 bytes flash (5.0%) | Compile-only complete-image evidence; +184 bytes flash from prior timer image |
+| Simple Net | 52 byte/loopback/manager behavior cases including invalid-backing-span safety, valid empty `{nullptr, 0}` reader reporting an empty suffix view without pointer arithmetic, host-loopback null-destination-before-empty-queue `Invalid` rejection with sentinel-verified transactional outputs, private caller-owned `FNetPacketStorage` observed only through the matching `FNetManager` specialization, normalized ENetResult semantics, recorded-packet FIFO order with differently sized and valued packets, exact head retention across driver Full/Unavailable/Invalid, recovery sending the retained head before later packets, caller-storage reuse across wraparound, transactional receive failures, and steady-state zero-allocation; strict Core+Memory+Net consumer built with exceptions and RTTI disabled exited 0; Net TU compiled clean under strict GCC 16 and Clang 19 warnings; dependency/profile checkers updated and self-tested | Accepted implementation candidate; target runtime margins unmeasured |
+| Net ESP32 image | 20,156 / 327,680 bytes RAM (6.2%); 196,773 / 4,194,304 bytes flash (4.7%) | Corrected-source compile-only complete-image evidence; clean retry passed after an earlier transient GCC 15.2.0 ICE in ESP-IDF vendor code |
+| Roadmap Phase 0 baseline (host, 2026-07-20) | Windows MinGW-w64 UCRT g++ 16.1.0 via Ninja: Core 5/5, Memory 1/1, and Object 1/1 CTest suites pass; Engine and Net test executables fail to build (MinGW-UCRT libstdc++ has no `std::aligned_alloc`; one `-Werror=unused-variable`), while all five production libraries compile | Baseline recorded per MICROWORLD_ROADMAP.md task 0.1; root and lib `AGENTS.md` now register the roadmap as plan/tracker (task 0.2). The Engine/Net test-support portability gap is tracked in the roadmap as a downstream blocker for Phases 2 and 4; no fix attempted (baseline is record-only) |
+| Roadmap Phase 1 consolidation (host, 2026-07-20) | Retired the duplicate Core actor model (`TWorld`/`TActor`/`FActorComponent`/`FNetwork`); the managed Engine `UWorld`/`AActor`/`UActorComponent` is the sole Actor model. GCC 16.1.0 via Ninja: `host-core` 5/5 and `host-eng` 1/1 CTest pass; the managed `HostLifecycle` example builds under `-fno-exceptions -fno-rtti` and prints its deterministic trace (exit 0); grep for `TWorld<`/`FActorBase`/`MicroWorld::FNetwork` over Core+Engine finds nothing; class-documentation (36 files) and Core dependency-boundary checkers pass; the retirement doc sweep leaves no doc presenting a retired type as current API. Core consumer probes retargeted to primitives and consolidated behind `CoreConsumerProbe.h` | Roadmap Phase 1 complete (tasks 1.1–1.4, per MICROWORLD_ROADMAP.md). Engine test-support `std::aligned_alloc` gap fixed for MinGW; the Net test-support copy remains a Phase 4 blocker. Strict `CheckFolderAgents.py` flags a pre-existing `docs/diagrams` guide gap unrelated to the retirement (roadmap section 6, proposed). ESP32 PlatformIO consumer builds not re-run here (Phase 5 gate) |
+| Roadmap Phase 2 runtime spawn & destroy (host, 2026-07-21) | Runtime `UWorld::SpawnActor`/`DestroyActor` (queue-only, validated per the section-5 table) applied at one deferred barrier `ApplyPending(now)` — destroys first (guarded end-cascade, then unguarded component+actor `MarkPendingDestroy` + stable `RemoveAt`), then spawns (register + begin under a fresh guard); `PendingSpawnCount`/`PendingDestroyCount` observers; pending-spawn actors traced by `VisitReferences`; bounded pending storage added to `FWorldActorRegistry`. Ergonomic `TInlineActor<N>`/`TInlineWorld<N>` (base-from-member inline registry). GCC 16.1.0 via Ninja: `host-eng` builds clean under `-Wall -Wextra -Wpedantic -Werror -fno-exceptions -fno-rtti`; CTest 1/1; runner 69 host cases, 0 failures (14 new across spawn/destroy + inline types); `HostLifecycle` example rewritten on inline types runs (exit 0) with the unchanged deterministic trace; `CheckClassDocumentation.py --root lib/microworld-engine` passes (24 files) | Roadmap Phase 2 complete (tasks 2.1–2.4, per MICROWORLD_ROADMAP.md); target runtime margins unmeasured. Resolved item for Phase 3 (roadmap section 6, 2026-07-21, option a): the object-store GC sweep skips pending-destroy slots, so destroyed actors are reclaimed by the store's `ApplyPendingDestroy` barrier, not GC mark/sweep — the section-4 frame order gained an explicit bounded reclamation slice before the GC slice, to be wired into `TEngineHost` in Phase 3.2. ESP32 image not re-measured here (Phase 5 gate) |
+| Roadmap Phase 3 composition root & logging (host, 2026-07-21) | Accepted implementation candidate; target runtime margins unmeasured. `MW_LOG` bounded logging facade (`lib/microworld/include/MicroWorld/Log.h` + `src/Log.cpp`, task 3.1). `TEngineHost` composition template wiring class registry, object store, garbage collector, world actor registry, and timer manager behind one canonical per-frame order — timers, world advance, pending spawn/destroy barrier, bounded `Store.ApplyPendingDestroy` reclamation slice, then idle-gated bounded GC slice — with a transactional non-monotonic-time guard (task 3.2). Five `TEngineHost` behavior cases in `lib/microworld-engine/tests/EngineHostTests.cpp` (lifecycle begin/tick/end order; timer-before-tick frame order; bounded GC reclamation of unrooted objects across ticks; transactional non-monotonic-time rejection; idempotent `EndPlay`), wired into `MICROWORLD_ENGINE_TEST_SOURCES`. `HostLifecycle` example rewritten on `TEngineHost` (the `FDeviceWorld`/`TInlineWorld` typedef and hand-rolled store/registry/world composition are gone); canonical lifecycle trace unchanged. Applied the 3.2 gap fix: public `TEngineHost::FindClass(FTypeId)` so user descriptors reference the registry's own parent copies and user types construct through them. GCC 16.1.0 via Ninja: `host-eng` builds clean under `-Wall -Wextra -Wpedantic -Werror -fno-exceptions -fno-rtti`; CTest 1/1; runner 74 host cases, 0 failures (5 new); `microworld_engine_host_lifecycle` prints the unchanged lifecycle trace and exits 0; `CheckClassDocumentation.py --root lib/microworld-engine` passes (24 files). Task 3.4 added `TEngineHost::RegisterClass<T>(FTypeId, const char*)` (derives the parent from `T`'s engine base, builds the descriptor with the shared managed tracer) and `CreateObject<T>(FTypeId, Args&&...)` (folds `FindClass` + `NewObject`; `UnknownClass` + null for an unregistered id), with two new host cases (helper-driven register/construct/lifecycle; unregistered-id rejection) and the `HostLifecycle` example simplified onto them (canonical trace byte-identical; `main()` 46 → 43 lines, register+construct section 18 → 7 lines); runner now 78 host cases, 0 failures (2 new) | Roadmap Phase 3 complete (tasks 3.1–3.4, per MICROWORLD_ROADMAP.md); target runtime margins unmeasured. Resolved item for Phase 3 (roadmap section 6, 2026-07-21, option a): `TEngineHost` exposed `RegisterClass` but no lookup, and the object store validates descriptor identity against the registry's own copy — added the minimal `FindClass` accessor rather than an auto-register-and-construct helper. ESP32 image not re-measured here (Phase 5 gate) |
+| Roadmap Phase 4 simple networking with roles (host, 2026-07-21) | Accepted implementation candidate; target runtime margins unmeasured. 4.1 `FNetAddress` (opaque bounded bytes) + `INetDriver` v2 addressed `TrySend`/`TryReceive` + multi-endpoint `FHostLoopback` shared-mailroom loopback. 4.2 `NetProtocol.h` wire framing `[u8 Channel][u8 Flags][u16 PayloadBytes LE][Payload]` with transactional `WriteMessage`/`ReadMessage` and Hello/Welcome/Heartbeat/Bye control messages. 4.3 header-only `TNetHost<MaxPeers, MaxPacketBytes>`: dedicated/listen/client/standalone roles, bounded peer table with Hello→Welcome admission and capacity rejection, heartbeat keepalive, timeout eviction, generation-checked `FPeerId` (stale ids fail after readmission), tick-driven `PumpReceive`/`PumpSend` (no hidden clock), channel-0 control handled internally and channels 1..255 to one bounded `TMulticastDelegate`, no hidden allocation; 18 behavioral cases over `FHostLoopback` including a flood-bounded-pump proof. 4.4 engine↔net composition without an `Engine → Net` dependency (forbidden by `CheckDependencyBoundaries.py`): engine-owned `Engine/NetworkFrame.h` (`INetworkFrame` `TickDispatch`/`TickFlush` mirroring UE5 `UNetDriver`, caller-side `TNetHostFrame<TNet>` adapter), a `TEngineHost` `INetworkFrame&` constructor overload with `Tick` steps 1 and 7 live and the seven-step order documented in `EngineHost.h`, and the concept-proof engine test where a client message spawns an actor in the server world driven only through `Tick`. GCC 16.1.0 via Ninja under `-Wall -Wextra -Wpedantic -Werror -fno-exceptions -fno-rtti`: Net suite `[SUMMARY] 93 tests, 0 failures` (CTest 1/1); Engine suite `[SUMMARY] 80 tests, 0 failures` (CTest 1/1, +2 for the net-composition cases); `CheckClassDocumentation.py` passes (Net 20 files, Engine 26 files); `CheckDependencyBoundaries.py` passes with Engine still net-free (3 packages, 33 files); `clang-format --style=file:clang-format --dry-run --Werror` exit 0 | Roadmap Phase 4 complete (tasks 4.1–4.4, per MICROWORLD_ROADMAP.md); target runtime margins unmeasured. Resolved for 4.4 (roadmap section 6): the engine may not depend on net, so `TNetHost` is bound through an engine-owned `INetworkFrame` seam rather than the literal `TNetHost&` parameter the task text sketched; production `microworld_engine` links no net (net is PRIVATE to the engine test target only). ESP32 image not re-measured here (Phase 5 gate) |
+| Roadmap Phase 5 platform adapters — host + ESP32 (host + ESP32 compile-only, 2026-07-21) | Accepted implementation candidates; target runtime margins unmeasured. 5.1 first non-portable platform package `microworld-platform-host` (`FHostTimeSource` steady_clock, `MakeUdpAddress`/`IsUdpAddress`/`UdpAddressPort` 6-byte IPv4+port encoding, refcounted `FWinSockScope`, `FHostUdpDriver final : INetDriver` non-blocking `SOCK_DGRAM` on 127.0.0.1 with a transactional sizing peek so `Full` leaves destination and queue untouched); OS socket headers confined to `src/UdpSocketGlue.h`. 5.2 second non-portable platform package `microworld-platform-esp32` (`FEsp32TimeSource` esp_timer, byte-identical duplicated UDP address encoding, `Esp32LogSink` `ELogLevel`→`ESP_LOG*`, `FEsp32UdpDriver final : INetDriver` non-blocking lwIP with the 5.1 peek fix ported and a `static_assert` tying `PeekScratchBytes` to `UdpMaxPacketBytes`); lwIP/ESP-IDF headers confined to `src/Esp32SocketGlue.h`; the `esp32-s3-platform` env adds `-Wno-error=pedantic` scoped to itself for ESP-IDF's `#include_next` extension. 5.3 E32 LoRa UART transport in two parts: **Part A** portable header-only `Net/FrameCodec.h` (`ComputeCrc16Ccitt` CRC-16/CCITT-FALSE poly 0x1021/init 0xFFFF/no reflection/xorout 0x0000, canonical check 0x29B1 asserted; transactional `EncodeFrame`; bounded `TFrameDecoder<MaxPayloadBytes>` state machine resyncing on bad magic/oversize length/CRC mismatch with the documented truncation non-guarantee; depends only on Core/Memory/std) + 9 host cases; **Part B** `LoraAddress.h` (1-byte broadcast LoRa `FNetAddress`), `Esp32E32LoraDriver.h` (`FEsp32E32LoraDriver final : INetDriver`, `E32MaxPayloadBytes==58`, held-by-value decoder, platform-free public header), `src/Esp32E32LoraDriver.cpp` (validate-then-syscall; bounded one-byte UART receive pump), `src/E32UartGlue.h` (SOLE home of `<driver/uart.h>`; `FUartPort=uart_port_t`; outcome enums; exact UART would-block/drain behavior documented as runtime-UNVERIFIED in the compile-only phase). GCC 16.1.0 via Ninja under `-Wall -Wextra -Wpedantic -Werror -fno-exceptions -fno-rtti`: 5.1 host suite `[SUMMARY] 7 tests, 0 failures`; Net suite at 5.3 `[SUMMARY] 102 tests, 0 failures` (+9 FrameCodec cases, CTest 1/1); `CheckClassDocumentation.py` passes (platform-host 9 files, platform-esp32 11 files, Net 22 files); `CheckDependencyBoundaries.py` passes with platform-host/platform-esp32 excluded by design (5 packages, 52 files); `clang-format --style=file:clang-format --dry-run --Werror` exit 0. Xtensa-ESP-ELF GCC 15.2.0: `esp32-s3-platform` `[SUCCESS]` with **RAM 21,804 / 327,680 bytes (6.7%)** and **Flash 309,921 / 4,194,304 bytes (7.4%)** (the LoRa driver adds +32 bytes RAM / +26,448 bytes flash over the 5.2 UDP-only image) | Roadmap Phase 5 complete (tasks 5.1–5.3, per MICROWORLD_ROADMAP.md); target runtime margins unmeasured (deferred to Phase 6.2). Resolved for 5.3 (roadmap section 6): the framing state machine is a PORTABLE Net class (host-tested off-target) with only the UART glue in the esp32 package; the LoRa addressing model is broadcast (frame carries SrcNodeId only, `To` validated but the wire is broadcast); the length-prefixed resync guarantee and its truncation non-guarantee are documented and tested. No UART traffic, radio, or firmware upload is exercised in this phase |
+| Roadmap Phase 6.2 runtime margins (ESP32-S3 hardware, 2026-07-21) | First physical-hardware run, under explicit human flash authorization. `esp32-s3-benchmark` image (release `-Os`; RAM 43,148 B / Flash 313,269 B) on a connected ESP32-S3 @ 160 MHz; representative world 8 actors / 16 components / 8 timers: tick min 62 / mean 73 / max 114 µs (1000 iterations, one full GC cycle per tick); GC Advance-slice min 21 / mean 25 / max 39 µs (budget `{root=1,mark=1,sweep=8}`, 4 slices/cycle over 32 slots); no-traffic net pump mean 47 µs; world-setup heap 580 B; main-task stack 2,476 B free after setup. Two runtime defects were fixed to enable the run, both invisible to the compile-only Part A proof: the harness never initialized the lwIP TCP/IP stack before opening a socket (added `esp_netif_init` + `esp_event_loop_create_default`), and the composition objects were stack locals that overflowed the 3,584 B main task stack (moved to static `.bss`) | Roadmap Phase 6.2 measurement complete, per MICROWORLD_ROADMAP.md §6.2. Net pump is no-traffic polling overhead only; on-the-wire per-datagram cost unmeasured. Timings at 160 MHz; single-run captures, not distributions |
+| Roadmap Phase 6.3 documentation release sweep + version bump (host, 2026-07-21) | Documentation-only sweep reflecting the shipped 0.2.0 reality, plus the version bump. `Version.h` `0.1.0` → `0.2.0`; package `project(... VERSION ...)` and `library.json` version fields bumped across Core/Memory/Object/Engine/Net/platform-host/platform-esp32; the four Core consumer probes' `Version.Minor` static_asserts moved to 2 so the host-core build still links. Doc updates: Core README title + "Next scope" rewritten around the shipped runtime (Engine, `TEngineHost`, Net roles, platform adapters, two-node demo, measured ESP32-S3 margins); Engine README corrected the "unmeasured margins" claim against the Phase 6.2 results file, added runtime Spawn/Destroy, promoted `TEngineHost` and its 7-step frame order, and fixed the false exclusion; Net README added `TNetHost`/`ENetMode` roles, `FNetAddress`, `FrameCodec`, and a "Real transports" section pointing at the platform adapters; `UE5ConceptMap.md` added Spawn/Destroy, composition-root, networking-roles, framing, and platform-adapter rows and dropped "dynamic spawn/destroy" from the not-shipped list; `Porting.md` rewritten as a one-page three-seam adapter guide (time source / net driver / log sink); `PROGRESS.md` set to 0.2.0 release-ready; `CHANGELOG.md` gained a `## 0.2.0 - 2026-07-21` entry; root `README.md` updated to 0.2.0. Added `lib/microworld/docs/diagrams/AGENTS.md` to close the pre-existing `CheckFolderAgents.py` gap. Verify gate (GCC 16.1.0 via Ninja): `CheckClassDocumentation.py`, `CheckFolderAgents.py`, `CheckDependencyBoundaries.py --self-test` + `--package Core=lib/microworld` pass; `clang-format --dry-run --Werror` on `Version.h` clean; `host-core` CTest 5/5 and `host-eng` CTest 1/1 pass | Roadmap Phase 6.3 complete, per MICROWORLD_ROADMAP.md §6.3. Documentation-only phase; no runtime/feature code changed except the version literal in `Version.h` and the version-tracking static_asserts in the Core consumer probes. During the checker run a pre-existing 4-sentence `FGcProbe` doc comment in the Phase 6.2 benchmark harness (`Esp32BenchmarkMain.cpp`) was trimmed to 3 sentences so `CheckClassDocumentation.py` passes — the only non-6.3 file touched. The 0.1.0 CHANGELOG history entry and the dated `benchmarks/Results/` evidence were left intact. Only Phase 6.4 (final acceptance) remains unchecked |
+
+No radio transmit or on-the-wire datagram has been exercised. Before Phase 6.2,
+no target upload, runtime timing, stack, heap, or physical-hardware claim had
+been recorded for Memory, Object, Engine, or Net; Phase 6.2 records the first
+such measurement (see the row above and the ESP32-S3 results file).
+
+- [Core host evidence](Modules/Core/benchmarks/Results/Host.md)
+- [Core ESP32 compile evidence](Modules/Core/benchmarks/Results/Esp32S3N16R8.md)
+- [Memory host evidence](Modules/Memory/benchmarks/Results/Host.md)
+- [Memory ESP32 compile evidence](Modules/Memory/benchmarks/Results/Esp32S3N16R8.md)
+- [Object host evidence](Modules/Object/benchmarks/Results/Host.md)
+- [Object ESP32 compile evidence](Modules/Object/benchmarks/Results/Esp32S3N16R8.md)
+- [Engine host evidence](Modules/Engine/benchmarks/Results/Host.md)
+- [Engine ESP32 compile evidence](Modules/Engine/benchmarks/Results/Esp32S3N16R8.md)
+- [Net host evidence](Modules/Net/benchmarks/Results/Host.md)
+- [Net ESP32 compile evidence](Modules/Net/benchmarks/Results/Esp32S3N16R8.md)
+- [Acceptance roadmap](../../.claude/plans/microworld-mini-engine-roadmap.md)

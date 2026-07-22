@@ -1,0 +1,75 @@
+BasedOnStyle: Microsoft
+Standard: Cpp11
+Language: Cpp
+StatementMacros: ['UPROPERTY', 'UFUNCTION', 'UCLASS', 'USTRUCT', 'UENUM', 'UINTERFACE', 'GENERATED_BODY']
+TabWidth: 4
+UseTab: Always
+SpaceBeforeCaseColon: 'false'
+AccessModifierOffset: -4
+AlignAfterOpenBracket: AlwaysBreak
+AlignOperands: DontAlign
+AlignTrailingComments: true
+AllowShortEnumsOnASingleLine: false
+AllowShortLambdasOnASingleLine: All
+BreakStringLiterals: false
+ConstructorInitializerAllOnOneLineOrOnePerLine: true
+EmptyLineBeforeAccessModifier: LogicalBlock
+IndentCaseBlocks: false
+AlignConsecutiveAssignments: 'false'
+AlignConsecutiveDeclarations: 'false'
+AlignEscapedNewlines: Left
+AllowShortBlocksOnASingleLine: 'Empty'
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: 'false'
+AlwaysBreakTemplateDeclarations: 'Yes'
+BinPackArguments: 'false'
+BinPackParameters: 'false'
+BreakBeforeBinaryOperators: NonAssignment
+BreakBeforeBraces: Allman
+BreakBeforeTernaryOperators: 'true'
+BreakConstructorInitializers: BeforeComma
+BreakInheritanceList: AfterColon
+ColumnLimit: 150
+Cpp11BracedListStyle: 'true'
+FixNamespaceComments: 'true'
+IncludeBlocks: Merge
+IndentCaseLabels: 'true'
+IndentPPDirectives: None
+IndentWrappedFunctionNames: 'false'
+MaxEmptyLinesToKeep: '1'
+PointerAlignment: Left
+SortIncludes: 'false'
+SpaceAfterCStyleCast: 'false'
+SpaceAfterLogicalNot: 'false'
+SpaceAfterTemplateKeyword: 'false'
+SpaceBeforeAssignmentOperators: 'true'
+SpaceBeforeCpp11BracedList: 'false'
+SpaceBeforeCtorInitializerColon: 'true'
+SpaceBeforeInheritanceColon: 'true'
+SpaceBeforeRangeBasedForLoopColon: 'true'
+SpaceInEmptyParentheses: 'false'
+SpacesInAngles: 'false'
+SpacesInCStyleCastParentheses: 'false'
+SpacesInContainerLiterals: 'false'
+SpacesInParentheses: 'false'
+SpacesInSquareBrackets: 'false'
+NamespaceIndentation: Inner
+IndentWidth: 4
+BraceWrapping:
+  AfterCaseLabel: true
+  AfterClass: true
+  AfterControlStatement: true
+  AfterEnum: true
+  AfterFunction: true
+  AfterNamespace: true
+  AfterObjCDeclaration: true
+  AfterStruct: true
+  AfterUnion: true
+  AfterExternBlock: true
+  BeforeCatch: true
+  BeforeElse: true
+  BeforeLambdaBody: false
+  BeforeWhile: true
+  IndentBraces: false
+SeparateDefinitionBlocks: Leave

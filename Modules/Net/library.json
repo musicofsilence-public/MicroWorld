@@ -1,0 +1,23 @@
+{
+  "name": "MicroWorldNet",
+  "version": "0.2.0",
+  "description": "MicroWorld Net: bounded non-blocking byte I/O for embedded applications",
+  "keywords": [
+    "embedded",
+    "network",
+    "loopback",
+    "bytebuffer"
+  ],
+  "license": "MIT",
+  "frameworks": "*",
+  "platforms": "*",
+  "build": {
+    "includeDir": "include",
+    "srcDir": "src",
+    "libArchive": true,
+    "flags": [
+      "-fno-exceptions",
+      "-fno-rtti"
+    ]
+  }
+}

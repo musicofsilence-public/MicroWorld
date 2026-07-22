@@ -1,0 +1,65 @@
+---
+title: MicroWorld Implementation Journey
+---
+%%{init: {
+  "theme": "base",
+  "themeVariables": {
+    "fontFamily": "Segoe UI, Arial, sans-serif",
+    "primaryTextColor": "#172033",
+    "lineColor": "#65758b",
+    "edgeLabelBackground": "#ffffff"
+  },
+  "flowchart": {
+    "htmlLabels": true,
+    "curve": "basis",
+    "nodeSpacing": 38,
+    "rankSpacing": 58
+  }
+}}%%
+flowchart TB
+    VISION["<b>VISION</b><br/><small>A simple, familiar,<br/>bounded mini engine<br/>for microcontrollers</small>"]
+
+    subgraph VERIFIED["DONE ·"]
+        direction LR
+        CORE["<b>1 · Core</b><br/><small><b>RELEASED 0.1</b><br/>Lifecycle · tick · typed results<br/>31 cases + 5 CTest checks</small>"]
+        MEMORY["<b>2 · Memory</b><br/><small><b>IMPLEMENTED CANDIDATE</b><br/>Fixed storage · smart pointers<br/>containers · delegates · 27 cases</small>"]
+        OBJECT["<b>3 · Object / GC</b><br/><small><b>IMPLEMENTED CANDIDATE</b><br/>UObject · handles · roots<br/>bounded incremental GC · 26 cases</small>"]
+        ENGINE["<b>4 · Minimal Engine</b><br/><small><b>ACCEPTED IMPLEMENTATION CANDIDATE</b><br/>UWorld · AActor · UActorComponent<br/>21 lifecycle/registration/GC cases</small>"]
+        TIMERS["<b>5 · Simple Timers</b><br/><small><b>ACCEPTED IMPLEMENTATION CANDIDATE</b><br/>Fixed capacity · mode allowlist<br/>single-pass compaction · 34 cases</small>"]
+        NET["<b>6 · Simple Net</b><br/><small><b>ACCEPTED IMPLEMENTATION CANDIDATE</b><br/>Byte I/O · INetDriver<br/>FNetManager · host loopback · 52 cases</small>"]
+
+        CORE --> MEMORY --> OBJECT --> ENGINE --> TIMERS
+        MEMORY --> NET
+    end
+
+    subgraph DELIVERY["NEXT ·"]
+        direction LR
+        EXAMPLE["<b>7 · ESP32-S3 Example</b><br/><small><b>PLANNED</b><br/>One deterministic demonstration<br/>compile first · hardware later</small>"]
+    end
+
+    VISION -->|"guides every decision"| CORE
+    NET -->|"next milestone"| EXAMPLE
+
+    ACCEPT["<b>Every milestone must stay:</b><br/><small>small · bounded · explicit · testable<br/>C++17 · no hidden allocation or platform policy</small>"]
+    ENGINE -. "quality boundary" .-> ACCEPT
+
+    LATER["<b>ONLY WHEN A REAL APPLICATION NEEDS IT</b><br/><small>dynamic spawning · richer timers · real transports<br/>serialization · security · replication · additional boards</small>"]
+    EXAMPLE -. "future evidence may justify" .-> LATER
+
+    classDef vision fill:#152238,stroke:#152238,color:#ffffff,stroke-width:2px;
+    classDef released fill:#dff7ea,stroke:#16875b,color:#113c2d,stroke-width:2px;
+    classDef candidate fill:#e6f4ff,stroke:#2878bd,color:#163a5c,stroke-width:2px;
+    classDef next fill:#fff1c7,stroke:#d18a00,color:#503200,stroke-width:3px;
+    classDef planned fill:#eef1f5,stroke:#77869a,color:#2b3645,stroke-width:2px;
+    classDef principle fill:#f5f0ff,stroke:#7655c7,color:#35245f,stroke-width:2px;
+    classDef later fill:#ffffff,stroke:#98a5b5,color:#405066,stroke-width:1.5px,stroke-dasharray: 6 4;
+
+    class VISION vision;
+    class CORE released;
+    class MEMORY,OBJECT,ENGINE,TIMERS,NET candidate;
+    class EXAMPLE next;
+    class ACCEPT principle;
+    class LATER later;
+
+    style VERIFIED fill:#f8fbff,stroke:#5f7898,stroke-width:2px
+    style DELIVERY fill:#fffaf0,stroke:#b78a32,stroke-width:2px
