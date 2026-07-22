@@ -152,4 +152,28 @@ private:
 	std::size_t WritePosition;
 };
 
+/**
+ * Writes a 16-bit value as two big-endian bytes (most significant byte first).
+ *
+ * @param Value 16-bit value to serialize.
+ * @param OutBytes Caller-owned destination for exactly two bytes.
+ */
+inline void WriteUint16BigEndian(const std::uint16_t Value, std::uint8_t* const OutBytes) noexcept
+{
+	OutBytes[0] = static_cast<std::uint8_t>(Value >> 8);
+	OutBytes[1] = static_cast<std::uint8_t>(Value & 0xFFu);
+}
+
+/**
+ * Writes a 16-bit value as two little-endian bytes (least significant byte first).
+ *
+ * @param Value 16-bit value to serialize.
+ * @param OutBytes Caller-owned destination for exactly two bytes.
+ */
+inline void WriteUint16LittleEndian(const std::uint16_t Value, std::uint8_t* const OutBytes) noexcept
+{
+	OutBytes[0] = static_cast<std::uint8_t>(Value & 0xFFu);
+	OutBytes[1] = static_cast<std::uint8_t>(Value >> 8);
+}
+
 } // namespace MicroWorld

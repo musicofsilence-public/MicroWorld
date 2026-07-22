@@ -1,6 +1,8 @@
 #pragma once
 
 #include <MicroWorld/Containers/Span.h>
+#include <MicroWorld/Net/ByteReader.h>
+#include <MicroWorld/Net/ByteWriter.h>
 #include <MicroWorld/Net/NetResult.h>
 
 #include <cstddef>
@@ -111,8 +113,8 @@ namespace Detail
 	{
 		OutFrame[0] = FrameMagicByte;
 		OutFrame[1] = SourceNodeId;
-		OutFrame[2] = static_cast<std::uint8_t>(PayloadSize >> 8);
-		OutFrame[3] = static_cast<std::uint8_t>(PayloadSize & 0xFFu);
+		// The frame length is big-endian (high byte first) so a LoRa packet sniffer shows it in on-air reading order (D6).
+		WriteUint16BigEndian(static_cast<std::uint16_t>(PayloadSize), &OutFrame[2]);
 	}
 
 	/** Copies the payload after the header, then appends the CRC-16 over the source id, length, and payload. */
@@ -304,8 +306,9 @@ private:
 	EFrameEvent CaptureLengthLowByte(const std::uint8_t Byte) noexcept
 	{
 		Detail::UpdateCrc16Byte(RunningCrc, Byte);
-		const std::uint16_t DeclaredLength =
-			static_cast<std::uint16_t>((static_cast<std::uint16_t>(PendingLengthHighByte) << 8) | static_cast<std::uint16_t>(Byte));
+		// The frame length is big-endian on the wire (high byte first) for LoRa sniffer readability (D6).
+		const std::uint8_t DeclaredLengthBytes[2] = {PendingLengthHighByte, Byte};
+		const std::uint16_t DeclaredLength = ReadUint16BigEndian(DeclaredLengthBytes);
 		PendingLength = DeclaredLength;
 		// A declared length above the capacity cannot be assembled; resync at the next magic.
 		if (DeclaredLength > MaxPayloadBytes)

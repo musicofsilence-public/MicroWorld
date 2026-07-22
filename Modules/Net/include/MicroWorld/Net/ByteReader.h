@@ -156,4 +156,26 @@ private:
 	std::size_t ReadPosition;
 };
 
+/**
+ * Reads two big-endian bytes (most significant byte first) as a 16-bit value.
+ *
+ * @param Bytes Caller-owned source of exactly two bytes.
+ * @return The decoded 16-bit value.
+ */
+inline std::uint16_t ReadUint16BigEndian(const std::uint8_t* const Bytes) noexcept
+{
+	return static_cast<std::uint16_t>((static_cast<std::uint16_t>(Bytes[0]) << 8) | static_cast<std::uint16_t>(Bytes[1]));
+}
+
+/**
+ * Reads two little-endian bytes (least significant byte first) as a 16-bit value.
+ *
+ * @param Bytes Caller-owned source of exactly two bytes.
+ * @return The decoded 16-bit value.
+ */
+inline std::uint16_t ReadUint16LittleEndian(const std::uint8_t* const Bytes) noexcept
+{
+	return static_cast<std::uint16_t>(static_cast<std::uint16_t>(Bytes[0]) | static_cast<std::uint16_t>(static_cast<std::uint16_t>(Bytes[1]) << 8));
+}
+
 } // namespace MicroWorld

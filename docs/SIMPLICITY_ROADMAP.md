@@ -1203,7 +1203,7 @@ tests must pass unchanged.
   what the bytes are). Verified: build clean, ctest 11/11 (`#1 format_check`,
   `#9 net_tests` incl. FrameCodecTests), doc checker 122 files.
 
-- [ ] **6.2 Split `ReadControlMessage`; name the byte-order helpers.**
+- [x] **6.2 Split `ReadControlMessage`; name the byte-order helpers.**
   `NetProtocol.h`.
   1. `ReadControlMessage` (`:189-236`, ~46 lines) →
      `ValidateControlPayloadLength(TypeByte, PayloadSize)` +
@@ -1219,6 +1219,30 @@ tests must pass unchanged.
 
   **Done when:** NetProtocolTests + FrameCodecTests pass unchanged (D6: same
   bytes on the wire); Standard Verify passes.
+
+  **Evidence (2026-07-22, commit pending):** On-wire bytes byte-identical across
+  four headers. (1) `ReadControlMessage` → `Detail::ValidateControlPayloadLength`
+  (the type+length switch, a pure query keeping the exact per-type sizes
+  Hello=2/Welcome=4/Heartbeat=Bye=1/unknown=Invalid and the default comment) +
+  `Detail::DecodeControlFields` (per-type field reads off the reader already past
+  the type byte, `OutMessage` written last); the parent is now read-type →
+  validate → decode, and still returns `Invalid` without touching `OutMessage` on
+  a length reject. (2) Four named 16-bit byte-order helpers added —
+  `WriteUint16BigEndian`/`WriteUint16LittleEndian` in `ByteWriter.h`,
+  `ReadUint16BigEndian`/`ReadUint16LittleEndian` in `ByteReader.h` — and applied
+  to the **length** field at all four sites with a D6 why-comment each: the frame
+  layer is big-endian (`WriteFrameHeader` write, `CaptureLengthLowByte` decode via
+  a two-byte scratch) for LoRa-sniffer on-air readability; the message layer is
+  little-endian (`WriteMessage` via scratch + `Writer.Write(2)`, `ReadMessage` via
+  `&Message[2]`) to match its byte-I/O convention. **Coupling (noted):**
+  `FrameCodec.h` gained `#include ByteReader.h`/`ByteWriter.h` for the big-endian
+  helpers — a benign intra-Net, header-only dependency; the `#3`/`#4`
+  dependency-boundary ctests stay green. **Scope:** the 16-bit CRC is also
+  big-endian but the roadmap scoped 6.2 to the length fields, so the CRC keeps its
+  inline bit math (a shared `ByteOrder.h` + CRC unification is a deliberate future
+  option, not done here). Verified: build clean, ctest 11/11 (`#1 format_check`,
+  `#3`/`#4 dependency_boundaries`, `#9 net_tests` incl. NetProtocol + FrameCodec),
+  doc checker 122 files.
 
 - [ ] **6.3 Split the `TNetHost` handlers.** `NetHost.h`.
   1. `HandleHello` (`:571-607`, ~35 lines) → extract
