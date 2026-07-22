@@ -641,7 +641,7 @@ sentences.
   via a follow-up brief after my first brief under-scoped to four sites. Build
   clean; ctest 11/11; doc checker 122 files.
 
-- [ ] **2.3 Object comments.**
+- [x] **2.3 Object comments.**
   - `ClassDescriptor.h:70-80` — why the two probes exist: "a corrupted Parent
     chain could cycle; the double-step probe detects that without RTTI."
   - `ClassDescriptor.h:179` — why `VisitedDescriptors >= RegisteredClassCount`
@@ -654,6 +654,14 @@ sentences.
     another destruction).
 
   **Done when:** each listed site has its why; Standard Verify passes.
+
+  Done 2026-07-22 — four why-comments added: the `IsChildOf` Floyd cycle guard
+  and the `HasValidParentChain` registry-length bound (`ClassDescriptor.h`); the
+  generation-0 "never published" ternary citing `ObjectHandle.h:61-62`
+  (`ObjectStore.h`); and the save/restore-not-clear rationale for
+  `bMutationLocked` in the nested-destroy path (`ObjectStore.cpp`, one comment at
+  the save per DRY). Anchors re-derived from live code — the `.cpp` save/restore
+  moved to lines 283/317. Build clean; ctest 11/11; doc checker 122 files.
 
 - [ ] **2.4 Engine comments.**
   - `ActorComponent.h:85` — **factual bug**: says "Advances this component's

@@ -67,6 +67,9 @@ struct FClassDescriptor
 	/** Tests finite explicit descriptor ancestry without C++ RTTI or cyclic traversal. */
 	bool IsChildOf(const FClassDescriptor& CandidateParent) const noexcept
 	{
+		// Floyd cycle check: AncestryProbe advances one link, CycleDetectorProbe
+		// two. A corrupted Parent chain that loops makes them meet, so we reject
+		// it here and guarantee the ancestry walk below terminates -- without RTTI.
 		const FClassDescriptor* AncestryProbe = this;
 		const FClassDescriptor* CycleDetectorProbe = this;
 		while (CycleDetectorProbe != nullptr && CycleDetectorProbe->Parent != nullptr)
@@ -176,6 +179,9 @@ private:
 		std::size_t VisitedDescriptors = 0;
 		while (Current != nullptr)
 		{
+			// No valid ancestry is longer than the registry, so reaching
+			// RegisteredClassCount visits (or re-reaching Descriptor) means the
+			// chain is cyclic or corrupt.
 			if (Current == &Descriptor || VisitedDescriptors >= RegisteredClassCount)
 			{
 				return false;

@@ -280,6 +280,10 @@ EObjectResult FObjectStore::DestroySlot(const ObjectIndex SlotIndex) noexcept
 	UObject* const Object = Slot.Object;
 	const FClassDescriptor* const Descriptor = Slot.Descriptor;
 	const bool bWasPending = Slot.State == EObjectSlotState::PendingDestroy;
+	// Save and restore (not clear): this destroy can nest inside another store
+	// mutation -- a destructor triggering a destroy, or destruction during
+	// construction -- so clearing the lock at the end would release the outer
+	// scope early.
 	const bool bWasMutationLocked = bMutationLocked;
 
 	bMutationLocked = true;

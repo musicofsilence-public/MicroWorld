@@ -315,6 +315,9 @@ public:
 		}
 
 		FObjectSlotMetadata& Slot = Storage.SlotMetadata[SlotIndex];
+		// Generation 0 means "never published" (ObjectHandle.h:61-62), so a
+		// slot's first publish jumps to 1 and later reuses increment --
+		// keeping every live handle's generation nonzero.
 		const ObjectGeneration NextGeneration = Slot.Generation == 0 ? 1 : Slot.Generation + 1;
 		Slot.State = EObjectSlotState::Constructing;
 		bMutationLocked = true;
