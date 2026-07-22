@@ -16,10 +16,10 @@ namespace
 
 using MicroWorld::ENetResult;
 using MicroWorld::FNetAddress;
-using MicroWorld::FNetManager;
-using MicroWorld::FNetPacketStorage;
 using MicroWorld::FNetReceiveResult;
 using MicroWorld::INetDriver;
+using MicroWorld::TNetManager;
+using MicroWorld::TNetPacketStorage;
 using MicroWorld::TSpan;
 
 /** Builds a 1-byte destination address whose single byte is `Index`; keeps queue call sites concise. */
@@ -121,8 +121,8 @@ public:
 MW_TEST_CASE(NetManagerStartsEmptyWithFixedConfiguration)
 {
 	FRecordingDriver Driver;
-	FNetPacketStorage<2, 4> Storage;
-	FNetManager<2, 4> Manager(Driver, Storage);
+	TNetPacketStorage<2, 4> Storage;
+	TNetManager<2, 4> Manager(Driver, Storage);
 
 	MW_EXPECT_EQ(Test, true, Manager.IsEmpty(), "A fresh manager must report an empty FIFO");
 	MW_EXPECT_EQ(Test, false, Manager.IsFull(), "A fresh manager must not report a full FIFO");
@@ -135,8 +135,8 @@ MW_TEST_CASE(NetManagerStartsEmptyWithFixedConfiguration)
 MW_TEST_CASE(NetManagerRejectsOversizedPacketTransactionally)
 {
 	FRecordingDriver Driver;
-	FNetPacketStorage<2, 2> Storage;
-	FNetManager<2, 2> Manager(Driver, Storage);
+	TNetPacketStorage<2, 2> Storage;
+	TNetManager<2, 2> Manager(Driver, Storage);
 
 	const std::uint8_t OversizedData[4] = {0x01, 0x02, 0x03, 0x04};
 	const ENetResult OversizedResult = Manager.QueueSend(MakeDest(0), TSpan<const std::uint8_t>(OversizedData, 4));
@@ -148,8 +148,8 @@ MW_TEST_CASE(NetManagerRejectsOversizedPacketTransactionally)
 MW_TEST_CASE(NetManagerRejectsNullPacketWithNonzeroLength)
 {
 	FRecordingDriver Driver;
-	FNetPacketStorage<2, 4> Storage;
-	FNetManager<2, 4> Manager(Driver, Storage);
+	TNetPacketStorage<2, 4> Storage;
+	TNetManager<2, 4> Manager(Driver, Storage);
 
 	const ENetResult NullResult = Manager.QueueSend(MakeDest(0), TSpan<const std::uint8_t>(nullptr, 2));
 	MW_EXPECT_EQ(Test, ENetResult::Invalid, NullResult, "Null data with nonzero length must return Invalid");
@@ -160,8 +160,8 @@ MW_TEST_CASE(NetManagerRejectsNullPacketWithNonzeroLength)
 MW_TEST_CASE(NetManagerAdvanceSendsDifferentlySizedPacketsInFifoOrder)
 {
 	FRecordingDriver Driver;
-	FNetPacketStorage<3, 4> Storage;
-	FNetManager<3, 4> Manager(Driver, Storage);
+	TNetPacketStorage<3, 4> Storage;
+	TNetManager<3, 4> Manager(Driver, Storage);
 
 	const std::uint8_t FirstPacket[2] = {0x10, 0x20};
 	const std::uint8_t SecondPacket[3] = {0x30, 0x40, 0x50};
@@ -197,8 +197,8 @@ MW_TEST_CASE(NetManagerAdvanceSendsDifferentlySizedPacketsInFifoOrder)
 MW_TEST_CASE(NetManagerFullFifoRejectsFurtherQueue)
 {
 	FRecordingDriver Driver;
-	FNetPacketStorage<1, 4> Storage;
-	FNetManager<1, 4> Manager(Driver, Storage);
+	TNetPacketStorage<1, 4> Storage;
+	TNetManager<1, 4> Manager(Driver, Storage);
 
 	const std::uint8_t Accepted[2] = {0xAA, 0xBB};
 	const std::uint8_t Rejected[2] = {0xCC, 0xDD};
@@ -221,8 +221,8 @@ MW_TEST_CASE(NetManagerFullFifoRejectsFurtherQueue)
 MW_TEST_CASE(NetManagerAdvanceEmptyReturnsUnavailableWithoutDriverCall)
 {
 	FRecordingDriver Driver;
-	FNetPacketStorage<2, 4> Storage;
-	FNetManager<2, 4> Manager(Driver, Storage);
+	TNetPacketStorage<2, 4> Storage;
+	TNetManager<2, 4> Manager(Driver, Storage);
 
 	const ENetResult EmptyAdvanceResult = Manager.AdvanceSend();
 	MW_EXPECT_EQ(Test, ENetResult::Unavailable, EmptyAdvanceResult, "Advance on an empty FIFO must return Unavailable");
@@ -233,8 +233,8 @@ MW_TEST_CASE(NetManagerAdvanceEmptyReturnsUnavailableWithoutDriverCall)
 MW_TEST_CASE(NetManagerAdvanceAttemptsOneSendAndRemovesHeadOnSuccess)
 {
 	FRecordingDriver Driver;
-	FNetPacketStorage<2, 4> Storage;
-	FNetManager<2, 4> Manager(Driver, Storage);
+	TNetPacketStorage<2, 4> Storage;
+	TNetManager<2, 4> Manager(Driver, Storage);
 
 	const std::uint8_t HeadPacket[2] = {0x11, 0x22};
 	Manager.QueueSend(MakeDest(0), TSpan<const std::uint8_t>(HeadPacket, 2));
@@ -251,8 +251,8 @@ MW_TEST_CASE(NetManagerDriverFullRetainsExactHeadContents)
 {
 	FRecordingDriver Driver;
 	Driver.ForcedSendResult = ENetResult::Full;
-	FNetPacketStorage<2, 4> Storage;
-	FNetManager<2, 4> Manager(Driver, Storage);
+	TNetPacketStorage<2, 4> Storage;
+	TNetManager<2, 4> Manager(Driver, Storage);
 
 	const std::uint8_t FirstPacket[3] = {0x01, 0x02, 0x03};
 	const std::uint8_t SecondPacket[2] = {0x04, 0x05};
@@ -282,8 +282,8 @@ MW_TEST_CASE(NetManagerDriverUnavailableRetainsExactHead)
 {
 	FRecordingDriver Driver;
 	Driver.ForcedSendResult = ENetResult::Unavailable;
-	FNetPacketStorage<1, 4> Storage;
-	FNetManager<1, 4> Manager(Driver, Storage);
+	TNetPacketStorage<1, 4> Storage;
+	TNetManager<1, 4> Manager(Driver, Storage);
 
 	const std::uint8_t Packet[2] = {0x55, 0x66};
 	Manager.QueueSend(MakeDest(0), TSpan<const std::uint8_t>(Packet, 2));
@@ -303,8 +303,8 @@ MW_TEST_CASE(NetManagerDriverInvalidRetainsExactHead)
 {
 	FRecordingDriver Driver;
 	Driver.ForcedSendResult = ENetResult::Invalid;
-	FNetPacketStorage<1, 4> Storage;
-	FNetManager<1, 4> Manager(Driver, Storage);
+	TNetPacketStorage<1, 4> Storage;
+	TNetManager<1, 4> Manager(Driver, Storage);
 
 	const std::uint8_t Packet[2] = {0x07, 0x08};
 	Manager.QueueSend(MakeDest(0), TSpan<const std::uint8_t>(Packet, 2));
@@ -324,8 +324,8 @@ MW_TEST_CASE(NetManagerRecoverySendsRetainedHeadBeforeLaterPackets)
 {
 	FRecordingDriver Driver;
 	Driver.ForcedSendResult = ENetResult::Full;
-	FNetPacketStorage<2, 4> Storage;
-	FNetManager<2, 4> Manager(Driver, Storage);
+	TNetPacketStorage<2, 4> Storage;
+	TNetManager<2, 4> Manager(Driver, Storage);
 
 	const std::uint8_t HeadPacket[2] = {0x99, 0xAA};
 	const std::uint8_t LaterPacket[1] = {0xBB};
@@ -351,8 +351,8 @@ MW_TEST_CASE(NetManagerRecoverySendsRetainedHeadBeforeLaterPackets)
 MW_TEST_CASE(NetManagerCallerStorageReusedAfterWraparoundAndDraining)
 {
 	FRecordingDriver Driver;
-	FNetPacketStorage<2, 2> Storage;
-	FNetManager<2, 2> Manager(Driver, Storage);
+	TNetPacketStorage<2, 2> Storage;
+	TNetManager<2, 2> Manager(Driver, Storage);
 
 	const std::uint8_t CycleA[2] = {0xA0, 0xA1};
 	const std::uint8_t CycleB[2] = {0xB0, 0xB1};
@@ -389,8 +389,8 @@ MW_TEST_CASE(NetManagerCallerStorageReusedAfterWraparoundAndDraining)
 MW_TEST_CASE(NetManagerAdvanceSendsEachHeadToItsStoredDestination)
 {
 	FRecordingDriver Driver;
-	FNetPacketStorage<3, 4> Storage;
-	FNetManager<3, 4> Manager(Driver, Storage);
+	TNetPacketStorage<3, 4> Storage;
+	TNetManager<3, 4> Manager(Driver, Storage);
 
 	const FNetAddress DestA = MakeDest(1);
 	const FNetAddress DestB = MakeDest(2);
@@ -421,8 +421,8 @@ MW_TEST_CASE(NetManagerReceivePerformsOneDirectDriverReceive)
 {
 	FRecordingDriver Driver;
 	Driver.ForcedReceiveResult = ENetResult::Unavailable;
-	FNetPacketStorage<2, 4> Storage;
-	FNetManager<2, 4> Manager(Driver, Storage);
+	TNetPacketStorage<2, 4> Storage;
+	TNetManager<2, 4> Manager(Driver, Storage);
 
 	std::uint8_t Destination[4] = {0xFF, 0xFF, 0xFF, 0xFF};
 	FNetReceiveResult ReceiveResult{std::size_t{0xEE}};
@@ -443,8 +443,8 @@ MW_TEST_CASE(NetManagerReceivePropagatesSuccessAndByteCount)
 	Driver.ReceiveByteCount = 3;
 	Driver.ReceiveFillerByte = 0x7C;
 	Driver.ReceiveSender = MakeDest(7);
-	FNetPacketStorage<2, 4> Storage;
-	FNetManager<2, 4> Manager(Driver, Storage);
+	TNetPacketStorage<2, 4> Storage;
+	TNetManager<2, 4> Manager(Driver, Storage);
 
 	std::uint8_t Destination[4] = {0};
 	FNetReceiveResult ReceiveResult{std::size_t{0xEE}};

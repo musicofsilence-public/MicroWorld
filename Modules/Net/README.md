@@ -2,7 +2,7 @@
 
 MicroWorld Net is the bounded non-blocking byte-I/O and simple-messaging
 package above Memory. It provides a byte reader/writer, one non-blocking
-`INetDriver` with `FNetAddress` addressing, one fixed-capacity `FNetManager`,
+`INetDriver` with `FNetAddress` addressing, one fixed-capacity `TNetManager`,
 explicit `ENetResult` outcomes, a deterministic host loopback driver, a
 header-only wire framing codec, and a session/role host for embedded
 applications.
@@ -36,11 +36,11 @@ Current status and recorded evidence live in
   carried by `INetDriver` sends and receives. Its concrete encoding is owned
   by the platform adapter (e.g. 6-byte IPv4+port for UDP, 1-byte node id for
   LoRa), not by Net.
-- `FNetPacketStorage<MaxPackets, MaxPacketBytes>` is the smallest fixed
+- `TNetPacketStorage<MaxPackets, MaxPacketBytes>` is the smallest fixed
   storage type the manager needs; both capacities must be nonzero. The caller
   constructs one instance and lends it to the manager by reference.
-- `FNetManager<MaxPackets, MaxPacketBytes>` holds one externally referenced
-  `INetDriver` and one externally referenced `FNetPacketStorage`, queues
+- `TNetManager<MaxPackets, MaxPacketBytes>` holds one externally referenced
+  `INetDriver` and one externally referenced `TNetPacketStorage`, queues
   complete packets into that storage, attempts at most the FIFO head per send
   advance (retaining the head on any driver failure), and performs at most one
   direct driver receive.
@@ -59,7 +59,7 @@ Current status and recorded evidence live in
   bounded `TFrameDecoder<MaxPayloadBytes>` state machine that resyncs on bad
   magic / oversize length / CRC mismatch. The E32 LoRa adapter uses it for
   on-the-wire framing.
-- `FHostLoopback<MaxPorts, MailboxCapacity, PacketBytes>` is a deterministic
+- `THostLoopback<MaxPorts, MailboxCapacity, PacketBytes>` is a deterministic
   fixed-capacity loopback network (N embedded per-port `INetDriver`s sharing
   one mailroom) for host tests.
 

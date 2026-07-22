@@ -2,7 +2,7 @@
 
 MicroWorld is a small, embedded-suitable C++17 engine that brings familiar UE5
 concepts — lifecycle, World/Actor/Component, GC, smart pointers, and a simple
-`FNetManager`/`INetDriver` networking layer — to constrained microcontrollers
+`TNetManager`/`INetDriver` networking layer — to constrained microcontrollers
 such as ESP32, STM32, and RP2040. It keeps only essential, bounded features so
 UE5 developers can build small applications and games for these devices without
 first learning every hardware detail. Platform support is verified one target at
@@ -21,7 +21,7 @@ as a historical record).
 | Memory | `MicroWorld::Memory` | `MicroWorldMemory` | Memory resource, arena, smart pointers |
 | Object | `MicroWorld::Object` | `MicroWorldObject` | Object store, garbage collector |
 | Engine | `MicroWorld::Engine` | `MicroWorldEngine` | `UWorld` / `AActor` / `UActorComponent`, timers |
-| Net | `MicroWorld::Net` | `MicroWorldNet` | Byte I/O, frame codec, `FNetManager` |
+| Net | `MicroWorld::Net` | `MicroWorldNet` | Byte I/O, frame codec, `TNetManager` |
 | PlatformHost | `MicroWorld::PlatformHost` | — | Host UDP transport (non-portable) |
 | PlatformEsp32 | — | `MicroWorldPlatformEsp32` | ESP32 UDP + E32 LoRa UART (PlatformIO/ESP-IDF only) |
 

@@ -278,7 +278,7 @@ def run_self_test() -> int:
     invalid_map = (
         "microworld.lib\n"
         "libmicroworld_net.a(NetManager.o)\n"
-        "MicroWorld::FNetManager\n"
+        "MicroWorld::TNetManager\n"
     )
     invalid_errors = analyze_map(invalid_map, "Core", [], [])
     if not any("unselected Net" in error for error in invalid_errors):
@@ -302,7 +302,7 @@ def run_self_test() -> int:
         "libmicroworld.a(TickFunction.o)\n"
         "libmicroworld_memory:MemoryResource.obj\n"
         "libmicroworld_net:NetDriver.obj\n"
-        "MicroWorld::FNetManager\n"
+        "MicroWorld::TNetManager\n"
     )
     valid_core_net_errors = analyze_map(valid_core_net_map, "Core+Net", [], [])
     if valid_core_net_errors:

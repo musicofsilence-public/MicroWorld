@@ -6,7 +6,7 @@ Inherits `../AGENTS.md`.
 
 Public headers under `include/MicroWorld/Net/` expose the bounded byte I/O
 contract: `ENetResult`, `FByteWriter`, `FByteReader`, `INetDriver`,
-`FNetManager`, and `FHostLoopback`. Headers are header-only except for
+`TNetManager`, and `THostLoopback`. Headers are header-only except for
 `INetDriver`'s out-of-line destructor, which lives in `src/NetDriver.cpp` to
 give the Net archive stable linker evidence.
 

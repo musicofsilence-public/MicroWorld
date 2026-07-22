@@ -24,16 +24,16 @@ using MicroWorld::ENetResult;
 using MicroWorld::FByteReader;
 using MicroWorld::FByteWriter;
 using MicroWorld::FControlMessage;
-using MicroWorld::FHostLoopback;
 using MicroWorld::FMessageHeader;
 using MicroWorld::FNetAddress;
-using MicroWorld::FNetManager;
-using MicroWorld::FNetPacketStorage;
 using MicroWorld::FNetReceiveResult;
 using MicroWorld::INetDriver;
 using MicroWorld::MakeLoopbackAddress;
 using MicroWorld::ReadControlMessage;
 using MicroWorld::ReadMessage;
+using MicroWorld::THostLoopback;
+using MicroWorld::TNetManager;
+using MicroWorld::TNetPacketStorage;
 using MicroWorld::TSpan;
 using MicroWorld::WriteControlMessage;
 using MicroWorld::WriteMessage;
@@ -55,10 +55,10 @@ MW_TEST_CASE(NetOperationsPerformNoObservableAllocation)
 	FByteWriter Writer(TSpan<std::uint8_t>(WriterStorage.data(), WriterStorage.size()));
 	FByteReader Reader(TSpan<const std::uint8_t>(Source.data(), Source.size()));
 	// A two-port loopback with port 0 sending to its own mailbox reproduces the single-link FIFO.
-	FHostLoopback<2, 2, 8> Loopback;
+	THostLoopback<2, 2, 8> Loopback;
 	const FNetAddress Port0 = MakeLoopbackAddress(0);
-	FNetPacketStorage<2, 8> ManagerStorage;
-	FNetManager<2, 8> Manager(Loopback.Port(0), ManagerStorage);
+	TNetPacketStorage<2, 8> ManagerStorage;
+	TNetManager<2, 8> Manager(Loopback.Port(0), ManagerStorage);
 	// Framing buffers live outside the counted region so only steady-state framing work is measured.
 	std::array<std::uint8_t, 16> FramingBuffer{};
 	const std::array<std::uint8_t, 3> FramingPayload{0xC0, 0xC1, 0xC2};
@@ -95,8 +95,8 @@ MW_TEST_CASE(NetOperationsPerformNoObservableAllocation)
 
 	// Exercise the empty and full paths: advance an empty FIFO and queue into a full one.
 	(void)Manager.AdvanceSend();
-	FNetPacketStorage<1, 4> FullManagerStorage;
-	FNetManager<1, 4> FullManager(Loopback.Port(0), FullManagerStorage);
+	TNetPacketStorage<1, 4> FullManagerStorage;
+	TNetManager<1, 4> FullManager(Loopback.Port(0), FullManagerStorage);
 	const std::array<std::uint8_t, 2> Packet{0xAA, 0xBB};
 	(void)FullManager.QueueSend(Port0, TSpan<const std::uint8_t>(Packet.data(), Packet.size()));
 	(void)FullManager.QueueSend(Port0, TSpan<const std::uint8_t>(Packet.data(), Packet.size()));

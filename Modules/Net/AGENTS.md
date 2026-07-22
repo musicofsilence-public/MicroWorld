@@ -11,7 +11,7 @@ standard library. Net must not depend on Object or Engine; applications call
 Engine and Net independently.
 
 The package owns a bounded byte reader/writer, one non-blocking `INetDriver`
-contract, one caller-storage-backed fixed-capacity `FNetManager`, explicit
+contract, one caller-storage-backed fixed-capacity `TNetManager`, explicit
 `ENetResult` outcomes, and a deterministic host loopback driver. It does not
 own wire framing, sessions, sequence numbers, retries, reliability,
 authentication, replication, real transports, threads, platform adapters, or
@@ -41,19 +41,19 @@ vendor SDK code.
   `Unavailable` the destination and `FNetReceiveResult::BytesReceived` are
   unchanged. The interface owns no clock, thread, retry, peer identity,
   session, or protocol behavior.
-- `FNetPacketStorage<MaxPackets, MaxPacketBytes>` is the smallest fixed
+- `TNetPacketStorage<MaxPackets, MaxPacketBytes>` is the smallest fixed
   storage type the manager needs; both capacities must be nonzero and are
   rejected at compile time otherwise. The caller constructs one instance and
   lends it to the manager by reference. The packet arrays are private and
-  observed only by the matching `FNetManager` specialization, so tests and
+  observed only by the matching `TNetManager` specialization, so tests and
   consumers must observe storage behavior through the manager and driver.
-- `FNetManager<MaxPackets, MaxPacketBytes>` holds exactly one externally
-  referenced `INetDriver` and one externally referenced `FNetPacketStorage`,
+- `TNetManager<MaxPackets, MaxPacketBytes>` holds exactly one externally
+  referenced `INetDriver` and one externally referenced `TNetPacketStorage`,
   maintains one deterministic outbound FIFO, copies complete accepted packets
   on queue, attempts at most the FIFO head per send advance, and performs at
   most one direct driver receive. Rejected operations leave state unchanged
   and preserve ordering.
-- `FHostLoopback<CapacityPackets, PacketBytes>` is a deterministic fixed-
+- `THostLoopback<CapacityPackets, PacketBytes>` is a deterministic fixed-
   capacity `INetDriver` for host tests: a full send never overwrites accepted
   packets, an empty receive returns `Unavailable`, a too-small receive
   destination returns `Full` while retaining the head packet, and a null

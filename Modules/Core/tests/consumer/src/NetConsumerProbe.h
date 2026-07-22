@@ -100,7 +100,7 @@ inline int RunNetConsumerProbe() noexcept
 
 	// Loopback: FIFO delivery, full backpressure, empty unavailable, too-small full.
 	// A two-port loopback with port 0 sending to its own mailbox reproduces the single-link FIFO.
-	FHostLoopback<2, 2, 4> Loopback;
+	THostLoopback<2, 2, 4> Loopback;
 	const FNetAddress LoopbackPort0 = MakeLoopbackAddress(0);
 	const std::array<std::uint8_t, 2> FirstPacket{0xAA, 0xBB};
 	const std::array<std::uint8_t, 2> SecondPacket{0xCC, 0xDD};
@@ -139,7 +139,7 @@ inline int RunNetConsumerProbe() noexcept
 	}
 
 	// Full backpressure: a one-slot mailbox must reject the second send and retain the head.
-	FHostLoopback<2, 1, 4> SingleLoopback;
+	THostLoopback<2, 1, 4> SingleLoopback;
 	if (SingleLoopback.Port(0).TrySend(LoopbackPort0, TSpan<const std::uint8_t>(FirstPacket.data(), FirstPacket.size())) != ENetResult::Success
 		|| SingleLoopback.Port(0).TrySend(LoopbackPort0, TSpan<const std::uint8_t>(SecondPacket.data(), SecondPacket.size())) != ENetResult::Full)
 	{
@@ -156,8 +156,8 @@ inline int RunNetConsumerProbe() noexcept
 	}
 
 	// Manager: queue, advance once (success), observe backpressure retention, recover, receive.
-	MicroWorld::FNetPacketStorage<2, 4> ManagerStorage;
-	FNetManager<2, 4> Manager(Loopback.Port(0), ManagerStorage);
+	MicroWorld::TNetPacketStorage<2, 4> ManagerStorage;
+	TNetManager<2, 4> Manager(Loopback.Port(0), ManagerStorage);
 	const std::array<std::uint8_t, 3> QueuePacket{0x01, 0x02, 0x03};
 	if (Manager.QueueSend(LoopbackPort0, TSpan<const std::uint8_t>(QueuePacket.data(), QueuePacket.size())) != ENetResult::Success)
 	{
@@ -169,9 +169,9 @@ inline int RunNetConsumerProbe() noexcept
 	}
 
 	// Backpressure: fill the driver, then observe the manager retain its head across a Full advance.
-	FHostLoopback<2, 1, 4> BackpressureDriver;
-	MicroWorld::FNetPacketStorage<1, 4> BackpressureStorage;
-	FNetManager<1, 4> BackpressureManager(BackpressureDriver.Port(0), BackpressureStorage);
+	THostLoopback<2, 1, 4> BackpressureDriver;
+	MicroWorld::TNetPacketStorage<1, 4> BackpressureStorage;
+	TNetManager<1, 4> BackpressureManager(BackpressureDriver.Port(0), BackpressureStorage);
 	const std::array<std::uint8_t, 2> BackpressurePacket{0x55, 0x66};
 	BackpressureDriver.Port(0).TrySend(LoopbackPort0, TSpan<const std::uint8_t>(BackpressurePacket.data(), BackpressurePacket.size()));
 	BackpressureManager.QueueSend(LoopbackPort0, TSpan<const std::uint8_t>(BackpressurePacket.data(), BackpressurePacket.size()));

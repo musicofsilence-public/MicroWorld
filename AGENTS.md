@@ -7,7 +7,7 @@ version of familiar UE5 engine concepts. It lets UE5 developers build small
 applications, interactive software, and games for constrained devices (ESP32,
 STM32, RP2040-class) without first learning every hardware detail. It keeps only
 essential, bounded features — lifecycle, World/Actor/Component, GC, smart
-pointers, a simple `FNetManager`/`INetDriver` networking layer, and explicit
+pointers, a simple `TNetManager`/`INetDriver` networking layer, and explicit
 hardware boundaries. Platform support is verified one target at a time, not
 claimed for every board.
 
@@ -26,7 +26,7 @@ MicroWorld/
 │   ├── Memory/         memory resource, arena, smart pointers
 │   ├── Object/         object store, garbage collector
 │   ├── Engine/         UWorld / AActor / UActorComponent, timers
-│   ├── Net/            byte I/O, frame codec, FNetManager
+│   ├── Net/            byte I/O, frame codec, TNetManager
 │   ├── PlatformHost/   host UDP transport (non-portable)
 │   └── PlatformEsp32/  ESP32 UDP + E32 LoRa UART (PlatformIO/ESP-IDF only)
 ├── docs/               engine-wide design docs, ADRs, diagrams, ROADMAP

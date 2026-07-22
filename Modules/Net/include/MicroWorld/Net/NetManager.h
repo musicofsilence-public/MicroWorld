@@ -15,30 +15,30 @@ namespace MicroWorld
 /**
  * Fixed-capacity outbound queue and direct receive over one externally referenced `INetDriver`.
  *
- * The manager holds one driver and one `FNetPacketStorage` by reference; the
+ * The manager holds one driver and one `TNetPacketStorage` by reference; the
  * caller owns both. `QueueSend` copies a complete accepted packet into the
  * caller-owned FIFO tail, one `AdvanceSend` attempts at most the head (retaining
  * it on any driver failure), and `Receive` performs at most one direct driver
  * receive without building an inbound queue.
  */
 template<std::size_t MaxPackets, std::size_t MaxPacketBytes>
-class FNetManager final
+class TNetManager final
 {
-	static_assert(MaxPackets > 0, "FNetManager requires at least one packet slot.");
-	static_assert(MaxPacketBytes > 0, "FNetManager requires a nonzero per-packet byte capacity.");
+	static_assert(MaxPackets > 0, "TNetManager requires at least one packet slot.");
+	static_assert(MaxPacketBytes > 0, "TNetManager requires a nonzero per-packet byte capacity.");
 
 public:
 	/** Binds the manager to one externally referenced driver and caller-owned packet storage. */
-	FNetManager(INetDriver& Driver, FNetPacketStorage<MaxPackets, MaxPacketBytes>& Storage) noexcept : Driver(Driver), Storage(Storage) {}
+	TNetManager(INetDriver& Driver, TNetPacketStorage<MaxPackets, MaxPacketBytes>& Storage) noexcept : Driver(Driver), Storage(Storage) {}
 
 	/** Prevents copying so one manager value binds one driver and one storage instance. */
-	FNetManager(const FNetManager&) = delete;
+	TNetManager(const TNetManager&) = delete;
 
 	/** Prevents copying so one manager value binds one driver and one storage instance. */
-	FNetManager& operator=(const FNetManager&) = delete;
+	TNetManager& operator=(const TNetManager&) = delete;
 
 	/** Defaulted so a manager with automatic storage destructs without side effects. */
-	~FNetManager() noexcept = default;
+	~TNetManager() noexcept = default;
 
 	/**
 	 * Copies one complete packet with its destination address into the outbound FIFO tail.
@@ -154,7 +154,7 @@ private:
 	INetDriver& Driver;
 
 	/** Holds the externally referenced caller-owned packet storage. */
-	FNetPacketStorage<MaxPackets, MaxPacketBytes>& Storage;
+	TNetPacketStorage<MaxPackets, MaxPacketBytes>& Storage;
 
 	/** Indexes the next packet to send so the FIFO order is preserved. */
 	std::size_t HeadIndex{0};

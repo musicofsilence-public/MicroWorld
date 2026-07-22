@@ -35,12 +35,12 @@ using MicroWorld::FActorComponentRegistry;
 using MicroWorld::FActorComponentRegistryReference;
 using MicroWorld::FDelegateHandle;
 using MicroWorld::FGarbageCollectionBudget;
-using MicroWorld::FHostLoopback;
 using MicroWorld::FNetHostConfig;
 using MicroWorld::FPeerId;
 using MicroWorld::INetworkFrame;
 using MicroWorld::MakeLoopbackAddress;
 using MicroWorld::TEngineHost;
+using MicroWorld::THostLoopback;
 using MicroWorld::TimePointMilliseconds;
 using MicroWorld::TNetHost;
 using MicroWorld::TNetHostFrame;
@@ -179,7 +179,7 @@ MW_TEST_CASE(EngineHostTickDrivesBoundNetworkFrameDispatchThenFlush)
 MW_TEST_CASE(EngineNetHostClientMessageSpawnsActorOnServerWorld)
 {
 	// One loopback network with two ports; the server drives port 0, the client port 1.
-	FHostLoopback<2, 8, 64> Network;
+	THostLoopback<2, 8, 64> Network;
 	TNetHost<2, 64> ServerNet(Network.Port(0));
 	TNetHost<1, 64> ClientNet(Network.Port(1));
 	TNetHostFrame<TNetHost<2, 64>> ServerFrame{ServerNet};

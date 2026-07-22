@@ -728,10 +728,10 @@ private:
 	}
 
 	/** Owns the outbound packet bytes, lengths, and destinations for the FIFO. */
-	FNetPacketStorage<SendQueueDepth, MaxPacketBytes> OutboundStorage{};
+	TNetPacketStorage<SendQueueDepth, MaxPacketBytes> OutboundStorage{};
 
 	/** Owns the outbound FIFO over the driver; reused rather than re-implementing queue mechanics. */
-	FNetManager<SendQueueDepth, MaxPacketBytes> OutboundManager;
+	TNetManager<SendQueueDepth, MaxPacketBytes> OutboundManager;
 
 	/** Dispatches application messages to every registered handler. */
 	FMessageHandler MessageHandler{};

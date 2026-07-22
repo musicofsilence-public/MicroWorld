@@ -20,13 +20,13 @@ using MicroWorld::ENetHostState;
 using MicroWorld::ENetMode;
 using MicroWorld::ENetResult;
 using MicroWorld::FDelegateHandle;
-using MicroWorld::FHostLoopback;
 using MicroWorld::FNetAddress;
 using MicroWorld::FNetHostConfig;
 using MicroWorld::FNetReceiveResult;
 using MicroWorld::FPeerId;
 using MicroWorld::INetDriver;
 using MicroWorld::MakeLoopbackAddress;
+using MicroWorld::THostLoopback;
 using MicroWorld::TimePointMilliseconds;
 using MicroWorld::TNetHost;
 using MicroWorld::TSpan;
@@ -97,7 +97,7 @@ void RunHandshake(ServerType& Server, ClientType& Client, const TimePointMillise
 /** Proves a server admits one client and issues a Welcome that connects it. */
 MW_TEST_CASE(NetHostServerAdmitsClientOnHello)
 {
-	FHostLoopback<2, 8, 64> Loopback;
+	THostLoopback<2, 8, 64> Loopback;
 	TNetHost<2, 64> Server(Loopback.Port(0));
 	TNetHost<1, 64> Client(Loopback.Port(1));
 	(void)Server.Configure(ENetMode::DedicatedServer, MakeHostConfig(1));
@@ -117,7 +117,7 @@ MW_TEST_CASE(NetHostServerAdmitsClientOnHello)
 /** Proves the client state machine advances Idle -> Connecting -> Connected. */
 MW_TEST_CASE(NetHostClientAdvancesThroughConnectingToConnected)
 {
-	FHostLoopback<2, 8, 64> Loopback;
+	THostLoopback<2, 8, 64> Loopback;
 	TNetHost<2, 64> Server(Loopback.Port(0));
 	TNetHost<1, 64> Client(Loopback.Port(1));
 	(void)Server.Configure(ENetMode::DedicatedServer, MakeHostConfig(1));
@@ -134,7 +134,7 @@ MW_TEST_CASE(NetHostClientAdvancesThroughConnectingToConnected)
 /** Proves a server admits only up to its peer capacity and rejects the overflow Hello. */
 MW_TEST_CASE(NetHostRejectsHelloWhenPeerTableFull)
 {
-	FHostLoopback<4, 8, 64> Loopback;
+	THostLoopback<4, 8, 64> Loopback;
 	TNetHost<2, 64> Server(Loopback.Port(0));
 	TNetHost<1, 64> FirstClient(Loopback.Port(1));
 	TNetHost<1, 64> SecondClient(Loopback.Port(2));
@@ -159,7 +159,7 @@ MW_TEST_CASE(NetHostRejectsHelloWhenPeerTableFull)
 /** Proves heartbeats received within the window keep a peer alive past the timeout. */
 MW_TEST_CASE(NetHostHeartbeatKeepsPeerAlive)
 {
-	FHostLoopback<2, 8, 64> Loopback;
+	THostLoopback<2, 8, 64> Loopback;
 	TNetHost<2, 64> Server(Loopback.Port(0));
 	TNetHost<1, 64> Client(Loopback.Port(1));
 	(void)Server.Configure(ENetMode::DedicatedServer, MakeHostConfig(1));
@@ -181,7 +181,7 @@ MW_TEST_CASE(NetHostHeartbeatKeepsPeerAlive)
 /** Proves a peer that misses heartbeats past the timeout is evicted. */
 MW_TEST_CASE(NetHostEvictsPeerAfterTimeout)
 {
-	FHostLoopback<2, 8, 64> Loopback;
+	THostLoopback<2, 8, 64> Loopback;
 	TNetHost<2, 64> Server(Loopback.Port(0));
 	TNetHost<1, 64> Client(Loopback.Port(1));
 	(void)Server.Configure(ENetMode::DedicatedServer, MakeHostConfig(1));
@@ -199,7 +199,7 @@ MW_TEST_CASE(NetHostEvictsPeerAfterTimeout)
 /** Proves eviction bumps the slot generation so a stale peer id fails after re-admission. */
 MW_TEST_CASE(NetHostBumpsGenerationSoStaleIdFailsAfterReadmission)
 {
-	FHostLoopback<3, 8, 64> Loopback;
+	THostLoopback<3, 8, 64> Loopback;
 	TNetHost<2, 64> Server(Loopback.Port(0));
 	TNetHost<1, 64> FirstClient(Loopback.Port(1));
 	TNetHost<1, 64> SecondClient(Loopback.Port(2));
@@ -237,7 +237,7 @@ MW_TEST_CASE(NetHostBumpsGenerationSoStaleIdFailsAfterReadmission)
 /** Proves a broadcast reaches every connected remote peer. */
 MW_TEST_CASE(NetHostBroadcastReachesEveryConnectedPeer)
 {
-	FHostLoopback<3, 8, 64> Loopback;
+	THostLoopback<3, 8, 64> Loopback;
 	TNetHost<3, 64> Server(Loopback.Port(0));
 	TNetHost<1, 64> FirstClient(Loopback.Port(1));
 	TNetHost<1, 64> SecondClient(Loopback.Port(2));
@@ -273,7 +273,7 @@ MW_TEST_CASE(NetHostBroadcastReachesEveryConnectedPeer)
 /** Proves SendTo delivers only to the addressed peer on the given channel. */
 MW_TEST_CASE(NetHostSendToDeliversToTheAddressedPeer)
 {
-	FHostLoopback<2, 8, 64> Loopback;
+	THostLoopback<2, 8, 64> Loopback;
 	TNetHost<2, 64> Server(Loopback.Port(0));
 	TNetHost<1, 64> Client(Loopback.Port(1));
 	(void)Server.Configure(ENetMode::DedicatedServer, MakeHostConfig(1));
@@ -303,7 +303,7 @@ MW_TEST_CASE(NetHostSendToDeliversToTheAddressedPeer)
 /** Proves a listen server dispatches a local-peer message straight to the handler with no driver. */
 MW_TEST_CASE(NetHostListenServerDispatchesToLocalPeerWithoutDriver)
 {
-	FHostLoopback<1, 8, 64> Loopback;
+	THostLoopback<1, 8, 64> Loopback;
 	TNetHost<2, 64> Server(Loopback.Port(0));
 	(void)Server.Configure(ENetMode::ListenServer, MakeHostConfig(1));
 	(void)Server.Start(0);
@@ -326,7 +326,7 @@ MW_TEST_CASE(NetHostListenServerDispatchesToLocalPeerWithoutDriver)
 /** Proves a client returns to Connecting when its server stops answering. */
 MW_TEST_CASE(NetHostClientReturnsToConnectingOnServerTimeout)
 {
-	FHostLoopback<2, 8, 64> Loopback;
+	THostLoopback<2, 8, 64> Loopback;
 	TNetHost<2, 64> Server(Loopback.Port(0));
 	TNetHost<1, 64> Client(Loopback.Port(1));
 	(void)Server.Configure(ENetMode::DedicatedServer, MakeHostConfig(1));
@@ -344,7 +344,7 @@ MW_TEST_CASE(NetHostClientReturnsToConnectingOnServerTimeout)
 /** Proves a repeated Hello from an admitted address re-welcomes without allocating a second slot. */
 MW_TEST_CASE(NetHostRepeatedHelloReusesTheSameSlot)
 {
-	FHostLoopback<2, 8, 64> Loopback;
+	THostLoopback<2, 8, 64> Loopback;
 	TNetHost<2, 64> Server(Loopback.Port(0));
 	TNetHost<1, 64> Client(Loopback.Port(1));
 	(void)Server.Configure(ENetMode::DedicatedServer, MakeHostConfig(1));
@@ -365,7 +365,7 @@ MW_TEST_CASE(NetHostRepeatedHelloReusesTheSameSlot)
 /** Proves a Bye received from a peer frees its slot. */
 MW_TEST_CASE(NetHostByeEvictsPeer)
 {
-	FHostLoopback<2, 8, 64> Loopback;
+	THostLoopback<2, 8, 64> Loopback;
 	TNetHost<2, 64> Server(Loopback.Port(0));
 	TNetHost<1, 64> Client(Loopback.Port(1));
 	(void)Server.Configure(ENetMode::DedicatedServer, MakeHostConfig(1));
@@ -384,7 +384,7 @@ MW_TEST_CASE(NetHostByeEvictsPeer)
 /** Proves a server ignores a Hello whose protocol version does not match. */
 MW_TEST_CASE(NetHostIgnoresHelloWithWrongProtocolVersion)
 {
-	FHostLoopback<2, 8, 64> Loopback;
+	THostLoopback<2, 8, 64> Loopback;
 	TNetHost<2, 64> Server(Loopback.Port(0));
 	TNetHost<1, 64> Client(Loopback.Port(1));
 	(void)Server.Configure(ENetMode::DedicatedServer, MakeHostConfig(1));
@@ -404,7 +404,7 @@ MW_TEST_CASE(NetHostIgnoresHelloWithWrongProtocolVersion)
 /** Proves an unknown control type is dropped without admitting a peer. */
 MW_TEST_CASE(NetHostDropsUnknownControlMessage)
 {
-	FHostLoopback<2, 8, 64> Loopback;
+	THostLoopback<2, 8, 64> Loopback;
 	TNetHost<2, 64> Server(Loopback.Port(0));
 	(void)Server.Configure(ENetMode::DedicatedServer, MakeHostConfig(1));
 	(void)Server.Start(0);
@@ -420,7 +420,7 @@ MW_TEST_CASE(NetHostDropsUnknownControlMessage)
 /** Proves a standalone host originates no traffic and reports Unavailable on send. */
 MW_TEST_CASE(NetHostStandaloneReportsUnavailableOnSend)
 {
-	FHostLoopback<1, 8, 64> Loopback;
+	THostLoopback<1, 8, 64> Loopback;
 	TNetHost<2, 64> Host(Loopback.Port(0));
 	(void)Host.Configure(ENetMode::Standalone, MakeHostConfig(1));
 	(void)Host.Start(0);
@@ -442,7 +442,7 @@ MW_TEST_CASE(NetHostStandaloneReportsUnavailableOnSend)
 /** Proves a full client/server session performs no observable heap allocation. */
 MW_TEST_CASE(NetHostSessionPerformsNoObservableAllocation)
 {
-	FHostLoopback<2, 8, 64> Loopback;
+	THostLoopback<2, 8, 64> Loopback;
 	TNetHost<2, 64> Server(Loopback.Port(0));
 	TNetHost<1, 64> Client(Loopback.Port(1));
 	(void)Server.Configure(ENetMode::DedicatedServer, MakeHostConfig(1));
@@ -472,7 +472,7 @@ MW_TEST_CASE(NetHostSessionPerformsNoObservableAllocation)
 /** Proves a dedicated server has no local peer: a local send is rejected and dispatches nothing. */
 MW_TEST_CASE(NetHostDedicatedServerHasNoLocalDispatch)
 {
-	FHostLoopback<1, 8, 64> Loopback;
+	THostLoopback<1, 8, 64> Loopback;
 	TNetHost<2, 64> Server(Loopback.Port(0));
 	(void)Server.Configure(ENetMode::DedicatedServer, MakeHostConfig(1));
 	(void)Server.Start(0);

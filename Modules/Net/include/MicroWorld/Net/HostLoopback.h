@@ -22,15 +22,15 @@ namespace Detail
 	 * single-link loopback they generalize.
 	 */
 	template<std::size_t MaxPorts, std::size_t MailboxCapacity, std::size_t PacketBytes>
-	class FLoopbackMailboxes final
+	class TLoopbackMailboxes final
 	{
-		static_assert(MaxPorts > 0, "FLoopbackMailboxes requires at least one port.");
-		static_assert(MailboxCapacity > 0, "FLoopbackMailboxes requires a nonzero per-mailbox capacity.");
-		static_assert(PacketBytes > 0, "FLoopbackMailboxes requires a nonzero per-packet byte capacity.");
+		static_assert(MaxPorts > 0, "TLoopbackMailboxes requires at least one port.");
+		static_assert(MailboxCapacity > 0, "TLoopbackMailboxes requires a nonzero per-mailbox capacity.");
+		static_assert(PacketBytes > 0, "TLoopbackMailboxes requires a nonzero per-packet byte capacity.");
 
 	public:
 		/** Defaulted so the network can live in automatic or static storage without side effects. */
-		FLoopbackMailboxes() noexcept = default;
+		TLoopbackMailboxes() noexcept = default;
 
 		/**
 		 * Enqueues one packet into the destination port's mailbox, stamped with the sender.
@@ -209,15 +209,15 @@ namespace Detail
  *
  * Owns N mailboxes and N embedded per-port `INetDriver`s; `Port(index)` hands out
  * the driver bound to the 1-byte loopback address equal to `index`. Two hosts
- * share one `FHostLoopback` and each drive their own `Port(i)`; the ports live
+ * share one `THostLoopback` and each drive their own `Port(i)`; the ports live
  * inside the network, so their lifetimes track it automatically.
  */
 template<std::size_t MaxPorts, std::size_t MailboxCapacity, std::size_t PacketBytes>
-class FHostLoopback final
+class THostLoopback final
 {
-	static_assert(MaxPorts > 0, "FHostLoopback requires at least one port.");
-	static_assert(MailboxCapacity > 0, "FHostLoopback requires a nonzero per-mailbox capacity.");
-	static_assert(PacketBytes > 0, "FHostLoopback requires a nonzero per-packet byte capacity.");
+	static_assert(MaxPorts > 0, "THostLoopback requires at least one port.");
+	static_assert(MailboxCapacity > 0, "THostLoopback requires a nonzero per-mailbox capacity.");
+	static_assert(PacketBytes > 0, "THostLoopback requires a nonzero per-packet byte capacity.");
 
 	/** One port's driver view: forwards send/receive to the shared mailboxes using its bound index. */
 	class FPort final : public INetDriver
@@ -230,7 +230,7 @@ class FHostLoopback final
 		~FPort() noexcept override = default;
 
 		/** Binds this port to the shared mailboxes and its own 1-byte address; called once at construction. */
-		void Bind(Detail::FLoopbackMailboxes<MaxPorts, MailboxCapacity, PacketBytes>* InMailboxes, const std::uint8_t InLocalIndex) noexcept
+		void Bind(Detail::TLoopbackMailboxes<MaxPorts, MailboxCapacity, PacketBytes>* InMailboxes, const std::uint8_t InLocalIndex) noexcept
 		{
 			Mailboxes = InMailboxes;
 			LocalIndex = InLocalIndex;
@@ -253,7 +253,7 @@ class FHostLoopback final
 
 	private:
 		/** Shared mailboxes owned by the enclosing network; never owned here. */
-		Detail::FLoopbackMailboxes<MaxPorts, MailboxCapacity, PacketBytes>* Mailboxes{nullptr};
+		Detail::TLoopbackMailboxes<MaxPorts, MailboxCapacity, PacketBytes>* Mailboxes{nullptr};
 
 		/** This port's 1-byte loopback address value. */
 		std::uint8_t LocalIndex{0};
@@ -261,7 +261,7 @@ class FHostLoopback final
 
 public:
 	/** Constructs N mailboxes and binds each embedded port to its own index. */
-	FHostLoopback() noexcept
+	THostLoopback() noexcept
 	{
 		for (std::uint8_t Index = 0; Index < MaxPorts; ++Index)
 		{
@@ -270,13 +270,13 @@ public:
 	}
 
 	/** Prevents copying so one network value owns its fixed mailbox storage and ports. */
-	FHostLoopback(const FHostLoopback&) = delete;
+	THostLoopback(const THostLoopback&) = delete;
 
 	/** Prevents copying so one network value owns its fixed mailbox storage and ports. */
-	FHostLoopback& operator=(const FHostLoopback&) = delete;
+	THostLoopback& operator=(const THostLoopback&) = delete;
 
 	/** Defaulted so a network with automatic storage destructs without side effects. */
-	~FHostLoopback() noexcept = default;
+	~THostLoopback() noexcept = default;
 
 	/** Returns the driver bound to `Index`; `Index` must be < MaxPorts (caller contract). */
 	INetDriver& Port(const std::uint8_t Index) noexcept { return Ports[Index]; }
@@ -307,7 +307,7 @@ public:
 
 private:
 	/** The shared mailboxes; declared before Ports so it is fully constructed when ports bind. */
-	Detail::FLoopbackMailboxes<MaxPorts, MailboxCapacity, PacketBytes> Mailboxes{};
+	Detail::TLoopbackMailboxes<MaxPorts, MailboxCapacity, PacketBytes> Mailboxes{};
 
 	/** The N embedded per-port drivers handed out by Port(). */
 	std::array<FPort, MaxPorts> Ports{};

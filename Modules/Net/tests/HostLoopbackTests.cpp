@@ -14,17 +14,17 @@ namespace
 {
 
 using MicroWorld::ENetResult;
-using MicroWorld::FHostLoopback;
 using MicroWorld::FNetAddress;
 using MicroWorld::FNetReceiveResult;
 using MicroWorld::INetDriver;
 using MicroWorld::MakeLoopbackAddress;
+using MicroWorld::THostLoopback;
 using MicroWorld::TSpan;
 
 /** Proves a fresh loopback is empty and reports its fixed capacities. */
 MW_TEST_CASE(HostLoopbackStartsEmptyWithFixedCapacities)
 {
-	FHostLoopback<1, 2, 4> Loopback;
+	THostLoopback<1, 2, 4> Loopback;
 
 	MW_EXPECT_EQ(Test, true, Loopback.IsEmpty(0), "A fresh loopback mailbox must be empty");
 	MW_EXPECT_EQ(Test, false, Loopback.IsFull(0), "A fresh loopback mailbox must not be full");
@@ -36,7 +36,7 @@ MW_TEST_CASE(HostLoopbackStartsEmptyWithFixedCapacities)
 /** Proves send followed by receive delivers the same bytes in FIFO order. */
 MW_TEST_CASE(HostLoopbackDeliversPacketsInFifoOrder)
 {
-	FHostLoopback<1, 2, 4> Loopback;
+	THostLoopback<1, 2, 4> Loopback;
 	const FNetAddress Port0 = MakeLoopbackAddress(0);
 
 	const std::array<std::uint8_t, 2> FirstPacket{0x10, 0x20};
@@ -83,7 +83,7 @@ MW_TEST_CASE(HostLoopbackDeliversPacketsInFifoOrder)
 /** Proves a full queue rejects further sends without overwriting accepted packets. */
 MW_TEST_CASE(HostLoopbackFullQueueDoesNotOverwriteAcceptedPackets)
 {
-	FHostLoopback<1, 1, 4> Loopback;
+	THostLoopback<1, 1, 4> Loopback;
 	const FNetAddress Port0 = MakeLoopbackAddress(0);
 
 	const std::array<std::uint8_t, 2> Accepted{0xAA, 0xBB};
@@ -110,7 +110,7 @@ MW_TEST_CASE(HostLoopbackFullQueueDoesNotOverwriteAcceptedPackets)
 /** Proves an empty receive returns Unavailable without touching its destination, byte count, or sender output. */
 MW_TEST_CASE(HostLoopbackEmptyReceiveReturnsUnavailable)
 {
-	FHostLoopback<1, 2, 4> Loopback;
+	THostLoopback<1, 2, 4> Loopback;
 
 	std::array<std::uint8_t, 4> Destination{0xFF, 0xFF, 0xFF, 0xFF};
 	FNetReceiveResult ReceiveResult{std::size_t{0xEE}};
@@ -127,7 +127,7 @@ MW_TEST_CASE(HostLoopbackEmptyReceiveReturnsUnavailable)
 /** Proves a too-small destination returns Full and leaves the head packet and outputs intact. */
 MW_TEST_CASE(HostLoopbackTooSmallDestinationRetainsHeadPacket)
 {
-	FHostLoopback<1, 1, 4> Loopback;
+	THostLoopback<1, 1, 4> Loopback;
 	const FNetAddress Port0 = MakeLoopbackAddress(0);
 
 	const std::array<std::uint8_t, 3> HeadPacket{0x01, 0x02, 0x03};
@@ -158,7 +158,7 @@ MW_TEST_CASE(HostLoopbackTooSmallDestinationRetainsHeadPacket)
 /** Proves Drain empties the mailbox so capacity can be reused. */
 MW_TEST_CASE(HostLoopbackDrainRestoresCapacityForReuse)
 {
-	FHostLoopback<1, 2, 2> Loopback;
+	THostLoopback<1, 2, 2> Loopback;
 	const FNetAddress Port0 = MakeLoopbackAddress(0);
 
 	const std::array<std::uint8_t, 2> FirstPacket{0x11, 0x22};
@@ -182,7 +182,7 @@ MW_TEST_CASE(HostLoopbackDrainRestoresCapacityForReuse)
 /** Proves a zero-length packet is enqueued and delivered as a zero-byte receive. */
 MW_TEST_CASE(HostLoopbackAcceptsZeroLengthPacketRoundTrip)
 {
-	FHostLoopback<1, 1, 2> Loopback;
+	THostLoopback<1, 1, 2> Loopback;
 	const FNetAddress Port0 = MakeLoopbackAddress(0);
 
 	const ENetResult ZeroSendResult = Loopback.Port(0).TrySend(Port0, TSpan<const std::uint8_t>(nullptr, 0));
@@ -203,7 +203,7 @@ MW_TEST_CASE(HostLoopbackAcceptsZeroLengthPacketRoundTrip)
 /** Proves an oversized packet is rejected as Invalid without queueing. */
 MW_TEST_CASE(HostLoopbackRejectsOversizedPacket)
 {
-	FHostLoopback<1, 2, 2> Loopback;
+	THostLoopback<1, 2, 2> Loopback;
 	const FNetAddress Port0 = MakeLoopbackAddress(0);
 
 	const std::array<std::uint8_t, 4> Oversized{0x01, 0x02, 0x03, 0x04};
@@ -215,7 +215,7 @@ MW_TEST_CASE(HostLoopbackRejectsOversizedPacket)
 /** Proves a null packet with nonzero length is rejected as Invalid without queueing. */
 MW_TEST_CASE(HostLoopbackRejectsNullPacketWithNonzeroLength)
 {
-	FHostLoopback<1, 2, 4> Loopback;
+	THostLoopback<1, 2, 4> Loopback;
 	const FNetAddress Port0 = MakeLoopbackAddress(0);
 
 	const ENetResult NullResult = Loopback.Port(0).TrySend(Port0, TSpan<const std::uint8_t>(nullptr, 2));
@@ -229,7 +229,7 @@ MW_TEST_CASE(HostLoopbackRejectsNullPacketWithNonzeroLength)
  */
 MW_TEST_CASE(HostLoopbackEmptyReceiveNullDestinationReturnsInvalid)
 {
-	FHostLoopback<1, 2, 4> Loopback;
+	THostLoopback<1, 2, 4> Loopback;
 	MW_EXPECT_EQ(Test, true, Loopback.IsEmpty(0), "Precondition: the loopback mailbox must start empty");
 
 	// Sentinel output bytes, BytesReceived, and OutFrom so an unchanged failure is provable.
@@ -256,7 +256,7 @@ MW_TEST_CASE(HostLoopbackEmptyReceiveNullDestinationReturnsInvalid)
  */
 MW_TEST_CASE(HostLoopbackNullDestinationRetainsHeadPacketAndOutputs)
 {
-	FHostLoopback<1, 1, 4> Loopback;
+	THostLoopback<1, 1, 4> Loopback;
 	const FNetAddress Port0 = MakeLoopbackAddress(0);
 
 	const std::array<std::uint8_t, 2> HeadPacket{0x11, 0x22};
@@ -290,7 +290,7 @@ MW_TEST_CASE(HostLoopbackNullDestinationRetainsHeadPacketAndOutputs)
 /** Proves the loopback port satisfies the INetDriver interface so a driver reference is usable. */
 MW_TEST_CASE(HostLoopbackSatisfiesINetDriverInterface)
 {
-	FHostLoopback<1, 1, 4> Loopback;
+	THostLoopback<1, 1, 4> Loopback;
 	const FNetAddress Port0 = MakeLoopbackAddress(0);
 	INetDriver& Driver = Loopback.Port(0);
 
@@ -319,7 +319,7 @@ MW_TEST_CASE(HostLoopbackSatisfiesINetDriverInterface)
  */
 MW_TEST_CASE(HostLoopbackRoutesDistinctPacketsToEachTargetPort)
 {
-	FHostLoopback<4, 2, 4> Loopback;
+	THostLoopback<4, 2, 4> Loopback;
 	const FNetAddress Port0 = MakeLoopbackAddress(0);
 
 	// Port 0 sends a distinct 1-byte packet to each of ports 1, 2, and 3.
@@ -365,7 +365,7 @@ MW_TEST_CASE(HostLoopbackRoutesDistinctPacketsToEachTargetPort)
 /** Proves a target can reply to the original sender, which then receives it with OutFrom == the replier. */
 MW_TEST_CASE(HostLoopbackSupportsTwoWayReplyWithCorrectSender)
 {
-	FHostLoopback<4, 2, 4> Loopback;
+	THostLoopback<4, 2, 4> Loopback;
 	const FNetAddress Port0 = MakeLoopbackAddress(0);
 	const FNetAddress Port1 = MakeLoopbackAddress(1);
 
@@ -412,7 +412,7 @@ MW_TEST_CASE(HostLoopbackSupportsTwoWayReplyWithCorrectSender)
  */
 MW_TEST_CASE(HostLoopbackRejectsUnroutableDestinationAddress)
 {
-	FHostLoopback<4, 2, 4> Loopback;
+	THostLoopback<4, 2, 4> Loopback;
 
 	const std::array<std::uint8_t, 2> Packet{0x77, 0x88};
 
@@ -447,7 +447,7 @@ MW_TEST_CASE(HostLoopbackRejectsUnroutableDestinationAddress)
  */
 MW_TEST_CASE(HostLoopbackReportsMaxPacketBytesAndRetainsHeadOnTooSmallReceive)
 {
-	FHostLoopback<4, 1, 4> Loopback;
+	THostLoopback<4, 1, 4> Loopback;
 	const FNetAddress Port0 = MakeLoopbackAddress(0);
 
 	// The per-port driver reports the network's per-packet byte capacity.

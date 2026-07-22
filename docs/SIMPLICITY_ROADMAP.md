@@ -466,7 +466,7 @@ the old name and must be updated in the same task.
   `MakeReference`/`RegistryReference`=164. Old `Lease`/`MakeView` vocabulary now
   survives only in frozen historical `docs/ROADMAP.md` (excepted by task 8.4).
 
-- [ ] **1.5 Net renames — fix the template-prefix style violations.** These
+- [x] **1.5 Net renames — fix the template-prefix style violations.** These
   four types are **class templates carrying the `F` prefix**, which teaches
   students the wrong rule (`docs/Style.md`: `T` = template).
 
@@ -483,6 +483,21 @@ the old name and must be updated in the same task.
 
   **Done when:** greps show old names only in historical files; Standard
   Verify passes.
+
+  Done 2026-07-22 — the four Net class templates renamed F→T across 10
+  code/test files (`FNetManager`→`TNetManager`,
+  `FNetPacketStorage`→`TNetPacketStorage`, `FHostLoopback`→`THostLoopback`,
+  `Detail::FLoopbackMailboxes`→`TLoopbackMailboxes`), including the forward
+  declaration, the template-friend declaration
+  (`friend class TNetManager<...>`), the `static_assert` message strings, and
+  every in-class self-reference; no other `F`-prefixed Net type touched. Living
+  docs swept (`README.md`, root + Net `AGENTS.md`×4, `Modules/Net/README.md`,
+  `docs/UE5ConceptMap.md`) plus the decorative `CheckProfileMap.py` self-test
+  fixture (its Net detection keys on the archive lines, not the symbol name, so
+  the change is safe — profile-map ctests #5/#6 stayed green). Build
+  warning-clean; ctest 11/11; doc checker 122 files; old-name grep 0 outside
+  historical files, `friend class FNetManager` 0. The `docs/diagrams/*` files
+  keep the old names — intentionally excluded from every sweep (see task 8.4).
 
 - [ ] **1.6 Net renames — abbreviations and bare literals.**
 
