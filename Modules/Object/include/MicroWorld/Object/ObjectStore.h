@@ -417,6 +417,9 @@ private:
 		return EObjectResult::Success;
 	}
 
+	/** Reports whether the caller-supplied storage descriptor has valid slot and root layout. */
+	static bool IsStorageDescriptorValid(const FObjectStoreStorage& Storage) noexcept;
+
 	/** Returns the first reusable slot without changing its generation or state. */
 	ObjectIndex FindVacantSlot() const noexcept;
 
@@ -452,6 +455,9 @@ private:
 
 	/** Wires object identity and slot metadata for a freshly constructed object and returns its handle. */
 	FObjectHandle PublishObjectIntoSlot(ObjectIndex SlotIndex, const FClassDescriptor& Descriptor, UObject& ManagedObject) noexcept;
+
+	/** Returns the next pending-destroy slot to inspect and advances the wrapping scan cursor. */
+	ObjectIndex AdvancePendingScanCursor() noexcept;
 
 	/** Reports collector iteration capacity without exposing mutable metadata publicly. */
 	std::uint32_t CollectorSlotCapacity() const noexcept { return Storage.SlotCount; }

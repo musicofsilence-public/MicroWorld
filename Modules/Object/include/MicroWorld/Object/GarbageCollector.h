@@ -184,6 +184,9 @@ private:
 	/** Releases a normally swept cycle without adding unbudgeted slot work. */
 	void CompleteCycle() noexcept;
 
+	/** Reports why a collection cannot start, or acquires store ownership for the cycle and returns Success. */
+	ERuntimeResult ClassifyStartFailure() noexcept;
+
 	/** Rejects an Advance call whose lifecycle or store ownership is not ready. */
 	ERuntimeResult ValidateAdvancePreconditions() const noexcept;
 

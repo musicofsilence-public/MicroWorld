@@ -41,16 +41,7 @@ FObjectStoreDispatchGuard::~FObjectStoreDispatchGuard() noexcept
 FObjectStore::FObjectStore(const FObjectStoreStorage InStorage, const FClassRegistryView InClasses) noexcept
 	: Storage(InStorage), ClassRegistryLookup(InClasses)
 {
-	const bool bHasSlotPointers = Storage.SlotCount > 0 && Storage.SlotPayloadBytes != nullptr && Storage.SlotMetadata != nullptr;
-	const bool bHasSlotLayout =
-		Storage.SlotSizeBytes > 0 && IsValidAlignment(Storage.SlotAlignmentBytes) && (Storage.SlotSizeBytes % Storage.SlotAlignmentBytes) == 0;
-	const bool bStorageExtentFits = MultiplicationFitsSizeType(Storage.SlotSizeBytes, Storage.SlotCount)
-		&& Storage.TotalSlotStorageBytes >= Storage.SlotSizeBytes * Storage.SlotCount;
-	const bool bStorageAddressAligned =
-		Storage.SlotPayloadBytes != nullptr && (reinterpret_cast<std::uintptr_t>(Storage.SlotPayloadBytes) & (Storage.SlotAlignmentBytes - 1U)) == 0;
-	const bool bHasRootStorage = Storage.RootCapacity == 0 || Storage.Roots != nullptr;
-
-	if (!bHasSlotPointers || !bHasSlotLayout || !bStorageExtentFits || !bStorageAddressAligned || !bHasRootStorage)
+	if (!IsStorageDescriptorValid(Storage))
 	{
 		return;
 	}
@@ -65,6 +56,19 @@ FObjectStore::FObjectStore(const FObjectStoreStorage InStorage, const FClassRegi
 	}
 
 	StoreConfigurationResult = EObjectResult::Success;
+}
+
+bool FObjectStore::IsStorageDescriptorValid(const FObjectStoreStorage& Storage) noexcept
+{
+	const bool bHasSlotPointers = Storage.SlotCount > 0 && Storage.SlotPayloadBytes != nullptr && Storage.SlotMetadata != nullptr;
+	const bool bHasSlotLayout =
+		Storage.SlotSizeBytes > 0 && IsValidAlignment(Storage.SlotAlignmentBytes) && (Storage.SlotSizeBytes % Storage.SlotAlignmentBytes) == 0;
+	const bool bStorageExtentFits = MultiplicationFitsSizeType(Storage.SlotSizeBytes, Storage.SlotCount)
+		&& Storage.TotalSlotStorageBytes >= Storage.SlotSizeBytes * Storage.SlotCount;
+	const bool bStorageAddressAligned =
+		Storage.SlotPayloadBytes != nullptr && (reinterpret_cast<std::uintptr_t>(Storage.SlotPayloadBytes) & (Storage.SlotAlignmentBytes - 1U)) == 0;
+	const bool bHasRootStorage = Storage.RootCapacity == 0 || Storage.Roots != nullptr;
+	return bHasSlotPointers && bHasSlotLayout && bStorageExtentFits && bStorageAddressAligned && bHasRootStorage;
 }
 
 FObjectStore::~FObjectStore() noexcept
@@ -136,8 +140,7 @@ FObjectMutationResult FObjectStore::ApplyPendingDestroy(const std::uint32_t MaxS
 	const std::uint32_t VisitLimit = MaxSlotsToInspect < Storage.SlotCount ? MaxSlotsToInspect : Storage.SlotCount;
 	while (Mutation.SlotsVisited < VisitLimit && PendingDestroyCount > 0)
 	{
-		const ObjectIndex SlotIndex = PendingDestroyScanCursor;
-		PendingDestroyScanCursor = PendingDestroyScanCursor + 1U == Storage.SlotCount ? 0 : PendingDestroyScanCursor + 1U;
+		const ObjectIndex SlotIndex = AdvancePendingScanCursor();
 		++Mutation.SlotsVisited;
 
 		if (Storage.SlotMetadata[SlotIndex].State == EObjectSlotState::PendingDestroy)
@@ -149,6 +152,13 @@ FObjectMutationResult FObjectStore::ApplyPendingDestroy(const std::uint32_t MaxS
 
 	Mutation.PendingObjectsRemaining = PendingDestroyCount;
 	return Mutation;
+}
+
+ObjectIndex FObjectStore::AdvancePendingScanCursor() noexcept
+{
+	const ObjectIndex SlotIndex = PendingDestroyScanCursor;
+	PendingDestroyScanCursor = PendingDestroyScanCursor + 1U == Storage.SlotCount ? 0 : PendingDestroyScanCursor + 1U;
+	return SlotIndex;
 }
 
 EObjectResult FObjectStore::AddRoot(const FObjectHandle Handle) noexcept

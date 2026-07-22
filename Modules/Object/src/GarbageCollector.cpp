@@ -72,36 +72,41 @@ FGarbageCollector::~FGarbageCollector() noexcept
 
 ERuntimeResult FGarbageCollector::RequestCollection() noexcept
 {
-	if (CurrentPhase != EGarbageCollectionPhase::Idle)
+	const ERuntimeResult StartFailure = ClassifyStartFailure();
+	if (StartFailure != ERuntimeResult::Success)
 	{
 		IncrementSaturated(CollectionStats.RejectedRequests);
-		return ERuntimeResult::LifecycleLocked;
-	}
-
-	if (ObjectStore != nullptr && ObjectStore->CollectorIsMutationLocked())
-	{
-		IncrementSaturated(CollectionStats.RejectedRequests);
-		return ERuntimeResult::LifecycleLocked;
-	}
-
-	const bool bStoreReady = ObjectStore != nullptr && ObjectStore->ConfigurationResult() == EObjectResult::Success;
-	const bool bWorklistReady = ObjectStore != nullptr && CollectorStorage.WorklistCapacity >= ObjectStore->CollectorSlotCapacity()
-		&& (CollectorStorage.WorklistCapacity == 0 || CollectorStorage.Worklist != nullptr);
-	if (!bStoreReady || !bWorklistReady)
-	{
-		IncrementSaturated(CollectionStats.RejectedRequests);
-		return ERuntimeResult::CapacityExceeded;
-	}
-	if (!ObjectStore->CollectorTryBegin(*this))
-	{
-		IncrementSaturated(CollectionStats.RejectedRequests);
-		return ERuntimeResult::LifecycleLocked;
+		return StartFailure;
 	}
 
 	RootCursor = 0;
 	WorklistCount = 0;
 	SweepCursor = 0;
 	CurrentPhase = EGarbageCollectionPhase::SeedRoots;
+	return ERuntimeResult::Success;
+}
+
+ERuntimeResult FGarbageCollector::ClassifyStartFailure() noexcept
+{
+	if (CurrentPhase != EGarbageCollectionPhase::Idle)
+	{
+		return ERuntimeResult::LifecycleLocked;
+	}
+	if (ObjectStore != nullptr && ObjectStore->CollectorIsMutationLocked())
+	{
+		return ERuntimeResult::LifecycleLocked;
+	}
+	const bool bStoreReady = ObjectStore != nullptr && ObjectStore->ConfigurationResult() == EObjectResult::Success;
+	const bool bWorklistReady = ObjectStore != nullptr && CollectorStorage.WorklistCapacity >= ObjectStore->CollectorSlotCapacity()
+		&& (CollectorStorage.WorklistCapacity == 0 || CollectorStorage.Worklist != nullptr);
+	if (!bStoreReady || !bWorklistReady)
+	{
+		return ERuntimeResult::CapacityExceeded;
+	}
+	if (!ObjectStore->CollectorTryBegin(*this))
+	{
+		return ERuntimeResult::LifecycleLocked;
+	}
 	return ERuntimeResult::Success;
 }
 

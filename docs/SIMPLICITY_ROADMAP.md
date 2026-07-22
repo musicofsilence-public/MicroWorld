@@ -886,7 +886,7 @@ tests must pass unchanged.
 
 ---
 
-### Phase 4 — Function decomposition: Object & GC 🟨
+### Phase 4 — Function decomposition: Object & GC ✅
 
 - [x] **4.1 Split `FGarbageCollector::Advance` (the largest function in the
   repo).** `GarbageCollector.cpp:108-247` (~137 body lines, 6 actions,
@@ -967,7 +967,7 @@ tests must pass unchanged.
   CQS: `PublishObjectIntoSlot` mutates-and-returns the handle — the intentional
   slot-factory shape, same as tasks 3.1/3.3/3.4.
 
-- [ ] **4.3 Smaller Object splits.**
+- [x] **4.3 Smaller Object splits.**
   1. `FGarbageCollector::RequestCollection` (`GarbageCollector.cpp:73-106`,
      ~32 lines, 4 reject branches each duplicating `RejectedRequests++`) —
      extract an enum-returning `ClassifyStartFailure()` (or equivalent) so
@@ -984,6 +984,21 @@ tests must pass unchanged.
 
   **Done when:** each touched parent ≤ 2 actions; tests pass unchanged;
   Standard Verify passes.
+
+  Done 2026-07-22 — implemented by a **Sonnet subagent**, then reviewed and
+  re-verified by the lead. Four extractions across five files:
+  `RequestCollection` → `ClassifyStartFailure` (the four reject branches become
+  one enum-returning classifier so there is a single reject path that increments
+  `RejectedRequests` once); `FObjectStore` constructor → `IsStorageDescriptorValid`
+  (static; body is validate-then-initialize); `FClassDescriptor::IsChildOf` →
+  `HasAcyclicAncestry` (Floyd probe) + `AncestryContains` (the walk), kept public
+  so the aggregate stays all-public; `ApplyPendingDestroy` → `AdvancePendingScanCursor`
+  (the wrapping ring-cursor read/advance). Behavior-preserving — every branch,
+  counter, and side-effect order reproduced; build clean, ctest 11/11 (Object tests
+  in `microworld_object_tests` #8), doc checker 122. CQS: `ClassifyStartFailure`
+  embeds `CollectorTryBegin` (single reject path — the roadmap's goal) and
+  `AdvancePendingScanCursor` is a post-increment cursor — both intentional
+  command+query idioms. **Phase 4 complete.**
 
 ---
 
@@ -1354,7 +1369,7 @@ tests must pass unchanged.
 | 1 | Mechanical renames | 7 | ✅ |
 | 2 | Why-comment repairs | 5 | ✅ |
 | 3 | Decompose: Core & Memory | 4 | ✅ |
-| 4 | Decompose: Object & GC | 3 | 🟨 |
+| 4 | Decompose: Object & GC | 3 | ✅ |
 | 5 | Decompose: Engine | 4 | ⬜ |
 | 6 | Decompose: Net & Platform | 6 | ⬜ |
 | 7 | Ceremony reduction | 3 | ⬜ |
