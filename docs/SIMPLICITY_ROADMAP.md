@@ -1079,7 +1079,7 @@ tests must pass unchanged.
   Verified: build clean, ctest 11/11 (`#1 format_check`, `#10 engine_tests`
   including EngineSpawnDestroy + EngineGarbageCollection), doc checker 122 files.
 
-- [ ] **5.3 Split `TTimerManager::Advance` and `Schedule`.** `Timer.h:223-292`
+- [x] **5.3 Split `TTimerManager::Advance` and `Schedule`.** `Timer.h:223-292`
   (~67 lines) and `:148-189` (~35 lines).
   1. `Advance` → `SnapshotActiveTimers()` (the insertion-order snapshot),
      `FireAndRescheduleSlot(SlotIndex, NowMilliseconds)` (the due-check +
@@ -1090,6 +1090,29 @@ tests must pass unchanged.
 
   **Done when:** `Advance` ≤ 30 body lines; EngineTimerManagerTests pass
   unchanged; Standard Verify passes.
+
+  **Evidence (2026-07-22, commit pending):** `Advance` reduced to a
+  ~11-logical-line orchestrator (two guards + time update + `SnapshotActiveTimers`
+  + a dispatch loop calling `FireAndRescheduleSlot` per snapshot handle +
+  `CompactInsertionOrder`), with the `bDispatchActive` dispatch lock kept in the
+  parent. `SnapshotActiveTimers()` reproduces the original snapshot loop and
+  returns the frozen count (faithfully replacing the original single
+  `InitialCount` capture). `FireAndRescheduleSlot(FTimerHandle, NowMilliseconds)`
+  is one original loop iteration with the four `continue` guards turned into
+  `return`; every inline why-comment (looping refire guard, dispatch-lock
+  rationale, one-shot in-place clear) is lifted verbatim. `Schedule`'s six field
+  writes became `FTimerSlot::Arm`, which sets exactly those six fields and leaves
+  `Generation`/`bRetired` untouched; the deadline (`SaturatingAdd`) and the
+  Looping-vs-zero period stay computed in `Schedule` since the manager owns the
+  clock and mode. **Deviation (justified):** `FireAndRescheduleSlot` takes the
+  full `FTimerHandle`, not the roadmap's illustrative bare `SlotIndex`, because
+  the per-slot generation check needs the handle's generation. **CQS note:**
+  `SnapshotActiveTimers()` is an intentional fill-and-return-count idiom (produces
+  the dispatch snapshot, returns how many entries it froze) — the cleanest way to
+  keep the original's single frozen count flowing to both the copy and the
+  dispatch loops; reported, not hidden. Verified: build clean, ctest 11/11
+  (`#1 format_check`, `#10 engine_tests` including EngineTimerManager), doc
+  checker 122 files.
 
 - [ ] **5.4 Name the `TEngineHost::Tick` frame steps and the lifecycle
   cascades.**

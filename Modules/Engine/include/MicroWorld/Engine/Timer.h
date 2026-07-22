@@ -174,12 +174,8 @@ public:
 		}
 
 		const std::size_t SlotIndex = static_cast<std::size_t>(AvailableSlot - Slots);
-		AvailableSlot->Callback = std::move(Callback);
-		AvailableSlot->DeadlineMilliseconds = SaturatingAdd(LastAcceptedNowMilliseconds, DelayAndPeriodMilliseconds);
-		AvailableSlot->PeriodMilliseconds = (Mode == ETimerMode::Looping) ? DelayAndPeriodMilliseconds : DurationMilliseconds{0};
-		AvailableSlot->LastFiredMilliseconds = TimePointMilliseconds{0};
-		AvailableSlot->Mode = Mode;
-		AvailableSlot->bActive = true;
+		const DurationMilliseconds PeriodMilliseconds = (Mode == ETimerMode::Looping) ? DelayAndPeriodMilliseconds : DurationMilliseconds{0};
+		AvailableSlot->Arm(std::move(Callback), SaturatingAdd(LastAcceptedNowMilliseconds, DelayAndPeriodMilliseconds), PeriodMilliseconds, Mode);
 
 		const FTimerHandle PublishedHandle{static_cast<std::uint16_t>(SlotIndex), AvailableSlot->Generation};
 		InsertionOrder[ActiveTimerCount] = PublishedHandle;
@@ -232,58 +228,12 @@ public:
 		}
 		LastAcceptedNowMilliseconds = NowMilliseconds;
 
-		const std::size_t InitialCount = ActiveTimerCount;
-		for (std::size_t SnapshotIndex = 0; SnapshotIndex < InitialCount; ++SnapshotIndex)
-		{
-			DispatchSnapshot[SnapshotIndex] = InsertionOrder[SnapshotIndex];
-		}
+		const std::size_t SnapshotCount = SnapshotActiveTimers();
 
 		bDispatchActive = true;
-		for (std::size_t SnapshotIndex = 0; SnapshotIndex < InitialCount; ++SnapshotIndex)
+		for (std::size_t SnapshotIndex = 0; SnapshotIndex < SnapshotCount; ++SnapshotIndex)
 		{
-			const FTimerHandle Handle = DispatchSnapshot[SnapshotIndex];
-			if (static_cast<std::size_t>(Handle.Index) >= MaxTimers)
-			{
-				continue;
-			}
-
-			FTimerSlot& Slot = Slots[Handle.Index];
-			if (!Slot.bActive || Slot.Generation != Handle.Generation)
-			{
-				continue;
-			}
-			if (NowMilliseconds < Slot.DeadlineMilliseconds)
-			{
-				continue;
-			}
-			// Guards a nonzero-period looping timer against refiring when NowMilliseconds has not advanced
-			// past the previously accepted timestamp, including after deadline saturation.
-			if (Slot.PeriodMilliseconds != 0 && Slot.LastFiredMilliseconds == NowMilliseconds)
-			{
-				continue;
-			}
-
-			// Dispatch is locked for the whole Advance, so no caller Schedule, Cancel, or nested
-			// Advance can cancel this slot, replace its callback, or reschedule it while the
-			// active bound callback executes. Execute is noexcept and the bound callable is live.
-			(void)Slot.Callback.Execute();
-
-			if (Slot.Mode == ETimerMode::OneShot)
-			{
-				// Clear and retire the slot in place; the live insertion-order entry is dropped
-				// by the single post-dispatch compaction pass so no per-fired shift is needed.
-				Slot.Callback.Reset();
-				Slot.bActive = false;
-				AdvanceGenerationOrRetire(Slot);
-			}
-			else
-			{
-				if (Slot.PeriodMilliseconds != 0)
-				{
-					Slot.LastFiredMilliseconds = NowMilliseconds;
-				}
-				Slot.DeadlineMilliseconds = SaturatingAdd(NowMilliseconds, Slot.PeriodMilliseconds);
-			}
+			FireAndRescheduleSlot(DispatchSnapshot[SnapshotIndex], NowMilliseconds);
 		}
 		bDispatchActive = false;
 
@@ -324,6 +274,22 @@ private:
 
 		/** Permanently removes this slot once its generation space is exhausted. */
 		bool bRetired{false};
+
+		/** Populates every schedule field for a freshly claimed slot; leaves generation
+		 * and retirement identity untouched so slot reuse stays generation-checked. */
+		void Arm(
+			TDelegate<void(), InlineTimerCallbackBytes>&& NewCallback,
+			const TimePointMilliseconds FirstDeadlineMilliseconds,
+			const DurationMilliseconds NewPeriodMilliseconds,
+			const ETimerMode NewMode) noexcept
+		{
+			Callback = std::move(NewCallback);
+			DeadlineMilliseconds = FirstDeadlineMilliseconds;
+			PeriodMilliseconds = NewPeriodMilliseconds;
+			LastFiredMilliseconds = TimePointMilliseconds{0};
+			Mode = NewMode;
+			bActive = true;
+		}
 	};
 
 	/** Finds the lowest reusable slot while insertion order remains separately recorded. */
@@ -365,6 +331,76 @@ private:
 			return;
 		}
 		++Slot.Generation;
+	}
+
+	/**
+	 * Freezes the handles active at Advance entry into the dispatch snapshot and
+	 * reports how many were frozen.
+	 *
+	 * The returned count bounds the dispatch loop so a callback that schedules or
+	 * cancels timers cannot change the set visited during this Advance.
+	 */
+	std::size_t SnapshotActiveTimers() noexcept
+	{
+		const std::size_t SnapshotCount = ActiveTimerCount;
+		for (std::size_t SnapshotIndex = 0; SnapshotIndex < SnapshotCount; ++SnapshotIndex)
+		{
+			DispatchSnapshot[SnapshotIndex] = InsertionOrder[SnapshotIndex];
+		}
+		return SnapshotCount;
+	}
+
+	/**
+	 * Fires one snapshotted timer if it is still live and due, then retires a
+	 * completed one-shot in place or reschedules a looping timer.
+	 *
+	 * A stale, inactive, not-yet-due, or already-fired-this-instant slot is skipped
+	 * without firing.
+	 */
+	void FireAndRescheduleSlot(const FTimerHandle Handle, const TimePointMilliseconds NowMilliseconds) noexcept
+	{
+		if (static_cast<std::size_t>(Handle.Index) >= MaxTimers)
+		{
+			return;
+		}
+
+		FTimerSlot& Slot = Slots[Handle.Index];
+		if (!Slot.bActive || Slot.Generation != Handle.Generation)
+		{
+			return;
+		}
+		if (NowMilliseconds < Slot.DeadlineMilliseconds)
+		{
+			return;
+		}
+		// Guards a nonzero-period looping timer against refiring when NowMilliseconds has not advanced
+		// past the previously accepted timestamp, including after deadline saturation.
+		if (Slot.PeriodMilliseconds != 0 && Slot.LastFiredMilliseconds == NowMilliseconds)
+		{
+			return;
+		}
+
+		// Dispatch is locked for the whole Advance, so no caller Schedule, Cancel, or nested
+		// Advance can cancel this slot, replace its callback, or reschedule it while the
+		// active bound callback executes. Execute is noexcept and the bound callable is live.
+		(void)Slot.Callback.Execute();
+
+		if (Slot.Mode == ETimerMode::OneShot)
+		{
+			// Clear and retire the slot in place; the live insertion-order entry is dropped
+			// by the single post-dispatch compaction pass so no per-fired shift is needed.
+			Slot.Callback.Reset();
+			Slot.bActive = false;
+			AdvanceGenerationOrRetire(Slot);
+		}
+		else
+		{
+			if (Slot.PeriodMilliseconds != 0)
+			{
+				Slot.LastFiredMilliseconds = NowMilliseconds;
+			}
+			Slot.DeadlineMilliseconds = SaturatingAdd(NowMilliseconds, Slot.PeriodMilliseconds);
+		}
 	}
 
 	/**
