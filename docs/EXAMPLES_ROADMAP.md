@@ -506,7 +506,7 @@ examples/*/src/NetworkConfig.h
 | Phase | Content | Status |
 | --- | --- | --- |
 | 0 | Scaffold: `examples/` folder, board profile, gitignore | ✅ |
-| 1 | Core on the board (01–03) | ⬜ |
+| 1 | Core on the board (01–03) | 🟨 |
 | 2 | Memory (04–07) | ⬜ |
 | 3 | Object (08–09) | ⬜ |
 | 4 | Engine (10–11) | ⬜ |
@@ -575,8 +575,10 @@ Done 2026-07-23 — `examples/esp32-common/partitions.csv` and `sdkconfig.defaul
 
 #### Task 1.1 — `01-CoreTick`
 
-- [ ] Built
+- [x] Built
 - [ ] Hardware-verified
+
+Built 2026-07-23 — `examples/01-CoreTick` implements the seven-line tick trace over `FTickFunction`/`FEsp32TimeSource`/`FVersion`; `pio run` `[SUCCESS]` (RAM 20,220 B / 6.2%, Flash 193,281 B / 4.6%), example code warning-clean (only ESP-IDF's downgraded `#include_next` pedantic warnings), root `ctest` 11/11 unchanged. Hardware-verified pending the human-gated §1.2 checkpoint.
 
 **Feature:** bounded per-object tick scheduling (`FTickFunction`) driven by
 caller-supplied real time — the engine's "no hidden clock" contract, made

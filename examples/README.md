@@ -38,7 +38,7 @@ Status: ⬜ planned · 🟨 built (compiles) · ✅ hardware-verified
 
 | # | Example | The one feature | Extra hardware | Status |
 | --- | --- | --- | --- | --- |
-| 01 | `01-CoreTick` | `FTickFunction` cadence from caller-supplied real time | — | ⬜ |
+| 01 | `01-CoreTick` | `FTickFunction` cadence from caller-supplied real time | — | 🟨 |
 | 02 | `02-CoreLifecycle` | forward-only lifecycle: `FApplication` + `FLifecycleGuard` | — | ⬜ |
 | 03 | `03-CoreLog` | `FLogSink` seam: `MW_LOG` through `Esp32LogSink` | — | ⬜ |
 | 04 | `04-MemoryArena` | `TFixedArena` / `IMemoryResource` explicit allocation | — | ⬜ |
