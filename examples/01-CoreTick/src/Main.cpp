@@ -1,12 +1,10 @@
+#include <MicroWorld/Log.h>
 #include <MicroWorld/TickFunction.h>
 #include <MicroWorld/Version.h>
 
+#include <MicroWorld/PlatformEsp32/Esp32LogSink.h>
+#include <MicroWorld/PlatformEsp32/Esp32Sleep.h>
 #include <MicroWorld/PlatformEsp32/Esp32TimeSource.h>
-
-#include <cstdio>
-
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
 
 namespace
 {
@@ -27,9 +25,13 @@ constexpr unsigned PollPacingMilliseconds = 10;
 /** Composition root: drives one 500 ms tick schedule off real time for five ticks. */
 extern "C" void app_main(void)
 {
+	MicroWorld::SetLogSink(&MicroWorld::Esp32LogSink);
+
 	// Announce the exact package contract this image was built against.
-	std::printf(
-		"[ex01] microworld %u.%u.%u\n",
+	MW_LOG(
+		Log,
+		"ex01",
+		"microworld %u.%u.%u",
 		static_cast<unsigned>(MicroWorld::Version.Major),
 		static_cast<unsigned>(MicroWorld::Version.Minor),
 		static_cast<unsigned>(MicroWorld::Version.Patch));
@@ -50,12 +52,12 @@ extern "C" void app_main(void)
 		if (Decision.bShouldTick)
 		{
 			++TickCount;
-			std::printf("[ex01] tick n=%u delta=%u\n", TickCount, static_cast<unsigned>(Decision.Context.DeltaMilliseconds));
+			MW_LOG(Log, "ex01", "tick n=%u delta=%u", TickCount, static_cast<unsigned>(Decision.Context.DeltaMilliseconds));
 		}
-		vTaskDelay(pdMS_TO_TICKS(PollPacingMilliseconds));
+		MicroWorld::SleepMilliseconds(PollPacingMilliseconds);
 	}
 
 	// Close the schedule and report the bounded run finished.
 	SensorTick.EndPlay();
-	std::printf("[ex01] done ticks=%u\n", TickCount);
+	MW_LOG(Log, "ex01", "done ticks=%u", TickCount);
 }

@@ -2,17 +2,15 @@
 
 #include <MicroWorld/Containers/Span.h>
 #include <MicroWorld/Delegates/Delegate.h>
+#include <MicroWorld/Log.h>
 #include <MicroWorld/Net/NetHost.h>
 #include <MicroWorld/Net/NetResult.h>
+#include <MicroWorld/PlatformEsp32/Esp32Sleep.h>
 #include <MicroWorld/PlatformEsp32/Esp32TimeSource.h>
 #include <MicroWorld/PlatformEsp32/Esp32UartDriver.h>
 #include <MicroWorld/PlatformEsp32/UartAddress.h>
 
 #include <cstdint>
-#include <cstdio>
-
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
 
 using namespace MicroWorld;
 using namespace Ex19;
@@ -33,10 +31,10 @@ int GLastServerActors = -1;
 void RunClient() noexcept
 {
 	static FEsp32UartDriver Driver{MakeUartConfig(ClientNodeId)};
-	std::printf("[ex19] client node=%u open=%d\n", static_cast<unsigned>(ClientNodeId), Driver.IsOpen() ? 1 : 0);
+	MW_LOG(Log, "ex19", "client node=%u open=%d", static_cast<unsigned>(ClientNodeId), Driver.IsOpen() ? 1 : 0);
 	if (!Driver.IsOpen())
 	{
-		std::printf("[ex19] uart failed to open; halting\n");
+		MW_LOG(Error, "ex19", "uart failed to open; halting");
 		return;
 	}
 
@@ -52,7 +50,7 @@ void RunClient() noexcept
 				return;
 			}
 			GLastServerActors = static_cast<int>(Payload[1]);
-			std::printf("[ex19] client rx state tick=%d actors=%d\n", static_cast<int>(Payload[0]), GLastServerActors);
+			MW_LOG(Log, "ex19", "client rx state tick=%d actors=%d", static_cast<int>(Payload[0]), GLastServerActors);
 		});
 	FDelegateHandle Handle{};
 	(void)ClientNet.AddMessageHandler(std::move(Binding), Handle);
@@ -61,7 +59,7 @@ void RunClient() noexcept
 	Config.ServerAddress = MakeUartAddress(ServerNodeId);
 	(void)ClientNet.Configure(ENetMode::Client, Config);
 	(void)ClientNet.Start(GTimeSource.Now());
-	std::printf("[ex19] client connecting (no WiFi -- UART only)\n");
+	MW_LOG(Log, "ex19", "client connecting (no WiFi -- UART only)");
 
 	bool bConnectedAnnounced = false;
 	bool bDoneAnnounced = false;
@@ -77,7 +75,7 @@ void RunClient() noexcept
 		{
 			if (!bConnectedAnnounced)
 			{
-				std::printf("[ex19] client connected\n");
+				MW_LOG(Log, "ex19", "client connected");
 				bConnectedAnnounced = true;
 				NextSpawnDueMilliseconds = Now; // first request now, the second one second later
 			}
@@ -88,7 +86,7 @@ void RunClient() noexcept
 					== ENetResult::Success)
 				{
 					++SpawnRequestsSent;
-					std::printf("[ex19] client sent spawn request %d\n", SpawnRequestsSent);
+					MW_LOG(Log, "ex19", "client sent spawn request %d", SpawnRequestsSent);
 					NextSpawnDueMilliseconds = Now + 1000;
 				}
 			}
@@ -96,9 +94,9 @@ void RunClient() noexcept
 
 		if (!bDoneAnnounced && GLastServerActors >= MaxSpawns)
 		{
-			std::printf("[ex19] done (observed actor count %d)\n", GLastServerActors);
+			MW_LOG(Log, "ex19", "done (observed actor count %d)", GLastServerActors);
 			bDoneAnnounced = true;
 		}
-		vTaskDelay(pdMS_TO_TICKS(PollPacingMilliseconds));
+		SleepMilliseconds(PollPacingMilliseconds);
 	}
 }

@@ -1,14 +1,13 @@
+#include <MicroWorld/Log.h>
 #include <MicroWorld/Net/NetResult.h>
+#include <MicroWorld/PlatformEsp32/Esp32LogSink.h>
+#include <MicroWorld/PlatformEsp32/Esp32Sleep.h>
 #include <MicroWorld/PlatformEsp32/Esp32SpiDriver.h>
 #include <MicroWorld/PlatformEsp32/Esp32TimeSource.h>
 #include <MicroWorld/PlatformEsp32/SpiAddress.h>
 
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
-
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
 
 // Role is chosen at build time by the platformio.ini environment, exactly as the
 // two-board WiFi, LoRa, UART, and I2C examples select theirs — never with build_src_filter.
@@ -97,12 +96,12 @@ void RunMaster() noexcept
 	// Static, never on the app_main stack (the ESP32-S3 stack lesson, §2.2); its DMA buffers must live here.
 	static MicroWorld::FEsp32TimeSource TimeSource{};
 	static MicroWorld::FEsp32SpiMasterDriver Driver{MakeMasterConfig()};
-	std::printf("[ex21] master open=%d\n", Driver.IsOpen() ? 1 : 0);
-	std::printf("[ex21] master clocks the bus; the slave only reacts\n");
+	MW_LOG(Log, "ex21", "master open=%d", Driver.IsOpen() ? 1 : 0);
+	MW_LOG(Log, "ex21", "master clocks the bus; the slave only reacts");
 	if (!Driver.IsOpen())
 	{
 		// A failed bus open cannot recover here; stop with a clear line instead of looping.
-		std::printf("[ex21] spi master failed to open; halting\n");
+		MW_LOG(Error, "ex21", "spi master failed to open; halting");
 		return;
 	}
 
@@ -122,7 +121,7 @@ void RunMaster() noexcept
 			WriteVolleyPayload(Payload, MasterNodeId, NextCounter);
 			const MicroWorld::ENetResult TxResult =
 				Driver.TrySend(MicroWorld::MakeSpiAddress(SlaveNodeId), MicroWorld::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
-			std::printf("[ex21] tx n=%u result=%s\n", static_cast<unsigned>(NextCounter), ToText(TxResult));
+			MW_LOG(Log, "ex21", "tx n=%u result=%s", static_cast<unsigned>(NextCounter), ToText(TxResult));
 			if (TxResult == MicroWorld::ENetResult::Success)
 			{
 				bAwaitingReply = true;
@@ -140,14 +139,14 @@ void RunMaster() noexcept
 			{
 				const std::uint32_t Counter = ReadVolleyCounter(RxBuffer);
 				const std::uint8_t FromId = MicroWorld::SpiAddressNodeId(From);
-				std::printf("[ex21] rx n=%u from=%u\n", static_cast<unsigned>(Counter), static_cast<unsigned>(FromId));
+				MW_LOG(Log, "ex21", "rx n=%u from=%u", static_cast<unsigned>(Counter), static_cast<unsigned>(FromId));
 				NextCounter = Counter + 1;
 				bAwaitingReply = false;
 				NextSendDueMilliseconds = Now + VolleyPeriodMilliseconds;
 			}
 		}
 
-		vTaskDelay(pdMS_TO_TICKS(PollPacingMilliseconds));
+		MicroWorld::SleepMilliseconds(PollPacingMilliseconds);
 	}
 }
 #else
@@ -169,11 +168,11 @@ void RunSlave() noexcept
 {
 	// Static, never on the app_main stack (§2.2); its DMA buffers must live here.
 	static MicroWorld::FEsp32SpiSlaveDriver Driver{MakeSlaveConfig()};
-	std::printf("[ex21] slave open=%d\n", Driver.IsOpen() ? 1 : 0);
+	MW_LOG(Log, "ex21", "slave open=%d", Driver.IsOpen() ? 1 : 0);
 	if (!Driver.IsOpen())
 	{
 		// A failed bus open cannot recover here; stop with a clear line instead of looping.
-		std::printf("[ex21] spi slave failed to open; halting\n");
+		MW_LOG(Error, "ex21", "spi slave failed to open; halting");
 		return;
 	}
 
@@ -188,25 +187,26 @@ void RunSlave() noexcept
 		{
 			const std::uint32_t Counter = ReadVolleyCounter(RxBuffer);
 			const std::uint8_t FromId = MicroWorld::SpiAddressNodeId(From);
-			std::printf("[ex21] rx n=%u from=%u\n", static_cast<unsigned>(Counter), static_cast<unsigned>(FromId));
+			MW_LOG(Log, "ex21", "rx n=%u from=%u", static_cast<unsigned>(Counter), static_cast<unsigned>(FromId));
 
 			// Stage the reply (counter + 1) for the master's next read; the master clocks it out.
 			std::uint8_t Payload[VolleyPayloadBytes];
 			WriteVolleyPayload(Payload, SlaveNodeId, Counter + 1);
 			const MicroWorld::ENetResult TxResult =
 				Driver.TrySend(MicroWorld::MakeSpiAddress(MasterNodeId), MicroWorld::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
-			std::printf("[ex21] tx n=%u result=%s\n", static_cast<unsigned>(Counter + 1), ToText(TxResult));
+			MW_LOG(Log, "ex21", "tx n=%u result=%s", static_cast<unsigned>(Counter + 1), ToText(TxResult));
 		}
 
-		vTaskDelay(pdMS_TO_TICKS(PollPacingMilliseconds));
+		MicroWorld::SleepMilliseconds(PollPacingMilliseconds);
 	}
 }
 #endif
 } // namespace
 
-/** Composition root: ping-pongs a counter with the peer board over one wired SPI bus. */
+/** Composition root: installs the log sink, then ping-pongs a counter with the peer board over one wired SPI bus. */
 extern "C" void app_main(void)
 {
+	MicroWorld::SetLogSink(&MicroWorld::Esp32LogSink);
 #if MICROWORLD_EXAMPLE_SPI_MASTER
 	RunMaster();
 #else

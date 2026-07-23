@@ -1,14 +1,13 @@
+#include <MicroWorld/Log.h>
 #include <MicroWorld/Net/NetResult.h>
 #include <MicroWorld/PlatformEsp32/Esp32I2cDriver.h>
+#include <MicroWorld/PlatformEsp32/Esp32LogSink.h>
+#include <MicroWorld/PlatformEsp32/Esp32Sleep.h>
 #include <MicroWorld/PlatformEsp32/Esp32TimeSource.h>
 #include <MicroWorld/PlatformEsp32/I2cAddress.h>
 
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
-
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
 
 // Role is chosen at build time by the platformio.ini environment, exactly as the
 // two-board WiFi, LoRa, and UART examples select theirs — never with build_src_filter.
@@ -97,12 +96,12 @@ void RunMaster() noexcept
 	// Static, never on the app_main stack (the ESP32-S3 stack lesson, §2.2).
 	static MicroWorld::FEsp32TimeSource TimeSource{};
 	static MicroWorld::FEsp32I2cMasterDriver Driver{MakeMasterConfig()};
-	std::printf("[ex20] master open=%d\n", Driver.IsOpen() ? 1 : 0);
-	std::printf("[ex20] master clocks the bus; the slave only reacts\n");
+	MW_LOG(Log, "ex20", "master open=%d", Driver.IsOpen() ? 1 : 0);
+	MW_LOG(Log, "ex20", "master clocks the bus; the slave only reacts");
 	if (!Driver.IsOpen())
 	{
 		// A failed bus open cannot recover here; stop with a clear line instead of looping.
-		std::printf("[ex20] i2c master failed to open; halting\n");
+		MW_LOG(Error, "ex20", "i2c master failed to open; halting");
 		return;
 	}
 
@@ -122,7 +121,7 @@ void RunMaster() noexcept
 			WriteVolleyPayload(Payload, MasterNodeId, NextCounter);
 			const MicroWorld::ENetResult TxResult =
 				Driver.TrySend(MicroWorld::MakeI2cAddress(SlaveNodeId), MicroWorld::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
-			std::printf("[ex20] tx n=%u result=%s\n", static_cast<unsigned>(NextCounter), ToText(TxResult));
+			MW_LOG(Log, "ex20", "tx n=%u result=%s", static_cast<unsigned>(NextCounter), ToText(TxResult));
 			if (TxResult == MicroWorld::ENetResult::Success)
 			{
 				bAwaitingReply = true;
@@ -139,14 +138,14 @@ void RunMaster() noexcept
 			{
 				const std::uint32_t Counter = ReadVolleyCounter(RxBuffer);
 				const std::uint8_t FromId = MicroWorld::I2cAddressNodeId(From);
-				std::printf("[ex20] rx n=%u from=%u\n", static_cast<unsigned>(Counter), static_cast<unsigned>(FromId));
+				MW_LOG(Log, "ex20", "rx n=%u from=%u", static_cast<unsigned>(Counter), static_cast<unsigned>(FromId));
 				NextCounter = Counter + 1;
 				bAwaitingReply = false;
 				NextSendDueMilliseconds = Now + VolleyPeriodMilliseconds;
 			}
 		}
 
-		vTaskDelay(pdMS_TO_TICKS(PollPacingMilliseconds));
+		MicroWorld::SleepMilliseconds(PollPacingMilliseconds);
 	}
 }
 #else
@@ -166,11 +165,11 @@ MicroWorld::FEsp32I2cSlaveConfig MakeSlaveConfig() noexcept
 void RunSlave() noexcept
 {
 	static MicroWorld::FEsp32I2cSlaveDriver Driver{MakeSlaveConfig()};
-	std::printf("[ex20] slave open=%d\n", Driver.IsOpen() ? 1 : 0);
+	MW_LOG(Log, "ex20", "slave open=%d", Driver.IsOpen() ? 1 : 0);
 	if (!Driver.IsOpen())
 	{
 		// A failed bus open cannot recover here; stop with a clear line instead of looping.
-		std::printf("[ex20] i2c slave failed to open; halting\n");
+		MW_LOG(Error, "ex20", "i2c slave failed to open; halting");
 		return;
 	}
 
@@ -185,25 +184,26 @@ void RunSlave() noexcept
 		{
 			const std::uint32_t Counter = ReadVolleyCounter(RxBuffer);
 			const std::uint8_t FromId = MicroWorld::I2cAddressNodeId(From);
-			std::printf("[ex20] rx n=%u from=%u\n", static_cast<unsigned>(Counter), static_cast<unsigned>(FromId));
+			MW_LOG(Log, "ex20", "rx n=%u from=%u", static_cast<unsigned>(Counter), static_cast<unsigned>(FromId));
 
 			// Stage the reply (counter + 1) for the master's next read; the master clocks it out.
 			std::uint8_t Payload[VolleyPayloadBytes];
 			WriteVolleyPayload(Payload, SlaveNodeId, Counter + 1);
 			const MicroWorld::ENetResult TxResult =
 				Driver.TrySend(MicroWorld::MakeI2cAddress(MasterNodeId), MicroWorld::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
-			std::printf("[ex20] tx n=%u result=%s\n", static_cast<unsigned>(Counter + 1), ToText(TxResult));
+			MW_LOG(Log, "ex20", "tx n=%u result=%s", static_cast<unsigned>(Counter + 1), ToText(TxResult));
 		}
 
-		vTaskDelay(pdMS_TO_TICKS(PollPacingMilliseconds));
+		MicroWorld::SleepMilliseconds(PollPacingMilliseconds);
 	}
 }
 #endif
 } // namespace
 
-/** Composition root: ping-pongs a counter with the peer board over one wired I2C bus. */
+/** Composition root: installs the log sink, then ping-pongs a counter with the peer board over one wired I2C bus. */
 extern "C" void app_main(void)
 {
+	MicroWorld::SetLogSink(&MicroWorld::Esp32LogSink);
 #if MICROWORLD_EXAMPLE_I2C_MASTER
 	RunMaster();
 #else

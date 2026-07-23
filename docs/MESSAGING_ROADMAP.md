@@ -733,7 +733,7 @@ of the transport seam — sensor examples use timer-driven synthetic readings).
 | Phase | Title | Tasks | Status |
 | --- | --- | --- | --- |
 | 0 | Baseline & governance | 2 | ✅ |
-| 1 | Engine-first examples groundwork (platform facades) | 5 | 🟨 |
+| 1 | Engine-first examples groundwork (platform facades) | 5 | ✅ |
 | 2 | Local actor messaging (Engine) | 3 | ⬜ |
 | 3 | Messaging over one wire | 2 | ⬜ |
 | 4 | Several channels per world | 3 | ⬜ |
@@ -779,7 +779,7 @@ of the transport seam — sensor examples use timer-driven synthetic readings).
 
 ---
 
-### Phase 1 — Engine-first examples groundwork 🟨
+### Phase 1 — Engine-first examples groundwork ✅
 
 Goal: every existing example builds from MicroWorld headers only (§2.2). No
 messaging yet — this phase just moves vendor glue behind platform facades and
@@ -891,7 +891,7 @@ adopts the shipped log seam.
   `.cpp/.h/.txt` grep gate 0, clang-format clean, host `ctest` 11/11, `pio run -d
   examples/16-TwoBoardUdp` both envs `[SUCCESS]` (RAM 13.4% / Flash 19.0%).
 
-- [ ] **1.5 Sweep examples 01, 18, 19, 20, 21 onto `MW_LOG` +
+- [x] **1.5 Sweep examples 01, 18, 19, 20, 21 onto `MW_LOG` +
   `SleepMilliseconds`.** Mechanical: install `Esp32LogSink`, swap
   `std::printf`→`MW_LOG(Log, "ex<NN>", ...)`, swap `vTaskDelay`→
   `SleepMilliseconds`, drop `<cstdio>`/freertos includes, replace stray
@@ -901,6 +901,26 @@ adopts the shipped log seam.
 
   **Done when:** the §1.3 grep gate returns 0 for all five `src/` trees.
   **Verify:** `pio run` for each of the five + ctest.
+
+  Done 2026-07-23 — all five examples now engine-first: `Esp32LogSink` installed
+  at each `app_main` start (before role dispatch where present), every
+  `std::printf("[exNN] ...\n")` → `MW_LOG(Level, "exNN", ...)` (Error for
+  halt lines, Log otherwise), `vTaskDelay` → `SleepMilliseconds`,
+  `<cstdio>`/freertos includes dropped, and ex19's `std::array<FActorComponentRegistry<0>,
+  MaxSpawns>` → plain C array (call site unchanged). All five `src/CMakeLists.txt`
+  reworded the `esp_libc` why-comment to plain English for grep-gate-0.
+  READMEs: status reset to "not yet verified on hardware" (18/19/20/21 dropped
+  their now-invalid hardware-verified claims — the printf→MW_LOG change alters
+  every trace line's shape), the four `## Verified output` sections deleted (old
+  traces survive in git history at the pre-sweep commit), expected-output blocks
+  reshaped to the `I (nnnn) exNN:` sink form, prose "prints `[exNN] ...`" → "logs
+  `...`", and each `## Image size` flash byte-count refreshed to the post-sweep
+  build (RAM unchanged; flash +130..+430 B from the MW_LOG/sink path; ex18 flash
+  5.2%→5.3%). Gates (lead-rerun): grep gate 0 for all five `src/`; clang-format
+  clean on all 7 edited `.cpp`; host `ctest` 11/11; `pio run` for all five green
+  — 9/9 envs `[SUCCESS]` (01 single; 18/19/20/21 two role envs each). Lead
+  touch-up: fixed the stale `[exNN]` prefixes in README prose and refreshed the
+  image-size figures (beyond the peer's diff).
 
 ---
 

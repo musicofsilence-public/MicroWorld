@@ -8,21 +8,18 @@
 #include <MicroWorld/Engine/EngineStorage.h>
 #include <MicroWorld/Engine/NetworkFrame.h>
 #include <MicroWorld/Engine/World.h>
+#include <MicroWorld/Log.h>
 #include <MicroWorld/Net/NetHost.h>
 #include <MicroWorld/Net/NetResult.h>
 #include <MicroWorld/Object/ClassDescriptor.h>
 #include <MicroWorld/Object/GarbageCollector.h>
 #include <MicroWorld/Object/ObjectPtr.h>
+#include <MicroWorld/PlatformEsp32/Esp32Sleep.h>
 #include <MicroWorld/PlatformEsp32/Esp32TimeSource.h>
 #include <MicroWorld/PlatformEsp32/Esp32UartDriver.h>
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
-
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
 
 using namespace MicroWorld;
 using namespace Ex19;
@@ -67,10 +64,10 @@ private:
 void RunServer() noexcept
 {
 	static FEsp32UartDriver Driver{MakeUartConfig(ServerNodeId)};
-	std::printf("[ex19] server node=%u open=%d\n", static_cast<unsigned>(ServerNodeId), Driver.IsOpen() ? 1 : 0);
+	MW_LOG(Log, "ex19", "server node=%u open=%d", static_cast<unsigned>(ServerNodeId), Driver.IsOpen() ? 1 : 0);
 	if (!Driver.IsOpen())
 	{
-		std::printf("[ex19] uart failed to open; halting\n");
+		MW_LOG(Error, "ex19", "uart failed to open; halting");
 		return;
 	}
 
@@ -78,7 +75,7 @@ void RunServer() noexcept
 	static FServerNet ServerNet{Driver};
 	static TNetHostFrame<FServerNet> ServerFrame{ServerNet};
 	static FServerEngine ServerHost{FGarbageCollectionBudget{1, 4, 8}, ServerFrame};
-	static std::array<FActorComponentRegistry<0>, MaxSpawns> SpawnedRegistries{};
+	static FActorComponentRegistry<0> SpawnedRegistries[MaxSpawns]{};
 	static int SpawnSequence = 0;
 	static int SpawnedBeginCount = 0;
 	static int WorldActorCount = 0;
@@ -86,7 +83,7 @@ void RunServer() noexcept
 	if (ServerHost.RegisterClass<FDemoSpawnedActor>(DemoSpawnedActorTypeId, "DemoSpawnedActor") != EObjectResult::Success
 		|| ServerHost.CreateWorld().Get() == nullptr)
 	{
-		std::printf("[ex19] server world setup failed; halting\n");
+		MW_LOG(Error, "ex19", "server world setup failed; halting");
 		return;
 	}
 
@@ -110,7 +107,7 @@ void RunServer() noexcept
 				return;
 			}
 			++WorldActorCount;
-			std::printf("[ex19] server spawned actor -> world actor count=%d\n", WorldActorCount);
+			MW_LOG(Log, "ex19", "server spawned actor -> world actor count=%d", WorldActorCount);
 		});
 	FDelegateHandle Handle{};
 	(void)ServerNet.AddMessageHandler(std::move(Binding), Handle);
@@ -118,7 +115,7 @@ void RunServer() noexcept
 	(void)ServerNet.Configure(ENetMode::DedicatedServer, MakeHostConfig());
 	(void)ServerNet.Start(GTimeSource.Now());
 	(void)ServerHost.BeginPlay(GTimeSource.Now());
-	std::printf("[ex19] server listening (no WiFi -- UART only)\n");
+	MW_LOG(Log, "ex19", "server listening (no WiFi -- UART only)");
 
 	std::uint8_t StateTick = 0;
 	bool bDoneAnnounced = false;
@@ -132,9 +129,9 @@ void RunServer() noexcept
 		(void)ServerNet.Broadcast(StateBroadcastChannel, TSpan<const std::uint8_t>(StatePayload, sizeof(StatePayload)));
 		if (!bDoneAnnounced && WorldActorCount >= MaxSpawns)
 		{
-			std::printf("[ex19] done (server spawned %d actors)\n", WorldActorCount);
+			MW_LOG(Log, "ex19", "done (server spawned %d actors)", WorldActorCount);
 			bDoneAnnounced = true;
 		}
-		vTaskDelay(pdMS_TO_TICKS(PollPacingMilliseconds));
+		SleepMilliseconds(PollPacingMilliseconds);
 	}
 }

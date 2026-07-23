@@ -5,19 +5,19 @@ instead of a UART — proof that swapping only the driver construction line swap
 the transport, even when the new transport has a clocking master and a
 responding slave.
 
-> Status: hardware-verified on ESP32-S3 (2026-07-23) — the counter ping-pong ran clean over a real I2C bus.
+> Status: not yet verified on hardware.
 
 ## What it does
 
-1. Each board constructs a static I2C driver and prints
-   `[ex20] <role> open=<0|1>`. If the bus fails to open it prints a halt line and
+1. Each board constructs a static I2C driver and logs
+   `<role> open=<0|1>`. If the bus fails to open it logs a halt line and
    stops (rather than looping on a dead link).
 2. **Only the master clocks the bus**, so the master paces every volley: it
    sends a 5-byte payload (sender node id + a big-endian `std::uint32_t` counter)
    to the slave, then polls reads until the slave's reply arrives.
-3. The **slave** is purely reactive: on each received counter it prints
-   `[ex20] rx n=<counter> from=1` and stages `counter + 1` with `TrySend` for the
-   master's next read. The master reads it, prints `[ex20] rx n=<counter> from=2`,
+3. The **slave** is purely reactive: on each received counter it logs
+   `rx n=<counter> from=1` and stages `counter + 1` with `TrySend` for the
+   master's next read. The master reads it, logs `rx n=<counter> from=2`,
    and sends the next odd counter. The counter climbs across the two monitors.
 4. There is **no WiFi and no radio** — the whole link is two bus wires plus
    ground and two pull-up resistors.
@@ -80,56 +80,29 @@ pio device monitor -d examples/20-TwoBoardI2c -e esp32-s3-slave
 
 ## Expected output
 
-Master board (node 1):
+Master board (node 1) (not yet verified on hardware):
 
 ```text
-[ex20] master open=1
-[ex20] master clocks the bus; the slave only reacts
-[ex20] tx n=1 result=Success
-[ex20] rx n=2 from=2
-[ex20] tx n=3 result=Success
-[ex20] rx n=4 from=2
+I (nnnn) ex20: master open=1
+I (nnnn) ex20: master clocks the bus; the slave only reacts
+I (nnnn) ex20: tx n=1 result=Success
+I (nnnn) ex20: rx n=2 from=2
+I (nnnn) ex20: tx n=3 result=Success
+I (nnnn) ex20: rx n=4 from=2
 ```
 
-Slave board (node 2):
+Slave board (node 2) (not yet verified on hardware):
 
 ```text
-[ex20] slave open=1
-[ex20] rx n=1 from=1
-[ex20] tx n=2 result=Success
-[ex20] rx n=3 from=1
-[ex20] tx n=4 result=Success
+I (nnnn) ex20: slave open=1
+I (nnnn) ex20: rx n=1 from=1
+I (nnnn) ex20: tx n=2 result=Success
+I (nnnn) ex20: rx n=3 from=1
+I (nnnn) ex20: tx n=4 result=Success
 ```
 
 The counter climbs with no stalls. Because only the master clocks the bus, every
 exchange is master-initiated — the slave never speaks unprompted.
-
-## Verified output
-
-Hardware-verified 2026-07-23 on two ESP32-S3 boards (SDA 8↔8, SCL 9↔9, common
-GND, two ~4.7 kΩ pull-ups to 3V3). The slave console, counter climbing unbroken:
-
-```text
-[ex20] slave open=1
-[ex20] rx n=1 from=1
-[ex20] tx n=2 result=Success
-[ex20] rx n=3 from=1
-[ex20] tx n=4 result=Success
-… unbroken …
-[ex20] rx n=39 from=1
-[ex20] tx n=40 result=Success
-```
-
-Every `tx … Success` and every `rx … from=1` — the master clocked, the slave's
-ISR inbox received, and the master read back the staged replies, so both
-directions and the `FrameCodec` framing are confirmed on real hardware.
-
-Reproduction note: start **both boards together** (power-cycle both, or flash
-the slave then the master). I2C is open-drain, so resetting one board
-mid-transaction can latch the bus low until a fresh restart clears it; the volley
-then re-syncs from n=1. Only the slave console was captured here — the master
-board was on its native-USB port, whose UART0 console is not wired to that
-connector.
 
 ## Image size
 
@@ -138,7 +111,7 @@ produce different images because each links a different driver class:
 
 ```text
 master  RAM:   6.4% (used 20924 bytes from 327680 bytes)
-        Flash: 5.2% (used 218521 bytes from 4194304 bytes)
+        Flash: 5.2% (used 218837 bytes from 4194304 bytes)
 slave   RAM:   6.5% (used 21164 bytes from 327680 bytes)
-        Flash: 5.1% (used 213101 bytes from 4194304 bytes)
+        Flash: 5.1% (used 213409 bytes from 4194304 bytes)
 ```

@@ -1,14 +1,13 @@
+#include <MicroWorld/Log.h>
 #include <MicroWorld/Net/NetResult.h>
+#include <MicroWorld/PlatformEsp32/Esp32LogSink.h>
+#include <MicroWorld/PlatformEsp32/Esp32Sleep.h>
 #include <MicroWorld/PlatformEsp32/Esp32TimeSource.h>
 #include <MicroWorld/PlatformEsp32/Esp32UartDriver.h>
 #include <MicroWorld/PlatformEsp32/UartAddress.h>
 
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
-
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
 
 // Role is chosen at build time by the platformio.ini environment, exactly as the
 // two-board WiFi and LoRa examples select theirs — never with build_src_filter.
@@ -95,16 +94,18 @@ MicroWorld::FEsp32UartConfig MakeUartConfig(const std::uint8_t NodeId) noexcept
 }
 } // namespace
 
-/** Composition root: ping-pongs a counter with the peer board over one wired UART. */
+/** Composition root: installs the log sink, then ping-pongs a counter with the peer board over one wired UART. */
 extern "C" void app_main(void)
 {
+	MicroWorld::SetLogSink(&MicroWorld::Esp32LogSink);
+
 	// Static, never on the app_main stack (the ESP32-S3 stack lesson, §2.2).
 	static MicroWorld::FEsp32UartDriver Driver{MakeUartConfig(LocalNodeId)};
-	std::printf("[ex18] node=%u open=%d\n", static_cast<unsigned>(LocalNodeId), Driver.IsOpen() ? 1 : 0);
+	MW_LOG(Log, "ex18", "node=%u open=%d", static_cast<unsigned>(LocalNodeId), Driver.IsOpen() ? 1 : 0);
 	if (!Driver.IsOpen())
 	{
 		// A failed UART open cannot recover here; stop with a clear line instead of looping.
-		std::printf("[ex18] uart failed to open; halting\n");
+		MW_LOG(Error, "ex18", "uart failed to open; halting");
 		return;
 	}
 
@@ -127,7 +128,7 @@ extern "C" void app_main(void)
 		{
 			const std::uint32_t Counter = ReadVolleyCounter(RxBuffer);
 			const std::uint8_t FromId = MicroWorld::UartAddressNodeId(From);
-			std::printf("[ex18] rx n=%u from=%u\n", static_cast<unsigned>(Counter), static_cast<unsigned>(FromId));
+			MW_LOG(Log, "ex18", "rx n=%u from=%u", static_cast<unsigned>(Counter), static_cast<unsigned>(FromId));
 			bHasPendingTx = true;
 			PendingCounter = Counter + 1;
 			PendingDueMilliseconds = Now + VolleyPeriodMilliseconds;
@@ -140,13 +141,13 @@ extern "C" void app_main(void)
 			WriteVolleyPayload(Payload, LocalNodeId, PendingCounter);
 			const MicroWorld::ENetResult TxResult =
 				Driver.TrySend(MicroWorld::MakeUartAddress(PeerNodeId), MicroWorld::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
-			std::printf("[ex18] tx n=%u result=%s\n", static_cast<unsigned>(PendingCounter), ToText(TxResult));
+			MW_LOG(Log, "ex18", "tx n=%u result=%s", static_cast<unsigned>(PendingCounter), ToText(TxResult));
 			if (TxResult == MicroWorld::ENetResult::Success)
 			{
 				bHasPendingTx = false;
 			}
 		}
 
-		vTaskDelay(pdMS_TO_TICKS(PollPacingMilliseconds));
+		MicroWorld::SleepMilliseconds(PollPacingMilliseconds);
 	}
 }

@@ -4,21 +4,21 @@
 instead of I2C — proof that swapping only the driver construction line swaps the
 transport, across every wired bus the plan builds.
 
-> Status: hardware-verified on ESP32-S3 (2026-07-23) — the counter ping-pong ran clean over a real SPI bus.
+> Status: not yet verified on hardware.
 
 ## What it does
 
-1. Each board constructs a static SPI driver and prints
-   `[ex21] <role> open=<0|1>`. If the bus fails to open it prints a halt line and
+1. Each board constructs a static SPI driver and logs
+   `<role> open=<0|1>`. If the bus fails to open it logs a halt line and
    stops (rather than looping on a dead link).
 2. **Only the master clocks the bus**, so the master paces every volley: it
    sends a 5-byte payload (sender node id + a big-endian `std::uint32_t` counter)
    to the slave, then polls reads until the slave's reply arrives. SPI is
    full-duplex and the slave's reply is pipelined by a transaction, so the master
    may poll a few reads before the reply lands — that is normal, not a stall.
-3. The **slave** is purely reactive: on each received counter it prints
-   `[ex21] rx n=<counter> from=1` and stages `counter + 1` with `TrySend` for the
-   master's next read. The master reads it, prints `[ex21] rx n=<counter> from=2`,
+3. The **slave** is purely reactive: on each received counter it logs
+   `rx n=<counter> from=1` and stages `counter + 1` with `TrySend` for the
+   master's next read. The master reads it, logs `rx n=<counter> from=2`,
    and sends the next counter. The counter climbs across the two monitors.
 4. There is **no WiFi and no radio** — the whole link is four bus wires plus
    ground.
@@ -81,52 +81,29 @@ pio device monitor -d examples/21-TwoBoardSpi -e esp32-s3-slave
 
 ## Expected output
 
-Master board (node 1):
+Master board (node 1) (not yet verified on hardware):
 
 ```text
-[ex21] master open=1
-[ex21] master clocks the bus; the slave only reacts
-[ex21] tx n=1 result=Success
-[ex21] rx n=2 from=2
-[ex21] tx n=3 result=Success
-[ex21] rx n=4 from=2
+I (nnnn) ex21: master open=1
+I (nnnn) ex21: master clocks the bus; the slave only reacts
+I (nnnn) ex21: tx n=1 result=Success
+I (nnnn) ex21: rx n=2 from=2
+I (nnnn) ex21: tx n=3 result=Success
+I (nnnn) ex21: rx n=4 from=2
 ```
 
-Slave board (node 2):
+Slave board (node 2) (not yet verified on hardware):
 
 ```text
-[ex21] slave open=1
-[ex21] rx n=1 from=1
-[ex21] tx n=2 result=Success
-[ex21] rx n=3 from=1
-[ex21] tx n=4 result=Success
+I (nnnn) ex21: slave open=1
+I (nnnn) ex21: rx n=1 from=1
+I (nnnn) ex21: tx n=2 result=Success
+I (nnnn) ex21: rx n=3 from=1
+I (nnnn) ex21: tx n=4 result=Success
 ```
 
 The counter climbs with no stalls. Because only the master clocks the bus, every
 exchange is master-initiated — the slave never speaks unprompted.
-
-## Verified output
-
-Hardware-verified 2026-07-23 on two ESP32-S3 boards (GND + MOSI 11 + MISO 13 +
-SCLK 12 + CS 10, straight through). The master console, counter climbing unbroken:
-
-```text
-[ex21] master open=1
-[ex21] master clocks the bus; the slave only reacts
-[ex21] tx n=1 result=Success
-[ex21] rx n=2 from=2
-[ex21] tx n=3 result=Success
-[ex21] rx n=4 from=2
-… unbroken …
-[ex21] tx n=41 result=Success
-[ex21] rx n=42 from=2
-```
-
-Every `tx … Success` and every `rx … from=2` — the master's full-duplex
-transaction clocked the frame out and the slave's reply in (the decoder reads it
-per the documented CQS deviation), and the queue-based slave staged each reply.
-Both directions and the `FrameCodec` framing are confirmed on real hardware; it
-came up first try, no stalls (SPI is push-pull, so no bus-latch quirk).
 
 ## Image size
 
@@ -135,7 +112,7 @@ produce different images because each links a different driver class:
 
 ```text
 master  RAM:   6.6% (used 21712 bytes from 327680 bytes)
-        Flash: 5.6% (used 234149 bytes from 4194304 bytes)
+        Flash: 5.6% (used 234465 bytes from 4194304 bytes)
 slave   RAM:   6.6% (used 21628 bytes from 327680 bytes)
-        Flash: 5.3% (used 220481 bytes from 4194304 bytes)
+        Flash: 5.3% (used 220789 bytes from 4194304 bytes)
 ```

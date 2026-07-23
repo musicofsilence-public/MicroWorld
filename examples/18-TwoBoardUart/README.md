@@ -4,18 +4,18 @@
 of a radio — proof that swapping only the driver construction line swaps the
 transport, with the byte I/O, frame codec, and address helpers unchanged.
 
-> Status: hardware-verified on ESP32-S3 (2026-07-23) — the counter ping-pong ran clean over a real wire.
+> Status: not yet verified on hardware.
 
 ## What it does
 
-1. Each board constructs a static `FEsp32UartDriver` and prints
-   `[ex18] node=<id> open=<0|1>`. If the UART fails to open it prints a halt
+1. Each board constructs a static `FEsp32UartDriver` and logs
+   `node=<id> open=<0|1>`. If the UART fails to open it logs a halt
    line and stops (rather than looping on a dead link).
 2. Node 1 seeds the volley: half a second after boot it sends a 5-byte payload
    (sender node id + a big-endian `std::uint32_t` counter) to the peer and
-   prints `[ex18] tx n=<counter> result=<text>`.
-3. Both boards poll `TryReceive` on a 10 ms pace. On a received frame they print
-   `[ex18] rx n=<counter> from=<node-id>` (the sender id comes from the frame,
+   logs `tx n=<counter> result=<text>`.
+3. Both boards poll `TryReceive` on a 10 ms pace. On a received frame they log
+   `rx n=<counter> from=<node-id>` (the sender id comes from the frame,
    read back through `UartAddressNodeId`), then reply with `counter + 1` half a
    second later. The counter climbs alternately across the two serial monitors.
 4. There is **no WiFi and no radio** — the whole link is two GPIO wires.
@@ -72,56 +72,29 @@ pio device monitor -d examples/18-TwoBoardUart -e esp32-s3-node-b
 
 ## Expected output
 
-Board A (node 1):
+Board A (node 1) (not yet verified on hardware):
 
 ```text
-[ex18] node=1 open=1
-[ex18] tx n=1 result=Success
-[ex18] rx n=2 from=2
-[ex18] tx n=3 result=Success
-[ex18] rx n=4 from=2
+I (nnnn) ex18: node=1 open=1
+I (nnnn) ex18: tx n=1 result=Success
+I (nnnn) ex18: rx n=2 from=2
+I (nnnn) ex18: tx n=3 result=Success
+I (nnnn) ex18: rx n=4 from=2
 ```
 
-Board B (node 2):
+Board B (node 2) (not yet verified on hardware):
 
 ```text
-[ex18] node=2 open=1
-[ex18] rx n=1 from=1
-[ex18] tx n=2 result=Success
-[ex18] rx n=3 from=1
-[ex18] tx n=4 result=Success
+I (nnnn) ex18: node=2 open=1
+I (nnnn) ex18: rx n=1 from=1
+I (nnnn) ex18: tx n=2 result=Success
+I (nnnn) ex18: rx n=3 from=1
+I (nnnn) ex18: tx n=4 result=Success
 ```
 
 The counter climbs alternately with no stalls. Unlike the LoRa example, a wired
 link dropping frames at 30 cm is a defect, not weather — investigate rather than
 accept it.
-
-## Verified output
-
-Hardware-verified 2026-07-23 on two ESP32-S3 boards (crossover GPIO 17↔18 +
-common GND). Node 1's serial console, counter climbing unbroken with every send
-`Success` and every reply `from=2`:
-
-```text
-[ex18] node=1 open=1
-[ex18] tx n=1 result=Success
-[ex18] rx n=2 from=2
-[ex18] tx n=3 result=Success
-[ex18] rx n=4 from=2
-… unbroken …
-[ex18] tx n=21 result=Success
-[ex18] rx n=22 from=2
-```
-
-22 exchanges in ~11 s at the 500 ms cadence, zero stalls or non-`Success`. The
-climbing `rx … from=2` proves node 2 received each frame and echoed `counter + 1`,
-so both directions and the `FrameCodec` framing are confirmed on real hardware.
-
-Reproduction note: node 1 sends its opening frame once at boot + 500 ms and only
-re-sends on receive (no retry), so bring the listener up first, then reset the
-initiator — otherwise the opening frame is lost and both boards wait forever.
-Only node 1's console was captured here because the second board was on its
-native-USB port, whose UART0 console is not wired to that connector.
 
 ## Image size
 
@@ -130,5 +103,5 @@ produce the same image — they differ only by a compile-time node-id constant:
 
 ```text
 RAM:   6.4% (used 20892 bytes from 327680 bytes)
-Flash: 5.2% (used 219941 bytes from 4194304 bytes)
+Flash: 5.3% (used 220249 bytes from 4194304 bytes)
 ```
