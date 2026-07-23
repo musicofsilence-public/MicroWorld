@@ -198,7 +198,7 @@ honesty rule the repo applies everywhere: never claim what was not verified.
 | 0 | ADR: wired links are Net transports; device-bus access is out of scope | ✅ |
 | 1 | UART link driver + examples 18, 19 | ✅ |
 | 2 | I2C spike, master/slave drivers + example 20 | ✅ |
-| 3 | SPI spike, master/slave drivers + example 21 | 🟨 |
+| 3 | SPI spike, master/slave drivers + example 21 | ✅ |
 | 4 | Close-out: docs, catalog, changelog | ⬜ |
 
 Each phase after 0 delivers standalone value — the plan can pause after any ✅
@@ -446,8 +446,10 @@ re-queues. Scoped `AGENTS.md` guides updated (§2.2). Standard Verify §1.1.
 
 #### Task 3.3 — Example `21-TwoBoardSpi`
 
-- [ ] Built
+- [x] Built
 - [ ] Hardware-verified
+
+Built 2026-07-23 — `examples/21-TwoBoardSpi` ping-pongs a counter over the SPI driver pair with the master-clocked asymmetry, byte-for-byte example 20's loop with only the driver, pins, and tag changed: the master (`FEsp32SpiMasterDriver`, node 1) paces send-then-poll-read, the slave (`FEsp32SpiSlaveDriver`, node 2) reacts. Roles by `-DMICROWORLD_EXAMPLE_SPI_MASTER=1|0`, tag `[ex21]`, wiring GND + MOSI (GPIO 11) + MISO (GPIO 13) + SCLK (GPIO 12) + CS (GPIO 10) straight-through, destinations via `MakeSpiAddress`. Build Verify §1.1 green: `pio run` builds **both** role envs `[SUCCESS]` (warning-clean save the vendor `-Wpedantic` warnings; master RAM 21712 B / 6.6%, Flash 234149 B / 5.6%; slave RAM 21628 B / 6.6%, Flash 220481 B / 5.3%), ctest 11/11, class-doc 136, folder-agents 63. Catalog row 21 added to `examples/README.md`. Hardware checkpoint pending (human-gated §1.2).
 
 **Spec:** task 2.3's asymmetric ping-pong, tag `[ex21]`, roles
 `-DMICROWORLD_EXAMPLE_SPI_MASTER=1|0`, wiring GND + MOSI (GPIO 11) + MISO
