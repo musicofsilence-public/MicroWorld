@@ -4,7 +4,7 @@
 instead of I2C — proof that swapping only the driver construction line swaps the
 transport, across every wired bus the plan builds.
 
-> Status: compiled for ESP32-S3; not yet verified on hardware.
+> Status: hardware-verified on ESP32-S3 (2026-07-23) — the counter ping-pong ran clean over a real SPI bus.
 
 ## What it does
 
@@ -107,9 +107,26 @@ exchange is master-initiated — the slave never speaks unprompted.
 
 ## Verified output
 
-Not yet verified on hardware. This example has been compiled for ESP32-S3 only;
-the captured serial traces from both boards go here once the human-gated
-checkpoint runs.
+Hardware-verified 2026-07-23 on two ESP32-S3 boards (GND + MOSI 11 + MISO 13 +
+SCLK 12 + CS 10, straight through). The master console, counter climbing unbroken:
+
+```text
+[ex21] master open=1
+[ex21] master clocks the bus; the slave only reacts
+[ex21] tx n=1 result=Success
+[ex21] rx n=2 from=2
+[ex21] tx n=3 result=Success
+[ex21] rx n=4 from=2
+… unbroken …
+[ex21] tx n=41 result=Success
+[ex21] rx n=42 from=2
+```
+
+Every `tx … Success` and every `rx … from=2` — the master's full-duplex
+transaction clocked the frame out and the slave's reply in (the decoder reads it
+per the documented CQS deviation), and the queue-based slave staged each reply.
+Both directions and the `FrameCodec` framing are confirmed on real hardware; it
+came up first try, no stalls (SPI is push-pull, so no bus-latch quirk).
 
 ## Image size
 

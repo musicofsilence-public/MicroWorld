@@ -5,16 +5,16 @@
 // It is included by one driver translation unit — Esp32SpiDriver.cpp (the wired
 // point-to-point SPI master/slave link pair) — and a public header must never reach
 // it. Every ESP-IDF SPI divergence is hidden behind the helpers below so both driver
-// classes read one platform-free path that mirrors the UART and I2C drivers. This
-// platform implementation is COMPILE-VERIFIED on ESP32-S3 but its runtime behavior is
-// UNVERIFIED: SPI is full-duplex, so every master transaction both sends and receives
-// (the master driver feeds the received window to its decoder rather than discarding
-// it); the slave is queue-based, so the driver keeps one persistent transaction
+// classes read one platform-free path that mirrors the UART and I2C drivers. Example
+// 21's master-clocked ping-pong runtime-verifies this path on ESP32-S3 (2026-07-23):
+// SPI is full-duplex, so every master transaction both sends and receives (the master
+// driver feeds the received window to its decoder rather than discarding it — confirmed
+// working); the slave is queue-based, so the driver keeps one persistent transaction
 // descriptor queued and the FrameCodec CRC rejects any garbage a momentary empty-queue
-// gap produces. DMA is used (SPI_DMA_CH_AUTO), so the driver's transmit/receive buffers
-// must live in internal RAM — the example composition root makes each driver static, as
-// the ESP32-S3 stack lesson (docs/WIRED_TRANSPORTS_ROADMAP.md §2.2) already requires. No
-// SPI traffic is exercised until example 21's hardware checkpoint passes (§1.2).
+// gap produces. Error/timeout branches stayed unexercised (every exchange succeeded).
+// DMA is used (SPI_DMA_CH_AUTO), so the driver's transmit/receive buffers must live in
+// internal RAM — the example composition root makes each driver static, as the ESP32-S3
+// stack lesson (docs/WIRED_TRANSPORTS_ROADMAP.md §2.2) already requires. See §1.2.
 // =============================================================================
 
 #include <MicroWorld/PlatformEsp32/Esp32SpiDriver.h>
@@ -118,8 +118,8 @@ inline FOpenedSpiMaster OpenConfiguredSpiMaster(
 /**
  * Runs one full-duplex master transaction, clocking the transmit window out and the receive window in.
  *
- * A timeout maps to `WouldBlock`; any other error maps to `Error`. The runtime behavior is UNVERIFIED
- * (compile-only phase).
+ * A timeout maps to `WouldBlock`; any other error maps to `Error`. Runtime-verified by example 21
+ * (2026-07-23): the full-duplex transaction round-tripped every volley (error/timeout branches unexercised).
  *
  * @param Device Open SPI master device handle.
  * @param TransmitBytes First byte of the transmit window.
@@ -208,7 +208,7 @@ inline FOpenedSpiSlave OpenConfiguredSpiSlave(
  * Queues one full-duplex slave transaction so the master's next clock finds a buffer.
  *
  * Points the caller-owned persistent descriptor at the transmit and receive windows and queues it without
- * blocking. The runtime behavior is UNVERIFIED (compile-only phase).
+ * blocking. Runtime-verified by example 21 (2026-07-23): the queued descriptor served the master's clocks.
  *
  * @param Host SPI host number acting as a slave.
  * @param Transaction Caller-owned persistent transaction descriptor (must outlive the queue/harvest cycle).
@@ -235,7 +235,7 @@ inline bool QueueSpiSlave(
  * Harvests one completed slave transaction without blocking.
  *
  * Returns true when a queued transaction has completed (its receive window now holds the master's bytes) and
- * false when none is done yet. The runtime behavior is UNVERIFIED (compile-only phase).
+ * false when none is done yet. Runtime-verified by example 21 (2026-07-23): harvested frames decoded correctly.
  *
  * @param Host SPI host number acting as a slave.
  * @return True when a transaction completed.
