@@ -1582,7 +1582,7 @@ tests must pass unchanged.
   order, tick independence, end order). Verified by lead: build clean, the
   example prints the byte-exact baseline trace (exit 0), ctest 11/11,
   CheckClassDocumentation 125. `Host.BeginPlay(0)`'s bare start-time literal
-  was out of the six specified edits and left as-is. Commit `<pending>`.
+  was out of the six specified edits and left as-is. Commit `8bf1021`.
 
 - [ ] **8.3 Restructure the `TwoNodeDemo` into named phases.**
   `Modules/PlatformHost/examples/TwoNodeDemo/Main.cpp` (380 LOC; `main` alone
