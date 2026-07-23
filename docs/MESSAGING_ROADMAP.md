@@ -964,7 +964,7 @@ deterministically, with zero networking.
   `microworld_engine_tests`, 88 total 0 failures); `CheckClassDocumentation
   --require-doxygen` 147 files.
 
-- [ ] **2.2 `Engine/MessageRouter.h` — `TMessageRouter`.** Implement per §4.3
+- [x] **2.2 `Engine/MessageRouter.h` — `TMessageRouter`.** Implement per §4.3
   semantics (normative list). Imitate `Timer.h` for slots/generations/guard.
   New `Modules/Engine/tests/EngineMessageRouterTests.cpp` covering at
   minimum: broadcast reaches all type subscribers in registration order;
@@ -979,6 +979,30 @@ deterministically, with zero networking.
   channel), and resumes next flush.
 
   **Done when:** every listed behavior has a passing case; Standard Verify.
+
+  Done 2026-07-23 — new header-only `Modules/Engine/include/MicroWorld/Engine/MessageRouter.h`
+  (`TMessageRouter<MaxHandlers, MaxQueuedMessages, MaxMessageBytes, MaxChannels>`,
+  `final : IMessageRouter, INetworkFrame`) implements the §4.3 normative list:
+  registration-order handler table with `Timer.h`-style slots/generations (retire
+  on generation wrap) + a `bDispatchActive` guard (`DispatchLocked`); two ring
+  FIFOs with bytes copied in; send-path validation order InvalidType →
+  InvalidChannel → PayloadTooLarge (per-message and per-channel cap) →
+  CapacityExceeded, encode-once into the tail; `TickDispatch` snapshots the inbound
+  count so a handler's own send arrives a frame later (D5); `TickFlush` moves
+  `LocalChannelId` entries to inbound and hands wired entries to the channel,
+  retaining the head and stopping on any non-Success (NetManager discipline,
+  cross-channel head-of-line accepted v1 and documented). `ReceiveEncodedMessage`
+  validates length and counts `DroppedInboundCount` on a full queue. New
+  `EngineMessageRouterTests.cpp` (12 cases) wired into `MICROWORLD_ENGINE_TEST_SOURCES`
+  (production sources untouched) with an `FStubChannel` double covering every listed
+  behavior plus a no-allocation steady-state case. Gates (lead-rerun): clang-format
+  clean; MSVC Release build warning-clean (`/WX`); host `ctest` 11/11 (12 router
+  cases `[PASS]`, 100 total 0 failures; `microworld_dependency_boundaries` passes —
+  the router pulls in no Net dependency); `CheckClassDocumentation --require-doxygen`
+  149 files. Lead touch-ups on the peer's diff: deleted copy **and** move (the peer
+  left the router implicitly movable — a composition root held by `IMessageRouter&`/
+  `INetworkFrame*` must not relocate; matches `TTimerManager`); the peer self-caught
+  one LoD tell (`FindChannel` now returns `IMessageChannel*`, one hop).
 
 - [ ] **2.3 Example `22-ActorMessages` (standalone world, 1 board).** New
   example per the §4.4 standalone recipe and the canonical example scaffold
