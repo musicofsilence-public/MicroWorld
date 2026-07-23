@@ -198,7 +198,7 @@ honesty rule the repo applies everywhere: never claim what was not verified.
 | 0 | ADR: wired links are Net transports; device-bus access is out of scope | ✅ |
 | 1 | UART link driver + examples 18, 19 | ✅ |
 | 2 | I2C spike, master/slave drivers + example 20 | ✅ |
-| 3 | SPI spike, master/slave drivers + example 21 | ⬜ |
+| 3 | SPI spike, master/slave drivers + example 21 | 🟨 |
 | 4 | Close-out: docs, catalog, changelog | ⬜ |
 
 Each phase after 0 delivers standalone value — the plan can pause after any ✅
@@ -405,7 +405,9 @@ clock the bus; README must state that asymmetry in one sentence.
 
 #### Task 3.1 — SPI design spike (ADR appendix)
 
-- [ ] Done
+- [x] Done
+
+Done 2026-07-23 — Appendix B appended to `docs/decisions/0003-wired-transports.md` answering all five questions from the installed ESP-IDF 6.0.1 headers (`spi_master.h`, `spi_slave.h`, `spi_common.h`, `hal/spi_types.h`): the slave is queue-based (`spi_slave_queue_trans` / `spi_slave_get_trans_result`), so the driver keeps one transaction queued and the `FrameCodec` CRC rejects any garbage a momentary empty-queue gap produces; a fixed 128-byte full-duplex window (a 126-byte max frame padded for the DMA word-alignment rule) is pumped through the shared decoder; `SpiMaxPayloadBytes = 120`, uniform with UART/I2C; 1 MHz, SPI mode 0, `SPI2_HOST` with `SPI_DMA_CH_AUTO`; MOSI = GPIO 11 / MISO = GPIO 13 / SCLK = GPIO 12 / CS = GPIO 10, clear of strapping and flash/PSRAM pins; `SpiAddress.h` = 1-byte node id like the others. Because SPI is full-duplex, every master transaction feeds the received window into the decoder — a documented CQS deviation recorded in the appendix. The `SPIKE:` blanks in tasks 3.2/3.3 are filled from these answers. Header-derived and runtime-UNVERIFIED until example 21's checkpoint (§1.2); docs-only, superbuild + ctest stay green at 11/11.
 
 **Questions (same deliverable shape as task 2.1):**
 
@@ -426,11 +428,19 @@ clock the bus; README must state that asymmetry in one sentence.
 - [ ] Built
 - [ ] Hardware-verified (via task 3.3's checkpoint)
 
-**Spec skeleton:** task 2.2's shape with `src/SpiPlatformImplementation.h`,
-configs per spike, master-clocked semantics: master `TryReceive` performs one
-transaction to harvest slave bytes; slave `TrySend` = queue one encoded frame
-as a DMA transaction (`Full` when the queue is saturated). Scoped guides
-updated. Standard Verify §1.1.
+**Spec skeleton (spike-filled — see ADR Appendix B):** task 2.2's shape with
+`src/SpiPlatformImplementation.h`; `FEsp32SpiMasterConfig` = {`SpiHost`,
+`MosiGpio`, `MisoGpio`, `SclkGpio`, `CsGpio`, `ClockHz` (1000000), `LocalNodeId`}
+and `FEsp32SpiSlaveConfig` = {`SpiHost`, `MosiGpio`, `MisoGpio`, `SclkGpio`,
+`CsGpio`, `LocalNodeId`}; `SpiMaxPayloadBytes = 120`, `SpiTransactionWindowBytes =
+128` (DMA-aligned). Master uses full-duplex fixed-window `spi_device_transmit`
+transactions: both `TrySend` (tx = encoded frame) and `TryReceive` (tx = idle)
+pump the received window into the decoder (Appendix B's documented CQS deviation),
+and `TryReceive` delivers a completed frame. Slave keeps one window transaction
+queued; slave `TrySend` stages one encoded frame for the next queued transaction
+(`Full` when one is still pending); slave `TryReceive` harvests a completed
+transaction via `spi_slave_get_trans_result(0)`, pumps its rx window, and
+re-queues. Scoped `AGENTS.md` guides updated (§2.2). Standard Verify §1.1.
 
 #### Task 3.3 — Example `21-TwoBoardSpi`
 
@@ -438,8 +448,9 @@ updated. Standard Verify §1.1.
 - [ ] Hardware-verified
 
 **Spec:** task 2.3's asymmetric ping-pong, tag `[ex21]`, roles
-`-DMICROWORLD_EXAMPLE_SPI_MASTER=1|0`, wiring GND + MOSI/MISO/SCLK/CS per
-spike answer 4, README states the master-clocked asymmetry.
+`-DMICROWORLD_EXAMPLE_SPI_MASTER=1|0`, wiring GND + MOSI (GPIO 11) + MISO
+(GPIO 13) + SCLK (GPIO 12) + CS (GPIO 10) straight-through by signal name
+(Appendix B4), README states the master-clocked asymmetry.
 
 ---
 

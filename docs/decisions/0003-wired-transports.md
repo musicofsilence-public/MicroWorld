@@ -138,3 +138,68 @@ decoder (Unavailable when the window yields no frame — answer A2). Slave `TryS
 slave `TryReceive` = drain the ISR-filled inbox through the decoder (answer A1).
 Pins on the DevKitC-1: **SDA = GPIO 8, SCL = GPIO 9** — both ordinary GPIOs, clear
 of the S3 strapping pins (GPIO 0, 3, 45, 46).
+
+---
+
+## Appendix B — SPI design spike (Task 3.1)
+
+Deliverable of the Phase 3 spike: verified answers from the same **ESP-IDF
+6.0.1** headers (`driver/spi_master.h`, `driver/spi_slave.h`,
+`driver/spi_common.h`, `hal/spi_types.h`). No hardware probe was run; the
+answers are header/documentation-derived, and the driver carries
+"UNVERIFIED at runtime" wording until example 21's checkpoint passes (§1.2).
+
+**B1 — Slave transaction queuing; empty-queue behavior.**
+`driver/spi_slave.h` is queue-based: `spi_slave_queue_trans(host, &trans, ticks)`
+pre-queues one full-duplex transaction (`tx_buffer` + `rx_buffer`, `length` in
+bits) that executes when the master pulls CS and clocks; `spi_slave_get_trans_result(host, &desc, 0)`
+harvests a completed one without blocking (a timeout means none is done).
+`queue_size` bounds in-flight transactions. If the master clocks while the slave
+queue is empty, MISO carries undefined bytes and the slave misses the master's
+bytes — so the driver keeps at least one transaction queued, and (as the
+question anticipated) the `FrameCodec` CRC rejects any garbage a momentary gap
+produces, so CRC suffices as the validation strategy.
+
+**B2 — Transaction size; `SpiMaxPayloadBytes`.**
+Fixed-size window fed to the byte-pump decoder, **not** exact-frame transfers —
+the same shape as UART and I2C. `SpiMaxPayloadBytes = 120` (uniform), so one
+whole frame is `120 + FrameOverheadBytes = 126` bytes, padded up to
+`SpiTransactionWindowBytes = 128` so the DMA constraint (rx buffer word-aligned,
+length a multiple of 4) is met; the pad bytes are filler the decoder discards.
+Every transaction is full-duplex `128 * 8 = 1024` bits in both directions.
+
+**B3 — Bus speed.**
+Start low: **1 MHz** (`SpiClockHz = 1000000`), comfortably within jumper-wire
+tolerance; SPI mode 0 (CPOL 0, CPHA 0).
+
+**B4 — Pin set.**
+`SPI2_HOST` (FSPI), DMA via `SPI_DMA_CH_AUTO` (a 128-byte transfer exceeds the
+no-DMA limit). **MOSI = GPIO 11, MISO = GPIO 13, SCLK = GPIO 12, CS = GPIO 10** —
+the S3's default FSPI pins, all ordinary GPIOs clear of the strapping pins
+(0/3/45/46) and the octal flash/PSRAM range (26–37) on the WROOM-1-N16R8.
+
+**B5 — `SpiAddress.h` layout.**
+One byte carrying the `FrameCodec` node id, identical in shape to
+`UartAddress.h`/`I2cAddress.h`/`LoraAddress.h` (`MakeSpiAddress` / `IsSpiAddress` /
+`SpiAddressNodeId`). The CS pin selects the device in hardware; the node id is
+only frame identity.
+
+**Resulting driver shape (fills tasks 3.2/3.3):** `FEsp32SpiMasterConfig` = {host,
+MOSI/MISO/SCLK/CS GPIOs, `ClockHz` (1000000), `LocalNodeId`}; `FEsp32SpiSlaveConfig`
+= {host, MOSI/MISO/SCLK/CS GPIOs, `LocalNodeId`}. **Master** (`spi_master.h`):
+full-duplex fixed-window transactions via `spi_device_transmit` (blocking but
+bounded — 128 B at 1 MHz ≈ 1 ms). Because SPI is full-duplex, *every* transaction
+moves both directions, so both `TrySend` (tx = encoded frame) and `TryReceive`
+(tx = idle) feed the received window into the driver's `TFrameDecoder` and
+`TryReceive` delivers completed frames — a documented CQS deviation: a send
+unavoidably also clocks in the slave's bytes, and the driver keeps them rather
+than discarding them. **Slave** (`spi_slave.h`): keeps one fixed-window
+transaction queued (`tx` = staged frame or idle, `rx` = window); `TrySend` stages
+one encoded frame for the next queued transaction (`Full` when a staged frame is
+still pending); `TryReceive` harvests a completed transaction with
+`spi_slave_get_trans_result(0)`, pumps its rx window through the decoder, and
+re-queues so a transaction is always ready. The slave reply is pipelined by one
+transaction (standard for SPI slaves); the master's poll-until-reply loop and the
+codec's resync absorb the intervening idle bytes. Wiring is straight-through by
+signal name (ESP-IDF names the line `mosi_io_num` on both sides): GND↔GND,
+MOSI↔MOSI, MISO↔MISO, SCLK↔SCLK, CS↔CS.
