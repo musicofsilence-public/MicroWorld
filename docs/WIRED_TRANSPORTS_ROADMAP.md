@@ -196,7 +196,7 @@ honesty rule the repo applies everywhere: never claim what was not verified.
 | Phase | Content | Status |
 | --- | --- | --- |
 | 0 | ADR: wired links are Net transports; device-bus access is out of scope | ✅ |
-| 1 | UART link driver + examples 18, 19 | 🟨 |
+| 1 | UART link driver + examples 18, 19 | ✅ |
 | 2 | I2C spike, master/slave drivers + example 20 | ⬜ |
 | 3 | SPI spike, master/slave drivers + example 21 | ⬜ |
 | 4 | Close-out: docs, catalog, changelog | ⬜ |
@@ -307,8 +307,10 @@ flips task 1.1's Hardware-verified box and its UNVERIFIED comment wording
 
 #### Task 1.3 — Example `19-UartMessaging` (the payoff demo)
 
-- [ ] Built
+- [x] Built
 - [ ] Hardware-verified
+
+Built 2026-07-23 — `examples/19-UartMessaging` runs example 16's full `TNetHost` client/server message design over `FEsp32UartDriver` with zero WiFi (no `WifiStation`/`NetworkConfig`/`esp_netif_init`): server = `TEngineHost` + `TNetHostFrame` + `TNetHost` (DedicatedServer, node 1) broadcasting the world actor count on channel 2 and spawning on channel-1 requests; client = bare `TNetHost` (Client, node 2) greeting `MakeUartAddress(1)`, sending two spawn requests, observing the count reach 2. Roles by `-DMICROWORLD_EXAMPLE_SERVER=1|0`; split into `Main.cpp` dispatcher + always-compiled `ServerMain.cpp`/`ClientMain.cpp` + shared `UartMessagingShared.h` (example-16 structure, each file under the ~200-line cap). `TNetHost` sized `MaxPacketBytes = 120` to stay within the UART driver cap. Build Verify §1.1 green: `pio run` builds **both** role envs `[SUCCESS]` (warning-clean; server RAM 25,820 B / 7.9%, Flash 235,761 B / 5.6%; client RAM 21,980 B / 6.7%, Flash 224,997 B / 5.4%), ctest 11/11, class-doc 128, folder-agents 63. Hardware checkpoint pending (§1.2): the client trace must show the actor count reaching 2.
 
 **Feature:** the full message design over the wire — example 16's
 `TNetHost` client/server spawn protocol with **zero WiFi**: server board runs
