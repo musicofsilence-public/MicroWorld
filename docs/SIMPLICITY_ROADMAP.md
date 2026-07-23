@@ -1658,7 +1658,7 @@ tests must pass unchanged.
   `docs/*.md` targets) returns zero; the only residual hits are in historical
   files (`docs/ROADMAP.md`, `PROGRESS.md`, this document) and
   `benchmarks/Results/*.md`, all excepted. Standard Verify unaffected
-  (doc-only): ctest 11/11, CheckClassDocumentation 125. Commit `<pending>`.
+  (doc-only): ctest 11/11, CheckClassDocumentation 125. Commit `5eeb54b`.
   **Phase 8 complete.**
 
 ---
