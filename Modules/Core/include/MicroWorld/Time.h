@@ -1,5 +1,7 @@
 #pragma once
 
+#include <MicroWorld/RuntimeResult.h>
+
 #include <cstdint>
 
 namespace MicroWorld
@@ -19,19 +21,6 @@ struct FTickContext
 
 	/** Reports elapsed time for this schedule, independent of other tickables. */
 	DurationMilliseconds DeltaMilliseconds{0};
-};
-
-/** Reports framework outcomes without exceptions or platform logging. */
-enum class ERuntimeResult : std::uint8_t
-{
-	Success,		  ///< Lets callers use one explicit success/failure channel.
-	Duplicate,		  ///< Protects deterministic registration from repeated entries.
-	CapacityExceeded, ///< Keeps fixed storage failure observable instead of allocating.
-	LifecycleLocked,  ///< Prevents structural mutation after dispatch can begin.
-	InvalidLifecycle, ///< Rejects hooks outside their forward-only lifecycle.
-	CannotEverTick,	  ///< Preserves construction-time capability as an invariant.
-	NonMonotonicTime, ///< Prevents unsigned time arithmetic from accepting rollback.
-	AlreadyOwned,	  ///< Prevents one object from entering two non-owning hierarchies.
 };
 
 /** Combines tick eligibility, timing, and any dispatcher error. */

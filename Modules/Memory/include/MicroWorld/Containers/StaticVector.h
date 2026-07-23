@@ -1,7 +1,7 @@
 #pragma once
 
 #include <MicroWorld/Containers/RawSlot.h>
-#include <MicroWorld/Time.h>
+#include <MicroWorld/RuntimeResult.h>
 
 #include <cstddef>
 #include <new>

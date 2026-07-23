@@ -1451,7 +1451,7 @@ tests must pass unchanged.
   later hygiene pass. Verified: build warning-clean, ctest 11/11 (`#7 memory_tests`
   exercises all four families), doc checker 124 files (`RawSlot.h` is the new file).
 
-- [ ] **7.2 Move `ERuntimeResult` into its own Core header (D5).**
+- [x] **7.2 Move `ERuntimeResult` into its own Core header (D5).**
   1. Create `Modules/Core/include/MicroWorld/RuntimeResult.h`; move the enum
      (with its per-enumerator docs) there verbatim; add a note that some
      values are raised only by higher layers (Object/Engine registration).
@@ -1463,6 +1463,20 @@ tests must pass unchanged.
 
   **Done when:** `StaticVector.h` no longer includes `Time.h`; Standard Verify
   passes; doc checker count grows by one file.
+
+  **Evidence (2026-07-23, committed with this change):** Three files, pure refactor
+  (no behavior change). New Core `RuntimeResult.h` holds `ERuntimeResult` verbatim
+  (per-enumerator docs intact) plus a note that Object/Engine registration raise
+  several of its values. `Time.h` now `#include`s the new header in place of the
+  definition, so every existing `Time.h` consumer still resolves `ERuntimeResult`
+  unchanged; only `StaticVector.h` switched its include to the narrow header (the
+  D5 goal: a Memory container no longer pulls the tick/time types just to name a
+  result). No CMake/`library.json` edit — Core and Memory expose headers by
+  `includeDir`. **Done-when met:** `StaticVector.h` no longer includes `Time.h`;
+  the doc checker grew 124 → 125 (the new enum-only header, which the checker
+  counts but requires no contract on). Verified: build warning-clean, ctest 11/11
+  (including `#3`/`#4 dependency_boundaries` and `#5`/`#6` profile-map — the Core
+  boundary is unchanged), doc checker 125 files.
 
 - [ ] **7.3 Label the collector back-channel and the enum boundary (D4).**
   1. In `ObjectStore.h`, the ~15 `Collector*`-prefixed private methods
