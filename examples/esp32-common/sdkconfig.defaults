@@ -1,0 +1,26 @@
+# Why: Match the ESP32-S3-WROOM-1-N16R8 module's 16 MB Quad-SPI flash.
+CONFIG_ESPTOOLPY_FLASH_MODE_AUTO_DETECT=n
+CONFIG_ESPTOOLPY_FLASHMODE_QIO=y
+CONFIG_ESPTOOLPY_FLASH_SAMPLE_MODE_STR=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+
+# Why: Make the module's 8 MB Octal-SPI PSRAM available for larger allocations.
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_80M=y
+CONFIG_SPIRAM_BOOT_INIT=y
+CONFIG_SPIRAM_USE_MALLOC=y
+
+# Why: Use the project layout that provides two OTA application slots and
+# dedicated persistent-storage and crash-diagnostic areas.
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+CONFIG_PARTITION_TABLE_FILENAME="partitions.csv"
+
+# Why: Preserve crash information across a reboot so failures can be diagnosed.
+CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
+
+# Why: A 4096-byte wear-levelling sector matches the flash erase sector and
+# reduces flash operations; this board has enough RAM for the larger FAT buffers.
+CONFIG_WL_SECTOR_SIZE_4096=y

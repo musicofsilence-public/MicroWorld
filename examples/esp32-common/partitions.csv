@@ -1,0 +1,14 @@
+# Name,    Type, SubType, Offset,   Size,      Flags
+# Why: Keep device settings in a dedicated, wear-managed key-value partition.
+nvs,       data, nvs,     0x9000,   0x10000,
+# Why: OTA metadata records which firmware slot should boot after an update.
+otadata,   data, ota,     0x19000,  0x2000,
+# Why: Two equal 4 MiB slots allow a new firmware image to be tested while the
+# previous working image remains available for recovery.
+ota_0,     app,  ota_0,   0x20000,  0x400000,
+ota_1,     app,  ota_1,   0x420000, 0x400000,
+# Why: FATFS provides files and directories; mounting it through ESP-IDF's
+# wear-levelling layer avoids repeatedly erasing the same physical sectors.
+storage,   data, fat,     0x820000, 0x7A0000,
+# Why: Retain a crash snapshot after reboot for offline debugging.
+coredump,  data, coredump,0xFC0000, 0x40000,

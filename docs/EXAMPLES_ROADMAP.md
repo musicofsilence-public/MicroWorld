@@ -505,7 +505,7 @@ examples/*/src/NetworkConfig.h
 
 | Phase | Content | Status |
 | --- | --- | --- |
-| 0 | Scaffold: `examples/` folder, board profile, gitignore | 🟨 |
+| 0 | Scaffold: `examples/` folder, board profile, gitignore | ✅ |
 | 1 | Core on the board (01–03) | ⬜ |
 | 2 | Memory (04–07) | ⬜ |
 | 3 | Object (08–09) | ⬜ |
@@ -551,7 +551,9 @@ same count (nothing tracked yet besides markdown and gitignore).
 
 #### Task 0.2 — Create `examples/esp32-common/` board profile
 
-- [ ] Done
+- [x] Done
+
+Done 2026-07-23 — `examples/esp32-common/partitions.csv` and `sdkconfig.defaults` copied byte-for-byte from §3.2, plus an `AGENTS.md` recording their provenance (the profile behind every verified ESP32-S3 compile and the Phase 6.2 measurements; examples reference it, never fork it); `ctest` unchanged at 11/11.
 
 **Steps:**
 
