@@ -824,11 +824,21 @@ adopts the shipped log seam.
   `examples/esp32-common` for the gate, then removed) — a pre-existing
   `platformio.ini` gap, out of scope here.
 
-- [ ] **1.2 `SleepMilliseconds` platform facade.** New public header
+- [x] **1.2 `SleepMilliseconds` platform facade.** New public header
   `Esp32Sleep.h` + `src/Esp32Sleep.cpp` per §4.3 (`vTaskDelay(pdMS_TO_TICKS(x))`,
   minimum one tick so the idle task always runs). Same gates as 1.1.
 
   **Done when:** header documented; include gate still 0; consumer compiles.
+
+  Done 2026-07-23 — `Esp32Sleep.h` (public, ESP-IDF-free; declares
+  `SleepMilliseconds(DurationMilliseconds)`) + `src/Esp32Sleep.cpp`
+  (`pdMS_TO_TICKS` clamped to ≥1 tick, then `vTaskDelay`); consumer probe calls
+  it once before the tick loop. Gates: clang-format clean, host `ctest` 11/11,
+  `CheckClassDocumentation --require-doxygen` 141 files, `pio run -e
+  esp32-s3-platform` `[SUCCESS]`; the new header adds 0 ESP-IDF include matches.
+  Lead note: the parameter is named `SleepDurationMilliseconds`, not the
+  roadmap's function-shadowing `SleepMilliseconds` — clarity only; the function
+  and type identity are unchanged.
 
 - [ ] **1.3 Rewrite example 15 engine-first.** Replace
   `examples/15-UdpEcho/src/WifiLink.{h,cpp}` usage with `FEsp32WifiLink`;

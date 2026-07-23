@@ -23,6 +23,7 @@
 #include <MicroWorld/Object/ObjectStore.h>
 #include <MicroWorld/PlatformEsp32/Esp32E32LoraDriver.h>
 #include <MicroWorld/PlatformEsp32/Esp32LogSink.h>
+#include <MicroWorld/PlatformEsp32/Esp32Sleep.h>
 #include <MicroWorld/PlatformEsp32/Esp32TimeSource.h>
 #include <MicroWorld/PlatformEsp32/Esp32UdpDriver.h>
 #include <MicroWorld/PlatformEsp32/Esp32WifiLink.h>
@@ -149,6 +150,9 @@ extern "C" void app_main()
 		PlatformEsp32CompositionResult = 2;
 		return;
 	}
+
+	// Compile/link proof for the sleep facade (MESSAGING 1.2): one bounded yield before the loop.
+	SleepMilliseconds(1);
 
 	// 7. Tick the canonical frame at a fixed 20 ms cadence; the loop never returns in a real app.
 	for (;;)
