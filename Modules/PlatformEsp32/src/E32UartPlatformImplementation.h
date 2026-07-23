@@ -6,13 +6,13 @@
 // LoRa radio link) and Esp32UartDriver.cpp (the wired point-to-point UART link) —
 // and a public header must never reach it. Every ESP-IDF UART divergence is hidden
 // behind the helpers below so both drivers read one platform-free send/receive path
-// that mirrors the UDP driver. This platform implementation is COMPILE-VERIFIED on
-// ESP32-S3 (Phase 5.3) but the exact would-block/partial-write behavior of
-// uart_write_bytes and the exact drain behavior of uart_read_bytes are UNVERIFIED at
-// runtime: the mapping below treats a short write as a would-block candidate and any
-// negative result as an error, and a receive that drains with no byte is Unavailable.
-// No radio or wired-UART traffic is exercised until each consuming driver's example
-// hardware checkpoint passes (docs/WIRED_TRANSPORTS_ROADMAP.md §1.2).
+// that mirrors the UDP driver. Example 18's two-board ping-pong runtime-verifies the
+// wired-UART path on ESP32-S3 (2026-07-23): uart_write_bytes fully accepts each frame
+// and the one-byte uart_read_bytes drain reassembles it, so the full-accept and
+// empty-drain outcomes below are proven on real hardware. Two branches stay
+// unexercised: the short-write would-block mapping (the ping-pong never saturates the
+// TX FIFO) and E32 radio frame traffic (Phase 6.2 measured only no-traffic pump
+// overhead). See docs/WIRED_TRANSPORTS_ROADMAP.md §1.2.
 // =============================================================================
 
 #include <driver/uart.h>
@@ -55,9 +55,9 @@ enum class EUartWriteOutcome : std::uint8_t
  * Writes one complete framed message to the UART.
  *
  * Hands the whole span to one `uart_write_bytes` call; the outcome classifies only whether it was fully
- * accepted, partially accepted, or failed, so the driver can map it to the shared `ENetResult`. The exact
- * would-block and partial-write behavior is UNVERIFIED at runtime (compile-only phase); a short write is
- * mapped to `WouldBlock` so the caller can treat the UART as transiently full.
+ * accepted, partially accepted, or failed, so the driver can map it to the shared `ENetResult`. The
+ * full-accept path is runtime-verified (example 18, 2026-07-23); the short-write would-block branch stays
+ * unexercised, so a short write is still mapped to `WouldBlock` to treat the UART as transiently full.
  *
  * @param Port Open UART port number.
  * @param FrameBytes First byte of the framed message to send.
@@ -93,8 +93,8 @@ enum class EUartReadStatus : std::uint8_t
  * Reads at most one byte from the UART without blocking.
  *
  * Uses `uart_read_bytes` with a zero timeout so the receive pump polls one byte at a time; a return of zero
- * means the UART is empty and the pump should drain, while a negative return is an error. The exact drain
- * behavior is UNVERIFIED at runtime (compile-only phase).
+ * means the UART is empty and the pump should drain, while a negative return is an error. The one-byte drain
+ * is runtime-verified by example 18's ping-pong (2026-07-23).
  *
  * @param Port Open UART port number.
  * @param OutByte Filled with the received byte only when the status is GotByte.

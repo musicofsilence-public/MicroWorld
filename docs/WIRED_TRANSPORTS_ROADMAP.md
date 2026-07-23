@@ -235,9 +235,9 @@ quote. **Verify:** §1.1 (docs-only — the build/gates simply stay green).
 #### Task 1.1 — `FEsp32UartDriver` + `UartAddress.h`
 
 - [x] Built (compile gate)
-- [ ] Hardware-verified (via task 1.2's checkpoint)
+- [x] Hardware-verified (via task 1.2's checkpoint)
 
-Built 2026-07-23 — `UartAddress.h` (1-byte point-to-point node id, mirroring `LoraAddress.h`), `Esp32UartDriver.h` (`UartMaxPayloadBytes = 120`, `FEsp32UartConfig` with `BaudRate` default 115200, `FEsp32UartDriver final : INetDriver`), and `Esp32UartDriver.cpp` (mirrors `Esp32E32LoraDriver.cpp` one-for-one; same `ENetResult` mapping; reuses the shared `E32UartPlatformImplementation.h` toolkit). Shared toolkit header comment now names both consumers; the three scoped `AGENTS.md` guides enumerate the new driver. Standard Verify §1.1 green: `pio run` `[SUCCESS]` (`Esp32UartDriver.o` compiled, warning-clean save the vendor `#include_next` pedantic warnings), ctest 11/11, class-doc 128 files, folder-agents 63. Send/receive path UNVERIFIED at runtime until task 1.2's checkpoint (§1.2). Hardware-verified pending that checkpoint.
+Built 2026-07-23 — `UartAddress.h` (1-byte point-to-point node id, mirroring `LoraAddress.h`), `Esp32UartDriver.h` (`UartMaxPayloadBytes = 120`, `FEsp32UartConfig` with `BaudRate` default 115200, `FEsp32UartDriver final : INetDriver`), and `Esp32UartDriver.cpp` (mirrors `Esp32E32LoraDriver.cpp` one-for-one; same `ENetResult` mapping; reuses the shared `E32UartPlatformImplementation.h` toolkit). Shared toolkit header comment now names both consumers; the three scoped `AGENTS.md` guides enumerate the new driver. Standard Verify §1.1 green: `pio run` `[SUCCESS]` (`Esp32UartDriver.o` compiled, warning-clean save the vendor `#include_next` pedantic warnings), ctest 11/11, class-doc 128 files, folder-agents 63. Hardware-verified 2026-07-23 (via task 1.2's checkpoint): example 18's two-board ping-pong drove the send and one-byte receive-drain paths clean over a real wire, so the shared toolkit's runtime-UNVERIFIED wording is updated to match; the short-write would-block branch stayed unexercised (traffic never saturated the TX FIFO).
 
 **Goal:** a wired point-to-point `INetDriver` over one UART — functionally
 "the E32 driver minus the radio".
@@ -275,9 +275,9 @@ updated; Standard Verify §1.1 passes (including the `pio run` compile gate).
 #### Task 1.2 — Example `18-TwoBoardUart` (ping-pong counter)
 
 - [x] Built
-- [ ] Hardware-verified
+- [x] Hardware-verified
 
-Built 2026-07-23 — `examples/18-TwoBoardUart` ping-pongs a `std::uint32_t` counter over the wired UART driver directly (no `TNetManager`): node 1 seeds, both poll `TryReceive` and reply `counter + 1` every 500 ms, 5-byte payload `[senderId][counter BE]`, roles by `-DMICROWORLD_EXAMPLE_NODE_ID=1|2`, destinations via `MakeUartAddress`. Build Verify §1.1 green: `pio run` builds **both** role envs `[SUCCESS]` (example warning-clean; identical images RAM 20,892 B / 6.4%, Flash 219,941 B / 5.2%), ctest 11/11, class-doc 128, folder-agents 63. Hardware checkpoint pending (human-gated §1.2); it also flips task 1.1's Hardware-verified box.
+Built 2026-07-23 — `examples/18-TwoBoardUart` ping-pongs a `std::uint32_t` counter over the wired UART driver directly (no `TNetManager`): node 1 seeds, both poll `TryReceive` and reply `counter + 1` every 500 ms, 5-byte payload `[senderId][counter BE]`, roles by `-DMICROWORLD_EXAMPLE_NODE_ID=1|2`, destinations via `MakeUartAddress`. Build Verify §1.1 green: `pio run` builds **both** role envs `[SUCCESS]` (example warning-clean; identical images RAM 20,892 B / 6.4%, Flash 219,941 B / 5.2%), ctest 11/11, class-doc 128, folder-agents 63. Hardware-verified 2026-07-23: on two ESP32-S3 boards (crossover GPIO 17↔18 + common GND) node 1's console showed the counter ping-pong climbing unbroken — `tx n=1,3,5,…` each `Success`, `rx n=2,4,6,…` `from=2` — 22 exchanges in ~11 s at the 500 ms cadence, zero stalls or non-`Success`. Runtime-verifies `FEsp32UartDriver` TrySend/TryReceive and the portable `FrameCodec` framing over a real wire; also flips task 1.1's Hardware-verified box.
 
 **Feature:** the same volley as example `17-TwoBoardLora`, over a wire — proof
 that swapping the driver line swaps the transport.

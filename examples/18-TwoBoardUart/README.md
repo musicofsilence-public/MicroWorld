@@ -4,7 +4,7 @@
 of a radio — proof that swapping only the driver construction line swaps the
 transport, with the byte I/O, frame codec, and address helpers unchanged.
 
-> Status: compiled for ESP32-S3; not yet verified on hardware.
+> Status: hardware-verified on ESP32-S3 (2026-07-23) — the counter ping-pong ran clean over a real wire.
 
 ## What it does
 
@@ -98,9 +98,30 @@ accept it.
 
 ## Verified output
 
-Not yet verified on hardware. This example has been compiled for ESP32-S3 only;
-the captured serial traces from both boards go here once the human-gated
-checkpoint runs (that checkpoint also flips task 1.1's Hardware-verified box).
+Hardware-verified 2026-07-23 on two ESP32-S3 boards (crossover GPIO 17↔18 +
+common GND). Node 1's serial console, counter climbing unbroken with every send
+`Success` and every reply `from=2`:
+
+```text
+[ex18] node=1 open=1
+[ex18] tx n=1 result=Success
+[ex18] rx n=2 from=2
+[ex18] tx n=3 result=Success
+[ex18] rx n=4 from=2
+… unbroken …
+[ex18] tx n=21 result=Success
+[ex18] rx n=22 from=2
+```
+
+22 exchanges in ~11 s at the 500 ms cadence, zero stalls or non-`Success`. The
+climbing `rx … from=2` proves node 2 received each frame and echoed `counter + 1`,
+so both directions and the `FrameCodec` framing are confirmed on real hardware.
+
+Reproduction note: node 1 sends its opening frame once at boot + 500 ms and only
+re-sends on receive (no retry), so bring the listener up first, then reset the
+initiator — otherwise the opening frame is lost and both boards wait forever.
+Only node 1's console was captured here because the second board was on its
+native-USB port, whose UART0 console is not wired to that connector.
 
 ## Image size
 
