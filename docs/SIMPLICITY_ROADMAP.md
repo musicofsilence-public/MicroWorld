@@ -1632,7 +1632,7 @@ tests must pass unchanged.
   Verified by lead: build clean, transcript byte-identical to the captured
   14-line baseline (exit 0), ctest 11/11, CheckClassDocumentation 125. Owner
   reviewed the diff at the pre-commit checkpoint and approved as-is.
-  Commit `<pending>`.
+  Commit `658eb4e`.
 
 - [ ] **8.4 Documentation consistency sweep.** After all renames: re-grep
   every new-vs-old name pair from Phase 1 across `README.md`, root
