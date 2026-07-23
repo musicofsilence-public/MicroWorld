@@ -11,7 +11,9 @@ a time, not claimed for every board.
 Current development status is in [PROGRESS.md](PROGRESS.md); the active
 improvement plan is in [docs/SIMPLICITY_ROADMAP.md](docs/SIMPLICITY_ROADMAP.md)
 (the completed implementation plan remains in [docs/ROADMAP.md](docs/ROADMAP.md)
-as a historical record).
+as a historical record). The active examples plan is in
+[docs/EXAMPLES_ROADMAP.md](docs/EXAMPLES_ROADMAP.md), building one runnable
+ESP32-S3 example per engine feature under [examples/](examples/README.md).
 
 ## Modules
 

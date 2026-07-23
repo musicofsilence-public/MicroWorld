@@ -1,0 +1,36 @@
+# Examples
+
+Inherits `../AGENTS.md`.
+
+## Architecture
+
+Each `examples/<NN-Name>/` is a self-contained PlatformIO consumer project that
+demonstrates exactly one MicroWorld feature on a real ESP32-S3. Dependencies
+point inward: an example consumes the `Modules/` packages through `symlink://`
+exactly like the verified consumer project, and MicroWorld never depends on an
+example. Duplication *across* examples (the `platformio.ini` boilerplate, the
+WiFi glue) is deliberate so each folder copies out standalone; DRY applies only
+*within* one example.
+
+## Concepts
+
+- One feature per example — the folder name states it, and the `src/` stays
+  small enough to read in one sitting.
+- The serial console is the observable: every printed line starts with the
+  example's `[ex<NN>]` tag so captures are unambiguous, and examples without
+  radio/network I/O print a deterministic trace.
+- Every MicroWorld composition object is declared `static` at file scope (or in
+  a `static` function-local), never on the `app_main` stack — the default main
+  task stack overflows otherwise (the hardware lesson recorded in
+  `Modules/PlatformEsp32/benchmarks/Results/Esp32S3N16R8.md`, Phase 6.2).
+- Time is caller-supplied from `FEsp32TimeSource`; no example logic reads a
+  hidden clock.
+
+## Verification
+
+Build every example with the Build Verify in `docs/EXAMPLES_ROADMAP.md` §1.1
+(`pio run` is the compile gate; the repo-wide `ctest` format gate covers example
+sources once they are tracked). Compile success is never a runtime claim: a
+board is flashed and monitored only through the human-gated hardware checkpoint
+of §1.2, and each example README carries the "not yet verified on hardware"
+sentence until its captured trace is pasted in.

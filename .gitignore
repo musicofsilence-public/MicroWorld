@@ -9,3 +9,10 @@ __pycache__/
 # OS metadata
 .DS_Store
 Thumbs.db
+
+# PlatformIO build output inside example projects
+**/.pio/
+# ESP-IDF sdkconfig files PlatformIO generates per environment
+examples/*/sdkconfig.*
+# Per-site WiFi credentials (committed template: NetworkConfig.example.h)
+examples/*/src/NetworkConfig.h
