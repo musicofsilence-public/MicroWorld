@@ -5,7 +5,7 @@ bound to `TNetHost` through the `TNetHostFrame` seam, and a bare `TNetHost`
 client — running over a plain wire with **zero WiFi**. **Same application
 protocol as example 16 — only the driver construction changed.**
 
-> Status: compiled for ESP32-S3; not yet verified on hardware.
+> Status: hardware-verified on ESP32-S3 (2026-07-23) — the client connected and observed the actor count reach 2 over a bare wire.
 
 ## What it does
 
@@ -108,9 +108,29 @@ climbs to 2):
 
 ## Verified output
 
-Not yet verified on hardware. This example has been compiled for ESP32-S3 only;
-the captured traces from both boards go here once the human-gated checkpoint
-runs (the client trace must show the actor count reaching 2, as in example 16).
+Hardware-verified 2026-07-23 on two ESP32-S3 boards (UART crossover GPIO 17↔18,
+common GND). The client console — full message stack over the wire, zero WiFi:
+
+```text
+[ex19] client node=2 open=1
+[ex19] client connecting (no WiFi -- UART only)
+[ex19] client connected
+[ex19] client sent spawn request 1
+[ex19] client rx state tick=63 actors=2
+[ex19] done (observed actor count 2)
+```
+
+`client connected` is `TNetHost` Hello/Welcome admission over UART; the spawn
+request is a channel-1 message; `rx state … actors=2` is the server's channel-2
+broadcast decoded — so the whole `TNetHost` + `TEngineHost` design runs over the
+bare wire exactly as example 16 does over WiFi.
+
+Reproduction note: the count showed `2` after one visible request because the
+capture reset only the client, and the free-running server still held the two
+actors it spawned for the client's earlier connection (`tick=63` shows it had
+been up a while). Co-start both boards for a pristine `0→1→2`. Only the client
+console was captured — the server board was on its native-USB port, whose UART0
+console is not wired to that connector.
 
 ## Image size
 
