@@ -6,9 +6,10 @@ Inherits `../AGENTS.md`.
 
 `src/` is the SOLE home of lwIP, ESP-IDF, and `<driver/uart.h>` headers in
 this package: each is confined to one private `*PlatformImplementation.h`
-(`Esp32SocketPlatformImplementation.h`, `E32UartPlatformImplementation.h`),
-included only by its matching `.cpp`. A public header must never reach these
-files.
+(`Esp32SocketPlatformImplementation.h` for the UDP driver;
+`E32UartPlatformImplementation.h`, the shared UART open/read/write/close
+toolkit, for both `Esp32E32LoraDriver.cpp` and `Esp32UartDriver.cpp`). A public
+header must never reach these files.
 
 ## Concepts
 

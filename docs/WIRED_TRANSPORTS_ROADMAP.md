@@ -196,7 +196,7 @@ honesty rule the repo applies everywhere: never claim what was not verified.
 | Phase | Content | Status |
 | --- | --- | --- |
 | 0 | ADR: wired links are Net transports; device-bus access is out of scope | ✅ |
-| 1 | UART link driver + examples 18, 19 | ⬜ |
+| 1 | UART link driver + examples 18, 19 | 🟨 |
 | 2 | I2C spike, master/slave drivers + example 20 | ⬜ |
 | 3 | SPI spike, master/slave drivers + example 21 | ⬜ |
 | 4 | Close-out: docs, catalog, changelog | ⬜ |
@@ -234,8 +234,10 @@ quote. **Verify:** §1.1 (docs-only — the build/gates simply stay green).
 
 #### Task 1.1 — `FEsp32UartDriver` + `UartAddress.h`
 
-- [ ] Built (compile gate)
+- [x] Built (compile gate)
 - [ ] Hardware-verified (via task 1.2's checkpoint)
+
+Built 2026-07-23 — `UartAddress.h` (1-byte point-to-point node id, mirroring `LoraAddress.h`), `Esp32UartDriver.h` (`UartMaxPayloadBytes = 120`, `FEsp32UartConfig` with `BaudRate` default 115200, `FEsp32UartDriver final : INetDriver`), and `Esp32UartDriver.cpp` (mirrors `Esp32E32LoraDriver.cpp` one-for-one; same `ENetResult` mapping; reuses the shared `E32UartPlatformImplementation.h` toolkit). Shared toolkit header comment now names both consumers; the three scoped `AGENTS.md` guides enumerate the new driver. Standard Verify §1.1 green: `pio run` `[SUCCESS]` (`Esp32UartDriver.o` compiled, warning-clean save the vendor `#include_next` pedantic warnings), ctest 11/11, class-doc 128 files, folder-agents 63. Send/receive path UNVERIFIED at runtime until task 1.2's checkpoint (§1.2). Hardware-verified pending that checkpoint.
 
 **Goal:** a wired point-to-point `INetDriver` over one UART — functionally
 "the E32 driver minus the radio".

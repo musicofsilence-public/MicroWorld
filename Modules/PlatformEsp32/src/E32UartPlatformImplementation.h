@@ -1,16 +1,18 @@
 #pragma once
 
 // =============================================================================
-// src/E32UartPlatformImplementation.h is the SOLE translation unit that pulls ESP-IDF UART headers.
-// It is included only by Esp32E32LoraDriver.cpp; a public header must never reach
-// it. Every ESP-IDF UART divergence is hidden behind the helpers below so
-// Esp32E32LoraDriver.cpp reads one platform-free send/receive path that mirrors
-// the UDP driver. This platform implementation is COMPILE-VERIFIED on ESP32-S3 (Phase 5.3) but the
-// exact would-block/partial-write behavior of uart_write_bytes and the exact
-// drain behavior of uart_read_bytes are UNVERIFIED at runtime: the mapping below
-// treats a short write as a would-block candidate and any negative result as an
-// error, and a receive that drains with no byte is Unavailable; no radio traffic
-// is exercised in the compile-only phase.
+// src/E32UartPlatformImplementation.h is the SOLE header that pulls ESP-IDF UART headers.
+// It is included by two driver translation units — Esp32E32LoraDriver.cpp (the E32
+// LoRa radio link) and Esp32UartDriver.cpp (the wired point-to-point UART link) —
+// and a public header must never reach it. Every ESP-IDF UART divergence is hidden
+// behind the helpers below so both drivers read one platform-free send/receive path
+// that mirrors the UDP driver. This platform implementation is COMPILE-VERIFIED on
+// ESP32-S3 (Phase 5.3) but the exact would-block/partial-write behavior of
+// uart_write_bytes and the exact drain behavior of uart_read_bytes are UNVERIFIED at
+// runtime: the mapping below treats a short write as a would-block candidate and any
+// negative result as an error, and a receive that drains with no byte is Unavailable.
+// No radio or wired-UART traffic is exercised until each consuming driver's example
+// hardware checkpoint passes (docs/WIRED_TRANSPORTS_ROADMAP.md §1.2).
 // =============================================================================
 
 #include <driver/uart.h>
