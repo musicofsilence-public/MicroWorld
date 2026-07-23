@@ -47,6 +47,21 @@ adapter owns its concrete encoding and provides helpers to build/inspect it.
   [`Net/FrameCodec.h`](../Modules/Net/include/MicroWorld/Net/FrameCodec.h)
   for CRC-16/CCITT-FALSE framing and a 1-byte broadcast
   [`LoraAddress`](../Modules/PlatformEsp32/include/MicroWorld/PlatformEsp32/LoraAddress.h).
+- ESP32 wired UART reference:
+  [`FEsp32UartDriver`](../Modules/PlatformEsp32/include/MicroWorld/PlatformEsp32/Esp32UartDriver.h)
+  over a plain point-to-point UART — the E32 driver minus the radio — using the
+  same `Net/FrameCodec.h` framing over a 1-byte point-to-point
+  [`UartAddress`](../Modules/PlatformEsp32/include/MicroWorld/PlatformEsp32/UartAddress.h).
+- ESP32 wired I2C reference (master/slave pair):
+  [`FEsp32I2cMasterDriver` / `FEsp32I2cSlaveDriver`](../Modules/PlatformEsp32/include/MicroWorld/PlatformEsp32/Esp32I2cDriver.h)
+  over one I2C bus — the master clocks whole-frame transactions, the slave receives
+  through an `on_receive` ISR inbox — with a 1-byte
+  [`I2cAddress`](../Modules/PlatformEsp32/include/MicroWorld/PlatformEsp32/I2cAddress.h).
+- ESP32 wired SPI reference (master/slave pair):
+  [`FEsp32SpiMasterDriver` / `FEsp32SpiSlaveDriver`](../Modules/PlatformEsp32/include/MicroWorld/PlatformEsp32/Esp32SpiDriver.h)
+  over one full-duplex SPI bus — the master clocks fixed-size transactions, the
+  slave keeps one queued — with a 1-byte
+  [`SpiAddress`](../Modules/PlatformEsp32/include/MicroWorld/PlatformEsp32/SpiAddress.h).
 
 ### 3. Log sink
 

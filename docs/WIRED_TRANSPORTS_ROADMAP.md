@@ -199,7 +199,7 @@ honesty rule the repo applies everywhere: never claim what was not verified.
 | 1 | UART link driver + examples 18, 19 | ✅ |
 | 2 | I2C spike, master/slave drivers + example 20 | ✅ |
 | 3 | SPI spike, master/slave drivers + example 21 | ✅ |
-| 4 | Close-out: docs, catalog, changelog | ⬜ |
+| 4 | Close-out: docs, catalog, changelog | ✅ |
 
 Each phase after 0 delivers standalone value — the plan can pause after any ✅
 phase with nothing half-built.
@@ -462,7 +462,9 @@ Built 2026-07-23 — `examples/21-TwoBoardSpi` ping-pongs a counter over the SPI
 
 #### Task 4.1 — Documentation sweep
 
-- [ ] Done
+- [x] Done
+
+Done 2026-07-23 — all five updated in one commit: `docs/Porting.md` seam 2 lists all five wired drivers (the UART driver plus the I2C and SPI master/slave pairs, each with its master/slave note and 1-byte address helper) beside the UDP/LoRa references; the root `README.md` module table names the wired UART/I2C/SPI transports; `Modules/PlatformEsp32/library.json` description and keywords gained the wired transports (name/version identity frozen per §2.2); `CHANGELOG.md` gained one Unreleased entry covering the wired UART/I2C/SPI transports and examples 18–21; `PROGRESS.md` gained the closing evidence row. Standard Verify §1.1 green: superbuild + `ctest` 11/11, `CheckClassDocumentation` 136, `CheckFolderAgents` 63, `pio run -d examples/01-CoreTick` `[SUCCESS]`.
 
 **Steps:**
 

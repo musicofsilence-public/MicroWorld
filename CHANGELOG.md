@@ -2,7 +2,22 @@
 
 ## Unreleased
 
-No unreleased changes. Live state and exact evidence are recorded in
+- **Wired board-to-board transports (`Modules/PlatformEsp32`).** New `INetDriver`
+  implementations behind `docs/Porting.md` seam 2, so the existing byte I/O,
+  `FrameCodec` framing, `TNetManager`, and `TNetHost` message design run over a
+  plain wire unchanged: `FEsp32UartDriver` (point-to-point UART), the
+  `FEsp32I2cMasterDriver`/`FEsp32I2cSlaveDriver` pair (I2C), and the
+  `FEsp32SpiMasterDriver`/`FEsp32SpiSlaveDriver` pair (full-duplex SPI), each with
+  a 1-byte address helper (`UartAddress`/`I2cAddress`/`SpiAddress`). ADR 0003
+  records the design — a wire is just another transport; peripheral device-bus
+  access is out of scope. Portable packages are unchanged.
+- **ESP32 examples 18–21.** `18-TwoBoardUart` and `19-UartMessaging` (example 16's
+  full `TNetHost` client/server design over a wire, zero WiFi), `20-TwoBoardI2c`,
+  and `21-TwoBoardSpi` — the same ping-pong volley over UART, I2C, and SPI with
+  the driver construction as the only difference. Compile-verified for ESP32-S3;
+  the hardware checkpoints are human-gated and pending.
+
+Live state and exact evidence are recorded in
 [PROGRESS.md](PROGRESS.md).
 
 ## 0.3.0 - 2026-07-23

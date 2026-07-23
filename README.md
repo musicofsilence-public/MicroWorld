@@ -25,7 +25,7 @@ ESP32-S3 example per engine feature under [examples/](examples/README.md).
 | Engine | `MicroWorld::Engine` | `MicroWorldEngine` | `UWorld` / `AActor` / `UActorComponent`, timers |
 | Net | `MicroWorld::Net` | `MicroWorldNet` | Byte I/O, frame codec, `TNetManager` |
 | PlatformHost | `MicroWorld::PlatformHost` | — | Host UDP transport (non-portable) |
-| PlatformEsp32 | — | `MicroWorldPlatformEsp32` | ESP32 UDP + E32 LoRa UART (PlatformIO/ESP-IDF only) |
+| PlatformEsp32 | — | `MicroWorldPlatformEsp32` | ESP32 UDP + E32 LoRa + wired UART/I2C/SPI transports (PlatformIO/ESP-IDF only) |
 
 Dependencies point inward:
 
