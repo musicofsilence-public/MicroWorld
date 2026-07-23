@@ -1698,7 +1698,7 @@ tests must pass unchanged.
   PlatformHost "BSD on POSIX" claim was confirmed against the real (compiled,
   runtime-unverified) `#ifdef _WIN32`/`#else` branches in
   `UdpSocketPlatformImplementation.h`, and the `src` guide carries that
-  unverified caveat faithfully. Commit `<pending>`.
+  unverified caveat faithfully. Commit `d61c2ca`.
 
 - [ ] **9.2 Version, changelog, progress.** This plan's renames are
   API-breaking for source consumers (`TNetManager`, `IssueLease`, lease type
