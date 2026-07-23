@@ -16,6 +16,14 @@
   and `21-TwoBoardSpi` — the same ping-pong volley over UART, I2C, and SPI with
   the driver construction as the only difference. Compile-verified for ESP32-S3;
   the hardware checkpoints are human-gated and pending.
+- **ESP32 WiFi UDP examples 15–16.** `15-UdpEcho` (raw `FEsp32UdpDriver` echo) and
+  `16-TwoBoardUdp` (example 19's full `TNetHost` + `TEngineHost` design over WiFi
+  UDP) — both **board-to-board with no router**: one board hosts a SoftAP the other
+  joins, so no home network and no real credentials are needed. The first
+  on-hardware runs of `FEsp32UdpDriver`; both **hardware-verified** on two ESP32-S3
+  boards (2026-07-23). Example 15's oversize probe found that an over-1200-byte UDP
+  receive silently truncates to `UdpMaxPacketBytes` on this ESP-IDF/lwIP build
+  (`MSG_TRUNC` not exposed).
 
 Live state and exact evidence are recorded in
 [PROGRESS.md](PROGRESS.md).

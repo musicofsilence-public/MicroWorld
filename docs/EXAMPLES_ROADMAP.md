@@ -1120,8 +1120,21 @@ parts: IP addresses, sender ports.
 
 #### Task 7.1 — `16-TwoBoardUdp`
 
-- [ ] Built
-- [ ] Hardware-verified
+- [x] Built
+- [x] Hardware-verified
+
+Built 2026-07-23 — `pio run` `[SUCCESS]` both role envs (server/client). Design deviates
+from the station-mode spec below: the server hosts a **SoftAP** the client joins, so no
+router and no real credentials are needed and the server address is the fixed gateway
+`192.168.4.1` (no IP-copy step). See `examples/16-TwoBoardUdp/README.md`.
+
+Hardware-verified 2026-07-23 — two ESP32-S3 boards, no router. The server console (SoftAP
+host) showed the client associating (`station join`, DHCP `192.168.4.2`) and then
+`server spawned actor -> world actor count=1`, `=2`, `done` — the remote client's `TNetHost`
+Hello/Welcome admission and two channel-1 spawn requests all crossed WiFi UDP and drove the
+server's engine world. Runtime-verifies the full `TNetHost` + `TEngineHost` message design
+over WiFi UDP across two boards — the WiFi twin of example 19 over UART. **With this, both
+WiFi examples (15, 16) are hardware-verified.**
 
 **Feature:** the full networked engine across two real machines — a dedicated
 server `TEngineHost` bound to `TNetHost` through the `TNetHostFrame` seam, and

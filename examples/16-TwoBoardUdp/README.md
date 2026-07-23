@@ -6,7 +6,8 @@ client, exchanging channel messages over **WiFi UDP with no router**. The server
 hosts its own SoftAP; the client joins it. This is the host `TwoNodeDemo` split across two
 boards, and the **WiFi twin of example 19** (same protocol, UART swapped for UDP).
 
-> Status: compiled for ESP32-S3; not yet verified on hardware.
+> Status: hardware-verified on two ESP32-S3 boards (2026-07-23) — the client connected over
+> the server's SoftAP and drove the server's world actor count to 2, no router.
 
 ## What it does
 
@@ -96,7 +97,29 @@ Client board:
 
 ## Verified output
 
-Status: compiled for ESP32-S3; not yet verified on hardware.
+Hardware-verified 2026-07-23 on two ESP32-S3 boards, no router. The server board (SoftAP
+host) console — the client joined its AP and drove the whole exchange over WiFi UDP:
+
+```text
+[ex16] wifi ip=192.168.4.1
+[ex16] server open=1 udp_port=40404
+[ex16] server listening (udp)
+I (29538) wifi:station: e0:72:a1:d5:56:9c join, AID=1, bgn, 40U
+I (29608) esp_netif_lwip: DHCP server assigned IP to a client, IP is: 192.168.4.2
+[ex16] server spawned actor -> world actor count=1
+[ex16] server spawned actor -> world actor count=2
+[ex16] done (server spawned 2 actors)
+```
+
+The `station join` + DHCP lease is the client associating with the board-hosted SoftAP; the
+two `spawned actor` lines are the client's channel-1 spawn requests — carried over `TNetHost`
+Hello/Welcome admission and WiFi UDP — decoded server-side and spawning actors in the engine
+world. The count reaching 2 proves the entire `TNetHost` + `TEngineHost` message design ran
+across two boards over WiFi with zero router, exactly as example 19 does over a bare UART.
+
+Only the server board's console was captured (the client board was on its native-USB port,
+whose UART0 console is not routed to that connector); the server-side spawns are the stronger
+proof anyway — they only occur when the remote client's requests actually arrive.
 
 ## Image size
 
