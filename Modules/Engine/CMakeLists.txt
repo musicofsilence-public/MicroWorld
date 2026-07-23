@@ -103,6 +103,7 @@ if(MICROWORLD_ENGINE_BUILD_TESTS)
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/EngineNetHostTests.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/EngineGarbageCollectionTests.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/EngineTimerManagerTests.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/EngineMessageCodecTests.cpp"
     )
 
     if(BUILD_TESTING)

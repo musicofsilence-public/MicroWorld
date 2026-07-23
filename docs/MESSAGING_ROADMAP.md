@@ -734,7 +734,7 @@ of the transport seam — sensor examples use timer-driven synthetic readings).
 | --- | --- | --- | --- |
 | 0 | Baseline & governance | 2 | ✅ |
 | 1 | Engine-first examples groundwork (platform facades) | 5 | ✅ |
-| 2 | Local actor messaging (Engine) | 3 | ⬜ |
+| 2 | Local actor messaging (Engine) | 3 | 🟨 |
 | 3 | Messaging over one wire | 2 | ⬜ |
 | 4 | Several channels per world | 3 | ⬜ |
 | 5 | Guaranteed delivery per channel | 3 | ⬜ |
@@ -924,12 +924,12 @@ adopts the shipped log seam.
 
 ---
 
-### Phase 2 — Local actor messaging (Engine) ⬜
+### Phase 2 — Local actor messaging (Engine) 🟨
 
 Goal: actors in one standalone world exchange typed messages with callbacks,
 deterministically, with zero networking.
 
-- [ ] **2.1 `Engine/Message.h` — vocabulary, codec, interfaces.** Implement
+- [x] **2.1 `Engine/Message.h` — vocabulary, codec, interfaces.** Implement
   §4.3's `Message.h` exactly: ids, `EMessageResult`, `FActorMessageHeader`,
   `EncodeActorMessage`/`DecodeActorMessage` (hand-rolled little-endian, D1),
   `FMessageView`, `FMessageHandlerBinding`, `FMessageHandlerHandle`,
@@ -943,6 +943,26 @@ deterministically, with zero networking.
 
   **Done when:** all contracts documented; tests pass.
   **Verify:** Standard Verify.
+
+  Done 2026-07-23 — new header-only `Modules/Engine/include/MicroWorld/Engine/Message.h`
+  implements §4.3 verbatim (all ids/constants, `EMessageResult` members in order,
+  `FActorMessageHeader`, `inline` little-endian codec imitating `FrameCodec.h`,
+  `FMessageView`, the `TDelegate` binding alias, `FMessageHandlerHandle` as an
+  `FTimerHandle`-shaped sibling, and the three interfaces
+  `IEncodedMessageSink`/`IMessageChannel`/`IMessageRouter`). Includes exactly the
+  four allowed (`<cstdint>`, `<cstddef>`, `Containers/Span.h`, `Delegates/Delegate.h`) —
+  no `<cstring>` (byte-loop copy) and no `<limits>` (handle sentinel is the literal
+  `0xFFFFu`, = `numeric_limits<uint16_t>::max()`, documented). Codec failure map
+  (lead-pinned): encode `InvalidType` on type 0 then `PayloadTooLarge` on short
+  output; decode `PayloadTooLarge` on sub-header input then `InvalidType` on type 0;
+  every failure path checked before any write (transactional). New
+  `EngineMessageCodecTests.cpp` (8 cases) wired into `MICROWORLD_ENGINE_TEST_SOURCES`
+  (production sources untouched): round-trip, exact hand-written LE byte array,
+  zero-length round-trip, all four failure paths sentinel-verified transactional,
+  and a no-allocation check. Gates (lead-rerun): clang-format clean; MSVC Release
+  build warning-clean (`/WX`); host `ctest` 11/11 (the 8 codec cases `[PASS]` inside
+  `microworld_engine_tests`, 88 total 0 failures); `CheckClassDocumentation
+  --require-doxygen` 147 files.
 
 - [ ] **2.2 `Engine/MessageRouter.h` — `TMessageRouter`.** Implement per §4.3
   semantics (normative list). Imitate `Timer.h` for slots/generations/guard.
