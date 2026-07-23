@@ -274,8 +274,10 @@ updated; Standard Verify §1.1 passes (including the `pio run` compile gate).
 
 #### Task 1.2 — Example `18-TwoBoardUart` (ping-pong counter)
 
-- [ ] Built
+- [x] Built
 - [ ] Hardware-verified
+
+Built 2026-07-23 — `examples/18-TwoBoardUart` ping-pongs a `std::uint32_t` counter over the wired UART driver directly (no `TNetManager`): node 1 seeds, both poll `TryReceive` and reply `counter + 1` every 500 ms, 5-byte payload `[senderId][counter BE]`, roles by `-DMICROWORLD_EXAMPLE_NODE_ID=1|2`, destinations via `MakeUartAddress`. Build Verify §1.1 green: `pio run` builds **both** role envs `[SUCCESS]` (example warning-clean; identical images RAM 20,892 B / 6.4%, Flash 219,941 B / 5.2%), ctest 11/11, class-doc 128, folder-agents 63. Hardware checkpoint pending (human-gated §1.2); it also flips task 1.1's Hardware-verified box.
 
 **Feature:** the same volley as example `17-TwoBoardLora`, over a wire — proof
 that swapping the driver line swaps the transport.

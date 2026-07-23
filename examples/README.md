@@ -55,6 +55,7 @@ Status: ⬜ planned · 🟨 built (compiles) · ✅ hardware-verified
 | 15 | `15-UdpEcho` | `FEsp32UdpDriver` over real WiFi | PC on same WiFi | ⬜ |
 | 16 | `16-TwoBoardUdp` | `TNetHost` client/server + `TNetHostFrame` engine binding | 2nd board, WiFi | ⬜ |
 | 17 | `17-TwoBoardLora` | `FEsp32E32LoraDriver` framed radio link | 2nd board, 2 × E32 | ⬜ |
+| 18 | `18-TwoBoardUart` | wired UART `INetDriver` link — example 17's volley over a plain wire | 2nd board, 3 wires | 🟨 |
 
 Wired board-to-board transports (examples 18–21) are planned in
 [`docs/WIRED_TRANSPORTS_ROADMAP.md`](../docs/WIRED_TRANSPORTS_ROADMAP.md) and are
