@@ -25,7 +25,7 @@ Current status and recorded evidence live in
 - `UWorld` traces Actors; `AActor` traces Components; parent links are weak and
   expire when the parent is reclaimed.
 - Caller-supplied monotonic milliseconds drive scheduling.
-- `TTimerManager<MaxTimers, InlineCallbackBytes>` schedules fixed-capacity
+- `TTimerManager<MaxTimers, InlineTimerCallbackBytes>` schedules fixed-capacity
   one-shot and looping timers from caller-supplied time. Every other
   `ETimerMode` value (including `None` and arbitrary casts) is rejected
   transactionally as `InvalidMode`. The application owns the manager value,

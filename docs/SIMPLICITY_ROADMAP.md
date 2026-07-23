@@ -1519,7 +1519,7 @@ tests must pass unchanged.
 
 ---
 
-### Phase 8 — Student entry points & the style contract ⬜
+### Phase 8 — Student entry points & the style contract ✅
 
 - [x] **8.1 Extend `docs/Style.md` with the simplicity rules.** Append a
   section covering: Rule N (long self-explanatory names, units in names,
@@ -1634,7 +1634,7 @@ tests must pass unchanged.
   reviewed the diff at the pre-commit checkpoint and approved as-is.
   Commit `658eb4e`.
 
-- [ ] **8.4 Documentation consistency sweep.** After all renames: re-grep
+- [x] **8.4 Documentation consistency sweep.** After all renames: re-grep
   every new-vs-old name pair from Phase 1 across `README.md`, root
   `AGENTS.md`, `Modules/*/README.md`, `Modules/**/AGENTS.md`,
   `docs/UE5ConceptMap.md`, `docs/ModulePackaging.md`, `docs/Style.md`,
@@ -1645,6 +1645,21 @@ tests must pass unchanged.
 
   **Done when:** every Phase-1 "old name" greps to zero outside historical
   files and this document; Standard Verify passes.
+
+  **Evidence:** Three single-token doc stragglers fixed:
+  `docs/UE5ConceptMap.md` and `Modules/Engine/README.md` (`TTimerManager`
+  param `InlineCallbackBytes`→`InlineTimerCallbackBytes`, the 1.4 rename) and
+  `docs/Porting.md` (`src/*Glue.h`→`src/*PlatformImplementation.h`, the D9/1.7
+  rename). The concept-map rows naming `TNetManager`/`THostLoopback` already
+  carried the new names (fixed in Phase 1's sweep); `docs/Style.md`'s `SrcId`
+  is a deliberate counter-example ("`SourceNodeId`, not `SrcId`") and was left.
+  Verified by lead: after the edits an old-name grep over the swept set
+  (`README.md`, root/module `AGENTS.md`, module `README.md`, and the six
+  `docs/*.md` targets) returns zero; the only residual hits are in historical
+  files (`docs/ROADMAP.md`, `PROGRESS.md`, this document) and
+  `benchmarks/Results/*.md`, all excepted. Standard Verify unaffected
+  (doc-only): ctest 11/11, CheckClassDocumentation 125. Commit `<pending>`.
+  **Phase 8 complete.**
 
 ---
 
@@ -1711,7 +1726,7 @@ tests must pass unchanged.
 | 5 | Decompose: Engine | 4 | ✅ |
 | 6 | Decompose: Net & Platform | 6 | ✅ |
 | 7 | Ceremony reduction | 3 | ✅ |
-| 8 | Entry points & style contract | 4 | ⬜ |
+| 8 | Entry points & style contract | 4 | ✅ |
 | 9 | Governance & release | 3 | ⬜ |
 
 Total: 40 tasks.

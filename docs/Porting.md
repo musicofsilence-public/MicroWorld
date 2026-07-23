@@ -66,7 +66,7 @@ Adapter code goes in a **non-portable platform package** (e.g.
 package:
 
 - may include OS and vendor headers (WinSock, lwIP, ESP-IDF, `<driver/uart.h>`,
-  `<chrono>`, …) and confine them to private `src/*Glue.h` headers;
+  `<chrono>`, …) and confine them to private `src/*PlatformImplementation.h` headers;
 - is **excluded from `CheckDependencyBoundaries.py`** — it has no module key in
   that tool's portable table;
 - **depends inward** on any portable package (Core, Memory, Object, Engine,
