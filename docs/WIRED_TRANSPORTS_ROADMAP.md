@@ -197,7 +197,7 @@ honesty rule the repo applies everywhere: never claim what was not verified.
 | --- | --- | --- |
 | 0 | ADR: wired links are Net transports; device-bus access is out of scope | ✅ |
 | 1 | UART link driver + examples 18, 19 | ✅ |
-| 2 | I2C spike, master/slave drivers + example 20 | ⬜ |
+| 2 | I2C spike, master/slave drivers + example 20 | 🟨 |
 | 3 | SPI spike, master/slave drivers + example 21 | ⬜ |
 | 4 | Close-out: docs, catalog, changelog | ⬜ |
 
@@ -334,7 +334,9 @@ example 16, with the WiFi router switched off if you want to make the point.
 
 #### Task 2.1 — I2C design spike (ADR appendix)
 
-- [ ] Done
+- [x] Done
+
+Done 2026-07-23 — Appendix A appended to `docs/decisions/0003-wired-transports.md` answering all six questions from the installed ESP-IDF 6.0.1 headers (`i2c_master.h`, `i2c_slave.h`, `i2c_types.h`): the slave pre-queues TX via `i2c_slave_write` (no ISR needed) and receives **only** through the `on_receive` ISR callback (no poll API in 6.0.1); master reads are clock-driven, so `Unavailable` is decided by the decoder finding no frame, not by the API; 100 kHz with mandatory external ~4.7 kΩ pull-ups; `I2cAddress.h` = 1-byte node id like `UartAddress.h`, with the 7-bit `SlaveAddress` a separate config field; a fixed whole-frame transaction window pumped through the shared `TFrameDecoder`; `I2cMaxPayloadBytes = 120`, uniform with UART. The `SPIKE:` blanks in tasks 2.2/2.3 are filled from these answers; SDA = GPIO 8 / SCL = GPIO 9 confirmed clear of the S3 strapping pins (0, 3, 45, 46). Header-derived and runtime-UNVERIFIED until example 20's checkpoint (§1.2); docs-only, superbuild + ctest stay green at 11/11.
 
 **Goal:** replace guesses with verified answers before any driver code.
 Deliverable: an appendix in `docs/decisions/0003-wired-transports.md` +
@@ -367,14 +369,19 @@ authorized, a scratch probe on hardware):**
 - [ ] Built
 - [ ] Hardware-verified (via task 2.3's checkpoint)
 
-**Spec skeleton (spike fills the blanks):** two `INetDriver` classes with the
-task 1.1 file/documentation shape; ESP-IDF confined to a new
-`src/I2cPlatformImplementation.h`; configs `FEsp32I2cMasterConfig` /
-`FEsp32I2cSlaveConfig` (port, SDA/SCL GPIOs, speed, own/peer address —
-`SPIKE:` exact fields). Master `TrySend` = one bus write transaction of one
-encoded frame; master `TryReceive` = one bounded read transaction mapped per
-spike answer 2. Slave mirrors via the queued-TX mechanism from spike answer 1.
-Scoped `AGENTS.md` guides updated (§2.2). Standard Verify §1.1.
+**Spec skeleton (spike-filled — see ADR Appendix A):** two `INetDriver` classes
+with the task 1.1 file/documentation shape; ESP-IDF confined to a new
+`src/I2cPlatformImplementation.h`; `FEsp32I2cMasterConfig` = {`I2cPort`,
+`SdaGpio`, `SclGpio`, `SclSpeedHz` (100000), `SlaveAddress` (0x28), `LocalNodeId`}
+and `FEsp32I2cSlaveConfig` = {`I2cPort`, `SdaGpio`, `SclGpio`, `SlaveAddress`,
+`LocalNodeId`} (the 7-bit bus address is a config field, not folded into
+`I2cAddress.h`). Master `TrySend` = one `i2c_master_transmit` of one encoded frame;
+master `TryReceive` = one `i2c_master_receive` of a whole-frame window
+(`I2cMaxPayloadBytes + FrameOverheadBytes`) pumped through the decoder, mapping
+`Unavailable` when the window yields no frame (Appendix A2). Slave `TrySend` = one
+`i2c_slave_write` (`Full` when the TX ring cannot take the frame); slave
+`TryReceive` drains the ISR-filled inbox through the decoder (Appendix A1). Scoped
+`AGENTS.md` guides updated (§2.2). Standard Verify §1.1.
 
 #### Task 2.3 — Example `20-TwoBoardI2c`
 
@@ -383,10 +390,10 @@ Scoped `AGENTS.md` guides updated (§2.2). Standard Verify §1.1.
 
 **Spec:** task 1.2's ping-pong with the master/slave asymmetry: board A =
 master env, board B = slave env (`-DMICROWORLD_EXAMPLE_I2C_MASTER=1|0`), tag
-`[ex20]`. Wiring: GND↔GND, SDA↔SDA (GPIO 8), SCL↔SCL (GPIO 9), pull-ups per
-spike answer 3 (`SPIKE:` confirm pins are free on the DevKitC-1 — GPIO 8/9
-are the candidates, avoid strapping pins). Master paces the volley since only
-it can clock the bus; README must state that asymmetry in one sentence.
+`[ex20]`. Wiring: GND↔GND, SDA↔SDA (GPIO 8), SCL↔SCL (GPIO 9), plus two external
+~4.7 kΩ pull-ups to 3V3 (Appendix A3 — GPIO 8/9 are ordinary DevKitC-1 pins, clear
+of the S3 strapping pins 0/3/45/46). Master paces the volley since only it can
+clock the bus; README must state that asymmetry in one sentence.
 
 ---
 

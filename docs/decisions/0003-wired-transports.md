@@ -68,3 +68,73 @@ have not built.**
   is the separate system this ADR defers; design it then, behind its own seam.
 - Multi-drop topology (one master, many slaves on one bus) becomes a
   requirement — that is a `TNetHost` capacity question, not a driver-seam change.
+
+---
+
+## Appendix A — I2C design spike (Task 2.1)
+
+Deliverable of the Phase 2 spike: verified answers, taken from the **ESP-IDF
+6.0.1** headers installed for this project (`driver/i2c_master.h`,
+`driver/i2c_slave.h`, `driver/i2c_types.h`), before any driver code. No hardware
+probe was run — hardware stays human-gated — so these answers are
+header/documentation-derived, and the driver's platform-implementation carries
+"UNVERIFIED at runtime" wording until example 20's checkpoint passes (§1.2).
+
+**A1 — Slave-side API; can a slave pre-queue TX without ISR callbacks?**
+Yes. 6.0.1 ships the v2 new-generation slave driver. A slave stages TX bytes with
+`i2c_slave_write(handle, data, len, &written, timeout_ms)` — no callback needed to
+send; the bytes wait in the hardware FIFO plus a software ring (`send_buf_depth`)
+for the master's next read. Receive is delivered **only** through the `on_receive`
+ISR callback (`i2c_slave_received_callback_t`, event `{uint8_t* buffer, uint32_t
+length}`); there is **no** polling `i2c_slave_receive` in 6.0.1. The `on_request`
+callback (master reads while the FIFO is empty) is optional; the driver does not
+register it — pre-queued TX plus hardware filler covers the point-to-point case.
+
+**A2 — Master read of N bytes when the slave has nothing queued.**
+The master generates the clock, so `i2c_master_receive(N)` returns `ESP_OK` with N
+bytes regardless of slave state; unqueued positions read as bus-idle filler (SDA
+released). It does not NACK or block for lack of data — a NACK only occurs in the
+address phase if the slave is absent. "Nothing to receive" is therefore never
+signalled by the API; it is detected by the `FrameCodec` decoder finding no valid
+frame in the window, which the master driver maps to `Unavailable`.
+
+**A3 — Bus speed and pull-ups.**
+100 kHz standard mode. Over ~20 cm jumper wires the internal pull-ups are, by the
+header's own warning, not strong enough to guarantee; two external ~4.7 kΩ
+resistors to 3V3 on SDA and SCL are the reliable choice and are **mandatory** in
+the example. The driver also sets `flags.enable_internal_pullup = true` as
+harmless insurance.
+
+**A4 — `I2cAddress.h` layout.**
+One byte carrying the `FrameCodec` node id, identical in shape to `UartAddress.h`
+and `LoraAddress.h` (`MakeI2cAddress` / `IsI2cAddress` / `I2cAddressNodeId`). The
+bus-level 7-bit slave address is a separate config field (`SlaveAddress`), not
+folded into the address helper, so the node-id concept stays uniform across every
+transport. Default slave bus address `0x28`, outside the reserved `0x00`–`0x07`
+and `0x78`–`0x7F` ranges.
+
+**A5 — Frame-in-transaction shape.**
+Fixed-size transaction window fed to the byte-pump decoder — **not**
+length-prefixed. The master `TryReceive` reads one whole-frame window
+(`I2cMaxPayloadBytes + FrameOverheadBytes`) and pushes every byte through the same
+`TFrameDecoder` the UART driver uses; the codec's magic/length/CRC resync discards
+the filler bytes a partially-filled read injects. This reuses the shipped codec
+instead of inventing an I2C-specific length protocol.
+
+**A6 — `I2cMaxPayloadBytes`.**
+120 bytes — the same cap as UART, keeping every transport uniform (the acceptance
+criterion wants only the driver construction to differ). The slave's
+`send_buf_depth` and `receive_buf_depth` are sized to 256 bytes, comfortably larger
+than one 126-byte frame, so a single frame always fits one transaction and the
+slave inbox never truncates a frame at the example's pacing.
+
+**Resulting driver shape (fills tasks 2.2/2.3):** `FEsp32I2cMasterConfig` = {port,
+SDA GPIO, SCL GPIO, `SclSpeedHz` (100000), `SlaveAddress` (0x28), `LocalNodeId`};
+`FEsp32I2cSlaveConfig` = {port, SDA GPIO, SCL GPIO, `SlaveAddress`, `LocalNodeId`}.
+Master `TrySend` = one `i2c_master_transmit` of one encoded frame; master
+`TryReceive` = one `i2c_master_receive` of a whole-frame window pumped through the
+decoder (Unavailable when the window yields no frame — answer A2). Slave `TrySend`
+= one `i2c_slave_write` of one encoded frame (`Full` when the ring cannot take it);
+slave `TryReceive` = drain the ISR-filled inbox through the decoder (answer A1).
+Pins on the DevKitC-1: **SDA = GPIO 8, SCL = GPIO 9** — both ordinary GPIOs, clear
+of the S3 strapping pins (GPIO 0, 3, 45, 46).
