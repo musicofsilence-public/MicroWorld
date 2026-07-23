@@ -1550,7 +1550,7 @@ tests must pass unchanged.
   guidance is stated inline instead. Verified: ctest 11/11 (Style.md is not
   format-gated or doc-checker-scanned).
 
-- [ ] **8.2 Make `HostLifecycle` read as a first lesson.**
+- [x] **8.2 Make `HostLifecycle` read as a first lesson.**
   `Modules/Engine/examples/HostLifecycle/Main.cpp` (109 LOC) — the first
   engine code a student reads.
   1. Replace magic literals with named `constexpr` values:
@@ -1569,6 +1569,20 @@ tests must pass unchanged.
   **Done when:** no unexplained numeric literal remains in the file; the
   example builds and, when run manually, prints the same trace as before;
   Standard Verify passes.
+
+  **Evidence:** `Modules/Engine/examples/HostLifecycle/Main.cpp` only
+  (+28/-7). Named `SensorCadenceMilliseconds` (100) feeds
+  `FTickConfiguration::EnabledEvery(...)` (behaviour-identical to the old
+  `{true, true, 100}`, confirmed against `TickFunction.h:21`); actor config
+  `{true, false, 0}` gained `/*bCanEverTick*/`… field comments; the host
+  template args carry `/*MaxClasses*/`…`/*InlineTimerCallbackBytes*/` (D10);
+  `FGarbageCollectionBudget{1, 4, 8}` became named
+  `Gc{Root,Mark,Sweep}OperationsPerTick` constants with a grouped why;
+  `Updates` → `TickTimesMilliseconds`; three lifecycle why-comments (begin
+  order, tick independence, end order). Verified by lead: build clean, the
+  example prints the byte-exact baseline trace (exit 0), ctest 11/11,
+  CheckClassDocumentation 125. `Host.BeginPlay(0)`'s bare start-time literal
+  was out of the six specified edits and left as-is. Commit `<pending>`.
 
 - [ ] **8.3 Restructure the `TwoNodeDemo` into named phases.**
   `Modules/PlatformHost/examples/TwoNodeDemo/Main.cpp` (380 LOC; `main` alone
