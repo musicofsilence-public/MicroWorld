@@ -38,14 +38,11 @@ namespace
 
 using namespace MicroWorld;
 
-/** Loopback octet prefix shared by every endpoint address in the demo. */
-constexpr std::uint8_t OctetA = 127;
-constexpr std::uint8_t OctetB = 0;
-constexpr std::uint8_t OctetC = 0;
-constexpr std::uint8_t OctetD = 1;
+/** Loopback IPv4 octets shared by every endpoint address in the demo. */
+constexpr std::uint8_t LoopbackIpv4Octets[4] = {127, 0, 0, 1};
 
 /** Fixed logical-clock advance per sub-action; the trace prints no wall time. */
-constexpr TimePointMilliseconds FrameStep = 10;
+constexpr TimePointMilliseconds LogicalClockStepMilliseconds = 10;
 
 /** Upper bound on the interleaved handshake loop; bounded work, no spin. */
 constexpr int HandshakeIterationCap = 32;
@@ -77,13 +74,21 @@ constexpr FTypeId DemoSpawnedActorTypeId{0x00080001u};
  * CreateObject under LifecycleLocked. This mirrors the proven EngineNetHostTests
  * profile; MaxActors leaves headroom above the demo's two spawns.
  */
-using FServerEngine = TEngineHost<6, 8, 256, 16, 1, 4, 4, 64>;
+using FServerEngine = TEngineHost<
+	6 /*MaxClasses*/,
+	8 /*MaxObjects*/,
+	256 /*SlotSizeBytes*/,
+	16 /*SlotAlign*/,
+	1 /*MaxRoots*/,
+	4 /*MaxActors*/,
+	4 /*MaxTimers*/,
+	64 /*InlineTimerCallbackBytes*/>;
 
 /** Server network host bound to one UDP driver; capacity fits one client peer. */
-using FServerNet = TNetHost<2, 256>;
+using FServerNet = TNetHost<2 /*MaxPeers*/, 256 /*MaxPacketBytes*/>;
 
 /** Client network host bound to its own UDP driver; capacity fits one server peer. */
-using FClientNet = TNetHost<1, 256>;
+using FClientNet = TNetHost<1 /*MaxPeers*/, 256 /*MaxPacketBytes*/>;
 
 /**
  * A minimal actor the server spawns on demand to prove a remote input event
@@ -168,19 +173,23 @@ FNetHostConfig MakeDemoConfig() noexcept
  * 7); the bare client uses explicit pumps.
  */
 bool RunHandshake(
-	FHostUdpDriver& ServerDriver, FHostUdpDriver& ClientDriver, FServerEngine& ServerHost, FClientNet& Client, TimePointMilliseconds& Now) noexcept
+	FHostUdpDriver& ServerDriver,
+	FHostUdpDriver& ClientDriver,
+	FServerEngine& ServerHost,
+	FClientNet& Client,
+	TimePointMilliseconds& LogicalClockMilliseconds) noexcept
 {
 	for (int Iteration = 0; Iteration < HandshakeIterationCap; ++Iteration)
 	{
-		Now += FrameStep;
-		(void)Client.PumpSend(Now);
+		LogicalClockMilliseconds += LogicalClockStepMilliseconds;
+		(void)Client.PumpSend(LogicalClockMilliseconds);
 		if (ServerDriver.PollReadable(ReadinessWaitMilliseconds))
 		{
-			(void)ServerHost.Tick(Now);
+			(void)ServerHost.Tick(LogicalClockMilliseconds);
 		}
 		if (ClientDriver.PollReadable(ReadinessWaitMilliseconds))
 		{
-			(void)Client.PumpReceive(Now);
+			(void)Client.PumpReceive(LogicalClockMilliseconds);
 		}
 		if (Client.GetState() == ENetHostState::Connected)
 		{
@@ -206,6 +215,260 @@ bool DecodeStatePayload(const TSpan<const std::uint8_t> Payload, int& OutTick, i
 	return true;
 }
 
+/**
+ * Checks whether both loopback UDP sockets bound successfully. FHostUdpDriver
+ * opens its socket in its constructor and cannot be moved, so this is a query
+ * over already-constructed drivers, not a command that opens them.
+ */
+bool BothLoopbackDriversOpen(const FHostUdpDriver& ServerDriver, const FHostUdpDriver& ClientDriver) noexcept
+{
+	return ServerDriver.IsOpen() && ClientDriver.IsOpen();
+}
+
+/**
+ * Registers the demo's one spawnable actor class and creates the server's
+ * world. Returns false on the first failing step so main can abort before any
+ * handler or session work depends on a half-built engine host.
+ */
+bool RegisterDemoWorld(FServerEngine& ServerHost) noexcept
+{
+	if (ServerHost.RegisterClass<FDemoSpawnedActor>(DemoSpawnedActorTypeId, "DemoSpawnedActor") != EObjectResult::Success)
+	{
+		return false;
+	}
+	if (ServerHost.CreateWorld().Get() == nullptr)
+	{
+		return false;
+	}
+	return true;
+}
+
+/**
+ * Spawns one server-world actor in response to a client input event, drawing
+ * from the next pre-allocated one-shot component registry. Does nothing once
+ * MaxSpawns requests have already been handled, since no further registry
+ * remains to hand out.
+ */
+void HandleClientSpawnRequest(FDemoSpawnContext& SpawnContext, int& SpawnedBeginCount) noexcept
+{
+	if (SpawnContext.SpawnSequence >= MaxSpawns)
+	{
+		return;
+	}
+	const int Slot = SpawnContext.SpawnSequence;
+	++SpawnContext.SpawnSequence;
+	const TObjectCreationResult<FDemoSpawnedActor> Creation = SpawnContext.Host.CreateObject<FDemoSpawnedActor>(
+		DemoSpawnedActorTypeId, SpawnContext.SpawnedRegistries[static_cast<std::size_t>(Slot)].MakeReference(), SpawnedBeginCount);
+	if (Creation.Result != EObjectResult::Success)
+	{
+		return;
+	}
+	if (SpawnContext.Host.GetWorld().SpawnActor(TObjectPtr<AActor>{Creation.Object}) != EEngineResult::Success)
+	{
+		return;
+	}
+	++SpawnContext.WorldActorCount;
+	std::printf(
+		"[server] received spawn request from peer -> spawned actor %d (world actor count = %d)\n",
+		SpawnContext.WorldActorCount,
+		SpawnContext.WorldActorCount);
+}
+
+/**
+ * Builds the server's channel-1 spawn-request handler binding and registers it
+ * with the server net host. The bound lambda only forwards to
+ * HandleClientSpawnRequest, keeping the capture list separate from the handler
+ * logic it invokes.
+ */
+bool InstallServerSpawnHandler(FServerNet& ServerNet, FDemoSpawnContext& SpawnContext, int& SpawnedBeginCount, FDelegateHandle& OutHandle) noexcept
+{
+	FServerNet::FMessageHandlerBinding Binding;
+	Binding.Bind([&SpawnContext, &SpawnedBeginCount](const FPeerId, const std::uint8_t, TSpan<const std::uint8_t>) noexcept
+				 { HandleClientSpawnRequest(SpawnContext, SpawnedBeginCount); });
+	return ServerNet.AddMessageHandler(std::move(Binding), OutHandle) == EDelegateResult::Success;
+}
+
+/**
+ * Decodes a server state broadcast payload into the client's capture state and
+ * prints the received-state trace line. Does nothing on a malformed payload so
+ * a corrupt broadcast cannot overwrite the client's last-known state.
+ */
+void HandleServerStateBroadcast(FDemoStateCapture& StateCapture, TSpan<const std::uint8_t> Payload) noexcept
+{
+	int DecodedTick = 0;
+	int DecodedActors = 0;
+	if (!DecodeStatePayload(Payload, DecodedTick, DecodedActors))
+	{
+		return;
+	}
+	StateCapture.LastTick = DecodedTick;
+	StateCapture.LastActors = DecodedActors;
+	std::printf("[client] received state: tick=%d actors=%d\n", StateCapture.LastTick, StateCapture.LastActors);
+}
+
+/**
+ * Builds the client's channel-2 state-broadcast handler binding and registers
+ * it with the client net host. The bound lambda only forwards to
+ * HandleServerStateBroadcast, keeping the capture list separate from the
+ * handler logic it invokes.
+ */
+bool InstallClientStateHandler(FClientNet& ClientNet, FDemoStateCapture& StateCapture, FDelegateHandle& OutHandle) noexcept
+{
+	FClientNet::FMessageHandlerBinding Binding;
+	Binding.Bind([&StateCapture](const FPeerId, const std::uint8_t, TSpan<const std::uint8_t> Payload) noexcept
+				 { HandleServerStateBroadcast(StateCapture, Payload); });
+	return ClientNet.AddMessageHandler(std::move(Binding), OutHandle) == EDelegateResult::Success;
+}
+
+/**
+ * Builds the client's server address from the server driver's bound loopback
+ * port, configures both net hosts, starts both, and prints the two startup
+ * trace lines. Returns false on the first failing step so main can abort
+ * before BeginPlay runs against a half-started session.
+ */
+bool ConfigureAndStartHosts(FServerNet& ServerNet, FClientNet& ClientNet, const FHostUdpDriver& ServerDriver) noexcept
+{
+	FNetHostConfig ClientConfig = MakeDemoConfig();
+	ClientConfig.ServerAddress =
+		MakeUdpAddress(LoopbackIpv4Octets[0], LoopbackIpv4Octets[1], LoopbackIpv4Octets[2], LoopbackIpv4Octets[3], ServerDriver.BoundPort());
+	if (ServerNet.Configure(ENetMode::DedicatedServer, MakeDemoConfig()) != ENetResult::Success)
+	{
+		return false;
+	}
+	if (ClientNet.Configure(ENetMode::Client, ClientConfig) != ENetResult::Success)
+	{
+		return false;
+	}
+	if (ServerNet.Start(0) != ENetResult::Success)
+	{
+		return false;
+	}
+	if (ClientNet.Start(0) != ENetResult::Success)
+	{
+		return false;
+	}
+	std::printf("[server] listening\n");
+	std::printf("[client] connecting to server\n");
+	return true;
+}
+
+/**
+ * Reports whether the given state tick should also send a client spawn
+ * request. The demo issues exactly two spawn requests (bounded by MaxSpawns ==
+ * 2 pre-allocated per-actor registries), on the first and last of the three
+ * state ticks, so the middle tick demonstrates a broadcast with no new spawn.
+ */
+bool IsSpawnRequestDue(int StateTick) noexcept
+{
+	return (StateTick == 1) || (StateTick == 3);
+}
+
+/**
+ * Sends the client's one-byte spawn-request opcode when due, then always
+ * pumps the client's send queue and advances the logical clock. The pump runs
+ * every tick, not only when a request was sent, so the logical clock and wire
+ * state stay in lockstep regardless of whether this tick issued a request.
+ */
+bool SendSpawnRequestIfDue(FClientNet& ClientNet, bool bSpawnRequestDue, TimePointMilliseconds& LogicalClockMilliseconds) noexcept
+{
+	if (bSpawnRequestDue)
+	{
+		const std::uint8_t Payload[1] = {SpawnRequestOpcode};
+		if (ClientNet.SendTo(ClientNet.GetServerPeer(), InputEventChannel, TSpan<const std::uint8_t>(Payload, 1)) != ENetResult::Success)
+		{
+			return false;
+		}
+		std::printf("[client] sending spawn request (input event)\n");
+	}
+	LogicalClockMilliseconds += LogicalClockStepMilliseconds;
+	(void)ClientNet.PumpSend(LogicalClockMilliseconds);
+	return true;
+}
+
+/**
+ * Polls the server socket for the spawn-request datagram when one is due,
+ * then advances the logical clock and ticks the server engine. This tick's
+ * PumpReceive step delivers the input event, which fires the spawn handler.
+ */
+bool AdvanceServerFrame(
+	FServerEngine& ServerHost, FHostUdpDriver& ServerDriver, bool bSpawnRequestDue, TimePointMilliseconds& LogicalClockMilliseconds) noexcept
+{
+	if (bSpawnRequestDue)
+	{
+		(void)ServerDriver.PollReadable(ReadinessWaitMilliseconds);
+	}
+	LogicalClockMilliseconds += LogicalClockStepMilliseconds;
+	return ServerHost.Tick(LogicalClockMilliseconds) == ERuntimeResult::Success;
+}
+
+/**
+ * Broadcasts the current tick and world actor count to connected peers,
+ * prints the heartbeat trace line, then advances the logical clock and ticks
+ * the server engine again. This second tick's PumpSend step flushes the
+ * broadcast onto the wire.
+ */
+bool BroadcastServerState(
+	FServerNet& ServerNet, FServerEngine& ServerHost, int StateTick, int WorldActorCount, TimePointMilliseconds& LogicalClockMilliseconds) noexcept
+{
+	const std::uint8_t StatePayload[2] = {static_cast<std::uint8_t>(StateTick), static_cast<std::uint8_t>(WorldActorCount)};
+	if (ServerNet.Broadcast(StateBroadcastChannel, TSpan<const std::uint8_t>(StatePayload, 2)) != ENetResult::Success)
+	{
+		return false;
+	}
+	std::printf("[server] heartbeat broadcast: state tick=%d actors=%d\n", StateTick, WorldActorCount);
+	LogicalClockMilliseconds += LogicalClockStepMilliseconds;
+	return ServerHost.Tick(LogicalClockMilliseconds) == ERuntimeResult::Success;
+}
+
+/**
+ * Polls the client socket for the broadcast datagram, advances the logical
+ * clock, then pumps the client's receive queue. The pump delivers the
+ * broadcast to the client's state handler, which prints the received-state
+ * trace line.
+ */
+void DeliverToClient(FClientNet& ClientNet, FHostUdpDriver& ClientDriver, TimePointMilliseconds& LogicalClockMilliseconds) noexcept
+{
+	(void)ClientDriver.PollReadable(ReadinessWaitMilliseconds);
+	LogicalClockMilliseconds += LogicalClockStepMilliseconds;
+	(void)ClientNet.PumpReceive(LogicalClockMilliseconds);
+}
+
+/**
+ * Drives the three-tick state-broadcast loop: each tick optionally sends a
+ * client spawn request, advances the server frame, broadcasts server state,
+ * and delivers that state to the client, all under one shared logical clock.
+ * Returns false on the first step that reports a hard failure.
+ */
+bool RunStateBroadcastLoop(
+	FClientNet& ClientNet,
+	FServerNet& ServerNet,
+	FServerEngine& ServerHost,
+	FHostUdpDriver& ServerDriver,
+	FHostUdpDriver& ClientDriver,
+	int& WorldActorCount,
+	TimePointMilliseconds& LogicalClockMilliseconds) noexcept
+{
+	constexpr int StateBroadcastStepCount = 3;
+	for (int StateTick = 1; StateTick <= StateBroadcastStepCount; ++StateTick)
+	{
+		const bool bSpawnRequestDue = IsSpawnRequestDue(StateTick);
+		if (!SendSpawnRequestIfDue(ClientNet, bSpawnRequestDue, LogicalClockMilliseconds))
+		{
+			return false;
+		}
+		if (!AdvanceServerFrame(ServerHost, ServerDriver, bSpawnRequestDue, LogicalClockMilliseconds))
+		{
+			return false;
+		}
+		if (!BroadcastServerState(ServerNet, ServerHost, StateTick, WorldActorCount, LogicalClockMilliseconds))
+		{
+			return false;
+		}
+		DeliverToClient(ClientNet, ClientDriver, LogicalClockMilliseconds);
+	}
+	return true;
+}
+
 } // namespace
 
 /**
@@ -219,11 +482,6 @@ int main()
 
 	FHostUdpDriver ServerDriver(0);
 	FHostUdpDriver ClientDriver(0);
-	if (!ServerDriver.IsOpen() || !ClientDriver.IsOpen())
-	{
-		return 1;
-	}
-
 	FServerNet ServerNet(ServerDriver);
 	FClientNet ClientNet(ClientDriver);
 	TNetHostFrame<FServerNet> ServerFrame{ServerNet};
@@ -236,146 +494,44 @@ int main()
 	FServerEngine ServerHost{FGarbageCollectionBudget{1, 4, 8}, ServerFrame};
 	FDemoSpawnContext SpawnContext{ServerHost, SpawnedRegistries, SpawnSequence, WorldActorCount};
 	FDemoStateCapture StateCapture{};
-
-	if (ServerHost.RegisterClass<FDemoSpawnedActor>(DemoSpawnedActorTypeId, "DemoSpawnedActor") != EObjectResult::Success)
-	{
-		return 1;
-	}
-	if (ServerHost.CreateWorld().Get() == nullptr)
-	{
-		return 1;
-	}
-
-	FServerNet::FMessageHandlerBinding SpawnBinding;
-	SpawnBinding.Bind(
-		[&SpawnContext, &SpawnedBeginCount](const FPeerId, const std::uint8_t, TSpan<const std::uint8_t>) noexcept
-		{
-			if (SpawnContext.SpawnSequence >= MaxSpawns)
-			{
-				return;
-			}
-			const int Slot = SpawnContext.SpawnSequence;
-			++SpawnContext.SpawnSequence;
-			const TObjectCreationResult<FDemoSpawnedActor> Creation = SpawnContext.Host.CreateObject<FDemoSpawnedActor>(
-				DemoSpawnedActorTypeId, SpawnContext.SpawnedRegistries[static_cast<std::size_t>(Slot)].MakeReference(), SpawnedBeginCount);
-			if (Creation.Result != EObjectResult::Success)
-			{
-				return;
-			}
-			if (SpawnContext.Host.GetWorld().SpawnActor(TObjectPtr<AActor>{Creation.Object}) != EEngineResult::Success)
-			{
-				return;
-			}
-			++SpawnContext.WorldActorCount;
-			std::printf(
-				"[server] received spawn request from peer -> spawned actor %d (world actor count = %d)\n",
-				SpawnContext.WorldActorCount,
-				SpawnContext.WorldActorCount);
-		});
 	FDelegateHandle SpawnHandle{};
-	if (ServerNet.AddMessageHandler(std::move(SpawnBinding), SpawnHandle) != EDelegateResult::Success)
-	{
-		return 1;
-	}
-
-	FClientNet::FMessageHandlerBinding StateBinding;
-	StateBinding.Bind(
-		[&StateCapture](const FPeerId, const std::uint8_t, TSpan<const std::uint8_t> Payload) noexcept
-		{
-			int DecodedTick = 0;
-			int DecodedActors = 0;
-			if (!DecodeStatePayload(Payload, DecodedTick, DecodedActors))
-			{
-				return;
-			}
-			StateCapture.LastTick = DecodedTick;
-			StateCapture.LastActors = DecodedActors;
-			std::printf("[client] received state: tick=%d actors=%d\n", StateCapture.LastTick, StateCapture.LastActors);
-		});
 	FDelegateHandle StateHandle{};
-	if (ClientNet.AddMessageHandler(std::move(StateBinding), StateHandle) != EDelegateResult::Success)
-	{
-		return 1;
-	}
+	TimePointMilliseconds LogicalClockMilliseconds = 0;
 
-	FNetHostConfig ClientConfig = MakeDemoConfig();
-	ClientConfig.ServerAddress = MakeUdpAddress(OctetA, OctetB, OctetC, OctetD, ServerDriver.BoundPort());
-	if (ServerNet.Configure(ENetMode::DedicatedServer, MakeDemoConfig()) != ENetResult::Success)
+	if (!BothLoopbackDriversOpen(ServerDriver, ClientDriver))
 	{
 		return 1;
 	}
-	if (ClientNet.Configure(ENetMode::Client, ClientConfig) != ENetResult::Success)
+	if (!RegisterDemoWorld(ServerHost))
 	{
 		return 1;
 	}
-
-	if (ServerNet.Start(0) != ENetResult::Success)
+	if (!InstallServerSpawnHandler(ServerNet, SpawnContext, SpawnedBeginCount, SpawnHandle))
 	{
 		return 1;
 	}
-	if (ClientNet.Start(0) != ENetResult::Success)
+	if (!InstallClientStateHandler(ClientNet, StateCapture, StateHandle))
 	{
 		return 1;
 	}
-
-	std::printf("[server] listening\n");
-	std::printf("[client] connecting to server\n");
+	if (!ConfigureAndStartHosts(ServerNet, ClientNet, ServerDriver))
+	{
+		return 1;
+	}
 
 	if (ServerHost.BeginPlay(0) != ERuntimeResult::Success)
 	{
 		return 1;
 	}
-
-	TimePointMilliseconds Now = 0;
-	if (!RunHandshake(ServerDriver, ClientDriver, ServerHost, ClientNet, Now))
+	if (!RunHandshake(ServerDriver, ClientDriver, ServerHost, ClientNet, LogicalClockMilliseconds))
 	{
 		return 1;
 	}
 	std::printf("[client] connected\n");
 
-	constexpr int StateStepCount = 3;
-	for (int StateTick = 1; StateTick <= StateStepCount; ++StateTick)
+	if (!RunStateBroadcastLoop(ClientNet, ServerNet, ServerHost, ServerDriver, ClientDriver, WorldActorCount, LogicalClockMilliseconds))
 	{
-		const bool bRequestsSpawn = (StateTick == 1) || (StateTick == 3);
-		if (bRequestsSpawn)
-		{
-			const std::uint8_t Payload[1] = {SpawnRequestOpcode};
-			if (ClientNet.SendTo(ClientNet.GetServerPeer(), InputEventChannel, TSpan<const std::uint8_t>(Payload, 1)) != ENetResult::Success)
-			{
-				return 1;
-			}
-			std::printf("[client] sending spawn request (input event)\n");
-		}
-
-		Now += FrameStep;
-		(void)ClientNet.PumpSend(Now);
-
-		if (bRequestsSpawn)
-		{
-			(void)ServerDriver.PollReadable(ReadinessWaitMilliseconds);
-		}
-		Now += FrameStep;
-		if (ServerHost.Tick(Now) != ERuntimeResult::Success)
-		{
-			return 1;
-		}
-
-		const std::uint8_t StatePayload[2] = {static_cast<std::uint8_t>(StateTick), static_cast<std::uint8_t>(WorldActorCount)};
-		if (ServerNet.Broadcast(StateBroadcastChannel, TSpan<const std::uint8_t>(StatePayload, 2)) != ENetResult::Success)
-		{
-			return 1;
-		}
-		std::printf("[server] heartbeat broadcast: state tick=%d actors=%d\n", StateTick, WorldActorCount);
-
-		Now += FrameStep;
-		if (ServerHost.Tick(Now) != ERuntimeResult::Success)
-		{
-			return 1;
-		}
-
-		(void)ClientDriver.PollReadable(ReadinessWaitMilliseconds);
-		Now += FrameStep;
-		(void)ClientNet.PumpReceive(Now);
+		return 1;
 	}
 
 	std::printf("[demo] complete\n");

@@ -1584,7 +1584,7 @@ tests must pass unchanged.
   CheckClassDocumentation 125. `Host.BeginPlay(0)`'s bare start-time literal
   was out of the six specified edits and left as-is. Commit `8bf1021`.
 
-- [ ] **8.3 Restructure the `TwoNodeDemo` into named phases.**
+- [x] **8.3 Restructure the `TwoNodeDemo` into named phases.**
   `Modules/PlatformHost/examples/TwoNodeDemo/Main.cpp` (380 LOC; `main` alone
   is ~165 lines — the worst first-contact file in the repo).
   1. Decompose `main` into six named free functions, in file order:
@@ -1609,6 +1609,30 @@ tests must pass unchanged.
   `build/Modules/PlatformHost/Release/microworld_platform_host_two_node_demo.exe`
   manually produces the same demo transcript as at baseline (capture both);
   Standard Verify passes.
+
+  **Evidence:** `Modules/PlatformHost/examples/TwoNodeDemo/Main.cpp` only
+  (+287/-131). `main` is now a 27-logical-line table of contents (15
+  declarations + 11 ordered phase calls/prints/return). Thirteen named
+  free functions extracted: the six phases (the driver open-check is the
+  honest query `BothLoopbackDriversOpen`, not the roadmap's command-shaped
+  `OpenLoopbackDriverPair` — `FHostUdpDriver` is non-movable and its ctor
+  opens, so a helper can only validate), the two handler bodies
+  (`HandleClientSpawnRequest` / `HandleServerStateBroadcast`) behind thin
+  forwarding lambdas, the four loop steps (`SendSpawnRequestIfDue`,
+  `AdvanceServerFrame`, `BroadcastServerState`, `DeliverToClient` — one clock
+  increment each), and the `IsSpawnRequestDue` predicate (why: two spawns
+  bounded by MaxSpawns==2 registries, on the first and last of three ticks).
+  Renames: `FrameStep`→`LogicalClockStepMilliseconds`, `Now`→
+  `LogicalClockMilliseconds`, `OctetA..D`→`LoopbackIpv4Octets[4]`; D10
+  `/*ParamName*/` comments on `TEngineHost` (8 args) and `TNetHost`
+  (MaxPeers, MaxPacketBytes), verified against headers. The open-check moved
+  after object construction (benign: extra ctors are driver-independent and
+  noexcept; failure path is output-free either way). `FGarbageCollectionBudget
+  {1,4,8}` left as-is (out of scope; documented in the FServerEngine block).
+  Verified by lead: build clean, transcript byte-identical to the captured
+  14-line baseline (exit 0), ctest 11/11, CheckClassDocumentation 125. Owner
+  reviewed the diff at the pre-commit checkpoint and approved as-is.
+  Commit `<pending>`.
 
 - [ ] **8.4 Documentation consistency sweep.** After all renames: re-grep
   every new-vs-old name pair from Phase 1 across `README.md`, root
