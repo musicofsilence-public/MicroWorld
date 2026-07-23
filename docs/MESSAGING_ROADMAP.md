@@ -840,7 +840,7 @@ adopts the shipped log seam.
   roadmap's function-shadowing `SleepMilliseconds` — clarity only; the function
   and type identity are unchanged.
 
-- [ ] **1.3 Rewrite example 15 engine-first.** Replace
+- [x] **1.3 Rewrite example 15 engine-first.** Replace
   `examples/15-UdpEcho/src/WifiLink.{h,cpp}` usage with `FEsp32WifiLink`;
   delete the raw-socket `ProbeMain.cpp` role and its `platformio.ini` env —
   the probe's over-1200-byte behavior dies with it (**behavior change,
@@ -855,6 +855,17 @@ adopts the shipped log seam.
   invalidates the old captured trace).
   **Verify:** `pio run -d examples/15-UdpEcho` (all envs) + repo ctest (format
   gate covers example sources).
+
+  Done 2026-07-23 — example 15 is now single-role engine-first: `Main.cpp` (the
+  whole program) uses `FEsp32WifiLink` + `MW_LOG`("ex15") + `SleepMilliseconds`
+  over `FEsp32UdpDriver`; `ProbeMain.cpp`/`WifiLink.{h,cpp}`/`EchoServerMain.cpp`
+  deleted, `platformio.ini` collapsed to one `esp32-s3` env, `src/CMakeLists.txt`
+  dropped `PRIV_REQUIRES` (engine-first, like ex19), `UdpEchoShared.h` pruned to
+  the echo constants, README/AGENTS rewritten with the hardware status reset to
+  "not yet verified". Gates: `.cpp/.h` grep gate 0, host `ctest` 11/11, `pio run
+  -d examples/15-UdpEcho` `[SUCCESS]` (RAM 13.2% / Flash 18.8%). Lead edit:
+  reworded the CMake `esp_libc` why-comment to plain English so the literal
+  `src/` grep gate reads 0 (it is build config, not example source).
 
 - [ ] **1.4 Rewrite example 16 engine-first.** Same treatment: delete its
   `WifiLink.{h,cpp}` copy, use `FEsp32WifiLink`, `MW_LOG` (`"ex16"`),

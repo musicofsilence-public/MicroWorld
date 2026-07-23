@@ -1,23 +1,81 @@
-// Role is chosen at build time: echo server (=1, hosts the SoftAP and echoes) or
-// probe (=0, joins the AP and sends). Both roles always compile — EchoServerMain.cpp
-// and ProbeMain.cpp are always built — and this define only selects which one runs;
-// never build_src_filter, which ESP-IDF ignores.
-#ifndef MICROWORLD_EXAMPLE_SERVER
-#error "Define MICROWORLD_EXAMPLE_SERVER=1 (echo server) or 0 (probe) via the build environment."
-#endif
+#include "UdpEchoShared.h"
 
-/** Runs the echo-server role (hosts the SoftAP); defined in EchoServerMain.cpp. */
-void RunEchoServer() noexcept;
+#include <MicroWorld/Log.h>
+#include <MicroWorld/Net/NetAddress.h>
+#include <MicroWorld/Net/NetDriver.h>
+#include <MicroWorld/Net/NetResult.h>
+#include <MicroWorld/Net/UdpAddressCodec.h>
+#include <MicroWorld/PlatformEsp32/Esp32LogSink.h>
+#include <MicroWorld/PlatformEsp32/Esp32Sleep.h>
+#include <MicroWorld/PlatformEsp32/Esp32UdpDriver.h>
+#include <MicroWorld/PlatformEsp32/Esp32WifiLink.h>
 
-/** Runs the probe role (joins the SoftAP); defined in ProbeMain.cpp. */
-void RunProbe() noexcept;
+#include <cstdint>
 
-/** Composition root: runs the role this image was built for. */
+using namespace MicroWorld;
+using namespace Ex15;
+
+namespace
+{
+/** Readiness-wait budget per poll; long enough to idle the CPU, short enough to stay responsive. */
+constexpr DurationMilliseconds PollReadinessMilliseconds = 250;
+} // namespace
+
+/**
+ * Composition root: installs the log sink, hosts the demo SoftAP, then echoes
+ * every UDP datagram back to its sender through FEsp32UdpDriver.
+ */
 extern "C" void app_main(void)
 {
-#if MICROWORLD_EXAMPLE_SERVER
-	RunEchoServer();
-#else
-	RunProbe();
-#endif
+	SetLogSink(&Esp32LogSink);
+
+	static FEsp32WifiLink WifiLink;
+	const ENetResult WifiResult =
+		WifiLink.StartAccessPoint(FEsp32AccessPointConfig{DemoApSsid, DemoApPassword, /*WifiChannel*/ 1, /*MaxStations*/ 4});
+	if (WifiResult != ENetResult::Success)
+	{
+		MW_LOG(Error, "ex15", "wifi failed result=%d; halting", static_cast<int>(WifiResult));
+		return;
+	}
+	MW_LOG(Log, "ex15", "wifi softap up, gateway 192.168.4.1");
+
+	// The driver is constructed only after WiFi/netif is up (lwIP must exist first).
+	static FEsp32UdpDriver Driver(EchoServerPort);
+	MW_LOG(Log, "ex15", "udp open=%d udp_port=%u", Driver.IsOpen() ? 1 : 0, static_cast<unsigned>(Driver.BoundPort()));
+	if (!Driver.IsOpen())
+	{
+		MW_LOG(Error, "ex15", "socket failed; halting");
+		return;
+	}
+
+	// Sized to the driver's max packet, which equals its internal peek scratch. Static,
+	// never an app_main stack local (§2.2).
+	static std::uint8_t RxBuffer[FEsp32UdpDriver::UdpMaxPacketBytes];
+	for (;;)
+	{
+		if (Driver.PollReadable(PollReadinessMilliseconds))
+		{
+			FNetAddress From{};
+			FNetReceiveResult Received{};
+			const ENetResult Result = Driver.TryReceive(From, TSpan<std::uint8_t>(RxBuffer, sizeof(RxBuffer)), Received);
+			if (Result == ENetResult::Success)
+			{
+				MW_LOG(
+					Log,
+					"ex15",
+					"rx bytes=%u from_port=%u",
+					static_cast<unsigned>(Received.BytesReceived),
+					static_cast<unsigned>(UdpAddressPort(From)));
+				const ENetResult Sent = Driver.TrySend(From, TSpan<const std::uint8_t>(RxBuffer, Received.BytesReceived));
+				MW_LOG(Log, "ex15", "echo result=%d", static_cast<int>(Sent));
+			}
+			else if (Result == ENetResult::Full)
+			{
+				// Oversize datagram: larger than the buffer, so the driver kept it queued
+				// rather than truncating. A single one can wedge later polls.
+				MW_LOG(Warning, "ex15", "rx oversize: datagram larger than buffer (result=Full)");
+			}
+		}
+		SleepMilliseconds(PollPacingMilliseconds);
+	}
 }
