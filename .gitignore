@@ -1,5 +1,7 @@
 # Build trees from CMake configure/build
 **/build/
+# Throwaway from-scratch acceptance tree (roadmap task 9.3)
+**/build-final/
 
 # Python bytecode caches
 __pycache__/
