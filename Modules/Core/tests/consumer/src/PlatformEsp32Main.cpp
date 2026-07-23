@@ -25,6 +25,7 @@
 #include <MicroWorld/PlatformEsp32/Esp32LogSink.h>
 #include <MicroWorld/PlatformEsp32/Esp32TimeSource.h>
 #include <MicroWorld/PlatformEsp32/Esp32UdpDriver.h>
+#include <MicroWorld/PlatformEsp32/Esp32WifiLink.h>
 #include <MicroWorld/Time.h>
 
 #include <driver/uart.h>
@@ -108,6 +109,11 @@ extern "C" void app_main()
 	//     traffic, no radio, and no upload is performed in this proof.
 	static FEsp32E32LoraDriver LoraDriver(FEsp32E32LoraConfig{UART_NUM_1, /*TxGpio*/ 17, /*RxGpio*/ 18, /*Baud*/ 9600, /*NodeId*/ 1});
 	(void)LoraDriver;
+
+	// Compile/link proof for the WiFi facade (MESSAGING 1.1): constructed and queried
+	// but never brought up here — this composition proof associates no WiFi.
+	static FEsp32WifiLink WifiLink;
+	(void)WifiLink.IsUp();
 
 	// 4. A dedicated-server session host over that driver, started at the current boot time.
 	static TNetHost<4, 256> Net(Driver);

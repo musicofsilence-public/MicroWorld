@@ -733,7 +733,7 @@ of the transport seam — sensor examples use timer-driven synthetic readings).
 | Phase | Title | Tasks | Status |
 | --- | --- | --- | --- |
 | 0 | Baseline & governance | 2 | ✅ |
-| 1 | Engine-first examples groundwork (platform facades) | 5 | ⬜ |
+| 1 | Engine-first examples groundwork (platform facades) | 5 | 🟨 |
 | 2 | Local actor messaging (Engine) | 3 | ⬜ |
 | 3 | Messaging over one wire | 2 | ⬜ |
 | 4 | Several channels per world | 3 | ⬜ |
@@ -779,13 +779,13 @@ of the transport seam — sensor examples use timer-driven synthetic readings).
 
 ---
 
-### Phase 1 — Engine-first examples groundwork ⬜
+### Phase 1 — Engine-first examples groundwork 🟨
 
 Goal: every existing example builds from MicroWorld headers only (§2.2). No
 messaging yet — this phase just moves vendor glue behind platform facades and
 adopts the shipped log seam.
 
-- [ ] **1.1 `FEsp32WifiLink` platform facade.** New public header
+- [x] **1.1 `FEsp32WifiLink` platform facade.** New public header
   `Modules/PlatformEsp32/include/MicroWorld/PlatformEsp32/Esp32WifiLink.h`
   exactly per §4.3, implementation in `src/Esp32WifiLink.cpp` +
   `src/Esp32WifiPlatformImplementation.h` (all `esp_wifi/esp_netif/nvs/event`
@@ -807,6 +807,22 @@ adopts the shipped log seam.
   plus the consumer compile check via `pio run` in
   `Modules/Core/tests/consumer` for the ESP32 env is the gate, same as the
   wired-transports plan used).
+
+  Done 2026-07-23 — `Esp32WifiLink.h` (public, ESP-IDF-free) +
+  `src/Esp32WifiPlatformImplementation.h` (sole ESP-IDF-including TU) +
+  `src/Esp32WifiLink.cpp` implement §4.3 exactly (validate-first transactional;
+  `ENetResult` map Invalid=bad-config / Unavailable=bring-up-failure-or-join-timeout
+  / Success; bounded 100 ms-slice join with no clock read; idempotent `Stop`
+  leaving netif/NVS up); consumer probe extended for the strict-profile compile.
+  Gates: clang-format clean, host `ctest` 11/11, `CheckClassDocumentation
+  --require-doxygen` 139 files, `pio run -e esp32-s3-platform` `[SUCCESS]`.
+  Grep gate: `Esp32WifiLink.h` adds 0 ESP-IDF include-tree matches (the 3 hits
+  are pre-existing in the deliberately header-only `Esp32TimeSource.h`). Lead
+  fix: dropped a `const_cast` for a plain non-const local (imitation-source
+  shape). Note: the consumer's `esp32-s3-*` envs need repo-root
+  `sdkconfig.defaults`/`partitions.csv` (absent from git; copied from
+  `examples/esp32-common` for the gate, then removed) — a pre-existing
+  `platformio.ini` gap, out of scope here.
 
 - [ ] **1.2 `SleepMilliseconds` platform facade.** New public header
   `Esp32Sleep.h` + `src/Esp32Sleep.cpp` per §4.3 (`vTaskDelay(pdMS_TO_TICKS(x))`,
