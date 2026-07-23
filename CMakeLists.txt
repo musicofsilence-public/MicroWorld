@@ -8,7 +8,7 @@ cmake_minimum_required(VERSION 3.16)
 # (e.g. Engine pulls Net for its tests, PlatformHost pulls Net and Engine) is not
 # added twice. PlatformEsp32 is PlatformIO/ESP-IDF only and has no CMakeLists,
 # so it is intentionally not added here.
-project(MicroWorld VERSION 0.2.0 LANGUAGES CXX)
+project(MicroWorld VERSION 0.3.0 LANGUAGES CXX)
 
 enable_testing()
 

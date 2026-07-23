@@ -1,4 +1,4 @@
-# MicroWorld Core 0.2.0
+# MicroWorld Core 0.3.0
 
 MicroWorld Core is a standalone C++17 lifecycle and tick runtime for bounded
 embedded applications. It has no ESP32, RTOS, transport, or product-policy
@@ -81,7 +81,7 @@ hardware authorization.
 
 ## Next scope
 
-The 0.2.0 release has delivered the surrounding runtime that sits on Core:
+As of 0.3.0, the runtime that sits on Core includes:
 
 - **Engine** — managed `UWorld` / `AActor` / `UActorComponent` with fixed
   registration, runtime `SpawnActor` / `DestroyActor` at a deferred

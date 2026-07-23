@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(MicroWorldObject VERSION 0.2.0 LANGUAGES CXX)
+project(MicroWorldObject VERSION 0.3.0 LANGUAGES CXX)
 
 option(
     MICROWORLD_OBJECT_BUILD_BENCHMARKS

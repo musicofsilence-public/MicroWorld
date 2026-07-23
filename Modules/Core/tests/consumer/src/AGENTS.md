@@ -18,7 +18,7 @@ project guarantees that only one entry point is linked per environment.
 
 ## Concepts and boundaries
 
-- Every entry point asserts the exact MicroWorld 0.2.0 public version.
+- Every entry point asserts the exact MicroWorld 0.3.0 public version.
 - Basic probes instantiate a public World type without reaching into private
   implementation. The native probe also calls one out-of-line tick primitive so
   linker maps contain positive Core archive evidence.

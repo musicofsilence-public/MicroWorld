@@ -1,6 +1,6 @@
 {
   "name": "MicroWorldNet",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "MicroWorld Net: bounded non-blocking byte I/O for embedded applications",
   "keywords": [
     "embedded",

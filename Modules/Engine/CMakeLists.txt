@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(MicroWorldEngine VERSION 0.2.0 LANGUAGES CXX)
+project(MicroWorldEngine VERSION 0.3.0 LANGUAGES CXX)
 
 option(
     MICROWORLD_ENGINE_BUILD_BENCHMARKS

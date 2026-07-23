@@ -1700,7 +1700,7 @@ tests must pass unchanged.
   `UdpSocketPlatformImplementation.h`, and the `src` guide carries that
   unverified caveat faithfully. Commit `d61c2ca`.
 
-- [ ] **9.2 Version, changelog, progress.** This plan's renames are
+- [x] **9.2 Version, changelog, progress.** This plan's renames are
   API-breaking for source consumers (`TNetManager`, `IssueLease`, lease type
   names): bump `VERSION` to `0.3.0`, add a `CHANGELOG.md` entry summarizing
   the rename tables and the single D7 behavior change, update `PROGRESS.md`
@@ -1710,6 +1710,29 @@ tests must pass unchanged.
   **Done when:** version strings agree everywhere
   (`rg -n "0\.2\.0" --glob '!build' --glob '!docs/ROADMAP.md'` returns only
   historical mentions); Standard Verify passes.
+
+  **Evidence:** Bumped the project version 0.2.0 → **0.3.0** everywhere it
+  asserts the current release: `Version.h` (`{0,2,0}`→`{0,3,0}`), the four Core
+  consumer-probe `static_assert(Version.Minor == 2)` → `== 3` (the build canary
+  — all probe targets compile), seven `project(... VERSION ...)` CMake files,
+  six `library.json` version fields, the Core README title + "Next scope" lead
+  ("As of 0.3.0, the runtime that sits on Core includes:"), and the
+  consumer-probe folder guide.
+  Added a `## 0.3.0 - 2026-07-23` `CHANGELOG.md` entry (between Unreleased and
+  the untouched 0.2.0 entry) summarizing the Phase-1 rename tables, the single
+  D7 behavior change, and the readability-only internal work. Lead-owned
+  `PROGRESS.md` current-state rewritten to 0.3.0 (prose + package table); the
+  per-phase evidence rows already satisfy "one evidence line per phase". Code +
+  release-docs done by a Sonnet subagent; the two lead-owned trackers by the
+  lead. Verified by lead: build warning-clean (probe asserts compile), ctest
+  11/11, CheckClassDocumentation 125; the version-agreement grep leaves only
+  historical mentions (the `CHANGELOG` 0.2.0/0.1.0 entries, `PROGRESS.md`
+  historical rows, this plan's own 9.2 task text, and — per the owner's
+  checkpoint decision — the eleven `docs/UE5ConceptMap.md` per-row version
+  tags, kept at 0.2.0 as the "shipped-in" version each concept first landed at
+  rather than restamped to the current release). `PROGRESS.md` lines 81/126
+  left as historical mentions. Owner reviewed the combined diff at the 9.2
+  checkpoint and chose to keep the concept-map tags at 0.2.0. Commit `<pending>`.
 
 - [ ] **9.3 Final acceptance.** Run everything, from scratch:
   ```sh

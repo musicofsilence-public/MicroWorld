@@ -19,6 +19,6 @@ struct FVersion
 };
 
 /** Lets downstream probes reject a package that does not match their API contract. */
-inline constexpr FVersion Version{0, 2, 0};
+inline constexpr FVersion Version{0, 3, 0};
 
 } // namespace MicroWorld

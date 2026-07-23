@@ -16,7 +16,7 @@
 
 static_assert(__cplusplus >= 201703L);
 static_assert(MicroWorld::Version.Major == 0);
-static_assert(MicroWorld::Version.Minor == 2);
+static_assert(MicroWorld::Version.Minor == 3);
 static_assert(MicroWorld::Version.Patch == 0);
 static_assert(std::is_nothrow_destructible_v<MicroWorld::TUniquePtr<std::uint32_t>>);
 

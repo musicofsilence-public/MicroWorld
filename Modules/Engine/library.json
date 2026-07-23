@@ -1,6 +1,6 @@
 {
   "name": "MicroWorldEngine",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "MicroWorld Engine: bounded managed UWorld/AActor/UActorComponent for embedded applications",
   "keywords": [
     "embedded",

@@ -5,24 +5,31 @@ behavior; benchmark records contain measured facts.
 
 ## Current state
 
-MicroWorld 0.2.0 is release-ready. All six roadmap phases are done: Core
+MicroWorld 0.3.0 delivers the student-facing simplicity refactor on top of the
+0.2.0 managed runtime, whose behavior is unchanged. The 0.2.0 runtime — Core
 actor-model retirement, runtime spawn/destroy, the `TEngineHost` composition
 root with `MW_LOG`, networking with roles, real transports plus platform
-adapters, the two-node demo, and measured ESP32-S3 runtime margins. The
-composed runtime's margins were measured on physical ESP32-S3 hardware in
-Phase 6.2 (tick / GC-slice / net-pump / heap / stack — see the ESP32-S3
-results file); isolated per-package margins beyond that representative world
-remain unmeasured.
+adapters, the two-node demo, and measured ESP32-S3 runtime margins — still
+holds; the ESP32-S3 margins from Phase 6.2 (tick / GC-slice / net-pump / heap /
+stack — see the ESP32-S3 results file) are unaffected, and isolated per-package
+margins beyond that representative world remain unmeasured. The 0.3.0 refactor
+(`docs/SIMPLICITY_ROADMAP.md`, Phases 0-9; one evidence row per phase below)
+makes every identifier state its role, keeps every function to one or two named
+steps, has comments explain *why*, and adds a written style contract, two
+self-documenting examples, and per-folder `AGENTS.md` coverage. Its one behavior
+change is D7 (`FrameCodec::EncodeFrame` returns `Invalid`, not `Full`, for an
+oversize payload); the from-scratch acceptance run and full green flip are the
+closing Phase 9.3.
 
 | Package | State |
 | --- | --- |
-| Core | 0.2.0 — lifecycle and tick primitives |
-| Memory | 0.2.0 — implemented; isolated runtime margins unmeasured |
-| Object / GC | 0.2.0 — implemented; GC Advance-slice pause measured on ESP32-S3 (Phase 6.2): mean 25 µs/slice |
-| Engine (incl. bounded timers + runtime spawn/destroy + `TEngineHost`) | 0.2.0 — implemented; tick measured on ESP32-S3 (Phase 6.2): mean 73 µs (8 actors/16 components/8 timers) |
-| Net (byte I/O + `TNetHost` roles + `FrameCodec`) | 0.2.0 — implemented; no-traffic pump overhead measured on ESP32-S3 (Phase 6.2): mean 47 µs |
-| platform-host (host UDP) | 0.2.0 — non-portable adapter; ships the two-node demo |
-| platform-esp32 (UDP + E32 LoRa + log sink + time source) | 0.2.0 — non-portable adapter; compile-only except for the Phase 6.2 benchmark run |
+| Core | 0.3.0 — lifecycle and tick primitives |
+| Memory | 0.3.0 — implemented; isolated runtime margins unmeasured |
+| Object / GC | 0.3.0 — implemented; GC Advance-slice pause measured on ESP32-S3 (Phase 6.2): mean 25 µs/slice |
+| Engine (incl. bounded timers + runtime spawn/destroy + `TEngineHost`) | 0.3.0 — implemented; tick measured on ESP32-S3 (Phase 6.2): mean 73 µs (8 actors/16 components/8 timers) |
+| Net (byte I/O + `TNetHost` roles + `FrameCodec`) | 0.3.0 — implemented; no-traffic pump overhead measured on ESP32-S3 (Phase 6.2): mean 47 µs |
+| platform-host (host UDP) | 0.3.0 — non-portable adapter; ships the two-node demo |
+| platform-esp32 (UDP + E32 LoRa + log sink + time source) | 0.3.0 — non-portable adapter; compile-only except for the Phase 6.2 benchmark run |
 
 ## Visual roadmap
 

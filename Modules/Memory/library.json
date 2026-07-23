@@ -1,6 +1,6 @@
 {
   "name": "MicroWorldMemory",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "MicroWorld Memory: explicit bounded C++17 resources for embedded applications",
   "keywords": [
     "embedded",

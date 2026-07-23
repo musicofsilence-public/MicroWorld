@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(MicroWorld VERSION 0.2.0 LANGUAGES CXX)
+project(MicroWorld VERSION 0.3.0 LANGUAGES CXX)
 
 option(MICROWORLD_BUILD_TESTS "Build MicroWorld host tests" ON)
 

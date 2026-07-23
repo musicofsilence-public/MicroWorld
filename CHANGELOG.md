@@ -5,6 +5,35 @@
 No unreleased changes. Live state and exact evidence are recorded in
 [PROGRESS.md](PROGRESS.md).
 
+## 0.3.0 - 2026-07-23
+
+The 0.3.0 release is the student-facing simplicity refactor. It is
+behavior-preserving throughout except one documented change, but it is
+**API-breaking for source consumers**: public identifiers were renamed so
+every one states its role.
+
+- **Renames so every identifier states its role (Phase 1, source-breaking).**
+  Net class templates changed prefix `F`→`T` (`FNetManager`→`TNetManager`,
+  `FNetPacketStorage`→`TNetPacketStorage`, `FHostLoopback`→`THostLoopback`);
+  the registry "lease" vocabulary became "Reference" (`MakeView()`→
+  `MakeReference()`, `F...RegistryBase`→`F...RegistryReference`);
+  abbreviations were expanded (`Src`/`Len`/`Hi`/`Lo`→ full words); timer/host
+  template params were unified (`GcBudget`→`GarbageCollectionBudget`,
+  `SlotBytes`→`SlotSizeBytes`, `InlineCallbackBytes`+`TimerCallbackBytes`→
+  `InlineTimerCallbackBytes`); private platform headers `...Glue.h`→
+  `...PlatformImplementation.h`.
+- **One behavior change (D7).** `Net/FrameCodec.h` `EncodeFrame` now returns
+  `Invalid` (previously `Full`) for a payload larger than `0xFFFF` bytes.
+- **Readability-only internal work (no public behavior change).** Why-comment
+  repairs, long-function decomposition into named ≤2-action helpers,
+  cross-cutting ceremony reduction (a shared `Memory/Containers/RawSlot.h`,
+  `ERuntimeResult` in its own `Core/RuntimeResult.h`), a written style
+  contract in `docs/Style.md` with self-documenting `HostLifecycle`/
+  `TwoNodeDemo` examples, and complete per-folder `AGENTS.md` coverage.
+
+Live state and exact evidence are recorded in
+[PROGRESS.md](PROGRESS.md).
+
 ## 0.2.0 - 2026-07-21
 
 The 0.2.0 release delivers the managed runtime, networking, and platform
