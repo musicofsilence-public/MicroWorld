@@ -4,7 +4,6 @@
 #include <MicroWorld/Memory/MemoryResource.h>
 
 #include <memory>
-#include <new>
 #include <type_traits>
 #include <utility>
 
