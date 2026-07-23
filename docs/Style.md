@@ -51,3 +51,113 @@ it explicitly:
 clang-format --style=file:clang-format -i <files>
 clang-format --style=file:clang-format --dry-run --Werror <files>
 ```
+
+## Simplicity rules
+
+The rules below extend the conventions above. `CheckClassDocumentation.py
+--require-doxygen` remains the gate for comment *presence* and the
+three-sentence contract cap; this section defines the *content* that names
+and comments should carry.
+
+### Rule N — names state their whole role
+
+- Spell names in full: `CalculateNextDueMilliseconds`, not `CalcNext`;
+  `SourceNodeId`, not `SrcId`.
+- Put the unit in the name of any scalar carrying one:
+  `TickIntervalMilliseconds`, not `TickInterval`.
+- Name booleans as a yes/no question with the `b` prefix: `bMustResetSchedule`.
+- The codebase spells names out. The only abbreviations in use are
+  established domain acronyms already present in the code, such as `Ipv4`,
+  `UART`, `CRC`, and `Id`.
+
+### Rule F — a function performs at most two logical actions
+
+A function should read as one or two steps plus its guards; guard clauses
+(early-return rejections) do not count toward the two actions. When a
+function grows past that, extract each extra step into a named helper and
+let the original become an orchestrator whose body names the steps in order.
+
+### Rule W — comments explain *why*, not *what*
+
+Write a comment only when the reason, safety constraint, or edge case is not
+already visible in the code. Never narrate syntax (`// increment the
+counter`); state the invariant a line protects or the boundary it honors.
+
+### Worked example — task 3.1, `FTickFunction::Advance`
+
+Before, one function performs four logical actions: validate lifecycle and
+time, first-tick reset, cadence gate, and produce the tick. After, the
+guards remain but each step is a named helper, and `Advance` reads as a
+table of contents.
+
+Before:
+
+```cpp
+FTickDecision FTickFunction::Advance(const TimePointMilliseconds NowMilliseconds) noexcept
+{
+	if (!bPlaying)
+	{
+		return FTickDecision::Rejected(ERuntimeResult::InvalidLifecycle);
+	}
+	if (NowMilliseconds < LastObservedMilliseconds)
+	{
+		return FTickDecision::Rejected(ERuntimeResult::NonMonotonicTime);
+	}
+	LastObservedMilliseconds = NowMilliseconds;
+	if (!bEnabled)
+	{
+		return FTickDecision::NotDue();
+	}
+	if (bMustResetSchedule)
+	{
+		bMustResetSchedule = false;
+		PreviousTickMilliseconds = NowMilliseconds;
+		NextDueMilliseconds = CalculateNextDueMilliseconds(NowMilliseconds);
+		return FTickDecision::Ticked(NowMilliseconds, 0);
+	}
+	if (IntervalMilliseconds != 0)
+	{
+		const bool bBeforeDeadline = NowMilliseconds < NextDueMilliseconds;
+		const bool bAlreadyTicked = NowMilliseconds == PreviousTickMilliseconds;
+		if (bBeforeDeadline || bAlreadyTicked)
+		{
+			return FTickDecision::NotDue();
+		}
+	}
+	const DurationMilliseconds DeltaMilliseconds = CalculateDeltaMilliseconds(NowMilliseconds);
+	PreviousTickMilliseconds = NowMilliseconds;
+	NextDueMilliseconds = CalculateNextDueMilliseconds(NowMilliseconds);
+	return FTickDecision::Ticked(NowMilliseconds, DeltaMilliseconds);
+}
+```
+
+After (the real current code, `Modules/Core/src/TickFunction.cpp:52-77`):
+
+```cpp
+FTickDecision FTickFunction::Advance(const TimePointMilliseconds NowMilliseconds) noexcept
+{
+	if (!bPlaying)
+	{
+		return FTickDecision::Rejected(ERuntimeResult::InvalidLifecycle);
+	}
+	if (NowMilliseconds < LastObservedMilliseconds)
+	{
+		return FTickDecision::Rejected(ERuntimeResult::NonMonotonicTime);
+	}
+	LastObservedMilliseconds = NowMilliseconds;
+
+	if (!bEnabled)
+	{
+		return FTickDecision::NotDue();
+	}
+	if (bMustResetSchedule)
+	{
+		return BeginResetSchedule(NowMilliseconds);
+	}
+	if (!IsTickDueNow(NowMilliseconds))
+	{
+		return FTickDecision::NotDue();
+	}
+	return ProduceDueTick(NowMilliseconds);
+}
+```

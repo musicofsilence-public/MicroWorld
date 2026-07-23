@@ -1521,7 +1521,7 @@ tests must pass unchanged.
 
 ### Phase 8 — Student entry points & the style contract ⬜
 
-- [ ] **8.1 Extend `docs/Style.md` with the simplicity rules.** Append a
+- [x] **8.1 Extend `docs/Style.md` with the simplicity rules.** Append a
   section covering: Rule N (long self-explanatory names, units in names,
   yes/no booleans, allowed abbreviation list from section 2.2), Rule F (≤ 2
   logical actions, guard-clause exemption, extract-named-helper recipe), and
@@ -1534,6 +1534,21 @@ tests must pass unchanged.
   **Done when:** Style.md carries the three rules with one worked example.
   No Verify needed beyond `ctest --test-dir build -C Release` (markdown is not
   format-gated; the run just proves nothing else broke).
+
+  **Evidence (2026-07-23, committed with this change):** Doc-only. Appended a
+  `## Simplicity rules` section (110 lines) to `docs/Style.md`: Rule N (full
+  names, units-in-names, `b`-prefixed yes/no booleans, the established-acronym
+  abbreviation note), Rule F (≤2 logical actions, guards excepted,
+  extract-to-orchestrator), Rule W (why-not-what, no syntax narration), and a
+  before/after worked example on `FTickFunction::Advance` (task 3.1) whose "after"
+  block is the verbatim current `TickFunction.cpp:52-77`. The intro names
+  `CheckClassDocumentation.py --require-doxygen` as the presence/cap gate and this
+  section as the content definition. The existing naming table, prefix rules,
+  doc-comment rules, and clang-format note are untouched (diff is +110/-0).
+  **Roadmap note:** the task's "(from section 2.2)" abbreviation cross-reference
+  has no target — this Style.md has no numbered sections — so the abbreviation
+  guidance is stated inline instead. Verified: ctest 11/11 (Style.md is not
+  format-gated or doc-checker-scanned).
 
 - [ ] **8.2 Make `HostLifecycle` read as a first lesson.**
   `Modules/Engine/examples/HostLifecycle/Main.cpp` (109 LOC) — the first
