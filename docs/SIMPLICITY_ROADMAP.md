@@ -1732,7 +1732,7 @@ tests must pass unchanged.
   tags, kept at 0.2.0 as the "shipped-in" version each concept first landed at
   rather than restamped to the current release). `PROGRESS.md` lines 81/126
   left as historical mentions. Owner reviewed the combined diff at the 9.2
-  checkpoint and chose to keep the concept-map tags at 0.2.0. Commit `<pending>`.
+  checkpoint and chose to keep the concept-map tags at 0.2.0. Commit `855ab51`.
 
 - [ ] **9.3 Final acceptance.** Run everything, from scratch:
   ```sh
