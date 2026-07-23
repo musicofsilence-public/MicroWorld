@@ -5,15 +5,16 @@
 // It is included by one driver translation unit — Esp32I2cDriver.cpp (the wired
 // point-to-point I2C master/slave link pair) — and a public header must never reach
 // it. Every ESP-IDF I2C divergence is hidden behind the helpers below so both driver
-// classes read one platform-free send/receive path that mirrors the UART driver. This
-// platform implementation is COMPILE-VERIFIED on ESP32-S3 but the runtime behavior of
-// i2c_master_transmit/receive, of i2c_slave_write's partial-write path, and of the
-// on_receive ISR callback are UNVERIFIED at runtime: the mapping below treats a NACK or
-// timeout as a transient full condition, discards any partial slave write, and copies
-// callback bytes into the driver's inbox. The on_receive callback and the byte push it
-// calls run in ISR context and assume CONFIG_I2C_ISR_IRAM_SAFE stays disabled (the
-// default); enabling it would require placing both in IRAM. No I2C traffic is exercised
-// until example 20's hardware checkpoint passes (docs/WIRED_TRANSPORTS_ROADMAP.md §1.2).
+// classes read one platform-free send/receive path that mirrors the UART driver. Example
+// 20's master-clocked ping-pong runtime-verifies this path on ESP32-S3 (2026-07-23):
+// i2c_master_transmit, i2c_master_receive, i2c_slave_write's staged reply, and the
+// on_receive ISR callback all round-trip, and the NACK/timeout -> transient-full mapping
+// was observed when a peer was absent. The i2c_slave_write partial-write discard stays
+// unexercised (frames fit the ring). Verified behavior needs external pull-ups and a
+// clean co-start: I2C is open-drain, so resetting one board mid-transaction can latch the
+// bus low until both restart. The on_receive callback and the byte push it calls run in
+// ISR context and assume CONFIG_I2C_ISR_IRAM_SAFE stays disabled (the default); enabling
+// it would require placing both in IRAM. See docs/WIRED_TRANSPORTS_ROADMAP.md §1.2.
 // =============================================================================
 
 #include <MicroWorld/PlatformEsp32/Esp32I2cDriver.h>
@@ -155,7 +156,8 @@ inline FOpenedI2cMaster OpenConfiguredI2cMaster(
  * Writes one complete framed message to the slave in a single bus transaction.
  *
  * A NACK or timeout maps to `WouldBlock` so the driver can treat an unready peer as transiently full; any
- * other error maps to `Error`. The runtime behavior is UNVERIFIED (compile-only phase).
+ * other error maps to `Error`. Runtime-verified by example 20 (2026-07-23): the full-accept and the
+ * NACK/timeout -> WouldBlock paths were both observed.
  *
  * @param Device Open I2C master device handle.
  * @param FrameBytes First byte of the framed message to send.
@@ -180,8 +182,8 @@ inline EI2cWriteOutcome WriteI2cMaster(const i2c_master_dev_handle_t Device, con
  * Clocks one whole-frame window of bytes out of the slave in a single read transaction.
  *
  * The master generates the clock, so a well-formed bus fills the whole window (with filler where the slave had
- * nothing queued); a busy bus or unresponsive slave maps to `WouldBlock`. The runtime behavior is UNVERIFIED
- * (compile-only phase).
+ * nothing queued); a busy bus or unresponsive slave maps to `WouldBlock`. Runtime-verified by example 20
+ * (2026-07-23): the master read back the slave's staged replies each volley.
  *
  * @param Device Open I2C master device handle.
  * @param WindowBytes Caller-owned buffer filled with the read window.
@@ -275,8 +277,8 @@ inline FOpenedI2cSlave OpenConfiguredI2cSlave(
  *
  * Writes with a zero timeout so the call never blocks; a full write is `Sent`, and anything else discards any
  * partial bytes with `i2c_slave_reset_tx_fifo` (so a half-frame never reaches the master) and reports
- * `WouldBlock` for a transient full ring or `Error` otherwise. The runtime behavior is UNVERIFIED (compile-only
- * phase).
+ * `WouldBlock` for a transient full ring or `Error` otherwise. The `Sent` path is runtime-verified by example
+ * 20 (2026-07-23); the partial-write discard stays unexercised (frames fit the ring).
  *
  * @param Device Open I2C slave device handle.
  * @param FrameBytes First byte of the framed message to stage.

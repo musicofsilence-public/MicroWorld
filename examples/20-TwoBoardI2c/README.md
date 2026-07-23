@@ -5,7 +5,7 @@ instead of a UART — proof that swapping only the driver construction line swap
 the transport, even when the new transport has a clocking master and a
 responding slave.
 
-> Status: compiled for ESP32-S3; not yet verified on hardware.
+> Status: hardware-verified on ESP32-S3 (2026-07-23) — the counter ping-pong ran clean over a real I2C bus.
 
 ## What it does
 
@@ -106,9 +106,30 @@ exchange is master-initiated — the slave never speaks unprompted.
 
 ## Verified output
 
-Not yet verified on hardware. This example has been compiled for ESP32-S3 only;
-the captured serial traces from both boards go here once the human-gated
-checkpoint runs.
+Hardware-verified 2026-07-23 on two ESP32-S3 boards (SDA 8↔8, SCL 9↔9, common
+GND, two ~4.7 kΩ pull-ups to 3V3). The slave console, counter climbing unbroken:
+
+```text
+[ex20] slave open=1
+[ex20] rx n=1 from=1
+[ex20] tx n=2 result=Success
+[ex20] rx n=3 from=1
+[ex20] tx n=4 result=Success
+… unbroken …
+[ex20] rx n=39 from=1
+[ex20] tx n=40 result=Success
+```
+
+Every `tx … Success` and every `rx … from=1` — the master clocked, the slave's
+ISR inbox received, and the master read back the staged replies, so both
+directions and the `FrameCodec` framing are confirmed on real hardware.
+
+Reproduction note: start **both boards together** (power-cycle both, or flash
+the slave then the master). I2C is open-drain, so resetting one board
+mid-transaction can latch the bus low until a fresh restart clears it; the volley
+then re-syncs from n=1. Only the slave console was captured here — the master
+board was on its native-USB port, whose UART0 console is not wired to that
+connector.
 
 ## Image size
 
