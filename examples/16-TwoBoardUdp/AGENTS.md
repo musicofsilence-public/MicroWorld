@@ -5,12 +5,12 @@ Inherits `../AGENTS.md`.
 ## Architecture
 
 One source tree, two roles selected by `-DMICROWORLD_EXAMPLE_SERVER`; `Main.cpp`
-dispatches to `RunServer()` (`ServerMain.cpp`) or `RunClient()` (`ClientMain.cpp`).
-`WifiLink.cpp` is the same ESP-IDF glue as example 15 (duplicated per §2.4): the
-server calls `StartSoftAccessPoint`, the client calls `JoinAccessPoint`, so the
-two boards form their own network with no router. `UdpMessagingShared.h` holds
-the one copy of the demo AP config, the fixed server IP (`192.168.4.1`), and the
-channel/opcode/spawn protocol.
+installs `Esp32LogSink` then dispatches to `RunServer()` (`ServerMain.cpp`) or
+`RunClient()` (`ClientMain.cpp`). The server calls `FEsp32WifiLink::StartAccessPoint`,
+the client `FEsp32WifiLink::JoinAccessPoint`, so the two boards form their own
+network with no router; both roles log via `MW_LOG` and pace their run loop with
+`SleepMilliseconds`. `UdpMessagingShared.h` holds the one copy of the demo AP
+config, the fixed server IP (`192.168.4.1`), and the channel/opcode/spawn protocol.
 
 ## Concepts
 
@@ -23,7 +23,7 @@ channel/opcode/spawn protocol.
   or copy step, and no real credentials (demo SSID/password in the shared header).
 - **No node id** (unlike example 19): a UDP peer is keyed by its socket address,
   which `TNetHost` learns from the datagram.
-- **Ordering + storage invariants:** driver after the WiFi bring-up returns true;
+- **Ordering + storage invariants:** driver after the WiFi bring-up returns `Success`;
   all composition objects `static`.
 - **Shared-AP caveat:** the server socket binds `INADDR_ANY`, so a stray datagram
   larger than the 256-byte packet capacity can head-of-line-wedge it silently;
@@ -35,4 +35,5 @@ channel/opcode/spawn protocol.
 Build Verify (`docs/EXAMPLES_ROADMAP.md` §1.1): `pio run -d examples/16-TwoBoardUdp`
 (both role envs) then the root `cmake --build` / `ctest`. Hardware checkpoint
 (§1.2, human-gated): flash both roles, capture the server console showing the
-actor count reach 2 (driven by the remote client's requests).
+actor count reach 2 (driven by the remote client's requests) — pending re-verification
+after the `FEsp32WifiLink`/`MW_LOG` rewrite, which changed the trace shape.

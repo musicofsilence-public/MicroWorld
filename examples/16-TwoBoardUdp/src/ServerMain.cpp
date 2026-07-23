@@ -1,5 +1,4 @@
 #include "UdpMessagingShared.h"
-#include "WifiLink.h"
 
 #include <MicroWorld/Containers/Span.h>
 #include <MicroWorld/Delegates/Delegate.h>
@@ -9,21 +8,19 @@
 #include <MicroWorld/Engine/EngineStorage.h>
 #include <MicroWorld/Engine/NetworkFrame.h>
 #include <MicroWorld/Engine/World.h>
+#include <MicroWorld/Log.h>
 #include <MicroWorld/Net/NetHost.h>
 #include <MicroWorld/Net/NetResult.h>
 #include <MicroWorld/Object/ClassDescriptor.h>
 #include <MicroWorld/Object/GarbageCollector.h>
 #include <MicroWorld/Object/ObjectPtr.h>
+#include <MicroWorld/PlatformEsp32/Esp32Sleep.h>
 #include <MicroWorld/PlatformEsp32/Esp32TimeSource.h>
 #include <MicroWorld/PlatformEsp32/Esp32UdpDriver.h>
+#include <MicroWorld/PlatformEsp32/Esp32WifiLink.h>
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
-
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
 
 using namespace MicroWorld;
 using namespace Ex16;
@@ -69,19 +66,21 @@ private:
 /** Server board: engine host + net frame + net host (DedicatedServer) over one UDP socket. */
 void RunServer() noexcept
 {
-	if (!StartSoftAccessPoint("ex16", DemoApSsid, DemoApPassword))
+	static FEsp32WifiLink WifiLink;
+	if (WifiLink.StartAccessPoint(FEsp32AccessPointConfig{DemoApSsid, DemoApPassword, /*WifiChannel*/ 1, /*MaxStations*/ 4}) != ENetResult::Success)
 	{
-		std::printf("[ex16] wifi failed; halting\n");
+		MW_LOG(Error, "ex16", "wifi failed; halting");
 		return;
 	}
+	MW_LOG(Log, "ex16", "wifi softap up, gateway 192.168.4.1");
 
 	// The driver is constructed only after WiFi/netif is up (lwIP must exist first).
 	// The server hosts the SoftAP, so its address is the fixed gateway 192.168.4.1.
 	static FEsp32UdpDriver Driver(ServerPort);
-	std::printf("[ex16] server open=%d udp_port=%u\n", Driver.IsOpen() ? 1 : 0, static_cast<unsigned>(Driver.BoundPort()));
+	MW_LOG(Log, "ex16", "server open=%d udp_port=%u", Driver.IsOpen() ? 1 : 0, static_cast<unsigned>(Driver.BoundPort()));
 	if (!Driver.IsOpen())
 	{
-		std::printf("[ex16] socket failed; halting\n");
+		MW_LOG(Error, "ex16", "socket failed; halting");
 		return;
 	}
 
@@ -89,7 +88,7 @@ void RunServer() noexcept
 	static FServerNet ServerNet{Driver};
 	static TNetHostFrame<FServerNet> ServerFrame{ServerNet};
 	static FServerEngine ServerHost{FGarbageCollectionBudget{1, 4, 8}, ServerFrame};
-	static std::array<FActorComponentRegistry<0>, MaxSpawns> SpawnedRegistries{};
+	static FActorComponentRegistry<0> SpawnedRegistries[MaxSpawns]{};
 	static int SpawnSequence = 0;
 	static int SpawnedBeginCount = 0;
 	static int WorldActorCount = 0;
@@ -97,7 +96,7 @@ void RunServer() noexcept
 	if (ServerHost.RegisterClass<FDemoSpawnedActor>(DemoSpawnedActorTypeId, "DemoSpawnedActor") != EObjectResult::Success
 		|| ServerHost.CreateWorld().Get() == nullptr)
 	{
-		std::printf("[ex16] server world setup failed; halting\n");
+		MW_LOG(Error, "ex16", "server world setup failed; halting");
 		return;
 	}
 
@@ -121,7 +120,7 @@ void RunServer() noexcept
 				return;
 			}
 			++WorldActorCount;
-			std::printf("[ex16] server spawned actor -> world actor count=%d\n", WorldActorCount);
+			MW_LOG(Log, "ex16", "server spawned actor -> world actor count=%d", WorldActorCount);
 		});
 	FDelegateHandle Handle{};
 	(void)ServerNet.AddMessageHandler(std::move(Binding), Handle);
@@ -129,7 +128,7 @@ void RunServer() noexcept
 	(void)ServerNet.Configure(ENetMode::DedicatedServer, MakeHostConfig());
 	(void)ServerNet.Start(GTimeSource.Now());
 	(void)ServerHost.BeginPlay(GTimeSource.Now());
-	std::printf("[ex16] server listening (udp)\n");
+	MW_LOG(Log, "ex16", "server listening (udp)");
 
 	std::uint8_t StateTick = 0;
 	bool bDoneAnnounced = false;
@@ -143,9 +142,9 @@ void RunServer() noexcept
 		(void)ServerNet.Broadcast(StateBroadcastChannel, TSpan<const std::uint8_t>(StatePayload, sizeof(StatePayload)));
 		if (!bDoneAnnounced && WorldActorCount >= MaxSpawns)
 		{
-			std::printf("[ex16] done (server spawned %d actors)\n", WorldActorCount);
+			MW_LOG(Log, "ex16", "done (server spawned %d actors)", WorldActorCount);
 			bDoneAnnounced = true;
 		}
-		vTaskDelay(pdMS_TO_TICKS(PollPacingMilliseconds));
+		SleepMilliseconds(PollPacingMilliseconds);
 	}
 }

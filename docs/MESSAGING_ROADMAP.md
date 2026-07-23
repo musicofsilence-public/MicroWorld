@@ -867,7 +867,7 @@ adopts the shipped log seam.
   reworded the CMake `esp_libc` why-comment to plain English so the literal
   `src/` grep gate reads 0 (it is build config, not example source).
 
-- [ ] **1.4 Rewrite example 16 engine-first.** Same treatment: delete its
+- [x] **1.4 Rewrite example 16 engine-first.** Same treatment: delete its
   `WifiLink.{h,cpp}` copy, use `FEsp32WifiLink`, `MW_LOG` (`"ex16"`),
   `SleepMilliseconds`, replace `std::array` buffers with
   `std::uint8_t Name[N]` + `TSpan`. README/AGENTS updated, verified-trace
@@ -875,6 +875,21 @@ adopts the shipped log seam.
 
   **Done when:** same grep gate for `examples/16-TwoBoardUdp/src` → 0.
   **Verify:** `pio run -d examples/16-TwoBoardUdp` + ctest.
+
+  Done 2026-07-23 — example 16 keeps its two role envs but is now engine-first:
+  `Main.cpp` installs `Esp32LogSink` before the `#if MICROWORLD_EXAMPLE_SERVER`
+  dispatch (the `#error` guard preserved); `ServerMain.cpp` brings up the SoftAP
+  via `FEsp32WifiLink::StartAccessPoint`, `ClientMain.cpp` joins via
+  `JoinAccessPoint`, both checking `!= ENetResult::Success`; every `std::printf`
+  → `MW_LOG`("ex16") (Error for halts, Log otherwise), `vTaskDelay` →
+  `SleepMilliseconds`. `WifiLink.{h,cpp}` deleted; the lone `std::array`
+  (`FActorComponentRegistry<0>` spawn slots) became a plain C array (same index
+  syntax at the call site); `src/CMakeLists.txt` dropped `WifiLink.cpp` +
+  `PRIV_REQUIRES` and reworded the `esp_libc` why-comment. README/AGENTS
+  rewritten, prior hardware-verified trace (the old 2026-07-23 capture) reset to
+  "not yet verified" and the "Verified output" section deleted. Gates:
+  `.cpp/.h/.txt` grep gate 0, clang-format clean, host `ctest` 11/11, `pio run -d
+  examples/16-TwoBoardUdp` both envs `[SUCCESS]` (RAM 13.4% / Flash 19.0%).
 
 - [ ] **1.5 Sweep examples 01, 18, 19, 20, 21 onto `MW_LOG` +
   `SleepMilliseconds`.** Mechanical: install `Esp32LogSink`, swap

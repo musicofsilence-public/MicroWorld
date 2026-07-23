@@ -1,19 +1,17 @@
 #include "UdpMessagingShared.h"
-#include "WifiLink.h"
 
 #include <MicroWorld/Containers/Span.h>
 #include <MicroWorld/Delegates/Delegate.h>
+#include <MicroWorld/Log.h>
 #include <MicroWorld/Net/NetHost.h>
 #include <MicroWorld/Net/NetResult.h>
 #include <MicroWorld/Net/UdpAddressCodec.h>
+#include <MicroWorld/PlatformEsp32/Esp32Sleep.h>
 #include <MicroWorld/PlatformEsp32/Esp32TimeSource.h>
 #include <MicroWorld/PlatformEsp32/Esp32UdpDriver.h>
+#include <MicroWorld/PlatformEsp32/Esp32WifiLink.h>
 
 #include <cstdint>
-#include <cstdio>
-
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
 
 using namespace MicroWorld;
 using namespace Ex16;
@@ -34,19 +32,21 @@ int GLastServerActors = -1;
 /** Client board: a bare TNetHost (Client) over one UDP socket, no engine. */
 void RunClient() noexcept
 {
-	if (!JoinAccessPoint("ex16", DemoApSsid, DemoApPassword))
+	static FEsp32WifiLink WifiLink;
+	if (WifiLink.JoinAccessPoint(FEsp32StationConfig{DemoApSsid, DemoApPassword, /*ConnectTimeoutMilliseconds*/ 15000}) != ENetResult::Success)
 	{
-		std::printf("[ex16] wifi failed; halting\n");
+		MW_LOG(Error, "ex16", "wifi failed; halting");
 		return;
 	}
+	MW_LOG(Log, "ex16", "wifi joined AP");
 
 	// The client binds an ephemeral local port (0): it only needs to reach the
 	// server, and TNetHost learns the client's address server-side from its Hello.
 	static FEsp32UdpDriver Driver(0);
-	std::printf("[ex16] client open=%d\n", Driver.IsOpen() ? 1 : 0);
+	MW_LOG(Log, "ex16", "client open=%d", Driver.IsOpen() ? 1 : 0);
 	if (!Driver.IsOpen())
 	{
-		std::printf("[ex16] socket failed; halting\n");
+		MW_LOG(Error, "ex16", "socket failed; halting");
 		return;
 	}
 
@@ -62,7 +62,7 @@ void RunClient() noexcept
 				return;
 			}
 			GLastServerActors = static_cast<int>(Payload[1]);
-			std::printf("[ex16] client rx state tick=%d actors=%d\n", static_cast<int>(Payload[0]), GLastServerActors);
+			MW_LOG(Log, "ex16", "client rx state tick=%d actors=%d", static_cast<int>(Payload[0]), GLastServerActors);
 		});
 	FDelegateHandle Handle{};
 	(void)ClientNet.AddMessageHandler(std::move(Binding), Handle);
@@ -71,7 +71,7 @@ void RunClient() noexcept
 	Config.ServerAddress = MakeUdpAddress(ServerIpv4[0], ServerIpv4[1], ServerIpv4[2], ServerIpv4[3], ServerPort);
 	(void)ClientNet.Configure(ENetMode::Client, Config);
 	(void)ClientNet.Start(GTimeSource.Now());
-	std::printf("[ex16] client connecting (udp)\n");
+	MW_LOG(Log, "ex16", "client connecting (udp)");
 
 	bool bConnectedAnnounced = false;
 	bool bDoneAnnounced = false;
@@ -87,7 +87,7 @@ void RunClient() noexcept
 		{
 			if (!bConnectedAnnounced)
 			{
-				std::printf("[ex16] client connected\n");
+				MW_LOG(Log, "ex16", "client connected");
 				bConnectedAnnounced = true;
 				NextSpawnDueMilliseconds = Now; // first request now, the second one second later
 			}
@@ -98,7 +98,7 @@ void RunClient() noexcept
 					== ENetResult::Success)
 				{
 					++SpawnRequestsSent;
-					std::printf("[ex16] client sent spawn request %d\n", SpawnRequestsSent);
+					MW_LOG(Log, "ex16", "client sent spawn request %d", SpawnRequestsSent);
 					NextSpawnDueMilliseconds = Now + 1000;
 				}
 			}
@@ -106,9 +106,9 @@ void RunClient() noexcept
 
 		if (!bDoneAnnounced && GLastServerActors >= MaxSpawns)
 		{
-			std::printf("[ex16] done (observed actor count %d)\n", GLastServerActors);
+			MW_LOG(Log, "ex16", "done (observed actor count %d)", GLastServerActors);
 			bDoneAnnounced = true;
 		}
-		vTaskDelay(pdMS_TO_TICKS(PollPacingMilliseconds));
+		SleepMilliseconds(PollPacingMilliseconds);
 	}
 }
