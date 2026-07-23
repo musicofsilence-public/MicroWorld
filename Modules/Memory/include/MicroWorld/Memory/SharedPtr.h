@@ -1,5 +1,6 @@
 #pragma once
 
+#include <MicroWorld/Containers/RawSlot.h>
 #include <MicroWorld/Memory/MemoryResource.h>
 
 #include <cstddef>
@@ -124,7 +125,7 @@ namespace Detail
 	{
 		IMemoryResource* const Resource = ControlBlock->Resource;
 		const FMemoryBlock Allocation = ControlBlock->Allocation;
-		ControlBlock->~TSharedControlBlock<ValueType>();
+		DestroyAt(ControlBlock);
 		static_cast<void>(Resource->Deallocate(Allocation));
 	}
 
@@ -157,8 +158,8 @@ namespace Detail
 	{
 		using FControlBlock = TSharedControlBlock<ValueType>;
 		std::byte* const AllocationBytes = static_cast<std::byte*>(Allocation.Address);
-		FControlBlock* const ControlBlock = ::new (AllocationBytes) FControlBlock{};
-		ValueType* const Value = ::new (AllocationBytes + ValueOffsetBytes) ValueType(std::forward<ConstructorArgumentTypes>(Arguments)...);
+		FControlBlock* const ControlBlock = ConstructAt<FControlBlock>(AllocationBytes);
+		ValueType* const Value = ConstructAt<ValueType>(AllocationBytes + ValueOffsetBytes, std::forward<ConstructorArgumentTypes>(Arguments)...);
 		ControlBlock->Resource = &Resource;
 		ControlBlock->Allocation = Allocation;
 		ControlBlock->Value = Value;
@@ -279,7 +280,7 @@ private:
 		ValueType* const Value = ReleasedControlBlock->Value;
 		ReleasedControlBlock->Value = nullptr;
 		ReleasedControlBlock->bValueDestructionInProgress = true;
-		Value->~ValueType();
+		Detail::DestroyAt(Value);
 		ReleasedControlBlock->bValueDestructionInProgress = false;
 	}
 

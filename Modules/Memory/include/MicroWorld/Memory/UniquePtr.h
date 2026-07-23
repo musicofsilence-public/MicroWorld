@@ -1,5 +1,6 @@
 #pragma once
 
+#include <MicroWorld/Containers/RawSlot.h>
 #include <MicroWorld/Memory/MemoryResource.h>
 
 #include <memory>
@@ -58,7 +59,7 @@ private:
 				return;
 			}
 
-			Value->~ValueType();
+			Detail::DestroyAt(Value);
 			if (Resource != nullptr)
 			{
 				static_cast<void>(Resource->Deallocate(Allocation));
@@ -147,7 +148,7 @@ TUniquePointerResult<ValueType> MakeUnique(IMemoryResource& Resource, Constructo
 		return FailedResult;
 	}
 
-	ValueType* const Value = ::new (Allocation.Address) ValueType(std::forward<ConstructorArgumentTypes>(Arguments)...);
+	ValueType* const Value = Detail::ConstructAt<ValueType>(Allocation.Address, std::forward<ConstructorArgumentTypes>(Arguments)...);
 
 	TUniquePointerResult<ValueType> SuccessfulResult{};
 	SuccessfulResult.Result = EMemoryResult::Success;

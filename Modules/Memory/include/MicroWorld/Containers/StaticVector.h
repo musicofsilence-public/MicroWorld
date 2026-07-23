@@ -1,5 +1,6 @@
 #pragma once
 
+#include <MicroWorld/Containers/RawSlot.h>
 #include <MicroWorld/Time.h>
 
 #include <cstddef>
@@ -60,7 +61,7 @@ public:
 		}
 
 		void* const ElementStorage = static_cast<void*>(&Storage[ElementCount]);
-		::new (ElementStorage) ElementType(std::forward<ArgumentTypes>(Arguments)...);
+		Detail::ConstructAt<ElementType>(ElementStorage, std::forward<ArgumentTypes>(Arguments)...);
 		++ElementCount;
 		return ERuntimeResult::Success;
 	}
@@ -72,7 +73,7 @@ public:
 		while (ElementCount > 0)
 		{
 			--ElementCount;
-			ElementAt(ElementCount)->~ElementType();
+			Detail::DestroyAt(ElementAt(ElementCount));
 		}
 	}
 
@@ -133,13 +134,10 @@ private:
 	static_assert(sizeof(FStorageSlot) == sizeof(ElementType), "TStaticVector requires storage slots with no inter-element padding");
 
 	/** Resolves a live element after placement construction has begun its lifetime. */
-	ElementType* ElementAt(const std::size_t Index) noexcept { return std::launder(reinterpret_cast<ElementType*>(&Storage[Index])); }
+	ElementType* ElementAt(const std::size_t Index) noexcept { return Detail::LaunderedPointer<ElementType>(&Storage[Index]); }
 
 	/** Resolves a live element after placement construction has begun its lifetime. */
-	const ElementType* ElementAt(const std::size_t Index) const noexcept
-	{
-		return std::launder(reinterpret_cast<const ElementType*>(&Storage[Index]));
-	}
+	const ElementType* ElementAt(const std::size_t Index) const noexcept { return Detail::LaunderedPointer<ElementType>(&Storage[Index]); }
 
 	/** Reserves a compile-time-bounded set of slots without constructing or allocating elements. */
 	// C++ forbids zero-length arrays; one dummy slot keeps a zero-capacity

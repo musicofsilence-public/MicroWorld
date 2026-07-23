@@ -1421,7 +1421,7 @@ tests must pass unchanged.
 
 ### Phase 7 — Cross-cutting ceremony reduction ⬜
 
-- [ ] **7.1 One shared construct/destroy helper for raw slots.** The
+- [x] **7.1 One shared construct/destroy helper for raw slots.** The
   placement-new + `std::aligned_storage` + `std::launder` ritual repeats in
   `StaticVector.h:131-142`, `Delegate.h:186-217`, and the smart-pointer
   factories. Add one small documented header
@@ -1432,6 +1432,24 @@ tests must pass unchanged.
 
   **Done when:** `rg -n "std::launder" Modules` hits only the helper (plus
   comments); Memory tests pass unchanged; Standard Verify passes.
+
+  **Evidence (2026-07-23, committed with this change):** Five files, pure refactor
+  (no behavior change). New `Memory/Containers/RawSlot.h` holds the raw-slot
+  lifetime ritual as three `MicroWorld::Detail` templates — `ConstructAt`
+  (placement new, parens-forwarded), `DestroyAt` (explicit destructor), and
+  `LaunderedPointer` (a `void*` and a `const void*` overload) — with ONE
+  authoritative why-comment explaining the `std::launder` aliasing rule. The three
+  call-site families were retargeted: `StaticVector` (Emplace/Clear/both
+  `ElementAt`), `Delegate` (Bind/CallableAt/Move/Destroy), and the smart pointers
+  (`ConstructSharedBlock`/`DestroySharedControlBlock`/`DestroyValueInPlace`,
+  `MakeUnique`/`FResourceDeleter`). Sites inside `MicroWorld::Detail` call the
+  helpers unqualified; the rest use `Detail::`. The `TSharedControlBlock{}` →
+  `ConstructAt<FControlBlock>()` change is state-identical (an aggregate whose
+  members all have default initializers). **Done-when met:** `rg "std::launder"
+  Modules` now hits only `RawSlot.h` (the two overloads plus the comment). The
+  now-unused `<new>` includes left in the four retargeted headers are noted for a
+  later hygiene pass. Verified: build warning-clean, ctest 11/11 (`#7 memory_tests`
+  exercises all four families), doc checker 124 files (`RawSlot.h` is the new file).
 
 - [ ] **7.2 Move `ERuntimeResult` into its own Core header (D5).**
   1. Create `Modules/Core/include/MicroWorld/RuntimeResult.h`; move the enum
