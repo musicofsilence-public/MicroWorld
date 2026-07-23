@@ -12,7 +12,13 @@ using ObjectIndex = std::uint32_t;
 /** Distinguishes every reusable lifetime published from one object-store slot. */
 using ObjectGeneration = std::uint32_t;
 
-/** Reports every bounded managed-object operation outcome without exceptions. */
+/**
+ * Reports every bounded managed-object operation outcome without exceptions.
+ *
+ * The object store and its handles speak `EObjectResult`; cross-layer lifecycle
+ * and tick outcomes speak `ERuntimeResult` (`RuntimeResult.h`). The two overlap
+ * by design and are deliberately not merged.
+ */
 enum class EObjectResult : std::uint8_t
 {
 	/** Confirms that the requested managed-object operation completed. */

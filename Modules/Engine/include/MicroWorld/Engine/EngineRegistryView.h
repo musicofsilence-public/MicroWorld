@@ -44,7 +44,10 @@ public:
 	FActorComponentRegistryReference& operator=(FActorComponentRegistryReference&&) = delete;
 
 private:
+	// AActor reads and mutates its own component registry only through this reference.
 	friend class AActor;
+
+	// The owning fixed registry is the only type that can mint a valid reference over its storage.
 	template<std::size_t>
 	friend class FActorComponentRegistry;
 
@@ -125,7 +128,10 @@ public:
 	FWorldActorRegistryReference& operator=(FWorldActorRegistryReference&&) = delete;
 
 private:
+	// UWorld reads and mutates its own actor registry only through this reference.
 	friend class UWorld;
+
+	// The owning fixed registry is the only type that can mint a valid reference over its storage.
 	template<std::size_t>
 	friend class FWorldActorRegistry;
 

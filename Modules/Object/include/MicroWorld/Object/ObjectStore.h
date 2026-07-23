@@ -459,6 +459,11 @@ private:
 	/** Returns the next pending-destroy slot to inspect and advances the wrapping scan cursor. */
 	ObjectIndex AdvancePendingScanCursor() noexcept;
 
+	// --- Collector-only interface (FGarbageCollector friend) ---
+	// FGarbageCollector reaches slot marks, occupancy, and cycle ownership through
+	// these private methods rather than public mutators, so no ordinary caller can
+	// start, observe, or end a collection out of phase. Keeping the back-channel
+	// private means the store's public surface can never corrupt an in-progress cycle.
 	/** Reports collector iteration capacity without exposing mutable metadata publicly. */
 	std::uint32_t CollectorSlotCapacity() const noexcept { return Storage.SlotCount; }
 
@@ -540,6 +545,10 @@ private:
 	/** Preserves bounded round-robin progress across partial destruction barriers. */
 	ObjectIndex PendingDestroyScanCursor{0};
 
+	// Locking trio, each guarding a distinct phase (see IsMutationLocked):
+	//   bMutationLocked -- set while a construct / exact-destruction callback runs.
+	//   bDispatchLocked -- set throughout one Engine callback cascade.
+	//   ActiveCollector -- non-null while one collection cycle owns store traversal.
 	/** Rejects callback reentry while construction or exact destruction is in progress. */
 	bool bMutationLocked{false};
 

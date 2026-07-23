@@ -13,6 +13,10 @@ namespace MicroWorld
  * and the lifecycle-locked results. It lives in its own header so a low-level
  * type such as `TStaticVector` can report outcomes without depending on the tick
  * and time types in `Time.h`.
+ *
+ * Cross-layer lifecycle and tick outcomes speak `ERuntimeResult`; the object
+ * store and its handles speak `EObjectResult` (`ObjectHandle.h`). The two overlap
+ * by design and are deliberately not merged.
  */
 enum class ERuntimeResult : std::uint8_t
 {

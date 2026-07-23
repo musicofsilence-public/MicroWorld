@@ -62,9 +62,12 @@ protected:
 	virtual void BeginDestroy() noexcept {}
 
 private:
-	friend class FGarbageCollector;
+	// The owning store stamps this object's Store, Handle, and Descriptor identity
+	// on publish and reads Store to reject foreign handles.
 	friend class FObjectStore;
-	friend class FReferenceCollector;
+
+	// The default descriptor tracer calls the protected VisitReferences to hand
+	// this object's managed references to the collector during a mark cycle.
 	friend void TraceManagedObjectReferences(UObject& Object, FReferenceCollector& Collector) noexcept;
 
 	/** Identifies the only store allowed to resolve and destroy this object. */

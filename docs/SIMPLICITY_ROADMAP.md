@@ -1419,7 +1419,7 @@ tests must pass unchanged.
 
 ---
 
-### Phase 7 — Cross-cutting ceremony reduction ⬜
+### Phase 7 — Cross-cutting ceremony reduction ✅
 
 - [x] **7.1 One shared construct/destroy helper for raw slots.** The
   placement-new + `std::aligned_storage` + `std::launder` ritual repeats in
@@ -1478,7 +1478,7 @@ tests must pass unchanged.
   (including `#3`/`#4 dependency_boundaries` and `#5`/`#6` profile-map — the Core
   boundary is unchanged), doc checker 125 files.
 
-- [ ] **7.3 Label the collector back-channel and the enum boundary (D4).**
+- [x] **7.3 Label the collector back-channel and the enum boundary (D4).**
   1. In `ObjectStore.h`, the ~15 `Collector*`-prefixed private methods
      (`:453-496`) get one banner comment
      (`// --- Collector-only interface (FGarbageCollector friend) ---`) with
@@ -1496,6 +1496,26 @@ tests must pass unchanged.
      each lock guards.
 
   **Done when:** all four sites documented; Standard Verify passes.
+
+  **Evidence (2026-07-23, committed with this change):** Five files, comment-only
+  except one behavior-neutral removal. `ObjectStore.h` gained the "Collector-only
+  interface" banner above the `Collector*` private methods (why the GC drives
+  mark/sweep through a private back-channel) and a three-line map of the locking
+  trio (`bMutationLocked`/`bDispatchLocked`/`ActiveCollector`). `EObjectResult`
+  (`ObjectHandle.h`) and `ERuntimeResult` (`RuntimeResult.h`) each gained the
+  mirrored D4 boundary note (store/handles vs. cross-layer lifecycle/tick; they
+  overlap by design and are not merged). The `EngineRegistryView.h` reference
+  friends (`AActor` + `FActorComponentRegistry`, `UWorld` + `FWorldActorRegistry`)
+  each gained a one-line why. **Step-2 finding (owner-approved):** investigation
+  showed only two of the four `UObject` friend grants actually touch its
+  protected/private members — `FObjectStore` (stamps `Store`/`Handle`/`Descriptor`
+  on publish, checks ownership) and `TraceManagedObjectReferences` (calls the
+  protected `VisitReferences`); the `FGarbageCollector` and `FReferenceCollector`
+  grants were unused (the GC reaches objects only through the descriptor-tracer
+  indirection and the store's own `Collector*` friend). Per the owner's decision
+  the two vestigial grants were removed rather than annotated, and the clean
+  compile proves they were unused. Verified: build warning-clean, ctest 11/11, doc
+  checker 125 files (no new file). **Phase 7 complete.**
 
 ---
 
@@ -1637,7 +1657,7 @@ tests must pass unchanged.
 | 4 | Decompose: Object & GC | 3 | ✅ |
 | 5 | Decompose: Engine | 4 | ✅ |
 | 6 | Decompose: Net & Platform | 6 | ✅ |
-| 7 | Ceremony reduction | 3 | ⬜ |
+| 7 | Ceremony reduction | 3 | ✅ |
 | 8 | Entry points & style contract | 4 | ⬜ |
 | 9 | Governance & release | 3 | ⬜ |
 
