@@ -10,7 +10,7 @@ WiFi UDP, E32 LoRa, and plain wires.
 ## Hardware shopping list
 
 - 2 × ESP32-S3-DevKitC-1 (ESP32-S3-WROOM-1-N16R8), USB serial.
-- A shared 2.4 GHz WiFi network (examples 15–16).
+- No router needed for examples 15–16: one board hosts a SoftAP the other joins.
 - 2 × E32 LoRa UART modules (example 17 only).
 - Jumper wires for the wired board-to-board examples (18–21); example 20 (I2C)
   also wants two ~4.7 kΩ pull-up resistors.
@@ -52,8 +52,8 @@ Status: ⬜ planned · 🟨 built (compiles) · ✅ hardware-verified
 | 12 | `12-NetBytes` | `FByteWriter` / `FByteReader` transactional byte I/O | — | ⬜ |
 | 13 | `13-NetLoopback` | `TNetManager` FIFO over `THostLoopback` | — | ⬜ |
 | 14 | `14-NetFrameCodec` | `EncodeFrame` / `TFrameDecoder` CRC framing + resync | — | ⬜ |
-| 15 | `15-UdpEcho` | `FEsp32UdpDriver` over real WiFi | PC on same WiFi | 🟨 |
-| 16 | `16-TwoBoardUdp` | `TNetHost` client/server + `TNetHostFrame` engine binding | 2nd board, WiFi | 🟨 |
+| 15 | `15-UdpEcho` | `FEsp32UdpDriver` over WiFi, board-to-board (SoftAP, no router) | 2nd board | 🟨 |
+| 16 | `16-TwoBoardUdp` | `TNetHost` client/server + `TNetHostFrame` over WiFi (SoftAP, no router) | 2nd board | 🟨 |
 | 17 | `17-TwoBoardLora` | `FEsp32E32LoraDriver` framed radio link | 2nd board, 2 × E32 | ⬜ |
 | 18 | `18-TwoBoardUart` | wired UART `INetDriver` link — example 17's volley over a plain wire | 2nd board, 3 wires | 🟨 |
 | 19 | `19-UartMessaging` | full `TNetHost` client/server message design over UART, zero WiFi — example 16's protocol, only the driver changed | 2nd board, 3 wires | 🟨 |

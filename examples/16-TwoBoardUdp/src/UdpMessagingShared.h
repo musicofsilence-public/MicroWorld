@@ -17,6 +17,19 @@
  */
 namespace Ex16
 {
+/** SoftAP the server hosts and the client joins — demo-only values, not a secret, so
+ *  they commit safely; no home router and no real credentials are involved. */
+constexpr const char* DemoApSsid = "microworld-ex16";
+
+/** Demo WPA2 password (>= 8 chars); throwaway, never a real network's password. */
+constexpr const char* DemoApPassword = "microworld";
+
+/** The server's fixed SoftAP gateway IPv4; the client addresses this, no discovery needed. */
+constexpr std::uint8_t ServerIpv4[4] = {192, 168, 4, 1};
+
+/** UDP port the server binds and the client targets. */
+constexpr std::uint16_t ServerPort = 40404;
+
 /** Application channel carrying the client's spawn request (channel 0 is reserved control). */
 constexpr std::uint8_t InputEventChannel = 1;
 

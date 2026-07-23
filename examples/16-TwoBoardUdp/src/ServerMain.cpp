@@ -1,6 +1,5 @@
-#include "NetworkConfig.h"
 #include "UdpMessagingShared.h"
-#include "WifiStation.h"
+#include "WifiLink.h"
 
 #include <MicroWorld/Containers/Span.h>
 #include <MicroWorld/Delegates/Delegate.h>
@@ -70,15 +69,15 @@ private:
 /** Server board: engine host + net frame + net host (DedicatedServer) over one UDP socket. */
 void RunServer() noexcept
 {
-	if (!ConnectWifiStation("ex16"))
+	if (!StartSoftAccessPoint("ex16", DemoApSsid, DemoApPassword))
 	{
 		std::printf("[ex16] wifi failed; halting\n");
 		return;
 	}
 
 	// The driver is constructed only after WiFi/netif is up (lwIP must exist first).
-	// The "wifi ip" line above is the address to copy into the client's NetworkConfig.h.
-	static FEsp32UdpDriver Driver(kServerPort);
+	// The server hosts the SoftAP, so its address is the fixed gateway 192.168.4.1.
+	static FEsp32UdpDriver Driver(ServerPort);
 	std::printf("[ex16] server open=%d udp_port=%u\n", Driver.IsOpen() ? 1 : 0, static_cast<unsigned>(Driver.BoundPort()));
 	if (!Driver.IsOpen())
 	{

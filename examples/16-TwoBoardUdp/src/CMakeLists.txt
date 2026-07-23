@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "Main.cpp" "ServerMain.cpp" "ClientMain.cpp" "WifiStation.cpp"
+    SRCS "Main.cpp" "ServerMain.cpp" "ClientMain.cpp" "WifiLink.cpp"
     PRIV_REQUIRES nvs_flash esp_wifi esp_netif esp_event
 )
 

@@ -1,6 +1,6 @@
 idf_component_register(
-    SRCS "Main.cpp" "WifiStation.cpp"
-    PRIV_REQUIRES nvs_flash esp_wifi esp_netif esp_event
+    SRCS "Main.cpp" "EchoServerMain.cpp" "ProbeMain.cpp" "WifiLink.cpp"
+    PRIV_REQUIRES nvs_flash esp_wifi esp_netif esp_event lwip
 )
 
 # Why: keep the engine's strict portable contract on example code. ESP-IDF's

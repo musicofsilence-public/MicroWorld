@@ -1,6 +1,5 @@
-#include "NetworkConfig.h"
 #include "UdpMessagingShared.h"
-#include "WifiStation.h"
+#include "WifiLink.h"
 
 #include <MicroWorld/Containers/Span.h>
 #include <MicroWorld/Delegates/Delegate.h>
@@ -35,7 +34,7 @@ int GLastServerActors = -1;
 /** Client board: a bare TNetHost (Client) over one UDP socket, no engine. */
 void RunClient() noexcept
 {
-	if (!ConnectWifiStation("ex16"))
+	if (!JoinAccessPoint("ex16", DemoApSsid, DemoApPassword))
 	{
 		std::printf("[ex16] wifi failed; halting\n");
 		return;
@@ -69,7 +68,7 @@ void RunClient() noexcept
 	(void)ClientNet.AddMessageHandler(std::move(Binding), Handle);
 
 	FNetHostConfig Config = MakeHostConfig();
-	Config.ServerAddress = MakeUdpAddress(kServerIpv4[0], kServerIpv4[1], kServerIpv4[2], kServerIpv4[3], kServerPort);
+	Config.ServerAddress = MakeUdpAddress(ServerIpv4[0], ServerIpv4[1], ServerIpv4[2], ServerIpv4[3], ServerPort);
 	(void)ClientNet.Configure(ENetMode::Client, Config);
 	(void)ClientNet.Start(GTimeSource.Now());
 	std::printf("[ex16] client connecting (udp)\n");

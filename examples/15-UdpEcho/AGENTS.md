@@ -4,39 +4,32 @@ Inherits `../AGENTS.md`.
 
 ## Architecture
 
-Two composition units. `WifiStation.cpp` is ESP-IDF vendor glue: it brings up
-`nvs` → `netif` → `event-loop` → WiFi-station and blocks until an IPv4 lease, so
-the socket has a stack to bind. `Main.cpp`'s `app_main` is the composition root:
-after WiFi is up it owns one static `FEsp32UdpDriver` and runs a bounded
-poll/receive/echo loop over it. No world, no actor, no `TNetHost` — the raw
-driver only.
+Two roles selected by `-DMICROWORLD_EXAMPLE_SERVER`; `Main.cpp` dispatches to
+`RunEchoServer()` (`EchoServerMain.cpp`) or `RunProbe()` (`ProbeMain.cpp`).
+`WifiLink.cpp` is ESP-IDF glue exposing `StartSoftAccessPoint` (echo role) and
+`JoinAccessPoint` (probe role), so the two boards form their own network with no
+router. `UdpEchoShared.h` holds the one copy of the demo AP config, the fixed
+echo-server IP (`192.168.4.1`), and the payload sizes.
 
 ## Concepts
 
-- Proves the `INetDriver` UDP transport on **real WiFi**: `TrySend` / `TryReceive`
-  / `PollReadable` over one lwIP socket, the first on-hardware run of the driver.
-- **Ordering invariant:** the driver is constructed only after
-  `ConnectWifiStation` returns true — a socket opened before lwIP exists asserts
-  inside the stack. All composition objects are `static` (§2.2), never
-  `app_main` stack locals.
-- **Oversize is the observable unknown.** The receive buffer equals the driver's
-  peek scratch (1200 B), so an oversize datagram resolves to `Full` *or* a silent
-  truncation depending on whether lwIP exposes `MSG_TRUNC`; the PC client's
-  length check records which. Whatever hardware shows is a finding, not a driver
-  bug to patch — `Modules/` is read-only.
-- Secrets live in the git-ignored `NetworkConfig.h`; only the template commits,
-  and the password is never printed.
+- Proves the raw `INetDriver` UDP transport **board-to-board over WiFi**, no
+  router: the echo board hosts a SoftAP and echoes via `FEsp32UdpDriver`; the
+  probe joins and drives it. No `TNetHost`, no engine — the driver only.
+- **Ordering + storage invariants:** the driver is constructed only after the
+  WiFi bring-up returns true; all composition objects are `static` (§2.2).
+- **The oversize probe needs a non-driver sender.** `FEsp32UdpDriver::TrySend`
+  rejects payloads over `UdpMaxPacketBytes` (1200) as `Invalid`, so the probe
+  uses a **raw lwIP socket** to fire a ~1300-byte datagram — the only way to make
+  the echo server's oversize *receive* path run. Its outcome (`Full` vs silent
+  truncation) is captured on the echo server's console and is a finding to record,
+  never a driver patch (`Modules/` is read-only).
+- No secrets: the SoftAP SSID/password are fixed demo values in the committed
+  shared header, not a real network's credentials.
 
 ## Verification
 
 Build Verify (`docs/EXAMPLES_ROADMAP.md` §1.1): `pio run -d examples/15-UdpEcho`
-then the root `cmake --build` / `ctest`. Hardware checkpoint (§1.2, human-gated):
-
-```sh
-pio run -d examples/15-UdpEcho -t upload --upload-port <COM-port>
-pio device monitor -d examples/15-UdpEcho
-python examples/15-UdpEcho/tools/EchoClient.py <board-ip> 40404
-```
-
-Expect the board's `wifi ip` / `listening` / `rx` / `echo` lines and the client's
-`echo: 16B OK`, plus whichever oversize outcome the hardware produces.
+(both role envs) then the root `cmake --build` / `ctest`. Hardware checkpoint
+(§1.2, human-gated): flash echo to one board, probe to the other, capture the
+echo board's `rx` / `echo` / `rx oversize` lines.
