@@ -4,13 +4,15 @@ Inherits `../AGENTS.md`.
 
 ## Architecture
 
-`src/` is the SOLE home of lwIP, ESP-IDF, `<driver/uart.h>`, and
-`<driver/i2c_*.h>` headers in this package: each is confined to one private
+`src/` is the SOLE home of lwIP, ESP-IDF, `<driver/uart.h>`, `<driver/i2c_*.h>`,
+and `<driver/spi_*.h>` headers in this package: each is confined to one private
 `*PlatformImplementation.h` (`Esp32SocketPlatformImplementation.h` for the UDP
 driver; `E32UartPlatformImplementation.h`, the shared UART open/read/write/close
 toolkit, for both `Esp32E32LoraDriver.cpp` and `Esp32UartDriver.cpp`;
 `I2cPlatformImplementation.h`, the `<driver/i2c_master.h>`/`<driver/i2c_slave.h>`
-toolkit, for `Esp32I2cDriver.cpp`). A public header must never reach these files.
+toolkit, for `Esp32I2cDriver.cpp`; `SpiPlatformImplementation.h`, the
+`<driver/spi_master.h>`/`<driver/spi_slave.h>` toolkit, for `Esp32SpiDriver.cpp`).
+A public header must never reach these files.
 
 ## Concepts
 
@@ -25,6 +27,11 @@ toolkit, for `Esp32I2cDriver.cpp`). A public header must never reach these files
   copies bytes into the driver-owned `FI2cReceiveInbox`, while the master clocks
   whole-frame read windows; both paths are UNVERIFIED at runtime until example
   20's hardware checkpoint (§1.2).
+- SPI is full-duplex and DMA-backed: every master transaction sends and receives,
+  so both master ops feed the received window to the decoder; the slave keeps one
+  persistent queued transaction (its descriptor lives in opaque driver storage).
+  DMA buffers require the driver to be static/global; UNVERIFIED at runtime until
+  example 21's hardware checkpoint (§1.2).
 
 ## Verification
 

@@ -425,8 +425,10 @@ Done 2026-07-23 — Appendix B appended to `docs/decisions/0003-wired-transports
 
 #### Task 3.2 — `FEsp32SpiMasterDriver` + `FEsp32SpiSlaveDriver` + `SpiAddress.h`
 
-- [ ] Built
+- [x] Built
 - [ ] Hardware-verified (via task 3.3's checkpoint)
+
+Built 2026-07-23 — `SpiAddress.h` (1-byte node id mirroring the others), `Esp32SpiDriver.h` (`SpiMaxPayloadBytes = 120`, `SpiTransactionWindowBytes = 128` DMA-aligned, `FEsp32SpiMasterConfig`/`FEsp32SpiSlaveConfig`, and `FEsp32SpiMasterDriver`/`FEsp32SpiSlaveDriver final : INetDriver`), `src/SpiPlatformImplementation.h` (sole home of `<driver/spi_master.h>`/`<driver/spi_slave.h>`: master `spi_device_transmit`, slave `spi_slave_queue_trans`/`spi_slave_get_trans_result`), and `src/Esp32SpiDriver.cpp` (master runs full-duplex fixed-window transactions, feeding the received window to the decoder on both `TrySend` and `TryReceive`; slave keeps one persistent queued transaction whose descriptor lives in opaque driver storage, staging `TrySend` frames for the master's next clock — file-local helpers shared by both, mirroring the UART/I2C drivers). The three scoped `AGENTS.md` guides enumerate the two drivers. Standard Verify §1.1 green: `pio run` `[SUCCESS]` (`Esp32SpiDriver.o` compiled; 3 warnings, all vendor `-Wpedantic` — the two `#include_next` plus one `spi_common.h` anonymous-struct — none from this code; image unchanged at RAM 20220 / Flash 193281 since 01-CoreTick links none of it), ctest 11/11, class-doc 136 files, folder-agents 63. The full-duplex CQS deviation (a master send also clocks in and decodes the slave's bytes) and the persistent-descriptor placement are documented in ADR Appendix B. Send/receive path UNVERIFIED at runtime until example 21's checkpoint (§1.2). Hardware-verified pending that checkpoint.
 
 **Spec skeleton (spike-filled — see ADR Appendix B):** task 2.2's shape with
 `src/SpiPlatformImplementation.h`; `FEsp32SpiMasterConfig` = {`SpiHost`,
