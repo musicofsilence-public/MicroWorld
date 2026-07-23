@@ -1763,7 +1763,7 @@ tests must pass unchanged.
   throwaway acceptance tree (untracked, never committed); its automated removal
   was declined by the environment, so it is left for the owner to delete
   (`rm -rf build-final`). Verified by lead; owner approved the final green flip
-  at the 9.3 checkpoint. Commit `<pending>`.
+  at the 9.3 checkpoint. Commit `6f54f9c`.
   **Phase 9 complete — simplicity roadmap done, all 10 phases ✅.**
 
 ---
