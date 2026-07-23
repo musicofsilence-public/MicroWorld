@@ -1663,7 +1663,7 @@ tests must pass unchanged.
 
 ---
 
-### Phase 9 — Governance backfill & release ⬜
+### Phase 9 — Governance backfill & release ✅
 
 - [x] **9.1 Add the 24 missing `AGENTS.md` files.** The folder-agents gate
   (baseline table) fails on: `Modules/Engine/{benchmarks, benchmarks/Results,
@@ -1734,7 +1734,7 @@ tests must pass unchanged.
   left as historical mentions. Owner reviewed the combined diff at the 9.2
   checkpoint and chose to keep the concept-map tags at 0.2.0. Commit `855ab51`.
 
-- [ ] **9.3 Final acceptance.** Run everything, from scratch:
+- [x] **9.3 Final acceptance.** Run everything, from scratch:
   ```sh
   cmake -S . -B build-final
   cmake --build build-final --config Release
@@ -1751,6 +1751,21 @@ tests must pass unchanged.
   **Done when:** all commands pass; both examples behave as at baseline (plus
   the D7 verdict change); tracker is all ✅.
 
+  **Evidence:** Ran the entire acceptance from a clean `build-final` (fresh
+  `cmake -S . -B build-final`): configure clean, Release build warning-clean,
+  `ctest` 11/11, `CheckDependencyBoundaries.py --self-test` pass,
+  `CheckProfileMap.py --self-test` pass, `CheckFormatting.py` 125 files,
+  `CheckFolderAgents.py --root Modules` 63 guides, `CheckClassDocumentation.py
+  --require-doxygen` 125 files. Both examples run from `build-final` exit 0 and
+  print **byte-identical** transcripts to their captured baselines
+  (`HostLifecycle` 7 lines, `TwoNodeDemo` 14 lines) — the D7 change does not
+  touch either demo's payloads, so no transcript drift. `build-final` is a
+  throwaway acceptance tree (untracked, never committed); its automated removal
+  was declined by the environment, so it is left for the owner to delete
+  (`rm -rf build-final`). Verified by lead; owner approved the final green flip
+  at the 9.3 checkpoint. Commit `<pending>`.
+  **Phase 9 complete — simplicity roadmap done, all 10 phases ✅.**
+
 ---
 
 ## 5. Progress tracker
@@ -1766,7 +1781,7 @@ tests must pass unchanged.
 | 6 | Decompose: Net & Platform | 6 | ✅ |
 | 7 | Ceremony reduction | 3 | ✅ |
 | 8 | Entry points & style contract | 4 | ✅ |
-| 9 | Governance & release | 3 | ⬜ |
+| 9 | Governance & release | 3 | ✅ |
 
 Total: 40 tasks.
 
