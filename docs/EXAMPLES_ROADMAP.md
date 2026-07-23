@@ -1053,8 +1053,21 @@ Trace shape: fully deterministic.
 
 #### Task 6.1 — `15-UdpEcho`
 
-- [ ] Built
-- [ ] Hardware-verified
+- [x] Built
+- [x] Hardware-verified
+
+Built 2026-07-23 — `pio run` `[SUCCESS]` both role envs (echo/probe). Design deviates from
+the original single-board-PC-echo spec below: reworked to a **two-board SoftAP** demo (one
+board hosts the AP and echoes, a second joins and probes) so no router and no real
+credentials are needed. See `examples/15-UdpEcho/README.md`.
+
+Hardware-verified 2026-07-23 — two ESP32-S3 boards, no router. Echo board console showed the
+SoftAP up (`wifi ip=192.168.4.1`), the probe joining, a normal 16-byte round trip
+(`rx bytes=16` → `echo result=0`), and the oversize probe arriving as `rx bytes=1200`
+Success. Finding: `MSG_TRUNC` is not exposed on this ESP-IDF 6.0.1/lwIP build, so an oversize
+UDP receive **silently truncates** to `UdpMaxPacketBytes` (1200) rather than reporting `Full`
+or wedging — the previously-`UNVERIFIED` branch, now resolved (recorded, not patched;
+`Modules/` is read-only).
 
 **Feature:** a real transport behind the same `INetDriver` seam — lwIP UDP via
 `FEsp32UdpDriver`, echoing datagrams to a PC on the same network.

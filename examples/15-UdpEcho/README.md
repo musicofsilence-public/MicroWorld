@@ -4,7 +4,8 @@
 `FEsp32UdpDriver` — proven **board-to-board over WiFi with no router**. One board hosts a
 SoftAP and echoes datagrams; a second board joins that AP and probes it.
 
-> Status: compiled for ESP32-S3; not yet verified on hardware.
+> Status: hardware-verified on two ESP32-S3 boards (2026-07-23) — echo round trip over the
+> board-hosted SoftAP, and the oversize datagram observed to truncate silently to 1200 B.
 
 ## What it does
 
@@ -85,7 +86,30 @@ Probe board:
 
 ## Verified output
 
-Status: compiled for ESP32-S3; not yet verified on hardware.
+Hardware-verified 2026-07-23 on two ESP32-S3 boards, no router. The echo board (SoftAP
+host) console — the probe board joined its AP and drove it:
+
+```text
+[ex15] wifi ip=192.168.4.1
+[ex15] echo server open=1 udp_port=40404
+I (33936) wifi:station: e0:72:a1:d5:56:9c join, AID=1, bgn, 40U
+I (33996) esp_netif_lwip: DHCP server assigned IP to a client, IP is: 192.168.4.2
+[ex15] rx bytes=16 from_port=58120
+[ex15] echo result=0
+[ex15] rx bytes=1200 from_port=58121
+[ex15] echo result=0
+```
+
+The first `rx bytes=16` / `echo result=0` is the normal payload round-tripped through the
+`FEsp32UdpDriver` (send **and** receive proven over the board-hosted SoftAP, zero router).
+
+**Oversize finding (resolves the Phase 5.2 `UNVERIFIED` branch).** The probe's raw 1300-byte
+datagram arrived as `rx bytes=1200` with `echo result=0` (Success) — **not** `Full`. So on
+this ESP-IDF 6.0.1 / lwIP build `MSG_TRUNC` is not exposed: an oversize UDP datagram is
+**silently truncated** to `UdpMaxPacketBytes` (1200) and the receive reports Success, losing
+the tail. It did **not** wedge the queue (no repeated `Full`; the server kept serving). This
+is a real behavioral finding, recorded here rather than patched — `FEsp32UdpDriver` lives in
+the read-only `Modules/` tree.
 
 ## Image size
 

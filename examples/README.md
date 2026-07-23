@@ -52,7 +52,7 @@ Status: ⬜ planned · 🟨 built (compiles) · ✅ hardware-verified
 | 12 | `12-NetBytes` | `FByteWriter` / `FByteReader` transactional byte I/O | — | ⬜ |
 | 13 | `13-NetLoopback` | `TNetManager` FIFO over `THostLoopback` | — | ⬜ |
 | 14 | `14-NetFrameCodec` | `EncodeFrame` / `TFrameDecoder` CRC framing + resync | — | ⬜ |
-| 15 | `15-UdpEcho` | `FEsp32UdpDriver` over WiFi, board-to-board (SoftAP, no router) | 2nd board | 🟨 |
+| 15 | `15-UdpEcho` | `FEsp32UdpDriver` over WiFi, board-to-board (SoftAP, no router) | 2nd board | ✅ |
 | 16 | `16-TwoBoardUdp` | `TNetHost` client/server + `TNetHostFrame` over WiFi (SoftAP, no router) | 2nd board | 🟨 |
 | 17 | `17-TwoBoardLora` | `FEsp32E32LoraDriver` framed radio link | 2nd board, 2 × E32 | ⬜ |
 | 18 | `18-TwoBoardUart` | wired UART `INetDriver` link — example 17's volley over a plain wire | 2nd board, 3 wires | 🟨 |
