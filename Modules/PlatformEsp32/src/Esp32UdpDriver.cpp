@@ -64,6 +64,39 @@ ENetResult FEsp32UdpDriver::TrySend(const FNetAddress& To, TSpan<const std::uint
 	}
 }
 
+namespace
+{
+
+	/**
+	 * Sizes the head datagram and folds every pre-consume verdict into one result.
+	 *
+	 * Returns `Unavailable` when nothing is queued, `Invalid` on a socket error,
+	 * and `Full` when the head datagram cannot fit the caller's capacity (the
+	 * datagram is left unconsumed so the receive stays transactional). `Success`
+	 * means a datagram is ready and fits, so the caller should consume it next.
+	 */
+	ENetResult ProbeAndClassify(const Detail::FSocketHandle Socket, const std::size_t Capacity) noexcept
+	{
+		const Detail::FPeekProbe Probe = Detail::ProbeReadableDatagram(Socket);
+		switch (Probe.Status)
+		{
+			case Detail::EPeekStatus::WouldBlock:
+				return ENetResult::Unavailable;
+			case Detail::EPeekStatus::Error:
+				return ENetResult::Invalid;
+			case Detail::EPeekStatus::Ready:
+				break;
+		}
+		// Single fits-vs-Full decision: the caller's destination is untouched on Full.
+		if (Probe.BytesReady > Capacity)
+		{
+			return ENetResult::Full;
+		}
+		return ENetResult::Success;
+	}
+
+} // namespace
+
 ENetResult FEsp32UdpDriver::TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> Destination, FNetReceiveResult& OutResult) noexcept
 {
 	// Keep the sizing scratch and the advertised max in lockstep; both are 1200.
@@ -79,24 +112,13 @@ ENetResult FEsp32UdpDriver::TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t>
 	{
 		return ENetResult::Invalid;
 	}
-	// Size the head datagram without consuming or touching the caller's destination.
-	const Detail::FPeekProbe Probe = Detail::ProbeReadableDatagram(Detail::AsSocketHandle(SocketHandle));
-	switch (Probe.Status)
+	const ENetResult Classification = ProbeAndClassify(Detail::AsSocketHandle(SocketHandle), Capacity);
+	if (Classification != ENetResult::Success)
 	{
-		case Detail::EPeekStatus::WouldBlock:
-			return ENetResult::Unavailable;
-		case Detail::EPeekStatus::Error:
-			return ENetResult::Invalid;
-		case Detail::EPeekStatus::Ready:
-			break;
+		return Classification;
 	}
-	// Single fits-vs-Full decision: the caller's destination is untouched on Full.
-	if (Probe.BytesReady > Capacity)
-	{
-		return ENetResult::Full;
-	}
-	// The fits check already passed on the peeked head datagram; this
-	// consuming read removes exactly that datagram.
+	// The fits check already passed on the peeked head datagram; this consuming
+	// read removes exactly that datagram.
 	sockaddr_in Sender{};
 	const Detail::FConsumeResult Consumed = Detail::ConsumeDatagram(Detail::AsSocketHandle(SocketHandle), Destination.Data(), Capacity, Sender);
 	if (!Consumed.bSuccess)
@@ -105,12 +127,7 @@ ENetResult FEsp32UdpDriver::TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t>
 		return ENetResult::Unavailable;
 	}
 	const std::uint32_t PackedIpv4Address = ntohl(Sender.sin_addr.s_addr);
-	OutFrom = MakeUdpAddress(
-		static_cast<std::uint8_t>(PackedIpv4Address >> 24),
-		static_cast<std::uint8_t>(PackedIpv4Address >> 16),
-		static_cast<std::uint8_t>(PackedIpv4Address >> 8),
-		static_cast<std::uint8_t>(PackedIpv4Address),
-		ntohs(Sender.sin_port));
+	OutFrom = MakeUdpAddressFromPackedHostOrder(PackedIpv4Address, ntohs(Sender.sin_port));
 	OutResult.BytesReceived = Consumed.BytesReceived;
 	return ENetResult::Success;
 }

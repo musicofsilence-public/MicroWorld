@@ -35,6 +35,11 @@ vendor SDK code.
   pointer. A failed byte operation must not partially advance the cursor,
   modify output parameters, or alter bytes outside the previously accepted
   prefix.
+- `Net/UdpAddressCodec.h` holds the 6-byte IPv4+port `FNetAddress` encoding
+  (`MakeUdpAddress`, `IsUdpAddress`, `UdpAddressPort`, and
+  `MakeUdpAddressFromPackedHostOrder`) as pure `constexpr` arithmetic with no OS
+  includes, so both UDP platform adapters and their drivers share one definition
+  without breaching the `Core <- Memory <- Net` boundary.
 - `INetDriver` exposes one bounded non-blocking `TrySend` and one bounded
   non-blocking `TryReceive`. One call performs at most one transport
   operation. Every receive is transactional: on `Full`, `Invalid`, or

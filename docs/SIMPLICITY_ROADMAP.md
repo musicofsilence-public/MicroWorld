@@ -1304,7 +1304,7 @@ tests must pass unchanged.
   **Done when:** the only test-expectation change is the D7 oversize verdict;
   Standard Verify passes.
 
-  **Evidence (2026-07-22, commit pending; D7 behavior change confirmed with the
+  **Evidence (2026-07-22, commit `0defc95`; D7 behavior change confirmed with the
   owner at the 6.4 checkpoint):** Six files. Parts 1-3 (behavior-preserving): the
   zero-length/normal duplication in `TLoopbackMailboxes::Deliver` and
   `TNetManager::QueueSend` is unified through a private `EnqueuePacket` (which
@@ -1332,7 +1332,7 @@ tests must pass unchanged.
   single-purpose commands/queries; no new violations. Verified: build clean, ctest
   11/11 (`#1 format_check`, `#9 net_tests`), doc checker 122 files.
 
-- [ ] **6.5 Deduplicate the UDP address codec; split the UDP drivers.**
+- [x] **6.5 Deduplicate the UDP address codec; split the UDP drivers.**
   1. The two `UdpAddress.h` files (PlatformHost + PlatformEsp32) are
      code-identical, and both drivers hand-copy the same ntohl sender-decode
      block (`HostUdpDriver.cpp:143-149` == `Esp32UdpDriver.cpp:106-112`).
@@ -1356,6 +1356,33 @@ tests must pass unchanged.
   **Done when:** `rg -n "ntohl" Modules/Platform*` shows the decode in exactly
   one shared place per platform seam; HostUdpDriverTests +
   HostNetEndToEndTests pass unchanged; Standard Verify passes.
+
+  **Evidence (2026-07-23, committed with this change):** Nine files, pure
+  refactor (no behavior change). Step 1: the byte-identical UDP address encoding
+  (`MakeUdpAddress`/`IsUdpAddress`/`UdpAddressPort`) moved verbatim into one new
+  portable `Net/UdpAddressCodec.h` (no OS includes, so `Core <- Memory <- Net`
+  holds), which also adds the owner-approved `MakeUdpAddressFromPackedHostOrder`
+  folding the four-octet sender split; both platform `UdpAddress.h` became thin
+  forwarders that keep their historical public paths. Step 2: each driver's
+  `TryReceive` now calls a file-local `ProbeAndClassify` (folds the peek-status
+  switch plus the single fits-vs-`Full` decision) and then the shared decode.
+  Step 3: `ProbeReadableDatagram` in both socket-impl headers delegates error
+  classification to a per-platform `ClassifyPeekError` (host keeps the Windows
+  `WSAEMSGSIZE`→oversize-sentinel branch; ESP32/POSIX only WouldBlock/Error).
+  Step 4: the thrice-repeated close-then-fail rollback in
+  `OpenBoundLoopbackUdpSocket`/`OpenBoundUdpSocket` became `CloseAndReportFailure`;
+  the first invalid-socket return is unchanged. Step 5: README gained a "UDP
+  address codec" concept bullet and its now-false "duplicated verbatim" platform
+  note was corrected; AGENTS gained a parallel bullet. **DRY note:**
+  `ProbeAndClassify` is duplicated file-local in each driver by design — it wraps
+  each package's *private* `Detail::` socket types, which cannot cross the
+  platform seam (same reason `MakeSockAddrIn`/`ConsumeDatagram` are per-package).
+  **Done-when met:** `rg "ntohl" Modules/Platform*` shows exactly one decode call
+  per driver (the two other hits are pre-existing `ntohl`/`ntohs` doc prose).
+  PlatformEsp32 files verified by lead re-read only (no host build). Verified:
+  build warning-clean, ctest 11/11 (`#1 format_check`, `#3`/`#4
+  dependency_boundaries`, `#9 net_tests`, `#11 platform_host_tests`), doc checker
+  123 files.
 
 - [ ] **6.6 Split the E32 LoRa driver.** `Esp32E32LoraDriver.cpp`.
   1. `TryReceive` (`:79-141`, ~61 lines) — the held-frame delivery block is

@@ -207,6 +207,25 @@ struct FPeekProbe
 constexpr std::size_t PeekScratchBytes = 1200;
 
 /**
+ * Maps a peek-time socket error code to a peek-probe outcome.
+ *
+ * A would-block error is the common "nothing queued yet" case; every other code
+ * is a hard error. lwIP has no oversize-datagram error, so this mirrors the host
+ * POSIX branch without a size sentinel.
+ *
+ * @param ErrorCode Platform last-error captured right after a failed peek.
+ * @return Peek probe the driver acts on without inspecting platform codes.
+ */
+inline FPeekProbe ClassifyPeekError(const int ErrorCode) noexcept
+{
+	if (ErrorCode == EWOULDBLOCK || ErrorCode == EAGAIN)
+	{
+		return FPeekProbe{EPeekStatus::WouldBlock, 0};
+	}
+	return FPeekProbe{EPeekStatus::Error, 0};
+}
+
+/**
  * Peeks the head datagram into an internal scratch buffer, never the caller's.
  *
  * When lwIP defines `MSG_TRUNC` the peek returns the true datagram length in
@@ -232,12 +251,7 @@ inline FPeekProbe ProbeReadableDatagram(const FSocketHandle Socket) noexcept
 #endif
 	if (Peeked < 0)
 	{
-		const int Error = errno;
-		if (Error == EWOULDBLOCK || Error == EAGAIN)
-		{
-			return FPeekProbe{EPeekStatus::WouldBlock, 0};
-		}
-		return FPeekProbe{EPeekStatus::Error, 0};
+		return ClassifyPeekError(errno);
 	}
 	return FPeekProbe{EPeekStatus::Ready, static_cast<std::size_t>(Peeked)};
 }
@@ -295,6 +309,22 @@ struct FOpenedSocket
 };
 
 /**
+ * Closes a partially opened socket and reports the open as failed.
+ *
+ * Folds the close-then-report rollback shared by every post-open syscall failure
+ * so each failure site reads as one line; the returned descriptor carries the
+ * now-closed handle with `bOpen` false.
+ *
+ * @param Socket Partially opened handle to release.
+ * @return Failed opened-socket descriptor.
+ */
+inline FOpenedSocket CloseAndReportFailure(const FSocketHandle Socket) noexcept
+{
+	CloseSocket(Socket);
+	return FOpenedSocket{Socket, false, 0};
+}
+
+/**
  * Opens, binds, and sizes one non-blocking UDP socket on all IPv4 interfaces.
  *
  * A `BindPort` of zero requests an ephemeral port; the actual port is read back
@@ -315,8 +345,7 @@ inline FOpenedSocket OpenBoundUdpSocket(const std::uint16_t BindPort) noexcept
 	}
 	if (!SetNonBlocking(Socket))
 	{
-		CloseSocket(Socket);
-		return FOpenedSocket{Socket, false, 0};
+		return CloseAndReportFailure(Socket);
 	}
 	sockaddr_in Local{};
 	Local.sin_family = AF_INET;
@@ -324,15 +353,13 @@ inline FOpenedSocket OpenBoundUdpSocket(const std::uint16_t BindPort) noexcept
 	Local.sin_port = htons(BindPort);
 	if (bind(Socket, reinterpret_cast<const sockaddr*>(&Local), sizeof(Local)) != 0)
 	{
-		CloseSocket(Socket);
-		return FOpenedSocket{Socket, false, 0};
+		return CloseAndReportFailure(Socket);
 	}
 	sockaddr_in Bound{};
 	FSockLen BoundLen = sizeof(Bound);
 	if (getsockname(Socket, reinterpret_cast<sockaddr*>(&Bound), &BoundLen) != 0)
 	{
-		CloseSocket(Socket);
-		return FOpenedSocket{Socket, false, 0};
+		return CloseAndReportFailure(Socket);
 	}
 	return FOpenedSocket{Socket, true, ntohs(Bound.sin_port)};
 }

@@ -59,6 +59,11 @@ Current status and recorded evidence live in
   bounded `TFrameDecoder<MaxPayloadBytes>` state machine that resyncs on bad
   magic / oversize length / CRC mismatch. The E32 LoRa adapter uses it for
   on-the-wire framing.
+- **UDP address codec** — `Net/UdpAddressCodec.h` is a portable, OS-free header
+  holding the 6-byte IPv4+port `FNetAddress` encoding (`MakeUdpAddress`,
+  `IsUdpAddress`, `UdpAddressPort`) plus `MakeUdpAddressFromPackedHostOrder` for
+  rebuilding a sender address after `ntohl`/`ntohs`. Both UDP platform adapters
+  and their drivers share this one definition.
 - `THostLoopback<MaxPorts, MailboxCapacity, PacketBytes>` is a deterministic
   fixed-capacity loopback network (N embedded per-port `INetDriver`s sharing
   one mailroom) for host tests.
@@ -73,13 +78,13 @@ non-portable (they may include OS/vendor headers) and are excluded from
 `CheckDependencyBoundaries.py`:
 
 - [`microworld-platform-host`](../PlatformHost) — `FHostUdpDriver`
-  over a host UDP socket (`127.0.0.1`), with `MakeUdpAddress` /
-  `IsUdpAddress` / `UdpAddressPort` for the 6-byte IPv4+port `FNetAddress`
-  encoding.
+  over a host UDP socket (`127.0.0.1`), using the shared
+  `Net/UdpAddressCodec.h` (`MakeUdpAddress` / `IsUdpAddress` /
+  `UdpAddressPort`) for the 6-byte IPv4+port `FNetAddress` encoding.
 - [`microworld-platform-esp32`](../PlatformEsp32) —
   `FEsp32UdpDriver` over lwIP, `FEsp32E32LoraDriver` over the E32 UART, and
-  `Esp32LogSink`; the same UDP address helpers are duplicated verbatim (each
-  adapter is self-contained; the encoding never crosses the wire).
+  `Esp32LogSink`; it shares the same `Net/UdpAddressCodec.h` encoding (the
+  adapter stays self-contained otherwise; the encoding never crosses the wire).
 
 Both depend inward on Net (and Core/Memory); the reverse dependency is
 forbidden.
