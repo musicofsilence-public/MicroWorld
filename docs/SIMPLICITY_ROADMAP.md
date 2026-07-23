@@ -1163,7 +1163,7 @@ tests must pass unchanged.
 
 ---
 
-### Phase 6 — Function decomposition: Net & Platform ⬜
+### Phase 6 — Function decomposition: Net & Platform ✅
 
 - [x] **6.1 Split the frame codec.** `FrameCodec.h`.
   1. Derive the by-hand indices `OutFrame[4 + PayloadSize]` / `[4 + PayloadSize + 1]`
@@ -1384,7 +1384,7 @@ tests must pass unchanged.
   dependency_boundaries`, `#9 net_tests`, `#11 platform_host_tests`), doc checker
   123 files.
 
-- [ ] **6.6 Split the E32 LoRa driver.** `Esp32E32LoraDriver.cpp`.
+- [x] **6.6 Split the E32 LoRa driver.** `Esp32E32LoraDriver.cpp`.
   1. `TryReceive` (`:79-141`, ~61 lines) — the held-frame delivery block is
      duplicated at `:93-104` and `:124-134`; extract one
      `ENetResult DeliverFrameToDestination(Destination, OutFrom, OutReceived)`
@@ -1396,6 +1396,26 @@ tests must pass unchanged.
      PlatformHost still green (the shared codec from 6.5 is compiled there).
 
   **Done when:** duplication gone, helpers documented; Standard Verify passes.
+
+  **Evidence (2026-07-23, committed with this change):** Two files, pure refactor
+  (no behavior change), ESP32-only translation unit. `TryReceive` became a
+  guards + held-frame + pump orchestrator: the frame-delivery block that was
+  duplicated (once in the held-frame branch, once in the pump loop) is now the
+  single private `DeliverFrameToDestination`, and the bounded byte pump is the
+  private `PumpDecoderForFrame` (which calls the same delivery helper on a
+  `FrameReady` event). `TrySend` extracts the three argument checks into the
+  private `const ValidateOutgoingPacket` and the write-outcome switch into a
+  file-local `MapUartWriteOutcome`. The three private members are declared in
+  `Esp32E32LoraDriver.h` (Detail-free signatures); `MapUartWriteOutcome` stays
+  file-local because its `Detail::EUartWriteOutcome` parameter cannot appear in
+  the public header. **CQS note:** `DeliverFrameToDestination`/`PumpDecoderForFrame`
+  are command-with-status idioms reproduced verbatim from the original; no new
+  violations. **Verification:** this module has no host build, so the ESP32
+  `.cpp`/`.h` were verified by lead re-read (every branch traced back to the
+  original) plus the host gate — build warning-clean, ctest 11/11 (`#1
+  format_check`, which does scan the ESP32 files, and `#11 platform_host_tests`
+  for the shared 6.5 codec), doc checker 123 files. `rg "FramePayload()"` shows
+  the delivery read in exactly one place. **Phase 6 complete.**
 
 ---
 
@@ -1584,7 +1604,7 @@ tests must pass unchanged.
 | 3 | Decompose: Core & Memory | 4 | ✅ |
 | 4 | Decompose: Object & GC | 3 | ✅ |
 | 5 | Decompose: Engine | 4 | ✅ |
-| 6 | Decompose: Net & Platform | 6 | ⬜ |
+| 6 | Decompose: Net & Platform | 6 | ✅ |
 | 7 | Ceremony reduction | 3 | ⬜ |
 | 8 | Entry points & style contract | 4 | ⬜ |
 | 9 | Governance & release | 3 | ⬜ |

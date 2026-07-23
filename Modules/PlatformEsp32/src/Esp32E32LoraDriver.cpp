@@ -35,12 +35,51 @@ FEsp32E32LoraDriver::~FEsp32E32LoraDriver() noexcept
 	}
 }
 
+namespace
+{
+
+	/** Maps one UART write outcome to the shared driver result. */
+	ENetResult MapUartWriteOutcome(const Detail::EUartWriteOutcome Outcome) noexcept
+	{
+		switch (Outcome)
+		{
+			case Detail::EUartWriteOutcome::Sent:
+				return ENetResult::Success;
+			case Detail::EUartWriteOutcome::WouldBlock:
+				return ENetResult::Full;
+			case Detail::EUartWriteOutcome::Error:
+			default:
+				return ENetResult::Invalid;
+		}
+	}
+
+} // namespace
+
 ENetResult FEsp32E32LoraDriver::TrySend(const FNetAddress& To, TSpan<const std::uint8_t> Packet) noexcept
 {
 	if (!bOpen)
 	{
 		return ENetResult::Unavailable;
 	}
+	const ENetResult Validation = ValidateOutgoingPacket(To, Packet);
+	if (Validation != ENetResult::Success)
+	{
+		return Validation;
+	}
+	// The codec is transactional on failure.
+	std::uint8_t Frame[E32MaxPayloadBytes + FrameOverheadBytes];
+	std::size_t Written = 0;
+	const ENetResult EncodeResult = EncodeFrame(LocalNodeIdValue, Packet, TSpan<std::uint8_t>(Frame, sizeof(Frame)), Written);
+	if (EncodeResult != ENetResult::Success)
+	{
+		return EncodeResult;
+	}
+	const Detail::EUartWriteOutcome Outcome = Detail::WriteUart(Detail::AsUartPort(UartPortNumber), Frame, Written);
+	return MapUartWriteOutcome(Outcome);
+}
+
+ENetResult FEsp32E32LoraDriver::ValidateOutgoingPacket(const FNetAddress& To, const TSpan<const std::uint8_t> Packet) const noexcept
+{
 	// Validate every argument before any syscall so a rejection is truly transactional.
 	if (!IsLoraAddress(To))
 	{
@@ -55,25 +94,7 @@ ENetResult FEsp32E32LoraDriver::TrySend(const FNetAddress& To, TSpan<const std::
 	{
 		return ENetResult::Invalid;
 	}
-	// The codec is transactional on failure.
-	std::uint8_t Frame[E32MaxPayloadBytes + FrameOverheadBytes];
-	std::size_t Written = 0;
-	const ENetResult EncodeResult = EncodeFrame(LocalNodeIdValue, Packet, TSpan<std::uint8_t>(Frame, sizeof(Frame)), Written);
-	if (EncodeResult != ENetResult::Success)
-	{
-		return EncodeResult;
-	}
-	const Detail::EUartWriteOutcome Outcome = Detail::WriteUart(Detail::AsUartPort(UartPortNumber), Frame, Written);
-	switch (Outcome)
-	{
-		case Detail::EUartWriteOutcome::Sent:
-			return ENetResult::Success;
-		case Detail::EUartWriteOutcome::WouldBlock:
-			return ENetResult::Full;
-		case Detail::EUartWriteOutcome::Error:
-		default:
-			return ENetResult::Invalid;
-	}
+	return ENetResult::Success;
 }
 
 ENetResult FEsp32E32LoraDriver::TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> Destination, FNetReceiveResult& OutResult) noexcept
@@ -91,17 +112,30 @@ ENetResult FEsp32E32LoraDriver::TryReceive(FNetAddress& OutFrom, TSpan<std::uint
 	// A frame held from a prior Full is delivered first so the decoder precondition is honored.
 	if (Decoder.HasFrame())
 	{
-		const std::size_t HeldLength = Decoder.FramePayload().Size();
-		if (HeldLength > Capacity)
-		{
-			return ENetResult::Full;
-		}
-		std::memcpy(Destination.Data(), Decoder.FramePayload().Data(), HeldLength);
-		OutFrom = MakeLoraAddress(Decoder.FrameNodeId());
-		OutResult.BytesReceived = HeldLength;
-		Decoder.ClearFrame();
-		return ENetResult::Success;
+		return DeliverFrameToDestination(Destination, OutFrom, OutResult);
 	}
+	return PumpDecoderForFrame(Destination, OutFrom, OutResult);
+}
+
+ENetResult FEsp32E32LoraDriver::DeliverFrameToDestination(
+	TSpan<std::uint8_t> Destination, FNetAddress& OutFrom, FNetReceiveResult& OutResult) noexcept
+{
+	// On Full the destination is untouched and the frame stays held for the next
+	// call, so a receive that cannot fit is transactional.
+	const std::size_t HeldLength = Decoder.FramePayload().Size();
+	if (HeldLength > Destination.Size())
+	{
+		return ENetResult::Full;
+	}
+	std::memcpy(Destination.Data(), Decoder.FramePayload().Data(), HeldLength);
+	OutFrom = MakeLoraAddress(Decoder.FrameNodeId());
+	OutResult.BytesReceived = HeldLength;
+	Decoder.ClearFrame();
+	return ENetResult::Success;
+}
+
+ENetResult FEsp32E32LoraDriver::PumpDecoderForFrame(TSpan<std::uint8_t> Destination, FNetAddress& OutFrom, FNetReceiveResult& OutResult) noexcept
+{
 	// Pump available UART bytes one at a time, bounded so a flood cannot starve the caller.
 	const std::size_t PumpByteCap = 2u * (E32MaxPayloadBytes + FrameOverheadBytes);
 	const Detail::FUartPort Port = Detail::AsUartPort(UartPortNumber);
@@ -120,18 +154,8 @@ ENetResult FEsp32E32LoraDriver::TryReceive(FNetAddress& OutFrom, TSpan<std::uint
 		const EFrameEvent Event = Decoder.PushByte(IncomingByte);
 		if (Event == EFrameEvent::FrameReady)
 		{
-			// Deliver the just-decoded frame; on Full the destination is untouched and
-			// the frame stays in the decoder for the next call (transactional Full).
-			const std::size_t HeldLength = Decoder.FramePayload().Size();
-			if (HeldLength > Capacity)
-			{
-				return ENetResult::Full;
-			}
-			std::memcpy(Destination.Data(), Decoder.FramePayload().Data(), HeldLength);
-			OutFrom = MakeLoraAddress(Decoder.FrameNodeId());
-			OutResult.BytesReceived = HeldLength;
-			Decoder.ClearFrame();
-			return ENetResult::Success;
+			// A completed frame is delivered immediately; Full keeps it held for the next call.
+			return DeliverFrameToDestination(Destination, OutFrom, OutResult);
 		}
 		if (Event == EFrameEvent::Discarded)
 		{

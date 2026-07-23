@@ -112,6 +112,17 @@ public:
 	bool IsOpen() const noexcept;
 
 private:
+	/** Copies the decoder's held frame into the destination and clears it, or returns
+	 * `Full` (leaving the frame held) when the payload exceeds the destination. */
+	ENetResult DeliverFrameToDestination(TSpan<std::uint8_t> Destination, FNetAddress& OutFrom, FNetReceiveResult& OutResult) noexcept;
+
+	/** Pumps the bounded UART byte budget through the decoder and delivers the first
+	 * completed frame; returns `Unavailable` when the budget drains with no frame ready. */
+	ENetResult PumpDecoderForFrame(TSpan<std::uint8_t> Destination, FNetAddress& OutFrom, FNetReceiveResult& OutResult) noexcept;
+
+	/** Reports the first reason an outgoing packet cannot be framed and sent, or `Success`. */
+	ENetResult ValidateOutgoingPacket(const FNetAddress& To, TSpan<const std::uint8_t> Packet) const noexcept;
+
 	/** Bounded RX deframer held by value; its capacity matches `E32MaxPayloadBytes`. */
 	TFrameDecoder<E32MaxPayloadBytes> Decoder{};
 
