@@ -197,7 +197,7 @@ honesty rule the repo applies everywhere: never claim what was not verified.
 | --- | --- | --- |
 | 0 | ADR: wired links are Net transports; device-bus access is out of scope | ✅ |
 | 1 | UART link driver + examples 18, 19 | ✅ |
-| 2 | I2C spike, master/slave drivers + example 20 | 🟨 |
+| 2 | I2C spike, master/slave drivers + example 20 | ✅ |
 | 3 | SPI spike, master/slave drivers + example 21 | ⬜ |
 | 4 | Close-out: docs, catalog, changelog | ⬜ |
 
@@ -387,8 +387,10 @@ master `TryReceive` = one `i2c_master_receive` of a whole-frame window
 
 #### Task 2.3 — Example `20-TwoBoardI2c`
 
-- [ ] Built
+- [x] Built
 - [ ] Hardware-verified
+
+Built 2026-07-23 — `examples/20-TwoBoardI2c` ping-pongs a counter over the I2C driver pair with the master-clocked asymmetry: the master (`FEsp32I2cMasterDriver`, node 1) paces each volley — sends the counter, then polls reads until the slave's staged reply arrives — while the slave (`FEsp32I2cSlaveDriver`, node 2) is purely reactive, staging `counter + 1` on each receive. Roles by `-DMICROWORLD_EXAMPLE_I2C_MASTER=1|0` (one `Main.cpp`, each env compiles only its role), tag `[ex20]`, 5-byte payload `[senderId][counter BE]`, destinations via `MakeI2cAddress`. Build Verify §1.1 green: `pio run` builds **both** role envs `[SUCCESS]` (example warning-clean; master RAM 20924 B / 6.4%, Flash 218521 B / 5.2%; slave RAM 21164 B / 6.5%, Flash 213101 B / 5.1%), ctest 11/11, class-doc 132, folder-agents 63. Catalog row 20 added to `examples/README.md`. Hardware checkpoint pending (human-gated §1.2; needs two external ~4.7 kΩ pull-ups).
 
 **Spec:** task 1.2's ping-pong with the master/slave asymmetry: board A =
 master env, board B = slave env (`-DMICROWORLD_EXAMPLE_I2C_MASTER=1|0`), tag
