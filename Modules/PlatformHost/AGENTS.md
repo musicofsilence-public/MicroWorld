@@ -1,0 +1,31 @@
+# MicroWorld PlatformHost Package
+
+Inherits `../AGENTS.md`.
+
+## Architecture
+
+`microworld-host` is the non-portable host platform adapter. It supplies real
+host UDP transport over OS sockets (WinSock on Windows, BSD on POSIX) and a
+`steady_clock`-based time source behind the portable `INetDriver` /
+`TimePointMilliseconds` seams described in `docs/Porting.md`. It ships the
+two-node UDP demo as its worked acceptance evidence. It depends inward on
+Core, Memory, Object, Engine, and Net as needed and never the reverse, and it
+is **excluded from `CheckDependencyBoundaries.py`** — it has no module key in
+that tool's portable table.
+
+## Concepts
+
+- The two adapter seams are `FHostTimeSource` (clock) and `FHostUdpDriver`
+  (`INetDriver` transport); portable code never reaches WinSock/BSD headers
+  directly.
+- `FWinSockScope` is a reference-counted RAII guard: the first construction
+  performs `WSAStartup`, the last destruction performs `WSACleanup`, and both
+  are no-ops on POSIX.
+- All OS socket headers are confined to private `src/*PlatformImplementation.h`
+  headers; public declarations stay platform-neutral.
+
+## Verification
+
+Build with CMake, linking `ws2_32` on Windows. Keep `-fno-exceptions
+-fno-rtti` (or MSVC equivalents), warnings as errors. Run the host tests and
+the two-node demo as the real-socket acceptance proof.

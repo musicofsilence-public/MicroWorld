@@ -1665,7 +1665,7 @@ tests must pass unchanged.
 
 ### Phase 9 — Governance backfill & release ⬜
 
-- [ ] **9.1 Add the 24 missing `AGENTS.md` files.** The folder-agents gate
+- [x] **9.1 Add the 24 missing `AGENTS.md` files.** The folder-agents gate
   (baseline table) fails on: `Modules/Engine/{benchmarks, benchmarks/Results,
   examples, examples/HostLifecycle, include, include/MicroWorld,
   include/MicroWorld/Engine, src, tests}`, `Modules/PlatformEsp32/{., benchmarks,
@@ -1683,6 +1683,22 @@ tests must pass unchanged.
   python tools/CheckFolderAgents.py --root Modules --exclude build --exclude .pio --exclude __pycache__
   ```
   **Done when:** the checker passes; Standard Verify passes.
+
+  **Evidence:** Created exactly the 24 missing `AGENTS.md` files (Engine ×9,
+  PlatformEsp32 ×7, PlatformHost ×8), each with the house convention (title +
+  `Inherits` + `## Architecture` + `## Concepts` + `## Verification`, 5-15
+  lines, folder-specific). Engine folders mirror the Object/Core peers; the two
+  platform packages (no existing peer guide) were authored from `docs/Porting.md`,
+  the concept map's platform row, and the actual driver headers. Verified by
+  lead: `CheckFolderAgents.py --root Modules` passes (**63 guides**, up from the
+  prior 24-missing failure); `git status` shows exactly 24 new files; ctest
+  11/11; CheckClassDocumentation 125 (AGENTS.md is not scanned). Spot-read 7 of
+  the highest-risk originals (both platform roots, both `src` vendor-confinement
+  guides, both example guides, the Engine contracts header) — all accurate: the
+  PlatformHost "BSD on POSIX" claim was confirmed against the real (compiled,
+  runtime-unverified) `#ifdef _WIN32`/`#else` branches in
+  `UdpSocketPlatformImplementation.h`, and the `src` guide carries that
+  unverified caveat faithfully. Commit `<pending>`.
 
 - [ ] **9.2 Version, changelog, progress.** This plan's renames are
   API-breaking for source consumers (`TNetManager`, `IssueLease`, lease type
