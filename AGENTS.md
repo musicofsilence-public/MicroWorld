@@ -14,8 +14,10 @@ claimed for every board.
 `PROGRESS.md` is the sole live implementation status and next-milestone record;
 `docs/SIMPLICITY_ROADMAP.md` is the active improvement plan and task tracker
 (`docs/ROADMAP.md` is the completed implementation plan, kept as a frozen
-historical record). Any change to implementation, gate, evidence, decision,
-blocker, or next milestone must update `PROGRESS.md` in the same commit.
+historical record). `docs/MESSAGING_ROADMAP.md` is the active plan for actor
+messaging and engine-first examples. Any change to implementation, gate,
+evidence, decision, blocker, or next milestone must update `PROGRESS.md` in the
+same commit.
 
 ## Repository structure
 

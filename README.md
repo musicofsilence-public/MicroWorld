@@ -13,7 +13,9 @@ improvement plan is in [docs/SIMPLICITY_ROADMAP.md](docs/SIMPLICITY_ROADMAP.md)
 (the completed implementation plan remains in [docs/ROADMAP.md](docs/ROADMAP.md)
 as a historical record). The active examples plan is in
 [docs/EXAMPLES_ROADMAP.md](docs/EXAMPLES_ROADMAP.md), building one runnable
-ESP32-S3 example per engine feature under [examples/](examples/README.md).
+ESP32-S3 example per engine feature under [examples/](examples/README.md). The
+active plan for actor messaging and engine-first examples is in
+[docs/MESSAGING_ROADMAP.md](docs/MESSAGING_ROADMAP.md).
 
 ## Modules
 

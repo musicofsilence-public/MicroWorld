@@ -732,7 +732,7 @@ of the transport seam — sensor examples use timer-driven synthetic readings).
 
 | Phase | Title | Tasks | Status |
 | --- | --- | --- | --- |
-| 0 | Baseline & governance | 2 | 🟨 |
+| 0 | Baseline & governance | 2 | ✅ |
 | 1 | Engine-first examples groundwork (platform facades) | 5 | ⬜ |
 | 2 | Local actor messaging (Engine) | 3 | ⬜ |
 | 3 | Messaging over one wire | 2 | ⬜ |
@@ -744,7 +744,7 @@ of the transport seam — sensor examples use timer-driven synthetic readings).
 
 ## 6. Phases and tasks
 
-### Phase 0 — Baseline & governance 🟨
+### Phase 0 — Baseline & governance ✅
 
 - [x] **0.1 Record a green baseline.** Confirm clean tree (`git -C . status`),
   run the Standard Verify (§1.1) and `python tools/CheckFolderAgents.py
@@ -763,13 +763,19 @@ of the transport seam — sensor examples use timer-driven synthetic readings).
   all seven examples `pio run` green — 13/13 envs `[SUCCESS]` (01 single;
   15/16/18/19/20/21 both envs each), 0 `[FAILED]`. Nothing fixed.
 
-- [ ] **0.2 Register this plan.** Add one sentence each to root `AGENTS.md`
+- [x] **0.2 Register this plan.** Add one sentence each to root `AGENTS.md`
   and root `README.md` docs paragraph: `docs/MESSAGING_ROADMAP.md` is the
   active plan for actor messaging and engine-first examples. Add one
   `PROGRESS.md` line recording the start + baseline ctest count. No other
   content changes.
 
   **Done when:** three files mention this plan; Standard Verify still green.
+
+  Done 2026-07-23 — root `AGENTS.md`, root `README.md`, and `PROGRESS.md` each
+  now name `docs/MESSAGING_ROADMAP.md` as the active plan (one sentence each in
+  AGENTS/README; one `PROGRESS.md` evidence line recording the baseline
+  ctest count 11). Docs-only; `ctest -C Release` still 11/11, no other content
+  changed.
 
 ---
 
