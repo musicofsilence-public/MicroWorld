@@ -366,8 +366,10 @@ authorized, a scratch probe on hardware):**
 
 #### Task 2.2 — `FEsp32I2cMasterDriver` + `FEsp32I2cSlaveDriver` + `I2cAddress.h`
 
-- [ ] Built
+- [x] Built
 - [ ] Hardware-verified (via task 2.3's checkpoint)
+
+Built 2026-07-23 — `I2cAddress.h` (1-byte node id mirroring `UartAddress.h`), `Esp32I2cDriver.h` (`I2cMaxPayloadBytes = 120`, `FEsp32I2cMasterConfig`/`FEsp32I2cSlaveConfig`, the ISR-filled `FI2cReceiveInbox`, and `FEsp32I2cMasterDriver`/`FEsp32I2cSlaveDriver final : INetDriver`), `src/I2cPlatformImplementation.h` (sole home of `<driver/i2c_master.h>`/`<driver/i2c_slave.h>`: master transmit/receive, slave `i2c_slave_write` with partial-discard, and the `on_receive` ISR callback that fills the inbox), and `src/Esp32I2cDriver.cpp` (both classes; master clocks one whole-frame window and pumps it, slave drains the ISR inbox — file-local `ValidateOutgoingI2cPacket`/`DeliverFrameFromDecoder`/`MapI2cWriteOutcome` shared by both, mirroring the UART driver). The three scoped `AGENTS.md` guides enumerate the two drivers. Standard Verify §1.1 green: `pio run` `[SUCCESS]` (`Esp32I2cDriver.o` compiled; 2 warnings, both vendor `#include_next`, none from this code; image unchanged at RAM 20220 / Flash 193281 since 01-CoreTick links none of it), ctest 11/11, class-doc 132 files, folder-agents 63. Send/receive path UNVERIFIED at runtime until example 20's checkpoint (§1.2). Hardware-verified pending that checkpoint.
 
 **Spec skeleton (spike-filled — see ADR Appendix A):** two `INetDriver` classes
 with the task 1.1 file/documentation shape; ESP-IDF confined to a new

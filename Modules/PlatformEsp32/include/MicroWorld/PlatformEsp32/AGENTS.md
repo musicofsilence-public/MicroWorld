@@ -4,14 +4,16 @@ Inherits `../../AGENTS.md`.
 
 ## Architecture
 
-This directory declares the five ESP32 adapters: `FEsp32TimeSource` (clock
-seam), `FEsp32UdpDriver`, `FEsp32E32LoraDriver`, and `FEsp32UartDriver`
-(`INetDriver` transport seams — the LoRa and wired UART drivers both built on
-the portable `Net/FrameCodec.h` CRC-16/CCITT-FALSE framing, over the 1-byte
-broadcast `LoraAddress` and the 1-byte point-to-point `UartAddress`
-respectively), and `Esp32LogSink` (log sink). Their declarations depend only on
-Net/Object/Memory/Core public headers and stay free of ESP-IDF, lwIP, and
-vendor headers; those live only in the matching `src/*PlatformImplementation.h`.
+This directory declares the seven ESP32 adapters: `FEsp32TimeSource` (clock
+seam); `FEsp32UdpDriver`, `FEsp32E32LoraDriver`, `FEsp32UartDriver`,
+`FEsp32I2cMasterDriver`, and `FEsp32I2cSlaveDriver` (`INetDriver` transport
+seams — the LoRa, wired UART, and wired I2C drivers all built on the portable
+`Net/FrameCodec.h` CRC-16/CCITT-FALSE framing, over the 1-byte broadcast
+`LoraAddress`, the 1-byte point-to-point `UartAddress`, and the 1-byte
+point-to-point `I2cAddress` respectively); and `Esp32LogSink` (log sink). Their
+declarations depend only on Net/Object/Memory/Core public headers and stay free
+of ESP-IDF, lwIP, and vendor headers; those live only in the matching
+`src/*PlatformImplementation.h`.
 
 ## Concepts
 
@@ -22,6 +24,11 @@ vendor headers; those live only in the matching `src/*PlatformImplementation.h`.
   as plain integers so these headers name ESP-IDF hardware without including its
   enum types; `FEsp32UartConfig` defaults `BaudRate` to 115200 (a wire is fast),
   the LoRa config to 9600 (the module's airtime).
+- `FEsp32I2cMasterConfig` and `FEsp32I2cSlaveConfig` likewise carry the I2C
+  port, SDA/SCL GPIOs, and 7-bit `SlaveAddress` as plain integers; the master
+  defaults `SclSpeedHz` to 100000 (100 kHz standard mode) and both default
+  `SlaveAddress` to 0x28. The slave owns an `FI2cReceiveInbox` the platform ISR
+  fills.
 - `Esp32LogSink` maps `ELogLevel` to `ESP_LOGE`/`ESP_LOGW`/`ESP_LOGI`/`ESP_LOGV`
   and is installed once via `SetLogSink`.
 
