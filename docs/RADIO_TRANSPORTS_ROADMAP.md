@@ -352,7 +352,7 @@ compile probe builds with BT enabled without touching the shared profile.
 | Phase | Title | Tasks | Status |
 | --- | --- | --- | --- |
 | 0 | Baseline & governance | 2 | ✅ |
-| 1 | LoRa proven on hardware | 4 | ⬜ |
+| 1 | LoRa proven on hardware | 4 | 🟨 |
 | 2 | Bluetooth LE design spike (ADR 0004) | 1 | ⬜ |
 | 3 | BLE driver pair | 2 | ⬜ |
 | 4 | BLE examples on hardware | 4 | ⬜ |
@@ -396,12 +396,12 @@ compile probe builds with BT enabled without touching the shared profile.
 
 ---
 
-### Phase 1 — LoRa proven on hardware ⬜
+### Phase 1 — LoRa proven on hardware 🟨
 
 Goal: the four-year-old catalog hole closes — the E32 driver runs on the
 bench, first as a raw volley, then under the full engine.
 
-- [ ] **1.1 Example `17-TwoBoardLora` (driver volley).** Copy example 18's
+- [x] **1.1 Example `17-TwoBoardLora` (driver volley).** Copy example 18's
   entire shape (`examples/18-TwoBoardUart` — one `Main.cpp`, two role envs
   via `-DMICROWORLD_EXAMPLE_NODE_ID=1|2`, counter ping-pong, `[ex17]` tag)
   with these substitutions: driver `FEsp32E32LoraDriver`, config
@@ -416,6 +416,22 @@ bench, first as a raw volley, then under the full engine.
 
   **Done when:** both envs compile; README/AGENTS complete; catalog updated.
   **Verify:** `pio run -d examples/17-TwoBoardLora` + repo ctest (format gate).
+
+  Done 2026-07-24 — `examples/17-TwoBoardLora` created (6 tracked files:
+  `src/Main.cpp`, `src/CMakeLists.txt`, `CMakeLists.txt`, `platformio.ini`,
+  `README.md`, `AGENTS.md`) as example 18's volley with only the transport
+  swapped to `FEsp32E32LoraDriver` (config `UartPort 1 / TxGpio 17 / RxGpio 18 /
+  BaudRate 9600 / LocalNodeId 1|2`, `MakeLoraAddress` destination,
+  `LoraAddressNodeId` sender, `E32MaxPayloadBytes` RX buffer, 1000 ms airtime
+  pacing per D8, `ex17` tag, engine-first `MW_LOG`/`SleepMilliseconds`/
+  `Esp32LogSink`). README carries the per-board ESP↔E32 wiring table (common
+  ground, `M0=M1=GND` transparent mode D7, `AUX` unconnected), the §2.2 antenna
+  rule and radio-legal note verbatim, and the "not yet verified on hardware"
+  status; catalog row 17 ⬜→🟨. Lead-verified: `pio run` both envs `[SUCCESS]`
+  (RAM 20604 B, Flash 216637/216633 B), `ctest -C Release` 11/11, clang-format
+  clean, no vendor/`printf`/`vTaskDelay` includes in `Main.cpp`. Lead fixed the
+  README wiring table (added the ESP↔E32 common-ground row, corrected the VCC
+  row's rationale from "common ground" to "module power").
 
 - [ ] **1.2 (owner-gated) LoRa volley hardware checkpoint.** Flash node 1 and
   node 2, capture both consoles per §1.3 (`mwlog.py`, USB-JTAG). Expect the
