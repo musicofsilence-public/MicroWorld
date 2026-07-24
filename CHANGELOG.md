@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+- **Actor messaging layer (`Modules/Engine`) + engine-first examples.** A
+  self-contained, header-only, Net-free messaging layer rides the existing
+  transports: `Message.h` (id/result vocabulary, a little-endian actor-message
+  codec, and the `IEncodedMessageSink`/`IMessageChannel`/`IMessageRouter`
+  interfaces), `TMessageRouter` (a local broadcast/targeted bus that is also an
+  `INetworkFrame`), `TMessageChannelBinding` (carries one channel over a
+  `TNetHost`, duck-typed so Engine keeps zero Net dependency), `TNetworkFrameSet`
+  (pumps several nets plus the router behind one engine frame slot), and
+  `TReliableChannel` (opt-in per-channel acknowledged, de-duplicated
+  point-to-point delivery; retries bounded by `MaxSendAttempts`, then counted
+  lost). `Modules/Net` gains `FPacketDropDriver`, a deterministic every-Nth-send
+  loss injector for tests and the demo. New ESP32 examples `22-ActorMessages`,
+  `23-TwoBoardWire`, `24-TwoChannelWorld`, and `25-GuaranteedDelivery` show the
+  layer; all are compile-verified for ESP32-S3 with human-gated hardware
+  checkpoints pending. Every example is now **engine-first** — each `src/` builds
+  from `<MicroWorld/...>` headers only, with WiFi, sleep, logging, and time from
+  the `PlatformEsp32` facades (`FEsp32WifiLink`, `SleepMilliseconds`,
+  `Esp32LogSink`, `FEsp32TimeSource`) — so the per-example WiFi glue is gone,
+  examples 15/16 were rewritten as two-board SoftAP demos (retiring example 15's
+  old raw-socket echo), and 01/18–21 moved onto the log/sleep seams
+  (`printf`/`<cstdio>` removed).
 - **Wired board-to-board transports (`Modules/PlatformEsp32`).** New `INetDriver`
   implementations behind `docs/Porting.md` seam 2, so the existing byte I/O,
   `FrameCodec` framing, `TNetManager`, and `TNetHost` message design run over a

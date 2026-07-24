@@ -738,7 +738,7 @@ of the transport seam — sensor examples use timer-driven synthetic readings).
 | 3 | Messaging over one wire | 2 | ✅ |
 | 4 | Several channels per world | 3 | ✅ |
 | 5 | Guaranteed delivery per channel | 3 | ✅ |
-| 6 | Documentation & close-out | 2 | 🟨 |
+| 6 | Documentation & close-out | 2 | ✅ |
 
 ---
 
@@ -1415,7 +1415,7 @@ demonstrated under packet loss.
   `CheckClassDocumentation --require-doxygen` 157 files; only the seven doc files
   changed. Commit — this one.
 
-- [ ] **6.2 Release bookkeeping.** Append a `CHANGELOG.md` entry (added:
+- [x] **6.2 Release bookkeeping.** Append a `CHANGELOG.md` entry (added:
   actor messaging, frame set, reliable channel, packet-drop driver, WiFi/sleep
   facades, examples 22–25; changed: examples 15/16 rewritten engine-first,
   01/18–21 log-seam adoption; removed: example WiFi glue + raw-socket probe).
@@ -1425,6 +1425,23 @@ demonstrated under packet loss.
   counts in the tracker table's evidence.
 
   **Done when:** everything green; tracker rows all ✅.
+
+  Done 2026-07-24 — release bookkeeping and final acceptance. `CHANGELOG.md`:
+  the messaging-layer entry added to `## Unreleased` (added: Message.h /
+  TMessageRouter / TMessageChannelBinding / TNetworkFrameSet / TReliableChannel /
+  FPacketDropDriver + examples 22–25; changed: every example engine-first, 15/16
+  rewritten as SoftAP demos, 01/18–21 onto the log/sleep seams; removed:
+  per-example WiFi glue + example 15's raw-socket echo). `PROGRESS.md`: the Phase
+  6 closure row added (and the Phase 4/5 rows reordered — Phase 5 had been
+  inserted above Phase 4). `examples/README.md` catalog statuses confirmed
+  accurate — 22–25 stay 🟨 (compile-only), nothing flipped to ✅ (compile is not
+  a hardware claim). Final full acceptance (lead-run): MSVC Release build
+  warning-clean (`/WX`); host `ctest` 11/11 (engine 121 / net 107 cases, 0
+  failures); `CheckClassDocumentation --require-doxygen` 157 files;
+  `CheckDependencyBoundaries --package Engine` 18 files; `CheckFolderAgents
+  --root Modules` 63 guides; `pio run` green for **all 11 examples (19 envs
+  `[SUCCESS]`)** — 01, 15, 16, 18–21, 22–25. Commit — this one. Every §5 tracker
+  row is now ✅: the messaging roadmap is complete.
 
 ---
 
