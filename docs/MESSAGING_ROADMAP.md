@@ -734,7 +734,7 @@ of the transport seam — sensor examples use timer-driven synthetic readings).
 | --- | --- | --- | --- |
 | 0 | Baseline & governance | 2 | ✅ |
 | 1 | Engine-first examples groundwork (platform facades) | 5 | ✅ |
-| 2 | Local actor messaging (Engine) | 3 | 🟨 |
+| 2 | Local actor messaging (Engine) | 3 | ✅ |
 | 3 | Messaging over one wire | 2 | ⬜ |
 | 4 | Several channels per world | 3 | ⬜ |
 | 5 | Guaranteed delivery per channel | 3 | ⬜ |
@@ -1004,7 +1004,7 @@ deterministically, with zero networking.
   `INetworkFrame*` must not relocate; matches `TTimerManager`); the peer self-caught
   one LoD tell (`FindChannel` now returns `IMessageChannel*`, one hop).
 
-- [ ] **2.3 Example `22-ActorMessages` (standalone world, 1 board).** New
+- [x] **2.3 Example `22-ActorMessages` (standalone world, 1 board).** New
   example per the §4.4 standalone recipe and the canonical example scaffold
   (`docs/EXAMPLES_ROADMAP.md` §3 — copy an existing example's
   `platformio.ini`/CMake shape, single env, no role flags).
@@ -1023,6 +1023,27 @@ deterministically, with zero networking.
 
   **Done when:** grep gate 0; README/AGENTS complete; catalog updated.
   **Verify:** `pio run -d examples/22-ActorMessages` + repo ctest.
+
+  Done 2026-07-24 — new engine-first example `examples/22-ActorMessages` (single
+  `esp32-s3` env, scaffold copied from example 01). `src/Main.cpp` is the whole
+  program: `FReadingSensorComponent` (500 ms tick, synthetic base+ramp reading, no
+  peripheral) is owned by `FThermometerActor` (`TInlineActor<1>`, primary tick
+  aligned to the same 500 ms cadence) which broadcasts `TemperatureReadingMessageId`
+  with a 2-byte little-endian payload; `FDisplayActor` (`TInlineActor<0>`, tick
+  disabled, purely reactive) subscribes to the broadcast, logs each reading, and
+  after 5 sends a **targeted** `CalibrateMessageId` to `ThermometerActorId`
+  (send-from-handler is legal, D5), whose handler resets the sensor counter. Both
+  actors take `IMessageRouter&` by constructor (D9), injected through
+  `CreateObject`'s argument forwarding; the router doubles as the `TEngineHost`
+  network frame, so `Tick` pumps its dispatch (step 1) and flush (step 7). README
+  states the reading-at-F / displayed-at-F+1 one-frame local latency as the teaching
+  point and keeps the "not yet verified on hardware" sentence; AGENTS.md added;
+  catalog row 22 appended (🟨). Gates (lead-rerun): grep gate 0; clang-format clean;
+  `pio run` [SUCCESS] (RAM 10.3% / Flash 5.0%, 211037 B); host `ctest` 11/11
+  (includes `microworld_format_check`); `CheckClassDocumentation --require-doxygen`
+  149 files. Lead touch-up on the peer's diff: demoted the two write-only
+  `*HandlerHandle` members to locals (this bounded example never calls
+  `RemoveMessageHandler` — YAGNI/§3.4), then re-ran every gate.
 
 ---
 
