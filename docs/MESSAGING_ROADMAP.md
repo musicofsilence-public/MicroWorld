@@ -736,7 +736,7 @@ of the transport seam — sensor examples use timer-driven synthetic readings).
 | 1 | Engine-first examples groundwork (platform facades) | 5 | ✅ |
 | 2 | Local actor messaging (Engine) | 3 | ✅ |
 | 3 | Messaging over one wire | 2 | ✅ |
-| 4 | Several channels per world | 3 | 🟨 |
+| 4 | Several channels per world | 3 | ✅ |
 | 5 | Guaranteed delivery per channel | 3 | ⬜ |
 | 6 | Documentation & close-out | 2 | ⬜ |
 
@@ -1217,7 +1217,7 @@ Goal: one world, several drivers, each channel with its own id and settings.
   `[PASS]`, 112 engine tests 0 failures); `CheckDependencyBoundaries --package
   Engine` passes; `CheckClassDocumentation --require-doxygen` 152 files.
 
-- [ ] **4.3 Example `24-TwoChannelWorld` (2 boards, UART + WiFi UDP).** Both
+- [x] **4.3 Example `24-TwoChannelWorld` (2 boards, UART + WiFi UDP).** Both
   physical links between the same two boards (the rig from examples 16 + 18:
   SoftAP for UDP, cross-wired UART). Server world on board A; client world on
   board B. Channel 1 `Telemetry` over UDP (`FEsp32UdpDriver`, client streams
@@ -1231,6 +1231,28 @@ Goal: one world, several drivers, each channel with its own id and settings.
 
   **Done when:** grep gate 0; both envs compile.
   **Verify:** `pio run -d examples/24-TwoChannelWorld` + ctest.
+
+  Done 2026-07-24 — New engine-first two-board example
+  `examples/24-TwoChannelWorld` (two role envs, `-DMICROWORLD_EXAMPLE_SERVER=1|0`):
+  one `TMessageRouter` per board carries `TelemetryChannelId` over WiFi UDP
+  (`FEsp32UdpDriver`, server SoftAP) and `CommandsChannelId` over a UART wire
+  (`FEsp32UartDriver`) simultaneously, behind one `TNetworkFrameSet<3>` (telemetry
+  frame, command frame, router) the engine holds — the first example to use the
+  frame set (example 23's manual `PumpOneFrame` is gone). The client's
+  `FSensorActor` broadcasts a 2-byte synthetic reading (ADR 0003) every reporting
+  interval over UDP and re-times its own cadence via `AActor::SetTickInterval` on
+  the server's targeted `SetReportingRateMessageId`; the server's `FCommanderActor`
+  alternates that rate 1000↔500 ms every 10 s over UART, and its
+  `FTelemetrySinkActor` logs each reading. All three actors take `IMessageRouter&`
+  by constructor injection (D9) and name no transport; per-binding
+  `EChannelSendTarget` is `AllPeers` on the server and `Server` on the client for
+  both channels. Catalog row 24 (🟨); a small LE codec
+  (`EncodeUint16LittleEndian`/`DecodeUint16LittleEndian`) factored into the shared
+  header (one encoding, four call sites). Gates (lead-rerun): engine-first grep
+  gate 0; clang-format clean; both `pio run` envs `[SUCCESS]` (server Flash
+  840457 B, client 841077 B); host `ctest` 11/11 (112 engine tests, unchanged — no
+  `Modules/` change); `CheckDependencyBoundaries --package Engine` and
+  `CheckClassDocumentation --require-doxygen` (152 files) pass. Closes Phase 4.
 
 ---
 
