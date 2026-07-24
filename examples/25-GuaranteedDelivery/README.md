@@ -4,7 +4,7 @@
 client injecting deterministic loss via `FPacketDropDriver`; the guaranteed
 channel (`TReliableChannel`) recovers every dropped packet.
 
-> Status: not yet verified on hardware.
+> Status: hardware-verified on two ESP32-S3 boards, 2026-07-24 (SoftAP UDP).
 
 ## What it does
 
@@ -71,52 +71,63 @@ differ only by `-DMICROWORLD_EXAMPLE_SERVER`.
 
 ## Flash and observe
 
-Human-gated (see `docs/EXAMPLES_ROADMAP.md` §1.2). Flash the server to one
-board and the client to the other, then open both monitors. Capture the
-**server** console: it shows the two columns side by side, with the
-best-effort column visibly missing values the guaranteed column still shows.
-The **client** console shows the `tx n=` lines and occasional `guaranteed
-resent=`/`pending=` lines as the reliable channel retries. Per the two-board
-rig, put the role you want to read on the CH343-USB board (it is the one with
-a visible console/DTR reset).
+The console is on the native USB port, so the port you flash is the port you
+read (see [`../LOGGING.md`](../LOGGING.md)). Flash the **server first** so its
+SoftAP is up before the client joins:
 
-```sh
-pio run -d examples/25-GuaranteedDelivery -e esp32-s3-server -t upload --upload-port <COM-A>
-pio run -d examples/25-GuaranteedDelivery -e esp32-s3-client -t upload --upload-port <COM-B>
-pio device monitor -d examples/25-GuaranteedDelivery -e esp32-s3-server
-pio device monitor -d examples/25-GuaranteedDelivery -e esp32-s3-client
+```bat
+mw flash 25 esp32-s3-server COM5     :: server hosts the SoftAP
+mw flash 25 esp32-s3-client COM7     :: client joins and sends 1..30
+mw log   COM5                        :: server RX columns  (Ctrl-C to stop)
+mw log   COM7                        :: client TX + resent  (second terminal)
 ```
 
-## Expected output
+`mw` is [`../tools/mw.bat`](../tools/mw.bat). Do **not** use `pio device monitor`
+on these boards -- its reset-on-open can drop the native-USB port into the ROM
+download loader; `mw log` holds the line steady and reconnects across resets.
 
-Server board (not yet verified on hardware; illustrative gap positions only):
+## Hardware verification
+
+Verified on two ESP32-S3-DevKitC-1 boards over SoftAP UDP on **2026-07-24**
+(server COM5, client COM7; primary console on USB-Serial-JTAG). One synchronized
+run, values 1..30 sent on both channels.
+
+**Server** -- best-effort has gaps, guaranteed is complete (abridged):
 
 ```text
-I (nnnn) ex25: wifi softap up, gateway 192.168.4.1
-I (nnnn) ex25: udp open=1 udp_port=40404
-I (nnnn) ex25: server up (best-effort + guaranteed over one UDP link)
-I (nnnn) ex25: rx best-effort n=1
-I (nnnn) ex25: rx guaranteed n=1
-I (nnnn) ex25: rx best-effort n=2
-I (nnnn) ex25: rx guaranteed n=2
-I (nnnn) ex25: rx guaranteed n=3
-I (nnnn) ex25: guaranteed dedup dropped=1
-I (nnnn) ex25: rx best-effort n=4
-I (nnnn) ex25: rx guaranteed n=4
+I (41723) ex25: rx best-effort n=1
+I (41983) ex25: rx guaranteed n=1
+I (42243) ex25: rx best-effort n=2
+I (42483) ex25: rx guaranteed n=2
+I (42763) ex25: rx guaranteed n=3      <- best-effort n=3 never arrived
+I (43303) ex25: rx best-effort n=4
+I (43563) ex25: rx guaranteed n=4
+I (43843) ex25: rx guaranteed n=5      <- best-effort n=5 never arrived
+I (44383) ex25: rx best-effort n=6
+I (44643) ex25: rx guaranteed n=6
 ```
 
-Client board (not yet verified on hardware; illustrative gap positions only):
+Over the full run the **best-effort** column delivered **15 of 30** (missing 3,
+5, 7, 9, 11, 13, 15, 16, 18, 20, 22, 24, 26, 28, 29) while the **guaranteed**
+column delivered **all 30 in order**.
+
+**Client** -- same run, the reliable channel resending the drops:
 
 ```text
-I (nnnn) ex25: wifi joined AP
-I (nnnn) ex25: udp open=1
-I (nnnn) ex25: client up (best-effort + guaranteed over one UDP link, dropping every 3-th send)
-I (nnnn) ex25: tx n=1 (best-effort + guaranteed)
-I (nnnn) ex25: tx n=2 (best-effort + guaranteed)
-I (nnnn) ex25: tx n=3 (best-effort + guaranteed)
-I (nnnn) ex25: guaranteed resent=1 pending=1
-I (nnnn) ex25: tx n=4 (best-effort + guaranteed)
+I (3599)  ex25: wifi joined AP
+I (3599)  ex25: client up (best-effort + guaranteed over one UDP link, dropping every 3-th send)
+I (3599)  ex25: tx n=1 (best-effort + guaranteed)
+I (3899)  ex25: guaranteed resent=1 pending=1
+...
+I (19267) ex25: tx n=30 (best-effort + guaranteed)
+I (19527) ex25: guaranteed resent=15 pending=1
 ```
+
+The numbers tie together: the client resent **15** guaranteed messages, and the
+server received **all 30** guaranteed despite losing **15** best-effort -- exactly
+the guarantee `TReliableChannel` exists to provide, over real WiFi. Which values
+go missing shifts run to run with how the every-third drop interleaves all
+outgoing packets; the counts are stable, the exact positions are not.
 
 ## Image size
 

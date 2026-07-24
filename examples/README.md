@@ -17,20 +17,30 @@ WiFi UDP, E32 LoRa, and plain wires.
 
 ## Build and flash
 
-Every example is a standalone PlatformIO project. From the repository root:
+Every example is a standalone PlatformIO project. The quickest path is the
+[`tools/mw.bat`](tools/mw.bat) helper — one dispatcher for every example:
 
-```sh
-# Compile (downloads the Espressif toolchain on first run — several minutes):
-pio run -d examples/<NN-Name>
-
-# Flash and watch the serial trace (human-gated — needs a connected board):
-pio run -d examples/<NN-Name> -t upload --upload-port <COM-port>
-pio device monitor -d examples/<NN-Name>
+```bat
+mw build 25                       :: compile all role envs of example 25
+mw flash 25 esp32-s3-server COM5  :: build & flash one env to a COM port
+mw log   COM5                     :: watch MW_LOG on that port (Ctrl-C to stop)
 ```
 
-`pio run` ending with `[SUCCESS]` is a compile-only proof. A board is flashed
-only under the human-gated hardware checkpoint (`docs/EXAMPLES_ROADMAP.md` §1.2);
-until an example's real trace is captured, its README says so.
+Or drive PlatformIO directly from the repository root:
+
+```sh
+pio run -d examples/<NN-Name>                                        # compile
+pio run -d examples/<NN-Name> -e <env> -t upload --upload-port <COM> # flash one role
+```
+
+To read logs use `mw log <COM>` (or `python tools/mwlog.py <COM>`), **not**
+`pio device monitor`: on these native-USB boards a monitor's reset-on-open can
+drop the port into the ROM download loader. [`LOGGING.md`](LOGGING.md) explains how
+the console is routed and how to write your own `MW_LOG` lines.
+
+`pio run` ending with `[SUCCESS]` is a compile-only proof. Flashing a board is
+human-gated (`docs/EXAMPLES_ROADMAP.md` §1.2); until an example's real trace is
+captured, its README says so.
 
 ## Catalog
 
@@ -61,8 +71,8 @@ Status: ⬜ planned · 🟨 built (compiles) · ✅ hardware-verified
 | 21 | `21-TwoBoardSpi` | wired SPI master/slave `INetDriver` link — example 20's volley over a clocked full-duplex bus | 2nd board, 5 wires | 🟨 |
 | 22 | `22-ActorMessages` | local actor messaging: `TMessageRouter` broadcast + targeted send, one board | — | 🟨 |
 | 23 | `23-TwoBoardWire` | actor messaging over a UART wire: `TMessageChannelBinding` client/server, switch drives lamp | 2nd board, 3 wires | 🟨 |
-| 24 | `24-TwoChannelWorld` | two channels, one world: telemetry over WiFi UDP + commands over a UART wire on one `TMessageRouter` via `TNetworkFrameSet<3>` | 2nd board, 3 wires + WiFi | 🟨 |
-| 25 | `25-GuaranteedDelivery` | best-effort vs guaranteed delivery on one WiFi-UDP link: `TReliableChannel` recovers packets `FPacketDropDriver` drops | 2nd board + WiFi | 🟨 |
+| 24 | `24-TwoChannelWorld` | two channels, one world: telemetry over WiFi UDP + commands over a UART wire on one `TMessageRouter` via `TNetworkFrameSet<3>` | 2nd board, 3 wires + WiFi | ✅ |
+| 25 | `25-GuaranteedDelivery` | best-effort vs guaranteed delivery on one WiFi-UDP link: `TReliableChannel` recovers packets `FPacketDropDriver` drops | 2nd board + WiFi | ✅ |
 
 Wired board-to-board transports (examples 18–21) are planned in
 [`docs/WIRED_TRANSPORTS_ROADMAP.md`](../docs/WIRED_TRANSPORTS_ROADMAP.md) and are

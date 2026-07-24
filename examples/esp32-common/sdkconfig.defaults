@@ -24,3 +24,10 @@ CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
 # Why: A 4096-byte wear-levelling sector matches the flash erase sector and
 # reduces flash operations; this board has enough RAM for the larger FAT buffers.
 CONFIG_WL_SECTOR_SIZE_4096=y
+
+# Why: Route the primary console to the native USB-Serial-JTAG port so MW_LOG output
+# is visible on the very USB connector used to flash the board. The ESP32-S3-DevKitC-1
+# otherwise puts the UART0 console only on its separate CP210x "UART" connector, which
+# a native-USB rig does not plug in. Data buses stay on UART1/I2C/SPI, so this only
+# moves where log bytes egress; example behaviour is unchanged. See examples/LOGGING.md.
+CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y

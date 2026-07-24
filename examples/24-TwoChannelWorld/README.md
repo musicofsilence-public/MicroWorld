@@ -6,7 +6,7 @@ telemetry over WiFi UDP and commands over a UART wire, simultaneously, between
 the same two boards. This is the first example to use `TNetworkFrameSet`
 (Phase 4.1), replacing 23-TwoBoardWire's manual per-frame router pump.
 
-> Status: not yet verified on hardware.
+> Status: hardware-verified on two ESP32-S3 boards, 2026-07-24 (WiFi UDP + UART wire).
 
 ## What it does
 
@@ -87,50 +87,54 @@ differ only by `-DMICROWORLD_EXAMPLE_SERVER`.
 
 ## Flash and observe
 
-Human-gated (see `docs/EXAMPLES_ROADMAP.md` §1.2). Flash the server to board A
-and the client to board B, then wire the UART crossover per the table above,
-and open both monitors. Capture the **server** console: it is the one that
-shows both the `rx telemetry reading=` (UDP) lines and the `tx command ->
-sensor rate=` (UART) lines interleaved, proving both links are alive at once.
+Flash both roles, wire the UART crossover per the table above, and read either
+console (both are on the native USB port — see [`../LOGGING.md`](../LOGGING.md)):
 
-```sh
-pio run -d examples/24-TwoChannelWorld -e esp32-s3-server -t upload --upload-port <COM-A>
-pio run -d examples/24-TwoChannelWorld -e esp32-s3-client -t upload --upload-port <COM-B>
-pio device monitor -d examples/24-TwoChannelWorld -e esp32-s3-server
-pio device monitor -d examples/24-TwoChannelWorld -e esp32-s3-client
+```bat
+mw flash 24 esp32-s3-server COM5     :: server hosts the SoftAP + drives commands
+mw flash 24 esp32-s3-client COM7     :: client joins + reports telemetry
+mw log   COM5                        :: server: rx telemetry (UDP) + tx command (UART)
+mw log   COM7                        :: client: tx telemetry (UDP) + rate change (UART)
 ```
 
-## Expected output
+`mw` is [`../tools/mw.bat`](../tools/mw.bat). Do **not** use `pio device monitor`
+on these boards -- its reset-on-open can drop the native-USB port into the ROM
+download loader; `mw log` holds the line steady and reconnects across resets.
 
-Server board (not yet verified on hardware; telemetry lines arrive roughly
-once a second, a command line every 10 s):
+## Hardware verification
+
+Verified on two ESP32-S3-DevKitC-1 boards on **2026-07-24** (server COM5, client
+COM7; UART1 GPIO17↔18 crossover wired; console on USB-Serial-JTAG). Both links
+ran at once — telemetry values flowing client→server over UDP while rate commands
+flowed server→client over the wire.
+
+**Server** — UDP telemetry in and UART commands out, interleaved:
 
 ```text
-I (nnnn) ex24: wifi softap up, gateway 192.168.4.1
-I (nnnn) ex24: telemetry open=1 udp_port=40404
-I (nnnn) ex24: commands node=1 open=1
-I (nnnn) ex24: server up (telemetry=UDP, commands=UART)
-I (nnnn) ex24: rx telemetry reading=1
-I (nnnn) ex24: rx telemetry reading=2
-I (nnnn) ex24: tx command -> sensor rate=500 ms
-I (nnnn) ex24: rx telemetry reading=3
-I (nnnn) ex24: rx telemetry reading=4
+I (119438) ex24: rx telemetry reading=62
+I (120458) ex24: rx telemetry reading=63
+I (121278) ex24: tx command -> sensor rate=500 ms
+I (121298) ex24: rx telemetry reading=64
+...
+I (131298) ex24: tx command -> sensor rate=1000 ms
 ```
 
-Client board (not yet verified on hardware; the reporting interval visibly
-halves/restores every 10 s):
+**Client** — same readings out over UDP, and the rate command applied from UART:
 
 ```text
-I (nnnn) ex24: wifi joined AP
-I (nnnn) ex24: telemetry open=1
-I (nnnn) ex24: commands node=2 open=1
-I (nnnn) ex24: client up (telemetry=UDP, commands=UART)
-I (nnnn) ex24: tx telemetry reading=1
-I (nnnn) ex24: tx telemetry reading=2
-I (nnnn) ex24: sensor reporting rate -> 500 ms
-I (nnnn) ex24: tx telemetry reading=3
-I (nnnn) ex24: tx telemetry reading=4
+I (45041) ex24: tx telemetry reading=62
+I (46061) ex24: tx telemetry reading=63
+I (46901) ex24: sensor reporting rate -> 500 ms
+I (46901) ex24: tx telemetry reading=64
+...
+I (56921) ex24: sensor reporting rate -> 1000 ms
 ```
+
+The reading values match end to end (client `tx telemetry reading=62` →
+server `rx telemetry reading=62`), and each server `tx command -> sensor
+rate=N` lands on the client as `sensor reporting rate -> N`, alternating
+500/1000 ms every 10 s — two transports, one `TNetworkFrameSet`, at the same
+time.
 
 ## Image size
 

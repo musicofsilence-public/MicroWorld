@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- **Examples 24 & 25 hardware-verified; example logs now on the native USB port.**
+  The two WiFi-riding messaging demos were run on two ESP32-S3 boards
+  (2026-07-24): `24-TwoChannelWorld` (telemetry over WiFi UDP and commands over a
+  UART wire, both live at once) and `25-GuaranteedDelivery` (the guaranteed
+  channel delivered all 30 values while best-effort lost 15). To make logs
+  readable on a native-USB rig, the example console now defaults to the
+  USB-Serial-JTAG port (`examples/esp32-common/sdkconfig.defaults`) — the same
+  connector used to flash — and new turnkey tooling was added:
+  `examples/tools/mw.bat` (a build/flash/log dispatcher for every example),
+  `examples/tools/mwlog.py` (a reset-safe serial log reader that survives the
+  native-USB re-enumeration), and `examples/LOGGING.md` (how the console is routed
+  and how to write your own `MW_LOG` lines).
 - **Actor messaging layer (`Modules/Engine`) + engine-first examples.** A
   self-contained, header-only, Net-free messaging layer rides the existing
   transports: `Message.h` (id/result vocabulary, a little-endian actor-message
