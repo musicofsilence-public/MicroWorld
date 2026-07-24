@@ -15,9 +15,10 @@ claimed for every board.
 `docs/SIMPLICITY_ROADMAP.md` is the active improvement plan and task tracker
 (`docs/ROADMAP.md` is the completed implementation plan, kept as a frozen
 historical record). `docs/MESSAGING_ROADMAP.md` is the active plan for actor
-messaging and engine-first examples. Any change to implementation, gate,
-evidence, decision, blocker, or next milestone must update `PROGRESS.md` in the
-same commit.
+messaging and engine-first examples, and `docs/RADIO_TRANSPORTS_ROADMAP.md` is
+the active plan for the E32 LoRa and Bluetooth LE radio transports. Any change
+to implementation, gate, evidence, decision, blocker, or next milestone must
+update `PROGRESS.md` in the same commit.
 
 ## Repository structure
 

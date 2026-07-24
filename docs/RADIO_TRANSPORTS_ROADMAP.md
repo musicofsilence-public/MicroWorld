@@ -351,7 +351,7 @@ compile probe builds with BT enabled without touching the shared profile.
 
 | Phase | Title | Tasks | Status |
 | --- | --- | --- | --- |
-| 0 | Baseline & governance | 2 | 🟨 |
+| 0 | Baseline & governance | 2 | ✅ |
 | 1 | LoRa proven on hardware | 4 | ⬜ |
 | 2 | Bluetooth LE design spike (ADR 0004) | 1 | ⬜ |
 | 3 | BLE driver pair | 2 | ⬜ |
@@ -363,7 +363,7 @@ compile probe builds with BT enabled without touching the shared profile.
 
 ## 6. Phases and tasks
 
-### Phase 0 — Baseline & governance 🟨
+### Phase 0 — Baseline & governance ✅
 
 - [x] **0.1 Record a green baseline.** Clean tree check, Standard Verify
   (§1.1), `CheckFolderAgents.py`, and `pio run` for the seven existing
@@ -382,11 +382,17 @@ compile probe builds with BT enabled without touching the shared profile.
   0 `[FAILED]` — the task's "seven" is inherited text that predates
   examples 22–25. Nothing fixed.
 
-- [ ] **0.2 Register this plan.** One sentence each in root `AGENTS.md` and
+- [x] **0.2 Register this plan.** One sentence each in root `AGENTS.md` and
   root `README.md`: `docs/RADIO_TRANSPORTS_ROADMAP.md` is the active plan for
   LoRa and Bluetooth LE. One `PROGRESS.md` line with the baseline counts.
 
   **Done when:** three files mention this plan; Standard Verify still green.
+
+  Done 2026-07-24 — root `AGENTS.md`, root `README.md`, and `PROGRESS.md` each
+  now name `docs/RADIO_TRANSPORTS_ROADMAP.md` as the active E32 LoRa / Bluetooth
+  LE plan (one sentence each in AGENTS/README; one `PROGRESS.md` baseline row
+  carrying the 0.1 counts). Docs-only; `ctest -C Release` still 11/11, nothing
+  else changed.
 
 ---
 
