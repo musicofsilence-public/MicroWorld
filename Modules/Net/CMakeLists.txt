@@ -27,6 +27,7 @@ endif()
 
 set(MICROWORLD_NET_PRODUCTION_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/src/NetDriver.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/PacketDropDriver.cpp"
 )
 
 add_library(microworld_net STATIC ${MICROWORLD_NET_PRODUCTION_SOURCES})
@@ -88,6 +89,7 @@ if(MICROWORLD_NET_BUILD_TESTS)
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/ByteReaderTests.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/FrameCodecTests.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/HostLoopbackTests.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/PacketDropDriverTests.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/NetManagerTests.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/NetProtocolTests.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/NetHostTests.cpp"

@@ -737,7 +737,7 @@ of the transport seam — sensor examples use timer-driven synthetic readings).
 | 2 | Local actor messaging (Engine) | 3 | ✅ |
 | 3 | Messaging over one wire | 2 | ✅ |
 | 4 | Several channels per world | 3 | ✅ |
-| 5 | Guaranteed delivery per channel | 3 | ⬜ |
+| 5 | Guaranteed delivery per channel | 3 | 🟨 |
 | 6 | Documentation & close-out | 2 | ⬜ |
 
 ---
@@ -1261,7 +1261,7 @@ Goal: one world, several drivers, each channel with its own id and settings.
 Goal: "guaranteed or not" becomes a per-channel composition choice, honestly
 demonstrated under packet loss.
 
-- [ ] **5.1 `Net/PacketDropDriver.h` + tests.** Implement §4.3's
+- [x] **5.1 `Net/PacketDropDriver.h` + tests.** Implement §4.3's
   `FPacketDropDriver`. New `Modules/Net/tests/PacketDropDriverTests.cpp`:
   with N=3 over `THostLoopback`, sends 1..9 → exactly 3,6,9 missing at the
   receiver and `DroppedSendCount()==3`; N=0 forwards everything; dropped
@@ -1269,6 +1269,28 @@ demonstrated under packet loss.
 
   **Done when:** tests pass; header documented.
   **Verify:** Standard Verify.
+
+  Done 2026-07-24 — `Modules/Net/include/MicroWorld/Net/PacketDropDriver.h` +
+  `src/PacketDropDriver.cpp`: `FPacketDropDriver final : INetDriver` wraps any
+  driver by reference and drops every Nth send. `TrySend` counts each call and,
+  when `DropEveryNthSend != 0 && SendCallCount % DropEveryNthSend == 0`, returns
+  `Success` without touching the inner driver or inspecting the packet (the `!= 0`
+  guard also prevents a modulo-by-zero); `TryReceive`/`MaxPacketBytes` forward
+  verbatim; `DroppedSendCount()` is a pure query. Copy **and** move deleted (holds
+  `INetDriver&`, itself held by reference); out-of-line destructor anchors the
+  vtable (matching `NetDriver.cpp`), with all definitions in the .cpp (the
+  `FHostUdpDriver` precedent for a concrete non-template driver). New
+  `PacketDropDriverTests.cpp` (5 cases over `THostLoopback<2,16,4>`): N=3 sends
+  1..9 delivering exactly {1,2,4,5,7,8} with `DroppedSendCount()==3`; N=0 forwards
+  all five; N=1 returns `Success` yet leaves the receiver mailbox empty (the wire
+  is never touched); the receive path is bit-identical (bytes, `BytesReceived`,
+  sender address, and the empty-queue `Unavailable` all forwarded, drop count
+  untouched); `MaxPacketBytes` forwards. Both CMake lists updated
+  (`MICROWORLD_NET_PRODUCTION_SOURCES` + `MICROWORLD_NET_TEST_SOURCES`). Gates
+  (lead-rerun): clang-format clean; MSVC Release warning-clean (`/W4 /WX`); host
+  `ctest` 11/11 (net suite 107 tests, all 5 `PacketDropDriver_*` `[PASS]`, 0
+  failures); `CheckClassDocumentation --require-doxygen` 155 files; the header
+  includes only Core/Memory/Net.
 
 - [ ] **5.2 `Engine/ReliableChannel.h` + tests.** Implement §4.3's
   `TReliableChannel` including `SetInnerChannel` two-phase setup (the
