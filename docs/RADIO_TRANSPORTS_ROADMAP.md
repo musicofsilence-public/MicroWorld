@@ -465,7 +465,7 @@ bench, first as a raw volley, then under the full engine.
   the lead will verify the shape, replace the README's illustrative "Expected
   output" with the real capture, record image sizes, and flip this checkbox.
 
-- [ ] **1.3 Example `26-LoraMessaging` (the payoff demo).** Copy example 19's
+- [x] **1.3 Example `26-MessagingOverLora` (the payoff demo).** Copy example 19's
   shape (`examples/19-UartMessaging` — server board: `TEngineHost` +
   `TNetHost` DedicatedServer + `TNetHostFrame`, channel-1 message spawns an
   actor, channel-2 state broadcast; client board: bare client `TNetHost`)
@@ -475,8 +475,45 @@ bench, first as a raw volley, then under the full engine.
   ≥ 1000 ms, tag `[ex26]`. README: same wiring/safety blocks as 17 plus the
   airtime paragraph (why the relaxed profile); catalog row appended.
 
+  *Naming note:* planned as `26-LoraMessaging`, renamed to
+  `26-MessagingOverLora` — PlatformIO's espidf builder corrupts any project
+  path containing the substring `-L` while extracting linker search paths
+  (`extract_link_args` in `builder/frameworks/espidf.py` strips every `-L`
+  occurrence, mangling the path to `…\26oraMessaging\…`), which breaks the
+  bootloader link deterministically. Folder names must avoid `-L`.
+
   **Done when:** both envs compile; README/AGENTS complete; catalog updated.
-  **Verify:** `pio run -d examples/26-LoraMessaging` + ctest.
+  **Verify:** `pio run -d examples/26-MessagingOverLora` + ctest.
+
+  Done 2026-07-24 — `examples/26-MessagingOverLora` created (9 tracked files:
+  `src/Main.cpp`, `src/ServerMain.cpp`, `src/ClientMain.cpp`,
+  `src/LoraMessagingShared.h`, `src/CMakeLists.txt`, `CMakeLists.txt`,
+  `platformio.ini`, `README.md`, `AGENTS.md`) as example 19's `TNetHost`
+  client/server protocol with only the transport swapped to
+  `FEsp32E32LoraDriver` at the D8 airtime profile: `TNetHost<2, 58>`, heartbeat
+  3000 / timeout 15000, `ServerAddress = MakeLoraAddress(1)`, 2-byte state
+  broadcast paced 1000 ms (server ticks the engine every poll but gates the
+  radio broadcast on a deadline — a full E32 frame costs hundreds of ms of
+  airtime), `ex26` tag. README carries the ESP↔E32 wiring table (common ground,
+  `M0=M1=GND` transparent mode D7), the §2.2 antenna rule and radio-legal note
+  verbatim, the airtime paragraph, and the "not yet verified on hardware"
+  status; catalog row 26 ⬜→🟨. Lead-verified on 2026-07-24: `pio run` both envs
+  `[SUCCESS]` (fullclean cold build server 72.2 s / client 73.3 s; server RAM
+  25084 B / Flash 232341 B, client RAM 21388 B / Flash 221493 B — real numbers
+  written into the README, replacing the pre-link estimates), `ctest -C Release`
+  11/11, clang-format clean (all four `src/` files), no regression in the
+  `Modules/PlatformEsp32/include` vendor-include gate.
+
+  *Blocker root-caused and fixed:* the first build failed with
+  `ld: cannot open linker script file bootloader.ld` on every `pio run` while
+  examples 17–25 built fine. Deterministic (7.6 s incremental repro), not a
+  ninja race: PlatformIO's espidf builder mangles the linker `-L` search path
+  for any project whose absolute path contains the substring `-L`
+  (`extract_link_args` in `builder/frameworks/espidf.py` runs
+  `fragment.replace("-L", "")`, which strips *every* `-L`, turning
+  `…\26-LoraMessaging\…` into `…\26oraMessaging\…`). Renaming the folder to
+  `26-MessagingOverLora` (no `-L` substring) + fullclean fixed it. Folder names
+  must avoid `-L`; examples 27–29 planned names are already clear.
 
 - [ ] **1.4 (owner-gated) LoRa messaging hardware checkpoint.** Flash, capture
   both consoles: expect Hello/Welcome admission, a channel-1 spawn on the
