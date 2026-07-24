@@ -736,7 +736,7 @@ of the transport seam — sensor examples use timer-driven synthetic readings).
 | 1 | Engine-first examples groundwork (platform facades) | 5 | ✅ |
 | 2 | Local actor messaging (Engine) | 3 | ✅ |
 | 3 | Messaging over one wire | 2 | ✅ |
-| 4 | Several channels per world | 3 | ⬜ |
+| 4 | Several channels per world | 3 | 🟨 |
 | 5 | Guaranteed delivery per channel | 3 | ⬜ |
 | 6 | Documentation & close-out | 2 | ⬜ |
 
@@ -1141,7 +1141,7 @@ Goal: the same actor API crosses a real link; actors cannot tell.
 
 Goal: one world, several drivers, each channel with its own id and settings.
 
-- [ ] **4.1 `TNetworkFrameSet` + tests.** Implement in `NetworkFrame.h` per
+- [x] **4.1 `TNetworkFrameSet` + tests.** Implement in `NetworkFrame.h` per
   §4.3 (D3 ordering). Extend `EngineHostTests.cpp` (or a new
   `EngineNetworkFrameSetTests.cpp` if cleaner): recording frames assert
   dispatch runs in add-order and flush in reverse add-order within one
@@ -1151,6 +1151,29 @@ Goal: one world, several drivers, each channel with its own id and settings.
 
   **Done when:** order assertions pass; 3.1 tests now go through the set.
   **Verify:** Standard Verify.
+
+  Done 2026-07-24 — `TNetworkFrameSet<MaxFrames>` appended to
+  `Modules/Engine/include/MicroWorld/Engine/NetworkFrame.h` (`final : INetworkFrame`,
+  Net-free): `Add` rejects a repeated frame pointer as `Duplicate` and a full set as
+  `CapacityExceeded` (both leave it unchanged), `TickDispatch` runs frames in add-order
+  and `TickFlush` in reverse add-order (D3), `FrameCount` observes occupancy; copy and
+  move deleted (composition root held by `TEngineHost` via `INetworkFrame&`). New
+  `EngineNetworkFrameSetTests.cpp` (5 cases): direct add-order/reverse-flush with
+  dispatch-before-flush, a `TEngineHost`-driven case proving the engine pumps the set at
+  steps 1 and 7 (net-before-router dispatch, router-before-net flush), Add-past-capacity,
+  duplicate-pointer, and empty-set-inert. The Phase 3.1 test
+  (`EngineMessageChannelTests.cpp`) is retrofitted onto the set: each side now binds a
+  `TNetworkFrameSet<2>` (`Add(NetFrame)` then `Add(Router)`) to its `TEngineHost` and
+  `PumpSide` collapses to one `Host.Tick` — the manual router `TickFlush`/`TickDispatch`
+  and the Phase-4.1 workaround comment are gone. The set order delivers one frame earlier
+  than the manual order, so case 4's post-connect checkpoints were tightened (the retained
+  message is already flushed — `QueuedOutboundCount == 0` — and delivered — `bWasCalled` —
+  by the time the handshake loop returns), not weakened; cases 1/2/3/5 kept their values.
+  Gates (lead-rerun): clang-format clean; MSVC Release warning-clean (`/WX`); host `ctest`
+  11/11 (all 5 `EngineNetworkFrameSet_*` and all 5 retrofitted `EngineMessageChannel_*`
+  cases `[PASS]`, 110 engine tests 0 failures); `CheckDependencyBoundaries --package
+  Engine` passes (the set adds no Net include); `CheckClassDocumentation --require-doxygen`
+  152 files.
 
 - [ ] **4.2 Multi-channel host test.** New case(s) in
   `EngineMessageChannelTests.cpp`: two `THostLoopback` networks, two

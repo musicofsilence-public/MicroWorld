@@ -23,6 +23,7 @@ namespace
 {
 using MicroWorld::BroadcastActorId;
 using MicroWorld::EChannelSendTarget;
+using MicroWorld::EEngineResult;
 using MicroWorld::EMessageResult;
 using MicroWorld::ENetHostState;
 using MicroWorld::ENetMode;
@@ -46,6 +47,7 @@ using MicroWorld::TMessageChannelBinding;
 using MicroWorld::TMessageRouter;
 using MicroWorld::TNetHost;
 using MicroWorld::TNetHostFrame;
+using MicroWorld::TNetworkFrameSet;
 using MicroWorld::TSpan;
 
 /** Asserts a messaging operation returned Success without discarding the result. */
@@ -95,6 +97,9 @@ using FBinding = TMessageChannelBinding<FNet>;
 
 /** Engine host profile sized for a bare rooted world; these cases never spawn actors. */
 using FHost = TEngineHost<6, 8, 256, 16, 1, 2, 4, 64>;
+
+/** Per-side D3 composition root: holds one side's net frame and message router behind the one INetworkFrame slot TEngineHost drives. */
+using FFrameSet = TNetworkFrameSet<2>;
 
 /** Router profile shared by every case; its capacities are generous headroom, never the behavior under test. */
 using FTestRouter = TMessageRouter<HandlerCapacity, OutboundQueueCapacity, MessageByteCapacity, ChannelCapacity>;
@@ -191,32 +196,25 @@ private:
 };
 
 /**
- * Runs one side's manual D3 pump: flushes the router's outbound queue into the wire before the engine tick, then
- * dispatches the router's inbound queue after it. Phase 4.1 retires this manual ordering once TNetworkFrameSet
- * drives a bound router the same way TEngineHost already drives a bound TNetHostFrame.
+ * Runs one side's frame-driven pump for one tick. Each side's TEngineHost is bound to an
+ * FFrameSet holding that side's net frame and message router (net added first, router added
+ * last per the D3 recipe), so this single Tick call already dispatches the net frame then the
+ * router (inbound) and flushes the router then the net frame (outbound) in the right order.
  */
-void PumpSide(FTestRouter& Router, FHost& Host, const TimePointMilliseconds NowMilliseconds) noexcept
+void PumpSide(FHost& Host, const TimePointMilliseconds NowMilliseconds) noexcept
 {
-	Router.TickFlush(NowMilliseconds);
 	(void)Host.Tick(NowMilliseconds);
-	Router.TickDispatch(NowMilliseconds);
 }
 
 /** Drives both sides through PumpSide until the client's NetHost reports Connected or the frame budget runs out, mirroring EngineNetHostTests.cpp's
  * handshake loop. */
-TimePointMilliseconds ConnectClientToServer(
-	FTestRouter& ClientRouter,
-	FHost& ClientHost,
-	FNet& ClientNet,
-	FTestRouter& ServerRouter,
-	FHost& ServerHost,
-	TimePointMilliseconds NowMilliseconds) noexcept
+TimePointMilliseconds ConnectClientToServer(FHost& ClientHost, FNet& ClientNet, FHost& ServerHost, TimePointMilliseconds NowMilliseconds) noexcept
 {
 	for (int Frame = 0; Frame < MaxHandshakeFrames && ClientNet.GetState() != ENetHostState::Connected; ++Frame)
 	{
 		NowMilliseconds += FrameStepMilliseconds;
-		PumpSide(ClientRouter, ClientHost, NowMilliseconds);
-		PumpSide(ServerRouter, ServerHost, NowMilliseconds);
+		PumpSide(ClientHost, NowMilliseconds);
+		PumpSide(ServerHost, NowMilliseconds);
 	}
 	return NowMilliseconds;
 }
@@ -229,10 +227,16 @@ MW_TEST_CASE(EngineMessageChannel_ClientToServerTargetedSendReachesServerHandler
 	FNet ClientNet(Network.Port(1));
 	FNetFrame ServerFrame{ServerNet};
 	FNetFrame ClientFrame{ClientNet};
-	FHost ServerHost{FGarbageCollectionBudget{1, 4, 8}, ServerFrame};
-	FHost ClientHost{FGarbageCollectionBudget{1, 4, 8}, ClientFrame};
 	FTestRouter ClientRouter;
 	FTestRouter ServerRouter;
+	FFrameSet ServerSet;
+	MW_EXPECT_EQ(Test, EEngineResult::Success, ServerSet.Add(ServerFrame), "The server's frame set must accept its net frame first (D3 order)");
+	MW_EXPECT_EQ(Test, EEngineResult::Success, ServerSet.Add(ServerRouter), "The server's frame set must accept its router last (D3 order)");
+	FFrameSet ClientSet;
+	MW_EXPECT_EQ(Test, EEngineResult::Success, ClientSet.Add(ClientFrame), "The client's frame set must accept its net frame first (D3 order)");
+	MW_EXPECT_EQ(Test, EEngineResult::Success, ClientSet.Add(ClientRouter), "The client's frame set must accept its router last (D3 order)");
+	FHost ServerHost{FGarbageCollectionBudget{1, 4, 8}, ServerSet};
+	FHost ClientHost{FGarbageCollectionBudget{1, 4, 8}, ClientSet};
 	FBinding ClientBinding(ClientNet, AppWireChannelByte, AppChannelId, EChannelSendTarget::Server, ClientRouter);
 	FBinding ServerBinding(ServerNet, AppWireChannelByte, AppChannelId, EChannelSendTarget::AllPeers, ServerRouter);
 
@@ -260,8 +264,8 @@ MW_TEST_CASE(EngineMessageChannel_ClientToServerTargetedSendReachesServerHandler
 	(void)ServerNet.Start(0);
 	(void)ClientNet.Start(0);
 
-	const TimePointMilliseconds ConnectedAt = ConnectClientToServer(ClientRouter, ClientHost, ClientNet, ServerRouter, ServerHost, 0);
-	MW_EXPECT_EQ(Test, ENetHostState::Connected, ClientNet.GetState(), "The client must connect through the manual per-side pump order");
+	const TimePointMilliseconds ConnectedAt = ConnectClientToServer(ClientHost, ClientNet, ServerHost, 0);
+	MW_EXPECT_EQ(Test, ENetHostState::Connected, ClientNet.GetState(), "The client must connect through the frame-set-driven pump order");
 
 	const std::array<std::uint8_t, 1> Payload{0x11};
 	MW_EXPECT_SUCCESS(
@@ -271,8 +275,8 @@ MW_TEST_CASE(EngineMessageChannel_ClientToServerTargetedSendReachesServerHandler
 		"A connected client must queue a targeted send on its wired channel");
 
 	const TimePointMilliseconds DeliveredAt = ConnectedAt + FrameStepMilliseconds;
-	PumpSide(ClientRouter, ClientHost, DeliveredAt);
-	PumpSide(ServerRouter, ServerHost, DeliveredAt);
+	PumpSide(ClientHost, DeliveredAt);
+	PumpSide(ServerHost, DeliveredAt);
 
 	MW_EXPECT_TRUE(Test, ServerRecord.bWasCalled, "The server handler must receive the client's targeted message");
 	MW_EXPECT_EQ(Test, TestMessageType, ServerRecord.MessageTypeId, "The delivered view must carry the original message type");
@@ -291,10 +295,16 @@ MW_TEST_CASE(EngineMessageChannel_ServerBroadcastReachesClientHandler)
 	FNet ClientNet(Network.Port(1));
 	FNetFrame ServerFrame{ServerNet};
 	FNetFrame ClientFrame{ClientNet};
-	FHost ServerHost{FGarbageCollectionBudget{1, 4, 8}, ServerFrame};
-	FHost ClientHost{FGarbageCollectionBudget{1, 4, 8}, ClientFrame};
 	FTestRouter ClientRouter;
 	FTestRouter ServerRouter;
+	FFrameSet ServerSet;
+	MW_EXPECT_EQ(Test, EEngineResult::Success, ServerSet.Add(ServerFrame), "The server's frame set must accept its net frame first (D3 order)");
+	MW_EXPECT_EQ(Test, EEngineResult::Success, ServerSet.Add(ServerRouter), "The server's frame set must accept its router last (D3 order)");
+	FFrameSet ClientSet;
+	MW_EXPECT_EQ(Test, EEngineResult::Success, ClientSet.Add(ClientFrame), "The client's frame set must accept its net frame first (D3 order)");
+	MW_EXPECT_EQ(Test, EEngineResult::Success, ClientSet.Add(ClientRouter), "The client's frame set must accept its router last (D3 order)");
+	FHost ServerHost{FGarbageCollectionBudget{1, 4, 8}, ServerSet};
+	FHost ClientHost{FGarbageCollectionBudget{1, 4, 8}, ClientSet};
 	FBinding ClientBinding(ClientNet, AppWireChannelByte, AppChannelId, EChannelSendTarget::Server, ClientRouter);
 	FBinding ServerBinding(ServerNet, AppWireChannelByte, AppChannelId, EChannelSendTarget::AllPeers, ServerRouter);
 
@@ -322,8 +332,8 @@ MW_TEST_CASE(EngineMessageChannel_ServerBroadcastReachesClientHandler)
 	(void)ServerNet.Start(0);
 	(void)ClientNet.Start(0);
 
-	const TimePointMilliseconds ConnectedAt = ConnectClientToServer(ClientRouter, ClientHost, ClientNet, ServerRouter, ServerHost, 0);
-	MW_EXPECT_EQ(Test, ENetHostState::Connected, ClientNet.GetState(), "The client must connect through the manual per-side pump order");
+	const TimePointMilliseconds ConnectedAt = ConnectClientToServer(ClientHost, ClientNet, ServerHost, 0);
+	MW_EXPECT_EQ(Test, ENetHostState::Connected, ClientNet.GetState(), "The client must connect through the frame-set-driven pump order");
 
 	const std::array<std::uint8_t, 1> Payload{0x22};
 	MW_EXPECT_SUCCESS(
@@ -332,8 +342,8 @@ MW_TEST_CASE(EngineMessageChannel_ServerBroadcastReachesClientHandler)
 		"A server with one active peer must queue a broadcast on its wired channel");
 
 	const TimePointMilliseconds DeliveredAt = ConnectedAt + FrameStepMilliseconds;
-	PumpSide(ServerRouter, ServerHost, DeliveredAt);
-	PumpSide(ClientRouter, ClientHost, DeliveredAt);
+	PumpSide(ServerHost, DeliveredAt);
+	PumpSide(ClientHost, DeliveredAt);
 
 	MW_EXPECT_TRUE(Test, ClientRecord.bWasCalled, "The client handler must receive the server's broadcast message");
 	MW_EXPECT_EQ(Test, TestMessageType, ClientRecord.MessageTypeId, "The delivered view must carry the original message type");
@@ -351,9 +361,14 @@ MW_TEST_CASE(EngineMessageChannel_ForeignWireChannelNeverReachesBoundSink)
 	FNet ClientNet(Network.Port(1));
 	FNetFrame ServerFrame{ServerNet};
 	FNetFrame ClientFrame{ClientNet};
-	FHost ServerHost{FGarbageCollectionBudget{1, 4, 8}, ServerFrame};
-	FHost ClientHost{FGarbageCollectionBudget{1, 4, 8}, ClientFrame};
 	FTestRouter ServerRouter;
+	FFrameSet ServerSet;
+	MW_EXPECT_EQ(Test, EEngineResult::Success, ServerSet.Add(ServerFrame), "The server's frame set must accept its net frame first (D3 order)");
+	MW_EXPECT_EQ(Test, EEngineResult::Success, ServerSet.Add(ServerRouter), "The server's frame set must accept its router last (D3 order)");
+	FHost ServerHost{FGarbageCollectionBudget{1, 4, 8}, ServerSet};
+	// The client in this case has no router at all (it sends raw wire bytes directly below), so it
+	// keeps the bare net frame instead of a frame set.
+	FHost ClientHost{FGarbageCollectionBudget{1, 4, 8}, ClientFrame};
 	FBinding ServerBinding(ServerNet, AppWireChannelByte, AppChannelId, EChannelSendTarget::AllPeers, ServerRouter);
 
 	MW_EXPECT_TRUE(Test, ServerBinding.IsAttached(), "The server binding must register its inbound handler");
@@ -385,7 +400,7 @@ MW_TEST_CASE(EngineMessageChannel_ForeignWireChannelNeverReachesBoundSink)
 	{
 		Now += FrameStepMilliseconds;
 		(void)ClientHost.Tick(Now);
-		PumpSide(ServerRouter, ServerHost, Now);
+		PumpSide(ServerHost, Now);
 	}
 	MW_EXPECT_EQ(Test, ENetHostState::Connected, ClientNet.GetState(), "The client must connect before sending the foreign-channel message");
 
@@ -395,7 +410,7 @@ MW_TEST_CASE(EngineMessageChannel_ForeignWireChannelNeverReachesBoundSink)
 
 	Now += FrameStepMilliseconds;
 	(void)ClientHost.Tick(Now);
-	PumpSide(ServerRouter, ServerHost, Now);
+	PumpSide(ServerHost, Now);
 
 	MW_EXPECT_TRUE(Test, !ServerRecord.bWasCalled, "A message on a foreign wire channel must never reach this binding's sink");
 	MW_EXPECT_EQ(Test, std::size_t{0}, ServerRouter.QueuedInboundCount(), "The router's inbound queue must stay empty for a filtered message");
@@ -414,10 +429,16 @@ MW_TEST_CASE(EngineMessageChannel_SendBeforeConnectReportsUnavailableThenDeliver
 	FNet ClientNet(Network.Port(1));
 	FNetFrame ServerFrame{ServerNet};
 	FNetFrame ClientFrame{ClientNet};
-	FHost ServerHost{FGarbageCollectionBudget{1, 4, 8}, ServerFrame};
-	FHost ClientHost{FGarbageCollectionBudget{1, 4, 8}, ClientFrame};
 	FTestRouter ClientRouter;
 	FTestRouter ServerRouter;
+	FFrameSet ServerSet;
+	MW_EXPECT_EQ(Test, EEngineResult::Success, ServerSet.Add(ServerFrame), "The server's frame set must accept its net frame first (D3 order)");
+	MW_EXPECT_EQ(Test, EEngineResult::Success, ServerSet.Add(ServerRouter), "The server's frame set must accept its router last (D3 order)");
+	FFrameSet ClientSet;
+	MW_EXPECT_EQ(Test, EEngineResult::Success, ClientSet.Add(ClientFrame), "The client's frame set must accept its net frame first (D3 order)");
+	MW_EXPECT_EQ(Test, EEngineResult::Success, ClientSet.Add(ClientRouter), "The client's frame set must accept its router last (D3 order)");
+	FHost ServerHost{FGarbageCollectionBudget{1, 4, 8}, ServerSet};
+	FHost ClientHost{FGarbageCollectionBudget{1, 4, 8}, ClientSet};
 	FBinding ClientBinding(ClientNet, AppWireChannelByte, AppChannelId, EChannelSendTarget::Server, ClientRouter);
 	FBinding ServerBinding(ServerNet, AppWireChannelByte, AppChannelId, EChannelSendTarget::AllPeers, ServerRouter);
 
@@ -452,7 +473,7 @@ MW_TEST_CASE(EngineMessageChannel_SendBeforeConnectReportsUnavailableThenDeliver
 		"Queuing succeeds before connect: the router's own outbound queue is independent of the transport");
 
 	TimePointMilliseconds Now = FrameStepMilliseconds;
-	PumpSide(ClientRouter, ClientHost, Now);
+	PumpSide(ClientHost, Now);
 	MW_EXPECT_EQ(
 		Test,
 		std::size_t{1},
@@ -460,20 +481,25 @@ MW_TEST_CASE(EngineMessageChannel_SendBeforeConnectReportsUnavailableThenDeliver
 		"Unavailable (no server peer yet) must retain the queued message instead of dropping it");
 	MW_EXPECT_TRUE(Test, !ServerRecord.bWasCalled, "Nothing can have arrived before the client even connects");
 
-	Now = ConnectClientToServer(ClientRouter, ClientHost, ClientNet, ServerRouter, ServerHost, Now);
-	MW_EXPECT_EQ(Test, ENetHostState::Connected, ClientNet.GetState(), "The client must connect through the manual per-side pump order");
+	// Under the old manual pump order the router flushed before that same frame's engine tick, so the
+	// connecting frame that flipped the peer to Connected still saw the pre-flip state; a further pump
+	// was needed after ConnectClientToServer returned. The frame set instead flushes the router right
+	// after the tick's own dispatch step (both inside one Host.Tick), so the very connecting frame whose
+	// dispatch admits the client also flushes and delivers the retained message within that same
+	// ConnectClientToServer iteration - one frame earlier than before.
+	Now = ConnectClientToServer(ClientHost, ClientNet, ServerHost, Now);
+	MW_EXPECT_EQ(Test, ENetHostState::Connected, ClientNet.GetState(), "The client must connect through the frame-set-driven pump order");
 	MW_EXPECT_EQ(
 		Test,
-		std::size_t{1},
+		std::size_t{0},
 		ClientRouter.QueuedOutboundCount(),
-		"Every connecting frame's flush ran before that same frame's state flip, so the retained message is still waiting");
-
-	Now += FrameStepMilliseconds;
-	PumpSide(ClientRouter, ClientHost, Now);
-	PumpSide(ServerRouter, ServerHost, Now);
-
-	MW_EXPECT_EQ(Test, std::size_t{0}, ClientRouter.QueuedOutboundCount(), "Once connected, the next flush must drain the retained head");
-	MW_EXPECT_TRUE(Test, ServerRecord.bWasCalled, "The retained message must reach the server handler once the client is connected");
+		"The set's flush runs right after the same tick's dispatch flips the peer to Connected, so the retained message is already sent "
+		"by the time the handshake loop reports Connected");
+	MW_EXPECT_TRUE(
+		Test,
+		ServerRecord.bWasCalled,
+		"That same connecting frame's server tick both receives the wire packet and dispatches it to the handler, so delivery is already "
+		"complete once the handshake loop returns");
 	MW_EXPECT_EQ(Test, TestMessageType, ServerRecord.MessageTypeId, "The delivered view must carry the original message type");
 	MW_EXPECT_EQ(Test, std::uint8_t{0x44}, ServerRecord.PayloadBytes[0], "The delivered view must carry the original payload byte");
 }
