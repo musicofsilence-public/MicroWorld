@@ -442,6 +442,29 @@ bench, first as a raw volley, then under the full engine.
 
   **Done when:** README carries real captured traces from both boards.
 
+  ⛔ WAITING FOR OWNER (2026-07-24) — build task 1.1 is green (example 17 both
+  envs `[SUCCESS]`, lead-verified). Flashing is owner-gated; the lead never
+  flashes. Owner: attach an E32 (with antenna) to each board per the example 17
+  README wiring, then run from the repo root — flash node 1 first, and keep the
+  two antennas ≥ 0.5 m apart:
+
+  ```bat
+  mw flash 17 esp32-s3-node-a COM5   :: node 1 (volley initiator)
+  mw flash 17 esp32-s3-node-b COM7   :: node 2
+  mw log   COM5                      :: node 1 trace  (Ctrl-C to stop)
+  mw log   COM7                      :: node 2 trace  (second terminal)
+  ```
+
+  `mw` is `examples/tools/mw.bat`, driving the reconnecting reader
+  `examples/tools/mwlog.py` over native USB-JTAG — **never** `pio device
+  monitor` (it wedges the port). COM5/COM7 are the rig's two USB-JTAG ports;
+  swap if enumeration differs. Expected shape: each console logs
+  `ex17: node=<id> open=1`, then the counter climbs alternately at the 1 s
+  cadence (node 1 `tx n=1`, node 2 `rx n=1 from=1` / `tx n=2`, node 1
+  `rx n=2 from=2`, …) with no stalls. Paste both consoles' output back here;
+  the lead will verify the shape, replace the README's illustrative "Expected
+  output" with the real capture, record image sizes, and flip this checkbox.
+
 - [ ] **1.3 Example `26-LoraMessaging` (the payoff demo).** Copy example 19's
   shape (`examples/19-UartMessaging` — server board: `TEngineHost` +
   `TNetHost` DedicatedServer + `TNetHostFrame`, channel-1 message spawns an
