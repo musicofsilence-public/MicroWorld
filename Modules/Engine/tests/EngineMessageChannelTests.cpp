@@ -69,6 +69,20 @@ constexpr std::uint8_t AppWireChannelByte = 5;
 /** A second wire-level channel byte on the same hosts, used only to prove a binding ignores traffic addressed to some other channel. */
 constexpr std::uint8_t ForeignWireChannelByte = 9;
 
+/** Router-facing channel id the multi-channel cases bind their telemetry wire to; equals AppChannelId since both name "the first channel". */
+constexpr FMessageChannelId TelemetryChannelId = AppChannelId;
+
+/** Router-facing channel id the multi-channel cases bind their command wire to; distinct from TelemetryChannelId so the router holds two channels. */
+constexpr FMessageChannelId CommandChannelId = 2;
+
+/** Wire-level channel byte the multi-channel cases' telemetry hosts read and write; equals AppWireChannelByte since it is that same single-channel
+ * byte. */
+constexpr std::uint8_t TelemetryWireChannelByte = AppWireChannelByte;
+
+/** Wire-level channel byte the multi-channel cases' command hosts read and write; a different network to Telemetry's, so the value need not differ,
+ * but a distinct one keeps captured logs unambiguous. */
+constexpr std::uint8_t CommandWireChannelByte = 6;
+
 /** Message type shared by every case; its value is arbitrary and only needs to be nonzero. */
 constexpr FMessageTypeId TestMessageType = 42;
 
@@ -101,8 +115,17 @@ using FHost = TEngineHost<6, 8, 256, 16, 1, 2, 4, 64>;
 /** Per-side D3 composition root: holds one side's net frame and message router behind the one INetworkFrame slot TEngineHost drives. */
 using FFrameSet = TNetworkFrameSet<2>;
 
+/** Per-side D3 composition root for the multi-channel cases: two net frames (telemetry, command) plus the one router that binds both. */
+using FMultiChannelFrameSet = TNetworkFrameSet<3>;
+
 /** Router profile shared by every case; its capacities are generous headroom, never the behavior under test. */
 using FTestRouter = TMessageRouter<HandlerCapacity, OutboundQueueCapacity, MessageByteCapacity, ChannelCapacity>;
+
+/** Channel capacity for the multi-channel cases: exactly Telemetry + Command, the roadmap 4.2 scenario under test. */
+constexpr std::size_t MultiChannelCapacity = 2;
+
+/** One router driving two wired channels (roadmap 4.2): otherwise identical profile to FTestRouter, sized only for its extra channel slot. */
+using FMultiChannelRouter = TMessageRouter<HandlerCapacity, OutboundQueueCapacity, MessageByteCapacity, MultiChannelCapacity>;
 
 /** Builds the shared fast-heartbeat, short-timeout config every case's hosts use for deterministic frames. */
 FNetHostConfig MakeConfig() noexcept
@@ -166,6 +189,42 @@ FMessageHandlerBinding MakeRecordingHandler(FDeliveredMessageRecord& Recorder) n
 }
 
 /**
+ * Buckets delivered views by ArrivedOnChannelId into one of two FDeliveredMessageRecords, so a single
+ * handler registered once on a multi-channel router can still prove per-channel isolation: a view that
+ * arrived on TelemetryChannelId only ever writes Telemetry, one that arrived on CommandChannelId only
+ * ever writes Command, so the recorded payload in either slot can only be its own channel's payload.
+ */
+struct FChannelKeyedMessageRecords final
+{
+	/** Written only by a view whose ArrivedOnChannelId equals TelemetryChannelId. */
+	FDeliveredMessageRecord Telemetry;
+
+	/** Written only by a view whose ArrivedOnChannelId equals CommandChannelId. */
+	FDeliveredMessageRecord Command;
+
+	/** Routes View into the slot matching its arrival channel; any other channel id is left unrecorded (never expected in this suite). */
+	void RecordByArrivalChannel(const FMessageView& View) noexcept
+	{
+		if (View.ArrivedOnChannelId == TelemetryChannelId)
+		{
+			Telemetry.Record(View);
+		}
+		else if (View.ArrivedOnChannelId == CommandChannelId)
+		{
+			Command.Record(View);
+		}
+	}
+};
+
+/** Binds a nothrow inline handler that buckets every delivered view into Recorder's channel-keyed slot. */
+FMessageHandlerBinding MakeChannelKeyedRecordingHandler(FChannelKeyedMessageRecords& Recorder) noexcept
+{
+	FMessageHandlerBinding Delegate;
+	(void)Delegate.Bind([&Recorder](const FMessageView& View) noexcept { Recorder.RecordByArrivalChannel(View); });
+	return Delegate;
+}
+
+/**
  * A minimal IEncodedMessageSink test double that can be toggled to reject every inbound message, isolating
  * TMessageChannelBinding::DroppedInboundCount from a real router's own queue mechanics.
  */
@@ -211,6 +270,25 @@ void PumpSide(FHost& Host, const TimePointMilliseconds NowMilliseconds) noexcept
 TimePointMilliseconds ConnectClientToServer(FHost& ClientHost, FNet& ClientNet, FHost& ServerHost, TimePointMilliseconds NowMilliseconds) noexcept
 {
 	for (int Frame = 0; Frame < MaxHandshakeFrames && ClientNet.GetState() != ENetHostState::Connected; ++Frame)
+	{
+		NowMilliseconds += FrameStepMilliseconds;
+		PumpSide(ClientHost, NowMilliseconds);
+		PumpSide(ServerHost, NowMilliseconds);
+	}
+	return NowMilliseconds;
+}
+
+/**
+ * Extends ConnectClientToServer to two independent wires (roadmap 4.2's telemetry + command networks):
+ * waits for BOTH client nets to report Connected, since each side's one Host.Tick already pumps both
+ * of that side's net frames through its frame set.
+ */
+TimePointMilliseconds ConnectClientToServerOverTwoWires(
+	FHost& ClientHost, FNet& ClientNetA, FNet& ClientNetB, FHost& ServerHost, TimePointMilliseconds NowMilliseconds) noexcept
+{
+	for (int Frame = 0;
+		 Frame < MaxHandshakeFrames && (ClientNetA.GetState() != ENetHostState::Connected || ClientNetB.GetState() != ENetHostState::Connected);
+		 ++Frame)
 	{
 		NowMilliseconds += FrameStepMilliseconds;
 		PumpSide(ClientHost, NowMilliseconds);
@@ -545,6 +623,289 @@ MW_TEST_CASE(EngineMessageChannel_RejectingSinkIncrementsDroppedInboundCount)
 		"A second rejected broadcast must still be accepted by the transport");
 	MW_EXPECT_EQ(Test, std::uint32_t{2}, Binding.DroppedInboundCount(), "A second rejection must climb the counter again, staying consistent");
 	MW_EXPECT_EQ(Test, std::size_t{3}, Sink.ReceivedCallCount(), "All three broadcasts must reach the sink after passing the channel filter");
+}
+
+/**
+ * Roadmap 4.2: one router per side drives two independent wires (telemetry + command) behind one
+ * TNetworkFrameSet<3>. A message sent on each channel must arrive tagged with that channel's own id
+ * and never bleed into the other's record (proven below by each record only ever holding its own
+ * distinct payload byte), and both must arrive within one post-send frame per side.
+ */
+MW_TEST_CASE(EngineMessageChannel_MultiChannelIsolationDeliversBothInOneFrame)
+{
+	THostLoopback<2, 8, 64> TelemetryNetwork;
+	THostLoopback<2, 8, 64> CommandNetwork;
+	FNet TelemetryServerNet(TelemetryNetwork.Port(0));
+	FNet TelemetryClientNet(TelemetryNetwork.Port(1));
+	FNet CommandServerNet(CommandNetwork.Port(0));
+	FNet CommandClientNet(CommandNetwork.Port(1));
+	FNetFrame TelemetryServerFrame{TelemetryServerNet};
+	FNetFrame TelemetryClientFrame{TelemetryClientNet};
+	FNetFrame CommandServerFrame{CommandServerNet};
+	FNetFrame CommandClientFrame{CommandClientNet};
+	FMultiChannelRouter ClientRouter;
+	FMultiChannelRouter ServerRouter;
+
+	FMultiChannelFrameSet ServerSet;
+	MW_EXPECT_EQ(
+		Test,
+		EEngineResult::Success,
+		ServerSet.Add(TelemetryServerFrame),
+		"The server's frame set must accept the telemetry net frame first (D3 order)");
+	MW_EXPECT_EQ(
+		Test,
+		EEngineResult::Success,
+		ServerSet.Add(CommandServerFrame),
+		"The server's frame set must accept the command net frame second (D3 order)");
+	MW_EXPECT_EQ(Test, EEngineResult::Success, ServerSet.Add(ServerRouter), "The server's frame set must accept its router last (D3 order)");
+	FMultiChannelFrameSet ClientSet;
+	MW_EXPECT_EQ(
+		Test,
+		EEngineResult::Success,
+		ClientSet.Add(TelemetryClientFrame),
+		"The client's frame set must accept the telemetry net frame first (D3 order)");
+	MW_EXPECT_EQ(
+		Test,
+		EEngineResult::Success,
+		ClientSet.Add(CommandClientFrame),
+		"The client's frame set must accept the command net frame second (D3 order)");
+	MW_EXPECT_EQ(Test, EEngineResult::Success, ClientSet.Add(ClientRouter), "The client's frame set must accept its router last (D3 order)");
+	FHost ServerHost{FGarbageCollectionBudget{1, 4, 8}, ServerSet};
+	FHost ClientHost{FGarbageCollectionBudget{1, 4, 8}, ClientSet};
+
+	FBinding TelemetryClientBinding(TelemetryClientNet, TelemetryWireChannelByte, TelemetryChannelId, EChannelSendTarget::Server, ClientRouter);
+	FBinding TelemetryServerBinding(TelemetryServerNet, TelemetryWireChannelByte, TelemetryChannelId, EChannelSendTarget::AllPeers, ServerRouter);
+	FBinding CommandClientBinding(CommandClientNet, CommandWireChannelByte, CommandChannelId, EChannelSendTarget::Server, ClientRouter);
+	FBinding CommandServerBinding(CommandServerNet, CommandWireChannelByte, CommandChannelId, EChannelSendTarget::AllPeers, ServerRouter);
+
+	MW_EXPECT_TRUE(Test, TelemetryClientBinding.IsAttached(), "The telemetry client binding must register its inbound handler");
+	MW_EXPECT_TRUE(Test, TelemetryServerBinding.IsAttached(), "The telemetry server binding must register its inbound handler");
+	MW_EXPECT_TRUE(Test, CommandClientBinding.IsAttached(), "The command client binding must register its inbound handler");
+	MW_EXPECT_TRUE(Test, CommandServerBinding.IsAttached(), "The command server binding must register its inbound handler");
+	MW_EXPECT_SUCCESS(Test, ClientRouter.AddChannel(TelemetryClientBinding), "The client router must accept its telemetry channel");
+	MW_EXPECT_SUCCESS(
+		Test, ClientRouter.AddChannel(CommandClientBinding), "The client router must accept its command channel as a second, distinct channel id");
+	MW_EXPECT_SUCCESS(Test, ServerRouter.AddChannel(TelemetryServerBinding), "The server router must accept its telemetry channel");
+	MW_EXPECT_SUCCESS(
+		Test, ServerRouter.AddChannel(CommandServerBinding), "The server router must accept its command channel as a second, distinct channel id");
+
+	FChannelKeyedMessageRecords ServerRecords;
+	FMessageHandlerHandle ServerHandle{};
+	MW_EXPECT_SUCCESS(
+		Test,
+		ServerRouter.AddMessageHandler(TestMessageType, BroadcastActorId, MakeChannelKeyedRecordingHandler(ServerRecords), ServerHandle),
+		"The server must register one handler shared by both channels before the client sends, bucketing by arrival channel");
+
+	MW_EXPECT_TRUE(Test, ServerHost.CreateWorld().Get() != nullptr, "The server roots its world before ticking");
+	MW_EXPECT_TRUE(Test, ClientHost.CreateWorld().Get() != nullptr, "The client roots its world before ticking");
+	MW_EXPECT_EQ(Test, ERuntimeResult::Success, ServerHost.BeginPlay(0), "The server world begins play at the baseline");
+	MW_EXPECT_EQ(Test, ERuntimeResult::Success, ClientHost.BeginPlay(0), "The client world begins play at the baseline");
+
+	FNetHostConfig TelemetryClientConfig = MakeConfig();
+	TelemetryClientConfig.ServerAddress = MakeLoopbackAddress(0);
+	FNetHostConfig CommandClientConfig = MakeConfig();
+	CommandClientConfig.ServerAddress = MakeLoopbackAddress(0);
+	(void)TelemetryServerNet.Configure(ENetMode::DedicatedServer, MakeConfig());
+	(void)TelemetryClientNet.Configure(ENetMode::Client, TelemetryClientConfig);
+	(void)CommandServerNet.Configure(ENetMode::DedicatedServer, MakeConfig());
+	(void)CommandClientNet.Configure(ENetMode::Client, CommandClientConfig);
+	(void)TelemetryServerNet.Start(0);
+	(void)TelemetryClientNet.Start(0);
+	(void)CommandServerNet.Start(0);
+	(void)CommandClientNet.Start(0);
+
+	const TimePointMilliseconds ConnectedAt = ConnectClientToServerOverTwoWires(ClientHost, TelemetryClientNet, CommandClientNet, ServerHost, 0);
+	MW_EXPECT_EQ(
+		Test, ENetHostState::Connected, TelemetryClientNet.GetState(), "The telemetry wire must connect through the frame-set-driven pump order");
+	MW_EXPECT_EQ(
+		Test, ENetHostState::Connected, CommandClientNet.GetState(), "The command wire must connect through the frame-set-driven pump order");
+
+	const std::array<std::uint8_t, 1> TelemetryPayload{0xAA};
+	const std::array<std::uint8_t, 1> CommandPayload{0xBB};
+	MW_EXPECT_SUCCESS(
+		Test,
+		ClientRouter.BroadcastMessage(TelemetryChannelId, TestMessageType, TestSenderActorId, TSpan<const std::uint8_t>(TelemetryPayload.data(), 1)),
+		"A connected client must queue a broadcast on its telemetry channel");
+	MW_EXPECT_SUCCESS(
+		Test,
+		ClientRouter.BroadcastMessage(CommandChannelId, TestMessageType, TestSenderActorId, TSpan<const std::uint8_t>(CommandPayload.data(), 1)),
+		"A connected client must queue a broadcast on its command channel");
+
+	const TimePointMilliseconds DeliveredAt = ConnectedAt + FrameStepMilliseconds;
+	PumpSide(ClientHost, DeliveredAt);
+	PumpSide(ServerHost, DeliveredAt);
+
+	MW_EXPECT_TRUE(Test, ServerRecords.Telemetry.bWasCalled, "One post-send frame per side must deliver the telemetry message");
+	MW_EXPECT_TRUE(Test, ServerRecords.Command.bWasCalled, "That same one post-send frame per side must also deliver the command message");
+	MW_EXPECT_EQ(
+		Test, TelemetryChannelId, ServerRecords.Telemetry.ArrivedOnChannelId, "The telemetry message must arrive tagged with its own channel id");
+	MW_EXPECT_EQ(Test, CommandChannelId, ServerRecords.Command.ArrivedOnChannelId, "The command message must arrive tagged with its own channel id");
+	MW_EXPECT_EQ(
+		Test,
+		std::uint8_t{0xAA},
+		ServerRecords.Telemetry.PayloadBytes[0],
+		"The record keyed by channel 1 must hold only the telemetry payload, never the command payload: proves no cross-channel bleed");
+	MW_EXPECT_EQ(
+		Test,
+		std::uint8_t{0xBB},
+		ServerRecords.Command.PayloadBytes[0],
+		"The record keyed by channel 2 must hold only the command payload, never the telemetry payload: proves no cross-channel bleed");
+}
+
+/**
+ * Roadmap 4.2's accepted v1 caveat: TMessageRouter has ONE shared outbound queue (see its TickFlush),
+ * so a stalled channel at the head retains that head and blocks every later entry for the whole tick,
+ * even one queued for an otherwise healthy channel - matching TNetManager::AdvanceSend's retained-head
+ * discipline from Task 2.2. To drive the stall deterministically in one flush: TNetHost::SendTo only
+ * queues into its own fixed-size outbound FIFO (TNetManager) and never touches the driver at queue
+ * time (see NetHost.h/NetManager.h), so filling the loopback mailbox alone cannot make a single SendTo
+ * call observe Full. This case therefore (1) fills the client's own command-wire TNetHost FIFO to
+ * capacity via direct SendTo calls bypassing the router, so the very next SendTo the router's flush
+ * issues is guaranteed to see Full, and (2) additionally fills the server's command mailbox directly
+ * via THostLoopback (per MailboxCapacityValue()), so the stall also reflects a genuinely unreachable
+ * peer rather than only a local queue.
+ */
+MW_TEST_CASE(EngineMessageChannel_StalledChannelRetainsRouterHead)
+{
+	THostLoopback<2, 8, 64> TelemetryNetwork;
+	THostLoopback<2, 8, 64> CommandNetwork;
+	FNet TelemetryServerNet(TelemetryNetwork.Port(0));
+	FNet TelemetryClientNet(TelemetryNetwork.Port(1));
+	FNet CommandServerNet(CommandNetwork.Port(0));
+	FNet CommandClientNet(CommandNetwork.Port(1));
+	FNetFrame TelemetryServerFrame{TelemetryServerNet};
+	FNetFrame TelemetryClientFrame{TelemetryClientNet};
+	FNetFrame CommandServerFrame{CommandServerNet};
+	FNetFrame CommandClientFrame{CommandClientNet};
+	FMultiChannelRouter ClientRouter;
+	FMultiChannelRouter ServerRouter;
+
+	FMultiChannelFrameSet ServerSet;
+	MW_EXPECT_EQ(
+		Test,
+		EEngineResult::Success,
+		ServerSet.Add(TelemetryServerFrame),
+		"The server's frame set must accept the telemetry net frame first (D3 order)");
+	MW_EXPECT_EQ(
+		Test,
+		EEngineResult::Success,
+		ServerSet.Add(CommandServerFrame),
+		"The server's frame set must accept the command net frame second (D3 order)");
+	MW_EXPECT_EQ(Test, EEngineResult::Success, ServerSet.Add(ServerRouter), "The server's frame set must accept its router last (D3 order)");
+	FMultiChannelFrameSet ClientSet;
+	MW_EXPECT_EQ(
+		Test,
+		EEngineResult::Success,
+		ClientSet.Add(TelemetryClientFrame),
+		"The client's frame set must accept the telemetry net frame first (D3 order)");
+	MW_EXPECT_EQ(
+		Test,
+		EEngineResult::Success,
+		ClientSet.Add(CommandClientFrame),
+		"The client's frame set must accept the command net frame second (D3 order)");
+	MW_EXPECT_EQ(Test, EEngineResult::Success, ClientSet.Add(ClientRouter), "The client's frame set must accept its router last (D3 order)");
+	FHost ServerHost{FGarbageCollectionBudget{1, 4, 8}, ServerSet};
+	FHost ClientHost{FGarbageCollectionBudget{1, 4, 8}, ClientSet};
+
+	FBinding TelemetryClientBinding(TelemetryClientNet, TelemetryWireChannelByte, TelemetryChannelId, EChannelSendTarget::Server, ClientRouter);
+	FBinding TelemetryServerBinding(TelemetryServerNet, TelemetryWireChannelByte, TelemetryChannelId, EChannelSendTarget::AllPeers, ServerRouter);
+	FBinding CommandClientBinding(CommandClientNet, CommandWireChannelByte, CommandChannelId, EChannelSendTarget::Server, ClientRouter);
+	FBinding CommandServerBinding(CommandServerNet, CommandWireChannelByte, CommandChannelId, EChannelSendTarget::AllPeers, ServerRouter);
+
+	MW_EXPECT_TRUE(Test, TelemetryClientBinding.IsAttached(), "The telemetry client binding must register its inbound handler");
+	MW_EXPECT_TRUE(Test, TelemetryServerBinding.IsAttached(), "The telemetry server binding must register its inbound handler");
+	MW_EXPECT_TRUE(Test, CommandClientBinding.IsAttached(), "The command client binding must register its inbound handler");
+	MW_EXPECT_TRUE(Test, CommandServerBinding.IsAttached(), "The command server binding must register its inbound handler");
+	MW_EXPECT_SUCCESS(Test, ClientRouter.AddChannel(TelemetryClientBinding), "The client router must accept its telemetry channel");
+	MW_EXPECT_SUCCESS(
+		Test, ClientRouter.AddChannel(CommandClientBinding), "The client router must accept its command channel as a second, distinct channel id");
+	MW_EXPECT_SUCCESS(Test, ServerRouter.AddChannel(TelemetryServerBinding), "The server router must accept its telemetry channel");
+	MW_EXPECT_SUCCESS(
+		Test, ServerRouter.AddChannel(CommandServerBinding), "The server router must accept its command channel as a second, distinct channel id");
+
+	MW_EXPECT_TRUE(Test, ServerHost.CreateWorld().Get() != nullptr, "The server roots its world before ticking");
+	MW_EXPECT_TRUE(Test, ClientHost.CreateWorld().Get() != nullptr, "The client roots its world before ticking");
+	MW_EXPECT_EQ(Test, ERuntimeResult::Success, ServerHost.BeginPlay(0), "The server world begins play at the baseline");
+	MW_EXPECT_EQ(Test, ERuntimeResult::Success, ClientHost.BeginPlay(0), "The client world begins play at the baseline");
+
+	FNetHostConfig TelemetryClientConfig = MakeConfig();
+	TelemetryClientConfig.ServerAddress = MakeLoopbackAddress(0);
+	FNetHostConfig CommandClientConfig = MakeConfig();
+	CommandClientConfig.ServerAddress = MakeLoopbackAddress(0);
+	(void)TelemetryServerNet.Configure(ENetMode::DedicatedServer, MakeConfig());
+	(void)TelemetryClientNet.Configure(ENetMode::Client, TelemetryClientConfig);
+	(void)CommandServerNet.Configure(ENetMode::DedicatedServer, MakeConfig());
+	(void)CommandClientNet.Configure(ENetMode::Client, CommandClientConfig);
+	(void)TelemetryServerNet.Start(0);
+	(void)TelemetryClientNet.Start(0);
+	(void)CommandServerNet.Start(0);
+	(void)CommandClientNet.Start(0);
+
+	const TimePointMilliseconds ConnectedAt = ConnectClientToServerOverTwoWires(ClientHost, TelemetryClientNet, CommandClientNet, ServerHost, 0);
+	MW_EXPECT_EQ(Test, ENetHostState::Connected, CommandClientNet.GetState(), "The command wire must connect before its outbound FIFO can be primed");
+
+	// auto: this test names no Net peer-id type, matching TMessageChannelBinding::TrySendEncodedMessage's own convention.
+	const auto CommandServerPeer = CommandClientNet.GetServerPeer();
+	MW_EXPECT_TRUE(Test, CommandServerPeer.IsValid(), "The client must resolve its server peer on the command wire before priming");
+
+	// (1) Prime the client's own command-wire TNetHost outbound FIFO to exactly its capacity via raw
+	// SendTo calls that bypass the router entirely; no Tick runs between these calls, so nothing drains
+	// and no heartbeat timer advances.
+	const std::array<std::uint8_t, 1> FifoPrimerPayload{0xF0};
+	for (std::size_t Index = 0; Index < FNet::SendQueueDepth; ++Index)
+	{
+		MW_EXPECT_EQ(
+			Test,
+			ENetResult::Success,
+			CommandClientNet.SendTo(CommandServerPeer, CommandWireChannelByte, TSpan<const std::uint8_t>(FifoPrimerPayload.data(), 1)),
+			"Priming the client's own outbound FIFO must succeed while it still has a free slot");
+	}
+
+	// (2) Fill the server's command mailbox directly (bypassing both routers and both TNetHosts), one
+	// raw packet at a time, until one more than MailboxCapacityValue() reports Full.
+	const std::array<std::uint8_t, 1> MailboxFillerPayload{0xF1};
+	for (std::size_t Index = 0; Index < CommandNetwork.MailboxCapacityValue(); ++Index)
+	{
+		MW_EXPECT_EQ(
+			Test,
+			ENetResult::Success,
+			CommandNetwork.Port(1).TrySend(MakeLoopbackAddress(0), TSpan<const std::uint8_t>(MailboxFillerPayload.data(), 1)),
+			"Each raw packet up to the server's command mailbox capacity must be accepted");
+	}
+	MW_EXPECT_EQ(
+		Test,
+		ENetResult::Full,
+		CommandNetwork.Port(1).TrySend(MakeLoopbackAddress(0), TSpan<const std::uint8_t>(MailboxFillerPayload.data(), 1)),
+		"One packet beyond MailboxCapacityValue() must report Full: the server's command mailbox is now saturated");
+
+	// Queue the stalled channel's message first (the router's next head), then a healthy channel's
+	// message right behind it.
+	const std::array<std::uint8_t, 1> StalledPayload{0xC0};
+	const std::array<std::uint8_t, 1> HealthyPayload{0xC1};
+	MW_EXPECT_SUCCESS(
+		Test,
+		ClientRouter.SendMessageToActor(
+			CommandChannelId, TestMessageType, BroadcastActorId, TestSenderActorId, TSpan<const std::uint8_t>(StalledPayload.data(), 1)),
+		"Queuing succeeds regardless of transport state: the router's own outbound queue is independent of the driver");
+	MW_EXPECT_SUCCESS(
+		Test,
+		ClientRouter.SendMessageToActor(
+			TelemetryChannelId, TestMessageType, BroadcastActorId, TestSenderActorId, TSpan<const std::uint8_t>(HealthyPayload.data(), 1)),
+		"Queuing the healthy channel's message behind the stalled one must also succeed");
+	MW_EXPECT_EQ(Test, std::size_t{2}, ClientRouter.QueuedOutboundCount(), "Both messages must be queued before the flush under test");
+
+	// Only the client is pumped: the server side is irrelevant to what the client's own router head
+	// does, and never receiving anything is exactly the point of a stalled wire.
+	const TimePointMilliseconds FlushAt = ConnectedAt + FrameStepMilliseconds;
+	PumpSide(ClientHost, FlushAt);
+
+	MW_EXPECT_EQ(
+		Test,
+		std::size_t{2},
+		ClientRouter.QueuedOutboundCount(),
+		"Accepted v1 cross-channel head-of-line caveat: a stalled channel at the head of the router's one shared outbound queue retains both "
+		"itself and the healthy channel's message queued behind it, because TMessageRouter::TickFlush stops the whole tick on the first "
+		"non-Success send (matching TNetManager::AdvanceSend's retained-head discipline from Task 2.2)");
 }
 
 } // namespace

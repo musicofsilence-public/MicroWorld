@@ -1175,7 +1175,7 @@ Goal: one world, several drivers, each channel with its own id and settings.
   Engine` passes (the set adds no Net include); `CheckClassDocumentation --require-doxygen`
   152 files.
 
-- [ ] **4.2 Multi-channel host test.** New case(s) in
+- [x] **4.2 Multi-channel host test.** New case(s) in
   `EngineMessageChannelTests.cpp`: two `THostLoopback` networks, two
   `TNetHost` pairs, ONE router per side with two bindings
   (`TelemetryChannelId = 1`, `CommandChannelId = 2`), one
@@ -1187,6 +1187,35 @@ Goal: one world, several drivers, each channel with its own id and settings.
 
   **Done when:** the isolation and ordering assertions pass.
   **Verify:** Standard Verify.
+
+  Done 2026-07-24 — Two cases appended to `EngineMessageChannelTests.cpp`
+  (test-only; 361 insertions, no production, docs, or example changes).
+  `EngineMessageChannel_MultiChannelIsolationDeliversBothInOneFrame`: per side
+  two `THostLoopback` networks (telemetry, command), two `TNetHost`, two
+  `TNetHostFrame`, ONE `TMessageRouter<…,2>` binding both wires
+  (`TelemetryChannelId`, `CommandChannelId`), a `TNetworkFrameSet<3>` (telemetry
+  frame, command frame, router) driven by `TEngineHost::Tick`. A single
+  channel-keyed handler buckets deliveries by `ArrivedOnChannelId`; distinct
+  payload markers (0xAA telemetry, 0xBB command) prove no cross-channel bleed and
+  one post-send frame per side delivers both.
+  `EngineMessageChannel_StalledChannelRetainsRouterHead`: demonstrates the
+  accepted-v1 cross-channel head-of-line caveat — the client's command-wire
+  `TNetHost` outbound FIFO is primed to `SendQueueDepth` (raw `SendTo` bypassing
+  the router) and the server's command mailbox filled to `MailboxCapacityValue()`,
+  so the router's next flush sees a non-Success on the command head; a healthy
+  telemetry message queued behind it is blocked too, so `QueuedOutboundCount()`
+  stays at 2 after one flush (router `TickFlush` stops on first non-Success,
+  matching `TNetManager`'s retained-head discipline). Reused the file's existing
+  `FNet`/`FNetFrame`/`FBinding`/`MakeConfig`/`PumpSide`; extended
+  `ConnectClientToServer` into a two-wire variant. Lead review confirmed the
+  FIFO-still-full-at-router-flush timing against source
+  (`TNetHostFrame::TickDispatch` → `PumpReceive` only, no outbound drain;
+  `TNetworkFrameSet::TickFlush` reverse add-order → the router, added last,
+  flushes before the command net frame drains its FIFO). Gates (lead-rerun):
+  clang-format clean; MSVC Release warning-clean (`/WX`); host `ctest` 11/11 (both
+  new cases plus all existing `EngineMessageChannel_*` and `EngineNetworkFrameSet_*`
+  `[PASS]`, 112 engine tests 0 failures); `CheckDependencyBoundaries --package
+  Engine` passes; `CheckClassDocumentation --require-doxygen` 152 files.
 
 - [ ] **4.3 Example `24-TwoChannelWorld` (2 boards, UART + WiFi UDP).** Both
   physical links between the same two boards (the rig from examples 16 + 18:
