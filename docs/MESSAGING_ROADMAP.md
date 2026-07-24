@@ -735,7 +735,7 @@ of the transport seam — sensor examples use timer-driven synthetic readings).
 | 0 | Baseline & governance | 2 | ✅ |
 | 1 | Engine-first examples groundwork (platform facades) | 5 | ✅ |
 | 2 | Local actor messaging (Engine) | 3 | ✅ |
-| 3 | Messaging over one wire | 2 | 🟨 |
+| 3 | Messaging over one wire | 2 | ✅ |
 | 4 | Several channels per world | 3 | ⬜ |
 | 5 | Guaranteed delivery per channel | 3 | ⬜ |
 | 6 | Documentation & close-out | 2 | ⬜ |
@@ -1098,7 +1098,7 @@ Goal: the same actor API crosses a real link; actors cannot tell.
   trimmed the binding's class comment to three sentences (doc-checker contract-length
   rule).
 
-- [ ] **3.2 Example `23-TwoBoardWire` (UART, 2 boards).** The vision demo on
+- [x] **3.2 Example `23-TwoBoardWire` (UART, 2 boards).** The vision demo on
   the cheapest link. Board A (server env): world with `FLampActor`
   (`LampActorId = 10`) subscribed to `SetLampStateMessageId`; on receipt logs
   `lamp ON`/`lamp OFF` (console is the observable — no GPIO, §4.6). Board B
@@ -1114,6 +1114,26 @@ Goal: the same actor API crosses a real link; actors cannot tell.
 
   **Done when:** grep gate 0; both envs compile.
   **Verify:** `pio run -d examples/23-TwoBoardWire` + ctest.
+
+  Done 2026-07-24 — new engine-first two-board example `examples/23-TwoBoardWire`
+  (two role envs `esp32-s3-server`/`esp32-s3-client` selected by
+  `-DMICROWORLD_EXAMPLE_SERVER`, scaffold copied from example 19). The client world's
+  `FSwitchActor` (`TInlineActor<0>`, 2 s tick) toggles a lamp state and sends a
+  targeted `SetLampStateMessageId` to `LampActorId`, then increments and broadcasts a
+  1-byte `HeartbeatCountMessageId`; the server world's `FLampActor` (subscribed
+  targeted to its own id) logs `lamp ON`/`lamp OFF` and `FDisplayActor` (broadcast
+  subscriber) logs `heartbeat=<n>` — console is the only observable, no GPIO (§4.6).
+  Both actors take `IMessageRouter&` by constructor (D9). Each board composes
+  `FEsp32UartDriver` → `TNetHost<2,120>` → `TMessageChannelBinding` (client target
+  `Server`, server `AllPeers`) → `TMessageRouter`, with `TEngineHost` holding the
+  `TNetHostFrame` and a shared `Ex23::PumpOneFrame` running the manual D3 order
+  (router `TickFlush` before the engine tick, `TickDispatch` after) — the same order
+  `EngineMessageChannelTests.cpp` proved, carrying the two-line Phase-4.1 comment. The
+  shared header holds the ids/config/composition-type aliases; role-local actors live
+  in each `*Main.cpp`. AGENTS.md added; catalog row 23 appended (🟨). Gates
+  (lead-rerun): grep gate 0; clang-format clean; `pio run` both envs `[SUCCESS]`
+  (server RAM 10.8% / Flash 5.8% 241501 B, client Flash 5.7% 240329 B); host `ctest`
+  11/11; `CheckClassDocumentation --require-doxygen` 151 files.
 
 ---
 

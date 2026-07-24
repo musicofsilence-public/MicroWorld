@@ -60,6 +60,7 @@ Status: ⬜ planned · 🟨 built (compiles) · ✅ hardware-verified
 | 20 | `20-TwoBoardI2c` | wired I2C master/slave `INetDriver` link — example 18's volley over a clocked bus | 2nd board, 3 wires + 2 pull-ups | 🟨 |
 | 21 | `21-TwoBoardSpi` | wired SPI master/slave `INetDriver` link — example 20's volley over a clocked full-duplex bus | 2nd board, 5 wires | 🟨 |
 | 22 | `22-ActorMessages` | local actor messaging: `TMessageRouter` broadcast + targeted send, one board | — | 🟨 |
+| 23 | `23-TwoBoardWire` | actor messaging over a UART wire: `TMessageChannelBinding` client/server, switch drives lamp | 2nd board, 3 wires | 🟨 |
 
 Wired board-to-board transports (examples 18–21) are planned in
 [`docs/WIRED_TRANSPORTS_ROADMAP.md`](../docs/WIRED_TRANSPORTS_ROADMAP.md) and are
