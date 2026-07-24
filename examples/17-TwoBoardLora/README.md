@@ -5,7 +5,7 @@ radio link instead of a wire — a `FEsp32E32LoraDriver` swapped in for
 `FEsp32UartDriver` on the `INetDriver` seam, with the volley loop, frame codec,
 and address helpers unchanged. This is the wireless twin of example 18.
 
-> Status: not yet verified on hardware.
+> Status: hardware-verified 2026-07-24 (EBYTE E32-433T20D, 433 MHz).
 
 ## What it does
 
@@ -93,26 +93,38 @@ mw log   COM7                        :: node 2 trace (second terminal)
 on these boards -- its reset-on-open can drop the native-USB port into the ROM
 download loader; `mw log` holds the line steady and reconnects across resets.
 
-## Expected output
+## Verified output
 
-Board A (node 1) (not yet verified on hardware):
+Captured 2026-07-24 on two ESP32-S3-DevKitC-1 boards, each with an EBYTE
+E32-433T20D (433 MHz, FCC ID 2ALPH-E32) in transparent mode, antennas
+attached. The two consoles show independent board uptimes (node 2 booted
+first, so it is already listening when node 1 seeds `n=1`); the counter climbs
+alternately at the 1 s cadence with `result=Success` on every send, and
+continues indefinitely.
+
+Board A (node 1), COM5:
 
 ```text
-I (nnnn) ex17: node=1 open=1
-I (nnnn) ex17: tx n=1 result=Success
-I (nnnn) ex17: rx n=2 from=2
-I (nnnn) ex17: tx n=3 result=Success
-I (nnnn) ex17: rx n=4 from=2
+I (572) ex17: node=1 open=1
+I (1582) ex17: tx n=1 result=Success
+I (3192) ex17: rx n=2 from=2
+I (4192) ex17: tx n=3 result=Success
+I (5802) ex17: rx n=4 from=2
+I (6802) ex17: tx n=5 result=Success
+I (8412) ex17: rx n=6 from=2
+I (9412) ex17: tx n=7 result=Success
 ```
 
-Board B (node 2) (not yet verified on hardware):
+Board B (node 2), COM7:
 
 ```text
-I (nnnn) ex17: node=2 open=1
-I (nnnn) ex17: rx n=1 from=1
-I (nnnn) ex17: tx n=2 result=Success
-I (nnnn) ex17: rx n=3 from=1
-I (nnnn) ex17: tx n=4 result=Success
+I (536) ex17: node=2 open=1
+I (5936) ex17: rx n=1 from=1
+I (6936) ex17: tx n=2 result=Success
+I (8546) ex17: rx n=3 from=1
+I (9546) ex17: tx n=4 result=Success
+I (11156) ex17: rx n=5 from=1
+I (12156) ex17: tx n=6 result=Success
 ```
 
 Unlike a wire, an occasional LoRa gap is radio weather (distance,

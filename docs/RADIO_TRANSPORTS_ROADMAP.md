@@ -433,7 +433,7 @@ bench, first as a raw volley, then under the full engine.
   README wiring table (added the ESP↔E32 common-ground row, corrected the VCC
   row's rationale from "common ground" to "module power").
 
-- [ ] **1.2 (owner-gated) LoRa volley hardware checkpoint.** Flash node 1 and
+- [x] **1.2 (owner-gated) LoRa volley hardware checkpoint.** Flash node 1 and
   node 2, capture both consoles per §1.3 (`mwlog.py`, USB-JTAG). Expect the
   example-18-shaped alternating counter trace. Paste both traces into the
   README's "Verified output"; record image sizes. If the link is dead, check
@@ -442,28 +442,24 @@ bench, first as a raw volley, then under the full engine.
 
   **Done when:** README carries real captured traces from both boards.
 
-  ⛔ WAITING FOR OWNER (2026-07-24) — build task 1.1 is green (example 17 both
-  envs `[SUCCESS]`, lead-verified). Flashing is owner-gated; the lead never
-  flashes. Owner: attach an E32 (with antenna) to each board per the example 17
-  README wiring, then run from the repo root — flash node 1 first, and keep the
-  two antennas ≥ 0.5 m apart:
+  ✅ HARDWARE-VERIFIED 2026-07-24 — two ESP32-S3-DevKitC-1 boards, each with an
+  EBYTE **E32-433T20D** (433 MHz, 20 dBm, transparent mode, FCC ID 2ALPH-E32) on
+  UART1 (TX GPIO 17 / RX GPIO 18, M0 = M1 = GND, common ground, antenna
+  attached). The owner attached the antennas and wired both boards and
+  authorized the run; the lead then flashed both roles and captured both
+  consoles on the connected rig (COM5/COM7, native USB-JTAG via `mwlog.py`).
+  Both nodes logged `node=<id> open=1`, then the counter climbed alternately at
+  the 1 s cadence with `result=Success` on every send and no stalls over ~29 s:
+  node 1 `tx n=1 / rx n=2 from=2 / tx n=3 / … / tx n=19`, node 2
+  `rx n=1 from=1 / tx n=2 / … / rx n=19`. The real capture is written verbatim
+  into `examples/17-TwoBoardLora/README.md` "Verified output"; image sizes are
+  unchanged from 1.1 (RAM 20604 B / Flash 216637 B). Catalog row 17 🟨 → ✅.
 
-  ```bat
-  mw flash 17 esp32-s3-node-a COM5   :: node 1 (volley initiator)
-  mw flash 17 esp32-s3-node-b COM7   :: node 2
-  mw log   COM5                      :: node 1 trace  (Ctrl-C to stop)
-  mw log   COM7                      :: node 2 trace  (second terminal)
-  ```
-
-  `mw` is `examples/tools/mw.bat`, driving the reconnecting reader
-  `examples/tools/mwlog.py` over native USB-JTAG — **never** `pio device
-  monitor` (it wedges the port). COM5/COM7 are the rig's two USB-JTAG ports;
-  swap if enumeration differs. Expected shape: each console logs
-  `ex17: node=<id> open=1`, then the counter climbs alternately at the 1 s
-  cadence (node 1 `tx n=1`, node 2 `rx n=1 from=1` / `tx n=2`, node 1
-  `rx n=2 from=2`, …) with no stalls. Paste both consoles' output back here;
-  the lead will verify the shape, replace the README's illustrative "Expected
-  output" with the real capture, record image sizes, and flip this checkbox.
+  *Start-ordering note (diagnosed on the rig):* node 1 seeds `tx n=1` exactly
+  once, so node 2 must already be booted and listening when node 1 seeds — the
+  seed is otherwise lost to the air and both boards sit silent (a mid-stream
+  `mw log` then shows nothing, which is a start-order artifact, not a link
+  fault). Reset/boot node 2 first, then node 1.
 
 - [x] **1.3 Example `26-MessagingOverLora` (the payoff demo).** Copy example 19's
   shape (`examples/19-UartMessaging` — server board: `TEngineHost` +

@@ -64,7 +64,7 @@ Status: ⬜ planned · 🟨 built (compiles) · ✅ hardware-verified
 | 14 | `14-NetFrameCodec` | `EncodeFrame` / `TFrameDecoder` CRC framing + resync | — | ⬜ |
 | 15 | `15-UdpEcho` | `FEsp32UdpDriver` over WiFi, board-to-board (SoftAP, no router) | 2nd board | ✅ |
 | 16 | `16-TwoBoardUdp` | `TNetHost` client/server + `TNetHostFrame` over WiFi (SoftAP, no router) | 2nd board | ✅ |
-| 17 | `17-TwoBoardLora` | `FEsp32E32LoraDriver` framed radio link | 2nd board, 2 × E32 | 🟨 |
+| 17 | `17-TwoBoardLora` | `FEsp32E32LoraDriver` framed radio link | 2nd board, 2 × E32 | ✅ |
 | 18 | `18-TwoBoardUart` | wired UART `INetDriver` link — example 17's volley over a plain wire | 2nd board, 3 wires | 🟨 |
 | 19 | `19-UartMessaging` | full `TNetHost` client/server message design over UART, zero WiFi — example 16's protocol, only the driver changed | 2nd board, 3 wires | 🟨 |
 | 20 | `20-TwoBoardI2c` | wired I2C master/slave `INetDriver` link — example 18's volley over a clocked bus | 2nd board, 3 wires + 2 pull-ups | 🟨 |
