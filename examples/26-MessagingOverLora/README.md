@@ -5,7 +5,7 @@ bound to `TNetHost` through the `TNetHostFrame` seam, and a bare `TNetHost`
 client — running over an E32 LoRa radio. **Same application protocol as
 example 19 — only the driver construction and the D8 session profile differ.**
 
-> Status: not yet verified on hardware.
+> Status: hardware-verified 2026-07-24 (EBYTE E32-433T20D, 433 MHz).
 
 ## What it does
 
@@ -105,30 +105,41 @@ mw log   COM7                        :: client trace (second terminal)
 on these boards -- its reset-on-open can drop the native-USB port into the ROM
 download loader; `mw log` holds the line steady and reconnects across resets.
 
-## Expected output
+## Verified output
 
-Server board (not yet verified on hardware):
+Captured 2026-07-24 on two ESP32-S3-DevKitC-1 boards, each with an EBYTE
+E32-433T20D (433 MHz, FCC ID 2ALPH-E32) in transparent mode, antennas
+attached — the server on COM5, the client on COM7.
+
+Server board (`node=1`):
 
 ```text
-I (nnnn) ex26: server node=1 open=1
-I (nnnn) ex26: server listening (no WiFi -- LoRa radio only)
-I (nnnn) ex26: server spawned actor -> world actor count=1
-I (nnnn) ex26: server spawned actor -> world actor count=2
-I (nnnn) ex26: done (server spawned 2 actors)
+I (575) ex26: server node=1 open=1
+I (575) ex26: server listening (no WiFi -- LoRa radio only)
+I (5615) ex26: server spawned actor -> world actor count=1
+I (6615) ex26: server spawned actor -> world actor count=2
+I (6615) ex26: done (server spawned 2 actors)
 ```
 
-Client board (not yet verified on hardware; the `rx state` line repeats as
-broadcasts arrive; the count climbs to 2):
+Client board (`node=2`): it connects, sends its two spawn requests, then prints
+the channel-2 state broadcast every second as it arrives (the actor count climbs
+0 → 1 → 2). The broadcasts keep arriving indefinitely, which shows the session's
+heartbeats holding the link open far past the 15 s peer timeout — tick 104 below
+is ~100 s of uptime, still connected:
 
 ```text
-I (nnnn) ex26: client node=2 open=1
-I (nnnn) ex26: client connecting (no WiFi -- LoRa radio only)
-I (nnnn) ex26: client connected
-I (nnnn) ex26: client sent spawn request 1
-I (nnnn) ex26: client rx state tick=<n> actors=1
-I (nnnn) ex26: client sent spawn request 2
-I (nnnn) ex26: client rx state tick=<n> actors=2
-I (nnnn) ex26: done (observed actor count 2)
+I (537) ex26: client node=2 open=1
+I (537) ex26: client connecting (no WiFi -- LoRa radio only)
+I (1197) ex26: client connected
+I (1197) ex26: client sent spawn request 1
+I (1837) ex26: client rx state tick=6 actors=0
+I (2197) ex26: client sent spawn request 2
+I (2837) ex26: client rx state tick=7 actors=1
+I (3837) ex26: client rx state tick=8 actors=2
+I (3837) ex26: done (observed actor count 2)
+I (4837) ex26: client rx state tick=9 actors=2
+...
+I (99837) ex26: client rx state tick=104 actors=2
 ```
 
 ## Image size

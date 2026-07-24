@@ -352,7 +352,7 @@ compile probe builds with BT enabled without touching the shared profile.
 | Phase | Title | Tasks | Status |
 | --- | --- | --- | --- |
 | 0 | Baseline & governance | 2 | ✅ |
-| 1 | LoRa proven on hardware | 4 | 🟨 |
+| 1 | LoRa proven on hardware | 4 | ✅ |
 | 2 | Bluetooth LE design spike (ADR 0004) | 1 | ⬜ |
 | 3 | BLE driver pair | 2 | ⬜ |
 | 4 | BLE examples on hardware | 4 | ⬜ |
@@ -511,12 +511,27 @@ bench, first as a raw volley, then under the full engine.
   `26-MessagingOverLora` (no `-L` substring) + fullclean fixed it. Folder names
   must avoid `-L`; examples 27–29 planned names are already clear.
 
-- [ ] **1.4 (owner-gated) LoRa messaging hardware checkpoint.** Flash, capture
+- [x] **1.4 (owner-gated) LoRa messaging hardware checkpoint.** Flash, capture
   both consoles: expect Hello/Welcome admission, a channel-1 spawn on the
   server world, periodic channel-2 state lines on the client, heartbeat
   survival over ≥ 60 s. Paste traces; record sizes.
 
   **Done when:** README carries the captured two-console trace.
+
+  ✅ HARDWARE-VERIFIED 2026-07-24 — same two boards + E32-433T20D rig as 1.2
+  (server on COM5, client on COM7; owner wired/antenna'd, lead flashed and
+  captured). All four acceptance criteria met: the client logged
+  `connecting` → `connected` (Hello/Welcome admission); it `sent spawn
+  request 1`/`2` on channel 1 and the **server** logged
+  `spawned actor -> world actor count=1` then `=2` and `done (server spawned 2
+  actors)`; the client received the channel-2 state broadcast every second with
+  the actor count climbing `0 → 1 → 2` (`done (observed actor count 2)`); and
+  the state broadcasts continued unbroken to **tick 104 (~100 s uptime, still
+  connected)** — heartbeat survival at 6.5× the 15 s peer timeout. The real
+  two-console capture is written into
+  `examples/26-MessagingOverLora/README.md` "Verified output"; image sizes are
+  unchanged from 1.3 (server RAM 25084 B / Flash 232341 B, client RAM 21388 B /
+  Flash 221493 B). Catalog row 26 🟨 → ✅. **Phase 1 complete.**
 
 ---
 
