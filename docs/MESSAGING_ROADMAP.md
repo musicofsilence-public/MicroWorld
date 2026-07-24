@@ -737,7 +737,7 @@ of the transport seam — sensor examples use timer-driven synthetic readings).
 | 2 | Local actor messaging (Engine) | 3 | ✅ |
 | 3 | Messaging over one wire | 2 | ✅ |
 | 4 | Several channels per world | 3 | ✅ |
-| 5 | Guaranteed delivery per channel | 3 | 🟨 |
+| 5 | Guaranteed delivery per channel | 3 | ✅ |
 | 6 | Documentation & close-out | 2 | ⬜ |
 
 ---
@@ -1339,7 +1339,7 @@ demonstrated under packet loss.
   0 failures); `CheckDependencyBoundaries --package Engine` 18 files; `CheckClassDocumentation
   --require-doxygen` 157 files.
 
-- [ ] **5.3 Example `25-GuaranteedDelivery` (2 boards, WiFi UDP + injected
+- [x] **5.3 Example `25-GuaranteedDelivery` (2 boards, WiFi UDP + injected
   loss).** SoftAP rig from 16. Client wraps its `FEsp32UdpDriver` in
   `FPacketDropDriver{DropEveryNthSend = 3}` (deterministic, honest loss).
   Two channels, same UDP link: channel 1 best-effort, channel 2 guaranteed
@@ -1352,6 +1352,29 @@ demonstrated under packet loss.
 
   **Done when:** grep gate 0; both envs compile.
   **Verify:** `pio run -d examples/25-GuaranteedDelivery` + ctest.
+
+  Done 2026-07-24 — new engine-first two-board example `examples/25-GuaranteedDelivery`
+  (nine files + one catalog row). ONE WiFi-UDP link carries TWO channels to one
+  `TMessageRouter`: `BestEffortChannelId` (a plain `TMessageChannelBinding`) and
+  `GuaranteedChannelId` (the same binding wrapped in `TReliableChannel<8, 96>`), both
+  pumped by one `TNetworkFrameSet<3>` (net frame, reliable channel, router — D3 order).
+  The client wraps its `FEsp32UdpDriver` in `FPacketDropDriver{DropEveryNthSend = 3}`
+  (Task 5.1), so every third outgoing packet — data, ack, or heartbeat — is dropped at
+  the driver seam, below the channel demux. `FCounterActor` sends 1..30 every 500 ms to
+  the server's `FLedgerActor` on both channels (targeted sends); the ledger logs one
+  column per channel (`rx best-effort n=` / `rx guaranteed n=`), the client logs
+  `guaranteed resent=/pending=` on change, the server logs `guaranteed dedup dropped=` on
+  change. Both actors reach messaging only through `IMessageRouter&` (D9) — neither sees
+  the net, a driver, UDP, or the drop injector. The guaranteed-channel composition breaks
+  the wrapper↔binding cycle in the exact §4.3 order (construct reliable(forward=router) →
+  construct binding(sink=reliable) → `SetInnerChannel` → `AddChannel` after it). Wire
+  channel bytes differ (1 best-effort, 2 guaranteed) since both share one net.
+  `platformio.ini`/`CMakeLists.txt`/`src/CMakeLists.txt` are byte-identical to example
+  24's. README keeps `> Status: not yet verified on hardware.` and has no wiring section
+  (WiFi only). Gates (lead-rerun): `src/` grep gate 0; clang-format clean; both ESP32
+  envs `pio run` `[SUCCESS]` (server Flash 811741 B, client 812981 B); host `ctest`
+  still 11/11 (this example adds no `Modules/` source). Commits `184e4be` (5.1),
+  `ecd6227` (5.2), plus the 5.3 commit — **closes Phase 5**.
 
 ---
 
