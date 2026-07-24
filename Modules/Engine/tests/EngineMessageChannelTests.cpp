@@ -7,10 +7,12 @@
 #include <MicroWorld/Engine/MessageChannelBinding.h>
 #include <MicroWorld/Engine/MessageRouter.h>
 #include <MicroWorld/Engine/NetworkFrame.h>
+#include <MicroWorld/Engine/ReliableChannel.h>
 #include <MicroWorld/Net/HostLoopback.h>
 #include <MicroWorld/Net/NetAddress.h>
 #include <MicroWorld/Net/NetHost.h>
 #include <MicroWorld/Net/NetResult.h>
+#include <MicroWorld/Net/PacketDropDriver.h>
 #include <MicroWorld/Object/GarbageCollector.h>
 #include <MicroWorld/Object/ObjectPtr.h>
 #include <MicroWorld/Time.h>
@@ -22,6 +24,7 @@
 namespace
 {
 using MicroWorld::BroadcastActorId;
+using MicroWorld::DurationMilliseconds;
 using MicroWorld::EChannelSendTarget;
 using MicroWorld::EEngineResult;
 using MicroWorld::EMessageResult;
@@ -37,9 +40,12 @@ using MicroWorld::FMessageHandlerHandle;
 using MicroWorld::FMessageTypeId;
 using MicroWorld::FMessageView;
 using MicroWorld::FNetHostConfig;
+using MicroWorld::FPacketDropDriver;
+using MicroWorld::FReliableChannelConfig;
 using MicroWorld::IEncodedMessageSink;
 using MicroWorld::LocalChannelId;
 using MicroWorld::MakeLoopbackAddress;
+using MicroWorld::ReliableHeaderBytes;
 using MicroWorld::TEngineHost;
 using MicroWorld::THostLoopback;
 using MicroWorld::TimePointMilliseconds;
@@ -48,6 +54,7 @@ using MicroWorld::TMessageRouter;
 using MicroWorld::TNetHost;
 using MicroWorld::TNetHostFrame;
 using MicroWorld::TNetworkFrameSet;
+using MicroWorld::TReliableChannel;
 using MicroWorld::TSpan;
 
 /** Asserts a messaging operation returned Success without discarding the result. */
@@ -251,6 +258,31 @@ private:
 	bool bRejectInbound{false};
 
 	/** Total ReceiveEncodedMessage calls observed, accepted or not. */
+	std::size_t CallCount{0};
+};
+
+/**
+ * Minimal application-layer stand-in for the reliable-channel integration case's server side:
+ * counts every payload a TReliableChannel forwards once its own ack/duplicate handling has run,
+ * so delivered-count can be compared against sender count without a full router and handler.
+ */
+class FRecordingReliableForwardSink final : public IEncodedMessageSink
+{
+public:
+	/** Reports how many payloads have been forwarded so far. */
+	std::size_t ForwardedCount() const noexcept { return CallCount; }
+
+	/** Records the call and always accepts. */
+	EMessageResult ReceiveEncodedMessage(const FMessageChannelId ArrivedOnChannelId, const TSpan<const std::uint8_t> Encoded) noexcept override
+	{
+		(void)ArrivedOnChannelId;
+		(void)Encoded;
+		++CallCount;
+		return EMessageResult::Success;
+	}
+
+private:
+	/** Total ReceiveEncodedMessage calls observed so far. */
 	std::size_t CallCount{0};
 };
 
@@ -906,6 +938,119 @@ MW_TEST_CASE(EngineMessageChannel_StalledChannelRetainsRouterHead)
 		"Accepted v1 cross-channel head-of-line caveat: a stalled channel at the head of the router's one shared outbound queue retains both "
 		"itself and the healthy channel's message queued behind it, because TMessageRouter::TickFlush stops the whole tick on the first "
 		"non-Success send (matching TNetManager::AdvanceSend's retained-head discipline from Task 2.2)");
+}
+
+/**
+ * Roadmap 5.2 integration case: the client wraps its wire binding in a TReliableChannel and its own
+ * driver in FPacketDropDriver{3} (Task 5.1's loss injector); the server also wraps its binding in a
+ * TReliableChannel (so acks and inbound both flow through the reliable wire format) whose forward
+ * sink is a plain recording stub rather than a full router+handler - the simpler wiring the brief
+ * allows, since counting deliveries needs no message-type dispatch. Every message the client sends
+ * must still reach the server exactly once despite the injected drops, and at least one resend must
+ * have fired, proving the retry/ack/dedup logic recovers from real loss end to end.
+ */
+MW_TEST_CASE(EngineMessageChannel_ReliableChannelSurvivesPacketDropsDeliveringExactlyOnce)
+{
+	constexpr std::uint32_t DropEveryNthSend = 3;
+	constexpr std::size_t MessagesToSend = 6;
+	constexpr DurationMilliseconds ReliableRetryIntervalMilliseconds = 50;
+	constexpr std::uint8_t ReliableMaxSendAttempts = 5;
+	constexpr int MaxFramesPerMessage = ReliableMaxSendAttempts + 3;
+	constexpr std::size_t ReliableSlotBytes = MessageByteCapacity + ReliableHeaderBytes;
+	using FReliableChannel = TReliableChannel<4, ReliableSlotBytes>;
+	using FClientFrameSet = TNetworkFrameSet<3>;
+	using FServerFrameSet = TNetworkFrameSet<2>;
+
+	THostLoopback<2, 8, 64> Network;
+	FPacketDropDriver ClientDropDriver(Network.Port(1), DropEveryNthSend);
+	FNet ServerNet(Network.Port(0));
+	FNet ClientNet(ClientDropDriver);
+	FNetFrame ServerFrame{ServerNet};
+	FNetFrame ClientFrame{ClientNet};
+
+	FTestRouter ClientRouter;
+	FRecordingReliableForwardSink ServerForwardSink;
+
+	FReliableChannelConfig ReliableConfig{};
+	ReliableConfig.RetryIntervalMilliseconds = ReliableRetryIntervalMilliseconds;
+	ReliableConfig.MaxSendAttempts = ReliableMaxSendAttempts;
+	FReliableChannel ClientReliable(ClientRouter, ReliableConfig);
+	FReliableChannel ServerReliable(ServerForwardSink, ReliableConfig);
+
+	FBinding ClientBinding(ClientNet, AppWireChannelByte, AppChannelId, EChannelSendTarget::Server, ClientReliable);
+	FBinding ServerBinding(ServerNet, AppWireChannelByte, AppChannelId, EChannelSendTarget::AllPeers, ServerReliable);
+	ClientReliable.SetInnerChannel(ClientBinding);
+	ServerReliable.SetInnerChannel(ServerBinding);
+
+	MW_EXPECT_TRUE(Test, ClientBinding.IsAttached(), "The client binding must register its inbound handler");
+	MW_EXPECT_TRUE(Test, ServerBinding.IsAttached(), "The server binding must register its inbound handler");
+	MW_EXPECT_SUCCESS(Test, ClientRouter.AddChannel(ClientReliable), "The client router must accept its guaranteed channel");
+
+	FClientFrameSet ClientSet;
+	MW_EXPECT_EQ(Test, EEngineResult::Success, ClientSet.Add(ClientFrame), "The client's frame set must accept its net frame first (4.4 order)");
+	MW_EXPECT_EQ(
+		Test, EEngineResult::Success, ClientSet.Add(ClientReliable), "The client's frame set must accept its reliable channel second (4.4 order)");
+	MW_EXPECT_EQ(Test, EEngineResult::Success, ClientSet.Add(ClientRouter), "The client's frame set must accept its router last (4.4 order)");
+	FServerFrameSet ServerSet;
+	MW_EXPECT_EQ(Test, EEngineResult::Success, ServerSet.Add(ServerFrame), "The server's frame set must accept its net frame first (4.4 order)");
+	MW_EXPECT_EQ(
+		Test,
+		EEngineResult::Success,
+		ServerSet.Add(ServerReliable),
+		"The server's frame set must accept its reliable channel second; this side needs no router");
+
+	FHost ServerHost{FGarbageCollectionBudget{1, 4, 8}, ServerSet};
+	FHost ClientHost{FGarbageCollectionBudget{1, 4, 8}, ClientSet};
+	MW_EXPECT_TRUE(Test, ServerHost.CreateWorld().Get() != nullptr, "The server roots its world before ticking");
+	MW_EXPECT_TRUE(Test, ClientHost.CreateWorld().Get() != nullptr, "The client roots its world before ticking");
+	MW_EXPECT_EQ(Test, ERuntimeResult::Success, ServerHost.BeginPlay(0), "The server world begins play at the baseline");
+	MW_EXPECT_EQ(Test, ERuntimeResult::Success, ClientHost.BeginPlay(0), "The client world begins play at the baseline");
+
+	// A heartbeat/timeout window far longer than this case's whole run keeps every raw send call
+	// attributable to the client's one-time Hello plus the reliable channel's own Data/retry traffic,
+	// so the deterministic every-3rd-call drop is guaranteed to land on a message send at some point.
+	FNetHostConfig SharedConfig = MakeConfig();
+	SharedConfig.HeartbeatIntervalMilliseconds = 1'000'000;
+	SharedConfig.PeerTimeoutMilliseconds = 2'000'000;
+	FNetHostConfig ClientConfig = SharedConfig;
+	ClientConfig.ServerAddress = MakeLoopbackAddress(0);
+	(void)ServerNet.Configure(ENetMode::DedicatedServer, SharedConfig);
+	(void)ClientNet.Configure(ENetMode::Client, ClientConfig);
+	(void)ServerNet.Start(0);
+	(void)ClientNet.Start(0);
+
+	TimePointMilliseconds Now = ConnectClientToServer(ClientHost, ClientNet, ServerHost, 0);
+	MW_EXPECT_EQ(Test, ENetHostState::Connected, ClientNet.GetState(), "The client must connect before the drop-injected sends begin");
+
+	for (std::size_t MessageIndex = 0; MessageIndex < MessagesToSend; ++MessageIndex)
+	{
+		const std::array<std::uint8_t, 1> Payload{static_cast<std::uint8_t>(MessageIndex)};
+		MW_EXPECT_SUCCESS(
+			Test,
+			ClientRouter.SendMessageToActor(
+				AppChannelId, TestMessageType, TestListenerActorId, TestSenderActorId, TSpan<const std::uint8_t>(Payload.data(), 1)),
+			"Queuing one guaranteed message must succeed");
+
+		for (int Frame = 0; Frame < MaxFramesPerMessage; ++Frame)
+		{
+			Now += ReliableRetryIntervalMilliseconds;
+			PumpSide(ClientHost, Now);
+			PumpSide(ServerHost, Now);
+			if (ClientReliable.PendingCount() == 0)
+			{
+				break;
+			}
+		}
+		MW_EXPECT_EQ(Test, std::size_t{0}, ClientReliable.PendingCount(), "Every message must be fully acknowledged before the next one is queued");
+	}
+
+	MW_EXPECT_EQ(
+		Test,
+		MessagesToSend,
+		ServerForwardSink.ForwardedCount(),
+		"Every message the client sent must be delivered to the server exactly once despite the injected drops");
+	MW_EXPECT_TRUE(
+		Test, ClientReliable.ResentCount() > 0, "At least one message must have been resent because FPacketDropDriver actually dropped a send");
 }
 
 } // namespace

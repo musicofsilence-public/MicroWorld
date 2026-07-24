@@ -1292,7 +1292,7 @@ demonstrated under packet loss.
   failures); `CheckClassDocumentation --require-doxygen` 155 files; the header
   includes only Core/Memory/Net.
 
-- [ ] **5.2 `Engine/ReliableChannel.h` + tests.** Implement §4.3's
+- [x] **5.2 `Engine/ReliableChannel.h` + tests.** Implement §4.3's
   `TReliableChannel` including `SetInnerChannel` two-phase setup (the
   documented composition cycle), serial-number comparison, ack-on-duplicate,
   retry pacing from `TickFlush(now)` (caller clock only), attempt cap →
@@ -1310,6 +1310,34 @@ demonstrated under packet loss.
   count and `ResentCount > 0`).
 
   **Done when:** all listed behaviors pass; Standard Verify.
+
+  Done 2026-07-24 — new header-only `Modules/Engine/include/MicroWorld/Engine/ReliableChannel.h`:
+  `TReliableChannel<MaxPendingMessages, MaxMessageBytes> final : IMessageChannel,
+  IEncodedMessageSink, INetworkFrame` with `ReliableHeaderBytes = 3`, `EReliablePacketKind`
+  {Data=1, Acknowledgement=2}, `FReliableChannelConfig`. Wire format `[Kind][Sequence u16 LE]
+  [payload]`; sequences start at 1 (0 never sent). Two-phase `SetInnerChannel` breaks the
+  wrapper↔binding cycle (before it: `TrySend`→`Unavailable`, `GetChannelId`→`LocalChannelId`,
+  `MaxEncodedMessageBytes`→0). Outbound wraps + stores pending (kept even when the initial inner
+  send is non-Success, so `TickFlush` retries rather than loses it); `CapacityExceeded` checked
+  transactionally before any sequence is consumed. Inbound always acks Data (even duplicates —
+  the sender's first ack may have been lost), dedups via a 32-wide serial-number window
+  (`IsNewer`/`WasSeen`/`MarkSeen`, 32-bit `SeenMask`), forwards a fresh payload once, counts a
+  duplicate otherwise. `TickFlush` sets the retry baseline on the first flush then resends once
+  `RetryIntervalMilliseconds` elapses, dropping + `LostCount` after `MaxSendAttempts`. All four
+  counters are pure queries; the header names no Net type. New `EngineReliableChannelTests.cpp`
+  (8 cases: wrap byte-layout, ack-clears-pending, resend-at-exactly-interval, drop-after-max-
+  attempts, duplicate-forwarded-once-acked-twice, capacity-exceeded-transactional, unset-inner-
+  unavailable, window-edge-jump-still-drops-old-highest); one integration case in
+  `EngineMessageChannelTests.cpp` (loopback + `FPacketDropDriver{3}` under the client driver,
+  both sides reliable-wrapped) proving all 6 messages delivered exactly once despite drops with
+  `ResentCount() > 0`. **Lead review fixed a boundary off-by-one** in the brief's normative
+  `MarkSeen`: at a jump of exactly the window width (32) the old highest was dropped from the
+  mask, so a later duplicate of it would be re-forwarded (breaks exactly-once) — provably
+  unreachable while `MaxPendingMessages < 32`, but corrected and locked by the window-edge unit
+  case. Gates (lead-rerun): clang-format clean; MSVC Release warning-clean (`/WX`); host `ctest`
+  11/11 (engine suite 121 tests, all `EngineReliableChannel_*` + the integration case `[PASS]`,
+  0 failures); `CheckDependencyBoundaries --package Engine` 18 files; `CheckClassDocumentation
+  --require-doxygen` 157 files.
 
 - [ ] **5.3 Example `25-GuaranteedDelivery` (2 boards, WiFi UDP + injected
   loss).** SoftAP rig from 16. Client wraps its `FEsp32UdpDriver` in
