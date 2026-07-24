@@ -125,6 +125,10 @@ public:
 	/** Inline bytes reserved per handler callable, sized for a small capture. */
 	static constexpr std::size_t MessageHandlerInlineBytes = 32;
 
+	/** Largest encoded message one packet can carry: the packet budget minus the
+	 *  4-byte message header. A channel binding exposes this as its send ceiling. */
+	static constexpr std::size_t MaxMessageBytes = MaxPacketBytes - MessageHeaderBytes;
+
 	/** Reserved peer index that routes a message to the listen server's local peer. */
 	static constexpr std::uint8_t LocalPeerIndex = 0xFE;
 

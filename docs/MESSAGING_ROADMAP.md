@@ -735,7 +735,7 @@ of the transport seam — sensor examples use timer-driven synthetic readings).
 | 0 | Baseline & governance | 2 | ✅ |
 | 1 | Engine-first examples groundwork (platform facades) | 5 | ✅ |
 | 2 | Local actor messaging (Engine) | 3 | ✅ |
-| 3 | Messaging over one wire | 2 | ⬜ |
+| 3 | Messaging over one wire | 2 | 🟨 |
 | 4 | Several channels per world | 3 | ⬜ |
 | 5 | Guaranteed delivery per channel | 3 | ⬜ |
 | 6 | Documentation & close-out | 2 | ⬜ |
@@ -1051,7 +1051,7 @@ deterministically, with zero networking.
 
 Goal: the same actor API crosses a real link; actors cannot tell.
 
-- [ ] **3.1 `Engine/MessageChannelBinding.h` + host tests.** Implement §4.3's
+- [x] **3.1 `Engine/MessageChannelBinding.h` + host tests.** Implement §4.3's
   `TMessageChannelBinding<TNet>` (ctor registers the inbound `TNetHost`
   handler capturing `this`; `IsAttached()`; result mapping normative table;
   `EChannelSendTarget`). New
@@ -1070,6 +1070,33 @@ Goal: the same actor API crosses a real link; actors cannot tell.
   comment pointing at 4.1 (which retrofits these tests onto the set).
 
   **Done when:** listed behaviors pass; Standard Verify.
+
+  Done 2026-07-24 — new header-only `Modules/Engine/include/MicroWorld/Engine/MessageChannelBinding.h`
+  implements §4.3's `TMessageChannelBinding<TNet>` (`final : IMessageChannel`,
+  `EChannelSendTarget { Server, AllPeers }`), duck-typed on TNet like `TNetHostFrame`
+  so the engine names no Net type and stays Net-free: the inbound handler binds a
+  generic lambda (`auto` peer) into `typename TNet::FMessageHandlerBinding`, and the
+  `ENetResult`→`EMessageResult` mapping (Success→Success, Full→CapacityExceeded,
+  Invalid→PayloadTooLarge, Unavailable→Unavailable) lives in a `MapNetSendResult`
+  function template so the transport enum stays a dependent name. Server-target send
+  returns `Unavailable` when `GetServerPeer()` is invalid (router retains the head);
+  copy and move deleted; the destructor removes the inbound handler while the host is
+  still alive. One additive, documented `static constexpr std::size_t MaxMessageBytes
+  = MaxPacketBytes - MessageHeaderBytes` on `TNetHost` (`NetHost.h`). New
+  `EngineMessageChannelTests.cpp` (5 cases) wired into `MICROWORLD_ENGINE_TEST_SOURCES`
+  (production sources untouched): client→server targeted delivery with the full
+  `FMessageView` (header/payload/`ArrivedOnChannelId`) asserted, server→client
+  broadcast, foreign-wire-channel filter, send-before-connect
+  `Unavailable`-then-retain-then-deliver, and rejecting-sink `DroppedInboundCount`.
+  Gates (lead-rerun): clang-format clean; MSVC Release warning-clean (`/WX`); host
+  `ctest` 11/11 (5 new cases `[PASS]`, 105 engine tests 0 failures);
+  `CheckDependencyBoundaries --package Engine` passes and
+  `rg "MicroWorld/Net" Modules/Engine/include` is 0 (the binding pulls in no Net
+  dependency); `CheckClassDocumentation --require-doxygen` 151 files. The first peer
+  implementer died mid-run (transient API drop) after writing the
+  binding/`NetHost.h`/CMake; a second peer wrote the test suite. Lead touch-up:
+  trimmed the binding's class comment to three sentences (doc-checker contract-length
+  rule).
 
 - [ ] **3.2 Example `23-TwoBoardWire` (UART, 2 boards).** The vision demo on
   the cheapest link. Board A (server env): world with `FLampActor`
