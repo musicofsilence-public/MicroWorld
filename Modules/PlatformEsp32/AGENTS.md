@@ -24,6 +24,13 @@ has no module key in that tool's portable table.
 - All lwIP, ESP-IDF, `<driver/uart.h>`, `<driver/i2c_*.h>`, and `<driver/spi_*.h>`
   headers are confined to private `src/*PlatformImplementation.h` headers; public
   declarations stay platform-neutral.
+- `FEsp32WifiLink` is the one-per-firmware SoftAP/station bring-up facade
+  (`StartAccessPoint` / `JoinAccessPoint` return `ENetResult`; `IsUp` queries
+  and `Stop` tears down), with every `esp_wifi`/`esp_netif`/`nvs`/event-loop
+  include confined to one private implementation TU — this is where examples
+  get WiFi instead of per-example glue.
+- `SleepMilliseconds` (`Esp32Sleep.h`) is the `vTaskDelay`-backed cooperative
+  yield examples call in their run loops.
 - Compile success on this package is a compile-only proof, never a runtime,
   timing, heap, stack, radio, or wired-link claim; see `benchmarks/Results/`
   for the measured evidence that closes that gap.

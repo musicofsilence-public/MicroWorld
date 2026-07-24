@@ -75,6 +75,39 @@ on stdout. Build it with the CMake target `microworld_engine_host_lifecycle`
 (included by the default `host-eng` configuration above). It is the smallest
 demonstration of the composition root added in roadmap Phase 3.
 
+## Actor messaging
+
+- `Message.h` is the header-only vocabulary: id/result types
+  (`FMessageTypeId`, `FMessageActorId`, `FMessageChannelId`, `EMessageResult`),
+  the little-endian `EncodeActorMessage`/`DecodeActorMessage` codec,
+  `FMessageView`, and the
+  `IEncodedMessageSink`/`IMessageChannel`/`IMessageRouter` interfaces.
+- `TMessageRouter` is the local bus: fixed handler table, broadcast
+  (`BroadcastActorId`) + targeted send, one-frame latency via
+  `TickDispatch`/`TickFlush`; it is also an `INetworkFrame`.
+- `TMessageChannelBinding<TNet>` carries one channel over a `TNetHost` and is
+  **duck-typed** on the net type, so **Engine keeps zero dependency on Net**
+  — that seam is the whole point.
+- `TNetworkFrameSet<MaxFrames>` pumps several frames (nets + router + reliable
+  channels) behind one engine `INetworkFrame` slot, dispatch in add order and
+  flush in reverse (D3).
+- `TReliableChannel<MaxPendingMessages, MaxMessageBytes>` wraps a binding to
+  add acknowledged, de-duplicated point-to-point delivery: sequence + ack +
+  retry (bounded by `MaxSendAttempts`, then counted `LostCount`) plus a
+  32-wide duplicate window, so a delivered message arrives exactly once.
+
+Where an actor message sits inside the existing wire stack (§4.2):
+
+```
+driver frame:   [magic][node][len][ TNetHost message ][crc]        (FrameCodec — wired transports)
+TNetHost msg:   [u8 WireChannel][u8 Flags=0][u16 PayloadBytes][ payload ]   (NetProtocol)
+payload:        EncodedActorMessage                                (best-effort channel)
+payload:        [u8 Kind][u16 Sequence][EncodedActorMessage]       (guaranteed channel, Kind=1 Data)
+payload:        [u8 Kind][u16 Sequence]                            (guaranteed channel, Kind=2 Ack)
+EncodedActorMessage = [u16 MessageTypeId][u16 TargetActorId][u16 SenderActorId][Payload...]
+ActorMessageHeaderBytes = 6   ReliableHeaderBytes = 3
+```
+
 Engine does not provide networking, subsystems, serialization, replication,
 platform abstraction, or hardware APIs. (Networking is reachable through an
 engine-owned `INetworkFrame` seam bound into `TEngineHost`; the net host itself

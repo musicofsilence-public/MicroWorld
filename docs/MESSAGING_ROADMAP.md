@@ -738,7 +738,7 @@ of the transport seam — sensor examples use timer-driven synthetic readings).
 | 3 | Messaging over one wire | 2 | ✅ |
 | 4 | Several channels per world | 3 | ✅ |
 | 5 | Guaranteed delivery per channel | 3 | ✅ |
-| 6 | Documentation & close-out | 2 | ⬜ |
+| 6 | Documentation & close-out | 2 | 🟨 |
 
 ---
 
@@ -1380,7 +1380,7 @@ demonstrated under packet loss.
 
 ### Phase 6 — Documentation & close-out ⬜
 
-- [ ] **6.1 Documentation sweep.** `docs/UE5ConceptMap.md`: add rows —
+- [x] **6.1 Documentation sweep.** `docs/UE5ConceptMap.md`: add rows —
   message channels ≈ UE `UChannel`/NetDriver channels ("bounded typed
   messages, no replication"), `TMessageRouter` ≈ Gameplay Message Subsystem,
   `TReliableChannel` ≈ reliable channel flag. `Modules/Engine/README.md` and
@@ -1394,6 +1394,26 @@ demonstrated under packet loss.
   **Done when:** `CheckFolderAgents.py` passes; no doc presents the old
   WifiLink glue or printf tracing as current practice.
   **Verify:** Standard Verify + folder-agents checker.
+
+  Done 2026-07-24 — seven documentation files updated (no code, no build files).
+  `docs/UE5ConceptMap.md`: three rows added after "Wire framing" — actor
+  messaging/channels (`IMessageChannel`/`TMessageChannelBinding` ≈ `UChannel`),
+  `TMessageRouter` (≈ Gameplay Message Subsystem), `TReliableChannel` (≈ reliable
+  channel flag). `Modules/Engine/README.md`: new "Actor messaging" section (the
+  five components + the §4.2 stack diagram verbatim). `Modules/Net/README.md`:
+  `FPacketDropDriver` bullet under "What Net provides". `Modules/PlatformEsp32/AGENTS.md`:
+  `FEsp32WifiLink` + `SleepMilliseconds` added to Concepts. `Modules/Engine/AGENTS.md`
+  + `Modules/Net/AGENTS.md`: concise mentions of the messaging layer / drop driver.
+  `examples/AGENTS.md`: the stale "WiFi glue is deliberate duplication" sentence
+  replaced (WiFi/sleep/log/time now come from the PlatformEsp32 facades), the
+  `[exNN]`-printf console bullet rewritten to the `MW_LOG`/`Esp32LogSink`
+  `I (nnnn) exNN:` shape, and the §2.2 engine-first invariant added. Lead review
+  tightened the `TReliableChannel` wording in the concept-map row and the Engine
+  README (dropped the unqualified "guaranteed", since delivery is bounded by
+  `MaxSendAttempts` → `LostCount`; the exactly-once dedup claim stays). Gates
+  (lead-rerun): `CheckFolderAgents.py --root Modules` passes (63 guides);
+  `CheckClassDocumentation --require-doxygen` 157 files; only the seven doc files
+  changed. Commit — this one.
 
 - [ ] **6.2 Release bookkeeping.** Append a `CHANGELOG.md` entry (added:
   actor messaging, frame set, reliable channel, packet-drop driver, WiFi/sleep

@@ -67,6 +67,9 @@ vendor SDK code.
 - Portable code uses fixed-width/value types, bounded fixed storage,
   deterministic lifetimes, and no RTTI, exceptions, logging, threads, clocks,
   heap containers, SDK calls, or global mutable state.
+- `FPacketDropDriver` is a test/demo `INetDriver` decorator that wraps another
+  driver by reference and silently drops every Nth outgoing send; it is a
+  loss injector, not reliability or a real transport.
 
 ## Verification
 

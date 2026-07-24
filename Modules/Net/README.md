@@ -67,6 +67,12 @@ Current status and recorded evidence live in
 - `THostLoopback<MaxPorts, MailboxCapacity, PacketBytes>` is a deterministic
   fixed-capacity loopback network (N embedded per-port `INetDriver`s sharing
   one mailroom) for host tests.
+- `FPacketDropDriver` is a concrete `INetDriver` decorator that wraps another
+  driver by reference and silently drops every Nth outgoing send (returns
+  `Success` without touching the wire; `0` disables dropping), forwarding
+  `TryReceive`/`MaxPacketBytes` verbatim and exposing a pure
+  `DroppedSendCount()` query — a deterministic loss injector for tests and the
+  guaranteed-delivery demo, not a transport.
 
 The application owns the driver, the packet storage, the manager value, the
 net host value, and all fixed buffers.
