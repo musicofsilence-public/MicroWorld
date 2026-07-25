@@ -2,17 +2,32 @@
 
 ## Unreleased
 
-- **Breaking: the log adapter is now `FOutputDevice`, not `FLogSink`.** Every
-  MicroWorld concept borrows UE5's vocabulary — `FApplication`, `UWorld`,
+- **Breaking: the log adapter is now `FOutputDeviceFunction`, not `FLogSink`.**
+  Every MicroWorld concept borrows UE5's vocabulary — `FApplication`, `UWorld`,
   `AActor`, `BeginPlay` — except this one, which borrowed spdlog's "sink"
   metaphor instead. UE5 calls this an output device, so MicroWorld now does too.
-  `FLogSink` → `FOutputDevice`, `SetLogSink` → `SetOutputDevice`, and
-  `Esp32LogSink` → `Esp32OutputDevice`, with the ESP32 header renamed to
-  `MicroWorld/PlatformEsp32/Esp32OutputDevice.h`. The type is still a plain
-  function pointer, not UE5's abstract class — the header says so, because the
-  borrowed name would otherwise imply a `Serialize` override that does not
-  exist. Consumers update one include and one call. Entries below the
-  `## 0.2.0` heading keep the old names: they record what shipped then.
+
+  | Was | Now |
+  | --- | --- |
+  | `FLogSink` | `FOutputDeviceFunction` |
+  | `SetLogSink` | `SetOutputDevice` |
+  | `Esp32LogSink` | `WriteEsp32LogRecord` |
+
+  The header `MicroWorld/PlatformEsp32/Esp32LogSink.h` is renamed to
+  `Esp32OutputDevice.h`; it still names its topic rather than its one function,
+  matching `Esp32Sleep.h`, which declares `SleepMilliseconds`.
+
+  The `Function` suffix and the verb-first supplier name are not decoration: the
+  engine's seven other function-pointer aliases all announce themselves
+  (`FSleepFunction`, `FTestFunction`, `FInvokeFunction`, `FMoveFunction`,
+  `FDestroyFunction`, `FTraceObjectReferences`, `FDestroyManagedObject`), and a
+  bare noun made `&Esp32LogSink` read like the address of an object. The rule is
+  now written down in `docs/Style.md` as Rule P. UE5's own `FOutputDevice` is an
+  abstract class with a `Serialize` override; this is a plain function pointer,
+  and the header says so.
+
+  Consumers update one include and one call. Entries below the `## 0.2.0`
+  heading keep the old names: they record what shipped then.
 - **`TApplicationRunner` + the first `FApplication` tests.** A new header-only
   Core template, `Modules/Core/include/MicroWorld/ApplicationRunner.h`, drives
   one `FApplication` through its whole lifecycle on an injected clock and pacing
@@ -56,7 +71,7 @@
   checkpoints pending. Every example is now **engine-first** — each `src/` builds
   from `<MicroWorld/...>` headers only, with WiFi, sleep, logging, and time from
   the `PlatformEsp32` facades (`FEsp32WifiLink`, `SleepMilliseconds`,
-  `Esp32OutputDevice`, `FEsp32TimeSource`) — so the per-example WiFi glue is gone,
+  `WriteEsp32LogRecord`, `FEsp32TimeSource`) — so the per-example WiFi glue is gone,
   examples 15/16 were rewritten as two-board SoftAP demos (retiring example 15's
   old raw-socket echo), and 01/18–21 moved onto the log/sleep seams
   (`printf`/`<cstdio>` removed).

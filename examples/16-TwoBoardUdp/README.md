@@ -39,7 +39,7 @@ bare wire, or WiFi UDP unchanged.
   `UWorld::SpawnActor`, `AActor`, `FGarbageCollectionBudget`
 - `FEsp32UdpDriver`, `MakeUdpAddress`, `FEsp32TimeSource::Now`
 - `FEsp32WifiLink` (`StartAccessPoint` / `JoinAccessPoint`), `SleepMilliseconds`,
-  `MW_LOG` / `Esp32OutputDevice`
+  `MW_LOG` / `WriteEsp32LogRecord`
 
 ## Hardware required
 

@@ -85,7 +85,7 @@ extern "C" void app_main()
 	using namespace MicroWorld;
 
 	// 1. Route every surviving MW_LOG call site through ESP-IDF logging.
-	SetOutputDevice(&Esp32OutputDevice);
+	SetOutputDevice(&WriteEsp32LogRecord);
 
 	// 2. The engine consumes one caller-supplied clock; esp_timer is the only real clock here.
 	FEsp32TimeSource Clock;

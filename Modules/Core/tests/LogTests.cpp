@@ -37,7 +37,7 @@ namespace
 	int GArgumentEvaluations{0};
 
 	/** Records one routed log record into the shared capture. */
-	void RecordingOutputDevice(ELogLevel Level, const char* Category, const char* Message)
+	void CaptureLogRecord(ELogLevel Level, const char* Category, const char* Message)
 	{
 		++GCapture.CallCount;
 		GCapture.Level = Level;
@@ -72,7 +72,7 @@ namespace
 MW_TEST_CASE(Log_MessageOnlyOutputDeviceReceivesLevelCategoryAndText)
 {
 	ResetCapture();
-	SetOutputDevice(&RecordingOutputDevice);
+	SetOutputDevice(&CaptureLogRecord);
 
 	MW_LOG_MSG(Warning, "Boot", "ready");
 
@@ -88,7 +88,7 @@ MW_TEST_CASE(Log_MessageOnlyOutputDeviceReceivesLevelCategoryAndText)
 MW_TEST_CASE(Log_FormattedRecordExpandsPrintfArguments)
 {
 	ResetCapture();
-	SetOutputDevice(&RecordingOutputDevice);
+	SetOutputDevice(&CaptureLogRecord);
 
 	MW_LOG(Warning, "Net", "peer %u timed out", 7u);
 
@@ -108,7 +108,7 @@ MW_TEST_CASE(Log_NullOutputDeviceDropsRecordsThenReinstallRoutes)
 
 	MW_EXPECT_EQ(Test, 0, GCapture.CallCount, "Null output device should route nothing");
 
-	SetOutputDevice(&RecordingOutputDevice);
+	SetOutputDevice(&CaptureLogRecord);
 	MW_LOG_MSG(Error, "Boot", "kept");
 
 	const bool bMessageMatches = std::strcmp(GCapture.Message, "kept") == 0;
@@ -120,7 +120,7 @@ MW_TEST_CASE(Log_NullOutputDeviceDropsRecordsThenReinstallRoutes)
 MW_TEST_CASE(Log_BelowFloorFormattedCallStripsArgumentEvaluation)
 {
 	ResetCapture();
-	SetOutputDevice(&RecordingOutputDevice);
+	SetOutputDevice(&CaptureLogRecord);
 
 	MW_LOG(Verbose, "Detail", "value=%d", EvaluatedInteger());
 
@@ -139,7 +139,7 @@ MW_TEST_CASE(Log_BelowFloorFormattedCallStripsArgumentEvaluation)
 MW_TEST_CASE(Log_BelowFloorMessageCallStripsArgumentEvaluation)
 {
 	ResetCapture();
-	SetOutputDevice(&RecordingOutputDevice);
+	SetOutputDevice(&CaptureLogRecord);
 
 	MW_LOG_MSG(Verbose, "Detail", EvaluatedMessage());
 
@@ -158,7 +158,7 @@ MW_TEST_CASE(Log_BelowFloorMessageCallStripsArgumentEvaluation)
 MW_TEST_CASE(Log_FloorRoutesImportantLevelsAndStripsVerbose)
 {
 	ResetCapture();
-	SetOutputDevice(&RecordingOutputDevice);
+	SetOutputDevice(&CaptureLogRecord);
 
 	MW_LOG_MSG(Error, "Level", "error");
 	MW_LOG_MSG(Warning, "Level", "warning");

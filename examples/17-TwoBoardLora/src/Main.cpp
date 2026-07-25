@@ -98,7 +98,7 @@ MicroWorld::FEsp32E32LoraConfig MakeLoraConfig(const std::uint8_t NodeId) noexce
 /** Composition root: installs the output device, then ping-pongs a counter with the peer board over one E32 LoRa radio link. */
 extern "C" void app_main(void)
 {
-	MicroWorld::SetOutputDevice(&MicroWorld::Esp32OutputDevice);
+	MicroWorld::SetOutputDevice(&MicroWorld::WriteEsp32LogRecord);
 
 	// Static, never on the app_main stack (the ESP32-S3 stack lesson, §2.2).
 	static MicroWorld::FEsp32E32LoraDriver Driver{MakeLoraConfig(LocalNodeId)};

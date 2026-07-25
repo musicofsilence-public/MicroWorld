@@ -44,7 +44,7 @@ every package. It has four levels — `Error`, `Warning`, `Log`, `Verbose` — a
 single process-global output device:
 
 ```cpp
-using FOutputDevice = void (*)(ELogLevel Level, const char* Category, const char* Message);
+using FOutputDeviceFunction = void (*)(ELogLevel Level, const char* Category, const char* Message);
 ```
 
 Install one output device at startup with `SetOutputDevice`; the default is null, which

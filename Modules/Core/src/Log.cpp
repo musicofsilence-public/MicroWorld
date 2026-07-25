@@ -10,13 +10,13 @@ namespace
 {
 
 	/** Holds the one process-global output device; nullptr means every log call is a no-op. */
-	FOutputDevice InstalledOutputDevice = nullptr;
+	FOutputDeviceFunction WriteRecord = nullptr;
 
 } // namespace
 
-void SetOutputDevice(FOutputDevice Device) noexcept
+void SetOutputDevice(FOutputDeviceFunction Device) noexcept
 {
-	InstalledOutputDevice = Device;
+	WriteRecord = Device;
 }
 
 namespace Detail
@@ -24,16 +24,16 @@ namespace Detail
 
 	void DispatchLogMessage(ELogLevel Level, const char* Category, const char* Message) noexcept
 	{
-		if (InstalledOutputDevice != nullptr)
+		if (WriteRecord != nullptr)
 		{
-			InstalledOutputDevice(Level, Category, Message);
+			WriteRecord(Level, Category, Message);
 		}
 	}
 
 	void DispatchLogFormatted(ELogLevel Level, const char* Category, const char* Format, ...) noexcept
 	{
 		// Skip formatting entirely when no output device can consume the result.
-		if (InstalledOutputDevice == nullptr)
+		if (WriteRecord == nullptr)
 		{
 			return;
 		}
@@ -46,7 +46,7 @@ namespace Detail
 		std::vsnprintf(Message, sizeof(Message), Format, Arguments);
 		va_end(Arguments);
 
-		InstalledOutputDevice(Level, Category, Message);
+		WriteRecord(Level, Category, Message);
 	}
 
 } // namespace Detail

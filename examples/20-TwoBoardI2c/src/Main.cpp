@@ -203,7 +203,7 @@ void RunSlave() noexcept
 /** Composition root: installs the output device, then ping-pongs a counter with the peer board over one wired I2C bus. */
 extern "C" void app_main(void)
 {
-	MicroWorld::SetOutputDevice(&MicroWorld::Esp32OutputDevice);
+	MicroWorld::SetOutputDevice(&MicroWorld::WriteEsp32LogRecord);
 #if MICROWORLD_EXAMPLE_I2C_MASTER
 	RunMaster();
 #else

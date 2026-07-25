@@ -89,7 +89,7 @@ non-portable (they may include OS/vendor headers) and are excluded from
   `UdpAddressPort`) for the 6-byte IPv4+port `FNetAddress` encoding.
 - [`microworld-platform-esp32`](../PlatformEsp32) —
   `FEsp32UdpDriver` over lwIP, `FEsp32E32LoraDriver` over the E32 UART, and
-  `Esp32OutputDevice`; it shares the same `Net/UdpAddressCodec.h` encoding (the
+  `WriteEsp32LogRecord`; it shares the same `Net/UdpAddressCodec.h` encoding (the
   adapter stays self-contained otherwise; the encoding never crosses the wire).
 
 Both depend inward on Net (and Core/Memory); the reverse dependency is

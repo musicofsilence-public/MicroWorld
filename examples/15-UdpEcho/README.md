@@ -25,7 +25,7 @@ echoed back.
   `UdpMaxPacketBytes`), `ENetResult`, `FNetReceiveResult`, `FNetAddress`, `UdpAddressPort`,
   `TSpan`
 - `SleepMilliseconds` (loop pacing)
-- `MW_LOG` / `Esp32OutputDevice` (installed once at `app_main` start)
+- `MW_LOG` / `WriteEsp32LogRecord` (installed once at `app_main` start)
 
 ## Hardware required
 

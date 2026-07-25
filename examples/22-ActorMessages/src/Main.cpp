@@ -333,7 +333,7 @@ constexpr unsigned PollPacingMilliseconds = 10;
  */
 extern "C" void app_main(void)
 {
-	MicroWorld::SetOutputDevice(&MicroWorld::Esp32OutputDevice);
+	MicroWorld::SetOutputDevice(&MicroWorld::WriteEsp32LogRecord);
 
 	// Announce the exact package contract this image was built against.
 	MW_LOG(

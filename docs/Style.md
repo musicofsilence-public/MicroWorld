@@ -70,6 +70,30 @@ and comments should carry.
   established domain acronyms already present in the code, such as `Ipv4`,
   `UART`, `CRC`, and `Id`.
 
+### Rule P — a function pointer is recognizable at every use site
+
+`&Something` must read as taking the address of a *function*, never of an object.
+A bare noun breaks that: `&Esp32LogSink` looked like an object's address, which is
+what retired that name.
+
+| Kind | Form | Examples |
+| --- | --- | --- |
+| The alias | `F<Verb>Function`, or a verb phrase | `FSleepFunction`, `FOutputDeviceFunction`, `FTestFunction`, `FTraceObjectReferences`, `FDestroyManagedObject` |
+| A variable or member holding one | a bare verb — the alias already carries `Function` | `Invoke`, `MoveConstruct`, `Destroy`, `TraceReferences`, `WriteRecord` |
+| A free function supplying one | a verb phrase | `SleepMilliseconds`, `WriteEsp32LogRecord`, `DestroyManagedObject<T>` |
+
+Read the two suppliers in one `app_main` side by side; both announce themselves:
+
+```cpp
+MicroWorld::SetOutputDevice(&MicroWorld::WriteEsp32LogRecord);
+static MicroWorld::TApplicationRunner<MicroWorld::FEsp32TimeSource> Runner{
+	TimeSource, &MicroWorld::SleepMilliseconds, kFramePacingMilliseconds};
+```
+
+Adding `Function` to an alias whose root word is borrowed from UE5 is worth the
+six characters: a type that cannot be recognized as callable costs every reader
+a jump to its declaration.
+
 ### Rule F — a function performs at most two logical actions
 
 A function should read as one or two steps plus its guards; guard clauses

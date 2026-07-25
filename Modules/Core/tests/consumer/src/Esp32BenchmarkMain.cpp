@@ -352,7 +352,7 @@ extern "C" void app_main()
 	using namespace MicroWorld;
 
 	// 0. Route every MW_LOG call site and each measurement line through ESP-IDF logging.
-	SetOutputDevice(&Esp32OutputDevice);
+	SetOutputDevice(&WriteEsp32LogRecord);
 
 	ESP_LOGI(BenchmarkTag, "=== MicroWorld ESP32-S3 runtime-margin harness (Phase 6.2 Part A) ===");
 	ESP_LOGI(

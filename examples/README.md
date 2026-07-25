@@ -50,7 +50,7 @@ Status: ⬜ planned · 🟨 built (compiles) · ✅ hardware-verified
 | --- | --- | --- | --- | --- |
 | 01 | `01-CoreTick` | `FTickFunction` cadence from caller-supplied real time | — | 🟨 |
 | 02 | `02-CoreLifecycle` | forward-only lifecycle: `FApplication` + `FLifecycleGuard` | — | ⬜ |
-| 03 | `03-CoreLog` | `FOutputDevice` seam: `MW_LOG` through `Esp32OutputDevice` | — | ⬜ |
+| 03 | `03-CoreLog` | `FOutputDeviceFunction` seam: `MW_LOG` through `WriteEsp32LogRecord` | — | ⬜ |
 | 04 | `04-MemoryArena` | `TFixedArena` / `IMemoryResource` explicit allocation | — | ⬜ |
 | 05 | `05-MemorySmartPointers` | `TUniquePtr` / `TSharedPtr` / `TWeakPtr` ownership | — | ⬜ |
 | 06 | `06-MemoryContainers` | `TStaticVector` + `TSpan` bounded storage and views | — | ⬜ |

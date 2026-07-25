@@ -66,12 +66,12 @@ adapter owns its concrete encoding and provides helpers to build/inspect it.
 ### 3. Output device
 
 Install one
-[`FOutputDevice`](../Modules/Core/include/MicroWorld/Log.h) via `SetOutputDevice` at startup. The
+[`FOutputDeviceFunction`](../Modules/Core/include/MicroWorld/Log.h) via `SetOutputDevice` at startup. The
 default output device is null (logging disabled). The facade is single-threaded; install
 the output device before the first `MW_LOG` / `MW_LOG_MSG` call.
 
 - ESP32 reference:
-  [`Esp32OutputDevice`](../Modules/PlatformEsp32/include/MicroWorld/PlatformEsp32/Esp32OutputDevice.h)
+  [`WriteEsp32LogRecord`](../Modules/PlatformEsp32/include/MicroWorld/PlatformEsp32/Esp32OutputDevice.h)
   maps each `ELogLevel` to the matching `ESP_LOG*` macro.
 
 ### 4. Pacing

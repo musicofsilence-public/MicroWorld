@@ -21,7 +21,7 @@ void RunClient() noexcept;
 /** Composition root: installs the output device, then runs the role this image was built for. */
 extern "C" void app_main(void)
 {
-	MicroWorld::SetOutputDevice(&MicroWorld::Esp32OutputDevice);
+	MicroWorld::SetOutputDevice(&MicroWorld::WriteEsp32LogRecord);
 #if MICROWORLD_EXAMPLE_SERVER
 	RunServer();
 #else

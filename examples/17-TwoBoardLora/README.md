@@ -32,7 +32,7 @@ and address helpers unchanged. This is the wireless twin of example 18.
 - `E32MaxPayloadBytes`
 - `MakeLoraAddress`, `LoraAddressNodeId`
 - `ENetResult`, `FNetReceiveResult`
-- `FEsp32TimeSource::Now`, `SleepMilliseconds`, `Esp32OutputDevice`, `MW_LOG`
+- `FEsp32TimeSource::Now`, `SleepMilliseconds`, `WriteEsp32LogRecord`, `MW_LOG`
 
 ## Hardware required
 

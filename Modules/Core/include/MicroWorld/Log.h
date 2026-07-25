@@ -91,14 +91,15 @@ enum class ELogLevel : std::uint8_t
 /**
  * Receives one fully formed record; the process installs exactly one output device.
  *
- * Named after UE5's FOutputDevice because it fills the same role, but it is a
- * plain function pointer rather than an abstract class: there is nothing to
- * subclass and no Serialize override. A platform supplies one free function.
+ * Named after UE5's FOutputDevice because it fills the same role, and suffixed
+ * Function because it is a plain function pointer rather than an abstract class:
+ * there is nothing to subclass and no Serialize override. A platform supplies one
+ * free function, so every function-pointer alias here announces itself.
  */
-using FOutputDevice = void (*)(ELogLevel Level, const char* Category, const char* Message);
+using FOutputDeviceFunction = void (*)(ELogLevel Level, const char* Category, const char* Message);
 
 /** Installs the process-global output device; pass nullptr (the default) to disable logging. */
-void SetOutputDevice(FOutputDevice Device) noexcept;
+void SetOutputDevice(FOutputDeviceFunction Device) noexcept;
 
 namespace Detail
 {

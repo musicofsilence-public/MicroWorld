@@ -15,8 +15,8 @@ mw log   COM5                       :: watch MW_LOG on COM5 (Ctrl-C to stop)
 
 ## Where the logs go
 
-`MW_LOG(...)` → `Detail::DispatchLogFormatted` → the installed `FOutputDevice`. The
-examples install `Esp32OutputDevice`, which forwards to ESP-IDF's logger, so each line
+`MW_LOG(...)` → `Detail::DispatchLogFormatted` → the installed `FOutputDeviceFunction`. The
+examples install `WriteEsp32LogRecord`, which forwards to ESP-IDF's logger, so each line
 comes out in the familiar `I (nnnn) tag: message` shape (`I`/`W`/`E` = level,
 `nnnn` = ms since boot).
 
@@ -104,7 +104,7 @@ MW_LOG_MSG(Log, "ex25", "ready");   // literal string, no printf parsing
 - **Category** is a short static string used as the log tag; the examples use
   `"exNN"`.
 
-The output device is one injected function pointer (`FOutputDevice`): the examples
-wire `Esp32OutputDevice` on device, and host tests install their own to assert on
+The output device is one injected function pointer (`FOutputDeviceFunction`): the examples
+wire `WriteEsp32LogRecord` on device, and host tests install their own to assert on
 log output. Your code only ever calls `MW_LOG` — it never talks to a console
 directly.

@@ -97,7 +97,7 @@ MicroWorld::FEsp32UartConfig MakeUartConfig(const std::uint8_t NodeId) noexcept
 /** Composition root: installs the output device, then ping-pongs a counter with the peer board over one wired UART. */
 extern "C" void app_main(void)
 {
-	MicroWorld::SetOutputDevice(&MicroWorld::Esp32OutputDevice);
+	MicroWorld::SetOutputDevice(&MicroWorld::WriteEsp32LogRecord);
 
 	// Static, never on the app_main stack (the ESP32-S3 stack lesson, §2.2).
 	static MicroWorld::FEsp32UartDriver Driver{MakeUartConfig(LocalNodeId)};

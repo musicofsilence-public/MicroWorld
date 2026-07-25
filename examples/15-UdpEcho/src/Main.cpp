@@ -27,7 +27,7 @@ constexpr DurationMilliseconds PollReadinessMilliseconds = 250;
  */
 extern "C" void app_main(void)
 {
-	SetOutputDevice(&Esp32OutputDevice);
+	SetOutputDevice(&WriteEsp32LogRecord);
 
 	static FEsp32WifiLink WifiLink;
 	const ENetResult WifiResult =

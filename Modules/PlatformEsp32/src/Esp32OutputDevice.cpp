@@ -5,7 +5,7 @@
 namespace MicroWorld
 {
 
-void Esp32OutputDevice(const ELogLevel Level, const char* const Category, const char* const Message) noexcept
+void WriteEsp32LogRecord(const ELogLevel Level, const char* const Category, const char* const Message) noexcept
 {
 	const char* const Tag = (Category != nullptr) ? Category : "MicroWorld";
 	const char* const Body = (Message != nullptr) ? Message : "";
