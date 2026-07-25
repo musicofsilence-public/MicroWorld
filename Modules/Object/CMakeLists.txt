@@ -15,12 +15,13 @@ option(
 
 # A standalone Object configuration composes its inward dependencies. A larger
 # profile may instead provide these targets before adding this directory.
-if(NOT TARGET MicroWorld::Memory)
-    set(MICROWORLD_MEMORY_BUILD_TESTS OFF)
-    set(MICROWORLD_MEMORY_BUILD_BENCHMARKS OFF)
+if(NOT TARGET MicroWorld::Core)
+    set(MICROWORLD_BUILD_TESTS OFF)
+    set(MICROWORLD_BUILD_BENCHMARKS OFF)
+    set(MICROWORLD_BUILD_EXAMPLES OFF)
     add_subdirectory(
-        "${CMAKE_CURRENT_SOURCE_DIR}/../Memory"
-        "${CMAKE_CURRENT_BINARY_DIR}/Memory"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../Core"
+        "${CMAKE_CURRENT_BINARY_DIR}/Core"
     )
 endif()
 
@@ -34,7 +35,7 @@ target_include_directories(microworld_object PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
 )
 target_compile_features(microworld_object PUBLIC cxx_std_17)
-target_link_libraries(microworld_object PUBLIC MicroWorld::Memory)
+target_link_libraries(microworld_object PUBLIC MicroWorld::Core)
 add_library(MicroWorld::Object ALIAS microworld_object)
 
 # Portable managed-object code is validated under the same strict, no-runtime-

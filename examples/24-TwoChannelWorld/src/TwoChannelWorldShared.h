@@ -4,7 +4,7 @@
 #include <MicroWorld/Engine/Message.h>
 #include <MicroWorld/Engine/MessageChannelBinding.h>
 #include <MicroWorld/Engine/MessageRouter.h>
-#include <MicroWorld/Engine/NetworkFrame.h>
+#include <MicroWorld/Engine/EngineSystem.h>
 #include <MicroWorld/Net/NetHost.h>
 #include <MicroWorld/Net/UdpAddressCodec.h>
 #include <MicroWorld/Object/ClassDescriptor.h>
@@ -20,7 +20,7 @@
  *
  * Both role translation units (ServerMain.cpp, ClientMain.cpp) include this so the
  * message/actor/channel ids, UART/WiFi/UDP configuration, and the
- * TNetHost/TMessageRouter/TEngineHost/TNetworkFrameSet shapes are defined exactly
+ * TNetHost/TMessageRouter/TEngine/TEngineSystemSet shapes are defined exactly
  * once -- DRY within this one example (mirrors 23-TwoBoardWire's
  * TwoBoardWireShared.h).
  */
@@ -114,10 +114,10 @@ using FCommandNet = MicroWorld::TNetHost<2, 120>;
 using FWorldRouter = MicroWorld::TMessageRouter<16, 8, 96, 2>;
 
 /** Adapts FTelemetryNet to the engine's per-frame network slot inside the frame set. */
-using FTelemetryFrame = MicroWorld::TNetHostFrame<FTelemetryNet>;
+using FTelemetryFrame = MicroWorld::TNetHostSystem<FTelemetryNet>;
 
 /** Adapts FCommandNet to the engine's per-frame network slot inside the frame set. */
-using FCommandFrame = MicroWorld::TNetHostFrame<FCommandNet>;
+using FCommandFrame = MicroWorld::TNetHostSystem<FCommandNet>;
 
 /** Two-way adapter binding the telemetry wire channel to the shared FWorldRouter. */
 using FTelemetryBinding = MicroWorld::TMessageChannelBinding<FTelemetryNet>;
@@ -125,11 +125,11 @@ using FTelemetryBinding = MicroWorld::TMessageChannelBinding<FTelemetryNet>;
 /** Two-way adapter binding the commands wire channel to the shared FWorldRouter. */
 using FCommandBinding = MicroWorld::TMessageChannelBinding<FCommandNet>;
 
-/** Pumps both net frames and the router behind the one INetworkFrame slot TEngineHost drives (Phase 4.1's D3 order). */
-using FWorldFrameSet = MicroWorld::TNetworkFrameSet<3>;
+/** Pumps both net frames and the router behind the one IEngineSystem slot TEngine drives (Phase 4.1's D3 order). */
+using FWorldFrameSet = MicroWorld::TEngineSystemSet<3>;
 
-/** The engine host both roles compose; sized for one world with a couple of small inline actors. */
-using FWorldEngine = MicroWorld::TEngineHost<8, 16, 512, 16, 2, 4, 8, 64>;
+/** The engine both roles compose; sized for one world with a couple of small inline actors (the default ESP32-S3 traits). */
+using FWorldEngine = MicroWorld::TEngine<>;
 
 /** Builds a board's UART driver configuration from the fixed pins and baud. */
 inline MicroWorld::FEsp32UartConfig MakeUartConfig(const std::uint8_t NodeId) noexcept

@@ -45,9 +45,9 @@ gap positions as illustrative, not fixed.
   `AllPeers` on the server, per channel)
 - `TMessageRouter`, `IMessageRouter` (`AddMessageHandler` /
   `SendMessageToActor`)
-- `TNetworkFrameSet` (`Add`, D3 dispatch/flush order over the net frame, the
+- `TEngineSystemSet` (`Add`, D3 dispatch/flush order over the net frame, the
   reliable channel, and the router)
-- `TNetHost` (`Configure` / `Start`), `TNetHostFrame`, `ENetMode`
+- `TNetHost` (`Configure` / `Start`), `TNetHostSystem`, `ENetMode`
 - `FEsp32WifiLink` (`StartAccessPoint` / `JoinAccessPoint`), `FEsp32UdpDriver`,
   `MakeUdpAddress`
 - `TEngineHost` (`RegisterClass` / `CreateWorld` / `CreateObject` /

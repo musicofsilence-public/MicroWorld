@@ -6,7 +6,7 @@ Inherits `../AGENTS.md`.
 
 `Main.cpp` is one executable hosting TWO independent MicroWorld nodes over
 real localhost UDP: a dedicated server built on a full `TEngineHost` (bound to
-an `INetworkFrame` via `TNetHostFrame`) and a bare client `TNetHost`. Both
+an `IEngineSystem` via `TNetHostSystem`) and a bare client `TNetHost`. Both
 nodes are driven from one process through a single deterministic interleaved
 loop, so the printed trace is byte-identical across runs.
 

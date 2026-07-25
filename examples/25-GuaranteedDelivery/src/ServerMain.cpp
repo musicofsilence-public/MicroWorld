@@ -9,7 +9,7 @@
 #include <MicroWorld/Engine/Message.h>
 #include <MicroWorld/Engine/MessageChannelBinding.h>
 #include <MicroWorld/Engine/MessageRouter.h>
-#include <MicroWorld/Engine/NetworkFrame.h>
+#include <MicroWorld/Engine/EngineSystem.h>
 #include <MicroWorld/Engine/ReliableChannel.h>
 #include <MicroWorld/Engine/World.h>
 #include <MicroWorld/Log.h>
@@ -122,7 +122,7 @@ private:
  * Server board: hosts the WiFi SoftAP and runs FLedgerActor over one TMessageRouter wired to ONE
  * UDP net through TWO TMessageChannelBinding -- best-effort straight to the router, guaranteed
  * wrapped in TReliableChannel -- with the engine holding the net frame, the reliable channel, and
- * the router behind one TNetworkFrameSet<3>. The server's own driver is never wrapped in
+ * the router behind one TEngineSystemSet<3>. The server's own driver is never wrapped in
  * FPacketDropDriver: only the client injects loss (§0 of the roadmap brief).
  */
 void RunServer() noexcept

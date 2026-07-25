@@ -10,30 +10,24 @@ from pathlib import Path
 
 
 # Profile names describe package bundles. Net is an independent overlay above
-# Memory: it never pulls Object or Engine, and no Engine-Net Integration profile
-# is retained because that coupling is deferred until a real application needs it.
+# Core: it never pulls Object or Engine, and no Engine-Net Integration profile
+# is retained because that coupling is deferred until a real application needs
+# it. Memory folded into Core, so no Memory package or archive marker remains.
 PROFILE_MODULES = {
     "Core": {"Core"},
-    "Memory": {"Core", "Memory"},
-    "Object": {"Core", "Memory", "Object"},
-    "Core+Net": {"Core", "Memory", "Net"},
-    "Managed": {"Core", "Memory", "Object", "Engine"},
-    "Managed+Net": {"Core", "Memory", "Object", "Engine", "Net"},
+    "Object": {"Core", "Object"},
+    "Core+Net": {"Core", "Net"},
+    "Managed": {"Core", "Object", "Engine"},
+    "Managed+Net": {"Core", "Object", "Engine", "Net"},
 }
 
 # Markers cover planned CMake target/archive names, PlatformIO package archives,
 # public include paths, and characteristic public symbols. Serialization and
 # Integration stay listed so any accidental linkage is still detected even though
-# no active profile selects them.
+# no active profile selects them. Memory's former markers (fmemoryresource,
+# tfixedarena, tsharedptr) are intentionally absent: those symbols now live in
+# the Core archive after the fold.
 MODULE_MARKERS = {
-    "Memory": (
-        "microworld_memory",
-        "microworld-memory",
-        "/microworld/memory/",
-        "fmemoryresource",
-        "tfixedarena",
-        "tsharedptr",
-    ),
     "Object": (
         "microworld_object",
         "microworld-object",
@@ -79,16 +73,6 @@ CORE_ARCHIVE_MARKERS = (
     "microworld:",
     "microworld.lib",
     "libmicroworld.a",
-)
-
-# Memory profiles must prove that the adjacent physical archive participated;
-# public template symbols alone do not establish package linkage.
-MEMORY_ARCHIVE_MARKERS = (
-    "microworld_memory:",
-    "microworld_memory.lib",
-    "libmicroworld_memory.a",
-    "libmicroworld-memory.a",
-    "libmicroworldmemory.a",
 )
 
 # Object profiles must link their separate package archive. Public header-only
@@ -145,14 +129,6 @@ def analyze_map(
         )
 
     selected_modules = PROFILE_MODULES[profile]
-    if "Memory" in selected_modules and not any(
-        marker in normalized_text for marker in MEMORY_ARCHIVE_MARKERS
-    ):
-        errors.append(
-            "map does not contain the MicroWorld Memory archive "
-            f"({', '.join(MEMORY_ARCHIVE_MARKERS)})"
-        )
-
     if "Object" in selected_modules and not any(
         marker in normalized_text for marker in OBJECT_ARCHIVE_MARKERS
     ):
@@ -190,36 +166,16 @@ def analyze_map(
 
 def run_self_test() -> int:
     """Prove profile evidence passes and absent or outward modules fail."""
-    valid_map = ".pio/build/lib123/libmicroworld.a(Actor.o)\n"
-    valid_errors = analyze_map(valid_map, "Core", [], [])
+    # Memory folded into Core, so a Core profile map links the Core archive only.
+    valid_core_map = "libmicroworld.a(TickFunction.o)\n"
+    valid_errors = analyze_map(valid_core_map, "Core", [], [])
     if valid_errors:
         for error in valid_errors:
-            print(f"Valid-map self-test failed: {error}", file=sys.stderr)
-        return 1
-
-    valid_memory_map = (
-        "libmicroworld.a(TickFunction.o)\n"
-        "libMicroWorldMemory.a(MemoryResource.o)\n"
-    )
-    valid_memory_errors = analyze_map(valid_memory_map, "Memory", [], [])
-    if valid_memory_errors:
-        for error in valid_memory_errors:
-            print(
-                f"Valid Memory-map self-test failed: {error}",
-                file=sys.stderr,
-            )
-        return 1
-
-    missing_memory_errors = analyze_map(valid_map, "Memory", [], [])
-    if not any("Memory archive" in error for error in missing_memory_errors):
-        print(
-            "Self-test did not detect missing Memory archive evidence.",
-            file=sys.stderr,
-        )
+            print(f"Valid Core-map self-test failed: {error}", file=sys.stderr)
         return 1
 
     valid_object_map = (
-        f"{valid_memory_map}"
+        f"{valid_core_map}"
         "libMicroWorldObject.a(ObjectStore.o)\n"
         "MicroWorld::FObjectStore\n"
     )
@@ -237,7 +193,7 @@ def run_self_test() -> int:
             )
         return 1
 
-    missing_object_errors = analyze_map(valid_memory_map, "Object", [], [])
+    missing_object_errors = analyze_map(valid_core_map, "Object", [], [])
     if not any("Object archive" in error for error in missing_object_errors):
         print(
             "Self-test did not detect missing Object archive evidence.",
@@ -256,21 +212,6 @@ def run_self_test() -> int:
     ):
         print(
             "Self-test did not detect Engine code in an Object profile.",
-            file=sys.stderr,
-        )
-        return 1
-
-    outward_memory_map = (
-        f"{valid_memory_map}"
-        "libmicroworld_object.a(ObjectStore.o)\n"
-        "MicroWorld::FObjectStore\n"
-    )
-    outward_memory_errors = analyze_map(outward_memory_map, "Memory", [], [])
-    if not any(
-        "unselected Object" in error for error in outward_memory_errors
-    ):
-        print(
-            "Self-test did not detect Object code in a Memory profile.",
             file=sys.stderr,
         )
         return 1
@@ -296,11 +237,10 @@ def run_self_test() -> int:
         )
         return 1
 
-    # A valid Core+Net map links the Core, Memory, and Net archives without
-    # pulling Object or Engine, proving the Net overlay is independent of them.
+    # A valid Core+Net map links the Core and Net archives without pulling
+    # Object or Engine, proving the Net overlay is independent of them.
     valid_core_net_map = (
         "libmicroworld.a(TickFunction.o)\n"
-        "libmicroworld_memory:MemoryResource.obj\n"
         "libmicroworld_net:NetDriver.obj\n"
         "MicroWorld::TNetManager\n"
     )
@@ -315,7 +255,7 @@ def run_self_test() -> int:
 
     # A Core+Net map lacking the Net archive must fail, proving header-only
     # evidence cannot satisfy the Net profile.
-    missing_net_errors = analyze_map(valid_memory_map, "Core+Net", [], [])
+    missing_net_errors = analyze_map(valid_core_map, "Core+Net", [], [])
     if not any("Net archive" in error for error in missing_net_errors):
         print(
             "Self-test did not detect missing Net archive evidence.",
@@ -342,7 +282,7 @@ def run_self_test() -> int:
 
     with tempfile.TemporaryDirectory() as temporary_directory:
         map_path = Path(temporary_directory) / "valid.map"
-        map_path.write_text(valid_map, encoding="utf-8")
+        map_path.write_text(valid_core_map, encoding="utf-8")
         if not map_path.is_file():
             print("Self-test could not create its map fixture.", file=sys.stderr)
             return 1

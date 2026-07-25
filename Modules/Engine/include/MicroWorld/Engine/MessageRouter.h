@@ -1,7 +1,7 @@
 #pragma once
 
 #include <MicroWorld/Engine/Message.h>
-#include <MicroWorld/Engine/NetworkFrame.h>
+#include <MicroWorld/Engine/EngineSystem.h>
 #include <MicroWorld/Time.h>
 
 #include <cstddef>
@@ -14,12 +14,12 @@ namespace MicroWorld
 
 /**
  * Routes actor messages between handlers and channels.
- * Implements INetworkFrame so TEngineHost pumps it like any net frame:
- * TickDispatch delivers queued inbound messages to matching handlers;
- * TickFlush hands queued outbound messages to their channels.
+ * Implements IEngineSystem so TEngine pumps it like any net frame:
+ * PreAdvance delivers queued inbound messages to matching handlers;
+ * PostAdvance hands queued outbound messages to their channels.
  */
 template<std::size_t MaxHandlers, std::size_t MaxQueuedMessages, std::size_t MaxMessageBytes, std::size_t MaxChannels>
-class TMessageRouter final : public IMessageRouter, public INetworkFrame
+class TMessageRouter final : public IMessageRouter, public IEngineSystem
 {
 	static_assert(MaxHandlers < FMessageHandlerHandle::InvalidIndex, "A message router's handler capacity must fit below the reserved handle index.");
 	static_assert(MaxMessageBytes >= ActorMessageHeaderBytes, "A message router's per-message byte budget must be able to hold at least a header.");
@@ -36,7 +36,7 @@ public:
 
 	/**
 	 * Prevents moving so the router keeps one deliberately simple application-owned lifetime and
-	 * identity. Actors hold it as IMessageRouter& and TEngineHost pumps it as INetworkFrame*, and
+	 * identity. Actors hold it as IMessageRouter& and TEngine pumps it as IEngineSystem*, and
 	 * relocation would not mechanically rewrite those references; forbidding move keeps the ownership
 	 * boundary explicit, matching TTimerManager.
 	 */
@@ -215,9 +215,9 @@ public:
 
 	/**
 	 * Delivers exactly the inbound messages queued at entry, oldest first, to their matching handlers.
-	 * Messages enqueued during this pass (including from a handler's own send) wait for the next TickDispatch.
+	 * Messages enqueued during this pass (including from a handler's own send) wait for the next PreAdvance.
 	 */
-	void TickDispatch(const TimePointMilliseconds InNowMilliseconds) noexcept override
+	void PreAdvance(const TimePointMilliseconds InNowMilliseconds) noexcept override
 	{
 		(void)InNowMilliseconds; // The router orders delivery by queue position, not by wall-clock time.
 
@@ -237,7 +237,7 @@ public:
 	 * stalled channel also holds back every later entry queued for a different channel (accepted v1
 	 * head-of-line behavior, matching TNetManager::AdvanceSend's retained-head discipline).
 	 */
-	void TickFlush(const TimePointMilliseconds InNowMilliseconds) noexcept override
+	void PostAdvance(const TimePointMilliseconds InNowMilliseconds) noexcept override
 	{
 		(void)InNowMilliseconds; // Flushing drains whatever is queued; it does not itself schedule by time.
 
@@ -299,13 +299,13 @@ public:
 		return EMessageResult::Success;
 	}
 
-	/** Reports how many messages are currently queued for TickDispatch to deliver. */
+	/** Reports how many messages are currently queued for PreAdvance to deliver. */
 	std::size_t QueuedInboundCount() const noexcept { return InboundCount; }
 
-	/** Reports how many messages are currently queued for TickFlush to send or deliver locally. */
+	/** Reports how many messages are currently queued for PostAdvance to send or deliver locally. */
 	std::size_t QueuedOutboundCount() const noexcept { return OutboundCount; }
 
-	/** Reports the exact number of handlers that the next TickDispatch pass may match against. */
+	/** Reports the exact number of handlers that the next PreAdvance pass may match against. */
 	std::size_t HandlerCount() const noexcept { return ActiveHandlerCount; }
 
 	/** Reports how many ReceiveEncodedMessage calls were rejected because the inbound queue was full. */
@@ -521,13 +521,13 @@ private:
 	/** Bounds HandlerOrder traversal and makes the current handler count observable. */
 	std::size_t ActiveHandlerCount{0};
 
-	/** Rejects AddMessageHandler and RemoveMessageHandler while a TickDispatch pass is active. */
+	/** Rejects AddMessageHandler and RemoveMessageHandler while a PreAdvance pass is active. */
 	bool bDispatchActive{false};
 
-	/** Backing ring storage for messages awaiting the next TickDispatch. */
+	/** Backing ring storage for messages awaiting the next PreAdvance. */
 	FQueuedMessage InboundEntries[MaxQueuedMessages == 0 ? 1 : MaxQueuedMessages];
 
-	/** Indexes the next inbound message TickDispatch will deliver. */
+	/** Indexes the next inbound message PreAdvance will deliver. */
 	std::size_t InboundHeadIndex{0};
 
 	/** Indexes the next free inbound slot so enqueues append without overwriting the head. */
@@ -539,10 +539,10 @@ private:
 	/** Counts ReceiveEncodedMessage calls rejected because the inbound queue was full. */
 	std::uint32_t DroppedInboundMessageCount{0};
 
-	/** Backing ring storage for messages awaiting the next TickFlush. */
+	/** Backing ring storage for messages awaiting the next PostAdvance. */
 	FQueuedMessage OutboundEntries[MaxQueuedMessages == 0 ? 1 : MaxQueuedMessages];
 
-	/** Indexes the next outbound message TickFlush will attempt to send or deliver locally. */
+	/** Indexes the next outbound message PostAdvance will attempt to send or deliver locally. */
 	std::size_t OutboundHeadIndex{0};
 
 	/** Indexes the next free outbound slot so enqueues append without overwriting the head. */

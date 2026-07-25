@@ -40,7 +40,7 @@ adapters, or hardware APIs.
   of structural mutation during dispatch, and free of RTTI, exceptions, hidden
   clocks, threads, and SDK calls.
 - Actor messaging (`Message.h`, `TMessageRouter`, `TMessageChannelBinding`,
-  `TNetworkFrameSet`, `TReliableChannel`) is header-only and Net-free: a
+  `TEngineSystemSet`, `TReliableChannel`) is header-only and Net-free: a
   channel binding is duck-typed on its net type, so Engine names no Net type
   and keeps zero dependency on Net.
 

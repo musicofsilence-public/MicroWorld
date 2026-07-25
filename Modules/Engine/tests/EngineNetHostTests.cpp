@@ -6,7 +6,7 @@
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Engine/EngineResult.h>
 #include <MicroWorld/Engine/EngineStorage.h>
-#include <MicroWorld/Engine/NetworkFrame.h>
+#include <MicroWorld/Engine/EngineSystem.h>
 #include <MicroWorld/Engine/World.h>
 #include <MicroWorld/Net/HostLoopback.h>
 #include <MicroWorld/Net/NetAddress.h>
@@ -33,24 +33,36 @@ using MicroWorld::EObjectResult;
 using MicroWorld::ERuntimeResult;
 using MicroWorld::FActorComponentRegistry;
 using MicroWorld::FActorComponentRegistryReference;
+using MicroWorld::FDefaultEngineTraits;
 using MicroWorld::FDelegateHandle;
 using MicroWorld::FGarbageCollectionBudget;
 using MicroWorld::FNetHostConfig;
 using MicroWorld::FPeerId;
-using MicroWorld::INetworkFrame;
+using MicroWorld::IEngineSystem;
 using MicroWorld::MakeLoopbackAddress;
-using MicroWorld::TEngineHost;
+using MicroWorld::TEngine;
 using MicroWorld::THostLoopback;
 using MicroWorld::TimePointMilliseconds;
 using MicroWorld::TNetHost;
-using MicroWorld::TNetHostFrame;
+using MicroWorld::TNetHostSystem;
 using MicroWorld::TObjectCreationResult;
 using MicroWorld::TObjectPtr;
 using MicroWorld::TSpan;
 using MicroWorld::UWorld;
 
+/** Carries the exact capacities FHost sized before the traits refactor, so the test store is unchanged. */
+struct FHostTraits : FDefaultEngineTraits
+{
+	static constexpr std::size_t MaxClasses = 6;
+	static constexpr std::size_t MaxObjects = 8;
+	static constexpr std::size_t SlotSizeBytes = 256;
+	static constexpr std::size_t MaxRoots = 1;
+	static constexpr std::size_t MaxActors = 2;
+	static constexpr std::size_t MaxTimers = 4;
+};
+
 /** Host sized for a world plus one spawned actor, matching the engine host test profile. */
-using FHost = TEngineHost<6, 8, 256, 16, 1, 2, 4, 64>;
+using FHost = TEngine<FHostTraits>;
 
 /** The one application channel this suite exchanges; channel 0 stays reserved for control. */
 constexpr std::uint8_t AppChannel = 1;
@@ -78,21 +90,21 @@ struct FFrameCallRecord
 };
 
 /** A network frame that only records its two slot calls, isolating the engine-side wiring contract. */
-class FRecordingNetworkFrame final : public INetworkFrame
+class FRecordingEngineSystem final : public IEngineSystem
 {
 public:
 	/** Binds this stub to the caller-owned record it stamps on every slot call. */
-	explicit FRecordingNetworkFrame(FFrameCallRecord& InRecord) noexcept : Record(InRecord) {}
+	explicit FRecordingEngineSystem(FFrameCallRecord& InRecord) noexcept : Record(InRecord) {}
 
 	/** Stamps the inbound-dispatch slot's count and order. */
-	void TickDispatch(const TimePointMilliseconds) noexcept override
+	void PreAdvance(const TimePointMilliseconds) noexcept override
 	{
 		++Record.DispatchCount;
 		Record.DispatchOrder = ++Record.Sequence;
 	}
 
 	/** Stamps the outbound-flush slot's count and order. */
-	void TickFlush(const TimePointMilliseconds) noexcept override
+	void PostAdvance(const TimePointMilliseconds) noexcept override
 	{
 		++Record.FlushCount;
 		Record.FlushOrder = ++Record.Sequence;
@@ -151,10 +163,10 @@ FNetHostConfig MakeConfig() noexcept
 } // namespace
 
 /** Proves a bound network frame's inbound slot runs before its outbound slot on every accepted tick, and neither runs on a rejected one. */
-MW_TEST_CASE(EngineHostTickDrivesBoundNetworkFrameDispatchThenFlush)
+MW_TEST_CASE(EngineHostTickDrivesBoundSystemPreAdvanceThenPostAdvance)
 {
 	FFrameCallRecord Record{};
-	FRecordingNetworkFrame Frame{Record};
+	FRecordingEngineSystem Frame{Record};
 	FHost Host{FGarbageCollectionBudget{1, 4, 8}, Frame};
 
 	MW_EXPECT_TRUE(Test, Host.CreateWorld().Get() != nullptr, "CreateWorld roots the world before the frame-driven ticks");
@@ -172,7 +184,7 @@ MW_TEST_CASE(EngineHostTickDrivesBoundNetworkFrameDispatchThenFlush)
 }
 
 /**
- * The concept proof that net and engine compose: two TEngineHost instances over one
+ * The concept proof that net and engine compose: two TEngine instances over one
  * loopback exchange a message that spawns an actor on the server world, driven only
  * through the canonical Tick frame order (never by calling the pumps directly).
  */
@@ -182,8 +194,8 @@ MW_TEST_CASE(EngineNetHostClientMessageSpawnsActorOnServerWorld)
 	THostLoopback<2, 8, 64> Network;
 	TNetHost<2, 64> ServerNet(Network.Port(0));
 	TNetHost<1, 64> ClientNet(Network.Port(1));
-	TNetHostFrame<TNetHost<2, 64>> ServerFrame{ServerNet};
-	TNetHostFrame<TNetHost<1, 64>> ClientFrame{ClientNet};
+	TNetHostSystem<TNetHost<2, 64>> ServerFrame{ServerNet};
+	TNetHostSystem<TNetHost<1, 64>> ClientFrame{ClientNet};
 
 	// The test owns the spawn observables so they outlive the host whose store holds the actor.
 	int HandlerInvocationCount = 0;

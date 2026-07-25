@@ -4,12 +4,16 @@ project(MicroWorld VERSION 0.3.0 LANGUAGES CXX)
 
 option(MICROWORLD_BUILD_TESTS "Build MicroWorld host tests" ON)
 
-# Core is now primitives only: lifecycle, tick, application. The World/Actor/
-# Component and Network sources were retired in favor of the managed Engine
-# layer (see MICROWORLD_ROADMAP.md Phase 1).
+# Core owns the engine's primitive layer: lifecycle, tick, application, and the
+# explicit memory resources, bounded containers, and fixed delegates that every
+# higher module reuses. The World/Actor/Component and Network sources were
+# retired in favor of the managed Engine layer (see MICROWORLD_ROADMAP.md Phase
+# 1); Memory was folded in here because it was one translation unit plus
+# header-only templates with no boundary of its own to protect.
 set(MICROWORLD_CORE_SOURCES
     src/Application.cpp
     src/Log.cpp
+    src/MemoryResource.cpp
     src/TickFunction.cpp
 )
 
@@ -50,13 +54,23 @@ if(MICROWORLD_BUILD_TESTS)
 
     add_executable(microworld_tests
         tests/TestMain.cpp
+        tests/CoreAllocationCounters.cpp
         tests/LogTests.cpp
         tests/TickFunctionTests.cpp
         tests/ApplicationTests.cpp
         tests/ApplicationRunnerTests.cpp
+        tests/MemoryTests.cpp
+        tests/DelegateTests.cpp
+        tests/TimerManagerTests.cpp
     )
     target_link_libraries(microworld_tests PRIVATE MicroWorld::Core)
     microworld_enable_strict_warnings(microworld_tests)
+    if(MSVC)
+        # The folded-in Memory and Delegate tests deliberately use over-aligned
+        # fixtures to verify resource and delegate contracts; their expected tail
+        # padding is not a defect.
+        target_compile_options(microworld_tests PRIVATE /wd4324)
+    endif()
     add_test(NAME microworld_tests COMMAND microworld_tests)
 
     add_executable(microworld_no_exceptions_rtti_probe

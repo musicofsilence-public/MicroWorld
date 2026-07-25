@@ -102,12 +102,11 @@ if(MICROWORLD_ENGINE_BUILD_TESTS)
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/EngineHostTests.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/EngineNetHostTests.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/EngineGarbageCollectionTests.cpp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/tests/EngineTimerManagerTests.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/EngineMessageCodecTests.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/EngineMessageRouterTests.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/EngineMessageChannelTests.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/EngineReliableChannelTests.cpp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/tests/EngineNetworkFrameSetTests.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/EngineSystemSetTests.cpp"
     )
 
     if(BUILD_TESTING)

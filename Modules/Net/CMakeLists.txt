@@ -13,15 +13,16 @@ option(
     ON
 )
 
-# A standalone Net configuration composes the adjacent Memory package while a
+# A standalone Net configuration composes the adjacent Core package while a
 # larger profile may provide the target before adding this directory. Net never
-# depends on Object or Engine; its inward edge is Core <- Memory <- Net only.
-if(NOT TARGET MicroWorld::Memory)
-    set(MICROWORLD_MEMORY_BUILD_TESTS OFF)
-    set(MICROWORLD_MEMORY_BUILD_BENCHMARKS OFF)
+# depends on Object or Engine; its inward edge is Core <- Net only.
+if(NOT TARGET MicroWorld::Core)
+    set(MICROWORLD_BUILD_TESTS OFF)
+    set(MICROWORLD_BUILD_BENCHMARKS OFF)
+    set(MICROWORLD_BUILD_EXAMPLES OFF)
     add_subdirectory(
-        "${CMAKE_CURRENT_SOURCE_DIR}/../Memory"
-        "${CMAKE_CURRENT_BINARY_DIR}/Memory"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../Core"
+        "${CMAKE_CURRENT_BINARY_DIR}/Core"
     )
 endif()
 
@@ -37,7 +38,7 @@ target_include_directories(microworld_net PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
 )
 target_compile_features(microworld_net PUBLIC cxx_std_17)
-target_link_libraries(microworld_net PUBLIC MicroWorld::Memory)
+target_link_libraries(microworld_net PUBLIC MicroWorld::Core)
 
 # Keeps the portable Net boundary under the same strict, no-runtime-type-
 # information gate as Memory so byte I/O never introduces a hidden dependency.

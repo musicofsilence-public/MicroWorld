@@ -5,8 +5,8 @@ Inherits `../AGENTS.md`.
 ## Architecture
 
 `Delegates/` owns allocation-free callable erasure and fixed-capacity multicast
-dispatch for Memory and inward-dependent modules. It depends only on the C++17
-standard library and introduces no platform, engine, or product policy.
+dispatch for Core and every inward-dependent module. It depends only on the
+C++17 standard library and introduces no platform, engine, or product policy.
 
 ## Concepts and invariants
 

@@ -6,7 +6,7 @@
 #include <MicroWorld/Engine/Message.h>
 #include <MicroWorld/Engine/MessageChannelBinding.h>
 #include <MicroWorld/Engine/MessageRouter.h>
-#include <MicroWorld/Engine/NetworkFrame.h>
+#include <MicroWorld/Engine/EngineSystem.h>
 #include <MicroWorld/Engine/ReliableChannel.h>
 #include <MicroWorld/Net/HostLoopback.h>
 #include <MicroWorld/Net/NetAddress.h>
@@ -32,6 +32,7 @@ using MicroWorld::ENetHostState;
 using MicroWorld::ENetMode;
 using MicroWorld::ENetResult;
 using MicroWorld::ERuntimeResult;
+using MicroWorld::FDefaultEngineTraits;
 using MicroWorld::FGarbageCollectionBudget;
 using MicroWorld::FMessageActorId;
 using MicroWorld::FMessageChannelId;
@@ -46,14 +47,14 @@ using MicroWorld::IEncodedMessageSink;
 using MicroWorld::LocalChannelId;
 using MicroWorld::MakeLoopbackAddress;
 using MicroWorld::ReliableHeaderBytes;
-using MicroWorld::TEngineHost;
+using MicroWorld::TEngine;
+using MicroWorld::TEngineSystemSet;
 using MicroWorld::THostLoopback;
 using MicroWorld::TimePointMilliseconds;
 using MicroWorld::TMessageChannelBinding;
 using MicroWorld::TMessageRouter;
 using MicroWorld::TNetHost;
-using MicroWorld::TNetHostFrame;
-using MicroWorld::TNetworkFrameSet;
+using MicroWorld::TNetHostSystem;
 using MicroWorld::TReliableChannel;
 using MicroWorld::TSpan;
 
@@ -111,19 +112,30 @@ constexpr std::size_t ChannelCapacity = 1;
 using FNet = TNetHost<2, 64>;
 
 /** Adapts FNet to the engine's per-frame network slot, matching EngineNetHostTests.cpp's wiring. */
-using FNetFrame = TNetHostFrame<FNet>;
+using FNetFrame = TNetHostSystem<FNet>;
 
 /** The channel binding under test, duck-typed on FNet. */
 using FBinding = TMessageChannelBinding<FNet>;
 
-/** Engine host profile sized for a bare rooted world; these cases never spawn actors. */
-using FHost = TEngineHost<6, 8, 256, 16, 1, 2, 4, 64>;
+/** Carries the exact capacities FHost sized before the traits refactor, so the test store is unchanged. */
+struct FHostTraits : FDefaultEngineTraits
+{
+	static constexpr std::size_t MaxClasses = 6;
+	static constexpr std::size_t MaxObjects = 8;
+	static constexpr std::size_t SlotSizeBytes = 256;
+	static constexpr std::size_t MaxRoots = 1;
+	static constexpr std::size_t MaxActors = 2;
+	static constexpr std::size_t MaxTimers = 4;
+};
 
-/** Per-side D3 composition root: holds one side's net frame and message router behind the one INetworkFrame slot TEngineHost drives. */
-using FFrameSet = TNetworkFrameSet<2>;
+/** Engine profile sized for a bare rooted world; these cases never spawn actors. */
+using FHost = TEngine<FHostTraits>;
+
+/** Per-side D3 composition root: holds one side's net frame and message router behind the one IEngineSystem slot TEngine drives. */
+using FFrameSet = TEngineSystemSet<2>;
 
 /** Per-side D3 composition root for the multi-channel cases: two net frames (telemetry, command) plus the one router that binds both. */
-using FMultiChannelFrameSet = TNetworkFrameSet<3>;
+using FMultiChannelFrameSet = TEngineSystemSet<3>;
 
 /** Router profile shared by every case; its capacities are generous headroom, never the behavior under test. */
 using FTestRouter = TMessageRouter<HandlerCapacity, OutboundQueueCapacity, MessageByteCapacity, ChannelCapacity>;
@@ -287,7 +299,7 @@ private:
 };
 
 /**
- * Runs one side's frame-driven pump for one tick. Each side's TEngineHost is bound to an
+ * Runs one side's frame-driven pump for one tick. Each side's TEngine is bound to an
  * FFrameSet holding that side's net frame and message router (net added first, router added
  * last per the D3 recipe), so this single Tick call already dispatches the net frame then the
  * router (inbound) and flushes the router then the net frame (outbound) in the right order.
@@ -660,7 +672,7 @@ MW_TEST_CASE(EngineMessageChannel_RejectingSinkIncrementsDroppedInboundCount)
 
 /**
  * Roadmap 4.2: one router per side drives two independent wires (telemetry + command) behind one
- * TNetworkFrameSet<3>. A message sent on each channel must arrive tagged with that channel's own id
+ * TEngineSystemSet<3>. A message sent on each channel must arrive tagged with that channel's own id
  * and never bleed into the other's record (proven below by each record only ever holding its own
  * distinct payload byte), and both must arrive within one post-send frame per side.
  */
@@ -786,7 +798,7 @@ MW_TEST_CASE(EngineMessageChannel_MultiChannelIsolationDeliversBothInOneFrame)
 }
 
 /**
- * Roadmap 4.2's accepted v1 caveat: TMessageRouter has ONE shared outbound queue (see its TickFlush),
+ * Roadmap 4.2's accepted v1 caveat: TMessageRouter has ONE shared outbound queue (see its PostAdvance),
  * so a stalled channel at the head retains that head and blocks every later entry for the whole tick,
  * even one queued for an otherwise healthy channel - matching TNetManager::AdvanceSend's retained-head
  * discipline from Task 2.2. To drive the stall deterministically in one flush: TNetHost::SendTo only
@@ -937,7 +949,7 @@ MW_TEST_CASE(EngineMessageChannel_StalledChannelRetainsRouterHead)
 		std::size_t{2},
 		ClientRouter.QueuedOutboundCount(),
 		"Accepted v1 cross-channel head-of-line caveat: a stalled channel at the head of the router's one shared outbound queue retains both "
-		"itself and the healthy channel's message queued behind it, because TMessageRouter::TickFlush stops the whole tick on the first "
+		"itself and the healthy channel's message queued behind it, because TMessageRouter::PostAdvance stops the whole tick on the first "
 		"non-Success send (matching TNetManager::AdvanceSend's retained-head discipline from Task 2.2)");
 }
 
@@ -959,8 +971,8 @@ MW_TEST_CASE(EngineMessageChannel_ReliableChannelSurvivesPacketDropsDeliveringEx
 	constexpr int MaxFramesPerMessage = ReliableMaxSendAttempts + 3;
 	constexpr std::size_t ReliableSlotBytes = MessageByteCapacity + ReliableHeaderBytes;
 	using FReliableChannel = TReliableChannel<4, ReliableSlotBytes>;
-	using FClientFrameSet = TNetworkFrameSet<3>;
-	using FServerFrameSet = TNetworkFrameSet<2>;
+	using FClientFrameSet = TEngineSystemSet<3>;
+	using FServerFrameSet = TEngineSystemSet<2>;
 
 	THostLoopback<2, 8, 64> Network;
 	FPacketDropDriver ClientDropDriver(Network.Port(1), DropEveryNthSend);

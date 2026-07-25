@@ -9,7 +9,7 @@
 #include <MicroWorld/Engine/Message.h>
 #include <MicroWorld/Engine/MessageChannelBinding.h>
 #include <MicroWorld/Engine/MessageRouter.h>
-#include <MicroWorld/Engine/NetworkFrame.h>
+#include <MicroWorld/Engine/EngineSystem.h>
 #include <MicroWorld/Engine/World.h>
 #include <MicroWorld/Log.h>
 #include <MicroWorld/Net/NetHost.h>
@@ -96,7 +96,7 @@ private:
 	 * Decodes the commanded 2-byte LE interval and re-times this actor's own reporting cadence.
 	 *
 	 * SetTickInterval is called from inside this handler, which runs during the engine's inbound
-	 * network dispatch step -- before the world advance step ticks this same actor (TEngineHost::Tick's
+	 * network dispatch step -- before the world advance step ticks this same actor (TEngine::Tick's
 	 * fixed frame order, EngineHost.h) -- so the new interval is already in effect the moment this
 	 * frame's Tick would fire. FTickFunction::SetInterval (TickFunction.cpp) is a plain state mutation
 	 * with no dispatch lock, so calling it mid-handler is safe.
@@ -129,7 +129,7 @@ private:
 /**
  * Client board: joins the WiFi SoftAP and runs FSensorActor over one TMessageRouter wired to two
  * nets (UDP telemetry, UART commands) through two TMessageChannelBinding, with the engine holding
- * both net frames and the router behind one TNetworkFrameSet<3>.
+ * both net frames and the router behind one TEngineSystemSet<3>.
  */
 void RunClient() noexcept
 {

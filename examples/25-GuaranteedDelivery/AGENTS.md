@@ -10,12 +10,12 @@ Two role worlds, one source tree. `Main.cpp` is a thin dispatcher whose
 hold the two roles and are both always compiled, and
 `GuaranteedDeliveryShared.h` defines the message/actor/channel ids, WiFi/UDP
 configuration, and the `TNetHost`/`TMessageRouter`/`TReliableChannel`/
-`TEngineHost`/`TNetworkFrameSet` type shapes once (DRY within this one
+`TEngineHost`/`TEngineSystemSet` type shapes once (DRY within this one
 example). Per board: ONE `TNetHost` over `FEsp32UdpDriver` -- on the client,
 wrapped in `FPacketDropDriver` -- carrying TWO channels to the same
 `TMessageRouter`: a best-effort binding straight to the router, and a
 guaranteed binding wrapped in `TReliableChannel`. All pumped by one
-`TNetworkFrameSet<3>` (net frame, reliable channel, router) the engine holds.
+`TEngineSystemSet<3>` (net frame, reliable channel, router) the engine holds.
 Every composition object is `static` and allocation-free.
 
 ## Concepts
@@ -34,7 +34,7 @@ Every composition object is `static` and allocation-free.
   (now-bound) inner channel.
 - **Frame-set add order is exact: net, reliable, router.** The net frame
   delivers inbound wire bytes to both bindings first; the reliable channel's
-  `TickFlush` then paces retries for anything still unacknowledged; the
+  `PostAdvance` then paces retries for anything still unacknowledged; the
   router dispatches last, once both channels have had their turn. Reversing
   this order would let the router run against stale channel state.
 - **`FPacketDropDriver` sits below the channel demux.** It wraps the raw UDP

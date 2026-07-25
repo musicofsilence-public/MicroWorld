@@ -13,12 +13,13 @@ from pathlib import Path
 # Each module may include itself plus only these inward portable dependencies.
 # Serialization and Integration are intentionally absent: those packages do not
 # exist and predeclaring them would authorize package paths that are not built.
+# Memory is folded into Core: its former public segments (Containers, Delegates,
+# Memory) resolve to Core, and no Memory package edge remains.
 MODULE_DEPENDENCIES = {
     "Core": set(),
-    "Memory": {"Core"},
-    "Object": {"Core", "Memory"},
-    "Engine": {"Core", "Memory", "Object"},
-    "Net": {"Core", "Memory"},
+    "Object": {"Core"},
+    "Engine": {"Core", "Object"},
+    "Net": {"Core"},
 }
 
 # Platform-facing APIs are intentionally absent: portable packages may use only
@@ -112,7 +113,10 @@ VENDOR_HEADER_PREFIXES = (
 )
 
 SOURCE_SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".h", ".hpp"}
-MEMORY_PUBLIC_SEGMENTS = {"Containers", "Delegates", "Memory"}
+# These sub-namespaces under include/MicroWorld/ are owned by Core (they were
+# the Memory package's public surface before it folded in). Resolving them to
+# Core keeps a Core header that includes <MicroWorld/Containers/Span.h> legal.
+CORE_PUBLIC_SEGMENTS = {"Containers", "Delegates", "Memory"}
 INCLUDE_PATTERN = re.compile(
     r'^\s*#\s*include\s*([<"])([^>"]+)[>"]',
     re.MULTILINE,
@@ -190,8 +194,8 @@ def declared_path_module(path: Path, package_root: Path) -> str | None:
         if namespace_index + 1 >= len(relative_parts) - 1:
             return "Core"
         candidate = relative_parts[namespace_index + 1]
-        if candidate in MEMORY_PUBLIC_SEGMENTS:
-            return "Memory"
+        if candidate in CORE_PUBLIC_SEGMENTS:
+            return "Core"
         return candidate if candidate in MODULE_DEPENDENCIES else "Core"
 
     if relative_parts[0] == "src" and len(relative_parts) > 2:
@@ -209,8 +213,8 @@ def included_module(header: str) -> str | None:
         return None
     remainder = normalized_header[len(prefix) :]
     first_segment = remainder.split("/", 1)[0]
-    if first_segment in MEMORY_PUBLIC_SEGMENTS:
-        return "Memory"
+    if first_segment in CORE_PUBLIC_SEGMENTS:
+        return "Core"
     return (
         first_segment
         if first_segment in MODULE_DEPENDENCIES
@@ -295,11 +299,13 @@ def run_self_test() -> int:
     with tempfile.TemporaryDirectory() as temporary_directory:
         root = Path(temporary_directory)
         core = root / "core"
-        memory = root / "memory"
         net = root / "net"
+        # Core owns its own Net-bucket leak fixture, the folded Memory segment,
+        # and the folded Containers segment (both resolve to Core, not a
+        # separate Memory package).
         (core / "include" / "MicroWorld" / "Net").mkdir(parents=True)
-        (memory / "include" / "MicroWorld" / "Memory").mkdir(parents=True)
-        (memory / "include" / "MicroWorld" / "Containers").mkdir(parents=True)
+        (core / "include" / "MicroWorld" / "Memory").mkdir(parents=True)
+        (core / "include" / "MicroWorld" / "Containers").mkdir(parents=True)
         (net / "include" / "MicroWorld" / "Net").mkdir(parents=True)
 
         (core / "include" / "MicroWorld" / "Good.h").write_text(
@@ -314,8 +320,9 @@ def run_self_test() -> int:
             "#pragma once\n",
             encoding="utf-8",
         )
+        # A Core header under the folded Memory segment must not reach Object.
         (
-            memory
+            core
             / "include"
             / "MicroWorld"
             / "Memory"
@@ -324,8 +331,9 @@ def run_self_test() -> int:
             "#include <MicroWorld/Object/Object.h>\n",
             encoding="utf-8",
         )
+        # A Core header may reach Core, so a Containers header using Time passes.
         (
-            memory
+            core
             / "include"
             / "MicroWorld"
             / "Containers"
@@ -334,7 +342,7 @@ def run_self_test() -> int:
             "#include <MicroWorld/Time.h>\n",
             encoding="utf-8",
         )
-        # A valid Net header may reach Core and Memory but nothing above it.
+        # A valid Net header may reach Core but nothing above it.
         (net / "include" / "MicroWorld" / "Net" / "Good.h").write_text(
             "#include <MicroWorld/Time.h>\n"
             "#include <MicroWorld/Containers/Span.h>\n",
@@ -351,13 +359,13 @@ def run_self_test() -> int:
         )
 
         errors, _ = analyze_packages(
-            [("Core", core), ("Memory", memory), ("Net", net)],
+            [("Core", core), ("Net", net)],
             {"build", ".pio", "__pycache__"},
         )
         expected_fragments = (
             "external header esp_log.h",
             "Core package contains a Net module path",
-            "Memory must not depend on Object",
+            "Core must not depend on Object",
             "Net must not depend on Object",
             "Net must not depend on Engine",
         )

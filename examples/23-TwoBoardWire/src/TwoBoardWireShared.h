@@ -4,7 +4,7 @@
 #include <MicroWorld/Engine/Message.h>
 #include <MicroWorld/Engine/MessageChannelBinding.h>
 #include <MicroWorld/Engine/MessageRouter.h>
-#include <MicroWorld/Engine/NetworkFrame.h>
+#include <MicroWorld/Engine/EngineSystem.h>
 #include <MicroWorld/Net/NetHost.h>
 #include <MicroWorld/Object/ClassDescriptor.h>
 #include <MicroWorld/PlatformEsp32/Esp32UartDriver.h>
@@ -17,7 +17,7 @@
  *
  * Both role translation units (ServerMain.cpp, ClientMain.cpp) include this so the
  * message ids, actor ids, node ids, UART/session configuration, and the
- * TNetHost/TMessageRouter/TEngineHost shapes are defined exactly once — DRY within
+ * TNetHost/TMessageRouter/TEngine shapes are defined exactly once — DRY within
  * this one example (mirrors 19-UartMessaging's UartMessagingShared.h).
  */
 namespace Ex23
@@ -78,14 +78,14 @@ using FWireNet = MicroWorld::TNetHost<2, 120>;
 /** The local actor-message router both roles compose, sized for this example's one channel and few handlers. */
 using FWireRouter = MicroWorld::TMessageRouter<16, 8, 96, 1>;
 
-/** Adapts FWireNet to the engine's per-frame network slot (only TickDispatch/TickFlush; the router is pumped separately, see §4). */
-using FWireFrame = MicroWorld::TNetHostFrame<FWireNet>;
+/** Adapts FWireNet to the engine's per-frame network slot (only PreAdvance/PostAdvance; the router is pumped separately, see §4). */
+using FWireFrame = MicroWorld::TNetHostSystem<FWireNet>;
 
 /** Two-way adapter binding one FWireNet wire channel to the local FWireRouter. */
 using FWireBinding = MicroWorld::TMessageChannelBinding<FWireNet>;
 
-/** The engine host both roles compose; sized for one world with a couple of small inline actors. */
-using FWireEngine = MicroWorld::TEngineHost<8, 16, 512, 16, 2, 4, 8, 64>;
+/** The engine both roles compose; sized for one world with a couple of small inline actors (the default ESP32-S3 traits). */
+using FWireEngine = MicroWorld::TEngine<>;
 
 /** Builds a board's UART driver configuration from the fixed pins and baud. */
 inline MicroWorld::FEsp32UartConfig MakeUartConfig(const std::uint8_t NodeId) noexcept
@@ -112,16 +112,16 @@ inline MicroWorld::FNetHostConfig MakeHostConfig() noexcept
 /**
  * Runs one board's manual per-frame router pump, identical on both roles.
  *
- * Manual frame composition (Phase 4.1 folds this into TNetworkFrameSet): flushes Router's outbound
+ * Manual frame composition (Phase 4.1 folds this into TEngineSystemSet): flushes Router's outbound
  * queue to the wire before the engine tick, then dispatches its inbound queue after -- the same order
- * EngineMessageChannelTests.cpp's PumpSide proved correct. TEngineHost holds exactly one
- * INetworkFrame (the bound TNetHostFrame), so the router itself is pumped here rather than through
+ * EngineMessageChannelTests.cpp's PumpSide proved correct. TEngine holds exactly one
+ * IEngineSystem (the bound TNetHostSystem), so the router itself is pumped here rather than through
  * the engine.
  */
 inline void PumpOneFrame(FWireRouter& Router, FWireEngine& Engine, const MicroWorld::TimePointMilliseconds NowMilliseconds) noexcept
 {
-	Router.TickFlush(NowMilliseconds);
+	Router.PostAdvance(NowMilliseconds);
 	(void)Engine.Tick(NowMilliseconds);
-	Router.TickDispatch(NowMilliseconds);
+	Router.PreAdvance(NowMilliseconds);
 }
 } // namespace Ex23

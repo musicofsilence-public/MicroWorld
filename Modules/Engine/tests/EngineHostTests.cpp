@@ -5,12 +5,12 @@
 #include <MicroWorld/Engine/EngineClassIds.h>
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Engine/EngineResult.h>
-#include <MicroWorld/Engine/Timer.h>
 #include <MicroWorld/Object/ClassDescriptor.h>
 #include <MicroWorld/Object/GarbageCollector.h>
 #include <MicroWorld/Object/Object.h>
 #include <MicroWorld/Object/ObjectStore.h>
 #include <MicroWorld/Time.h>
+#include <MicroWorld/Timer.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -26,6 +26,7 @@ using MicroWorld::ERuntimeResult;
 using MicroWorld::ETimerMode;
 using MicroWorld::ETimerResult;
 using MicroWorld::FClassDescriptor;
+using MicroWorld::FDefaultEngineTraits;
 using MicroWorld::FGarbageCollectionBudget;
 using MicroWorld::FObjectStoreStats;
 using MicroWorld::FTickConfiguration;
@@ -33,7 +34,7 @@ using MicroWorld::FTimerHandle;
 using MicroWorld::FTypeId;
 using MicroWorld::MakeClassDescriptor;
 using MicroWorld::TDelegate;
-using MicroWorld::TEngineHost;
+using MicroWorld::TEngine;
 using MicroWorld::TObjectCreationResult;
 using MicroWorld::TObjectPtr;
 using MicroWorld::TraceManagedObjectReferences;
@@ -48,10 +49,10 @@ using MicroWorld::Tests::FSequenceCounter;
 /** Ticks every advance with a zero interval so the lifecycle test counts one tick per frame. */
 constexpr FTickConfiguration HostTickConfiguration{true, true, MicroWorld::DurationMilliseconds{0}};
 
-/** Stable type id for the recording actor managed through TEngineHost in this suite. */
+/** Stable type id for the recording actor managed through TEngine in this suite. */
 constexpr FTypeId HostActorTypeId{0x00060001u};
 
-/** Stable type id for the recording component managed through TEngineHost in this suite. */
+/** Stable type id for the recording component managed through TEngine in this suite. */
 constexpr FTypeId HostComponentTypeId{0x00060002u};
 
 /** Stable type id for the plain unrooted component used as true garbage in the GC test. */
@@ -60,8 +61,19 @@ constexpr FTypeId HostPlainComponentTypeId{0x00060003u};
 /** Inline storage reserved for one timer callback bound through the host's delegate type. */
 constexpr std::size_t HostTimerCallbackBytes = 64;
 
+/** Carries the exact capacities FHost sized before the traits refactor, so the test store is unchanged. */
+struct FHostTraits : FDefaultEngineTraits
+{
+	static constexpr std::size_t MaxClasses = 6;
+	static constexpr std::size_t MaxObjects = 8;
+	static constexpr std::size_t SlotSizeBytes = 256;
+	static constexpr std::size_t MaxRoots = 1;
+	static constexpr std::size_t MaxActors = 2;
+	static constexpr std::size_t MaxTimers = 4;
+};
+
 /** Sizes a host large enough for the world, one actor, one component, and three garbage objects. */
-using FHost = TEngineHost<6, 8, 256, 16, 1, 2, 4, HostTimerCallbackBytes>;
+using FHost = TEngine<FHostTraits>;
 
 /** Matches the host's timer manager delegate type so Schedule accepts the bound callback. */
 using FHostDelegate = TDelegate<void(), HostTimerCallbackBytes>;
@@ -246,7 +258,7 @@ struct FHostFixture final
 
 } // namespace
 
-/** Proves the host runs begin, tick, and end through TEngineHost in the engine's deterministic order. */
+/** Proves the host runs begin, tick, and end through TEngine in the engine's deterministic order. */
 MW_TEST_CASE(EngineHostLifecycleRunsBeginTickEndInOrder)
 {
 	FHostFixture Fixture{};

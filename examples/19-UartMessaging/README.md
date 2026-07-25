@@ -1,7 +1,7 @@
 # 19-UartMessaging
 
 **Feature:** the full MicroWorld message design — a dedicated-server `TEngineHost`
-bound to `TNetHost` through the `TNetHostFrame` seam, and a bare `TNetHost`
+bound to `TNetHost` through the `TNetHostSystem` seam, and a bare `TNetHost`
 client — running over a plain wire with **zero WiFi**. **Same application
 protocol as example 16 — only the driver construction changed.**
 
@@ -9,7 +9,7 @@ protocol as example 16 — only the driver construction changed.**
 
 ## What it does
 
-1. The **server** board (`node=1`) composes a `TEngineHost` + `TNetHostFrame` +
+1. The **server** board (`node=1`) composes a `TEngineHost` + `TNetHostSystem` +
    `TNetHost` in `DedicatedServer` mode over one `FEsp32UartDriver`, registers a
    spawnable actor class, creates its world, and ticks forever. Each tick it
    broadcasts the world actor count on channel 2.
@@ -31,7 +31,7 @@ demonstration.
 - `TNetHost` (`Configure` / `Start` / `PumpReceive` / `PumpSend` / `SendTo` /
   `Broadcast` / `GetState` / `GetServerPeer`, message-handler multicast),
   `ENetMode`, `ENetHostState`, `FNetHostConfig`, `FPeerId`
-- `TNetHostFrame` / `INetworkFrame` and the `TEngineHost` network-frame constructor
+- `TNetHostSystem` / `IEngineSystem` and the `TEngineHost` network-frame constructor
 - `TEngineHost` (`RegisterClass` / `CreateWorld` / `CreateObject` / `BeginPlay` /
   `Tick` / `GetWorld`), `UWorld::SpawnActor`, `AActor`, `FGarbageCollectionBudget`
 - `FEsp32UartDriver`, `FEsp32UartConfig`, `MakeUartAddress`

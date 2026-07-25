@@ -4,8 +4,7 @@
 #include <MicroWorld/Engine/ActorComponent.h>
 #include <MicroWorld/Engine/EngineClassIds.h>
 #include <MicroWorld/Engine/EngineStorage.h>
-#include <MicroWorld/Engine/NetworkFrame.h>
-#include <MicroWorld/Engine/Timer.h>
+#include <MicroWorld/Engine/EngineSystem.h>
 #include <MicroWorld/Engine/World.h>
 #include <MicroWorld/Object/ClassDescriptor.h>
 #include <MicroWorld/Object/GarbageCollector.h>
@@ -13,6 +12,7 @@
 #include <MicroWorld/Object/ObjectPtr.h>
 #include <MicroWorld/Object/ObjectStore.h>
 #include <MicroWorld/Time.h>
+#include <MicroWorld/Timer.h>
 
 #include <array>
 #include <cstddef>
@@ -22,6 +22,71 @@
 
 namespace MicroWorld
 {
+
+/**
+ * Non-template handle so an application can hold and drive an engine without
+ * naming its traits. A subclass-free application composes a TEngine<TTraits>
+ * and reaches it through this interface; the five lifecycle/world methods are
+ * the only operations that do not depend on a compile-time capacity.
+ *
+ * GetTimerManager returns a templated TTimerManager and therefore cannot sit
+ * here: an actor that needs a timer would need an ITimerManager instead, which
+ * is the likely answer when one is first required (a separate task).
+ */
+class IEngine
+{
+public:
+	/** Defaulted virtual so a TEngine destructs through this interface. */
+	virtual ~IEngine() noexcept = default;
+
+	/** Starts the world at one canonical time and records it as the tick baseline. */
+	virtual ERuntimeResult BeginPlay(TimePointMilliseconds InNowMilliseconds) noexcept = 0;
+
+	/** Runs one canonical frame in the documented fixed order and returns the world's advance/apply result. */
+	virtual ERuntimeResult Tick(TimePointMilliseconds InNowMilliseconds) noexcept = 0;
+
+	/** Ends the world in reverse registration order; idempotent after success. */
+	virtual ERuntimeResult EndPlay() noexcept = 0;
+
+	/** Returns the rooted world; only valid after CreateWorld has succeeded. */
+	virtual UWorld& GetWorld() noexcept = 0;
+
+	/** Returns the object store so callers can query stats or manage roots directly. */
+	virtual FObjectStore& GetObjectStore() noexcept = 0;
+};
+
+/**
+ * A starting point for the eight compile-time capacities TEngine sizes itself
+ * with, sized for an ESP32-S3 from the values a working two-channel networked
+ * example already uses. These are a starting point, not a measurement: override
+ * the members in a project's own traits struct to grow or shrink the engine.
+ */
+struct FDefaultEngineTraits
+{
+	/** Maximum registered class descriptors (engine bases plus user types). */
+	static constexpr std::size_t MaxClasses = 8;
+
+	/** Maximum live managed objects across the world, actors, and components. */
+	static constexpr std::size_t MaxObjects = 16;
+
+	/** Byte width of one equal-size, non-moving object slot. */
+	static constexpr std::size_t SlotSizeBytes = 512;
+
+	/** Alignment every object slot preserves. */
+	static constexpr std::size_t SlotAlign = 16;
+
+	/** Maximum independently reusable strong-root entries. */
+	static constexpr std::size_t MaxRoots = 2;
+
+	/** Maximum actors the single world registers. */
+	static constexpr std::size_t MaxActors = 4;
+
+	/** Maximum concurrent bounded timers. */
+	static constexpr std::size_t MaxTimers = 8;
+
+	/** Inline bytes one timer callback's delegate storage may use. */
+	static constexpr std::size_t InlineTimerCallbackBytes = 64;
+};
 
 #if defined(_MSC_VER)
 // C4324: padding after the alignas(SlotAlign) slot storage is intentional; the
@@ -33,25 +98,31 @@ namespace MicroWorld
 /**
  * Owns and wires every fixed-capacity runtime subsystem — class registry, object
  * store, garbage collector, world actor registry, and timer manager — behind one
- * canonical per-frame order. Construct it in static storage or a stack frame,
- * register user classes, call CreateWorld once, then drive BeginPlay/Tick/EndPlay.
- * Every instantiation sizes all storage at compile time and never allocates; an
- * optional caller-owned network frame bound at construction makes the per-frame
- * network slots live.
+ * canonical per-frame order, sizing all storage at compile time and never
+ * allocating; an optional caller-owned engine system bound at construction makes
+ * the per-frame system turns live.
+ *
+ * TTraits supplies the eight compile-time capacities as static constexpr members
+ * (see FDefaultEngineTraits) and defaults to FDefaultEngineTraits, so a consumer
+ * whose needs match the ESP32-S3 starting point writes TEngine<> with no args;
+ * deriving IEngine lets an application hold and drive the engine without naming
+ * its traits.
  */
-template<
-	std::size_t MaxClasses,
-	std::size_t MaxObjects,
-	std::size_t SlotSizeBytes,
-	std::size_t SlotAlign,
-	std::size_t MaxRoots,
-	std::size_t MaxActors,
-	std::size_t MaxTimers,
-	std::size_t InlineTimerCallbackBytes>
-class TEngineHost final
+template<typename TTraits = FDefaultEngineTraits>
+class TEngine final : public IEngine
 {
 public:
-	/** Alias for the timer manager this host owns, so callers name one concrete type. */
+	/** Pulls the eight capacities out of the traits type so the body reads as before the refactor. */
+	static constexpr std::size_t MaxClasses = TTraits::MaxClasses;
+	static constexpr std::size_t MaxObjects = TTraits::MaxObjects;
+	static constexpr std::size_t SlotSizeBytes = TTraits::SlotSizeBytes;
+	static constexpr std::size_t SlotAlign = TTraits::SlotAlign;
+	static constexpr std::size_t MaxRoots = TTraits::MaxRoots;
+	static constexpr std::size_t MaxActors = TTraits::MaxActors;
+	static constexpr std::size_t MaxTimers = TTraits::MaxTimers;
+	static constexpr std::size_t InlineTimerCallbackBytes = TTraits::InlineTimerCallbackBytes;
+
+	/** Alias for the timer manager this engine owns, so callers name one concrete type. */
 	using FTimerManager = TTimerManager<MaxTimers, InlineTimerCallbackBytes>;
 
 	/**
@@ -62,7 +133,7 @@ public:
 	 * bounds how many store slots the per-tick destruction barrier inspects (default:
 	 * every slot, reclaiming all pending destroys each frame).
 	 */
-	explicit TEngineHost(
+	explicit TEngine(
 		const FGarbageCollectionBudget InCollectionBudget, const std::uint32_t InReclamationBudget = static_cast<std::uint32_t>(MaxObjects)) noexcept
 		: GarbageCollectionBudget(InCollectionBudget)
 		, FrameReclamationBudget(InReclamationBudget)
@@ -74,26 +145,26 @@ public:
 	}
 
 	/**
-	 * Builds the host exactly as the budget-only constructor does, then binds a
-	 * caller-owned network frame so Tick drives its inbound step first (step 1) and
-	 * its outbound step last (step 7). The frame and the network host behind it must
-	 * outlive this host.
+	 * Builds the engine exactly as the budget-only constructor does, then binds a
+	 * caller-owned engine system so Tick drives its pre-advance turn first (step 1)
+	 * and its post-advance turn last (step 7). The system and whatever stands behind
+	 * it must outlive this engine.
 	 */
-	explicit TEngineHost(
+	explicit TEngine(
 		const FGarbageCollectionBudget InCollectionBudget,
-		INetworkFrame& InNetworkFrame,
+		IEngineSystem& InSystem,
 		const std::uint32_t InReclamationBudget = static_cast<std::uint32_t>(MaxObjects)) noexcept
-		: TEngineHost(InCollectionBudget, InReclamationBudget)
+		: TEngine(InCollectionBudget, InReclamationBudget)
 	{
-		Network = &InNetworkFrame;
+		System = &InSystem;
 	}
 
-	/** Copying or moving would duplicate this host's unique ownership of the
+	/** Copying or moving would duplicate this engine's unique ownership of the
 	 * store, garbage collector, registries, and timer manager. */
-	TEngineHost(const TEngineHost&) = delete;
-	TEngineHost& operator=(const TEngineHost&) = delete;
-	TEngineHost(TEngineHost&&) = delete;
-	TEngineHost& operator=(TEngineHost&&) = delete;
+	TEngine(const TEngine&) = delete;
+	TEngine& operator=(const TEngine&) = delete;
+	TEngine(TEngine&&) = delete;
+	TEngine& operator=(TEngine&&) = delete;
 
 	/** Registers one user class descriptor so the store accepts its construction. */
 	EObjectResult RegisterClass(const FClassDescriptor& InDescriptor) noexcept { return Registry.Register(InDescriptor); }
@@ -191,10 +262,10 @@ public:
 	}
 
 	/** Returns the rooted world; only valid after CreateWorld has succeeded. */
-	UWorld& GetWorld() noexcept { return *WorldRoot.Get(); }
+	UWorld& GetWorld() noexcept override { return *WorldRoot.Get(); }
 
 	/** Returns the object store so callers can query stats or manage roots directly. */
-	FObjectStore& GetObjectStore() noexcept { return Store; }
+	FObjectStore& GetObjectStore() noexcept override { return Store; }
 
 	/** Returns the timer manager so callers schedule and cancel bounded timers. */
 	FTimerManager& GetTimerManager() noexcept { return Timers; }
@@ -203,7 +274,7 @@ public:
 	 * Starts the world at one canonical time and records it as the tick baseline.
 	 * Returns InvalidLifecycle if no world has been created.
 	 */
-	ERuntimeResult BeginPlay(const TimePointMilliseconds InNowMilliseconds) noexcept
+	ERuntimeResult BeginPlay(const TimePointMilliseconds InNowMilliseconds) noexcept override
 	{
 		UWorld* const World = WorldRoot.Get();
 		if (World == nullptr)
@@ -218,20 +289,20 @@ public:
 	/**
 	 * Runs one canonical frame in fixed order and returns the world's advance/apply
 	 * result. The full order is:
-	 *   1. NetworkFrame TickDispatch — drain inbound traffic, dispatch messages, age peers.
+	 *   1. System PreAdvance — give a bound system its pre-advance turn.
 	 *   2. Timers.Advance — fire due timer callbacks.
 	 *   3. World.Advance — tick every component, then every actor.
 	 *   4. World.ApplyPending — begin pending spawns; end and unregister pending destroys.
 	 *   5. Store.ApplyPendingDestroy — bounded reclamation of the slots step 4 marked.
 	 *   6. GC slice — start a cycle when idle, then advance one bounded slice.
-	 *   7. NetworkFrame TickFlush — flush outbound traffic and heartbeats.
+	 *   7. System PostAdvance — give a bound system its post-advance turn.
 	 *
 	 * Rejects a rolled-back clock transactionally before any step runs. Every step
 	 * but the world advance/apply is bounded best-effort, so the world result is the
-	 * authoritative per-frame outcome. The two network slots run only when a frame
+	 * authoritative per-frame outcome. The two system turns run only when a system
 	 * was bound at construction; otherwise they are inert.
 	 */
-	ERuntimeResult Tick(const TimePointMilliseconds InNowMilliseconds) noexcept
+	ERuntimeResult Tick(const TimePointMilliseconds InNowMilliseconds) noexcept override
 	{
 		UWorld* const World = WorldRoot.Get();
 		if (World == nullptr)
@@ -244,17 +315,17 @@ public:
 		}
 		LastTickMilliseconds = InNowMilliseconds;
 
-		DispatchInboundNetwork(InNowMilliseconds);
+		PreAdvanceSystem(InNowMilliseconds);
 		(void)Timers.Advance(InNowMilliseconds);
 		const ERuntimeResult FrameResult = AdvanceWorldAndApplyBarrier(*World, InNowMilliseconds);
 		ReclaimAndCollect();
-		FlushOutboundNetwork(InNowMilliseconds);
+		PostAdvanceSystem(InNowMilliseconds);
 
 		return FrameResult;
 	}
 
 	/** Ends the world in reverse registration order; idempotent after success. */
-	ERuntimeResult EndPlay() noexcept
+	ERuntimeResult EndPlay() noexcept override
 	{
 		UWorld* const World = WorldRoot.Get();
 		if (World == nullptr)
@@ -266,8 +337,8 @@ public:
 	}
 
 private:
-	static_assert(MaxObjects > 0, "TEngineHost needs at least one object slot for the world.");
-	static_assert(MaxRoots > 0, "TEngineHost roots its world, so it needs at least one root entry.");
+	static_assert(MaxObjects > 0, "TEngine needs at least one object slot for the world.");
+	static_assert(MaxRoots > 0, "TEngine roots its world, so it needs at least one root entry.");
 	static_assert(SlotSizeBytes % SlotAlign == 0, "Slot stride must preserve slot alignment.");
 
 	/** Registers the three engine base descriptors so base types are constructible. */
@@ -294,11 +365,11 @@ private:
 	}
 
 	/** Frame step 1: drains inbound traffic, dispatches messages, and ages peers when a network frame is bound. */
-	void DispatchInboundNetwork(const TimePointMilliseconds InNowMilliseconds) noexcept
+	void PreAdvanceSystem(const TimePointMilliseconds InNowMilliseconds) noexcept
 	{
-		if (Network != nullptr)
+		if (System != nullptr)
 		{
-			Network->TickDispatch(InNowMilliseconds);
+			System->PreAdvance(InNowMilliseconds);
 		}
 	}
 
@@ -324,11 +395,11 @@ private:
 	}
 
 	/** Frame step 7: flushes outbound traffic and heartbeats when a network frame is bound. */
-	void FlushOutboundNetwork(const TimePointMilliseconds InNowMilliseconds) noexcept
+	void PostAdvanceSystem(const TimePointMilliseconds InNowMilliseconds) noexcept
 	{
-		if (Network != nullptr)
+		if (System != nullptr)
 		{
-			Network->TickFlush(InNowMilliseconds);
+			System->PostAdvance(InNowMilliseconds);
 		}
 	}
 
@@ -338,8 +409,8 @@ private:
 	/** Bounds the per-tick store slots inspected by the destruction barrier. */
 	std::uint32_t FrameReclamationBudget;
 
-	/** Optional caller-owned network frame advanced first and last each tick; null when standalone. */
-	INetworkFrame* Network{nullptr};
+	/** Optional caller-owned engine system advanced first and last each tick; null when standalone. */
+	IEngineSystem* System{nullptr};
 
 	/** Records the last accepted tick time so a rolled-back clock is rejected. */
 	TimePointMilliseconds LastTickMilliseconds{0};

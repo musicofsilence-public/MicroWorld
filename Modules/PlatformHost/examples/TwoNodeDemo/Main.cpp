@@ -3,7 +3,7 @@
  * @brief Phase 6.1 two-node UDP acceptance demo.
  *
  * One host executable hosts TWO independent MicroWorld nodes — a dedicated
- * server built on a full TEngineHost and a bare TNetHost client — talking over
+ * server built on a full TEngine and a bare TNetHost client — talking over
  * real localhost UDP. A client input event spawns an actor in the server's
  * world; the server broadcasts world state each step. The two nodes live in one
  * process and are driven in one deterministic interleaved loop so the printed
@@ -16,7 +16,7 @@
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Engine/EngineResult.h>
 #include <MicroWorld/Engine/EngineStorage.h>
-#include <MicroWorld/Engine/NetworkFrame.h>
+#include <MicroWorld/Engine/EngineSystem.h>
 #include <MicroWorld/Engine/World.h>
 #include <MicroWorld/Net/NetAddress.h>
 #include <MicroWorld/Net/NetHost.h>
@@ -74,15 +74,17 @@ constexpr FTypeId DemoSpawnedActorTypeId{0x00080001u};
  * CreateObject under LifecycleLocked. This mirrors the proven EngineNetHostTests
  * profile; MaxActors leaves headroom above the demo's two spawns.
  */
-using FServerEngine = TEngineHost<
-	6 /*MaxClasses*/,
-	8 /*MaxObjects*/,
-	256 /*SlotSizeBytes*/,
-	16 /*SlotAlign*/,
-	1 /*MaxRoots*/,
-	4 /*MaxActors*/,
-	4 /*MaxTimers*/,
-	64 /*InlineTimerCallbackBytes*/>;
+/** Server engine traits: carries the exact capacities FServerEngine sized before the traits refactor. */
+struct FServerEngineTraits : FDefaultEngineTraits
+{
+	static constexpr std::size_t MaxClasses = 6;
+	static constexpr std::size_t MaxObjects = 8;
+	static constexpr std::size_t SlotSizeBytes = 256;
+	static constexpr std::size_t MaxRoots = 1;
+	static constexpr std::size_t MaxActors = 4;
+	static constexpr std::size_t MaxTimers = 4;
+};
+using FServerEngine = TEngine<FServerEngineTraits>;
 
 /** Server network host bound to one UDP driver; capacity fits one client peer. */
 using FServerNet = TNetHost<2 /*MaxPeers*/, 256 /*MaxPacketBytes*/>;
@@ -484,7 +486,7 @@ int main()
 	FHostUdpDriver ClientDriver(0);
 	FServerNet ServerNet(ServerDriver);
 	FClientNet ClientNet(ClientDriver);
-	TNetHostFrame<FServerNet> ServerFrame{ServerNet};
+	TNetHostSystem<FServerNet> ServerFrame{ServerNet};
 
 	std::array<FActorComponentRegistry<0>, MaxSpawns> SpawnedRegistries{};
 	int SpawnSequence = 0;

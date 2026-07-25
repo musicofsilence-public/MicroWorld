@@ -21,10 +21,10 @@ if(NOT TARGET MicroWorld::Net)
     )
 endif()
 
-# The Phase 6.1 two-node demo composes the engine's TEngineHost (which owns
+# The Phase 6.1 two-node demo composes the engine's TEngine (which owns
 # UWorld/AActor/GC) on top of a PlatformHost UDP driver, so the example links
 # MicroWorld::Engine directly. Engine never depends on Net (the frame seam is
-# caller-bound via TNetHostFrame), so adding it here introduces no cycle.
+# caller-bound via TNetHostSystem), so adding it here introduces no cycle.
 if(NOT TARGET MicroWorld::Engine)
     set(MICROWORLD_ENGINE_BUILD_BENCHMARKS OFF)
     add_subdirectory(
@@ -122,7 +122,7 @@ if(MICROWORLD_PLATFORM_HOST_BUILD_TESTS)
 endif()
 
 # The Phase 6.1 two-node acceptance demo: one process hosts a dedicated-server
-# TEngineHost and a bare TNetHost client over real localhost UDP. A host-UDP
+# TEngine and a bare TNetHost client over real localhost UDP. A host-UDP
 # consumer MUST live in this non-portable package because only platform-host may
 # reach OS socket headers.
 set(MICROWORLD_PLATFORM_HOST_EXAMPLE_SOURCE

@@ -29,19 +29,19 @@ construction (D9): a broadcast reading and a targeted calibrate reply.
 
 A "frame" here means one call to `TEngineHost::Tick`, not one 500 ms sensor
 cadence — the two are independent. Within a single `Tick` call the canonical
-order is fixed: **(1) `TickDispatch`** delivers whatever is already queued,
+order is fixed: **(1) `PreAdvance`** delivers whatever is already queued,
 **(3) the world advances** (components tick, then actors tick — this is when
-the thermometer broadcasts), and **(7) `TickFlush`** moves that new
+the thermometer broadcasts), and **(7) `PostAdvance`** moves that new
 `LocalChannelId` send into the inbound queue for next time. So:
 
 - A reading broadcast during the world-advance step of frame **F** is flushed
   to the inbound queue at the end of that same frame **F**, and is only
-  handed to the display's handler by `TickDispatch` at frame **F+1** — the
+  handed to the display's handler by `PreAdvance` at frame **F+1** — the
   very next `Tick` call (about 10 ms later at this example's poll pace, well
   before the sensor's next 500 ms tick). This is decision **D5**: sends are
   queued, never dispatched inline.
 - The same rule applies to the calibrate reply: sent from inside the
-  display's handler during frame **F+1**'s `TickDispatch`, it is flushed at
+  display's handler during frame **F+1**'s `PreAdvance`, it is flushed at
   the end of frame **F+1** and reaches the thermometer's handler at frame
   **F+2**.
 

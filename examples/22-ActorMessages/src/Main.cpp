@@ -359,8 +359,8 @@ extern "C" void app_main(void)
 	constexpr std::uint32_t GcSweepOperationsPerTick = 8;
 
 	// Owns every managed subsystem and pumps GRouter as its network frame, so
-	// Tick's step 1 (TickDispatch) and step 7 (TickFlush) drive local delivery.
-	static MicroWorld::TEngineHost<8, 16, 512, 16, 2, 4, 8, 64> GEngine{
+	// Tick's step 1 (PreAdvance) and step 7 (PostAdvance) drive local delivery.
+	static MicroWorld::TEngine<> GEngine{
 		MicroWorld::FGarbageCollectionBudget{GcRootOperationsPerTick, GcMarkOperationsPerTick, GcSweepOperationsPerTick}, GRouter};
 
 	if (GEngine.RegisterClass<FThermometerActor>(ThermometerActorTypeId, "ThermometerActor") != MicroWorld::EObjectResult::Success

@@ -9,7 +9,7 @@
 #include <MicroWorld/Engine/Message.h>
 #include <MicroWorld/Engine/MessageChannelBinding.h>
 #include <MicroWorld/Engine/MessageRouter.h>
-#include <MicroWorld/Engine/NetworkFrame.h>
+#include <MicroWorld/Engine/EngineSystem.h>
 #include <MicroWorld/Engine/World.h>
 #include <MicroWorld/Log.h>
 #include <MicroWorld/Net/NetHost.h>
@@ -134,7 +134,7 @@ private:
  * Server board: hosts the WiFi SoftAP and runs FTelemetrySinkActor + FCommanderActor over one
  * TMessageRouter wired to two nets (UDP telemetry, UART commands) through two
  * TMessageChannelBinding, with the engine holding both net frames and the router behind one
- * TNetworkFrameSet<3> (Phase 4.1; see AGENTS.md for why this is the first example to use it).
+ * TEngineSystemSet<3> (Phase 4.1; see AGENTS.md for why this is the first example to use it).
  */
 void RunServer() noexcept
 {

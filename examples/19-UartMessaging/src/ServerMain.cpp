@@ -6,7 +6,7 @@
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Engine/EngineResult.h>
 #include <MicroWorld/Engine/EngineStorage.h>
-#include <MicroWorld/Engine/NetworkFrame.h>
+#include <MicroWorld/Engine/EngineSystem.h>
 #include <MicroWorld/Engine/World.h>
 #include <MicroWorld/Log.h>
 #include <MicroWorld/Net/NetHost.h>
@@ -29,10 +29,20 @@ namespace
 /** Single real-time source for the server board. */
 FEsp32TimeSource GTimeSource{};
 
-/** Server engine-host profile: bounds tuned so one GC slice {1,4,8} finishes a full
- *  cycle each tick, so a spawn arriving mid-tick never fails LifecycleLocked (the
- *  proven EngineNetHostTests / two-node-demo profile). */
-using FServerEngine = TEngineHost<6, 8, 256, 16, 1, 4, 4, 64>;
+/** Server engine traits: carries the exact capacities FServerEngine sized before the
+ *  traits refactor, so the server store is unchanged. Bounds tuned so one GC slice
+ *  {1,4,8} finishes a full cycle each tick, so a spawn arriving mid-tick never fails
+ *  LifecycleLocked (the proven EngineNetHostTests / two-node-demo profile). */
+struct FServerEngineTraits : FDefaultEngineTraits
+{
+	static constexpr std::size_t MaxClasses = 6;
+	static constexpr std::size_t MaxObjects = 8;
+	static constexpr std::size_t SlotSizeBytes = 256;
+	static constexpr std::size_t MaxRoots = 1;
+	static constexpr std::size_t MaxActors = 4;
+	static constexpr std::size_t MaxTimers = 4;
+};
+using FServerEngine = TEngine<FServerEngineTraits>;
 
 /** Server session host; two peer slots leave headroom above the single wired client. */
 using FServerNet = TNetHost<2, 120>;
@@ -73,7 +83,7 @@ void RunServer() noexcept
 
 	// All composition objects are static (the ESP32-S3 stack lesson, §2.2).
 	static FServerNet ServerNet{Driver};
-	static TNetHostFrame<FServerNet> ServerFrame{ServerNet};
+	static TNetHostSystem<FServerNet> ServerFrame{ServerNet};
 	static FServerEngine ServerHost{FGarbageCollectionBudget{1, 4, 8}, ServerFrame};
 	static FActorComponentRegistry<0> SpawnedRegistries[MaxSpawns]{};
 	static int SpawnSequence = 0;

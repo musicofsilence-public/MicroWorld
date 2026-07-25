@@ -8,7 +8,7 @@
 #include <MicroWorld/Engine/Message.h>
 #include <MicroWorld/Engine/MessageChannelBinding.h>
 #include <MicroWorld/Engine/MessageRouter.h>
-#include <MicroWorld/Engine/NetworkFrame.h>
+#include <MicroWorld/Engine/EngineSystem.h>
 #include <MicroWorld/Engine/World.h>
 #include <MicroWorld/Log.h>
 #include <MicroWorld/Net/NetHost.h>
@@ -102,7 +102,7 @@ private:
 /**
  * Client board (node 2): FSwitchActor over a TMessageRouter wired to TNetHost (Client, greeting the
  * server's UART address) through TMessageChannelBinding, with the engine holding the net frame and
- * the loop pumping the router manually (Phase 4.1 will fold this into TNetworkFrameSet -- see §4).
+ * the loop pumping the router manually (Phase 4.1 will fold this into TEngineSystemSet -- see §4).
  */
 void RunClient() noexcept
 {

@@ -27,10 +27,10 @@ over WiFi.
 ## MicroWorld APIs used
 
 - `TMessageRouter`, `IMessageRouter` (`AddMessageHandler` / `SendMessageToActor`
-  / `BroadcastMessage` / `TickDispatch` / `TickFlush`)
+  / `BroadcastMessage` / `PreAdvance` / `PostAdvance`)
 - `TMessageChannelBinding`, `EChannelSendTarget` (`Server` on the client,
   `AllPeers` on the server)
-- `TNetHost` (`Configure` / `Start`), `TNetHostFrame`, `ENetMode`
+- `TNetHost` (`Configure` / `Start`), `TNetHostSystem`, `ENetMode`
 - `FEsp32UartDriver`, `FEsp32UartConfig`, `MakeUartAddress`
 - `TEngineHost` (`RegisterClass` / `CreateWorld` / `CreateObject` /
   `BeginPlay` / `Tick`), `TInlineActor`, `UWorld::RegisterActor`

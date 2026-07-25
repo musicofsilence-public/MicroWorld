@@ -4,8 +4,8 @@ Inherits `../AGENTS.md`.
 
 ## Architecture
 
-This directory owns portable, header-only containers used by Memory and later
-inward-dependent modules. Containers keep capacity and ownership visible at the
+This directory owns portable, header-only containers used by Core and every
+inward-dependent module. Containers keep capacity and ownership visible at the
 call site, perform no allocation, and depend only on the C++17 standard library
 and MicroWorld Core result contracts.
 

@@ -1,9 +1,9 @@
 # 24-TwoChannelWorld
 
 **Feature:** one world, two live channels on two different physical links at
-once — a single `TMessageRouter` behind one `TNetworkFrameSet<3>` carries
+once — a single `TMessageRouter` behind one `TEngineSystemSet<3>` carries
 telemetry over WiFi UDP and commands over a UART wire, simultaneously, between
-the same two boards. This is the first example to use `TNetworkFrameSet`
+the same two boards. This is the first example to use `TEngineSystemSet`
 (Phase 4.1), replacing 23-TwoBoardWire's manual per-frame router pump.
 
 > Status: hardware-verified on two ESP32-S3 boards, 2026-07-24 (WiFi UDP + UART wire).
@@ -39,9 +39,9 @@ the same two boards. This is the first example to use `TNetworkFrameSet`
   / `BroadcastMessage`)
 - `TMessageChannelBinding`, `EChannelSendTarget` (`Server` on the client,
   `AllPeers` on the server, per channel)
-- `TNetworkFrameSet` (`Add`, D3 dispatch/flush order) — the per-frame seam
+- `TEngineSystemSet` (`Add`, D3 dispatch/flush order) — the per-frame seam
   that pumps both nets and the router behind one `TEngineHost`
-- `TNetHost` (`Configure` / `Start`), `TNetHostFrame`, `ENetMode`
+- `TNetHost` (`Configure` / `Start`), `TNetHostSystem`, `ENetMode`
 - `FEsp32WifiLink` (`StartAccessPoint` / `JoinAccessPoint`), `FEsp32UdpDriver`,
   `MakeUdpAddress`
 - `FEsp32UartDriver`, `FEsp32UartConfig`, `MakeUartAddress`
@@ -133,7 +133,7 @@ I (56921) ex24: sensor reporting rate -> 1000 ms
 The reading values match end to end (client `tx telemetry reading=62` →
 server `rx telemetry reading=62`), and each server `tx command -> sensor
 rate=N` lands on the client as `sensor reporting rate -> N`, alternating
-500/1000 ms every 10 s — two transports, one `TNetworkFrameSet`, at the same
+500/1000 ms every 10 s — two transports, one `TEngineSystemSet`, at the same
 time.
 
 ## Image size

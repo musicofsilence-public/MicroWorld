@@ -64,25 +64,28 @@ constexpr MicroWorld::FTypeId DeviceActorTypeId{0x00010001u};
 /** Stable type id for the example's user-derived managed component descriptor. */
 constexpr MicroWorld::FTypeId SensorComponentTypeId{0x00010002u};
 
+/** Carries the exact capacities FDeviceHost sized before the traits refactor, so the demo store is unchanged. */
+struct FDeviceHostTraits : MicroWorld::FDefaultEngineTraits
+{
+	static constexpr std::size_t MaxClasses = 5;
+	static constexpr std::size_t MaxObjects = 3;
+	static constexpr std::size_t MaxRoots = 1;
+	static constexpr std::size_t MaxActors = 1;
+	static constexpr std::size_t MaxTimers = 1;
+	static constexpr std::size_t InlineTimerCallbackBytes = 32;
+};
+
 } // namespace
 
-/** Builds a managed composition through TEngineHost and prints deterministic lifecycle evidence. */
+/** Builds a managed composition through TEngine and prints deterministic lifecycle evidence. */
 int main()
 {
 	using namespace MicroWorld;
 
-	// TEngineHost owns every subsystem — class registry, object store, garbage collector, world
+	// TEngine owns every subsystem — class registry, object store, garbage collector, world
 	// actor registry, and timer manager — and registers the three engine base descriptors itself.
 	// The inline actor embeds its component registry, so slots stay as wide as before (512 bytes).
-	using FDeviceHost = TEngineHost<
-		5 /*MaxClasses*/,
-		3 /*MaxObjects*/,
-		512 /*SlotSizeBytes*/,
-		16 /*SlotAlign*/,
-		1 /*MaxRoots*/,
-		1 /*MaxActors*/,
-		1 /*MaxTimers*/,
-		32 /*InlineTimerCallbackBytes*/>;
+	using FDeviceHost = TEngine<FDeviceHostTraits>;
 	// Per-tick garbage-collection slice for this demo's tiny managed graph: one
 	// root (the world), a few mark steps for world -> actor -> component, and
 	// enough sweep steps to scan every object slot, so a cycle finishes quickly.

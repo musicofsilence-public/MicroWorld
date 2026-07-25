@@ -20,7 +20,7 @@ and allocation-free; no wire, no second board.
   a global router, and neither `AActor` nor `UActorComponent` gained any
   messaging member for this.
 - **D5 one-frame local latency.** A send queues; only the next `Tick` call's
-  `TickDispatch` delivers it. See the README's teaching-point section for the
+  `PreAdvance` delivers it. See the README's teaching-point section for the
   exact frame-by-frame trace.
 - **Component-before-actor tick order.** The thermometer's `Tick` runs after
   its own sensor component's `TickComponent` within the same `Advance` (see

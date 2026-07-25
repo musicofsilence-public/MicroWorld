@@ -7,24 +7,24 @@ Inherits `../../AGENTS.md`.
 `Engine/` owns the managed-runtime contracts above Object: `UWorld` traces
 `AActor`, `AActor` traces `UActorComponent`, and `TEngineHost` wires the class
 registry, object store, garbage collector, world root, and `TTimerManager`
-behind one canonical per-tick frame order. `NetworkFrame.h` defines the
-`INetworkFrame` seam so `TEngineHost` can drive an optional caller-owned
+behind one canonical per-tick frame order. `EngineSystem.h` defines the
+`IEngineSystem` seam so `TEngineHost` can drive an optional caller-owned
 network host without this package depending on `microworld-net`.
 
 ## Concepts
 
-- `TEngineHost::Tick` runs a fixed 7-step frame: (1) network TickDispatch,
+- `TEngineHost::Tick` runs a fixed 7-step frame: (1) network PreAdvance,
   (2) `Timers.Advance`, (3) `World.Advance`, (4) `World.ApplyPending`,
   (5) `Store.ApplyPendingDestroy`, (6) one bounded GC slice, (7) network
-  TickFlush. Steps 3-4 produce the authoritative per-frame result; every other
+  PostAdvance. Steps 3-4 produce the authoritative per-frame result; every other
   step is bounded best-effort.
 - Components dispatch before their owning Actor during Begin and Advance;
   End runs in the reverse of registration order.
 - `TTimerManager` is a standalone caller-owned value with no reference to
   `UWorld`, `AActor`, or `UActorComponent`; `FTimerHandle` is a
   {slot index, generation} pair local to the issuing manager.
-- `INetworkFrame` keeps the network seam optional: a null frame leaves both
-  Tick steps inert, and `TNetHostFrame<TNet>` adapts a concrete net host
+- `IEngineSystem` keeps the network seam optional: a null frame leaves both
+  Tick steps inert, and `TNetHostSystem<TNet>` adapts a concrete net host
   without naming it in this package.
 
 ## Verification

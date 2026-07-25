@@ -9,7 +9,7 @@
 #include <MicroWorld/Engine/Message.h>
 #include <MicroWorld/Engine/MessageChannelBinding.h>
 #include <MicroWorld/Engine/MessageRouter.h>
-#include <MicroWorld/Engine/NetworkFrame.h>
+#include <MicroWorld/Engine/EngineSystem.h>
 #include <MicroWorld/Engine/World.h>
 #include <MicroWorld/Log.h>
 #include <MicroWorld/Net/NetHost.h>
@@ -140,7 +140,7 @@ private:
 /**
  * Server board (node 1): FLampActor + FDisplayActor over a TMessageRouter wired to TNetHost
  * (DedicatedServer) through TMessageChannelBinding, with the engine holding the net frame and the
- * loop pumping the router manually (Phase 4.1 will fold this into TNetworkFrameSet — see §4).
+ * loop pumping the router manually (Phase 4.1 will fold this into TEngineSystemSet — see §4).
  */
 void RunServer() noexcept
 {

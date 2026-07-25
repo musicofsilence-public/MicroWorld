@@ -2,8 +2,8 @@
 //
 // This translation unit composes the full MicroWorld stack on ESP32-S3:
 // FEsp32TimeSource (esp_timer, the single real clock) + FEsp32UdpDriver (lwIP
-// non-blocking UDP) + TNetHost<4,256> (dedicated server) bound into TEngineHost
-// via the TNetHostFrame/INetworkFrame seam from Phase 4.4, then ticks it at a
+// non-blocking UDP) + TNetHost<4,256> (dedicated server) bound into TEngine
+// via the TNetHostSystem/IEngineSystem seam from Phase 4.4, then ticks it at a
 // fixed 20 ms cadence from app_main. Phase 5.3 additionally constructs one
 // FEsp32E32LoraDriver so its portable FrameCodec + UART platform code compile and link
 // into the image; that driver is never ticked here. It is a COMPOSITION proof:
@@ -80,6 +80,17 @@ volatile int PlatformEsp32CompositionResult = -1;
  * exercises only the host's plumbing. Flashing this image to hardware requires
  * explicit authorization that is out of scope for Phase 5.2.
  */
+/** Carries the exact capacities FDemoHost sized before the traits refactor, so the proof store is unchanged. */
+struct FDemoHostTraits : MicroWorld::FDefaultEngineTraits
+{
+	static constexpr std::size_t MaxClasses = 6;
+	static constexpr std::size_t MaxObjects = 8;
+	static constexpr std::size_t SlotSizeBytes = 256;
+	static constexpr std::size_t MaxRoots = 1;
+	static constexpr std::size_t MaxActors = 2;
+	static constexpr std::size_t MaxTimers = 4;
+};
+
 extern "C" void app_main()
 {
 	using namespace MicroWorld;
@@ -93,7 +104,7 @@ extern "C" void app_main()
 	// Bring up the lwIP TCP/IP stack before any socket is opened. Without the tcpip task and the
 	// default event loop, FEsp32UdpDriver's socket()/bind() asserts inside lwIP ("Invalid mbox").
 	// No WiFi is associated, so the socket binds but no datagram routes. The composition objects
-	// below are STATIC: TEngineHost embeds its object storage inline (MaxObjects * SlotBytes) and
+	// below are STATIC: TEngine embeds its object storage inline (MaxObjects * SlotBytes) and
 	// the UDP/net objects hold internal buffers, together too large for the 3584-byte main task
 	// stack; static .bss placement matches MicroWorld's bounded caller-owned-storage model.
 	if (esp_netif_init() != ESP_OK || esp_event_loop_create_default() != ESP_OK)
@@ -122,10 +133,10 @@ extern "C" void app_main()
 	Net.Start(Clock.Now());
 
 	// 5. Adapt the host to the engine's network frame seam (Phase 4.4).
-	static TNetHostFrame<TNetHost<4, 256>> Frame(Net);
+	static TNetHostSystem<TNetHost<4, 256>> Frame(Net);
 
-	// 6. The composition root: same template args as the Engine profile probe + the live frame.
-	using FDemoHost = TEngineHost<6, 8, 256, 16, 1, 2, 4, 64>;
+	// 6. The composition root: same capacities as the Engine profile probe + the live frame.
+	using FDemoHost = TEngine<FDemoHostTraits>;
 	static FDemoHost Host{FGarbageCollectionBudget{1, 4, 8}, Frame};
 
 	// Register one user actor and component so CreateWorld/CreateObject have real work to do.

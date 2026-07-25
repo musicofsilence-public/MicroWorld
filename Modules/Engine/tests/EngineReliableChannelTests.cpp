@@ -181,8 +181,8 @@ MW_TEST_CASE(EngineReliableChannel_AckClearsPending)
 		"An ack naming the outstanding sequence must be accepted");
 	MW_EXPECT_EQ(Test, std::size_t{0}, Reliable.PendingCount(), "The ack must clear the matching pending slot");
 
-	Reliable.TickFlush(0);
-	Reliable.TickFlush(TestRetryIntervalMilliseconds);
+	Reliable.PostAdvance(0);
+	Reliable.PostAdvance(TestRetryIntervalMilliseconds);
 	MW_EXPECT_EQ(Test, std::size_t{1}, InnerChannel.SendCallCount(), "No resend may occur once the pending slot has been acked and cleared");
 	MW_EXPECT_EQ(Test, std::uint32_t{0}, Reliable.ResentCount(), "ResentCount must stay zero once the message was acked before any retry was due");
 }
@@ -201,15 +201,15 @@ MW_TEST_CASE(EngineReliableChannel_NoAckResendsAfterExactlyRetryInterval)
 	MW_EXPECT_EQ(Test, std::size_t{1}, InnerChannel.SendCallCount(), "The initial send must reach the inner channel once");
 
 	constexpr TimePointMilliseconds BaselineTime = 1000;
-	Reliable.TickFlush(BaselineTime);
+	Reliable.PostAdvance(BaselineTime);
 	MW_EXPECT_EQ(
-		Test, std::size_t{1}, InnerChannel.SendCallCount(), "The first TickFlush after a send only establishes the retry baseline, never resends");
+		Test, std::size_t{1}, InnerChannel.SendCallCount(), "The first PostAdvance after a send only establishes the retry baseline, never resends");
 
-	Reliable.TickFlush(BaselineTime + TestRetryIntervalMilliseconds - 1);
+	Reliable.PostAdvance(BaselineTime + TestRetryIntervalMilliseconds - 1);
 	MW_EXPECT_EQ(Test, std::size_t{1}, InnerChannel.SendCallCount(), "A flush before the retry interval elapses must not resend");
 	MW_EXPECT_EQ(Test, std::uint32_t{0}, Reliable.ResentCount(), "ResentCount must stay zero before the retry interval elapses");
 
-	Reliable.TickFlush(BaselineTime + TestRetryIntervalMilliseconds);
+	Reliable.PostAdvance(BaselineTime + TestRetryIntervalMilliseconds);
 	MW_EXPECT_EQ(Test, std::size_t{2}, InnerChannel.SendCallCount(), "A flush at exactly the retry interval must resend exactly once");
 	MW_EXPECT_EQ(Test, std::uint32_t{1}, Reliable.ResentCount(), "Exactly one resend must be counted at the retry interval");
 }
@@ -227,12 +227,12 @@ MW_TEST_CASE(EngineReliableChannel_DropsAfterMaxSendAttempts)
 		Test, EMessageResult::Success, Reliable.TrySendEncodedMessage(TSpan<const std::uint8_t>(Payload.data(), 1)), "The send must be accepted");
 
 	TimePointMilliseconds Now = 1000;
-	Reliable.TickFlush(Now); // Establishes the retry baseline; the initial send already counts as attempt 1.
+	Reliable.PostAdvance(Now); // Establishes the retry baseline; the initial send already counts as attempt 1.
 
 	for (int RetryIndex = 0; RetryIndex < TestMaxSendAttempts - 1; ++RetryIndex)
 	{
 		Now += TestRetryIntervalMilliseconds;
-		Reliable.TickFlush(Now);
+		Reliable.PostAdvance(Now);
 	}
 	MW_EXPECT_EQ(
 		Test,
@@ -243,13 +243,13 @@ MW_TEST_CASE(EngineReliableChannel_DropsAfterMaxSendAttempts)
 	MW_EXPECT_EQ(Test, std::uint32_t{0}, Reliable.LostCount(), "The slot must not yet be counted lost while attempts remain");
 
 	Now += TestRetryIntervalMilliseconds;
-	Reliable.TickFlush(Now);
+	Reliable.PostAdvance(Now);
 	MW_EXPECT_EQ(Test, std::size_t{0}, Reliable.PendingCount(), "The slot must be dropped once MaxSendAttempts is exhausted");
 	MW_EXPECT_EQ(Test, std::uint32_t{1}, Reliable.LostCount(), "Exactly one message must be counted lost");
 
 	const std::size_t SendCountAtDrop = InnerChannel.SendCallCount();
 	Now += TestRetryIntervalMilliseconds;
-	Reliable.TickFlush(Now);
+	Reliable.PostAdvance(Now);
 	MW_EXPECT_EQ(Test, SendCountAtDrop, InnerChannel.SendCallCount(), "No further inner sends may occur once the slot has been dropped");
 }
 

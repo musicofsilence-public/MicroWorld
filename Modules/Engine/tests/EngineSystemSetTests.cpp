@@ -2,7 +2,7 @@
 
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Engine/EngineResult.h>
-#include <MicroWorld/Engine/NetworkFrame.h>
+#include <MicroWorld/Engine/EngineSystem.h>
 #include <MicroWorld/Object/GarbageCollector.h>
 #include <MicroWorld/Object/ObjectPtr.h>
 #include <MicroWorld/Time.h>
@@ -14,14 +14,26 @@ namespace
 {
 using MicroWorld::EEngineResult;
 using MicroWorld::ERuntimeResult;
+using MicroWorld::FDefaultEngineTraits;
 using MicroWorld::FGarbageCollectionBudget;
-using MicroWorld::INetworkFrame;
-using MicroWorld::TEngineHost;
+using MicroWorld::IEngineSystem;
+using MicroWorld::TEngine;
+using MicroWorld::TEngineSystemSet;
 using MicroWorld::TimePointMilliseconds;
-using MicroWorld::TNetworkFrameSet;
 
-/** Host profile sized for a bare rooted world, matching EngineMessageChannelTests.cpp's profile; this suite never spawns actors. */
-using FHost = TEngineHost<6, 8, 256, 16, 1, 2, 4, 64>;
+/** Carries the exact capacities FHost sized before the traits refactor, so the test store is unchanged. */
+struct FHostTraits : FDefaultEngineTraits
+{
+	static constexpr std::size_t MaxClasses = 6;
+	static constexpr std::size_t MaxObjects = 8;
+	static constexpr std::size_t SlotSizeBytes = 256;
+	static constexpr std::size_t MaxRoots = 1;
+	static constexpr std::size_t MaxActors = 2;
+	static constexpr std::size_t MaxTimers = 4;
+};
+
+/** Engine profile sized for a bare rooted world, matching EngineMessageChannelTests.cpp's profile; this suite never spawns actors. */
+using FHost = TEngine<FHostTraits>;
 
 /** Monotonic call-order source every recording frame in a test stamps from, so several frames' relative order is observable. */
 class FSharedFrameSequence final
@@ -51,22 +63,22 @@ struct FFrameCallRecord
 	std::uint32_t FlushOrder{0};
 };
 
-/** A network frame that only records its two slot calls, isolating TNetworkFrameSet's pump order from any real transport. */
-class FRecordingNetworkFrame final : public INetworkFrame
+/** A network frame that only records its two slot calls, isolating TEngineSystemSet's pump order from any real transport. */
+class FRecordingEngineSystem final : public IEngineSystem
 {
 public:
 	/** Binds this stub to the caller-owned record it stamps and the sequence every recording frame in the test shares. */
-	FRecordingNetworkFrame(FFrameCallRecord& InRecord, FSharedFrameSequence& InSequence) noexcept : Record(InRecord), Sequence(InSequence) {}
+	FRecordingEngineSystem(FFrameCallRecord& InRecord, FSharedFrameSequence& InSequence) noexcept : Record(InRecord), Sequence(InSequence) {}
 
 	/** Stamps the inbound-dispatch slot's count and shared-sequence order. */
-	void TickDispatch(const TimePointMilliseconds) noexcept override
+	void PreAdvance(const TimePointMilliseconds) noexcept override
 	{
 		++Record.DispatchCount;
 		Record.DispatchOrder = Sequence.Next();
 	}
 
 	/** Stamps the outbound-flush slot's count and shared-sequence order. */
-	void TickFlush(const TimePointMilliseconds) noexcept override
+	void PostAdvance(const TimePointMilliseconds) noexcept override
 	{
 		++Record.FlushCount;
 		Record.FlushOrder = Sequence.Next();
@@ -82,43 +94,43 @@ private:
 
 } // namespace
 
-/** Proves TNetworkFrameSet's TickDispatch runs its frames in add-order and TickFlush runs them in reverse add-order, called directly. */
-MW_TEST_CASE(EngineNetworkFrameSet_TickDispatchRunsAddOrderTickFlushRunsReverseOrder)
+/** Proves TEngineSystemSet's PreAdvance runs its frames in add-order and PostAdvance runs them in reverse add-order, called directly. */
+MW_TEST_CASE(EngineSystemSet_PreAdvanceRunsAddOrderPostAdvanceRunsReverseOrder)
 {
 	FSharedFrameSequence Sequence;
 	FFrameCallRecord RecordA{};
 	FFrameCallRecord RecordB{};
 	FFrameCallRecord RecordC{};
-	FRecordingNetworkFrame FrameA{RecordA, Sequence};
-	FRecordingNetworkFrame FrameB{RecordB, Sequence};
-	FRecordingNetworkFrame FrameC{RecordC, Sequence};
+	FRecordingEngineSystem FrameA{RecordA, Sequence};
+	FRecordingEngineSystem FrameB{RecordB, Sequence};
+	FRecordingEngineSystem FrameC{RecordC, Sequence};
 
-	TNetworkFrameSet<3> Set;
+	TEngineSystemSet<3> Set;
 	MW_EXPECT_EQ(Test, EEngineResult::Success, Set.Add(FrameA), "Adding the first frame under capacity must succeed");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, Set.Add(FrameB), "Adding the second frame under capacity must succeed");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, Set.Add(FrameC), "Adding the third frame under capacity must succeed");
 
-	Set.TickDispatch(10);
-	Set.TickFlush(10);
+	Set.PreAdvance(10);
+	Set.PostAdvance(10);
 
-	MW_EXPECT_TRUE(Test, RecordA.DispatchOrder < RecordB.DispatchOrder, "TickDispatch must run the first-added frame before the second");
-	MW_EXPECT_TRUE(Test, RecordB.DispatchOrder < RecordC.DispatchOrder, "TickDispatch must run the second-added frame before the third");
-	MW_EXPECT_TRUE(Test, RecordC.FlushOrder < RecordB.FlushOrder, "TickFlush must run the third-added frame before the second (reverse add-order)");
-	MW_EXPECT_TRUE(Test, RecordB.FlushOrder < RecordA.FlushOrder, "TickFlush must run the second-added frame before the first (reverse add-order)");
+	MW_EXPECT_TRUE(Test, RecordA.DispatchOrder < RecordB.DispatchOrder, "PreAdvance must run the first-added frame before the second");
+	MW_EXPECT_TRUE(Test, RecordB.DispatchOrder < RecordC.DispatchOrder, "PreAdvance must run the second-added frame before the third");
+	MW_EXPECT_TRUE(Test, RecordC.FlushOrder < RecordB.FlushOrder, "PostAdvance must run the third-added frame before the second (reverse add-order)");
+	MW_EXPECT_TRUE(Test, RecordB.FlushOrder < RecordA.FlushOrder, "PostAdvance must run the second-added frame before the first (reverse add-order)");
 	MW_EXPECT_TRUE(
 		Test, RecordC.DispatchOrder < RecordC.FlushOrder, "Every added frame's dispatch must complete before any added frame's flush begins");
 }
 
-/** Proves TEngineHost::Tick pumps a bound TNetworkFrameSet at its step 1 (dispatch, add-order) and step 7 (flush, reverse add-order). */
-MW_TEST_CASE(EngineNetworkFrameSet_TEngineHostTickPumpsBoundSetAtDispatchAndFlushSteps)
+/** Proves TEngine::Tick pumps a bound TEngineSystemSet at its step 1 (dispatch, add-order) and step 7 (flush, reverse add-order). */
+MW_TEST_CASE(EngineSystemSet_TEngineTickPumpsBoundSetAtPreAdvanceAndPostAdvanceSteps)
 {
 	FSharedFrameSequence Sequence;
 	FFrameCallRecord NetRecord{};
 	FFrameCallRecord RouterRecord{};
-	FRecordingNetworkFrame NetFrame{NetRecord, Sequence};
-	FRecordingNetworkFrame RouterFrame{RouterRecord, Sequence};
+	FRecordingEngineSystem NetFrame{NetRecord, Sequence};
+	FRecordingEngineSystem RouterFrame{RouterRecord, Sequence};
 
-	TNetworkFrameSet<2> Set;
+	TEngineSystemSet<2> Set;
 	MW_EXPECT_EQ(Test, EEngineResult::Success, Set.Add(NetFrame), "The net-like frame must be added first (D3 order: net before router)");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, Set.Add(RouterFrame), "The router-like frame must be added last (D3 order: net before router)");
 
@@ -138,17 +150,17 @@ MW_TEST_CASE(EngineNetworkFrameSet_TEngineHostTickPumpsBoundSetAtDispatchAndFlus
 }
 
 /** An Add past a set's fixed capacity must report CapacityExceeded and leave FrameCount unchanged. */
-MW_TEST_CASE(EngineNetworkFrameSet_AddPastCapacityReportsCapacityExceededAndLeavesFrameCountUnchanged)
+MW_TEST_CASE(EngineSystemSet_AddPastCapacityReportsCapacityExceededAndLeavesFrameCountUnchanged)
 {
 	FSharedFrameSequence Sequence;
 	FFrameCallRecord RecordA{};
 	FFrameCallRecord RecordB{};
 	FFrameCallRecord RecordC{};
-	FRecordingNetworkFrame FrameA{RecordA, Sequence};
-	FRecordingNetworkFrame FrameB{RecordB, Sequence};
-	FRecordingNetworkFrame FrameC{RecordC, Sequence};
+	FRecordingEngineSystem FrameA{RecordA, Sequence};
+	FRecordingEngineSystem FrameB{RecordB, Sequence};
+	FRecordingEngineSystem FrameC{RecordC, Sequence};
 
-	TNetworkFrameSet<2> Set;
+	TEngineSystemSet<2> Set;
 	MW_EXPECT_EQ(Test, EEngineResult::Success, Set.Add(FrameA), "The first Add under capacity must succeed");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, Set.Add(FrameB), "The second Add under capacity must succeed");
 	MW_EXPECT_EQ(Test, EEngineResult::CapacityExceeded, Set.Add(FrameC), "A third Add on a set already at capacity must be rejected");
@@ -156,26 +168,26 @@ MW_TEST_CASE(EngineNetworkFrameSet_AddPastCapacityReportsCapacityExceededAndLeav
 }
 
 /** Adding the same frame pointer twice must report Duplicate on the second call and count the frame only once. */
-MW_TEST_CASE(EngineNetworkFrameSet_AddSameFramePointerTwiceReportsDuplicateAndCountsItOnce)
+MW_TEST_CASE(EngineSystemSet_AddSameFramePointerTwiceReportsDuplicateAndCountsItOnce)
 {
 	FSharedFrameSequence Sequence;
 	FFrameCallRecord Record{};
-	FRecordingNetworkFrame Frame{Record, Sequence};
+	FRecordingEngineSystem Frame{Record, Sequence};
 
-	TNetworkFrameSet<2> Set;
+	TEngineSystemSet<2> Set;
 	MW_EXPECT_EQ(Test, EEngineResult::Success, Set.Add(Frame), "The first Add of a frame must succeed");
 	MW_EXPECT_EQ(Test, EEngineResult::Duplicate, Set.Add(Frame), "Adding the same frame pointer again must be rejected as Duplicate");
 	MW_EXPECT_EQ(Test, std::size_t{1}, Set.FrameCount(), "A duplicate Add must not grow FrameCount");
 }
 
-/** An empty set's TickDispatch and TickFlush must both be inert: no crash, and FrameCount stays zero. */
-MW_TEST_CASE(EngineNetworkFrameSet_EmptySetTicksInertly)
+/** An empty set's PreAdvance and PostAdvance must both be inert: no crash, and FrameCount stays zero. */
+MW_TEST_CASE(EngineSystemSet_EmptySetTicksInertly)
 {
-	TNetworkFrameSet<2> Set;
+	TEngineSystemSet<2> Set;
 	MW_EXPECT_EQ(Test, std::size_t{0}, Set.FrameCount(), "A freshly constructed set must start empty");
 
-	Set.TickDispatch(10);
-	Set.TickFlush(10);
+	Set.PreAdvance(10);
+	Set.PostAdvance(10);
 
 	MW_EXPECT_EQ(Test, std::size_t{0}, Set.FrameCount(), "Ticking an empty set must not change FrameCount");
 }

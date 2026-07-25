@@ -7,10 +7,10 @@
 #include <MicroWorld/Engine/ActorComponent.h>
 #include <MicroWorld/Engine/EngineClassIds.h>
 #include <MicroWorld/Engine/EngineStorage.h>
-#include <MicroWorld/Engine/Timer.h>
 #include <MicroWorld/Engine/World.h>
 #include <MicroWorld/Object/GarbageCollector.h>
 #include <MicroWorld/Object/ObjectStore.h>
+#include <MicroWorld/Timer.h>
 #include <MicroWorld/Version.h>
 
 #include <array>

@@ -9,7 +9,7 @@ calls `RunServer()` or `RunClient()` by the `-DMICROWORLD_EXAMPLE_SERVER`
 define; `ServerMain.cpp` and `ClientMain.cpp` hold the two roles and are both
 always compiled (matching example 16's structure), and `UartMessagingShared.h`
 defines the channels, opcode, node ids, and config builders once. The server is
-a full `TEngineHost` + `TNetHostFrame` + `TNetHost` (DedicatedServer); the
+a full `TEngineHost` + `TNetHostSystem` + `TNetHost` (DedicatedServer); the
 client is a bare `TNetHost` (Client). Both run over `FEsp32UartDriver`.
 
 ## Concepts

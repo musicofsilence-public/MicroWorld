@@ -12,10 +12,10 @@ defines the message/actor ids, node ids, UART/session config builders, and the
 `TNetHost`/`TMessageRouter`/`TEngineHost` type shapes once (DRY within this one
 example). Per board: a `TNetHost` over `FEsp32UartDriver`, a `TMessageRouter`,
 and a `TMessageChannelBinding` wiring the two together. The engine holds the
-`TNetHostFrame` as its per-frame network slot; the run loop pumps the router
-manually (`TickFlush` before `Engine.Tick`, `TickDispatch` after) because
-`TNetworkFrameSet` does not exist until Phase 4.1 and `TEngineHost` holds
-exactly one `INetworkFrame`. Every composition object is `static`,
+`TNetHostSystem` as its per-frame network slot; the run loop pumps the router
+manually (`PostAdvance` before `Engine.Tick`, `PreAdvance` after) because
+`TEngineSystemSet` does not exist until Phase 4.1 and `TEngineHost` holds
+exactly one `IEngineSystem`. Every composition object is `static`,
 allocation-free, sized at compile time.
 
 ## Concepts
@@ -28,7 +28,7 @@ allocation-free, sized at compile time.
   connected peer); the server's binding sends to `AllPeers` (broadcasts reach
   every connected client, matching `TNetHost::Broadcast`'s own semantics).
 - **Manual frame order = the 3.1 test's.** `Modules/Engine/tests/EngineMessageChannelTests.cpp`'s
-  `PumpSide` proved `Router.TickFlush` -> `Host.Tick` -> `Router.TickDispatch`
+  `PumpSide` proved `Router.PostAdvance` -> `Host.Tick` -> `Router.PreAdvance`
   is the correct per-frame order for a router bound to a live `TNetHost`; this
   example's run loop mirrors that order exactly, on both boards.
 - **Only the driver differs from a WiFi build.** Swapping `FEsp32UartDriver`

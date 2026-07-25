@@ -1,9 +1,9 @@
-#include "EngineAllocationCounters.h"
+#include "CoreAllocationCounters.h"
 #include "TestSupport.h"
 
 #include <MicroWorld/Delegates/Delegate.h>
-#include <MicroWorld/Engine/Timer.h>
 #include <MicroWorld/Time.h>
+#include <MicroWorld/Timer.h>
 
 #include <cstddef>
 #include <cstdint>

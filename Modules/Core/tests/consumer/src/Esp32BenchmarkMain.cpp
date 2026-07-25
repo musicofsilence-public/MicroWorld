@@ -24,8 +24,7 @@
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Engine/EngineResult.h>
 #include <MicroWorld/Engine/EngineStorage.h>
-#include <MicroWorld/Engine/NetworkFrame.h>
-#include <MicroWorld/Engine/Timer.h>
+#include <MicroWorld/Engine/EngineSystem.h>
 #include <MicroWorld/Log.h>
 #include <MicroWorld/Net/NetHost.h>
 #include <MicroWorld/Object/ClassDescriptor.h>
@@ -36,6 +35,7 @@
 #include <MicroWorld/PlatformEsp32/Esp32TimeSource.h>
 #include <MicroWorld/PlatformEsp32/Esp32UdpDriver.h>
 #include <MicroWorld/Time.h>
+#include <MicroWorld/Timer.h>
 
 #include <esp_event.h>
 #include <esp_heap_caps.h>
@@ -134,16 +134,19 @@ public:
 	~FGcProbeObject() noexcept override = default;
 };
 
-/** Sizes the host to hold the representative world with bounded headroom. */
-using FBenchmarkHost = MicroWorld::TEngineHost<
-	6,						  // MaxClasses: UWorld + AActor + UActorComponent + 2 user types + 1 spare.
-	32,						  // MaxObjects: 1 world + 8 actors + 16 components = 25 live; +7 headroom.
-	256,					  // SlotBytes: proven actor slot width (PlatformEsp32Main / EngineHostTests).
-	16,						  // SlotAlign: proven slot alignment.
-	1,						  // MaxRoots: the single rooted world.
-	RepresentativeActorCount, // MaxActors: the representative actor count.
-	RepresentativeTimerCount, // MaxTimers: the representative timer count.
-	64>;					  // TimerCallbackBytes: proven inline delegate storage.
+/** Carries the exact capacities FBenchmarkHost sized before the traits refactor, so the benchmark store is unchanged. */
+struct FBenchmarkHostTraits : MicroWorld::FDefaultEngineTraits
+{
+	static constexpr std::size_t MaxClasses = 6;					   // UWorld + AActor + UActorComponent + 2 user types + 1 spare.
+	static constexpr std::size_t MaxObjects = 32;					   // 1 world + 8 actors + 16 components = 25 live; +7 headroom.
+	static constexpr std::size_t SlotSizeBytes = 256;				   // proven actor slot width (PlatformEsp32Main / EngineHostTests).
+	static constexpr std::size_t MaxRoots = 1;						   // the single rooted world.
+	static constexpr std::size_t MaxActors = RepresentativeActorCount; // the representative actor count.
+	static constexpr std::size_t MaxTimers = RepresentativeTimerCount; // the representative timer count.
+};
+
+/** Sizes the engine to hold the representative world with bounded headroom. */
+using FBenchmarkHost = MicroWorld::TEngine<FBenchmarkHostTraits>;
 
 /** Dedicated server net host sized identically to the PlatformEsp32Main proof. */
 using FBenchmarkNet = MicroWorld::TNetHost<4, 256>;
@@ -388,7 +391,7 @@ extern "C" void app_main()
 
 	// The composition objects below (UDP driver, net host, frame, engine host, and the GC probe)
 	// are placed in STATIC storage, not on the stack. The ESP-IDF main task stack is only 3584
-	// bytes, but TEngineHost embeds its fixed object storage inline (MaxObjects * SlotBytes) and
+	// bytes, but TEngine embeds its fixed object storage inline (MaxObjects * SlotBytes) and
 	// the GC probe embeds its own slot bytes, which together far exceed that; a stack frame this
 	// large faults during the first register-window spill. Static .bss placement matches
 	// MicroWorld's bounded caller-owned-storage model and keeps the main task stack small.
@@ -403,7 +406,7 @@ extern "C" void app_main()
 	Net.Start(Clock.Now());
 
 	// 4. Adapt the host to the engine's network frame seam.
-	static TNetHostFrame<FBenchmarkNet> Frame(Net);
+	static TNetHostSystem<FBenchmarkNet> Frame(Net);
 
 	// 5. Composition root. Budget {1,4,32}: MaxSweepOperations(32) >= MaxObjects(32) so one
 	//    Tick completes a full GC cycle each frame — no mid-cycle mutation lock during the

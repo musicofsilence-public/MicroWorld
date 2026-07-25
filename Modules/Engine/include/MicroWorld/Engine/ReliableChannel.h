@@ -2,7 +2,7 @@
 
 #include <MicroWorld/Containers/Span.h>
 #include <MicroWorld/Engine/Message.h>
-#include <MicroWorld/Engine/NetworkFrame.h>
+#include <MicroWorld/Engine/EngineSystem.h>
 #include <MicroWorld/Time.h>
 
 #include <cstddef>
@@ -39,10 +39,10 @@ struct FReliableChannelConfig
  * Sits between a channel binding and the router in both directions: outbound it prefixes
  * [Kind][Sequence] and keeps a copy until acknowledged; inbound it acknowledges data, drops
  * duplicates via a serial-number window, and forwards fresh payloads to ForwardSink.
- * Implements INetworkFrame so TickFlush resends due unacknowledged messages; point-to-point only.
+ * Implements IEngineSystem so PostAdvance resends due unacknowledged messages; point-to-point only.
  */
 template<std::size_t MaxPendingMessages, std::size_t MaxMessageBytes>
-class TReliableChannel final : public IMessageChannel, public IEncodedMessageSink, public INetworkFrame
+class TReliableChannel final : public IMessageChannel, public IEncodedMessageSink, public IEngineSystem
 {
 public:
 	/** Stores the forward sink and retry configuration; the inner channel is bound later via SetInnerChannel. */
@@ -87,7 +87,7 @@ public:
 	 * Rejects transactionally (no sequence consumed, nothing sent, no state change) when the inner channel is
 	 * unset (Unavailable), the wrapped size cannot fit a pending slot or the inner budget (PayloadTooLarge), or
 	 * every pending slot is already in use (CapacityExceeded). Otherwise keeps the pending slot even when the
-	 * initial inner send does not report Success, since TickFlush retries it later instead of losing it.
+	 * initial inner send does not report Success, since PostAdvance retries it later instead of losing it.
 	 */
 	EMessageResult TrySendEncodedMessage(const TSpan<const std::uint8_t> InEncoded) noexcept override
 	{
@@ -152,14 +152,14 @@ public:
 	}
 
 	/** No-op: this wrapper has no inbound polling of its own; inbound arrives via ReceiveEncodedMessage. */
-	void TickDispatch(const TimePointMilliseconds InNowMilliseconds) noexcept override { (void)InNowMilliseconds; }
+	void PreAdvance(const TimePointMilliseconds InNowMilliseconds) noexcept override { (void)InNowMilliseconds; }
 
 	/**
 	 * Paces retries for every pending slot: the first flush after a send only records the retry baseline
 	 * (never resending that same tick), a later flush resends once RetryIntervalMilliseconds has elapsed
 	 * and the slot has not exhausted Config.MaxSendAttempts, and an exhausted slot is dropped and counted lost instead.
 	 */
-	void TickFlush(const TimePointMilliseconds InNowMilliseconds) noexcept override
+	void PostAdvance(const TimePointMilliseconds InNowMilliseconds) noexcept override
 	{
 		if (InnerChannel == nullptr)
 		{
@@ -189,7 +189,7 @@ public:
 		return Count;
 	}
 
-	/** Reports how many retry resends TickFlush has issued so far. */
+	/** Reports how many retry resends PostAdvance has issued so far. */
 	std::uint32_t ResentCount() const noexcept { return ResentTotal; }
 
 	/** Reports how many pending messages were abandoned after exhausting Config.MaxSendAttempts. */
@@ -217,7 +217,7 @@ private:
 		/** Distinguishes "no retry baseline established yet" from a real LastSendTimeMilliseconds. */
 		bool bBaselineTimeSet{false};
 
-		/** Wall-clock time TickFlush last (re)sent this slot, meaningful only once bBaselineTimeSet is true. */
+		/** Wall-clock time PostAdvance last (re)sent this slot, meaningful only once bBaselineTimeSet is true. */
 		TimePointMilliseconds LastSendTimeMilliseconds{0};
 
 		/** Distinguishes an occupied slot from reusable free storage. */
@@ -368,7 +368,7 @@ private:
 		return EMessageResult::Success;
 	}
 
-	/** Advances one pending slot's retry state by exactly one TickFlush's worth of elapsed time. */
+	/** Advances one pending slot's retry state by exactly one PostAdvance's worth of elapsed time. */
 	void TickOnePendingSlot(FPendingMessage& InSlot, const TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		if (!InSlot.bBaselineTimeSet)
@@ -415,7 +415,7 @@ private:
 	/** Bit i set means sequence (HighestSequenceSeen - (i+1)) has already been seen. */
 	std::uint32_t SeenMask{0};
 
-	/** Counts retry resends issued by TickFlush. */
+	/** Counts retry resends issued by PostAdvance. */
 	std::uint32_t ResentTotal{0};
 
 	/** Counts pending messages abandoned after exhausting Config.MaxSendAttempts. */

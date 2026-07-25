@@ -6,7 +6,7 @@
 // define only selects which one runs; never build_src_filter, which ESP-IDF
 // ignores. This is the first example to run one world's TMessageRouter over TWO
 // simultaneous physical links (WiFi UDP telemetry + a UART command wire) behind
-// one TNetworkFrameSet<3>.
+// one TEngineSystemSet<3>.
 #ifndef MICROWORLD_EXAMPLE_SERVER
 #error "Define MICROWORLD_EXAMPLE_SERVER=1 (server) or 0 (client) via the build environment."
 #endif

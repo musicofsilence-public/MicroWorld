@@ -1,12 +1,15 @@
 {
   "name": "MicroWorld",
   "version": "0.3.0",
-  "description": "MicroWorld Core: bounded C++17 lifecycle and ticking for embedded applications",
+  "description": "MicroWorld Core: bounded C++17 lifecycle, ticking, and explicit memory resources for embedded applications",
   "keywords": [
     "embedded",
     "core",
     "lifecycle",
-    "tick"
+    "tick",
+    "memory",
+    "allocator",
+    "arena"
   ],
   "license": "MIT",
   "frameworks": "*",

@@ -4,7 +4,7 @@
 #include <MicroWorld/Engine/Message.h>
 #include <MicroWorld/Engine/MessageChannelBinding.h>
 #include <MicroWorld/Engine/MessageRouter.h>
-#include <MicroWorld/Engine/NetworkFrame.h>
+#include <MicroWorld/Engine/EngineSystem.h>
 #include <MicroWorld/Engine/ReliableChannel.h>
 #include <MicroWorld/Net/NetHost.h>
 #include <MicroWorld/Object/ClassDescriptor.h>
@@ -14,8 +14,8 @@
 /**
  * Shared protocol ids, config, and composition-type aliases for example 25's two roles.
  * Both role translation units include this so the message/actor/channel ids, WiFi/UDP
- * configuration, and the TNetHost/TMessageRouter/TReliableChannel/TEngineHost/
- * TNetworkFrameSet shapes are defined exactly once (DRY within this one example).
+ * configuration, and the TNetHost/TMessageRouter/TReliableChannel/TEngine/
+ * TEngineSystemSet shapes are defined exactly once (DRY within this one example).
  */
 namespace Ex25
 {
@@ -85,7 +85,7 @@ using FWorldNet = MicroWorld::TNetHost<2, 256>;
 using FWorldRouter = MicroWorld::TMessageRouter<16, 8, 96, 2>;
 
 /** Adapts FWorldNet to the engine's per-frame network slot inside the frame set. */
-using FNetFrame = MicroWorld::TNetHostFrame<FWorldNet>;
+using FNetFrame = MicroWorld::TNetHostSystem<FWorldNet>;
 
 /** Two-way adapter binding one wire channel to the shared router; both channels use this type. */
 using FChannelBinding = MicroWorld::TMessageChannelBinding<FWorldNet>;
@@ -93,11 +93,11 @@ using FChannelBinding = MicroWorld::TMessageChannelBinding<FWorldNet>;
 /** Guaranteed-delivery wrapper for channel 2 (8 pending slots, 96-byte wrapped-packet budget). */
 using FGuaranteedChannel = MicroWorld::TReliableChannel<8, 96>;
 
-/** Pumps the net frame, the reliable channel, and the router behind one INetworkFrame slot (D3 order). */
-using FWorldFrameSet = MicroWorld::TNetworkFrameSet<3>;
+/** Pumps the net frame, the reliable channel, and the router behind one IEngineSystem slot (D3 order). */
+using FWorldFrameSet = MicroWorld::TEngineSystemSet<3>;
 
-/** The engine host both roles compose; sized for one world with a couple of small inline actors. */
-using FWorldEngine = MicroWorld::TEngineHost<8, 16, 512, 16, 2, 4, 8, 64>;
+/** The engine both roles compose; sized for one world with a couple of small inline actors (the default ESP32-S3 traits). */
+using FWorldEngine = MicroWorld::TEngine<>;
 
 /** Builds the shared session config; heartbeats keep the point-to-point peer alive between sends. */
 inline MicroWorld::FNetHostConfig MakeHostConfig() noexcept

@@ -1,7 +1,7 @@
 # 16-TwoBoardUdp
 
 **Feature:** the full networked engine across two real boards — a dedicated-server
-`TEngineHost` bound to `TNetHost` through the `TNetHostFrame` seam, and a bare `TNetHost`
+`TEngineHost` bound to `TNetHost` through the `TNetHostSystem` seam, and a bare `TNetHost`
 client, exchanging channel messages over **WiFi UDP with no router**. The server board
 hosts its own SoftAP; the client joins it. This is the host `TwoNodeDemo` split across two
 boards, and the **WiFi twin of example 19** (same protocol, UART swapped for UDP).
@@ -15,7 +15,7 @@ Two roles talk directly over the server's SoftAP — **no home WiFi, no real cre
 SoftAP gateway `192.168.4.1`, so there is no IP to look up or copy:
 
 1. The **server** (`esp32-s3-server`) hosts the SoftAP `microworld-ex16`, then composes a
-   `TEngineHost` + `TNetHostFrame` + `TNetHost` (`DedicatedServer`) over one
+   `TEngineHost` + `TNetHostSystem` + `TNetHost` (`DedicatedServer`) over one
    `FEsp32UdpDriver` bound to `ServerPort`, registers a spawnable actor class, creates its
    world, and ticks forever. Each tick it broadcasts the world actor count on channel 2.
 2. The **client** (`esp32-s3-client`) joins the AP and runs a bare `TNetHost` (`Client`)
@@ -34,7 +34,7 @@ bare wire, or WiFi UDP unchanged.
 - `TNetHost` (`Configure` / `Start` / `PumpReceive` / `PumpSend` / `SendTo` / `Broadcast` /
   `GetState` / `GetServerPeer`, message-handler multicast), `ENetMode`, `ENetHostState`,
   `FNetHostConfig`, `FPeerId`
-- `TNetHostFrame` / `INetworkFrame` and the `TEngineHost` network-frame constructor
+- `TNetHostSystem` / `IEngineSystem` and the `TEngineHost` network-frame constructor
 - `TEngineHost` (`RegisterClass` / `CreateWorld` / `CreateObject` / `BeginPlay` / `Tick`),
   `UWorld::SpawnActor`, `AActor`, `FGarbageCollectionBudget`
 - `FEsp32UdpDriver`, `MakeUdpAddress`, `FEsp32TimeSource::Now`
