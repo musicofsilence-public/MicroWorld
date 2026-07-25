@@ -1,8 +1,8 @@
 # Seeing and writing logs on the ESP32-S3 examples
 
 Every example prints through MicroWorld's logging facade (`MW_LOG`), which the
-examples route to an on-device sink. This page explains how to **see** those logs
-on the two-board rig and how to **write** your own.
+examples route to the ESP32 output device. This page explains how to **see** those
+logs on the two-board rig and how to **write** your own.
 
 The convenience wrapper for all of this is [`tools/mw.bat`](tools/mw.bat):
 
@@ -15,8 +15,8 @@ mw log   COM5                       :: watch MW_LOG on COM5 (Ctrl-C to stop)
 
 ## Where the logs go
 
-`MW_LOG(...)` → `Detail::DispatchLogFormatted` → the installed `FLogSink`. The
-examples install `Esp32LogSink`, which forwards to ESP-IDF's logger, so each line
+`MW_LOG(...)` → `Detail::DispatchLogFormatted` → the installed `FOutputDevice`. The
+examples install `Esp32OutputDevice`, which forwards to ESP-IDF's logger, so each line
 comes out in the familiar `I (nnnn) tag: message` shape (`I`/`W`/`E` = level,
 `nnnn` = ms since boot).
 
@@ -104,6 +104,7 @@ MW_LOG_MSG(Log, "ex25", "ready");   // literal string, no printf parsing
 - **Category** is a short static string used as the log tag; the examples use
   `"exNN"`.
 
-The sink is a seam (`FLogSink`): the examples wire `Esp32LogSink` on device, and
-host tests install their own sink to assert on log output. Your code only ever
-calls `MW_LOG` — it never talks to a console directly.
+The output device is one injected function pointer (`FOutputDevice`): the examples
+wire `Esp32OutputDevice` on device, and host tests install their own to assert on
+log output. Your code only ever calls `MW_LOG` — it never talks to a console
+directly.

@@ -5,7 +5,7 @@ Inherits `../AGENTS.md`.
 ## Architecture
 
 One source tree, two roles selected by `-DMICROWORLD_EXAMPLE_SERVER`; `Main.cpp`
-installs `Esp32LogSink` then dispatches to `RunServer()` (`ServerMain.cpp`) or
+installs `Esp32OutputDevice` then dispatches to `RunServer()` (`ServerMain.cpp`) or
 `RunClient()` (`ClientMain.cpp`). The server calls `FEsp32WifiLink::StartAccessPoint`,
 the client `FEsp32WifiLink::JoinAccessPoint`, so the two boards form their own
 network with no router; both roles log via `MW_LOG` and pace their run loop with

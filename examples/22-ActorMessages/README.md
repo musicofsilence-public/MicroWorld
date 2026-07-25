@@ -58,7 +58,7 @@ followed one poll later by `calibrated`.
 - `TInlineActor`, `UActorComponent`
 - `TEngineHost` (network-frame constructor, `RegisterClass` / `CreateWorld` /
   `CreateObject` / `RegisterComponent` / `BeginPlay` / `Tick` / `EndPlay`)
-- `FEsp32TimeSource`, `Esp32LogSink`, `SleepMilliseconds`
+- `FEsp32TimeSource`, `Esp32OutputDevice`, `SleepMilliseconds`
 
 ## Hardware required
 

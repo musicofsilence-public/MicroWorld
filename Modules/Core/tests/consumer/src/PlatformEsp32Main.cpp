@@ -22,7 +22,7 @@
 #include <MicroWorld/Object/GarbageCollector.h>
 #include <MicroWorld/Object/ObjectStore.h>
 #include <MicroWorld/PlatformEsp32/Esp32E32LoraDriver.h>
-#include <MicroWorld/PlatformEsp32/Esp32LogSink.h>
+#include <MicroWorld/PlatformEsp32/Esp32OutputDevice.h>
 #include <MicroWorld/PlatformEsp32/Esp32Sleep.h>
 #include <MicroWorld/PlatformEsp32/Esp32TimeSource.h>
 #include <MicroWorld/PlatformEsp32/Esp32UdpDriver.h>
@@ -85,7 +85,7 @@ extern "C" void app_main()
 	using namespace MicroWorld;
 
 	// 1. Route every surviving MW_LOG call site through ESP-IDF logging.
-	SetLogSink(&Esp32LogSink);
+	SetOutputDevice(&Esp32OutputDevice);
 
 	// 2. The engine consumes one caller-supplied clock; esp_timer is the only real clock here.
 	FEsp32TimeSource Clock;

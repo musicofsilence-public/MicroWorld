@@ -6,8 +6,8 @@ Inherits `../AGENTS.md`.
 
 `include/` is the only supported compile-time surface of the PlatformEsp32
 package. Public headers declare `FEsp32TimeSource`, `FEsp32UdpDriver`,
-`FEsp32E32LoraDriver`, and `Esp32LogSink` against the portable `INetDriver`,
-`TimePointMilliseconds`, and `FLogSink` contracts; they may depend inward on
+`FEsp32E32LoraDriver`, and `Esp32OutputDevice` against the portable `INetDriver`,
+`TimePointMilliseconds`, and `FOutputDevice` contracts; they may depend inward on
 Net, Object, Memory, and Core public headers but must declare no ESP-IDF,
 lwIP, or vendor type in a way that leaks into a caller's include of this
 directory.

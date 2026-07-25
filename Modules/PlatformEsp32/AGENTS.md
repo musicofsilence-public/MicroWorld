@@ -8,8 +8,8 @@ Inherits `../AGENTS.md`.
 real transports (lwIP UDP, E32 LoRa over UART, a wired point-to-point UART, a
 wired point-to-point I2C master/slave pair, and a wired point-to-point SPI
 master/slave pair), a time source (`esp_timer`),
-and a log sink (`ESP_LOG*`) behind the portable `INetDriver` /
-`TimePointMilliseconds` / `FLogSink` seams described in `docs/Porting.md`. It
+and an output device (`ESP_LOG*`) behind the portable `INetDriver` /
+`TimePointMilliseconds` / `FOutputDevice` seams described in `docs/Porting.md`. It
 depends inward on Core, Memory, Object, Engine, and Net as needed and never
 the reverse, and it is **excluded from `CheckDependencyBoundaries.py`** — it
 has no module key in that tool's portable table.
@@ -19,7 +19,7 @@ has no module key in that tool's portable table.
 - The three adapter seams are `FEsp32TimeSource` (clock), `FEsp32UdpDriver` /
   `FEsp32E32LoraDriver` / `FEsp32UartDriver` / `FEsp32I2cMasterDriver` /
   `FEsp32I2cSlaveDriver` / `FEsp32SpiMasterDriver` / `FEsp32SpiSlaveDriver`
-  (`INetDriver` transports), and `Esp32LogSink` (log sink); portable code never
+  (`INetDriver` transports), and `Esp32OutputDevice` (the log output device); portable code never
   reaches ESP-IDF, lwIP, or vendor headers directly.
 - All lwIP, ESP-IDF, `<driver/uart.h>`, `<driver/i2c_*.h>`, and `<driver/spi_*.h>`
   headers are confined to private `src/*PlatformImplementation.h` headers; public

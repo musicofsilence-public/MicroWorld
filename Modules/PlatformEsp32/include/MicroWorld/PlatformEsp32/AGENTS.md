@@ -11,7 +11,7 @@ seam); `FEsp32UdpDriver`, `FEsp32E32LoraDriver`, `FEsp32UartDriver`,
 wired I2C, and wired SPI drivers all built on the portable `Net/FrameCodec.h`
 CRC-16/CCITT-FALSE framing, over the 1-byte broadcast `LoraAddress` and the
 1-byte point-to-point `UartAddress`, `I2cAddress`, and `SpiAddress` respectively);
-and `Esp32LogSink` (log sink). Their declarations depend only on
+and `Esp32OutputDevice` (the log output device). Their declarations depend only on
 Net/Object/Memory/Core public headers and stay free of ESP-IDF, lwIP, and vendor
 headers; those live only in the matching `src/*PlatformImplementation.h`.
 
@@ -33,8 +33,8 @@ headers; those live only in the matching `src/*PlatformImplementation.h`.
   MOSI/MISO/SCLK/CS GPIOs as plain integers; the master defaults `ClockHz` to
   1000000 (1 MHz). SPI is full-duplex, so both master ops feed the received
   window to the decoder; the slave keeps one persistent transaction queued.
-- `Esp32LogSink` maps `ELogLevel` to `ESP_LOGE`/`ESP_LOGW`/`ESP_LOGI`/`ESP_LOGV`
-  and is installed once via `SetLogSink`.
+- `Esp32OutputDevice` maps `ELogLevel` to `ESP_LOGE`/`ESP_LOGW`/`ESP_LOGI`/`ESP_LOGV`
+  and is installed once via `SetOutputDevice`.
 
 ## Verification
 

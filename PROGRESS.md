@@ -36,7 +36,7 @@ the roadmap tracker is fully green — all 10 simplicity phases (0-9) are done.
 | Engine (incl. bounded timers + runtime spawn/destroy + `TEngineHost`) | 0.3.0 — implemented; tick measured on ESP32-S3 (Phase 6.2): mean 73 µs (8 actors/16 components/8 timers) |
 | Net (byte I/O + `TNetHost` roles + `FrameCodec`) | 0.3.0 — implemented; no-traffic pump overhead measured on ESP32-S3 (Phase 6.2): mean 47 µs |
 | platform-host (host UDP) | 0.3.0 — non-portable adapter; ships the two-node demo |
-| platform-esp32 (UDP + E32 LoRa + log sink + time source) | 0.3.0 — non-portable adapter; compile-only except for the Phase 6.2 benchmark run |
+| platform-esp32 (UDP + E32 LoRa + output device + time source) | 0.3.0 — non-portable adapter; compile-only except for the Phase 6.2 benchmark run |
 
 ## Visual roadmap
 

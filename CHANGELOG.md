@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- **Breaking: the log adapter is now `FOutputDevice`, not `FLogSink`.** Every
+  MicroWorld concept borrows UE5's vocabulary — `FApplication`, `UWorld`,
+  `AActor`, `BeginPlay` — except this one, which borrowed spdlog's "sink"
+  metaphor instead. UE5 calls this an output device, so MicroWorld now does too.
+  `FLogSink` → `FOutputDevice`, `SetLogSink` → `SetOutputDevice`, and
+  `Esp32LogSink` → `Esp32OutputDevice`, with the ESP32 header renamed to
+  `MicroWorld/PlatformEsp32/Esp32OutputDevice.h`. The type is still a plain
+  function pointer, not UE5's abstract class — the header says so, because the
+  borrowed name would otherwise imply a `Serialize` override that does not
+  exist. Consumers update one include and one call. Entries below the
+  `## 0.2.0` heading keep the old names: they record what shipped then.
 - **`TApplicationRunner` + the first `FApplication` tests.** A new header-only
   Core template, `Modules/Core/include/MicroWorld/ApplicationRunner.h`, drives
   one `FApplication` through its whole lifecycle on an injected clock and pacing
@@ -15,7 +26,7 @@
   `ApplicationRunnerTests.cpp` (5 cases over the stopping frame, the
   end-after-stop rule, the no-end-after-failed-begin rule, once-per-frame
   pacing, and clock-value feed-through). `docs/Porting.md` now documents pacing
-  as a fourth adapter (time source, net driver, log sink, pacing).
+  as a fourth adapter (time source, net driver, output device, pacing).
 - **Examples 24 & 25 hardware-verified; example logs now on the native USB port.**
   The two WiFi-riding messaging demos were run on two ESP32-S3 boards
   (2026-07-24): `24-TwoChannelWorld` (telemetry over WiFi UDP and commands over a
@@ -45,7 +56,7 @@
   checkpoints pending. Every example is now **engine-first** — each `src/` builds
   from `<MicroWorld/...>` headers only, with WiFi, sleep, logging, and time from
   the `PlatformEsp32` facades (`FEsp32WifiLink`, `SleepMilliseconds`,
-  `Esp32LogSink`, `FEsp32TimeSource`) — so the per-example WiFi glue is gone,
+  `Esp32OutputDevice`, `FEsp32TimeSource`) — so the per-example WiFi glue is gone,
   examples 15/16 were rewritten as two-board SoftAP demos (retiring example 15's
   old raw-socket echo), and 01/18–21 moved onto the log/sleep seams
   (`printf`/`<cstdio>` removed).

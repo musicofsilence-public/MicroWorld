@@ -5,7 +5,7 @@
 #include <MicroWorld/Net/NetDriver.h>
 #include <MicroWorld/Net/NetResult.h>
 #include <MicroWorld/Net/UdpAddressCodec.h>
-#include <MicroWorld/PlatformEsp32/Esp32LogSink.h>
+#include <MicroWorld/PlatformEsp32/Esp32OutputDevice.h>
 #include <MicroWorld/PlatformEsp32/Esp32Sleep.h>
 #include <MicroWorld/PlatformEsp32/Esp32UdpDriver.h>
 #include <MicroWorld/PlatformEsp32/Esp32WifiLink.h>
@@ -22,12 +22,12 @@ constexpr DurationMilliseconds PollReadinessMilliseconds = 250;
 } // namespace
 
 /**
- * Composition root: installs the log sink, hosts the demo SoftAP, then echoes
+ * Composition root: installs the output device, hosts the demo SoftAP, then echoes
  * every UDP datagram back to its sender through FEsp32UdpDriver.
  */
 extern "C" void app_main(void)
 {
-	SetLogSink(&Esp32LogSink);
+	SetOutputDevice(&Esp32OutputDevice);
 
 	static FEsp32WifiLink WifiLink;
 	const ENetResult WifiResult =

@@ -1,6 +1,6 @@
 #include <MicroWorld/Log.h>
 #include <MicroWorld/Net/NetResult.h>
-#include <MicroWorld/PlatformEsp32/Esp32LogSink.h>
+#include <MicroWorld/PlatformEsp32/Esp32OutputDevice.h>
 #include <MicroWorld/PlatformEsp32/Esp32Sleep.h>
 #include <MicroWorld/PlatformEsp32/Esp32SpiDriver.h>
 #include <MicroWorld/PlatformEsp32/Esp32TimeSource.h>
@@ -203,10 +203,10 @@ void RunSlave() noexcept
 #endif
 } // namespace
 
-/** Composition root: installs the log sink, then ping-pongs a counter with the peer board over one wired SPI bus. */
+/** Composition root: installs the output device, then ping-pongs a counter with the peer board over one wired SPI bus. */
 extern "C" void app_main(void)
 {
-	MicroWorld::SetLogSink(&MicroWorld::Esp32LogSink);
+	MicroWorld::SetOutputDevice(&MicroWorld::Esp32OutputDevice);
 #if MICROWORLD_EXAMPLE_SPI_MASTER
 	RunMaster();
 #else

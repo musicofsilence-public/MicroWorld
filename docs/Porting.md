@@ -63,15 +63,15 @@ adapter owns its concrete encoding and provides helpers to build/inspect it.
   slave keeps one queued — with a 1-byte
   [`SpiAddress`](../Modules/PlatformEsp32/include/MicroWorld/PlatformEsp32/SpiAddress.h).
 
-### 3. Log sink
+### 3. Output device
 
 Install one
-[`FLogSink`](../Modules/Core/include/MicroWorld/Log.h) via `SetLogSink` at startup. The
-default sink is null (logging disabled). The facade is single-threaded; install
-the sink before the first `MW_LOG` / `MW_LOG_MSG` call.
+[`FOutputDevice`](../Modules/Core/include/MicroWorld/Log.h) via `SetOutputDevice` at startup. The
+default output device is null (logging disabled). The facade is single-threaded; install
+the output device before the first `MW_LOG` / `MW_LOG_MSG` call.
 
 - ESP32 reference:
-  [`Esp32LogSink`](../Modules/PlatformEsp32/include/MicroWorld/PlatformEsp32/Esp32LogSink.h)
+  [`Esp32OutputDevice`](../Modules/PlatformEsp32/include/MicroWorld/PlatformEsp32/Esp32OutputDevice.h)
   maps each `ELogLevel` to the matching `ESP_LOG*` macro.
 
 ### 4. Pacing

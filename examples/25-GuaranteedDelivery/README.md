@@ -52,7 +52,7 @@ gap positions as illustrative, not fixed.
   `MakeUdpAddress`
 - `TEngineHost` (`RegisterClass` / `CreateWorld` / `CreateObject` /
   `BeginPlay` / `Tick`), `TInlineActor`, `UWorld::RegisterActor`
-- `FEsp32TimeSource::Now`, `SleepMilliseconds`, `Esp32LogSink`, `MW_LOG`
+- `FEsp32TimeSource::Now`, `SleepMilliseconds`, `Esp32OutputDevice`, `MW_LOG`
 
 ## Hardware required
 

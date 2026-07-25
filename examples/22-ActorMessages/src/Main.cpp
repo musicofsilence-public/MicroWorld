@@ -14,7 +14,7 @@
 #include <MicroWorld/Object/ClassDescriptor.h>
 #include <MicroWorld/Object/ObjectPtr.h>
 
-#include <MicroWorld/PlatformEsp32/Esp32LogSink.h>
+#include <MicroWorld/PlatformEsp32/Esp32OutputDevice.h>
 #include <MicroWorld/PlatformEsp32/Esp32Sleep.h>
 #include <MicroWorld/PlatformEsp32/Esp32TimeSource.h>
 
@@ -333,7 +333,7 @@ constexpr unsigned PollPacingMilliseconds = 10;
  */
 extern "C" void app_main(void)
 {
-	MicroWorld::SetLogSink(&MicroWorld::Esp32LogSink);
+	MicroWorld::SetOutputDevice(&MicroWorld::Esp32OutputDevice);
 
 	// Announce the exact package contract this image was built against.
 	MW_LOG(

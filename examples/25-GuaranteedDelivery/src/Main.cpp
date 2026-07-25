@@ -1,5 +1,5 @@
 #include <MicroWorld/Log.h>
-#include <MicroWorld/PlatformEsp32/Esp32LogSink.h>
+#include <MicroWorld/PlatformEsp32/Esp32OutputDevice.h>
 
 // Role is chosen at build time: server (=1) or client (=0). Both roles always
 // compile -- ServerMain.cpp and ClientMain.cpp are always built -- and this
@@ -18,10 +18,10 @@ void RunServer() noexcept;
 /** Runs the client role (Board B): FCounterActor behind FPacketDropDriver; defined in ClientMain.cpp. */
 void RunClient() noexcept;
 
-/** Composition root: installs the log sink, then runs the role this image was built for. */
+/** Composition root: installs the output device, then runs the role this image was built for. */
 extern "C" void app_main(void)
 {
-	MicroWorld::SetLogSink(&MicroWorld::Esp32LogSink);
+	MicroWorld::SetOutputDevice(&MicroWorld::Esp32OutputDevice);
 #if MICROWORLD_EXAMPLE_SERVER
 	RunServer();
 #else

@@ -1,11 +1,11 @@
-#include <MicroWorld/PlatformEsp32/Esp32LogSink.h>
+#include <MicroWorld/PlatformEsp32/Esp32OutputDevice.h>
 
 #include <esp_log.h>
 
 namespace MicroWorld
 {
 
-void Esp32LogSink(const ELogLevel Level, const char* const Category, const char* const Message) noexcept
+void Esp32OutputDevice(const ELogLevel Level, const char* const Category, const char* const Message) noexcept
 {
 	const char* const Tag = (Category != nullptr) ? Category : "MicroWorld";
 	const char* const Body = (Message != nullptr) ? Message : "";

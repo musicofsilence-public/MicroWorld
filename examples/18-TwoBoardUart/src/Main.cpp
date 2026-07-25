@@ -1,6 +1,6 @@
 #include <MicroWorld/Log.h>
 #include <MicroWorld/Net/NetResult.h>
-#include <MicroWorld/PlatformEsp32/Esp32LogSink.h>
+#include <MicroWorld/PlatformEsp32/Esp32OutputDevice.h>
 #include <MicroWorld/PlatformEsp32/Esp32Sleep.h>
 #include <MicroWorld/PlatformEsp32/Esp32TimeSource.h>
 #include <MicroWorld/PlatformEsp32/Esp32UartDriver.h>
@@ -94,10 +94,10 @@ MicroWorld::FEsp32UartConfig MakeUartConfig(const std::uint8_t NodeId) noexcept
 }
 } // namespace
 
-/** Composition root: installs the log sink, then ping-pongs a counter with the peer board over one wired UART. */
+/** Composition root: installs the output device, then ping-pongs a counter with the peer board over one wired UART. */
 extern "C" void app_main(void)
 {
-	MicroWorld::SetLogSink(&MicroWorld::Esp32LogSink);
+	MicroWorld::SetOutputDevice(&MicroWorld::Esp32OutputDevice);
 
 	// Static, never on the app_main stack (the ESP32-S3 stack lesson, §2.2).
 	static MicroWorld::FEsp32UartDriver Driver{MakeUartConfig(LocalNodeId)};

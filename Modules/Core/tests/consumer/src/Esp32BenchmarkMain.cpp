@@ -32,7 +32,7 @@
 #include <MicroWorld/Object/GarbageCollector.h>
 #include <MicroWorld/Object/Object.h>
 #include <MicroWorld/Object/ObjectStore.h>
-#include <MicroWorld/PlatformEsp32/Esp32LogSink.h>
+#include <MicroWorld/PlatformEsp32/Esp32OutputDevice.h>
 #include <MicroWorld/PlatformEsp32/Esp32TimeSource.h>
 #include <MicroWorld/PlatformEsp32/Esp32UdpDriver.h>
 #include <MicroWorld/Time.h>
@@ -352,7 +352,7 @@ extern "C" void app_main()
 	using namespace MicroWorld;
 
 	// 0. Route every MW_LOG call site and each measurement line through ESP-IDF logging.
-	SetLogSink(&Esp32LogSink);
+	SetOutputDevice(&Esp32OutputDevice);
 
 	ESP_LOGI(BenchmarkTag, "=== MicroWorld ESP32-S3 runtime-margin harness (Phase 6.2 Part A) ===");
 	ESP_LOGI(

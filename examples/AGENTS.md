@@ -12,14 +12,14 @@ example. Duplication *across* examples (the `platformio.ini` boilerplate, the
 role-dispatch `Main.cpp`) is deliberate so each folder copies out standalone;
 DRY applies only *within* one example. WiFi, sleep, logging, and time come
 from the shared `PlatformEsp32` facades (`FEsp32WifiLink`, `SleepMilliseconds`,
-`Esp32LogSink`, `FEsp32TimeSource`), not per-example glue.
+`Esp32OutputDevice`, `FEsp32TimeSource`), not per-example glue.
 
 ## Concepts
 
 - One feature per example — the folder name states it, and the `src/` stays
   small enough to read in one sitting.
 - The serial console is the observable: examples log through
-  `Esp32LogSink`/`MW_LOG`, so every line carries the example's `exNN` category
+  `Esp32OutputDevice`/`MW_LOG`, so every line carries the example's `exNN` category
   tag in the ESP-IDF shape `I (nnnn) exNN: …` (or `W`/`E` for warnings/errors),
   and examples without radio/network I/O print a deterministic trace.
 - After Phase 1, an example's `src/` includes only `<MicroWorld/...>` headers

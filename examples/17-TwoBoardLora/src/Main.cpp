@@ -1,7 +1,7 @@
 #include <MicroWorld/Log.h>
 #include <MicroWorld/Net/NetResult.h>
 #include <MicroWorld/PlatformEsp32/Esp32E32LoraDriver.h>
-#include <MicroWorld/PlatformEsp32/Esp32LogSink.h>
+#include <MicroWorld/PlatformEsp32/Esp32OutputDevice.h>
 #include <MicroWorld/PlatformEsp32/Esp32Sleep.h>
 #include <MicroWorld/PlatformEsp32/Esp32TimeSource.h>
 #include <MicroWorld/PlatformEsp32/LoraAddress.h>
@@ -95,10 +95,10 @@ MicroWorld::FEsp32E32LoraConfig MakeLoraConfig(const std::uint8_t NodeId) noexce
 }
 } // namespace
 
-/** Composition root: installs the log sink, then ping-pongs a counter with the peer board over one E32 LoRa radio link. */
+/** Composition root: installs the output device, then ping-pongs a counter with the peer board over one E32 LoRa radio link. */
 extern "C" void app_main(void)
 {
-	MicroWorld::SetLogSink(&MicroWorld::Esp32LogSink);
+	MicroWorld::SetOutputDevice(&MicroWorld::Esp32OutputDevice);
 
 	// Static, never on the app_main stack (the ESP32-S3 stack lesson, §2.2).
 	static MicroWorld::FEsp32E32LoraDriver Driver{MakeLoraConfig(LocalNodeId)};

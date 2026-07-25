@@ -1,7 +1,7 @@
 #include <MicroWorld/Log.h>
 #include <MicroWorld/Net/NetResult.h>
 #include <MicroWorld/PlatformEsp32/Esp32I2cDriver.h>
-#include <MicroWorld/PlatformEsp32/Esp32LogSink.h>
+#include <MicroWorld/PlatformEsp32/Esp32OutputDevice.h>
 #include <MicroWorld/PlatformEsp32/Esp32Sleep.h>
 #include <MicroWorld/PlatformEsp32/Esp32TimeSource.h>
 #include <MicroWorld/PlatformEsp32/I2cAddress.h>
@@ -200,10 +200,10 @@ void RunSlave() noexcept
 #endif
 } // namespace
 
-/** Composition root: installs the log sink, then ping-pongs a counter with the peer board over one wired I2C bus. */
+/** Composition root: installs the output device, then ping-pongs a counter with the peer board over one wired I2C bus. */
 extern "C" void app_main(void)
 {
-	MicroWorld::SetLogSink(&MicroWorld::Esp32LogSink);
+	MicroWorld::SetOutputDevice(&MicroWorld::Esp32OutputDevice);
 #if MICROWORLD_EXAMPLE_I2C_MASTER
 	RunMaster();
 #else

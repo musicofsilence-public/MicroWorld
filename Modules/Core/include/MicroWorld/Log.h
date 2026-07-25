@@ -11,7 +11,7 @@
  *     flash, and its arguments are never evaluated.
  *   * Formatting uses a fixed-size caller-stack buffer plus vsnprintf (see
  *     src/Log.cpp): no heap, no exceptions, no hidden clock.
- *   * One process-global function-pointer sink; a null sink (the default)
+ *   * One process-global function-pointer output device; a null device (the default)
  *     disables logging. Install it once at startup (MicroWorld is
  *     single-threaded).
  *
@@ -23,7 +23,7 @@
 
 // Compile-time severity ranks. Lower value = more important. The preprocessor
 // uses these to strip below-floor call sites; the enum mirrors them for the
-// sink signature.
+// output-device signature.
 #define MW_LOG_LEVEL_Error 0
 #define MW_LOG_LEVEL_Warning 1
 #define MW_LOG_LEVEL_Log 2
@@ -88,19 +88,25 @@ enum class ELogLevel : std::uint8_t
 	Verbose = MW_LOG_LEVEL_Verbose, ///< Reports fine-grained detail usually stripped in release.
 };
 
-/** Receives one fully formed record; the process installs exactly one sink. */
-using FLogSink = void (*)(ELogLevel Level, const char* Category, const char* Message);
+/**
+ * Receives one fully formed record; the process installs exactly one output device.
+ *
+ * Named after UE5's FOutputDevice because it fills the same role, but it is a
+ * plain function pointer rather than an abstract class: there is nothing to
+ * subclass and no Serialize override. A platform supplies one free function.
+ */
+using FOutputDevice = void (*)(ELogLevel Level, const char* Category, const char* Message);
 
-/** Installs the process-global sink; pass nullptr (the default) to disable logging. */
-void SetLogSink(FLogSink Sink) noexcept;
+/** Installs the process-global output device; pass nullptr (the default) to disable logging. */
+void SetOutputDevice(FOutputDevice Device) noexcept;
 
 namespace Detail
 {
 
-	/** Forwards a ready-made message to the installed sink, doing nothing when none is set. */
+	/** Forwards a ready-made message to the installed output device, doing nothing when none is set. */
 	void DispatchLogMessage(ELogLevel Level, const char* Category, const char* Message) noexcept;
 
-	/** Formats into a bounded stack buffer then forwards to the sink, skipping work when none is set. */
+	/** Formats into a bounded stack buffer then forwards to the output device, skipping work when none is set. */
 	void DispatchLogFormatted(ELogLevel Level, const char* Category, const char* Format, ...) noexcept MW_LOG_PRINTF_FORMAT;
 
 } // namespace Detail

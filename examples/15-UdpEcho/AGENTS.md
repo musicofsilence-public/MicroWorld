@@ -4,7 +4,7 @@ Inherits `../AGENTS.md`.
 
 ## Architecture
 
-Single role, one file: `Main.cpp`'s `app_main` installs `Esp32LogSink`, brings up the SoftAP
+Single role, one file: `Main.cpp`'s `app_main` installs `Esp32OutputDevice`, brings up the SoftAP
 via `FEsp32WifiLink::StartAccessPoint`, then echoes every UDP datagram back to its sender
 through `FEsp32UdpDriver`, pacing the poll loop with `SleepMilliseconds`. `UdpEchoShared.h`
 holds the one copy of the demo AP config (SSID/password) and the echo port.

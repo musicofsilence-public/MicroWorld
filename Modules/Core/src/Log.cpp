@@ -9,14 +9,14 @@ namespace MicroWorld
 namespace
 {
 
-	/** Holds the one process-global sink; nullptr means every log call is a no-op. */
-	FLogSink InstalledLogSink = nullptr;
+	/** Holds the one process-global output device; nullptr means every log call is a no-op. */
+	FOutputDevice InstalledOutputDevice = nullptr;
 
 } // namespace
 
-void SetLogSink(FLogSink Sink) noexcept
+void SetOutputDevice(FOutputDevice Device) noexcept
 {
-	InstalledLogSink = Sink;
+	InstalledOutputDevice = Device;
 }
 
 namespace Detail
@@ -24,16 +24,16 @@ namespace Detail
 
 	void DispatchLogMessage(ELogLevel Level, const char* Category, const char* Message) noexcept
 	{
-		if (InstalledLogSink != nullptr)
+		if (InstalledOutputDevice != nullptr)
 		{
-			InstalledLogSink(Level, Category, Message);
+			InstalledOutputDevice(Level, Category, Message);
 		}
 	}
 
 	void DispatchLogFormatted(ELogLevel Level, const char* Category, const char* Format, ...) noexcept
 	{
-		// Skip formatting entirely when no sink can consume the result.
-		if (InstalledLogSink == nullptr)
+		// Skip formatting entirely when no output device can consume the result.
+		if (InstalledOutputDevice == nullptr)
 		{
 			return;
 		}
@@ -46,7 +46,7 @@ namespace Detail
 		std::vsnprintf(Message, sizeof(Message), Format, Arguments);
 		va_end(Arguments);
 
-		InstalledLogSink(Level, Category, Message);
+		InstalledOutputDevice(Level, Category, Message);
 	}
 
 } // namespace Detail

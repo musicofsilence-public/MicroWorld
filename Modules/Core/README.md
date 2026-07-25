@@ -41,13 +41,13 @@ consolidation. Consumers still own their concrete objects.
 
 `MicroWorld/Log.h` is a bounded logging facade owned by Core and usable from
 every package. It has four levels — `Error`, `Warning`, `Log`, `Verbose` — and a
-single process-global sink:
+single process-global output device:
 
 ```cpp
-using FLogSink = void (*)(ELogLevel Level, const char* Category, const char* Message);
+using FOutputDevice = void (*)(ELogLevel Level, const char* Category, const char* Message);
 ```
 
-Install one sink at startup with `SetLogSink`; the default sink is null, which
+Install one output device at startup with `SetOutputDevice`; the default is null, which
 disables logging. There are two call macros:
 
 ```cpp
@@ -63,7 +63,7 @@ A **compile-time floor** `MW_LOG_MIN_LEVEL` (default `Log`) strips less importan
 call sites entirely: they expand to nothing, emit no code, keep no format or
 category strings in flash, and never evaluate their arguments. Lower the floor
 for a build with `-DMW_LOG_MIN_LEVEL=MW_LOG_LEVEL_Verbose`. The facade is
-single-threaded; install the sink before the first log call.
+single-threaded; install the output device before the first log call.
 
 ## Build
 
