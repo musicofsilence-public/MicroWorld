@@ -36,10 +36,10 @@ struct FTickDecision
 	FTickContext Context{};
 
 	/** Builds a decision that reports a scheduling error without a tick. */
-	static FTickDecision Rejected(ERuntimeResult Result) noexcept
+	static FTickDecision Rejected(ERuntimeResult InResult) noexcept
 	{
 		FTickDecision Decision;
-		Decision.Result = Result;
+		Decision.Result = InResult;
 		return Decision;
 	}
 
@@ -47,12 +47,12 @@ struct FTickDecision
 	static FTickDecision NotDue() noexcept { return FTickDecision{}; }
 
 	/** Builds an accepted due-tick decision carrying its canonical time and delta. */
-	static FTickDecision Ticked(TimePointMilliseconds NowMilliseconds, DurationMilliseconds DeltaMilliseconds) noexcept
+	static FTickDecision Ticked(TimePointMilliseconds InNowMilliseconds, DurationMilliseconds InDeltaMilliseconds) noexcept
 	{
 		FTickDecision Decision;
 		Decision.bShouldTick = true;
-		Decision.Context.NowMilliseconds = NowMilliseconds;
-		Decision.Context.DeltaMilliseconds = DeltaMilliseconds;
+		Decision.Context.NowMilliseconds = InNowMilliseconds;
+		Decision.Context.DeltaMilliseconds = InDeltaMilliseconds;
 		return Decision;
 	}
 };

@@ -18,12 +18,12 @@ struct FTickConfiguration
 	DurationMilliseconds TickIntervalMilliseconds{0};
 
 	/** Builds a config that may tick, starts enabled, and repeats on the given interval. */
-	static FTickConfiguration EnabledEvery(DurationMilliseconds IntervalMilliseconds) noexcept
+	static FTickConfiguration EnabledEvery(DurationMilliseconds InIntervalMilliseconds) noexcept
 	{
 		FTickConfiguration Configuration;
 		Configuration.bCanEverTick = true;
 		Configuration.bStartWithTickEnabled = true;
-		Configuration.TickIntervalMilliseconds = IntervalMilliseconds;
+		Configuration.TickIntervalMilliseconds = InIntervalMilliseconds;
 		return Configuration;
 	}
 };
@@ -33,22 +33,22 @@ class FTickFunction final
 {
 public:
 	/** Captures immutable capability and the consumer-selected initial schedule. */
-	explicit FTickFunction(FTickConfiguration Configuration) noexcept;
+	explicit FTickFunction(FTickConfiguration InConfiguration) noexcept;
 
 	/** Starts scheduling from canonical dispatcher time. */
-	void BeginPlay(TimePointMilliseconds NowMilliseconds) noexcept;
+	void BeginPlay(TimePointMilliseconds InNowMilliseconds) noexcept;
 
 	/** Ends scheduling without invoking object policy. */
 	void EndPlay() noexcept;
 
 	/** Changes enablement without taking an independent clock sample. */
-	ERuntimeResult SetEnabled(bool bEnabled) noexcept;
+	ERuntimeResult SetEnabled(bool bInEnabled) noexcept;
 
 	/** Changes the minimum interval without changing enablement. */
-	ERuntimeResult SetInterval(DurationMilliseconds IntervalMilliseconds) noexcept;
+	ERuntimeResult SetInterval(DurationMilliseconds InIntervalMilliseconds) noexcept;
 
 	/** Returns at most one due tick and rejects backward dispatcher time. */
-	FTickDecision Advance(TimePointMilliseconds NowMilliseconds) noexcept;
+	FTickDecision Advance(TimePointMilliseconds InNowMilliseconds) noexcept;
 
 	/** Lets owners expose enablement without leaking scheduler representation. */
 	bool IsEnabled() const noexcept;
@@ -58,19 +58,19 @@ public:
 
 private:
 	/** Saturates deadlines so a long-running clock cannot wrap into an early tick. */
-	TimePointMilliseconds CalculateNextDueMilliseconds(TimePointMilliseconds NowMilliseconds) const noexcept;
+	TimePointMilliseconds CalculateNextDueMilliseconds(TimePointMilliseconds InNowMilliseconds) const noexcept;
 
 	/** Saturates elapsed time because the public tick context uses a bounded duration. */
-	DurationMilliseconds CalculateDeltaMilliseconds(TimePointMilliseconds NowMilliseconds) const noexcept;
+	DurationMilliseconds CalculateDeltaMilliseconds(TimePointMilliseconds InNowMilliseconds) const noexcept;
 
 	/** Applies the first-tick schedule reset and returns its due tick. */
-	FTickDecision BeginResetSchedule(TimePointMilliseconds NowMilliseconds) noexcept;
+	FTickDecision BeginResetSchedule(TimePointMilliseconds InNowMilliseconds) noexcept;
 
 	/** Reports whether the cadence gate allows a tick at this time. */
-	bool IsTickDueNow(TimePointMilliseconds NowMilliseconds) const noexcept;
+	bool IsTickDueNow(TimePointMilliseconds InNowMilliseconds) const noexcept;
 
 	/** Advances the schedule for an accepted tick and returns it. */
-	FTickDecision ProduceDueTick(TimePointMilliseconds NowMilliseconds) noexcept;
+	FTickDecision ProduceDueTick(TimePointMilliseconds InNowMilliseconds) noexcept;
 
 	/** Detects caller time rollback even while ticking is disabled. */
 	TimePointMilliseconds LastObservedMilliseconds{0};

@@ -22,10 +22,13 @@ public:
 	FTickable& operator=(FTickable&&) = delete;
 
 	/** Exposes safe runtime enablement without exposing the scheduler itself. */
-	ERuntimeResult SetTickEnabled(const bool bEnabled) noexcept { return PrimaryTick.SetEnabled(bEnabled); }
+	ERuntimeResult SetTickEnabled(const bool bInEnabled) noexcept { return PrimaryTick.SetEnabled(bInEnabled); }
 
 	/** Lets consumers change cadence while keeping schedule-reset rules centralized. */
-	ERuntimeResult SetTickInterval(const DurationMilliseconds IntervalMilliseconds) noexcept { return PrimaryTick.SetInterval(IntervalMilliseconds); }
+	ERuntimeResult SetTickInterval(const DurationMilliseconds InIntervalMilliseconds) noexcept
+	{
+		return PrimaryTick.SetInterval(InIntervalMilliseconds);
+	}
 
 	/** Reports current intent without granting mutable access to scheduling state. */
 	bool IsTickEnabled() const noexcept { return PrimaryTick.IsEnabled(); }
@@ -35,13 +38,13 @@ public:
 
 protected:
 	/** Gives each derived runtime object one independent primary schedule. */
-	explicit FTickable(const FTickConfiguration Configuration) noexcept : PrimaryTick(Configuration) {}
+	explicit FTickable(const FTickConfiguration InConfiguration) noexcept : PrimaryTick(InConfiguration) {}
 
 	/** Restricts scheduling decisions to lifecycle-aware derived dispatchers. */
-	FTickDecision AdvancePrimaryTick(const TimePointMilliseconds NowMilliseconds) noexcept { return PrimaryTick.Advance(NowMilliseconds); }
+	FTickDecision AdvancePrimaryTick(const TimePointMilliseconds InNowMilliseconds) noexcept { return PrimaryTick.Advance(InNowMilliseconds); }
 
 	/** Aligns the first tick with the owning object's canonical begin time. */
-	void BeginPrimaryTickLifecycle(const TimePointMilliseconds NowMilliseconds) noexcept { PrimaryTick.BeginPlay(NowMilliseconds); }
+	void BeginPrimaryTickLifecycle(const TimePointMilliseconds InNowMilliseconds) noexcept { PrimaryTick.BeginPlay(InNowMilliseconds); }
 
 	/** Stops future decisions when the owning runtime object leaves play. */
 	void EndPrimaryTickLifecycle() noexcept { PrimaryTick.EndPlay(); }

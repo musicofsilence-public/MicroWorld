@@ -14,23 +14,23 @@ namespace
 
 } // namespace
 
-void SetOutputDevice(FOutputDeviceFunction Device) noexcept
+void SetOutputDevice(FOutputDeviceFunction InOutputDevice) noexcept
 {
-	WriteRecord = Device;
+	WriteRecord = InOutputDevice;
 }
 
 namespace Detail
 {
 
-	void DispatchLogMessage(ELogLevel Level, const char* Category, const char* Message) noexcept
+	void DispatchLogMessage(ELogLevel InLevel, const char* InCategory, const char* InMessage) noexcept
 	{
 		if (WriteRecord != nullptr)
 		{
-			WriteRecord(Level, Category, Message);
+			WriteRecord(InLevel, InCategory, InMessage);
 		}
 	}
 
-	void DispatchLogFormatted(ELogLevel Level, const char* Category, const char* Format, ...) noexcept
+	void DispatchLogFormatted(ELogLevel InLevel, const char* InCategory, const char* InFormat, ...) noexcept
 	{
 		// Skip formatting entirely when no output device can consume the result.
 		if (WriteRecord == nullptr)
@@ -42,11 +42,11 @@ namespace Detail
 		// always null-terminates and truncates rather than overflowing.
 		char Message[MW_LOG_MESSAGE_CAPACITY];
 		std::va_list Arguments;
-		va_start(Arguments, Format);
-		std::vsnprintf(Message, sizeof(Message), Format, Arguments);
+		va_start(Arguments, InFormat);
+		std::vsnprintf(Message, sizeof(Message), InFormat, Arguments);
 		va_end(Arguments);
 
-		WriteRecord(Level, Category, Message);
+		WriteRecord(InLevel, InCategory, Message);
 	}
 
 } // namespace Detail

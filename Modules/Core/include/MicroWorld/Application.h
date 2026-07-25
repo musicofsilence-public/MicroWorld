@@ -31,10 +31,10 @@ public:
 	virtual ~FApplication() = default;
 
 	/** Starts the application once, at the caller's current time; fails if already started. */
-	ERuntimeResult BeginPlay(TimePointMilliseconds NowMilliseconds) noexcept;
+	ERuntimeResult BeginPlay(TimePointMilliseconds InNowMilliseconds) noexcept;
 
 	/** Runs one frame; rejects a time earlier than the last one instead of forwarding it. */
-	ERuntimeResult Advance(TimePointMilliseconds NowMilliseconds) noexcept;
+	ERuntimeResult Advance(TimePointMilliseconds InNowMilliseconds) noexcept;
 
 	/** Stops the application; calling it again after success does nothing and still succeeds. */
 	ERuntimeResult EndPlay() noexcept;
@@ -44,13 +44,13 @@ protected:
 	FApplication() = default;
 
 	/** Starts the application's subsystems, in whatever order it needs. */
-	virtual ERuntimeResult OnBeginPlay(TimePointMilliseconds NowMilliseconds) = 0;
+	virtual ERuntimeResult OnBeginPlay(TimePointMilliseconds InNowMilliseconds) = 0;
 
 	/** Undoes whatever OnBeginPlay started before it failed; it runs on the failure path, so it cannot throw. */
 	virtual void OnBeginPlayFailed() noexcept = 0;
 
-	/** Does one frame of work; NowMilliseconds never moves backward. */
-	virtual ERuntimeResult OnAdvance(TimePointMilliseconds NowMilliseconds) = 0;
+	/** Does one frame of work; InNowMilliseconds never moves backward. */
+	virtual ERuntimeResult OnAdvance(TimePointMilliseconds InNowMilliseconds) = 0;
 
 	/** Stops the subsystems, normally in reverse start order. */
 	virtual void OnEndPlay() = 0;

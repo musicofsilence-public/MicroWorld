@@ -96,19 +96,19 @@ enum class ELogLevel : std::uint8_t
  * there is nothing to subclass and no Serialize override. A platform supplies one
  * free function, so every function-pointer alias here announces itself.
  */
-using FOutputDeviceFunction = void (*)(ELogLevel Level, const char* Category, const char* Message);
+using FOutputDeviceFunction = void (*)(ELogLevel InLevel, const char* InCategory, const char* InMessage);
 
 /** Installs the process-global output device; pass nullptr (the default) to disable logging. */
-void SetOutputDevice(FOutputDeviceFunction Device) noexcept;
+void SetOutputDevice(FOutputDeviceFunction InOutputDevice) noexcept;
 
 namespace Detail
 {
 
 	/** Forwards a ready-made message to the installed output device, doing nothing when none is set. */
-	void DispatchLogMessage(ELogLevel Level, const char* Category, const char* Message) noexcept;
+	void DispatchLogMessage(ELogLevel InLevel, const char* InCategory, const char* InMessage) noexcept;
 
 	/** Formats into a bounded stack buffer then forwards to the output device, skipping work when none is set. */
-	void DispatchLogFormatted(ELogLevel Level, const char* Category, const char* Format, ...) noexcept MW_LOG_PRINTF_FORMAT;
+	void DispatchLogFormatted(ELogLevel InLevel, const char* InCategory, const char* InFormat, ...) noexcept MW_LOG_PRINTF_FORMAT;
 
 } // namespace Detail
 

@@ -3,7 +3,7 @@
 namespace MicroWorld
 {
 
-ERuntimeResult FApplication::BeginPlay(const TimePointMilliseconds NowMilliseconds) noexcept
+ERuntimeResult FApplication::BeginPlay(const TimePointMilliseconds InNowMilliseconds) noexcept
 {
 	const ERuntimeResult BeginResult = Lifecycle.Begin();
 	if (BeginResult != ERuntimeResult::Success)
@@ -11,8 +11,8 @@ ERuntimeResult FApplication::BeginPlay(const TimePointMilliseconds NowMillisecon
 		return BeginResult;
 	}
 
-	LastUpdateMilliseconds = NowMilliseconds;
-	const ERuntimeResult ConsumerResult = OnBeginPlay(NowMilliseconds);
+	LastUpdateMilliseconds = InNowMilliseconds;
+	const ERuntimeResult ConsumerResult = OnBeginPlay(InNowMilliseconds);
 	if (ConsumerResult != ERuntimeResult::Success)
 	{
 		OnBeginPlayFailed();
@@ -22,20 +22,20 @@ ERuntimeResult FApplication::BeginPlay(const TimePointMilliseconds NowMillisecon
 	return ERuntimeResult::Success;
 }
 
-ERuntimeResult FApplication::Advance(const TimePointMilliseconds NowMilliseconds) noexcept
+ERuntimeResult FApplication::Advance(const TimePointMilliseconds InNowMilliseconds) noexcept
 {
 	const ERuntimeResult PlayingResult = Lifecycle.RequirePlaying();
 	if (PlayingResult != ERuntimeResult::Success)
 	{
 		return PlayingResult;
 	}
-	if (NowMilliseconds < LastUpdateMilliseconds)
+	if (InNowMilliseconds < LastUpdateMilliseconds)
 	{
 		return ERuntimeResult::NonMonotonicTime;
 	}
 
-	LastUpdateMilliseconds = NowMilliseconds;
-	return OnAdvance(NowMilliseconds);
+	LastUpdateMilliseconds = InNowMilliseconds;
+	return OnAdvance(InNowMilliseconds);
 }
 
 ERuntimeResult FApplication::EndPlay() noexcept

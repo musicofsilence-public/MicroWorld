@@ -37,12 +37,12 @@ namespace
 	int GArgumentEvaluations{0};
 
 	/** Records one routed log record into the shared capture. */
-	void CaptureLogRecord(ELogLevel Level, const char* Category, const char* Message)
+	void CaptureLogRecord(ELogLevel InLevel, const char* InCategory, const char* InMessage)
 	{
 		++GCapture.CallCount;
-		GCapture.Level = Level;
-		GCapture.Category = Category;
-		std::snprintf(GCapture.Message, sizeof(GCapture.Message), "%s", Message);
+		GCapture.Level = InLevel;
+		GCapture.Category = InCategory;
+		std::snprintf(GCapture.Message, sizeof(GCapture.Message), "%s", InMessage);
 	}
 
 	/** Returns a marker integer while recording that the argument was evaluated. */

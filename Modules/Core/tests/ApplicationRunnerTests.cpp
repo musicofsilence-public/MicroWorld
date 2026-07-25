@@ -43,10 +43,10 @@ namespace
 	{
 	public:
 		/** Seeds the clock with the monotonic values the test expects BeginPlay and each Advance to see. */
-		explicit FScriptedClock(std::initializer_list<MicroWorld::TimePointMilliseconds> Values) noexcept
+		explicit FScriptedClock(std::initializer_list<MicroWorld::TimePointMilliseconds> InValues) noexcept
 		{
 			// Copying under the capacity check keeps an over-long list from writing past Sequence.
-			for (const MicroWorld::TimePointMilliseconds Value : Values)
+			for (const MicroWorld::TimePointMilliseconds Value : InValues)
 			{
 				if (ValueCount == MaximumScriptedValues)
 				{
@@ -96,10 +96,10 @@ namespace
 	{
 	public:
 		/** Selects the zero-based Advance index that returns non-Success so Run terminates. */
-		void ConfigureStopOnFrame(int FrameIndex) noexcept { StopOnFrameIndex = FrameIndex; }
+		void ConfigureStopOnFrame(int InFrameIndex) noexcept { StopOnFrameIndex = InFrameIndex; }
 
 		/** Selects the result OnBeginPlay returns, so a failed-begin run is reachable from a test. */
-		void ConfigureBeginResult(MicroWorld::ERuntimeResult Result) noexcept { ConfiguredBeginResult = Result; }
+		void ConfigureBeginResult(MicroWorld::ERuntimeResult InResult) noexcept { ConfiguredBeginResult = InResult; }
 
 		/** Records whether the rollback hook fired after a failed begin. */
 		int BeginPlayFailedCount{0};
@@ -118,11 +118,11 @@ namespace
 
 		void OnBeginPlayFailed() noexcept override { ++BeginPlayFailedCount; }
 
-		MicroWorld::ERuntimeResult OnAdvance(MicroWorld::TimePointMilliseconds NowMilliseconds) override
+		MicroWorld::ERuntimeResult OnAdvance(MicroWorld::TimePointMilliseconds InNowMilliseconds) override
 		{
 			if (static_cast<std::size_t>(AdvanceCount) < ObservedAdvanceTimestamps.size())
 			{
-				ObservedAdvanceTimestamps[static_cast<std::size_t>(AdvanceCount)] = NowMilliseconds;
+				ObservedAdvanceTimestamps[static_cast<std::size_t>(AdvanceCount)] = InNowMilliseconds;
 			}
 			if (AdvanceCount == StopOnFrameIndex)
 			{

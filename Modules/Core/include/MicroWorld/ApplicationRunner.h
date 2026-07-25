@@ -13,7 +13,7 @@ namespace MicroWorld
  * noexcept is part of the type, so a platform's existing sleep function binds with
  * no wrapper and the compiler rejects one that could throw into a noexcept Run.
  */
-using FSleepFunction = void (*)(DurationMilliseconds SleepDurationMilliseconds) noexcept;
+using FSleepFunction = void (*)(DurationMilliseconds InSleepDurationMilliseconds) noexcept;
 
 /**
  * Runs one application: begin once, then advance and sleep until a frame fails.
@@ -27,8 +27,8 @@ class TApplicationRunner final
 {
 public:
 	/** Binds the clock, the sleep function, and the frame period; none of the three can change later. */
-	TApplicationRunner(TimeSourceType& InTimeSource, const FSleepFunction InSleepFunction, const DurationMilliseconds InPacingMilliseconds) noexcept
-		: TimeSource(InTimeSource), SleepFunction(InSleepFunction), PacingMilliseconds(InPacingMilliseconds)
+	TApplicationRunner(TimeSourceType& InTimeSource, const FSleepFunction InSleep, const DurationMilliseconds InPacingMilliseconds) noexcept
+		: TimeSource(InTimeSource), SleepFunction(InSleep), PacingMilliseconds(InPacingMilliseconds)
 	{
 	}
 
@@ -47,9 +47,9 @@ public:
 	 * latched Failed, so EndPlay could only answer InvalidLifecycle and would hide
 	 * the real reason.
 	 */
-	ERuntimeResult Run(FApplication& Application) noexcept
+	ERuntimeResult Run(FApplication& InApplication) noexcept
 	{
-		const ERuntimeResult BeginResult = Application.BeginPlay(TimeSource.Now());
+		const ERuntimeResult BeginResult = InApplication.BeginPlay(TimeSource.Now());
 		if (BeginResult != ERuntimeResult::Success)
 		{
 			return BeginResult;
@@ -57,10 +57,10 @@ public:
 
 		for (;;)
 		{
-			const ERuntimeResult FrameResult = Application.Advance(TimeSource.Now());
+			const ERuntimeResult FrameResult = InApplication.Advance(TimeSource.Now());
 			if (FrameResult != ERuntimeResult::Success)
 			{
-				(void)Application.EndPlay();
+				(void)InApplication.EndPlay();
 				return FrameResult;
 			}
 

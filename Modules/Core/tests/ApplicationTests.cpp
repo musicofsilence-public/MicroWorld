@@ -18,7 +18,7 @@ namespace
 	{
 	public:
 		/** Drives the next OnBeginPlay result so the failed-begin path is reachable from a test. */
-		void ConfigureBeginResult(MicroWorld::ERuntimeResult Result) noexcept { ConfiguredBeginResult = Result; }
+		void ConfigureBeginResult(MicroWorld::ERuntimeResult InResult) noexcept { ConfiguredBeginResult = InResult; }
 
 		/** Observes how many times OnBeginPlay fired, since double-begin must not re-invoke it. */
 		int BeginPlayCount{0};

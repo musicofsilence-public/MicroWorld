@@ -10,30 +10,30 @@ class FTestContext final
 {
 public:
 	/** Associates every failure with one behavior-oriented test name. */
-	explicit FTestContext(const char* const TestName) noexcept : Name(TestName) {}
+	explicit FTestContext(const char* const InTestName) noexcept : Name(InTestName) {}
 
 	/** Records only unequal outcomes so successful assertions remain allocation-free. */
 	template<typename ExpectedType, typename ActualType>
 	void ExpectEqual(
-		const ExpectedType& Expected, const ActualType& Actual, const char* const Message, const char* const File, const int Line) noexcept
+		const ExpectedType& InExpected, const ActualType& InActual, const char* const InMessage, const char* const InFile, const int InLine) noexcept
 	{
-		if (Expected == Actual)
+		if (InExpected == InActual)
 		{
 			return;
 		}
 
-		RecordFailure(Message, File, Line);
+		RecordFailure(InMessage, InFile, InLine);
 	}
 
 	/** Records a failed predicate with caller location for actionable diagnostics. */
-	void ExpectTrue(const bool bCondition, const char* const Message, const char* const File, const int Line) noexcept
+	void ExpectTrue(const bool bInCondition, const char* const InMessage, const char* const InFile, const int InLine) noexcept
 	{
-		if (bCondition)
+		if (bInCondition)
 		{
 			return;
 		}
 
-		RecordFailure(Message, File, Line);
+		RecordFailure(InMessage, InFile, InLine);
 	}
 
 	/** Lets the runner classify the test without exposing mutable failure state. */
@@ -41,10 +41,10 @@ public:
 
 private:
 	/** Centralizes bounded failure reporting so assertion helpers stay consistent. */
-	void RecordFailure(const char* const Message, const char* const File, const int Line) noexcept
+	void RecordFailure(const char* const InMessage, const char* const InFile, const int InLine) noexcept
 	{
 		++FailureCount;
-		std::printf("[ASSERT] %s: %s (%s:%d)\n", Name, Message, File, Line);
+		std::printf("[ASSERT] %s: %s (%s:%d)\n", Name, InMessage, InFile, InLine);
 	}
 
 	/** Keeps diagnostics tied to the behavior contract selected at registration. */
@@ -72,8 +72,8 @@ class FTestRegistration final
 {
 public:
 	/** Prepends one static test without heap allocation or external registration code. */
-	FTestRegistration(const char* const TestName, const FTestFunction TestFunction) noexcept
-		: Name(TestName), Function(TestFunction), Next(GetTestRegistrationHead())
+	FTestRegistration(const char* const InTestName, const FTestFunction InTestFunction) noexcept
+		: Name(InTestName), Function(InTestFunction), Next(GetTestRegistrationHead())
 	{
 		GetTestRegistrationHead() = this;
 	}
