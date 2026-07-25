@@ -7,9 +7,9 @@
 namespace MicroWorld
 {
 
-FEsp32UdpDriver::FEsp32UdpDriver(const std::uint16_t BindPort) noexcept
+FEsp32UdpDriver::FEsp32UdpDriver(const std::uint16_t InBindPort) noexcept
 {
-	const Detail::FOpenedSocket Opened = Detail::OpenBoundUdpSocket(BindPort);
+	const Detail::FOpenedSocket Opened = Detail::OpenBoundUdpSocket(InBindPort);
 	if (!Opened.bOpen)
 	{
 		SocketHandle = 0;
@@ -30,28 +30,28 @@ FEsp32UdpDriver::~FEsp32UdpDriver() noexcept
 	}
 }
 
-ENetResult FEsp32UdpDriver::TrySend(const FNetAddress& To, TSpan<const std::uint8_t> Packet) noexcept
+ENetResult FEsp32UdpDriver::TrySend(const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
 {
 	if (!bOpen)
 	{
 		return ENetResult::Unavailable;
 	}
 	// Validate every argument before any syscall so a rejection is truly transactional.
-	if (!IsUdpAddress(To))
+	if (!IsUdpAddress(InTo))
 	{
 		return ENetResult::Invalid;
 	}
-	const std::size_t PacketSize = Packet.Size();
+	const std::size_t PacketSize = InPacket.Size();
 	if (PacketSize > UdpMaxPacketBytes)
 	{
 		return ENetResult::Invalid;
 	}
-	if (PacketSize != 0 && Packet.Data() == nullptr)
+	if (PacketSize != 0 && InPacket.Data() == nullptr)
 	{
 		return ENetResult::Invalid;
 	}
-	const sockaddr_in Destination = Detail::MakeSockAddrIn(To.Bytes[0], To.Bytes[1], To.Bytes[2], To.Bytes[3], UdpAddressPort(To));
-	const Detail::ESendOutcome Outcome = Detail::SendDatagram(Detail::AsSocketHandle(SocketHandle), Packet.Data(), PacketSize, Destination);
+	const sockaddr_in Destination = Detail::MakeSockAddrIn(InTo.Bytes[0], InTo.Bytes[1], InTo.Bytes[2], InTo.Bytes[3], UdpAddressPort(InTo));
+	const Detail::ESendOutcome Outcome = Detail::SendDatagram(Detail::AsSocketHandle(SocketHandle), InPacket.Data(), PacketSize, Destination);
 	switch (Outcome)
 	{
 		case Detail::ESendOutcome::Success:
@@ -75,9 +75,9 @@ namespace
 	 * datagram is left unconsumed so the receive stays transactional). `Success`
 	 * means a datagram is ready and fits, so the caller should consume it next.
 	 */
-	ENetResult ProbeAndClassify(const Detail::FSocketHandle Socket, const std::size_t Capacity) noexcept
+	ENetResult ProbeAndClassify(const Detail::FSocketHandle InSocket, const std::size_t InCapacity) noexcept
 	{
-		const Detail::FPeekProbe Probe = Detail::ProbeReadableDatagram(Socket);
+		const Detail::FPeekProbe Probe = Detail::ProbeReadableDatagram(InSocket);
 		switch (Probe.Status)
 		{
 			case Detail::EPeekStatus::WouldBlock:
@@ -88,7 +88,7 @@ namespace
 				break;
 		}
 		// Single fits-vs-Full decision: the caller's destination is untouched on Full.
-		if (Probe.BytesReady > Capacity)
+		if (Probe.BytesReady > InCapacity)
 		{
 			return ENetResult::Full;
 		}
@@ -97,7 +97,7 @@ namespace
 
 } // namespace
 
-ENetResult FEsp32UdpDriver::TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> Destination, FNetReceiveResult& OutResult) noexcept
+ENetResult FEsp32UdpDriver::TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept
 {
 	// Keep the sizing scratch and the advertised max in lockstep; both are 1200.
 	static_assert(Detail::PeekScratchBytes == FEsp32UdpDriver::UdpMaxPacketBytes, "Peek scratch must match the advertised packet maximum.");
@@ -107,8 +107,8 @@ ENetResult FEsp32UdpDriver::TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t>
 		return ENetResult::Unavailable;
 	}
 	// Reject a null destination with nonzero length before touching the socket.
-	const std::size_t Capacity = Destination.Size();
-	if (Capacity != 0 && Destination.Data() == nullptr)
+	const std::size_t Capacity = InDestination.Size();
+	if (Capacity != 0 && InDestination.Data() == nullptr)
 	{
 		return ENetResult::Invalid;
 	}
@@ -120,7 +120,7 @@ ENetResult FEsp32UdpDriver::TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t>
 	// The fits check already passed on the peeked head datagram; this consuming
 	// read removes exactly that datagram.
 	sockaddr_in Sender{};
-	const Detail::FConsumeResult Consumed = Detail::ConsumeDatagram(Detail::AsSocketHandle(SocketHandle), Destination.Data(), Capacity, Sender);
+	const Detail::FConsumeResult Consumed = Detail::ConsumeDatagram(Detail::AsSocketHandle(SocketHandle), InDestination.Data(), Capacity, Sender);
 	if (!Consumed.bSuccess)
 	{
 		// A peer may have evicted the probed datagram; treat that race as transient.
@@ -147,13 +147,13 @@ std::uint16_t FEsp32UdpDriver::BoundPort() const noexcept
 	return BoundPortValue;
 }
 
-bool FEsp32UdpDriver::PollReadable(const DurationMilliseconds TimeoutMilliseconds) const noexcept
+bool FEsp32UdpDriver::PollReadable(const DurationMilliseconds InTimeoutMilliseconds) const noexcept
 {
 	if (!bOpen)
 	{
 		return false;
 	}
-	return Detail::WaitForReadable(Detail::AsSocketHandle(SocketHandle), TimeoutMilliseconds);
+	return Detail::WaitForReadable(Detail::AsSocketHandle(SocketHandle), InTimeoutMilliseconds);
 }
 
 } // namespace MicroWorld

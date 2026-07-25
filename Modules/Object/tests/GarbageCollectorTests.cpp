@@ -57,17 +57,17 @@ public:
 	~FGraphObject() noexcept override { ++State.DestructionCount; }
 
 	/** Replaces one bounded outgoing edge without changing target lifetime. */
-	void SetReference(const std::size_t Index, const TObjectPtr<FGraphObject> Reference) noexcept
+	void SetReference(const std::size_t InIndex, const TObjectPtr<FGraphObject> InReference) noexcept
 	{
-		if (Index >= References.size())
+		if (InIndex >= References.size())
 		{
 			return;
 		}
 
-		References[Index] = Reference;
-		if (ReferenceCount <= Index)
+		References[InIndex] = InReference;
+		if (ReferenceCount <= InIndex)
 		{
-			ReferenceCount = Index + 1;
+			ReferenceCount = InIndex + 1;
 		}
 	}
 
@@ -80,7 +80,7 @@ public:
 
 protected:
 	/** Presents every configured edge to the active iterative collector. */
-	void VisitReferences(FReferenceCollector& Collector) noexcept override
+	void VisitReferences(FReferenceCollector& InCollector) noexcept override
 	{
 		if (ReentrantCollector != nullptr && ReentrantResult != nullptr)
 		{
@@ -89,7 +89,7 @@ protected:
 
 		for (std::size_t Index = 0; Index < ReferenceCount; ++Index)
 		{
-			Collector.AddReferencedObject(References[Index]);
+			InCollector.AddReferencedObject(References[Index]);
 		}
 	}
 
@@ -147,7 +147,7 @@ public:
 
 protected:
 	/** Exercises TObjectPtr store-origin validation at the collector boundary. */
-	void VisitReferences(FReferenceCollector& Collector) noexcept override { Collector.AddReferencedObject(Reference); }
+	void VisitReferences(FReferenceCollector& InCollector) noexcept override { InCollector.AddReferencedObject(Reference); }
 
 	/** Records managed holder teardown before exact destruction. */
 	void BeginDestroy() noexcept override { ++State.BeginDestroyCount; }
@@ -166,7 +166,7 @@ class TGraphStoreFixture final
 {
 public:
 	/** Binds the store to this fixture's complete aligned caller-owned storage. */
-	explicit TGraphStoreFixture(const MicroWorld::FClassRegistryView Classes) noexcept : Store(MakeStorage(), Classes) {}
+	explicit TGraphStoreFixture(const MicroWorld::FClassRegistryView InClasses) noexcept : Store(MakeStorage(), InClasses) {}
 
 	/** Exposes the public store under test. */
 	FObjectStore& GetStore() noexcept { return Store; }
@@ -204,11 +204,11 @@ private:
 };
 
 /** Registers the one graph-node class used by a fresh test. */
-EObjectResult RegisterGraphDescriptor(TClassRegistry<2>& Registry, const FClassDescriptor*& OutDescriptor) noexcept
+EObjectResult RegisterGraphDescriptor(TClassRegistry<2>& InRegistry, const FClassDescriptor*& OutDescriptor) noexcept
 {
 	const FClassDescriptor Candidate = MakeClassDescriptor<FGraphObject>(1, "GraphObject", nullptr, &TraceManagedObjectReferences);
-	const EObjectResult Result = Registry.Register(Candidate);
-	OutDescriptor = Registry.Find(Candidate.TypeId);
+	const EObjectResult Result = InRegistry.Register(Candidate);
+	OutDescriptor = InRegistry.Find(Candidate.TypeId);
 	return Result;
 }
 

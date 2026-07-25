@@ -29,15 +29,15 @@ public:
 	static constexpr std::size_t UdpMaxPacketBytes = 1200;
 
 	/**
-	 * Opens one non-blocking UDP socket bound to `127.0.0.1:BindPort`.
+	 * Opens one non-blocking UDP socket bound to `127.0.0.1:InBindPort`.
 	 *
-	 * A `BindPort` of zero asks the host for an ephemeral port, readable through
+	 * An `InBindPort` of zero asks the host for an ephemeral port, readable through
 	 * `BoundPort()`. On any syscall failure the constructor closes what it opened
 	 * and leaves the driver with `IsOpen() == false`; it never throws.
 	 *
-	 * @param BindPort Host-order UDP port to bind, or zero for an ephemeral port.
+	 * @param InBindPort Host-order UDP port to bind, or zero for an ephemeral port.
 	 */
-	explicit FHostUdpDriver(std::uint16_t BindPort) noexcept;
+	explicit FHostUdpDriver(std::uint16_t InBindPort) noexcept;
 
 	/** Closes the owned socket and releases the shared socket-stack reference. */
 	~FHostUdpDriver() noexcept override;
@@ -55,18 +55,18 @@ public:
 	FHostUdpDriver& operator=(FHostUdpDriver&&) = delete;
 
 	/**
-	 * Sends one complete datagram to a UDP-encoded `To` address, transactionally.
+	 * Sends one complete datagram to a UDP-encoded `InTo` address, transactionally.
 	 *
 	 * Returns `Invalid` for an address that is not a UDP encoding, an oversize
 	 * packet, or a null span with nonzero length; `Full` when the send would
 	 * block; and `Success` only when the whole datagram was accepted. A
 	 * non-success result leaves the socket state unchanged.
 	 *
-	 * @param To Destination whose bytes encode IPv4 octets and a port.
-	 * @param Packet Caller-owned bytes to deliver as one complete datagram.
+	 * @param InTo Destination whose bytes encode IPv4 octets and a port.
+	 * @param InPacket Caller-owned bytes to deliver as one complete datagram.
 	 * @return Normalized outcome of the single send attempt.
 	 */
-	ENetResult TrySend(const FNetAddress& To, TSpan<const std::uint8_t> Packet) noexcept override;
+	ENetResult TrySend(const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
 	 * Receives at most one datagram into the caller-owned destination, transactionally.
@@ -78,11 +78,11 @@ public:
 	 * sender address into `OutFrom`.
 	 *
 	 * @param OutFrom Filled with the sender's UDP address only on `Success`.
-	 * @param Destination Caller-owned buffer for the received bytes.
+	 * @param InDestination Caller-owned buffer for the received bytes.
 	 * @param OutResult Filled with the received byte count only on `Success`.
 	 * @return Normalized outcome of the single receive attempt.
 	 */
-	ENetResult TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> Destination, FNetReceiveResult& OutResult) noexcept override;
+	ENetResult TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept override;
 
 	/** Reports the largest datagram, in bytes, one send accepts. */
 	std::size_t MaxPacketBytes() const noexcept override;
@@ -94,16 +94,16 @@ public:
 	std::uint16_t BoundPort() const noexcept;
 
 	/**
-	 * Waits up to `TimeoutMilliseconds` for a datagram to be readable on the socket.
+	 * Waits up to `InTimeoutMilliseconds` for a datagram to be readable on the socket.
 	 *
 	 * Uses `select()` with a bounded timeout so host tests and demos can wait for
 	 * readiness deterministically without sleeping in a poll loop. A true return
 	 * means a subsequent `TryReceive` has data to consume.
 	 *
-	 * @param TimeoutMilliseconds Upper bound on the readiness wait.
+	 * @param InTimeoutMilliseconds Upper bound on the readiness wait.
 	 * @return True when the socket is readable within the timeout.
 	 */
-	bool PollReadable(DurationMilliseconds TimeoutMilliseconds) const noexcept;
+	bool PollReadable(DurationMilliseconds InTimeoutMilliseconds) const noexcept;
 
 private:
 	/** Holds one reference to the shared socket-stack lifetime for the owned socket. */

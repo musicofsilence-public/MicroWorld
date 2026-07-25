@@ -46,16 +46,19 @@ public:
 	 * The object store assigns canonical ownership only after construction
 	 * publishes this UObject, so callers cannot supply a second store identity.
 	 */
-	explicit AActor(FActorComponentRegistryReference ComponentStorage, FTickConfiguration TickConfiguration = {}) noexcept;
+	explicit AActor(FActorComponentRegistryReference InComponentStorage, FTickConfiguration InTickConfiguration = {}) noexcept;
 
 	/** Keeps exact derived destruction behind the descriptor/store boundary. */
 	~AActor() noexcept override;
 
 	/** Forwards tick enablement to the primary tick function. */
-	ERuntimeResult SetTickEnabled(bool bEnabled) noexcept { return FTickable::SetTickEnabled(bEnabled); }
+	ERuntimeResult SetTickEnabled(bool bInEnabled) noexcept { return FTickable::SetTickEnabled(bInEnabled); }
 
 	/** Forwards the minimum tick interval to the primary tick function. */
-	ERuntimeResult SetTickInterval(DurationMilliseconds IntervalMilliseconds) noexcept { return FTickable::SetTickInterval(IntervalMilliseconds); }
+	ERuntimeResult SetTickInterval(DurationMilliseconds InIntervalMilliseconds) noexcept
+	{
+		return FTickable::SetTickInterval(InIntervalMilliseconds);
+	}
 
 	/** Exposes tick enablement using the primary tick function's representation. */
 	bool IsTickEnabled() const noexcept { return FTickable::IsTickEnabled(); }
@@ -85,7 +88,7 @@ public:
 	 * empty, stale, or non-resolvable references atomically: a rejected
 	 * registration leaves the actor and the component unchanged.
 	 */
-	EEngineResult RegisterComponent(TObjectPtr<UActorComponent> Component) noexcept;
+	EEngineResult RegisterComponent(TObjectPtr<UActorComponent> InComponent) noexcept;
 
 protected:
 	/** Runs once after this actor's components have begun play. */
@@ -101,26 +104,26 @@ private:
 	friend class UWorld;
 
 	/** Reports the first reason a component cannot register, or Success. */
-	EEngineResult CheckComponentRegistrable(TObjectPtr<UActorComponent> Component) const noexcept;
+	EEngineResult CheckComponentRegistrable(TObjectPtr<UActorComponent> InComponent) const noexcept;
 
 	/** Links a component to this actor and adds it to the registry after all checks pass. */
-	void PublishComponent(TObjectPtr<UActorComponent> Component) noexcept;
+	void PublishComponent(TObjectPtr<UActorComponent> InComponent) noexcept;
 
 	/** Begins this actor's lifecycle, primary tick, components, and consumer hook. */
-	ERuntimeResult DispatchBeginPlay(TimePointMilliseconds NowMilliseconds) noexcept;
+	ERuntimeResult DispatchBeginPlay(TimePointMilliseconds InNowMilliseconds) noexcept;
 
 	/** Advances this actor's components and primary tick for one dispatcher step. */
-	ERuntimeResult DispatchAdvance(TimePointMilliseconds NowMilliseconds) noexcept;
+	ERuntimeResult DispatchAdvance(TimePointMilliseconds InNowMilliseconds) noexcept;
 
 	/** Ends this actor's consumer hook and components; idempotent after success. */
 	ERuntimeResult DispatchEndPlay() noexcept;
 
 	/** Begins every registered component in order and, on the first failure, ends the
 	 * already-begun components in reverse and fails the actor lifecycle. */
-	ERuntimeResult BeginComponentsWithRollback(TimePointMilliseconds NowMilliseconds) noexcept;
+	ERuntimeResult BeginComponentsWithRollback(TimePointMilliseconds InNowMilliseconds) noexcept;
 
 	/** Binds one weak world handle after same-store registration validation. */
-	void AssignWorld(FObjectHandle World) noexcept;
+	void AssignWorld(FObjectHandle InWorld) noexcept;
 
 	/** Marks every registered component for the store destruction barrier after end. */
 	void MarkRegisteredComponentsPendingDestroy() noexcept;
@@ -129,7 +132,7 @@ private:
 	bool IsRegistrationOpen() const noexcept { return Lifecycle.GetState() == ELifecycleState::Constructed; }
 
 	/** Presents every registered component to the active iterative collector. */
-	void VisitReferences(FReferenceCollector& Collector) noexcept override;
+	void VisitReferences(FReferenceCollector& InCollector) noexcept override;
 
 	/** Holds the unique caller-owned component registry reference for this actor's lifetime. */
 	FActorComponentRegistryReference Components;

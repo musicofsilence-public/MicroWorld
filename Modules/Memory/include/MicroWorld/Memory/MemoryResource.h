@@ -37,9 +37,9 @@ struct FMemoryBlock
  * value placed at the result begins on its own aligned boundary. AlignmentBytes
  * must be a power of two.
  */
-constexpr std::size_t AlignSizeUp(const std::size_t SizeBytes, const std::size_t AlignmentBytes) noexcept
+constexpr std::size_t AlignSizeUp(const std::size_t InSizeBytes, const std::size_t InAlignmentBytes) noexcept
 {
-	return (SizeBytes + AlignmentBytes - 1U) & ~(AlignmentBytes - 1U);
+	return (InSizeBytes + InAlignmentBytes - 1U) & ~(InAlignmentBytes - 1U);
 }
 
 /** Defines explicit allocation over caller-selected storage with no fallback. */
@@ -55,10 +55,10 @@ public:
 	 * The returned block must later be passed unchanged to Deallocate on this
 	 * same resource.
 	 */
-	virtual EMemoryResult TryAllocate(std::size_t SizeBytes, std::size_t AlignmentBytes, FMemoryBlock& OutBlock) noexcept = 0;
+	virtual EMemoryResult TryAllocate(std::size_t InSizeBytes, std::size_t InAlignmentBytes, FMemoryBlock& OutBlock) noexcept = 0;
 
 	/** Releases one exact active block originally returned by this resource. */
-	virtual EMemoryResult Deallocate(FMemoryBlock Block) noexcept = 0;
+	virtual EMemoryResult Deallocate(FMemoryBlock InBlock) noexcept = 0;
 
 	/** Reports the resource's caller-usable byte capacity without metadata. */
 	virtual std::size_t CapacityBytes() const noexcept = 0;

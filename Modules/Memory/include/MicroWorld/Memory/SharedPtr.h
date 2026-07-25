@@ -59,12 +59,12 @@ struct TWeakPointerResult;
  * @tparam ValueType Complete value type whose construction and destruction cannot throw.
  * @tparam Mode Reference-counting execution contract.
  * @tparam ConstructorArgumentTypes Constructor argument types forwarded only after allocation.
- * @param Resource Resource that must outlive every resulting shared and weak handle.
+ * @param InResource Resource that must outlive every resulting shared and weak handle.
  * @param Arguments Arguments forwarded to ValueType's constructor.
  * @return Typed allocation outcome and first strong owner on success.
  */
 template<typename ValueType, ESharedPointerMode Mode = ESharedPointerMode::SingleThreaded, typename... ConstructorArgumentTypes>
-TSharedPointerResult<ValueType, Mode> MakeShared(IMemoryResource& Resource, ConstructorArgumentTypes&&... Arguments) noexcept;
+TSharedPointerResult<ValueType, Mode> MakeShared(IMemoryResource& InResource, ConstructorArgumentTypes&&... Arguments) noexcept;
 
 namespace Detail
 {
@@ -102,9 +102,9 @@ namespace Detail
 	};
 
 	/** Converts allocation-boundary failures into the shared-pointer result domain. */
-	inline ESharedPointerResult ToSharedPointerResult(const EMemoryResult Result) noexcept
+	inline ESharedPointerResult ToSharedPointerResult(const EMemoryResult InResult) noexcept
 	{
-		switch (Result)
+		switch (InResult)
 		{
 			case EMemoryResult::Success:
 				return ESharedPointerResult::Success;
@@ -120,11 +120,11 @@ namespace Detail
 
 	/** Returns an expired control block to its exact resource after its final weak release. */
 	template<typename ValueType>
-	void DestroySharedControlBlock(TSharedControlBlock<ValueType>* const ControlBlock) noexcept
+	void DestroySharedControlBlock(TSharedControlBlock<ValueType>* const InControlBlock) noexcept
 	{
-		IMemoryResource* const Resource = ControlBlock->Resource;
-		const FMemoryBlock Allocation = ControlBlock->Allocation;
-		DestroyAt(ControlBlock);
+		IMemoryResource* const Resource = InControlBlock->Resource;
+		const FMemoryBlock Allocation = InControlBlock->Allocation;
+		DestroyAt(InControlBlock);
 		static_cast<void>(Resource->Deallocate(Allocation));
 	}
 
@@ -150,17 +150,17 @@ namespace Detail
 	/** Constructs the control block and value in one allocation and links the block to its resource. */
 	template<typename ValueType, typename... ConstructorArgumentTypes>
 	TSharedControlBlock<ValueType>* ConstructSharedBlock(
-		IMemoryResource& Resource,
-		const FMemoryBlock Allocation,
-		const std::size_t ValueOffsetBytes,
+		IMemoryResource& InResource,
+		const FMemoryBlock InAllocation,
+		const std::size_t InValueOffsetBytes,
 		ConstructorArgumentTypes&&... Arguments) noexcept
 	{
 		using FControlBlock = TSharedControlBlock<ValueType>;
-		std::byte* const AllocationBytes = static_cast<std::byte*>(Allocation.Address);
+		std::byte* const AllocationBytes = static_cast<std::byte*>(InAllocation.Address);
 		FControlBlock* const ControlBlock = ConstructAt<FControlBlock>(AllocationBytes);
-		ValueType* const Value = ConstructAt<ValueType>(AllocationBytes + ValueOffsetBytes, std::forward<ConstructorArgumentTypes>(Arguments)...);
-		ControlBlock->Resource = &Resource;
-		ControlBlock->Allocation = Allocation;
+		ValueType* const Value = ConstructAt<ValueType>(AllocationBytes + InValueOffsetBytes, std::forward<ConstructorArgumentTypes>(Arguments)...);
+		ControlBlock->Resource = &InResource;
+		ControlBlock->Allocation = InAllocation;
 		ControlBlock->Value = Value;
 		return ControlBlock;
 	}
@@ -274,21 +274,21 @@ private:
 	friend TSharedPointerResult<FactoryValueType, PointerMode> MakeShared(IMemoryResource&, FactoryConstructorArgumentTypes&&...) noexcept;
 
 	/** Destroys the owned value in place while blocking weak-side reclamation mid-teardown. */
-	static void DestroyValueInPlace(FControlBlock* const ReleasedControlBlock) noexcept
+	static void DestroyValueInPlace(FControlBlock* const InReleasedControlBlock) noexcept
 	{
-		ValueType* const Value = ReleasedControlBlock->Value;
-		ReleasedControlBlock->Value = nullptr;
-		ReleasedControlBlock->bValueDestructionInProgress = true;
+		ValueType* const Value = InReleasedControlBlock->Value;
+		InReleasedControlBlock->Value = nullptr;
+		InReleasedControlBlock->bValueDestructionInProgress = true;
 		Detail::DestroyAt(Value);
-		ReleasedControlBlock->bValueDestructionInProgress = false;
+		InReleasedControlBlock->bValueDestructionInProgress = false;
 	}
 
 	/** Frees the control block once no strong or weak handle can still observe it. */
-	static void ReclaimControlBlockIfUnreferenced(FControlBlock* const ReleasedControlBlock) noexcept
+	static void ReclaimControlBlockIfUnreferenced(FControlBlock* const InReleasedControlBlock) noexcept
 	{
-		if (ReleasedControlBlock->WeakReferenceCount == 0)
+		if (InReleasedControlBlock->WeakReferenceCount == 0)
 		{
-			Detail::DestroySharedControlBlock(ReleasedControlBlock);
+			Detail::DestroySharedControlBlock(InReleasedControlBlock);
 		}
 	}
 
@@ -518,7 +518,7 @@ TSharedPointerResult<ValueType, Mode> TWeakPtr<ValueType, Mode>::Pin() const noe
 }
 
 template<typename ValueType, ESharedPointerMode Mode, typename... ConstructorArgumentTypes>
-TSharedPointerResult<ValueType, Mode> MakeShared(IMemoryResource& Resource, ConstructorArgumentTypes&&... Arguments) noexcept
+TSharedPointerResult<ValueType, Mode> MakeShared(IMemoryResource& InResource, ConstructorArgumentTypes&&... Arguments) noexcept
 {
 	static_assert(Mode == ESharedPointerMode::SingleThreaded, "Only single-threaded shared pointers are available.");
 	static_assert(!std::is_array<ValueType>::value, "MakeShared constructs one non-array value.");
@@ -528,7 +528,7 @@ TSharedPointerResult<ValueType, Mode> MakeShared(IMemoryResource& Resource, Cons
 	using FLayout = Detail::TSharedAllocationLayout<ValueType>;
 
 	FMemoryBlock Allocation{};
-	const EMemoryResult AllocationResult = Resource.TryAllocate(FLayout::CombinedSizeBytes, FLayout::CombinedAlignmentBytes, Allocation);
+	const EMemoryResult AllocationResult = InResource.TryAllocate(FLayout::CombinedSizeBytes, FLayout::CombinedAlignmentBytes, Allocation);
 	if (AllocationResult != EMemoryResult::Success)
 	{
 		TSharedPointerResult<ValueType, Mode> FailedResult{};
@@ -537,7 +537,7 @@ TSharedPointerResult<ValueType, Mode> MakeShared(IMemoryResource& Resource, Cons
 	}
 
 	Detail::TSharedControlBlock<ValueType>* const ControlBlock = Detail::ConstructSharedBlock<ValueType>(
-		Resource, Allocation, FLayout::ValueOffsetBytes, std::forward<ConstructorArgumentTypes>(Arguments)...);
+		InResource, Allocation, FLayout::ValueOffsetBytes, std::forward<ConstructorArgumentTypes>(Arguments)...);
 
 	TSharedPointerResult<ValueType, Mode> SuccessfulResult{};
 	SuccessfulResult.Result = ESharedPointerResult::Success;

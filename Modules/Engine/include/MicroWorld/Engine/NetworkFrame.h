@@ -24,10 +24,10 @@ public:
 	virtual ~INetworkFrame() noexcept = default;
 
 	/** Processes inbound traffic for one frame: drains the driver, dispatches messages, ages peers. */
-	virtual void TickDispatch(TimePointMilliseconds NowMilliseconds) noexcept = 0;
+	virtual void TickDispatch(TimePointMilliseconds InNowMilliseconds) noexcept = 0;
 
 	/** Sends outbound traffic for one frame: flushes the queue and emits due heartbeats. */
-	virtual void TickFlush(TimePointMilliseconds NowMilliseconds) noexcept = 0;
+	virtual void TickFlush(TimePointMilliseconds InNowMilliseconds) noexcept = 0;
 };
 
 /**
@@ -47,10 +47,10 @@ public:
 	explicit TNetHostFrame(TNet& InHost) noexcept : Host(InHost) {}
 
 	/** Forwards the frame's inbound step to the bound host. */
-	void TickDispatch(const TimePointMilliseconds NowMilliseconds) noexcept override { (void)Host.PumpReceive(NowMilliseconds); }
+	void TickDispatch(const TimePointMilliseconds InNowMilliseconds) noexcept override { (void)Host.PumpReceive(InNowMilliseconds); }
 
 	/** Forwards the frame's outbound step to the bound host. */
-	void TickFlush(const TimePointMilliseconds NowMilliseconds) noexcept override { (void)Host.PumpSend(NowMilliseconds); }
+	void TickFlush(const TimePointMilliseconds InNowMilliseconds) noexcept override { (void)Host.PumpSend(InNowMilliseconds); }
 
 private:
 	/** The externally owned network host this adapter drives; never owned here. */
@@ -90,11 +90,11 @@ public:
 	 * Rejects a frame already present as Duplicate (matched by pointer identity) and a full
 	 * set as CapacityExceeded, leaving the set unchanged in both cases.
 	 */
-	EEngineResult Add(INetworkFrame& Frame) noexcept
+	EEngineResult Add(INetworkFrame& InFrame) noexcept
 	{
 		for (std::size_t Index = 0; Index < Count; ++Index)
 		{
-			if (Frames[Index] == &Frame)
+			if (Frames[Index] == &InFrame)
 			{
 				return EEngineResult::Duplicate;
 			}
@@ -104,26 +104,26 @@ public:
 			return EEngineResult::CapacityExceeded;
 		}
 
-		Frames[Count] = &Frame;
+		Frames[Count] = &InFrame;
 		++Count;
 		return EEngineResult::Success;
 	}
 
 	/** Dispatches every added frame's inbound step in add-order. An empty set does nothing. */
-	void TickDispatch(const TimePointMilliseconds NowMilliseconds) noexcept override
+	void TickDispatch(const TimePointMilliseconds InNowMilliseconds) noexcept override
 	{
 		for (std::size_t Index = 0; Index < Count; ++Index)
 		{
-			Frames[Index]->TickDispatch(NowMilliseconds);
+			Frames[Index]->TickDispatch(InNowMilliseconds);
 		}
 	}
 
 	/** Flushes every added frame's outbound step in reverse add-order. An empty set does nothing. */
-	void TickFlush(const TimePointMilliseconds NowMilliseconds) noexcept override
+	void TickFlush(const TimePointMilliseconds InNowMilliseconds) noexcept override
 	{
 		for (std::size_t Index = Count; Index > 0; --Index)
 		{
-			Frames[Index - 1]->TickFlush(NowMilliseconds);
+			Frames[Index - 1]->TickFlush(InNowMilliseconds);
 		}
 	}
 

@@ -38,7 +38,7 @@ class FI2cReceiveInbox
 {
 public:
 	/** Pushes one received byte from ISR context, dropping it when the ring is full so the ISR never blocks. */
-	void PushFromIsr(std::uint8_t Byte) noexcept;
+	void PushFromIsr(std::uint8_t InByte) noexcept;
 
 	/** Pops one buffered byte into `OutByte`, returning false when the ring is empty. */
 	bool Pop(std::uint8_t& OutByte) noexcept;
@@ -127,9 +127,9 @@ public:
 	 * as its device. On any failure the constructor rolls back what it allocated and leaves `IsOpen() == false`;
 	 * it never throws. The local node id is stamped on every outgoing frame.
 	 *
-	 * @param Config Bus, GPIO, speed, slave-address, and local node id parameters.
+	 * @param InConfig Bus, GPIO, speed, slave-address, and local node id parameters.
 	 */
-	explicit FEsp32I2cMasterDriver(const FEsp32I2cMasterConfig& Config) noexcept;
+	explicit FEsp32I2cMasterDriver(const FEsp32I2cMasterConfig& InConfig) noexcept;
 
 	/** Removes the device and deletes the master bus opened by construction. */
 	~FEsp32I2cMasterDriver() noexcept override;
@@ -153,11 +153,11 @@ public:
 	 * nonzero length; `Full` when the slave does not acknowledge or the bus is busy; and `Success` only when the
 	 * whole frame was clocked out. A non-success result leaves the bus state unchanged.
 	 *
-	 * @param To Destination whose single byte must be an I2C node id (validated; the wire is point-to-point).
-	 * @param Packet Caller-owned payload bytes framed and sent as one message.
+	 * @param InTo Destination whose single byte must be an I2C node id (validated; the wire is point-to-point).
+	 * @param InPacket Caller-owned payload bytes framed and sent as one message.
 	 * @return Normalized outcome of the single send attempt.
 	 */
-	ENetResult TrySend(const FNetAddress& To, TSpan<const std::uint8_t> Packet) noexcept override;
+	ENetResult TrySend(const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
 	 * Receives at most one framed message by clocking one whole-frame window from the slave, transactionally.
@@ -168,11 +168,11 @@ public:
 	 * complete frame copies its payload, byte count, and sender node id into `OutFrom`.
 	 *
 	 * @param OutFrom Filled with the sender's I2C address only on `Success`.
-	 * @param Destination Caller-owned buffer for the received payload bytes.
+	 * @param InDestination Caller-owned buffer for the received payload bytes.
 	 * @param OutResult Filled with the received byte count only on `Success`.
 	 * @return Normalized outcome of the single receive attempt.
 	 */
-	ENetResult TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> Destination, FNetReceiveResult& OutResult) noexcept override;
+	ENetResult TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept override;
 
 	/** Reports the largest payload, in bytes, one send accepts (excludes framing overhead). */
 	std::size_t MaxPacketBytes() const noexcept override;
@@ -215,9 +215,9 @@ public:
 	 * platform `on_receive` callback that fills this driver's inbox. On any failure the constructor rolls back and
 	 * leaves `IsOpen() == false`; it never throws. The local node id is stamped on every outgoing frame.
 	 *
-	 * @param Config Bus, GPIO, own-address, and local node id parameters.
+	 * @param InConfig Bus, GPIO, own-address, and local node id parameters.
 	 */
-	explicit FEsp32I2cSlaveDriver(const FEsp32I2cSlaveConfig& Config) noexcept;
+	explicit FEsp32I2cSlaveDriver(const FEsp32I2cSlaveConfig& InConfig) noexcept;
 
 	/** Deletes the slave device opened by construction. */
 	~FEsp32I2cSlaveDriver() noexcept override;
@@ -241,11 +241,11 @@ public:
 	 * nonzero length; `Full` when the transmit ring cannot take the whole frame (any partial bytes are discarded
 	 * so a half-frame never reaches the master); and `Success` only when the whole frame was queued.
 	 *
-	 * @param To Destination whose single byte must be an I2C node id (validated; the wire is point-to-point).
-	 * @param Packet Caller-owned payload bytes framed and staged as one message.
+	 * @param InTo Destination whose single byte must be an I2C node id (validated; the wire is point-to-point).
+	 * @param InPacket Caller-owned payload bytes framed and staged as one message.
 	 * @return Normalized outcome of the single send attempt.
 	 */
-	ENetResult TrySend(const FNetAddress& To, TSpan<const std::uint8_t> Packet) noexcept override;
+	ENetResult TrySend(const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
 	 * Receives at most one framed message by draining the ISR-filled inbox, transactionally.
@@ -256,11 +256,11 @@ public:
 	 * copies its payload, byte count, and sender node id into `OutFrom`.
 	 *
 	 * @param OutFrom Filled with the sender's I2C address only on `Success`.
-	 * @param Destination Caller-owned buffer for the received payload bytes.
+	 * @param InDestination Caller-owned buffer for the received payload bytes.
 	 * @param OutResult Filled with the received byte count only on `Success`.
 	 * @return Normalized outcome of the single receive attempt.
 	 */
-	ENetResult TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> Destination, FNetReceiveResult& OutResult) noexcept override;
+	ENetResult TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept override;
 
 	/** Reports the largest payload, in bytes, one send accepts (excludes framing overhead). */
 	std::size_t MaxPacketBytes() const noexcept override;

@@ -43,7 +43,7 @@ public:
 class FPlainActor final : public AActor
 {
 public:
-	explicit FPlainActor(FActorComponentRegistryReference Components) noexcept : AActor(std::move(Components)) {}
+	explicit FPlainActor(FActorComponentRegistryReference InComponents) noexcept : AActor(std::move(InComponents)) {}
 };
 
 constexpr MicroWorld::FTypeId PlainActorTypeId{0x00020001u};
@@ -53,15 +53,15 @@ constexpr MicroWorld::FTypeId PlainComponentTypeId{0x00020002u};
 using FRegistrationEnvironment = TEngineEnvironment<256, 16, 16, 4>;
 
 /** Builds a plain actor in the environment through its own derived descriptor. */
-TObjectPtr<FPlainActor> MakePlainActor(FRegistrationEnvironment& Env, FActorComponentRegistryReference Components) noexcept
+TObjectPtr<FPlainActor> MakePlainActor(FRegistrationEnvironment& InEnv, FActorComponentRegistryReference InComponents) noexcept
 {
-	return Env.CreateDerivedObject<FPlainActor>(PlainActorTypeId, "PlainActor", std::move(Components));
+	return InEnv.CreateDerivedObject<FPlainActor>(PlainActorTypeId, "PlainActor", std::move(InComponents));
 }
 
 /** Builds a plain component in the environment through its own derived descriptor. */
-TObjectPtr<FPlainComponent> MakePlainComponent(FRegistrationEnvironment& Env) noexcept
+TObjectPtr<FPlainComponent> MakePlainComponent(FRegistrationEnvironment& InEnv) noexcept
 {
-	return Env.CreateDerivedObject<FPlainComponent>(PlainComponentTypeId, "PlainComponent");
+	return InEnv.CreateDerivedObject<FPlainComponent>(PlainComponentTypeId, "PlainComponent");
 }
 
 /** Builds a fresh standalone store so cross-store tests can use a second owner. */

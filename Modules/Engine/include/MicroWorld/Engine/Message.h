@@ -81,16 +81,16 @@ namespace Detail
 {
 
 	/** Writes one 16-bit value into two bytes, least-significant byte first. */
-	inline void WriteMessageUint16LittleEndian(const std::uint16_t Value, std::uint8_t* const OutBytes) noexcept
+	inline void WriteMessageUint16LittleEndian(const std::uint16_t InValue, std::uint8_t* const OutBytes) noexcept
 	{
-		OutBytes[0] = static_cast<std::uint8_t>(Value & 0xFFu);
-		OutBytes[1] = static_cast<std::uint8_t>((Value >> 8) & 0xFFu);
+		OutBytes[0] = static_cast<std::uint8_t>(InValue & 0xFFu);
+		OutBytes[1] = static_cast<std::uint8_t>((InValue >> 8) & 0xFFu);
 	}
 
 	/** Reads one 16-bit value from two bytes, least-significant byte first. */
-	inline std::uint16_t ReadMessageUint16LittleEndian(const std::uint8_t* const Bytes) noexcept
+	inline std::uint16_t ReadMessageUint16LittleEndian(const std::uint8_t* const InBytes) noexcept
 	{
-		return static_cast<std::uint16_t>(static_cast<std::uint16_t>(Bytes[0]) | (static_cast<std::uint16_t>(Bytes[1]) << 8));
+		return static_cast<std::uint16_t>(static_cast<std::uint16_t>(InBytes[0]) | (static_cast<std::uint16_t>(InBytes[1]) << 8));
 	}
 
 } // namespace Detail
@@ -105,36 +105,36 @@ namespace Detail
  * immediately by the payload bytes, and OutWrittenBytes is set to ActorMessageHeaderBytes plus
  * Payload.Size().
  *
- * @param Header Message identity written into the six-byte encoded header.
- * @param Payload Caller-owned payload bytes copied immediately after the header.
- * @param OutEncoded Caller-owned destination for the encoded header and payload.
+ * @param InHeader Message identity written into the six-byte encoded header.
+ * @param InPayload Caller-owned payload bytes copied immediately after the header.
+ * @param InEncoded Caller-owned destination for the encoded header and payload.
  * @param OutWrittenBytes Filled with the total byte count written only on Success.
  * @return Outcome of the single encode attempt.
  */
 inline EMessageResult EncodeActorMessage(
-	const FActorMessageHeader& Header,
-	const TSpan<const std::uint8_t> Payload,
-	const TSpan<std::uint8_t> OutEncoded,
+	const FActorMessageHeader& InHeader,
+	const TSpan<const std::uint8_t> InPayload,
+	const TSpan<std::uint8_t> InEncoded,
 	std::size_t& OutWrittenBytes) noexcept
 {
-	if (Header.MessageTypeId == 0)
+	if (InHeader.MessageTypeId == 0)
 	{
 		return EMessageResult::InvalidType;
 	}
 
-	const std::size_t EncodedSize = ActorMessageHeaderBytes + Payload.Size();
-	if (EncodedSize > OutEncoded.Size())
+	const std::size_t EncodedSize = ActorMessageHeaderBytes + InPayload.Size();
+	if (EncodedSize > InEncoded.Size())
 	{
 		return EMessageResult::PayloadTooLarge;
 	}
 
-	std::uint8_t* const Destination = OutEncoded.Data();
-	Detail::WriteMessageUint16LittleEndian(Header.MessageTypeId, &Destination[0]);
-	Detail::WriteMessageUint16LittleEndian(Header.TargetActorId, &Destination[2]);
-	Detail::WriteMessageUint16LittleEndian(Header.SenderActorId, &Destination[4]);
+	std::uint8_t* const Destination = InEncoded.Data();
+	Detail::WriteMessageUint16LittleEndian(InHeader.MessageTypeId, &Destination[0]);
+	Detail::WriteMessageUint16LittleEndian(InHeader.TargetActorId, &Destination[2]);
+	Detail::WriteMessageUint16LittleEndian(InHeader.SenderActorId, &Destination[4]);
 
-	const std::uint8_t* const PayloadData = Payload.Data();
-	for (std::size_t Index = 0; Index < Payload.Size(); ++Index)
+	const std::uint8_t* const PayloadData = InPayload.Data();
+	for (std::size_t Index = 0; Index < InPayload.Size(); ++Index)
 	{
 		Destination[ActorMessageHeaderBytes + Index] = PayloadData[Index];
 	}
@@ -152,20 +152,20 @@ inline EMessageResult EncodeActorMessage(
  * caller passed them. On Success OutHeader receives the three little-endian header fields and
  * OutPayload views the remaining bytes of Encoded without copying them.
  *
- * @param Encoded Caller-owned bytes previously produced by EncodeActorMessage.
+ * @param InEncoded Caller-owned bytes previously produced by EncodeActorMessage.
  * @param OutHeader Filled with the decoded header fields only on Success.
  * @param OutPayload Filled with a view of the payload bytes only on Success.
  * @return Outcome of the single decode attempt.
  */
 inline EMessageResult DecodeActorMessage(
-	const TSpan<const std::uint8_t> Encoded, FActorMessageHeader& OutHeader, TSpan<const std::uint8_t>& OutPayload) noexcept
+	const TSpan<const std::uint8_t> InEncoded, FActorMessageHeader& OutHeader, TSpan<const std::uint8_t>& OutPayload) noexcept
 {
-	if (Encoded.Size() < ActorMessageHeaderBytes)
+	if (InEncoded.Size() < ActorMessageHeaderBytes)
 	{
 		return EMessageResult::PayloadTooLarge;
 	}
 
-	const std::uint8_t* const Source = Encoded.Data();
+	const std::uint8_t* const Source = InEncoded.Data();
 	FActorMessageHeader DecodedHeader;
 	DecodedHeader.MessageTypeId = Detail::ReadMessageUint16LittleEndian(&Source[0]);
 	DecodedHeader.TargetActorId = Detail::ReadMessageUint16LittleEndian(&Source[2]);
@@ -176,7 +176,7 @@ inline EMessageResult DecodeActorMessage(
 	}
 
 	OutHeader = DecodedHeader;
-	OutPayload = TSpan<const std::uint8_t>(Source + ActorMessageHeaderBytes, Encoded.Size() - ActorMessageHeaderBytes);
+	OutPayload = TSpan<const std::uint8_t>(Source + ActorMessageHeaderBytes, InEncoded.Size() - ActorMessageHeaderBytes);
 	return EMessageResult::Success;
 }
 
@@ -218,13 +218,16 @@ struct FMessageHandlerHandle final
 	constexpr bool IsValid() const noexcept { return Index != InvalidIndex && Generation != 0; }
 
 	/** Compares the complete stable handler identity. */
-	friend constexpr bool operator==(const FMessageHandlerHandle Left, const FMessageHandlerHandle Right) noexcept
+	friend constexpr bool operator==(const FMessageHandlerHandle InLeft, const FMessageHandlerHandle InRight) noexcept
 	{
-		return Left.Index == Right.Index && Left.Generation == Right.Generation;
+		return InLeft.Index == InRight.Index && InLeft.Generation == InRight.Generation;
 	}
 
 	/** Distinguishes handles whose slot or generation identity differs. */
-	friend constexpr bool operator!=(const FMessageHandlerHandle Left, const FMessageHandlerHandle Right) noexcept { return !(Left == Right); }
+	friend constexpr bool operator!=(const FMessageHandlerHandle InLeft, const FMessageHandlerHandle InRight) noexcept
+	{
+		return !(InLeft == InRight);
+	}
 };
 
 /**
@@ -243,11 +246,11 @@ public:
 	 * Rejection (CapacityExceeded, InvalidChannel, or DispatchLocked) leaves the sink's queued
 	 * state unchanged; the caller may retry with the same bytes on a later frame.
 	 *
-	 * @param ArrivedOnChannelId Channel the encoded bytes were received on.
-	 * @param Encoded Complete encoded actor message, as produced by EncodeActorMessage.
+	 * @param InArrivedOnChannelId Channel the encoded bytes were received on.
+	 * @param InEncoded Complete encoded actor message, as produced by EncodeActorMessage.
 	 * @return Outcome of the single queue attempt.
 	 */
-	virtual EMessageResult ReceiveEncodedMessage(FMessageChannelId ArrivedOnChannelId, TSpan<const std::uint8_t> Encoded) noexcept = 0;
+	virtual EMessageResult ReceiveEncodedMessage(FMessageChannelId InArrivedOnChannelId, TSpan<const std::uint8_t> InEncoded) noexcept = 0;
 };
 
 /** Outbound side of one configured channel; implemented by channel bindings and wrappers such as a reliability layer. */
@@ -266,11 +269,11 @@ public:
 	/**
 	 * Hands one encoded message to the channel's transport.
 	 *
-	 * @param Encoded Complete encoded actor message, as produced by EncodeActorMessage.
+	 * @param InEncoded Complete encoded actor message, as produced by EncodeActorMessage.
 	 * @return Success once accepted; Unavailable or PayloadTooLarge means the caller may retry
 	 *         (a later frame, or after re-encoding within MaxEncodedMessageBytes) rather than the send being lost.
 	 */
-	virtual EMessageResult TrySendEncodedMessage(TSpan<const std::uint8_t> Encoded) noexcept = 0;
+	virtual EMessageResult TrySendEncodedMessage(TSpan<const std::uint8_t> InEncoded) noexcept = 0;
 };
 
 /** The actor-facing messaging API; actors hold this by reference and never see channels or transports directly. */
@@ -283,54 +286,57 @@ public:
 	 * Failure clears OutHandle and leaves Handler bound to the caller; success publishes a fresh
 	 * generation-checked handle usable with RemoveMessageHandler.
 	 *
-	 * @param MessageTypeId Message type this handler will be invoked for.
-	 * @param ListenerActorId Actor id to match against TargetActorId; 0 (BroadcastActorId) means broadcasts only.
-	 * @param Handler Callback moved into the router's storage on success.
+	 * @param InMessageTypeId Message type this handler will be invoked for.
+	 * @param InListenerActorId Actor id to match against TargetActorId; 0 (BroadcastActorId) means broadcasts only.
+	 * @param InHandler Callback moved into the router's storage on success.
 	 * @param OutHandle Filled with a valid handle only on Success.
 	 * @return Outcome of the single registration attempt.
 	 */
 	virtual EMessageResult AddMessageHandler(
-		FMessageTypeId MessageTypeId,
-		FMessageActorId ListenerActorId,
-		FMessageHandlerBinding&& Handler,
+		FMessageTypeId InMessageTypeId,
+		FMessageActorId InListenerActorId,
+		FMessageHandlerBinding&& InHandler,
 		FMessageHandlerHandle& OutHandle) noexcept = 0;
 
 	/**
 	 * Removes one previously registered callback.
 	 *
-	 * @param Handle Handle previously published by AddMessageHandler; a stale or already-removed handle is rejected.
+	 * @param InHandle Handle previously published by AddMessageHandler; a stale or already-removed handle is rejected.
 	 * @return Outcome of the single removal attempt.
 	 */
-	virtual EMessageResult RemoveMessageHandler(FMessageHandlerHandle Handle) noexcept = 0;
+	virtual EMessageResult RemoveMessageHandler(FMessageHandlerHandle InHandle) noexcept = 0;
 
 	/**
 	 * Queues one message for a specific target actor on the given channel.
 	 *
-	 * @param ChannelId Channel the message is queued on; LocalChannelId delivers within the same world.
-	 * @param MessageTypeId Message type identifying which handlers may receive this message.
-	 * @param TargetActorId Actor id that must match a handler's ListenerActorId to receive this message.
-	 * @param SenderActorId Actor id recorded as the message's sender for the receiving handler.
-	 * @param Payload Caller-owned message body following the header.
+	 * @param InChannelId Channel the message is queued on; LocalChannelId delivers within the same world.
+	 * @param InMessageTypeId Message type identifying which handlers may receive this message.
+	 * @param InTargetActorId Actor id that must match a handler's ListenerActorId to receive this message.
+	 * @param InSenderActorId Actor id recorded as the message's sender for the receiving handler.
+	 * @param InPayload Caller-owned message body following the header.
 	 * @return Outcome of the single queue attempt.
 	 */
 	virtual EMessageResult SendMessageToActor(
-		FMessageChannelId ChannelId,
-		FMessageTypeId MessageTypeId,
-		FMessageActorId TargetActorId,
-		FMessageActorId SenderActorId,
-		TSpan<const std::uint8_t> Payload) noexcept = 0;
+		FMessageChannelId InChannelId,
+		FMessageTypeId InMessageTypeId,
+		FMessageActorId InTargetActorId,
+		FMessageActorId InSenderActorId,
+		TSpan<const std::uint8_t> InPayload) noexcept = 0;
 
 	/**
 	 * Queues one message for every subscriber of the type on the given channel.
 	 *
-	 * @param ChannelId Channel the message is queued on; LocalChannelId delivers within the same world.
-	 * @param MessageTypeId Message type identifying which handlers may receive this message.
-	 * @param SenderActorId Actor id recorded as the message's sender for the receiving handlers.
-	 * @param Payload Caller-owned message body following the header.
+	 * @param InChannelId Channel the message is queued on; LocalChannelId delivers within the same world.
+	 * @param InMessageTypeId Message type identifying which handlers may receive this message.
+	 * @param InSenderActorId Actor id recorded as the message's sender for the receiving handlers.
+	 * @param InPayload Caller-owned message body following the header.
 	 * @return Outcome of the single queue attempt.
 	 */
 	virtual EMessageResult BroadcastMessage(
-		FMessageChannelId ChannelId, FMessageTypeId MessageTypeId, FMessageActorId SenderActorId, TSpan<const std::uint8_t> Payload) noexcept = 0;
+		FMessageChannelId InChannelId,
+		FMessageTypeId InMessageTypeId,
+		FMessageActorId InSenderActorId,
+		TSpan<const std::uint8_t> InPayload) noexcept = 0;
 };
 
 } // namespace MicroWorld

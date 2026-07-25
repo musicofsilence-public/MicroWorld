@@ -46,7 +46,7 @@ public:
 	 * The object store assigns canonical ownership only after construction
 	 * publishes this UObject, so callers cannot supply a second store identity.
 	 */
-	explicit UWorld(FWorldActorRegistryReference ActorStorage) noexcept;
+	explicit UWorld(FWorldActorRegistryReference InActorStorage) noexcept;
 
 	/** Keeps exact derived destruction behind the descriptor/store boundary. */
 	~UWorld() noexcept override;
@@ -59,13 +59,13 @@ public:
 	 * stale, or non-resolvable references atomically: a rejected registration
 	 * leaves the world and the actor unchanged.
 	 */
-	EEngineResult RegisterActor(TObjectPtr<AActor> Actor) noexcept;
+	EEngineResult RegisterActor(TObjectPtr<AActor> InActor) noexcept;
 
 	/** Starts every registered actor in registration order from one canonical time. */
-	ERuntimeResult BeginPlay(TimePointMilliseconds NowMilliseconds) noexcept;
+	ERuntimeResult BeginPlay(TimePointMilliseconds InNowMilliseconds) noexcept;
 
 	/** Advances every registered actor once after validating monotonic world time. */
-	ERuntimeResult Advance(TimePointMilliseconds NowMilliseconds) noexcept;
+	ERuntimeResult Advance(TimePointMilliseconds InNowMilliseconds) noexcept;
 
 	/** Ends every registered actor in reverse registration order; idempotent after success. */
 	ERuntimeResult EndPlay() noexcept;
@@ -78,7 +78,7 @@ public:
 	 * already registered or already pending-spawn, actors owned by another world,
 	 * and exhausted live-plus-pending capacity, all transactionally.
 	 */
-	EEngineResult SpawnActor(TObjectPtr<AActor> Actor) noexcept;
+	EEngineResult SpawnActor(TObjectPtr<AActor> InActor) noexcept;
 
 	/**
 	 * Queues one actor registered with this world to end and release at the next
@@ -88,14 +88,14 @@ public:
 	 * registered with this world, and actors already pending-destroy, all
 	 * transactionally.
 	 */
-	EEngineResult DestroyActor(TObjectPtr<AActor> Actor) noexcept;
+	EEngineResult DestroyActor(TObjectPtr<AActor> InActor) noexcept;
 
 	/**
 	 * Applies pending destroys first, then pending spawns; call once per frame
 	 * after Advance so structural change happens only at this barrier. Returns the
 	 * first end or begin failure while still applying every queued change.
 	 */
-	ERuntimeResult ApplyPending(TimePointMilliseconds NowMilliseconds) noexcept;
+	ERuntimeResult ApplyPending(TimePointMilliseconds InNowMilliseconds) noexcept;
 
 	/** Reports how many actors are queued to begin at the next barrier. */
 	std::size_t PendingSpawnCount() const noexcept;
@@ -105,29 +105,29 @@ public:
 
 private:
 	/** Reports the first reason an actor cannot register, or Success. */
-	EEngineResult CheckActorRegistrable(TObjectPtr<AActor> Actor) const noexcept;
+	EEngineResult CheckActorRegistrable(TObjectPtr<AActor> InActor) const noexcept;
 
 	/** Reports the first reason a deferred spawn cannot be queued, or Success. */
-	EEngineResult CheckSpawnable(TObjectPtr<AActor> Actor) const noexcept;
+	EEngineResult CheckSpawnable(TObjectPtr<AActor> InActor) const noexcept;
 
 	/** Reports the first reason a registered actor cannot be queued for destroy, or Success. */
-	EEngineResult CheckDestroyable(TObjectPtr<AActor> Actor) const noexcept;
+	EEngineResult CheckDestroyable(TObjectPtr<AActor> InActor) const noexcept;
 
 	/** Links an actor to this world and adds it to the registry after all checks pass. */
-	void PublishActor(TObjectPtr<AActor> Actor) noexcept;
+	void PublishActor(TObjectPtr<AActor> InActor) noexcept;
 
 	/** Begins one actor's lifecycle while letting the world roll back on failure. */
-	ERuntimeResult DispatchActorBegin(AActor& Actor, TimePointMilliseconds NowMilliseconds) noexcept;
+	ERuntimeResult DispatchActorBegin(AActor& InActor, TimePointMilliseconds InNowMilliseconds) noexcept;
 
 	/** Advances one actor for one dispatcher step. */
-	ERuntimeResult DispatchActorAdvance(AActor& Actor, TimePointMilliseconds NowMilliseconds) noexcept;
+	ERuntimeResult DispatchActorAdvance(AActor& InActor, TimePointMilliseconds InNowMilliseconds) noexcept;
 
 	/** Ends one actor while the world retains the first error and still ends every actor. */
-	ERuntimeResult DispatchActorEnd(AActor& Actor) noexcept;
+	ERuntimeResult DispatchActorEnd(AActor& InActor) noexcept;
 
 	/** Begins every registered actor in order and, on the first failure, ends the
 	 * already-begun actors in reverse and fails the world lifecycle. */
-	ERuntimeResult BeginRegisteredActorsWithRollback(TimePointMilliseconds NowMilliseconds) noexcept;
+	ERuntimeResult BeginRegisteredActorsWithRollback(TimePointMilliseconds InNowMilliseconds) noexcept;
 
 	/** Ends every registered actor in reverse order, retaining the first error while still ending every actor. */
 	ERuntimeResult EndRegisteredActorsReverse() noexcept;
@@ -135,20 +135,20 @@ private:
 	/** Ends every doomed actor under the dispatch guard and folds the first end
 	 * failure into FirstError; returns LifecycleLocked only when the guard cannot
 	 * be acquired. */
-	ERuntimeResult EndDoomedActorsUnderGuard(FObjectStore& ObjectStore, ERuntimeResult& FirstError) noexcept;
+	ERuntimeResult EndDoomedActorsUnderGuard(FObjectStore& InObjectStore, ERuntimeResult& InOutFirstError) noexcept;
 
 	/** Marks each doomed actor's components and itself for the destruction barrier
 	 * and removes it from the live set, run after the dispatch guard has released. */
-	void MarkAndUnregisterDoomedActors(FObjectStore& ObjectStore) noexcept;
+	void MarkAndUnregisterDoomedActors(FObjectStore& InObjectStore) noexcept;
 
 	/** Begins every pending-spawn actor under a fresh dispatch guard and folds the
 	 * first begin failure into FirstError; returns LifecycleLocked only when the
 	 * guard cannot be acquired. */
 	ERuntimeResult BeginPendingSpawnsUnderGuard(
-		FObjectStore& ObjectStore, TimePointMilliseconds NowMilliseconds, ERuntimeResult& FirstError) noexcept;
+		FObjectStore& InObjectStore, TimePointMilliseconds InNowMilliseconds, ERuntimeResult& InOutFirstError) noexcept;
 
 	/** Presents every registered actor to the active iterative collector. */
-	void VisitReferences(FReferenceCollector& Collector) noexcept override;
+	void VisitReferences(FReferenceCollector& InCollector) noexcept override;
 
 	/** Holds the unique caller-owned actor registry reference for this world's lifetime. */
 	FWorldActorRegistryReference Actors;

@@ -27,7 +27,7 @@ class FObjectStoreDispatchGuard final
 {
 public:
 	/** Tries to exclude lifetime-changing work from one callback cascade. */
-	explicit FObjectStoreDispatchGuard(FObjectStore& Store) noexcept;
+	explicit FObjectStoreDispatchGuard(FObjectStore& InStore) noexcept;
 
 	/** Releases callback exclusion only when this instance acquired it. */
 	~FObjectStoreDispatchGuard() noexcept;
@@ -141,9 +141,9 @@ public:
 	FClassRegistryView(const void* InContext, FFindClass InFindClass) noexcept : Context(InContext), FindClass(InFindClass) {}
 
 	/** Finds one descriptor by local type identifier without changing registry state. */
-	const FClassDescriptor* Find(const FTypeId TypeId) const noexcept
+	const FClassDescriptor* Find(const FTypeId InTypeId) const noexcept
 	{
-		return Context != nullptr && FindClass != nullptr ? FindClass(Context, TypeId) : nullptr;
+		return Context != nullptr && FindClass != nullptr ? FindClass(Context, InTypeId) : nullptr;
 	}
 
 private:
@@ -160,37 +160,37 @@ FClassRegistryView MakeClassRegistryView(const TClassRegistry<MaxClasses>& Regis
 {
 	return FClassRegistryView(
 		&Registry,
-		[](const void* Context, const FTypeId TypeId) noexcept -> const FClassDescriptor*
-		{ return static_cast<const TClassRegistry<MaxClasses>*>(Context)->Find(TypeId); });
+		[](const void* InContext, const FTypeId InTypeId) noexcept -> const FClassDescriptor*
+		{ return static_cast<const TClassRegistry<MaxClasses>*>(InContext)->Find(InTypeId); });
 }
 
 /** Invokes the exact public nothrow destructor bound to one managed C++ type. */
 template<typename T>
-void DestroyManagedObject(UObject& Object) noexcept
+void DestroyManagedObject(UObject& InObject) noexcept
 {
 	static_assert(std::is_base_of<UObject, T>::value, "Managed destruction requires a UObject-derived type.");
 	static_assert(std::is_nothrow_destructible<T>::value, "Managed destruction requires an accessible noexcept destructor.");
-	static_cast<T&>(Object).~T();
+	static_cast<T&>(InObject).~T();
 }
 
 /** Creates a descriptor whose layout and exact destructor are bound to T without RTTI. */
 template<typename T>
 FClassDescriptor MakeClassDescriptor(
-	const FTypeId TypeId,
-	const char* const DiagnosticName,
-	const FClassDescriptor* const Parent = nullptr,
-	const FTraceObjectReferences TraceReferences = nullptr) noexcept
+	const FTypeId InTypeId,
+	const char* const InDiagnosticName,
+	const FClassDescriptor* const InParent = nullptr,
+	const FTraceObjectReferences InTraceReferences = nullptr) noexcept
 {
 	static_assert(std::is_base_of<UObject, T>::value, "Managed descriptors require a UObject-derived type.");
 	static_assert(std::is_nothrow_destructible<T>::value, "Managed descriptors require an accessible noexcept destructor.");
 
 	return FClassDescriptor{
-		TypeId,
-		DiagnosticName,
-		Parent,
+		InTypeId,
+		InDiagnosticName,
+		InParent,
 		sizeof(T),
 		alignof(T),
-		TraceReferences,
+		InTraceReferences,
 		&DestroyManagedObject<T>,
 		ManagedObjectTypeToken<T>(),
 	};
@@ -289,7 +289,7 @@ public:
 	 * a generation changes or placement construction begins.
 	 */
 	template<typename T, typename... TArguments>
-	TObjectCreationResult<T> NewObject(const FClassDescriptor& Descriptor, TArguments&&... Arguments) noexcept
+	TObjectCreationResult<T> NewObject(const FClassDescriptor& InDescriptor, TArguments&&... Arguments) noexcept
 	{
 		static_assert(std::is_base_of<UObject, T>::value, "FObjectStore can construct only UObject-derived values.");
 		static_assert(std::is_nothrow_constructible<T, TArguments...>::value, "Managed-object construction must be noexcept.");
@@ -301,7 +301,7 @@ public:
 			return Creation;
 		}
 
-		Creation.Result = ValidateConstruction<T>(Descriptor);
+		Creation.Result = ValidateConstruction<T>(InDescriptor);
 		if (Creation.Result != EObjectResult::Success)
 		{
 			return Creation;
@@ -321,7 +321,7 @@ public:
 		T* const ConstructedObject = ::new (PlacementAddress) T(std::forward<TArguments>(Arguments)...);
 		UObject* const ManagedObject = static_cast<UObject*>(ConstructedObject);
 
-		const FObjectHandle Handle = PublishObjectIntoSlot(SlotIndex, Descriptor, *ManagedObject);
+		const FObjectHandle Handle = PublishObjectIntoSlot(SlotIndex, InDescriptor, *ManagedObject);
 		bMutationLocked = false;
 		Creation.Result = EObjectResult::Success;
 		Creation.Object = TObjectPtr<T>(*this, Handle);
@@ -341,16 +341,16 @@ public:
 	}
 
 	/** Resolves only a live matching generation and never changes store state. */
-	UObject* Resolve(FObjectHandle Handle) const noexcept;
+	UObject* Resolve(FObjectHandle InHandle) const noexcept;
 
 	/** Hides one live object immediately and queues it for the explicit barrier. */
-	EObjectResult MarkPendingDestroy(FObjectHandle Handle) noexcept;
+	EObjectResult MarkPendingDestroy(FObjectHandle InHandle) noexcept;
 
-	/** Inspects at most MaxSlotsToInspect slots and destroys pending objects encountered. */
-	FObjectMutationResult ApplyPendingDestroy(std::uint32_t MaxSlotsToInspect) noexcept;
+	/** Inspects at most InMaxSlotsToInspect slots and destroys pending objects encountered. */
+	FObjectMutationResult ApplyPendingDestroy(std::uint32_t InMaxSlotsToInspect) noexcept;
 
 	/** Registers one independent root token after live-handle and capacity validation. */
-	EObjectResult AddRoot(FObjectHandle Handle) noexcept;
+	EObjectResult AddRoot(FObjectHandle InHandle) noexcept;
 
 	/**
 	 * Releases one matching root token even while guarded work is active.
@@ -359,23 +359,23 @@ public:
 	 * only future reachability; destruction, slot reuse, and collection remain
 	 * blocked until the active callback or mutation boundary ends.
 	 */
-	EObjectResult RemoveRoot(FObjectHandle Handle) noexcept;
+	EObjectResult RemoveRoot(FObjectHandle InHandle) noexcept;
 
 	/** Registers one independent root token and transfers it into an RAII owner. */
 	template<typename T>
-	TStrongObjectPointerResult<T> MakeStrongObjectPtr(const TObjectPtr<T> Object) noexcept
+	TStrongObjectPointerResult<T> MakeStrongObjectPtr(const TObjectPtr<T> InObject) noexcept
 	{
 		TStrongObjectPointerResult<T> StrongResult{};
-		if (Object.Store != this)
+		if (InObject.Store != this)
 		{
 			StrongResult.Result = EObjectResult::StaleHandle;
 			return StrongResult;
 		}
 
-		StrongResult.Result = AddRoot(Object.TargetHandle);
+		StrongResult.Result = AddRoot(InObject.TargetHandle);
 		if (StrongResult.Result == EObjectResult::Success)
 		{
-			StrongResult.Pointer = TStrongObjectPtr<T>(*this, Object.TargetHandle);
+			StrongResult.Pointer = TStrongObjectPtr<T>(*this, InObject.TargetHandle);
 		}
 		return StrongResult;
 	}
@@ -395,18 +395,18 @@ private:
 
 	/** Validates descriptor identity and exact T layout before any slot mutation. */
 	template<typename T>
-	EObjectResult ValidateConstruction(const FClassDescriptor& Descriptor) const noexcept
+	EObjectResult ValidateConstruction(const FClassDescriptor& InDescriptor) const noexcept
 	{
 		if (StoreConfigurationResult != EObjectResult::Success)
 		{
 			return StoreConfigurationResult;
 		}
-		if (ClassRegistryLookup.Find(Descriptor.TypeId) != &Descriptor)
+		if (ClassRegistryLookup.Find(InDescriptor.TypeId) != &InDescriptor)
 		{
 			return EObjectResult::UnknownClass;
 		}
-		if (Descriptor.SizeBytes != sizeof(T) || Descriptor.AlignmentBytes != alignof(T) || Descriptor.TypeToken != ManagedObjectTypeToken<T>()
-			|| Descriptor.Destroy != &DestroyManagedObject<T>)
+		if (InDescriptor.SizeBytes != sizeof(T) || InDescriptor.AlignmentBytes != alignof(T) || InDescriptor.TypeToken != ManagedObjectTypeToken<T>()
+			|| InDescriptor.Destroy != &DestroyManagedObject<T>)
 		{
 			return EObjectResult::UnsupportedObjectLayout;
 		}
@@ -418,43 +418,43 @@ private:
 	}
 
 	/** Reports whether the caller-supplied storage descriptor has valid slot and root layout. */
-	static bool IsStorageDescriptorValid(const FObjectStoreStorage& Storage) noexcept;
+	static bool IsStorageDescriptorValid(const FObjectStoreStorage& InStorage) noexcept;
 
 	/** Returns the first reusable slot without changing its generation or state. */
 	ObjectIndex FindVacantSlot() const noexcept;
 
 	/** Returns the stable first byte of one validated equal-size slot. */
-	void* SlotAddress(ObjectIndex SlotIndex) const noexcept;
+	void* SlotAddress(ObjectIndex InSlotIndex) const noexcept;
 
 	/** Validates index, generation, and occupancy while optionally accepting pending state. */
-	FObjectSlotMetadata* FindMatchingSlot(FObjectHandle Handle, bool bAllowPending) noexcept;
+	FObjectSlotMetadata* FindMatchingSlot(FObjectHandle InHandle, bool bInAllowPending) noexcept;
 
 	/** Provides const matching-slot validation to query-only operations. */
-	const FObjectSlotMetadata* FindMatchingSlot(FObjectHandle Handle, bool bAllowPending) const noexcept;
+	const FObjectSlotMetadata* FindMatchingSlot(FObjectHandle InHandle, bool bInAllowPending) const noexcept;
 
 	/** Runs BeginDestroy and exact destruction once, then vacates or retires the slot. */
-	EObjectResult DestroySlot(ObjectIndex SlotIndex) noexcept;
+	EObjectResult DestroySlot(ObjectIndex InSlotIndex) noexcept;
 
 	/** Removes every independent root token for a lifetime that can no longer resolve. */
-	void RemoveAllRoots(FObjectHandle Handle) noexcept;
+	void RemoveAllRoots(FObjectHandle InHandle) noexcept;
 
 	/** Rejects an index that is out of range or not a destroyable live/pending slot. */
-	EObjectResult ValidateDestroyableSlot(ObjectIndex SlotIndex) const noexcept;
+	EObjectResult ValidateDestroyableSlot(ObjectIndex InSlotIndex) const noexcept;
 
 	/** Runs BeginDestroy and exact destruction, then drops the lifetime's root tokens. */
-	void RunDestructionCallbacks(FObjectSlotMetadata& Slot, FObjectHandle Handle) noexcept;
+	void RunDestructionCallbacks(FObjectSlotMetadata& InSlot, FObjectHandle InHandle) noexcept;
 
 	/** Clears the slot's live pointers and either vacates it or retires it before wrap. */
-	void RecycleOrRetireSlot(FObjectSlotMetadata& Slot) noexcept;
+	void RecycleOrRetireSlot(FObjectSlotMetadata& InSlot) noexcept;
 
 	/** Decrements occupancy, pending, and payload totals for one destroyed object. */
-	void UpdateOccupancyCounters(bool bWasPending, std::size_t PayloadBytes) noexcept;
+	void UpdateOccupancyCounters(bool bInWasPending, std::size_t InPayloadBytes) noexcept;
 
 	/** Computes the generation a reused slot publishes next (0 means never published). */
-	static ObjectGeneration NextPublishGeneration(ObjectGeneration CurrentGeneration) noexcept;
+	static ObjectGeneration NextPublishGeneration(ObjectGeneration InCurrentGeneration) noexcept;
 
 	/** Wires object identity and slot metadata for a freshly constructed object and returns its handle. */
-	FObjectHandle PublishObjectIntoSlot(ObjectIndex SlotIndex, const FClassDescriptor& Descriptor, UObject& ManagedObject) noexcept;
+	FObjectHandle PublishObjectIntoSlot(ObjectIndex InSlotIndex, const FClassDescriptor& InDescriptor, UObject& InManagedObject) noexcept;
 
 	/** Returns the next pending-destroy slot to inspect and advances the wrapping scan cursor. */
 	ObjectIndex AdvancePendingScanCursor() noexcept;
@@ -471,19 +471,19 @@ private:
 	std::uint32_t CollectorRootCapacity() const noexcept { return Storage.RootCapacity; }
 
 	/** Returns one root token or an invalid handle for a free/out-of-range entry. */
-	FObjectHandle CollectorRootAt(std::uint32_t RootIndex) const noexcept;
+	FObjectHandle CollectorRootAt(std::uint32_t InRootIndex) const noexcept;
 
 	/** Returns the current live handle for one slot or an invalid handle otherwise. */
-	FObjectHandle CollectorHandleAt(ObjectIndex SlotIndex) const noexcept;
+	FObjectHandle CollectorHandleAt(ObjectIndex InSlotIndex) const noexcept;
 
 	/** Resolves one live slot by index for descriptor-driven tracing. */
-	UObject* CollectorObjectAt(ObjectIndex SlotIndex) const noexcept;
+	UObject* CollectorObjectAt(ObjectIndex InSlotIndex) const noexcept;
 
 	/** Reports whether a slot contains either a live or pending object. */
-	bool CollectorIsOccupied(ObjectIndex SlotIndex) const noexcept;
+	bool CollectorIsOccupied(ObjectIndex InSlotIndex) const noexcept;
 
 	/** Reports whether a slot is irreversibly pending destruction. */
-	bool CollectorIsPendingDestroy(ObjectIndex SlotIndex) const noexcept;
+	bool CollectorIsPendingDestroy(ObjectIndex InSlotIndex) const noexcept;
 
 	/** Prevents a collector cycle from starting inside construction or destruction callbacks. */
 	bool CollectorIsMutationLocked() const noexcept { return bMutationLocked || bDispatchLocked; }
@@ -492,22 +492,22 @@ private:
 	bool CollectorIsDispatchLocked() const noexcept { return bDispatchLocked; }
 
 	/** Atomically reserves public store mutation for one collector cycle. */
-	bool CollectorTryBegin(const FGarbageCollector& Collector) noexcept;
+	bool CollectorTryBegin(const FGarbageCollector& InCollector) noexcept;
 
 	/** Releases store ownership only for the collector that acquired it. */
-	void CollectorEnd(const FGarbageCollector& Collector) noexcept;
+	void CollectorEnd(const FGarbageCollector& InCollector) noexcept;
 
 	/** Confirms that this collector owns the active incremental cycle. */
-	bool CollectorIsOwnedBy(const FGarbageCollector& Collector) const noexcept { return ActiveCollector == &Collector; }
+	bool CollectorIsOwnedBy(const FGarbageCollector& InCollector) const noexcept { return ActiveCollector == &InCollector; }
 
 	/** Reports the collector mark associated with one occupied slot. */
-	bool CollectorIsMarked(ObjectIndex SlotIndex) const noexcept;
+	bool CollectorIsMarked(ObjectIndex InSlotIndex) const noexcept;
 
 	/** Changes one occupied slot's collector mark without changing lifecycle state. */
-	void CollectorSetMarked(ObjectIndex SlotIndex, bool bMarked) noexcept;
+	void CollectorSetMarked(ObjectIndex InSlotIndex, bool bInMarked) noexcept;
 
 	/** Reclaims one generation-checked unmarked lifetime during bounded sweep. */
-	EObjectResult CollectorReclaim(FObjectHandle Handle) noexcept;
+	EObjectResult CollectorReclaim(FObjectHandle InHandle) noexcept;
 
 	/** Excludes lifetime-changing work from one non-nested callback cascade. */
 	bool TryBeginDispatch() noexcept;

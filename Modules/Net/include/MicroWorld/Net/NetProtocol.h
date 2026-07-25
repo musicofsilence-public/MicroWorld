@@ -78,15 +78,15 @@ struct FControlMessage
 };
 
 /**
- * Writes one framed message (header plus payload) into `Writer`.
+ * Writes one framed message (header plus payload) into `InWriter`.
  *
  * Validates the payload length and the total required capacity up front so a `Full` or
  * `Invalid` result leaves the writer cursor and accepted bytes unchanged. A zero-length
  * payload writes only the four-byte header.
  */
-inline ENetResult WriteMessage(FByteWriter& Writer, std::uint8_t Channel, TSpan<const std::uint8_t> Payload) noexcept
+inline ENetResult WriteMessage(FByteWriter& InWriter, std::uint8_t InChannel, TSpan<const std::uint8_t> InPayload) noexcept
 {
-	const std::size_t PayloadSize = Payload.Size();
+	const std::size_t PayloadSize = InPayload.Size();
 	if (PayloadSize > 0xFFFF)
 	{
 		// A u16 length field cannot represent a payload this large; reject before any write.
@@ -94,79 +94,79 @@ inline ENetResult WriteMessage(FByteWriter& Writer, std::uint8_t Channel, TSpan<
 	}
 	const std::size_t RequiredBytes = MessageHeaderBytes + PayloadSize;
 	// Pre-check the whole requirement before the first WriteByte so a Full leaves the cursor at zero.
-	if (Writer.Remaining() < RequiredBytes)
+	if (InWriter.Remaining() < RequiredBytes)
 	{
 		return ENetResult::Full;
 	}
 	const std::uint16_t PayloadBytes = static_cast<std::uint16_t>(PayloadSize);
-	(void)Writer.WriteByte(Channel);
-	(void)Writer.WriteByte(std::uint8_t{0}); // Flags is reserved and always transmitted as zero.
+	(void)InWriter.WriteByte(InChannel);
+	(void)InWriter.WriteByte(std::uint8_t{0}); // Flags is reserved and always transmitted as zero.
 	// The message header length is little-endian to match this layer's byte I/O convention (D6).
 	std::uint8_t PayloadLengthBytes[2];
 	WriteUint16LittleEndian(PayloadBytes, PayloadLengthBytes);
-	(void)Writer.Write(TSpan<const std::uint8_t>(PayloadLengthBytes, 2));
+	(void)InWriter.Write(TSpan<const std::uint8_t>(PayloadLengthBytes, 2));
 	if (PayloadSize > 0)
 	{
-		(void)Writer.Write(Payload);
+		(void)InWriter.Write(InPayload);
 	}
 	return ENetResult::Success;
 }
 
 /**
- * Parses one whole framed message from `Message`.
+ * Parses one whole framed message from `InMessage`.
  *
  * Outputs are written only on `Success`: a too-short message, a nonzero Flags byte, or a
  * payload-size mismatch all return `Invalid` and leave `OutHeader` and `OutPayload` unchanged.
  */
-inline ENetResult ReadMessage(TSpan<const std::uint8_t> Message, FMessageHeader& OutHeader, TSpan<const std::uint8_t>& OutPayload) noexcept
+inline ENetResult ReadMessage(TSpan<const std::uint8_t> InMessage, FMessageHeader& OutHeader, TSpan<const std::uint8_t>& OutPayload) noexcept
 {
-	if (Message.Size() < MessageHeaderBytes)
+	if (InMessage.Size() < MessageHeaderBytes)
 	{
 		// Not even a header is present; nothing can be parsed.
 		return ENetResult::Invalid;
 	}
-	const std::uint8_t Flags = Message[1];
+	const std::uint8_t Flags = InMessage[1];
 	if (Flags != 0)
 	{
 		// Flags is reserved; a nonzero value is a malformed or unknown-framing message.
 		return ENetResult::Invalid;
 	}
 	// The message header length is little-endian to match this layer's byte I/O convention (D6).
-	const std::uint16_t PayloadBytes = ReadUint16LittleEndian(&Message[2]);
-	if (Message.Size() - MessageHeaderBytes != PayloadBytes)
+	const std::uint16_t PayloadBytes = ReadUint16LittleEndian(&InMessage[2]);
+	if (InMessage.Size() - MessageHeaderBytes != PayloadBytes)
 	{
 		// The declared length disagrees with the actual trailing payload: truncation or corruption.
 		return ENetResult::Invalid;
 	}
-	OutHeader.Channel = Message[0];
+	OutHeader.Channel = InMessage[0];
 	OutHeader.Flags = std::uint8_t{0};
 	OutHeader.PayloadBytes = PayloadBytes;
-	OutPayload = TSpan<const std::uint8_t>(Message.Data() + MessageHeaderBytes, PayloadBytes);
+	OutPayload = TSpan<const std::uint8_t>(InMessage.Data() + MessageHeaderBytes, PayloadBytes);
 	return ENetResult::Success;
 }
 
 /**
- * Encodes one channel-0 control message into `Writer` via `WriteMessage`.
+ * Encodes one channel-0 control message into `InWriter` via `WriteMessage`.
  *
  * Builds the per-type control payload in a fixed local array, then frames it on the control
  * channel so the result and transactional contract are exactly `WriteMessage`'s. An unknown
  * `Type` returns `Invalid` without touching the writer.
  */
-inline ENetResult WriteControlMessage(FByteWriter& Writer, const FControlMessage& Message) noexcept
+inline ENetResult WriteControlMessage(FByteWriter& InWriter, const FControlMessage& InMessage) noexcept
 {
 	std::array<std::uint8_t, MaxControlPayloadBytes> Payload{};
-	Payload[0] = static_cast<std::uint8_t>(Message.Type);
+	Payload[0] = static_cast<std::uint8_t>(InMessage.Type);
 	std::size_t PayloadLength = 1;
-	switch (Message.Type)
+	switch (InMessage.Type)
 	{
 		case EControlMessageType::Hello:
-			Payload[1] = Message.ProtocolVersion;
+			Payload[1] = InMessage.ProtocolVersion;
 			PayloadLength = 2;
 			break;
 		case EControlMessageType::Welcome:
-			Payload[1] = Message.ProtocolVersion;
-			Payload[2] = Message.PeerIndex;
-			Payload[3] = Message.PeerGeneration;
+			Payload[1] = InMessage.ProtocolVersion;
+			Payload[2] = InMessage.PeerIndex;
+			Payload[3] = InMessage.PeerGeneration;
 			PayloadLength = 4;
 			break;
 		case EControlMessageType::Heartbeat:
@@ -177,7 +177,7 @@ inline ENetResult WriteControlMessage(FByteWriter& Writer, const FControlMessage
 			// An unknown type has no defined encoding; reject before any write.
 			return ENetResult::Invalid;
 	}
-	return WriteMessage(Writer, ControlChannel, TSpan<const std::uint8_t>(Payload.data(), PayloadLength));
+	return WriteMessage(InWriter, ControlChannel, TSpan<const std::uint8_t>(Payload.data(), PayloadLength));
 }
 
 namespace Detail
@@ -186,29 +186,29 @@ namespace Detail
 	/**
 	 * Validates the control type byte and its exact per-type payload length.
 	 *
-	 * @param TypeByte First payload byte naming the control message type.
-	 * @param PayloadSize Total control payload size in bytes.
+	 * @param InTypeByte First payload byte naming the control message type.
+	 * @param InPayloadSize Total control payload size in bytes.
 	 * @return Success when the type is known and the length matches; otherwise Invalid.
 	 */
-	inline ENetResult ValidateControlPayloadLength(const std::uint8_t TypeByte, const std::size_t PayloadSize) noexcept
+	inline ENetResult ValidateControlPayloadLength(const std::uint8_t InTypeByte, const std::size_t InPayloadSize) noexcept
 	{
-		switch (TypeByte)
+		switch (InTypeByte)
 		{
 			case static_cast<std::uint8_t>(EControlMessageType::Hello):
-				if (PayloadSize != 2)
+				if (InPayloadSize != 2)
 				{
 					return ENetResult::Invalid;
 				}
 				return ENetResult::Success;
 			case static_cast<std::uint8_t>(EControlMessageType::Welcome):
-				if (PayloadSize != 4)
+				if (InPayloadSize != 4)
 				{
 					return ENetResult::Invalid;
 				}
 				return ENetResult::Success;
 			case static_cast<std::uint8_t>(EControlMessageType::Heartbeat):
 			case static_cast<std::uint8_t>(EControlMessageType::Bye):
-				if (PayloadSize != 1)
+				if (InPayloadSize != 1)
 				{
 					return ENetResult::Invalid;
 				}
@@ -222,22 +222,22 @@ namespace Detail
 	/**
 	 * Reads the per-type control fields from a reader already positioned past the type byte.
 	 *
-	 * @param Reader Byte reader positioned immediately after the type byte.
-	 * @param Type Validated control message type.
+	 * @param InReader Byte reader positioned immediately after the type byte.
+	 * @param InType Validated control message type.
 	 * @param OutMessage Populated with the decoded fields.
 	 */
-	inline void DecodeControlFields(FByteReader& Reader, const EControlMessageType Type, FControlMessage& OutMessage) noexcept
+	inline void DecodeControlFields(FByteReader& InReader, const EControlMessageType InType, FControlMessage& OutMessage) noexcept
 	{
 		FControlMessage Decoded{};
-		Decoded.Type = Type;
-		if (Type == EControlMessageType::Hello || Type == EControlMessageType::Welcome)
+		Decoded.Type = InType;
+		if (InType == EControlMessageType::Hello || InType == EControlMessageType::Welcome)
 		{
-			(void)Reader.ReadByte(Decoded.ProtocolVersion);
+			(void)InReader.ReadByte(Decoded.ProtocolVersion);
 		}
-		if (Type == EControlMessageType::Welcome)
+		if (InType == EControlMessageType::Welcome)
 		{
-			(void)Reader.ReadByte(Decoded.PeerIndex);
-			(void)Reader.ReadByte(Decoded.PeerGeneration);
+			(void)InReader.ReadByte(Decoded.PeerIndex);
+			(void)InReader.ReadByte(Decoded.PeerGeneration);
 		}
 		OutMessage = Decoded;
 	}
@@ -252,16 +252,16 @@ namespace Detail
  * Outputs are written only on `Success`; a malformed payload returns `Invalid` and leaves
  * `OutMessage` unchanged.
  */
-inline ENetResult ReadControlMessage(TSpan<const std::uint8_t> Payload, FControlMessage& OutMessage) noexcept
+inline ENetResult ReadControlMessage(TSpan<const std::uint8_t> InPayload, FControlMessage& OutMessage) noexcept
 {
-	FByteReader Reader(Payload);
+	FByteReader Reader(InPayload);
 	std::uint8_t TypeByte = 0;
 	if (Reader.ReadByte(TypeByte) != ENetResult::Success)
 	{
 		// An empty control payload carries no type byte at all.
 		return ENetResult::Invalid;
 	}
-	const ENetResult LengthResult = Detail::ValidateControlPayloadLength(TypeByte, Payload.Size());
+	const ENetResult LengthResult = Detail::ValidateControlPayloadLength(TypeByte, InPayload.Size());
 	if (LengthResult != ENetResult::Success)
 	{
 		return LengthResult;

@@ -20,11 +20,11 @@ using MicroWorld::Tests::GlobalAllocationCount;
 
 /** Fills a buffer with a recognizable sentinel so a transactional failure leaving it untouched is observable. */
 template<std::size_t BufferSize>
-void FillWithSentinel(std::array<std::uint8_t, BufferSize>& Buffer, const std::uint8_t SentinelByte) noexcept
+void FillWithSentinel(std::array<std::uint8_t, BufferSize>& InBuffer, const std::uint8_t InSentinelByte) noexcept
 {
 	for (std::size_t Index = 0; Index < BufferSize; ++Index)
 	{
-		Buffer[Index] = SentinelByte;
+		InBuffer[Index] = InSentinelByte;
 	}
 }
 

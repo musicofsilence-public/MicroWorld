@@ -15,10 +15,10 @@ public:
 	constexpr TSpan() noexcept = default;
 
 	/**
-	 * Observes `Count` elements beginning at `Data`.
-	 * `Data` may be null only when `Count` is zero, and the caller keeps all elements alive and pointer-stable.
+	 * Observes `InCount` elements beginning at `InData`.
+	 * `InData` may be null only when `InCount` is zero, and the caller keeps all elements alive and pointer-stable.
 	 */
-	constexpr TSpan(ElementType* const Data, const std::size_t Count) noexcept : DataPointer(Data), ElementCount(Count) {}
+	constexpr TSpan(ElementType* const InData, const std::size_t InCount) noexcept : DataPointer(InData), ElementCount(InCount) {}
 
 	/** Observes every element in a caller-owned C array without changing its mutability. */
 	template<std::size_t Count>
@@ -28,7 +28,7 @@ public:
 
 	/** Converts a compatible view, including mutable-to-const, without changing ownership. */
 	template<typename OtherElementType, typename std::enable_if<std::is_convertible<OtherElementType (*)[], ElementType (*)[]>::value, int>::type = 0>
-	constexpr TSpan(const TSpan<OtherElementType>& Other) noexcept : DataPointer(Other.Data()), ElementCount(Other.Size())
+	constexpr TSpan(const TSpan<OtherElementType>& InOther) noexcept : DataPointer(InOther.Data()), ElementCount(InOther.Size())
 	{
 	}
 
@@ -45,7 +45,7 @@ public:
 	constexpr bool IsValid() const noexcept { return DataPointer != nullptr || ElementCount == 0; }
 
 	/** Accesses a viewed element; the caller must first ensure the view is valid and the index is below `Size()`. */
-	constexpr ElementType& operator[](const std::size_t Index) const noexcept { return DataPointer[Index]; }
+	constexpr ElementType& operator[](const std::size_t InIndex) const noexcept { return DataPointer[InIndex]; }
 
 	/** Begins iteration; a non-empty view must be valid and its storage must remain alive. */
 	constexpr ElementType* begin() const noexcept { return DataPointer; }

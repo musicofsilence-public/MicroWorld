@@ -37,16 +37,19 @@ public:
 	static const FClassDescriptor& StaticClassDescriptor() noexcept;
 
 	/** Captures the consumer-selected tick capability and cadence at construction. */
-	explicit UActorComponent(FTickConfiguration TickConfiguration = {}) noexcept;
+	explicit UActorComponent(FTickConfiguration InTickConfiguration = {}) noexcept;
 
 	/** Keeps exact derived destruction behind the descriptor/store boundary. */
 	~UActorComponent() noexcept override;
 
 	/** Forwards tick enablement to the primary tick function. */
-	ERuntimeResult SetTickEnabled(bool bEnabled) noexcept { return FTickable::SetTickEnabled(bEnabled); }
+	ERuntimeResult SetTickEnabled(bool bInEnabled) noexcept { return FTickable::SetTickEnabled(bInEnabled); }
 
 	/** Forwards the minimum tick interval to the primary tick function. */
-	ERuntimeResult SetTickInterval(DurationMilliseconds IntervalMilliseconds) noexcept { return FTickable::SetTickInterval(IntervalMilliseconds); }
+	ERuntimeResult SetTickInterval(DurationMilliseconds InIntervalMilliseconds) noexcept
+	{
+		return FTickable::SetTickInterval(InIntervalMilliseconds);
+	}
 
 	/** Exposes tick enablement using the primary tick function's representation. */
 	bool IsTickEnabled() const noexcept { return FTickable::IsTickEnabled(); }
@@ -82,16 +85,16 @@ private:
 	friend class AActor;
 
 	/** Begins this component's lifecycle, primary tick, and consumer hook. */
-	ERuntimeResult DispatchBeginPlay(TimePointMilliseconds NowMilliseconds) noexcept;
+	ERuntimeResult DispatchBeginPlay(TimePointMilliseconds InNowMilliseconds) noexcept;
 
 	/** Advances this component's primary tick for one dispatcher step. */
-	ERuntimeResult DispatchAdvance(TimePointMilliseconds NowMilliseconds) noexcept;
+	ERuntimeResult DispatchAdvance(TimePointMilliseconds InNowMilliseconds) noexcept;
 
 	/** Ends this component's consumer hook and primary tick; idempotent after success. */
 	ERuntimeResult DispatchEndPlay() noexcept;
 
 	/** Binds one weak actor handle after same-store registration validation. */
-	void AssignOwner(FObjectHandle Owner) noexcept;
+	void AssignOwner(FObjectHandle InOwner) noexcept;
 
 	/** Reports whether registration into a new owner is still permitted. */
 	bool IsRegistrationOpen() const noexcept { return Lifecycle.GetState() == ELifecycleState::Constructed; }

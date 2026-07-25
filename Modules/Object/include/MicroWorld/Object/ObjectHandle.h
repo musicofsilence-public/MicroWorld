@@ -72,15 +72,15 @@ struct FObjectHandle
 };
 
 /** Compares complete local lifetime identity rather than a potentially reused slot. */
-constexpr bool operator==(const FObjectHandle Left, const FObjectHandle Right) noexcept
+constexpr bool operator==(const FObjectHandle InLeft, const FObjectHandle InRight) noexcept
 {
-	return Left.Index == Right.Index && Left.Generation == Right.Generation;
+	return InLeft.Index == InRight.Index && InLeft.Generation == InRight.Generation;
 }
 
 /** Distinguishes any slot or generation mismatch. */
-constexpr bool operator!=(const FObjectHandle Left, const FObjectHandle Right) noexcept
+constexpr bool operator!=(const FObjectHandle InLeft, const FObjectHandle InRight) noexcept
 {
-	return !(Left == Right);
+	return !(InLeft == InRight);
 }
 
 /**
@@ -101,9 +101,9 @@ struct FObjectId
  * A store permanently retires the slot when this query is false; wrapping a
  * generation and making an old handle valid again is forbidden.
  */
-constexpr bool CanAdvanceObjectGeneration(const ObjectGeneration CurrentGeneration) noexcept
+constexpr bool CanAdvanceObjectGeneration(const ObjectGeneration InCurrentGeneration) noexcept
 {
-	return CurrentGeneration < std::numeric_limits<ObjectGeneration>::max();
+	return InCurrentGeneration < std::numeric_limits<ObjectGeneration>::max();
 }
 
 } // namespace MicroWorld

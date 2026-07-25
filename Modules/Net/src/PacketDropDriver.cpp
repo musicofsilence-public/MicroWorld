@@ -3,15 +3,15 @@
 namespace MicroWorld
 {
 
-FPacketDropDriver::FPacketDropDriver(INetDriver& InnerDriver, const std::uint32_t DropEveryNthSend) noexcept
-	: InnerDriver(InnerDriver), DropEveryNthSend(DropEveryNthSend)
+FPacketDropDriver::FPacketDropDriver(INetDriver& InInnerDriver, const std::uint32_t InDropEveryNthSend) noexcept
+	: InnerDriver(InInnerDriver), DropEveryNthSend(InDropEveryNthSend)
 {
 }
 
 /** Defines the destructor out of line so one vtable entry lives in the Net archive. */
 FPacketDropDriver::~FPacketDropDriver() noexcept = default;
 
-ENetResult FPacketDropDriver::TrySend(const FNetAddress& To, TSpan<const std::uint8_t> Packet) noexcept
+ENetResult FPacketDropDriver::TrySend(const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
 {
 	++SendCallCount;
 	if (DropEveryNthSend != 0 && (SendCallCount % DropEveryNthSend == 0))
@@ -20,12 +20,12 @@ ENetResult FPacketDropDriver::TrySend(const FNetAddress& To, TSpan<const std::ui
 		++DroppedSendTotal;
 		return ENetResult::Success;
 	}
-	return InnerDriver.TrySend(To, Packet);
+	return InnerDriver.TrySend(InTo, InPacket);
 }
 
-ENetResult FPacketDropDriver::TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> Destination, FNetReceiveResult& OutResult) noexcept
+ENetResult FPacketDropDriver::TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept
 {
-	return InnerDriver.TryReceive(OutFrom, Destination, OutResult);
+	return InnerDriver.TryReceive(OutFrom, InDestination, OutResult);
 }
 
 std::size_t FPacketDropDriver::MaxPacketBytes() const noexcept

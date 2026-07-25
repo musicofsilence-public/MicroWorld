@@ -69,31 +69,31 @@ public:
 	/**
 	 * Brings the board up as a SoftAP, transactionally.
 	 *
-	 * Validates `Config` before touching the radio: a null/empty SSID or a password shorter than
+	 * Validates `InConfig` before touching the radio: a null/empty SSID or a password shorter than
 	 * the WPA2 minimum of 8 characters returns `Invalid` with no network stack or radio call made.
 	 * Otherwise brings up NVS/netif/the default event loop (tolerating already-initialized), then
 	 * configures and starts the SoftAP. Any ESP-IDF failure returns `Unavailable` and leaves the
 	 * link down. This call does not print or log; that is the caller's responsibility.
 	 *
-	 * @param Config SoftAP SSID, password, channel, and station limit.
+	 * @param InConfig SoftAP SSID, password, channel, and station limit.
 	 * @return `Success` once the SoftAP is broadcasting; `Invalid` or `Unavailable` otherwise.
 	 */
-	ENetResult StartAccessPoint(const FEsp32AccessPointConfig& Config) noexcept;
+	ENetResult StartAccessPoint(const FEsp32AccessPointConfig& InConfig) noexcept;
 
 	/**
 	 * Joins an existing network as a station and waits for an IPv4 lease, transactionally.
 	 *
-	 * Validates `Config` before touching the radio: a null/empty SSID or a null password returns
+	 * Validates `InConfig` before touching the radio: a null/empty SSID or a null password returns
 	 * `Invalid` with no network stack or radio call made. Otherwise brings up NVS/netif/the default
 	 * event loop (tolerating already-initialized), starts the station, and waits in fixed 100 ms
-	 * slices for an IPv4 lease until `Config.ConnectTimeoutMilliseconds` is spent. Returns `Success`
+	 * slices for an IPv4 lease until `InConfig.ConnectTimeoutMilliseconds` is spent. Returns `Success`
 	 * once the lease arrives, or `Unavailable` once the budget is spent with no lease. Any ESP-IDF
 	 * start failure also returns `Unavailable`. This call does not print or log.
 	 *
-	 * @param Config Target SSID, password, and connect timeout.
+	 * @param InConfig Target SSID, password, and connect timeout.
 	 * @return `Success` once an IPv4 lease is held; `Invalid` or `Unavailable` otherwise.
 	 */
-	ENetResult JoinAccessPoint(const FEsp32StationConfig& Config) noexcept;
+	ENetResult JoinAccessPoint(const FEsp32StationConfig& InConfig) noexcept;
 
 	/** Reports whether a prior `StartAccessPoint`/`JoinAccessPoint` call is still up. */
 	bool IsUp() const noexcept;

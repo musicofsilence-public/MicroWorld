@@ -84,20 +84,20 @@ struct FOpenedI2cSlave
  * received byte into the ring and returns false because it wakes no higher-priority task. It must stay short
  * and allocation-free because it runs in ISR context.
  *
- * @param EventData Driver-fed event carrying the received bytes and their count.
- * @param UserData The `FI2cReceiveInbox` address passed at registration.
+ * @param InEventData Driver-fed event carrying the received bytes and their count.
+ * @param InUserData The `FI2cReceiveInbox` address passed at registration.
  * @return Always false: this callback wakes no task.
  */
-inline bool OnI2cSlaveReceiveFromIsr(i2c_slave_dev_handle_t, const i2c_slave_rx_done_event_data_t* EventData, void* UserData)
+inline bool OnI2cSlaveReceiveFromIsr(i2c_slave_dev_handle_t, const i2c_slave_rx_done_event_data_t* InEventData, void* InUserData)
 {
-	FI2cReceiveInbox* const Inbox = static_cast<FI2cReceiveInbox*>(UserData);
-	if (Inbox == nullptr || EventData == nullptr || EventData->buffer == nullptr)
+	FI2cReceiveInbox* const Inbox = static_cast<FI2cReceiveInbox*>(InUserData);
+	if (Inbox == nullptr || InEventData == nullptr || InEventData->buffer == nullptr)
 	{
 		return false;
 	}
-	for (std::uint32_t Index = 0; Index < EventData->length; ++Index)
+	for (std::uint32_t Index = 0; Index < InEventData->length; ++Index)
 	{
-		Inbox->PushFromIsr(EventData->buffer[Index]);
+		Inbox->PushFromIsr(InEventData->buffer[Index]);
 	}
 	return false;
 }
@@ -109,24 +109,24 @@ inline bool OnI2cSlaveReceiveFromIsr(i2c_slave_dev_handle_t, const i2c_slave_rx_
  * mandatory external resistors. On any failure the partially allocated bus is deleted so the caller sees
  * `bOpen == false` and can leave the driver inert without throwing.
  *
- * @param Port I2C port number to open.
- * @param SdaGpio SDA GPIO number wired to the slave's SDA pin.
- * @param SclGpio SCL GPIO number wired to the slave's SCL pin.
- * @param SclSpeedHz SCL clock frequency in hertz.
- * @param SlaveAddress 7-bit bus address of the peer slave.
+ * @param InPort I2C port number to open.
+ * @param InSdaGpio SDA GPIO number wired to the slave's SDA pin.
+ * @param InSclGpio SCL GPIO number wired to the slave's SCL pin.
+ * @param InSclSpeedHz SCL clock frequency in hertz.
+ * @param InSlaveAddress 7-bit bus address of the peer slave.
  * @return Opened-master descriptor reporting whether allocation succeeded.
  */
 inline FOpenedI2cMaster OpenConfiguredI2cMaster(
-	const std::int32_t Port,
-	const std::int32_t SdaGpio,
-	const std::int32_t SclGpio,
-	const std::uint32_t SclSpeedHz,
-	const std::uint8_t SlaveAddress) noexcept
+	const std::int32_t InPort,
+	const std::int32_t InSdaGpio,
+	const std::int32_t InSclGpio,
+	const std::uint32_t InSclSpeedHz,
+	const std::uint8_t InSlaveAddress) noexcept
 {
 	i2c_master_bus_config_t BusConfig{};
-	BusConfig.i2c_port = static_cast<i2c_port_num_t>(Port);
-	BusConfig.sda_io_num = static_cast<gpio_num_t>(SdaGpio);
-	BusConfig.scl_io_num = static_cast<gpio_num_t>(SclGpio);
+	BusConfig.i2c_port = static_cast<i2c_port_num_t>(InPort);
+	BusConfig.sda_io_num = static_cast<gpio_num_t>(InSdaGpio);
+	BusConfig.scl_io_num = static_cast<gpio_num_t>(InSclGpio);
 	BusConfig.clk_source = I2C_CLK_SRC_DEFAULT;
 	BusConfig.glitch_ignore_cnt = 7;
 	BusConfig.intr_priority = 0;
@@ -139,8 +139,8 @@ inline FOpenedI2cMaster OpenConfiguredI2cMaster(
 	}
 	i2c_device_config_t DeviceConfig{};
 	DeviceConfig.dev_addr_length = I2C_ADDR_BIT_LEN_7;
-	DeviceConfig.device_address = SlaveAddress;
-	DeviceConfig.scl_speed_hz = SclSpeedHz;
+	DeviceConfig.device_address = InSlaveAddress;
+	DeviceConfig.scl_speed_hz = InSclSpeedHz;
 	DeviceConfig.scl_wait_us = 0;
 	DeviceConfig.flags.disable_ack_check = false;
 	i2c_master_dev_handle_t Device = nullptr;
@@ -159,14 +159,15 @@ inline FOpenedI2cMaster OpenConfiguredI2cMaster(
  * other error maps to `Error`. Runtime-verified by example 20 (2026-07-23): the full-accept and the
  * NACK/timeout -> WouldBlock paths were both observed.
  *
- * @param Device Open I2C master device handle.
- * @param FrameBytes First byte of the framed message to send.
- * @param Length Number of bytes to send.
+ * @param InDevice Open I2C master device handle.
+ * @param InFrameBytes First byte of the framed message to send.
+ * @param InLength Number of bytes to send.
  * @return Normalized outcome of the single write attempt.
  */
-inline EI2cWriteOutcome WriteI2cMaster(const i2c_master_dev_handle_t Device, const std::uint8_t* const FrameBytes, const std::size_t Length) noexcept
+inline EI2cWriteOutcome WriteI2cMaster(
+	const i2c_master_dev_handle_t InDevice, const std::uint8_t* const InFrameBytes, const std::size_t InLength) noexcept
 {
-	const esp_err_t Result = i2c_master_transmit(Device, FrameBytes, Length, I2cTransactionTimeoutMs);
+	const esp_err_t Result = i2c_master_transmit(InDevice, InFrameBytes, InLength, I2cTransactionTimeoutMs);
 	if (Result == ESP_OK)
 	{
 		return EI2cWriteOutcome::Sent;
@@ -185,14 +186,14 @@ inline EI2cWriteOutcome WriteI2cMaster(const i2c_master_dev_handle_t Device, con
  * nothing queued); a busy bus or unresponsive slave maps to `WouldBlock`. Runtime-verified by example 20
  * (2026-07-23): the master read back the slave's staged replies each volley.
  *
- * @param Device Open I2C master device handle.
- * @param WindowBytes Caller-owned buffer filled with the read window.
- * @param Length Number of bytes to read.
+ * @param InDevice Open I2C master device handle.
+ * @param OutWindowBytes Caller-owned buffer filled with the read window.
+ * @param InLength Number of bytes to read.
  * @return Normalized outcome of the single read attempt.
  */
-inline EI2cReadOutcome ReadI2cMaster(const i2c_master_dev_handle_t Device, std::uint8_t* const WindowBytes, const std::size_t Length) noexcept
+inline EI2cReadOutcome ReadI2cMaster(const i2c_master_dev_handle_t InDevice, std::uint8_t* const OutWindowBytes, const std::size_t InLength) noexcept
 {
-	const esp_err_t Result = i2c_master_receive(Device, WindowBytes, Length, I2cTransactionTimeoutMs);
+	const esp_err_t Result = i2c_master_receive(InDevice, OutWindowBytes, InLength, I2cTransactionTimeoutMs);
 	if (Result == ESP_OK)
 	{
 		return EI2cReadOutcome::Read;
@@ -210,18 +211,18 @@ inline EI2cReadOutcome ReadI2cMaster(const i2c_master_dev_handle_t Device, std::
  * Each step is a safe no-op when its handle is null; the return values are ignored because the driver is
  * already going inert and there is no recovery action at this layer.
  *
- * @param Bus Master bus handle to delete.
- * @param Device Master device handle to remove.
+ * @param InBus Master bus handle to delete.
+ * @param InDevice Master device handle to remove.
  */
-inline void CloseI2cMaster(const i2c_master_bus_handle_t Bus, const i2c_master_dev_handle_t Device) noexcept
+inline void CloseI2cMaster(const i2c_master_bus_handle_t InBus, const i2c_master_dev_handle_t InDevice) noexcept
 {
-	if (Device != nullptr)
+	if (InDevice != nullptr)
 	{
-		(void)i2c_master_bus_rm_device(Device);
+		(void)i2c_master_bus_rm_device(InDevice);
 	}
-	if (Bus != nullptr)
+	if (InBus != nullptr)
 	{
-		(void)i2c_del_master_bus(Bus);
+		(void)i2c_del_master_bus(InBus);
 	}
 }
 
@@ -232,28 +233,28 @@ inline void CloseI2cMaster(const i2c_master_bus_handle_t Bus, const i2c_master_d
  * enabled as insurance. On any failure the partially created device is deleted so the caller sees
  * `bOpen == false` and can leave the driver inert without throwing.
  *
- * @param Port I2C port number to open.
- * @param SdaGpio SDA GPIO number wired to the master's SDA pin.
- * @param SclGpio SCL GPIO number wired to the master's SCL pin.
- * @param SlaveAddress This board's own 7-bit bus address.
- * @param Inbox Inbox the receive callback fills; its address is passed as the callback user data.
+ * @param InPort I2C port number to open.
+ * @param InSdaGpio SDA GPIO number wired to the master's SDA pin.
+ * @param InSclGpio SCL GPIO number wired to the master's SCL pin.
+ * @param InSlaveAddress This board's own 7-bit bus address.
+ * @param InInbox Inbox the receive callback fills; its address is passed as the callback user data.
  * @return Opened-slave descriptor reporting whether creation succeeded.
  */
 inline FOpenedI2cSlave OpenConfiguredI2cSlave(
-	const std::int32_t Port,
-	const std::int32_t SdaGpio,
-	const std::int32_t SclGpio,
-	const std::uint8_t SlaveAddress,
-	FI2cReceiveInbox& Inbox) noexcept
+	const std::int32_t InPort,
+	const std::int32_t InSdaGpio,
+	const std::int32_t InSclGpio,
+	const std::uint8_t InSlaveAddress,
+	FI2cReceiveInbox& InInbox) noexcept
 {
 	i2c_slave_config_t SlaveConfig{};
-	SlaveConfig.i2c_port = static_cast<i2c_port_num_t>(Port);
-	SlaveConfig.sda_io_num = static_cast<gpio_num_t>(SdaGpio);
-	SlaveConfig.scl_io_num = static_cast<gpio_num_t>(SclGpio);
+	SlaveConfig.i2c_port = static_cast<i2c_port_num_t>(InPort);
+	SlaveConfig.sda_io_num = static_cast<gpio_num_t>(InSdaGpio);
+	SlaveConfig.scl_io_num = static_cast<gpio_num_t>(InSclGpio);
 	SlaveConfig.clk_source = I2C_CLK_SRC_DEFAULT;
 	SlaveConfig.send_buf_depth = I2cSlaveBufferDepth;
 	SlaveConfig.receive_buf_depth = I2cSlaveBufferDepth;
-	SlaveConfig.slave_addr = SlaveAddress;
+	SlaveConfig.slave_addr = InSlaveAddress;
 	SlaveConfig.addr_bit_len = I2C_ADDR_BIT_LEN_7;
 	SlaveConfig.intr_priority = 0;
 	SlaveConfig.flags.enable_internal_pullup = true;
@@ -264,7 +265,7 @@ inline FOpenedI2cSlave OpenConfiguredI2cSlave(
 	}
 	i2c_slave_event_callbacks_t Callbacks{};
 	Callbacks.on_receive = OnI2cSlaveReceiveFromIsr;
-	if (i2c_slave_register_event_callbacks(Device, &Callbacks, &Inbox) != ESP_OK)
+	if (i2c_slave_register_event_callbacks(Device, &Callbacks, &InInbox) != ESP_OK)
 	{
 		(void)i2c_del_slave_device(Device);
 		return FOpenedI2cSlave{nullptr, false};
@@ -280,21 +281,22 @@ inline FOpenedI2cSlave OpenConfiguredI2cSlave(
  * `WouldBlock` for a transient full ring or `Error` otherwise. The `Sent` path is runtime-verified by example
  * 20 (2026-07-23); the partial-write discard stays unexercised (frames fit the ring).
  *
- * @param Device Open I2C slave device handle.
- * @param FrameBytes First byte of the framed message to stage.
- * @param Length Number of bytes to stage.
+ * @param InDevice Open I2C slave device handle.
+ * @param InFrameBytes First byte of the framed message to stage.
+ * @param InLength Number of bytes to stage.
  * @return Normalized outcome of the single stage attempt.
  */
-inline EI2cWriteOutcome WriteI2cSlave(const i2c_slave_dev_handle_t Device, const std::uint8_t* const FrameBytes, const std::size_t Length) noexcept
+inline EI2cWriteOutcome WriteI2cSlave(
+	const i2c_slave_dev_handle_t InDevice, const std::uint8_t* const InFrameBytes, const std::size_t InLength) noexcept
 {
 	std::uint32_t Written = 0;
-	const esp_err_t Result = i2c_slave_write(Device, FrameBytes, static_cast<std::uint32_t>(Length), &Written, 0);
-	if (Result == ESP_OK && static_cast<std::size_t>(Written) == Length)
+	const esp_err_t Result = i2c_slave_write(InDevice, InFrameBytes, static_cast<std::uint32_t>(InLength), &Written, 0);
+	if (Result == ESP_OK && static_cast<std::size_t>(Written) == InLength)
 	{
 		return EI2cWriteOutcome::Sent;
 	}
 	// Discard any partial bytes so a half-frame never corrupts the master's read.
-	(void)i2c_slave_reset_tx_fifo(Device);
+	(void)i2c_slave_reset_tx_fifo(InDevice);
 	if (Result == ESP_OK || Result == ESP_ERR_TIMEOUT)
 	{
 		return EI2cWriteOutcome::WouldBlock;
@@ -308,13 +310,13 @@ inline EI2cWriteOutcome WriteI2cSlave(const i2c_slave_dev_handle_t Device, const
  * A safe no-op when the device is null; the return value is ignored because the driver is already going inert
  * and there is no recovery action at this layer.
  *
- * @param Device Slave device handle to delete.
+ * @param InDevice Slave device handle to delete.
  */
-inline void CloseI2cSlave(const i2c_slave_dev_handle_t Device) noexcept
+inline void CloseI2cSlave(const i2c_slave_dev_handle_t InDevice) noexcept
 {
-	if (Device != nullptr)
+	if (InDevice != nullptr)
 	{
-		(void)i2c_del_slave_device(Device);
+		(void)i2c_del_slave_device(InDevice);
 	}
 }
 

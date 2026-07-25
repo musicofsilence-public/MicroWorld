@@ -98,16 +98,16 @@ public:
 	TClassRegistry<8>& GetRegistry() noexcept { return Registry; }
 
 	/** Returns the registry-owned descriptor for one engine base type id. */
-	const FClassDescriptor* FindDescriptor(const FTypeId TypeId) noexcept { return Registry.Find(TypeId); }
+	const FClassDescriptor* FindDescriptor(const FTypeId InTypeId) noexcept { return Registry.Find(InTypeId); }
 
 	/**
 	 * Constructs one base engine object (UWorld, AActor, or UActorComponent) in
 	 * this environment's store using its registry-owned descriptor.
 	 */
 	template<typename T, typename... TArguments>
-	TObjectPtr<T> CreateObject(const FTypeId TypeId, TArguments&&... Arguments) noexcept
+	TObjectPtr<T> CreateObject(const FTypeId InTypeId, TArguments&&... Arguments) noexcept
 	{
-		const FClassDescriptor* const Descriptor = Registry.Find(TypeId);
+		const FClassDescriptor* const Descriptor = Registry.Find(InTypeId);
 		const auto Result = Store.NewObject<T>(*Descriptor, std::forward<TArguments>(Arguments)...);
 		return Result.Object;
 	}
@@ -117,17 +117,17 @@ public:
 	 * an instance of the derived type through that descriptor.
 	 */
 	template<typename T, typename... TArguments>
-	TObjectPtr<T> CreateDerivedObject(const FTypeId TypeId, const char* const Name, TArguments&&... Arguments) noexcept
+	TObjectPtr<T> CreateDerivedObject(const FTypeId InTypeId, const char* const InName, TArguments&&... Arguments) noexcept
 	{
-		RegisterDerivedClass<T>(TypeId, Name);
-		const FClassDescriptor* const Descriptor = Registry.Find(TypeId);
+		RegisterDerivedClass<T>(InTypeId, InName);
+		const FClassDescriptor* const Descriptor = Registry.Find(InTypeId);
 		const auto Result = Store.NewObject<T>(*Descriptor, std::forward<TArguments>(Arguments)...);
 		return Result.Object;
 	}
 
 	/** Registers one user-derived descriptor using the shared managed tracer. */
 	template<typename T>
-	EObjectResult RegisterDerivedClass(const FTypeId TypeId, const char* const Name) noexcept
+	EObjectResult RegisterDerivedClass(const FTypeId InTypeId, const char* const InName) noexcept
 	{
 		const FClassDescriptor* Parent = nullptr;
 		if constexpr (std::is_base_of<AActor, T>::value)
@@ -142,15 +142,15 @@ public:
 		{
 			Parent = Registry.Find(UWorldClassId);
 		}
-		const FClassDescriptor Candidate = MakeClassDescriptor<T>(TypeId, Name, Parent, &TraceManagedObjectReferences);
+		const FClassDescriptor Candidate = MakeClassDescriptor<T>(InTypeId, InName, Parent, &TraceManagedObjectReferences);
 		return Registry.Register(Candidate);
 	}
 
 	/** Roots one traced reference using this environment's root capacity. */
 	template<typename T>
-	TStrongObjectPtr<T> MakeRoot(const TObjectPtr<T> Object) noexcept
+	TStrongObjectPtr<T> MakeRoot(const TObjectPtr<T> InObject) noexcept
 	{
-		auto Result = Store.MakeStrongObjectPtr(Object);
+		auto Result = Store.MakeStrongObjectPtr(InObject);
 		return std::move(Result.Pointer);
 	}
 

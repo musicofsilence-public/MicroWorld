@@ -22,9 +22,9 @@ namespace
 {
 
 	/** Maps one SPI transmit outcome to the shared driver result (mirrors the UART/I2C drivers' mapping). */
-	ENetResult MapSpiTransmitOutcome(const Detail::ESpiTransmitOutcome Outcome) noexcept
+	ENetResult MapSpiTransmitOutcome(const Detail::ESpiTransmitOutcome InOutcome) noexcept
 	{
-		switch (Outcome)
+		switch (InOutcome)
 		{
 			case Detail::ESpiTransmitOutcome::Sent:
 				return ENetResult::Success;
@@ -37,19 +37,19 @@ namespace
 	}
 
 	/** Reports the first reason an outgoing packet cannot be framed and sent, or `Success`. */
-	ENetResult ValidateOutgoingSpiPacket(const FNetAddress& To, const TSpan<const std::uint8_t> Packet) noexcept
+	ENetResult ValidateOutgoingSpiPacket(const FNetAddress& InTo, const TSpan<const std::uint8_t> InPacket) noexcept
 	{
 		// Validate every argument before any syscall so a rejection is truly transactional.
-		if (!IsSpiAddress(To))
+		if (!IsSpiAddress(InTo))
 		{
 			return ENetResult::Invalid;
 		}
-		const std::size_t PacketSize = Packet.Size();
+		const std::size_t PacketSize = InPacket.Size();
 		if (PacketSize > SpiMaxPayloadBytes)
 		{
 			return ENetResult::Invalid;
 		}
-		if (PacketSize != 0 && Packet.Data() == nullptr)
+		if (PacketSize != 0 && InPacket.Data() == nullptr)
 		{
 			return ENetResult::Invalid;
 		}
@@ -59,29 +59,29 @@ namespace
 	/** Copies the decoder's held frame into the destination and clears it, or returns `Full`
 	 * (leaving the frame held) when the payload exceeds the destination. */
 	ENetResult DeliverFrameFromDecoder(
-		TFrameDecoder<SpiMaxPayloadBytes>& Decoder, TSpan<std::uint8_t> Destination, FNetAddress& OutFrom, FNetReceiveResult& OutResult) noexcept
+		TFrameDecoder<SpiMaxPayloadBytes>& InDecoder, TSpan<std::uint8_t> InDestination, FNetAddress& OutFrom, FNetReceiveResult& OutResult) noexcept
 	{
 		// On Full the destination is untouched and the frame stays held for the next call, so a
 		// receive that cannot fit is transactional.
-		const std::size_t HeldLength = Decoder.FramePayload().Size();
-		if (HeldLength > Destination.Size())
+		const std::size_t HeldLength = InDecoder.FramePayload().Size();
+		if (HeldLength > InDestination.Size())
 		{
 			return ENetResult::Full;
 		}
-		std::memcpy(Destination.Data(), Decoder.FramePayload().Data(), HeldLength);
-		OutFrom = MakeSpiAddress(Decoder.FrameNodeId());
+		std::memcpy(InDestination.Data(), InDecoder.FramePayload().Data(), HeldLength);
+		OutFrom = MakeSpiAddress(InDecoder.FrameNodeId());
 		OutResult.BytesReceived = HeldLength;
-		Decoder.ClearFrame();
+		InDecoder.ClearFrame();
 		return ENetResult::Success;
 	}
 
 	/** Pushes a whole received window through the decoder, stopping at the first completed frame; the
 	 * caller must ensure the decoder holds no frame before calling. */
-	void PumpWindowIntoDecoder(TFrameDecoder<SpiMaxPayloadBytes>& Decoder, const std::uint8_t* const Window, const std::size_t Length) noexcept
+	void PumpWindowIntoDecoder(TFrameDecoder<SpiMaxPayloadBytes>& InDecoder, const std::uint8_t* const InWindow, const std::size_t InLength) noexcept
 	{
-		for (std::size_t Index = 0; Index < Length; ++Index)
+		for (std::size_t Index = 0; Index < InLength; ++Index)
 		{
-			const EFrameEvent Event = Decoder.PushByte(Window[Index]);
+			const EFrameEvent Event = InDecoder.PushByte(InWindow[Index]);
 			if (Event == EFrameEvent::FrameReady)
 			{
 				return;
@@ -95,10 +95,10 @@ namespace
 
 } // namespace
 
-FEsp32SpiMasterDriver::FEsp32SpiMasterDriver(const FEsp32SpiMasterConfig& Config) noexcept
+FEsp32SpiMasterDriver::FEsp32SpiMasterDriver(const FEsp32SpiMasterConfig& InConfig) noexcept
 {
 	const Detail::FOpenedSpiMaster Opened =
-		Detail::OpenConfiguredSpiMaster(Config.SpiHost, Config.MosiGpio, Config.MisoGpio, Config.SclkGpio, Config.CsGpio, Config.ClockHz);
+		Detail::OpenConfiguredSpiMaster(InConfig.SpiHost, InConfig.MosiGpio, InConfig.MisoGpio, InConfig.SclkGpio, InConfig.CsGpio, InConfig.ClockHz);
 	if (!Opened.bOpen)
 	{
 		DeviceHandle = nullptr;
@@ -108,8 +108,8 @@ FEsp32SpiMasterDriver::FEsp32SpiMasterDriver(const FEsp32SpiMasterConfig& Config
 		return;
 	}
 	DeviceHandle = Opened.Device;
-	SpiHostValue = Config.SpiHost;
-	LocalNodeIdValue = Config.LocalNodeId;
+	SpiHostValue = InConfig.SpiHost;
+	LocalNodeIdValue = InConfig.LocalNodeId;
 	bOpen = true;
 }
 
@@ -121,10 +121,10 @@ FEsp32SpiMasterDriver::~FEsp32SpiMasterDriver() noexcept
 	}
 }
 
-ENetResult FEsp32SpiMasterDriver::ExchangeAndPump(const std::uint8_t* const TransmitWindowBytes) noexcept
+ENetResult FEsp32SpiMasterDriver::ExchangeAndPump(const std::uint8_t* const InTransmitWindow) noexcept
 {
 	const Detail::ESpiTransmitOutcome Outcome =
-		Detail::TransmitSpiMaster(static_cast<spi_device_handle_t>(DeviceHandle), TransmitWindowBytes, ReceiveWindow, SpiTransactionWindowBytes);
+		Detail::TransmitSpiMaster(static_cast<spi_device_handle_t>(DeviceHandle), InTransmitWindow, ReceiveWindow, SpiTransactionWindowBytes);
 	const ENetResult Result = MapSpiTransmitOutcome(Outcome);
 	// SPI is full-duplex: the received window holds the slave's simultaneous output, so feed it to the
 	// decoder rather than discard it. Only pump when no frame is already held (the decoder precondition).
@@ -135,20 +135,20 @@ ENetResult FEsp32SpiMasterDriver::ExchangeAndPump(const std::uint8_t* const Tran
 	return Result;
 }
 
-ENetResult FEsp32SpiMasterDriver::TrySend(const FNetAddress& To, TSpan<const std::uint8_t> Packet) noexcept
+ENetResult FEsp32SpiMasterDriver::TrySend(const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
 {
 	if (!bOpen)
 	{
 		return ENetResult::Unavailable;
 	}
-	const ENetResult Validation = ValidateOutgoingSpiPacket(To, Packet);
+	const ENetResult Validation = ValidateOutgoingSpiPacket(InTo, InPacket);
 	if (Validation != ENetResult::Success)
 	{
 		return Validation;
 	}
 	// The codec is transactional on failure; pad the window's tail with idle bytes the peer's decoder ignores.
 	std::size_t Written = 0;
-	const ENetResult EncodeResult = EncodeFrame(LocalNodeIdValue, Packet, TSpan<std::uint8_t>(TransmitWindow, SpiTransactionWindowBytes), Written);
+	const ENetResult EncodeResult = EncodeFrame(LocalNodeIdValue, InPacket, TSpan<std::uint8_t>(TransmitWindow, SpiTransactionWindowBytes), Written);
 	if (EncodeResult != ENetResult::Success)
 	{
 		return EncodeResult;
@@ -157,11 +157,11 @@ ENetResult FEsp32SpiMasterDriver::TrySend(const FNetAddress& To, TSpan<const std
 	return ExchangeAndPump(TransmitWindow);
 }
 
-ENetResult FEsp32SpiMasterDriver::TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> Destination, FNetReceiveResult& OutResult) noexcept
+ENetResult FEsp32SpiMasterDriver::TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept
 {
 	// Reject a null destination with nonzero length before any bus transaction.
-	const std::size_t Capacity = Destination.Size();
-	if (Capacity != 0 && Destination.Data() == nullptr)
+	const std::size_t Capacity = InDestination.Size();
+	if (Capacity != 0 && InDestination.Data() == nullptr)
 	{
 		return ENetResult::Invalid;
 	}
@@ -172,7 +172,7 @@ ENetResult FEsp32SpiMasterDriver::TryReceive(FNetAddress& OutFrom, TSpan<std::ui
 	// A frame held from a prior Full is delivered first so the decoder precondition is honored.
 	if (Decoder.HasFrame())
 	{
-		return DeliverFrameFromDecoder(Decoder, Destination, OutFrom, OutResult);
+		return DeliverFrameFromDecoder(Decoder, InDestination, OutFrom, OutResult);
 	}
 	// One idle full-duplex transaction clocks in whatever the slave has staged (ADR Appendix B).
 	const ENetResult Exchange = ExchangeAndPump(IdleWindow);
@@ -182,7 +182,7 @@ ENetResult FEsp32SpiMasterDriver::TryReceive(FNetAddress& OutFrom, TSpan<std::ui
 	}
 	if (Decoder.HasFrame())
 	{
-		return DeliverFrameFromDecoder(Decoder, Destination, OutFrom, OutResult);
+		return DeliverFrameFromDecoder(Decoder, InDestination, OutFrom, OutResult);
 	}
 	return ENetResult::Unavailable;
 }
@@ -197,10 +197,10 @@ bool FEsp32SpiMasterDriver::IsOpen() const noexcept
 	return bOpen;
 }
 
-FEsp32SpiSlaveDriver::FEsp32SpiSlaveDriver(const FEsp32SpiSlaveConfig& Config) noexcept
+FEsp32SpiSlaveDriver::FEsp32SpiSlaveDriver(const FEsp32SpiSlaveConfig& InConfig) noexcept
 {
 	const Detail::FOpenedSpiSlave Opened =
-		Detail::OpenConfiguredSpiSlave(Config.SpiHost, Config.MosiGpio, Config.MisoGpio, Config.SclkGpio, Config.CsGpio);
+		Detail::OpenConfiguredSpiSlave(InConfig.SpiHost, InConfig.MosiGpio, InConfig.MisoGpio, InConfig.SclkGpio, InConfig.CsGpio);
 	if (!Opened.bOpen)
 	{
 		SpiHostValue = 0;
@@ -208,8 +208,8 @@ FEsp32SpiSlaveDriver::FEsp32SpiSlaveDriver(const FEsp32SpiSlaveConfig& Config) n
 		bOpen = false;
 		return;
 	}
-	SpiHostValue = Config.SpiHost;
-	LocalNodeIdValue = Config.LocalNodeId;
+	SpiHostValue = InConfig.SpiHost;
+	LocalNodeIdValue = InConfig.LocalNodeId;
 	// Give the persistent descriptor a lifetime in its opaque storage before the first queue.
 	TransactionPtr = ::new (static_cast<void*>(TransactionStorage)) spi_slave_transaction_t{};
 	bOpen = true;
@@ -245,13 +245,13 @@ void FEsp32SpiSlaveDriver::QueueNextTransaction() noexcept
 	}
 }
 
-ENetResult FEsp32SpiSlaveDriver::TrySend(const FNetAddress& To, TSpan<const std::uint8_t> Packet) noexcept
+ENetResult FEsp32SpiSlaveDriver::TrySend(const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
 {
 	if (!bOpen)
 	{
 		return ENetResult::Unavailable;
 	}
-	const ENetResult Validation = ValidateOutgoingSpiPacket(To, Packet);
+	const ENetResult Validation = ValidateOutgoingSpiPacket(InTo, InPacket);
 	if (Validation != ENetResult::Success)
 	{
 		return Validation;
@@ -263,7 +263,7 @@ ENetResult FEsp32SpiSlaveDriver::TrySend(const FNetAddress& To, TSpan<const std:
 	}
 	// The codec is transactional on failure; pad the window's tail with idle bytes.
 	std::size_t Written = 0;
-	const ENetResult EncodeResult = EncodeFrame(LocalNodeIdValue, Packet, TSpan<std::uint8_t>(StagedFrame, SpiTransactionWindowBytes), Written);
+	const ENetResult EncodeResult = EncodeFrame(LocalNodeIdValue, InPacket, TSpan<std::uint8_t>(StagedFrame, SpiTransactionWindowBytes), Written);
 	if (EncodeResult != ENetResult::Success)
 	{
 		return EncodeResult;
@@ -273,11 +273,11 @@ ENetResult FEsp32SpiSlaveDriver::TrySend(const FNetAddress& To, TSpan<const std:
 	return ENetResult::Success;
 }
 
-ENetResult FEsp32SpiSlaveDriver::TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> Destination, FNetReceiveResult& OutResult) noexcept
+ENetResult FEsp32SpiSlaveDriver::TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept
 {
 	// Reject a null destination with nonzero length before touching the transaction queue.
-	const std::size_t Capacity = Destination.Size();
-	if (Capacity != 0 && Destination.Data() == nullptr)
+	const std::size_t Capacity = InDestination.Size();
+	if (Capacity != 0 && InDestination.Data() == nullptr)
 	{
 		return ENetResult::Invalid;
 	}
@@ -288,7 +288,7 @@ ENetResult FEsp32SpiSlaveDriver::TryReceive(FNetAddress& OutFrom, TSpan<std::uin
 	// A frame held from a prior Full is delivered first so the decoder precondition is honored.
 	if (Decoder.HasFrame())
 	{
-		return DeliverFrameFromDecoder(Decoder, Destination, OutFrom, OutResult);
+		return DeliverFrameFromDecoder(Decoder, InDestination, OutFrom, OutResult);
 	}
 	// Recover if a prior queue attempt failed, so the master always has a buffer to clock.
 	if (!bTransactionQueued)
@@ -306,7 +306,7 @@ ENetResult FEsp32SpiSlaveDriver::TryReceive(FNetAddress& OutFrom, TSpan<std::uin
 	QueueNextTransaction();
 	if (Decoder.HasFrame())
 	{
-		return DeliverFrameFromDecoder(Decoder, Destination, OutFrom, OutResult);
+		return DeliverFrameFromDecoder(Decoder, InDestination, OutFrom, OutResult);
 	}
 	return ENetResult::Unavailable;
 }

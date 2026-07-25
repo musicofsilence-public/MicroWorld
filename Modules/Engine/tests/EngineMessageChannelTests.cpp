@@ -172,26 +172,26 @@ struct FDeliveredMessageRecord final
 	std::uint8_t PayloadBytes[MaxPayloadBytes]{};
 
 	/** Records one delivered view's header, arrival channel, and payload for a later assertion. */
-	void Record(const FMessageView& View) noexcept
+	void Record(const FMessageView& InView) noexcept
 	{
 		bWasCalled = true;
-		MessageTypeId = View.Header.MessageTypeId;
-		TargetActorId = View.Header.TargetActorId;
-		SenderActorId = View.Header.SenderActorId;
-		ArrivedOnChannelId = View.ArrivedOnChannelId;
-		PayloadLength = View.Payload.Size();
-		for (std::size_t Index = 0; Index < View.Payload.Size() && Index < MaxPayloadBytes; ++Index)
+		MessageTypeId = InView.Header.MessageTypeId;
+		TargetActorId = InView.Header.TargetActorId;
+		SenderActorId = InView.Header.SenderActorId;
+		ArrivedOnChannelId = InView.ArrivedOnChannelId;
+		PayloadLength = InView.Payload.Size();
+		for (std::size_t Index = 0; Index < InView.Payload.Size() && Index < MaxPayloadBytes; ++Index)
 		{
-			PayloadBytes[Index] = View.Payload.Data()[Index];
+			PayloadBytes[Index] = InView.Payload.Data()[Index];
 		}
 	}
 };
 
 /** Binds a nothrow inline handler that records every delivered view into Recorder. */
-FMessageHandlerBinding MakeRecordingHandler(FDeliveredMessageRecord& Recorder) noexcept
+FMessageHandlerBinding MakeRecordingHandler(FDeliveredMessageRecord& InRecorder) noexcept
 {
 	FMessageHandlerBinding Delegate;
-	(void)Delegate.Bind([&Recorder](const FMessageView& View) noexcept { Recorder.Record(View); });
+	(void)Delegate.Bind([&InRecorder](const FMessageView& InView) noexcept { InRecorder.Record(InView); });
 	return Delegate;
 }
 
@@ -210,24 +210,24 @@ struct FChannelKeyedMessageRecords final
 	FDeliveredMessageRecord Command;
 
 	/** Routes View into the slot matching its arrival channel; any other channel id is left unrecorded (never expected in this suite). */
-	void RecordByArrivalChannel(const FMessageView& View) noexcept
+	void RecordByArrivalChannel(const FMessageView& InView) noexcept
 	{
-		if (View.ArrivedOnChannelId == TelemetryChannelId)
+		if (InView.ArrivedOnChannelId == TelemetryChannelId)
 		{
-			Telemetry.Record(View);
+			Telemetry.Record(InView);
 		}
-		else if (View.ArrivedOnChannelId == CommandChannelId)
+		else if (InView.ArrivedOnChannelId == CommandChannelId)
 		{
-			Command.Record(View);
+			Command.Record(InView);
 		}
 	}
 };
 
 /** Binds a nothrow inline handler that buckets every delivered view into Recorder's channel-keyed slot. */
-FMessageHandlerBinding MakeChannelKeyedRecordingHandler(FChannelKeyedMessageRecords& Recorder) noexcept
+FMessageHandlerBinding MakeChannelKeyedRecordingHandler(FChannelKeyedMessageRecords& InRecorder) noexcept
 {
 	FMessageHandlerBinding Delegate;
-	(void)Delegate.Bind([&Recorder](const FMessageView& View) noexcept { Recorder.RecordByArrivalChannel(View); });
+	(void)Delegate.Bind([&InRecorder](const FMessageView& InView) noexcept { InRecorder.RecordByArrivalChannel(InView); });
 	return Delegate;
 }
 
@@ -239,16 +239,16 @@ class FToggleableSink final : public IEncodedMessageSink
 {
 public:
 	/** Selects whether the next ReceiveEncodedMessage calls accept or reject their message. */
-	void SetRejectInbound(const bool bReject) noexcept { bRejectInbound = bReject; }
+	void SetRejectInbound(const bool bInReject) noexcept { bRejectInbound = bInReject; }
 
 	/** Reports how many ReceiveEncodedMessage calls this stub has observed, accepted or not. */
 	std::size_t ReceivedCallCount() const noexcept { return CallCount; }
 
 	/** Records the call and reports CapacityExceeded while rejecting, Success otherwise. */
-	EMessageResult ReceiveEncodedMessage(const FMessageChannelId ArrivedOnChannelId, const TSpan<const std::uint8_t> Encoded) noexcept override
+	EMessageResult ReceiveEncodedMessage(const FMessageChannelId InArrivedOnChannelId, const TSpan<const std::uint8_t> InEncoded) noexcept override
 	{
-		(void)ArrivedOnChannelId;
-		(void)Encoded;
+		(void)InArrivedOnChannelId;
+		(void)InEncoded;
 		++CallCount;
 		return bRejectInbound ? EMessageResult::CapacityExceeded : EMessageResult::Success;
 	}
@@ -273,10 +273,10 @@ public:
 	std::size_t ForwardedCount() const noexcept { return CallCount; }
 
 	/** Records the call and always accepts. */
-	EMessageResult ReceiveEncodedMessage(const FMessageChannelId ArrivedOnChannelId, const TSpan<const std::uint8_t> Encoded) noexcept override
+	EMessageResult ReceiveEncodedMessage(const FMessageChannelId InArrivedOnChannelId, const TSpan<const std::uint8_t> InEncoded) noexcept override
 	{
-		(void)ArrivedOnChannelId;
-		(void)Encoded;
+		(void)InArrivedOnChannelId;
+		(void)InEncoded;
 		++CallCount;
 		return EMessageResult::Success;
 	}
@@ -292,22 +292,23 @@ private:
  * last per the D3 recipe), so this single Tick call already dispatches the net frame then the
  * router (inbound) and flushes the router then the net frame (outbound) in the right order.
  */
-void PumpSide(FHost& Host, const TimePointMilliseconds NowMilliseconds) noexcept
+void PumpSide(FHost& InHost, const TimePointMilliseconds InNowMilliseconds) noexcept
 {
-	(void)Host.Tick(NowMilliseconds);
+	(void)InHost.Tick(InNowMilliseconds);
 }
 
 /** Drives both sides through PumpSide until the client's NetHost reports Connected or the frame budget runs out, mirroring EngineNetHostTests.cpp's
  * handshake loop. */
-TimePointMilliseconds ConnectClientToServer(FHost& ClientHost, FNet& ClientNet, FHost& ServerHost, TimePointMilliseconds NowMilliseconds) noexcept
+TimePointMilliseconds ConnectClientToServer(
+	FHost& InClientHost, FNet& InClientNet, FHost& InServerHost, TimePointMilliseconds InNowMilliseconds) noexcept
 {
-	for (int Frame = 0; Frame < MaxHandshakeFrames && ClientNet.GetState() != ENetHostState::Connected; ++Frame)
+	for (int Frame = 0; Frame < MaxHandshakeFrames && InClientNet.GetState() != ENetHostState::Connected; ++Frame)
 	{
-		NowMilliseconds += FrameStepMilliseconds;
-		PumpSide(ClientHost, NowMilliseconds);
-		PumpSide(ServerHost, NowMilliseconds);
+		InNowMilliseconds += FrameStepMilliseconds;
+		PumpSide(InClientHost, InNowMilliseconds);
+		PumpSide(InServerHost, InNowMilliseconds);
 	}
-	return NowMilliseconds;
+	return InNowMilliseconds;
 }
 
 /**
@@ -316,17 +317,17 @@ TimePointMilliseconds ConnectClientToServer(FHost& ClientHost, FNet& ClientNet, 
  * of that side's net frames through its frame set.
  */
 TimePointMilliseconds ConnectClientToServerOverTwoWires(
-	FHost& ClientHost, FNet& ClientNetA, FNet& ClientNetB, FHost& ServerHost, TimePointMilliseconds NowMilliseconds) noexcept
+	FHost& InClientHost, FNet& InClientNetA, FNet& InClientNetB, FHost& InServerHost, TimePointMilliseconds InNowMilliseconds) noexcept
 {
 	for (int Frame = 0;
-		 Frame < MaxHandshakeFrames && (ClientNetA.GetState() != ENetHostState::Connected || ClientNetB.GetState() != ENetHostState::Connected);
+		 Frame < MaxHandshakeFrames && (InClientNetA.GetState() != ENetHostState::Connected || InClientNetB.GetState() != ENetHostState::Connected);
 		 ++Frame)
 	{
-		NowMilliseconds += FrameStepMilliseconds;
-		PumpSide(ClientHost, NowMilliseconds);
-		PumpSide(ServerHost, NowMilliseconds);
+		InNowMilliseconds += FrameStepMilliseconds;
+		PumpSide(InClientHost, InNowMilliseconds);
+		PumpSide(InServerHost, InNowMilliseconds);
 	}
-	return NowMilliseconds;
+	return InNowMilliseconds;
 }
 
 /** Client-to-server targeted delivery: SendMessageToActor on the bound channel reaches only the server's matching handler. */

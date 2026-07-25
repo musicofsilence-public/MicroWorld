@@ -50,7 +50,7 @@ public:
 class FTrackedActor final : public AActor
 {
 public:
-	explicit FTrackedActor(FActorComponentRegistryReference Components) noexcept : AActor(std::move(Components)) {}
+	explicit FTrackedActor(FActorComponentRegistryReference InComponents) noexcept : AActor(std::move(InComponents)) {}
 };
 
 constexpr MicroWorld::FTypeId TrackedActorTypeId{0x00030001u};
@@ -60,23 +60,23 @@ constexpr MicroWorld::FTypeId TrackedComponentTypeId{0x00030002u};
 using FGarbageCollectionEnvironment = TEngineEnvironment<256, 16, 8, 4>;
 
 /** Builds a tracked actor through its own derived descriptor. */
-TObjectPtr<FTrackedActor> MakeTrackedActor(FGarbageCollectionEnvironment& Env, FActorComponentRegistryReference Components) noexcept
+TObjectPtr<FTrackedActor> MakeTrackedActor(FGarbageCollectionEnvironment& InEnv, FActorComponentRegistryReference InComponents) noexcept
 {
-	return Env.CreateDerivedObject<FTrackedActor>(TrackedActorTypeId, "TrackedActor", std::move(Components));
+	return InEnv.CreateDerivedObject<FTrackedActor>(TrackedActorTypeId, "TrackedActor", std::move(InComponents));
 }
 
 /** Builds a tracked component through its own derived descriptor. */
-TObjectPtr<FTrackedComponent> MakeTrackedComponent(FGarbageCollectionEnvironment& Env) noexcept
+TObjectPtr<FTrackedComponent> MakeTrackedComponent(FGarbageCollectionEnvironment& InEnv) noexcept
 {
-	return Env.CreateDerivedObject<FTrackedComponent>(TrackedComponentTypeId, "TrackedComponent");
+	return InEnv.CreateDerivedObject<FTrackedComponent>(TrackedComponentTypeId, "TrackedComponent");
 }
 
 /** Owns a fixed worklist and collector bound to an environment's store for GC tests. */
 class FCollectorFixture final
 {
 public:
-	explicit FCollectorFixture(FObjectStore& Store) noexcept
-		: Collector(Store, FGarbageCollectorStorage{Worklist.data(), static_cast<std::uint32_t>(Worklist.size())})
+	explicit FCollectorFixture(FObjectStore& InStore) noexcept
+		: Collector(InStore, FGarbageCollectorStorage{Worklist.data(), static_cast<std::uint32_t>(Worklist.size())})
 	{
 	}
 

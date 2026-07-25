@@ -11,10 +11,10 @@
 namespace MicroWorld
 {
 
-FEsp32E32LoraDriver::FEsp32E32LoraDriver(const FEsp32E32LoraConfig& Config) noexcept
+FEsp32E32LoraDriver::FEsp32E32LoraDriver(const FEsp32E32LoraConfig& InConfig) noexcept
 {
-	const Detail::FUartPort Port = Detail::AsUartPort(Config.UartPort);
-	const Detail::FOpenedUart Opened = Detail::OpenConfiguredUartPort(Port, Config.TxGpio, Config.RxGpio, Config.BaudRate);
+	const Detail::FUartPort Port = Detail::AsUartPort(InConfig.UartPort);
+	const Detail::FOpenedUart Opened = Detail::OpenConfiguredUartPort(Port, InConfig.TxGpio, InConfig.RxGpio, InConfig.BaudRate);
 	if (!Opened.bOpen)
 	{
 		UartPortNumber = 0;
@@ -22,8 +22,8 @@ FEsp32E32LoraDriver::FEsp32E32LoraDriver(const FEsp32E32LoraConfig& Config) noex
 		bOpen = false;
 		return;
 	}
-	UartPortNumber = Config.UartPort;
-	LocalNodeIdValue = Config.LocalNodeId;
+	UartPortNumber = InConfig.UartPort;
+	LocalNodeIdValue = InConfig.LocalNodeId;
 	bOpen = true;
 }
 
@@ -39,9 +39,9 @@ namespace
 {
 
 	/** Maps one UART write outcome to the shared driver result. */
-	ENetResult MapUartWriteOutcome(const Detail::EUartWriteOutcome Outcome) noexcept
+	ENetResult MapUartWriteOutcome(const Detail::EUartWriteOutcome InOutcome) noexcept
 	{
-		switch (Outcome)
+		switch (InOutcome)
 		{
 			case Detail::EUartWriteOutcome::Sent:
 				return ENetResult::Success;
@@ -55,13 +55,13 @@ namespace
 
 } // namespace
 
-ENetResult FEsp32E32LoraDriver::TrySend(const FNetAddress& To, TSpan<const std::uint8_t> Packet) noexcept
+ENetResult FEsp32E32LoraDriver::TrySend(const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
 {
 	if (!bOpen)
 	{
 		return ENetResult::Unavailable;
 	}
-	const ENetResult Validation = ValidateOutgoingPacket(To, Packet);
+	const ENetResult Validation = ValidateOutgoingPacket(InTo, InPacket);
 	if (Validation != ENetResult::Success)
 	{
 		return Validation;
@@ -69,7 +69,7 @@ ENetResult FEsp32E32LoraDriver::TrySend(const FNetAddress& To, TSpan<const std::
 	// The codec is transactional on failure.
 	std::uint8_t Frame[E32MaxPayloadBytes + FrameOverheadBytes];
 	std::size_t Written = 0;
-	const ENetResult EncodeResult = EncodeFrame(LocalNodeIdValue, Packet, TSpan<std::uint8_t>(Frame, sizeof(Frame)), Written);
+	const ENetResult EncodeResult = EncodeFrame(LocalNodeIdValue, InPacket, TSpan<std::uint8_t>(Frame, sizeof(Frame)), Written);
 	if (EncodeResult != ENetResult::Success)
 	{
 		return EncodeResult;
@@ -78,30 +78,30 @@ ENetResult FEsp32E32LoraDriver::TrySend(const FNetAddress& To, TSpan<const std::
 	return MapUartWriteOutcome(Outcome);
 }
 
-ENetResult FEsp32E32LoraDriver::ValidateOutgoingPacket(const FNetAddress& To, const TSpan<const std::uint8_t> Packet) const noexcept
+ENetResult FEsp32E32LoraDriver::ValidateOutgoingPacket(const FNetAddress& InTo, const TSpan<const std::uint8_t> InPacket) const noexcept
 {
 	// Validate every argument before any syscall so a rejection is truly transactional.
-	if (!IsLoraAddress(To))
+	if (!IsLoraAddress(InTo))
 	{
 		return ENetResult::Invalid;
 	}
-	const std::size_t PacketSize = Packet.Size();
+	const std::size_t PacketSize = InPacket.Size();
 	if (PacketSize > E32MaxPayloadBytes)
 	{
 		return ENetResult::Invalid;
 	}
-	if (PacketSize != 0 && Packet.Data() == nullptr)
+	if (PacketSize != 0 && InPacket.Data() == nullptr)
 	{
 		return ENetResult::Invalid;
 	}
 	return ENetResult::Success;
 }
 
-ENetResult FEsp32E32LoraDriver::TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> Destination, FNetReceiveResult& OutResult) noexcept
+ENetResult FEsp32E32LoraDriver::TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept
 {
 	// Reject a null destination with nonzero length before any UART read.
-	const std::size_t Capacity = Destination.Size();
-	if (Capacity != 0 && Destination.Data() == nullptr)
+	const std::size_t Capacity = InDestination.Size();
+	if (Capacity != 0 && InDestination.Data() == nullptr)
 	{
 		return ENetResult::Invalid;
 	}
@@ -112,29 +112,29 @@ ENetResult FEsp32E32LoraDriver::TryReceive(FNetAddress& OutFrom, TSpan<std::uint
 	// A frame held from a prior Full is delivered first so the decoder precondition is honored.
 	if (Decoder.HasFrame())
 	{
-		return DeliverFrameToDestination(Destination, OutFrom, OutResult);
+		return DeliverFrameToDestination(InDestination, OutFrom, OutResult);
 	}
-	return PumpDecoderForFrame(Destination, OutFrom, OutResult);
+	return PumpDecoderForFrame(InDestination, OutFrom, OutResult);
 }
 
 ENetResult FEsp32E32LoraDriver::DeliverFrameToDestination(
-	TSpan<std::uint8_t> Destination, FNetAddress& OutFrom, FNetReceiveResult& OutResult) noexcept
+	TSpan<std::uint8_t> InDestination, FNetAddress& OutFrom, FNetReceiveResult& OutResult) noexcept
 {
 	// On Full the destination is untouched and the frame stays held for the next
 	// call, so a receive that cannot fit is transactional.
 	const std::size_t HeldLength = Decoder.FramePayload().Size();
-	if (HeldLength > Destination.Size())
+	if (HeldLength > InDestination.Size())
 	{
 		return ENetResult::Full;
 	}
-	std::memcpy(Destination.Data(), Decoder.FramePayload().Data(), HeldLength);
+	std::memcpy(InDestination.Data(), Decoder.FramePayload().Data(), HeldLength);
 	OutFrom = MakeLoraAddress(Decoder.FrameNodeId());
 	OutResult.BytesReceived = HeldLength;
 	Decoder.ClearFrame();
 	return ENetResult::Success;
 }
 
-ENetResult FEsp32E32LoraDriver::PumpDecoderForFrame(TSpan<std::uint8_t> Destination, FNetAddress& OutFrom, FNetReceiveResult& OutResult) noexcept
+ENetResult FEsp32E32LoraDriver::PumpDecoderForFrame(TSpan<std::uint8_t> InDestination, FNetAddress& OutFrom, FNetReceiveResult& OutResult) noexcept
 {
 	// Pump available UART bytes one at a time, bounded so a flood cannot starve the caller.
 	const std::size_t PumpByteCap = 2u * (E32MaxPayloadBytes + FrameOverheadBytes);
@@ -155,7 +155,7 @@ ENetResult FEsp32E32LoraDriver::PumpDecoderForFrame(TSpan<std::uint8_t> Destinat
 		if (Event == EFrameEvent::FrameReady)
 		{
 			// A completed frame is delivered immediately; Full keeps it held for the next call.
-			return DeliverFrameToDestination(Destination, OutFrom, OutResult);
+			return DeliverFrameToDestination(InDestination, OutFrom, OutResult);
 		}
 		if (Event == EFrameEvent::Discarded)
 		{

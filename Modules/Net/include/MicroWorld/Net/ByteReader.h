@@ -23,7 +23,7 @@ class FByteReader final
 {
 public:
 	/** Binds the reader to a caller-owned source view; storage is observed, never owned. */
-	constexpr explicit FByteReader(TSpan<const std::uint8_t> Source) noexcept : Buffer(Source), ReadPosition(0) {}
+	constexpr explicit FByteReader(TSpan<const std::uint8_t> InSource) noexcept : Buffer(InSource), ReadPosition(0) {}
 
 	/** Prevents the reader from being copied while caller storage has one observer. */
 	FByteReader(const FByteReader&) = delete;
@@ -66,20 +66,20 @@ public:
 	}
 
 	/**
-	 * Reads `Destination.Size()` bytes into the caller-owned destination and advances.
+	 * Reads `InDestination.Size()` bytes into the caller-owned destination and advances.
 	 * An empty destination is a valid no-op. A null destination with nonzero length
 	 * returns `Invalid`. A destination larger than the remaining source returns
 	 * `Invalid` (a truncated request) without modifying the destination or advancing.
 	 * A source bound to `{nullptr, nonzero}` returns `Invalid` for any nonzero read.
 	 */
-	ENetResult Read(TSpan<std::uint8_t> Destination) noexcept
+	ENetResult Read(TSpan<std::uint8_t> InDestination) noexcept
 	{
-		const std::size_t RequestedSize = Destination.Size();
+		const std::size_t RequestedSize = InDestination.Size();
 		if (RequestedSize == 0)
 		{
 			return ENetResult::Success;
 		}
-		if (Destination.Data() == nullptr)
+		if (InDestination.Data() == nullptr)
 		{
 			return ENetResult::Invalid;
 		}
@@ -92,7 +92,7 @@ public:
 			// The request exceeds the remaining source; treat it as a truncated request.
 			return ENetResult::Invalid;
 		}
-		std::memcpy(Destination.Data(), Buffer.Data() + ReadPosition, RequestedSize);
+		std::memcpy(InDestination.Data(), Buffer.Data() + ReadPosition, RequestedSize);
 		ReadPosition += RequestedSize;
 		return ENetResult::Success;
 	}
@@ -159,23 +159,24 @@ private:
 /**
  * Reads two big-endian bytes (most significant byte first) as a 16-bit value.
  *
- * @param Bytes Caller-owned source of exactly two bytes.
+ * @param InBytes Caller-owned source of exactly two bytes.
  * @return The decoded 16-bit value.
  */
-inline std::uint16_t ReadUint16BigEndian(const std::uint8_t* const Bytes) noexcept
+inline std::uint16_t ReadUint16BigEndian(const std::uint8_t* const InBytes) noexcept
 {
-	return static_cast<std::uint16_t>((static_cast<std::uint16_t>(Bytes[0]) << 8) | static_cast<std::uint16_t>(Bytes[1]));
+	return static_cast<std::uint16_t>((static_cast<std::uint16_t>(InBytes[0]) << 8) | static_cast<std::uint16_t>(InBytes[1]));
 }
 
 /**
  * Reads two little-endian bytes (least significant byte first) as a 16-bit value.
  *
- * @param Bytes Caller-owned source of exactly two bytes.
+ * @param InBytes Caller-owned source of exactly two bytes.
  * @return The decoded 16-bit value.
  */
-inline std::uint16_t ReadUint16LittleEndian(const std::uint8_t* const Bytes) noexcept
+inline std::uint16_t ReadUint16LittleEndian(const std::uint8_t* const InBytes) noexcept
 {
-	return static_cast<std::uint16_t>(static_cast<std::uint16_t>(Bytes[0]) | static_cast<std::uint16_t>(static_cast<std::uint16_t>(Bytes[1]) << 8));
+	return static_cast<std::uint16_t>(
+		static_cast<std::uint16_t>(InBytes[0]) | static_cast<std::uint16_t>(static_cast<std::uint16_t>(InBytes[1]) << 8));
 }
 
 } // namespace MicroWorld

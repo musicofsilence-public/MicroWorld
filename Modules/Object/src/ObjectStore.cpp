@@ -9,24 +9,24 @@ namespace
 {
 
 	/** Confirms that a fixed alignment is non-zero and power-of-two. */
-	bool IsValidAlignment(const std::size_t AlignmentBytes) noexcept
+	bool IsValidAlignment(const std::size_t InAlignmentBytes) noexcept
 	{
-		return AlignmentBytes > 0 && (AlignmentBytes & (AlignmentBytes - 1U)) == 0;
+		return InAlignmentBytes > 0 && (InAlignmentBytes & (InAlignmentBytes - 1U)) == 0;
 	}
 
 	/** Confirms multiplication cannot wrap the storage extent calculation. */
-	bool MultiplicationFitsSizeType(const std::size_t Left, const std::size_t Right) noexcept
+	bool MultiplicationFitsSizeType(const std::size_t InLeft, const std::size_t InRight) noexcept
 	{
-		return Right == 0 || Left <= std::numeric_limits<std::size_t>::max() / Right;
+		return InRight == 0 || InLeft <= std::numeric_limits<std::size_t>::max() / InRight;
 	}
 
 } // namespace
 
-FObjectStoreDispatchGuard::FObjectStoreDispatchGuard(FObjectStore& Store) noexcept
+FObjectStoreDispatchGuard::FObjectStoreDispatchGuard(FObjectStore& InStore) noexcept
 {
-	if (Store.TryBeginDispatch())
+	if (InStore.TryBeginDispatch())
 	{
-		ObjectStore = &Store;
+		ObjectStore = &InStore;
 	}
 }
 
@@ -58,16 +58,16 @@ FObjectStore::FObjectStore(const FObjectStoreStorage InStorage, const FClassRegi
 	StoreConfigurationResult = EObjectResult::Success;
 }
 
-bool FObjectStore::IsStorageDescriptorValid(const FObjectStoreStorage& Storage) noexcept
+bool FObjectStore::IsStorageDescriptorValid(const FObjectStoreStorage& InStorage) noexcept
 {
-	const bool bHasSlotPointers = Storage.SlotCount > 0 && Storage.SlotPayloadBytes != nullptr && Storage.SlotMetadata != nullptr;
-	const bool bHasSlotLayout =
-		Storage.SlotSizeBytes > 0 && IsValidAlignment(Storage.SlotAlignmentBytes) && (Storage.SlotSizeBytes % Storage.SlotAlignmentBytes) == 0;
-	const bool bStorageExtentFits = MultiplicationFitsSizeType(Storage.SlotSizeBytes, Storage.SlotCount)
-		&& Storage.TotalSlotStorageBytes >= Storage.SlotSizeBytes * Storage.SlotCount;
-	const bool bStorageAddressAligned =
-		Storage.SlotPayloadBytes != nullptr && (reinterpret_cast<std::uintptr_t>(Storage.SlotPayloadBytes) & (Storage.SlotAlignmentBytes - 1U)) == 0;
-	const bool bHasRootStorage = Storage.RootCapacity == 0 || Storage.Roots != nullptr;
+	const bool bHasSlotPointers = InStorage.SlotCount > 0 && InStorage.SlotPayloadBytes != nullptr && InStorage.SlotMetadata != nullptr;
+	const bool bHasSlotLayout = InStorage.SlotSizeBytes > 0 && IsValidAlignment(InStorage.SlotAlignmentBytes)
+		&& (InStorage.SlotSizeBytes % InStorage.SlotAlignmentBytes) == 0;
+	const bool bStorageExtentFits = MultiplicationFitsSizeType(InStorage.SlotSizeBytes, InStorage.SlotCount)
+		&& InStorage.TotalSlotStorageBytes >= InStorage.SlotSizeBytes * InStorage.SlotCount;
+	const bool bStorageAddressAligned = InStorage.SlotPayloadBytes != nullptr
+		&& (reinterpret_cast<std::uintptr_t>(InStorage.SlotPayloadBytes) & (InStorage.SlotAlignmentBytes - 1U)) == 0;
+	const bool bHasRootStorage = InStorage.RootCapacity == 0 || InStorage.Roots != nullptr;
 	return bHasSlotPointers && bHasSlotLayout && bStorageExtentFits && bStorageAddressAligned && bHasRootStorage;
 }
 
@@ -88,20 +88,20 @@ FObjectStore::~FObjectStore() noexcept
 	}
 }
 
-UObject* FObjectStore::Resolve(const FObjectHandle Handle) const noexcept
+UObject* FObjectStore::Resolve(const FObjectHandle InHandle) const noexcept
 {
-	const FObjectSlotMetadata* const Slot = FindMatchingSlot(Handle, false);
+	const FObjectSlotMetadata* const Slot = FindMatchingSlot(InHandle, false);
 	return Slot != nullptr ? Slot->Object : nullptr;
 }
 
-EObjectResult FObjectStore::MarkPendingDestroy(const FObjectHandle Handle) noexcept
+EObjectResult FObjectStore::MarkPendingDestroy(const FObjectHandle InHandle) noexcept
 {
 	if (IsPublicMutationLocked())
 	{
 		return EObjectResult::LifecycleLocked;
 	}
 
-	FObjectSlotMetadata* const AnyMatchingSlot = FindMatchingSlot(Handle, true);
+	FObjectSlotMetadata* const AnyMatchingSlot = FindMatchingSlot(InHandle, true);
 	if (AnyMatchingSlot == nullptr)
 	{
 		return EObjectResult::StaleHandle;
@@ -122,7 +122,7 @@ EObjectResult FObjectStore::MarkPendingDestroy(const FObjectHandle Handle) noexc
 	return EObjectResult::Success;
 }
 
-FObjectMutationResult FObjectStore::ApplyPendingDestroy(const std::uint32_t MaxSlotsToInspect) noexcept
+FObjectMutationResult FObjectStore::ApplyPendingDestroy(const std::uint32_t InMaxSlotsToInspect) noexcept
 {
 	FObjectMutationResult Mutation{};
 	Mutation.Result = StoreConfigurationResult;
@@ -132,12 +132,12 @@ FObjectMutationResult FObjectStore::ApplyPendingDestroy(const std::uint32_t MaxS
 		Mutation.Result = EObjectResult::LifecycleLocked;
 		return Mutation;
 	}
-	if (StoreConfigurationResult != EObjectResult::Success || MaxSlotsToInspect == 0 || PendingDestroyCount == 0)
+	if (StoreConfigurationResult != EObjectResult::Success || InMaxSlotsToInspect == 0 || PendingDestroyCount == 0)
 	{
 		return Mutation;
 	}
 
-	const std::uint32_t VisitLimit = MaxSlotsToInspect < Storage.SlotCount ? MaxSlotsToInspect : Storage.SlotCount;
+	const std::uint32_t VisitLimit = InMaxSlotsToInspect < Storage.SlotCount ? InMaxSlotsToInspect : Storage.SlotCount;
 	while (Mutation.SlotsVisited < VisitLimit && PendingDestroyCount > 0)
 	{
 		const ObjectIndex SlotIndex = AdvancePendingScanCursor();
@@ -161,14 +161,14 @@ ObjectIndex FObjectStore::AdvancePendingScanCursor() noexcept
 	return SlotIndex;
 }
 
-EObjectResult FObjectStore::AddRoot(const FObjectHandle Handle) noexcept
+EObjectResult FObjectStore::AddRoot(const FObjectHandle InHandle) noexcept
 {
 	if (IsPublicMutationLocked())
 	{
 		return EObjectResult::LifecycleLocked;
 	}
 
-	FObjectSlotMetadata* const MatchingSlot = FindMatchingSlot(Handle, true);
+	FObjectSlotMetadata* const MatchingSlot = FindMatchingSlot(InHandle, true);
 	if (MatchingSlot == nullptr)
 	{
 		return EObjectResult::StaleHandle;
@@ -186,7 +186,7 @@ EObjectResult FObjectStore::AddRoot(const FObjectHandle Handle) noexcept
 	{
 		if (!Storage.Roots[RootIndex].Handle.IsValid())
 		{
-			Storage.Roots[RootIndex].Handle = Handle;
+			Storage.Roots[RootIndex].Handle = InHandle;
 			++ActiveRootCount;
 			return EObjectResult::Success;
 		}
@@ -194,9 +194,9 @@ EObjectResult FObjectStore::AddRoot(const FObjectHandle Handle) noexcept
 	return EObjectResult::RootCapacityExceeded;
 }
 
-EObjectResult FObjectStore::RemoveRoot(const FObjectHandle Handle) noexcept
+EObjectResult FObjectStore::RemoveRoot(const FObjectHandle InHandle) noexcept
 {
-	if (!Handle.IsValid() || StoreConfigurationResult != EObjectResult::Success)
+	if (!InHandle.IsValid() || StoreConfigurationResult != EObjectResult::Success)
 	{
 		return EObjectResult::StaleHandle;
 	}
@@ -205,7 +205,7 @@ EObjectResult FObjectStore::RemoveRoot(const FObjectHandle Handle) noexcept
 	// later collection; guarded destruction and slot reuse remain impossible.
 	for (std::uint32_t RootIndex = 0; RootIndex < Storage.RootCapacity; ++RootIndex)
 	{
-		if (Storage.Roots[RootIndex].Handle == Handle)
+		if (Storage.Roots[RootIndex].Handle == InHandle)
 		{
 			Storage.Roots[RootIndex].Handle = {};
 			if (ActiveRootCount > 0)
@@ -246,42 +246,42 @@ ObjectIndex FObjectStore::FindVacantSlot() const noexcept
 	return FObjectHandle::InvalidIndex;
 }
 
-void* FObjectStore::SlotAddress(const ObjectIndex SlotIndex) const noexcept
+void* FObjectStore::SlotAddress(const ObjectIndex InSlotIndex) const noexcept
 {
-	return static_cast<void*>(Storage.SlotPayloadBytes + static_cast<std::size_t>(SlotIndex) * Storage.SlotSizeBytes);
+	return static_cast<void*>(Storage.SlotPayloadBytes + static_cast<std::size_t>(InSlotIndex) * Storage.SlotSizeBytes);
 }
 
-FObjectSlotMetadata* FObjectStore::FindMatchingSlot(const FObjectHandle Handle, const bool bAllowPending) noexcept
+FObjectSlotMetadata* FObjectStore::FindMatchingSlot(const FObjectHandle InHandle, const bool bInAllowPending) noexcept
 {
-	return const_cast<FObjectSlotMetadata*>(static_cast<const FObjectStore&>(*this).FindMatchingSlot(Handle, bAllowPending));
+	return const_cast<FObjectSlotMetadata*>(static_cast<const FObjectStore&>(*this).FindMatchingSlot(InHandle, bInAllowPending));
 }
 
-const FObjectSlotMetadata* FObjectStore::FindMatchingSlot(const FObjectHandle Handle, const bool bAllowPending) const noexcept
+const FObjectSlotMetadata* FObjectStore::FindMatchingSlot(const FObjectHandle InHandle, const bool bInAllowPending) const noexcept
 {
-	if (StoreConfigurationResult != EObjectResult::Success || !Handle.IsValid() || Handle.Index >= Storage.SlotCount)
+	if (StoreConfigurationResult != EObjectResult::Success || !InHandle.IsValid() || InHandle.Index >= Storage.SlotCount)
 	{
 		return nullptr;
 	}
 
-	const FObjectSlotMetadata& Slot = Storage.SlotMetadata[Handle.Index];
-	const bool bStateAccepted = Slot.State == EObjectSlotState::Live || (bAllowPending && Slot.State == EObjectSlotState::PendingDestroy);
-	if (!bStateAccepted || Slot.Generation != Handle.Generation || Slot.Object == nullptr)
+	const FObjectSlotMetadata& Slot = Storage.SlotMetadata[InHandle.Index];
+	const bool bStateAccepted = Slot.State == EObjectSlotState::Live || (bInAllowPending && Slot.State == EObjectSlotState::PendingDestroy);
+	if (!bStateAccepted || Slot.Generation != InHandle.Generation || Slot.Object == nullptr)
 	{
 		return nullptr;
 	}
 	return &Slot;
 }
 
-EObjectResult FObjectStore::DestroySlot(const ObjectIndex SlotIndex) noexcept
+EObjectResult FObjectStore::DestroySlot(const ObjectIndex InSlotIndex) noexcept
 {
-	const EObjectResult ValidationResult = ValidateDestroyableSlot(SlotIndex);
+	const EObjectResult ValidationResult = ValidateDestroyableSlot(InSlotIndex);
 	if (ValidationResult != EObjectResult::Success)
 	{
 		return ValidationResult;
 	}
 
-	FObjectSlotMetadata& Slot = Storage.SlotMetadata[SlotIndex];
-	const FObjectHandle Handle{SlotIndex, Slot.Generation};
+	FObjectSlotMetadata& Slot = Storage.SlotMetadata[InSlotIndex];
+	const FObjectHandle Handle{InSlotIndex, Slot.Generation};
 	const FClassDescriptor* const Descriptor = Slot.Descriptor;
 	const bool bWasPending = Slot.State == EObjectSlotState::PendingDestroy;
 	// Save and restore (not clear): this destroy can nest inside another store
@@ -298,13 +298,13 @@ EObjectResult FObjectStore::DestroySlot(const ObjectIndex SlotIndex) noexcept
 	return EObjectResult::Success;
 }
 
-EObjectResult FObjectStore::ValidateDestroyableSlot(const ObjectIndex SlotIndex) const noexcept
+EObjectResult FObjectStore::ValidateDestroyableSlot(const ObjectIndex InSlotIndex) const noexcept
 {
-	if (SlotIndex >= Storage.SlotCount)
+	if (InSlotIndex >= Storage.SlotCount)
 	{
 		return EObjectResult::StaleHandle;
 	}
-	const FObjectSlotMetadata& Slot = Storage.SlotMetadata[SlotIndex];
+	const FObjectSlotMetadata& Slot = Storage.SlotMetadata[InSlotIndex];
 	if ((Slot.State != EObjectSlotState::Live && Slot.State != EObjectSlotState::PendingDestroy) || Slot.Object == nullptr
 		|| Slot.Descriptor == nullptr || Slot.Descriptor->Destroy == nullptr)
 	{
@@ -313,84 +313,85 @@ EObjectResult FObjectStore::ValidateDestroyableSlot(const ObjectIndex SlotIndex)
 	return EObjectResult::Success;
 }
 
-void FObjectStore::RunDestructionCallbacks(FObjectSlotMetadata& Slot, const FObjectHandle Handle) noexcept
+void FObjectStore::RunDestructionCallbacks(FObjectSlotMetadata& InSlot, const FObjectHandle InHandle) noexcept
 {
-	UObject* const Object = Slot.Object;
-	const FClassDescriptor* const Descriptor = Slot.Descriptor;
-	Slot.State = EObjectSlotState::Destroying;
+	UObject* const Object = InSlot.Object;
+	const FClassDescriptor* const Descriptor = InSlot.Descriptor;
+	InSlot.State = EObjectSlotState::Destroying;
 	Object->bPendingDestroy = true;
 	Object->BeginDestroy();
 	Descriptor->Destroy(*Object);
-	RemoveAllRoots(Handle);
+	RemoveAllRoots(InHandle);
 }
 
-void FObjectStore::RecycleOrRetireSlot(FObjectSlotMetadata& Slot) noexcept
+void FObjectStore::RecycleOrRetireSlot(FObjectSlotMetadata& InSlot) noexcept
 {
-	Slot.Descriptor = nullptr;
-	Slot.Object = nullptr;
-	Slot.bMarked = false;
-	if (CanAdvanceObjectGeneration(Slot.Generation))
+	InSlot.Descriptor = nullptr;
+	InSlot.Object = nullptr;
+	InSlot.bMarked = false;
+	if (CanAdvanceObjectGeneration(InSlot.Generation))
 	{
-		Slot.State = EObjectSlotState::Vacant;
+		InSlot.State = EObjectSlotState::Vacant;
 	}
 	else
 	{
-		Slot.State = EObjectSlotState::Retired;
+		InSlot.State = EObjectSlotState::Retired;
 		++RetiredSlotCount;
 	}
 }
 
-void FObjectStore::UpdateOccupancyCounters(const bool bWasPending, const std::size_t PayloadBytes) noexcept
+void FObjectStore::UpdateOccupancyCounters(const bool bInWasPending, const std::size_t InPayloadBytes) noexcept
 {
 	if (OccupiedSlotCount > 0)
 	{
 		--OccupiedSlotCount;
 	}
-	if (bWasPending && PendingDestroyCount > 0)
+	if (bInWasPending && PendingDestroyCount > 0)
 	{
 		--PendingDestroyCount;
 	}
-	if (ObjectPayloadByteCount >= PayloadBytes)
+	if (ObjectPayloadByteCount >= InPayloadBytes)
 	{
-		ObjectPayloadByteCount -= PayloadBytes;
+		ObjectPayloadByteCount -= InPayloadBytes;
 	}
 }
 
-ObjectGeneration FObjectStore::NextPublishGeneration(const ObjectGeneration CurrentGeneration) noexcept
+ObjectGeneration FObjectStore::NextPublishGeneration(const ObjectGeneration InCurrentGeneration) noexcept
 {
 	// Generation 0 means "never published" (ObjectHandle.h), so a slot's first
 	// publish jumps to 1 and later reuse increments -- keeping every live handle's
 	// generation nonzero. FindVacantSlot never returns a slot that cannot advance.
-	return CurrentGeneration == 0 ? 1 : CurrentGeneration + 1;
+	return InCurrentGeneration == 0 ? 1 : InCurrentGeneration + 1;
 }
 
-FObjectHandle FObjectStore::PublishObjectIntoSlot(const ObjectIndex SlotIndex, const FClassDescriptor& Descriptor, UObject& ManagedObject) noexcept
+FObjectHandle FObjectStore::PublishObjectIntoSlot(
+	const ObjectIndex InSlotIndex, const FClassDescriptor& InDescriptor, UObject& InManagedObject) noexcept
 {
-	FObjectSlotMetadata& Slot = Storage.SlotMetadata[SlotIndex];
+	FObjectSlotMetadata& Slot = Storage.SlotMetadata[InSlotIndex];
 	const ObjectGeneration NextGeneration = NextPublishGeneration(Slot.Generation);
-	const FObjectHandle Handle{SlotIndex, NextGeneration};
+	const FObjectHandle Handle{InSlotIndex, NextGeneration};
 
-	ManagedObject.Store = this;
-	ManagedObject.Handle = Handle;
-	ManagedObject.Descriptor = &Descriptor;
-	ManagedObject.bPendingDestroy = false;
+	InManagedObject.Store = this;
+	InManagedObject.Handle = Handle;
+	InManagedObject.Descriptor = &InDescriptor;
+	InManagedObject.bPendingDestroy = false;
 
 	Slot.Generation = NextGeneration;
-	Slot.Descriptor = &Descriptor;
-	Slot.Object = &ManagedObject;
+	Slot.Descriptor = &InDescriptor;
+	Slot.Object = &InManagedObject;
 	Slot.bMarked = false;
 	Slot.State = EObjectSlotState::Live;
 
 	++OccupiedSlotCount;
-	ObjectPayloadByteCount += Descriptor.SizeBytes;
+	ObjectPayloadByteCount += InDescriptor.SizeBytes;
 	return Handle;
 }
 
-void FObjectStore::RemoveAllRoots(const FObjectHandle Handle) noexcept
+void FObjectStore::RemoveAllRoots(const FObjectHandle InHandle) noexcept
 {
 	for (std::uint32_t RootIndex = 0; RootIndex < Storage.RootCapacity; ++RootIndex)
 	{
-		if (Storage.Roots[RootIndex].Handle == Handle)
+		if (Storage.Roots[RootIndex].Handle == InHandle)
 		{
 			Storage.Roots[RootIndex].Handle = {};
 			if (ActiveRootCount > 0)
@@ -401,81 +402,82 @@ void FObjectStore::RemoveAllRoots(const FObjectHandle Handle) noexcept
 	}
 }
 
-FObjectHandle FObjectStore::CollectorRootAt(const std::uint32_t RootIndex) const noexcept
+FObjectHandle FObjectStore::CollectorRootAt(const std::uint32_t InRootIndex) const noexcept
 {
-	return RootIndex < Storage.RootCapacity ? Storage.Roots[RootIndex].Handle : FObjectHandle{};
+	return InRootIndex < Storage.RootCapacity ? Storage.Roots[InRootIndex].Handle : FObjectHandle{};
 }
 
-FObjectHandle FObjectStore::CollectorHandleAt(const ObjectIndex SlotIndex) const noexcept
+FObjectHandle FObjectStore::CollectorHandleAt(const ObjectIndex InSlotIndex) const noexcept
 {
-	if (SlotIndex >= Storage.SlotCount || Storage.SlotMetadata[SlotIndex].State != EObjectSlotState::Live)
+	if (InSlotIndex >= Storage.SlotCount || Storage.SlotMetadata[InSlotIndex].State != EObjectSlotState::Live)
 	{
 		return {};
 	}
-	return FObjectHandle{SlotIndex, Storage.SlotMetadata[SlotIndex].Generation};
+	return FObjectHandle{InSlotIndex, Storage.SlotMetadata[InSlotIndex].Generation};
 }
 
-UObject* FObjectStore::CollectorObjectAt(const ObjectIndex SlotIndex) const noexcept
+UObject* FObjectStore::CollectorObjectAt(const ObjectIndex InSlotIndex) const noexcept
 {
-	return SlotIndex < Storage.SlotCount && Storage.SlotMetadata[SlotIndex].State == EObjectSlotState::Live ? Storage.SlotMetadata[SlotIndex].Object
-																											: nullptr;
+	return InSlotIndex < Storage.SlotCount && Storage.SlotMetadata[InSlotIndex].State == EObjectSlotState::Live
+		? Storage.SlotMetadata[InSlotIndex].Object
+		: nullptr;
 }
 
-bool FObjectStore::CollectorIsOccupied(const ObjectIndex SlotIndex) const noexcept
+bool FObjectStore::CollectorIsOccupied(const ObjectIndex InSlotIndex) const noexcept
 {
-	if (SlotIndex >= Storage.SlotCount)
+	if (InSlotIndex >= Storage.SlotCount)
 	{
 		return false;
 	}
-	const EObjectSlotState State = Storage.SlotMetadata[SlotIndex].State;
+	const EObjectSlotState State = Storage.SlotMetadata[InSlotIndex].State;
 	return State == EObjectSlotState::Live || State == EObjectSlotState::PendingDestroy || State == EObjectSlotState::Destroying;
 }
 
-bool FObjectStore::CollectorIsPendingDestroy(const ObjectIndex SlotIndex) const noexcept
+bool FObjectStore::CollectorIsPendingDestroy(const ObjectIndex InSlotIndex) const noexcept
 {
-	if (SlotIndex >= Storage.SlotCount)
+	if (InSlotIndex >= Storage.SlotCount)
 	{
 		return false;
 	}
-	const EObjectSlotState State = Storage.SlotMetadata[SlotIndex].State;
+	const EObjectSlotState State = Storage.SlotMetadata[InSlotIndex].State;
 	return State == EObjectSlotState::PendingDestroy || State == EObjectSlotState::Destroying;
 }
 
-bool FObjectStore::CollectorIsMarked(const ObjectIndex SlotIndex) const noexcept
+bool FObjectStore::CollectorIsMarked(const ObjectIndex InSlotIndex) const noexcept
 {
-	return SlotIndex < Storage.SlotCount && CollectorIsOccupied(SlotIndex) && Storage.SlotMetadata[SlotIndex].bMarked;
+	return InSlotIndex < Storage.SlotCount && CollectorIsOccupied(InSlotIndex) && Storage.SlotMetadata[InSlotIndex].bMarked;
 }
 
-void FObjectStore::CollectorSetMarked(const ObjectIndex SlotIndex, const bool bMarked) noexcept
+void FObjectStore::CollectorSetMarked(const ObjectIndex InSlotIndex, const bool bInMarked) noexcept
 {
-	if (SlotIndex < Storage.SlotCount && CollectorIsOccupied(SlotIndex))
+	if (InSlotIndex < Storage.SlotCount && CollectorIsOccupied(InSlotIndex))
 	{
-		Storage.SlotMetadata[SlotIndex].bMarked = bMarked;
+		Storage.SlotMetadata[InSlotIndex].bMarked = bInMarked;
 	}
 }
 
-bool FObjectStore::CollectorTryBegin(const FGarbageCollector& Collector) noexcept
+bool FObjectStore::CollectorTryBegin(const FGarbageCollector& InCollector) noexcept
 {
 	if (bMutationLocked || ActiveCollector != nullptr)
 	{
 		return false;
 	}
-	ActiveCollector = &Collector;
+	ActiveCollector = &InCollector;
 	return true;
 }
 
-void FObjectStore::CollectorEnd(const FGarbageCollector& Collector) noexcept
+void FObjectStore::CollectorEnd(const FGarbageCollector& InCollector) noexcept
 {
-	if (ActiveCollector == &Collector)
+	if (ActiveCollector == &InCollector)
 	{
 		ActiveCollector = nullptr;
 	}
 }
 
-EObjectResult FObjectStore::CollectorReclaim(const FObjectHandle Handle) noexcept
+EObjectResult FObjectStore::CollectorReclaim(const FObjectHandle InHandle) noexcept
 {
-	FObjectSlotMetadata* const Slot = FindMatchingSlot(Handle, true);
-	return Slot != nullptr ? DestroySlot(Handle.Index) : EObjectResult::StaleHandle;
+	FObjectSlotMetadata* const Slot = FindMatchingSlot(InHandle, true);
+	return Slot != nullptr ? DestroySlot(InHandle.Index) : EObjectResult::StaleHandle;
 }
 
 bool FObjectStore::TryBeginDispatch() noexcept
@@ -493,24 +495,24 @@ void FObjectStore::EndDispatch() noexcept
 	bDispatchLocked = false;
 }
 
-UObject* ResolveObjectHandle(const FObjectStore& Store, const FObjectHandle Handle) noexcept
+UObject* ResolveObjectHandle(const FObjectStore& InStore, const FObjectHandle InHandle) noexcept
 {
-	return Store.Resolve(Handle);
+	return InStore.Resolve(InHandle);
 }
 
-EObjectResult AddObjectRoot(FObjectStore& Store, const FObjectHandle Handle) noexcept
+EObjectResult AddObjectRoot(FObjectStore& InStore, const FObjectHandle InHandle) noexcept
 {
-	return Store.AddRoot(Handle);
+	return InStore.AddRoot(InHandle);
 }
 
-void ReleaseObjectRoot(FObjectStore& Store, const FObjectHandle Handle) noexcept
+void ReleaseObjectRoot(FObjectStore& InStore, const FObjectHandle InHandle) noexcept
 {
-	(void)Store.RemoveRoot(Handle);
+	(void)InStore.RemoveRoot(InHandle);
 }
 
-void TraceManagedObjectReferences(UObject& Object, FReferenceCollector& Collector) noexcept
+void TraceManagedObjectReferences(UObject& InObject, FReferenceCollector& InCollector) noexcept
 {
-	Object.VisitReferences(Collector);
+	InObject.VisitReferences(InCollector);
 }
 
 } // namespace MicroWorld

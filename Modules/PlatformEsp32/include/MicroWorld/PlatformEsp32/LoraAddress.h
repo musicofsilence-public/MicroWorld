@@ -15,13 +15,13 @@ namespace MicroWorld
  * is a higher-layer concern. The encoding is owned here because `FNetAddress` ascribes no
  * meaning to its bytes and is shared with the UDP and loopback encodings.
  *
- * @param NodeId Node id of the sender or recipient this address names.
+ * @param InNodeId Node id of the sender or recipient this address names.
  * @return One-byte address carrying the node id.
  */
-constexpr FNetAddress MakeLoraAddress(const std::uint8_t NodeId) noexcept
+constexpr FNetAddress MakeLoraAddress(const std::uint8_t InNodeId) noexcept
 {
 	FNetAddress Address{};
-	Address.Bytes[0] = NodeId;
+	Address.Bytes[0] = InNodeId;
 	Address.Size = 1;
 	return Address;
 }
@@ -32,12 +32,12 @@ constexpr FNetAddress MakeLoraAddress(const std::uint8_t NodeId) noexcept
  * Only the active length is inspected, so a six-byte UDP or one-byte loopback address is never
  * mistaken for a LoRa one; the byte value is validated when a driver actually routes the address.
  *
- * @param Address Address whose encoding to test.
+ * @param InAddress Address whose encoding to test.
  * @return True when the active length is exactly one byte.
  */
-constexpr bool IsLoraAddress(const FNetAddress& Address) noexcept
+constexpr bool IsLoraAddress(const FNetAddress& InAddress) noexcept
 {
-	return Address.Size == 1;
+	return InAddress.Size == 1;
 }
 
 /**
@@ -47,12 +47,12 @@ constexpr bool IsLoraAddress(const FNetAddress& Address) noexcept
  * local stamp on an outgoing frame; callers must first confirm `IsLoraAddress` to avoid reading
  * unrelated bytes.
  *
- * @param Address Address whose first byte holds the node id.
+ * @param InAddress Address whose first byte holds the node id.
  * @return Node id carried by the address.
  */
-constexpr std::uint8_t LoraAddressNodeId(const FNetAddress& Address) noexcept
+constexpr std::uint8_t LoraAddressNodeId(const FNetAddress& InAddress) noexcept
 {
-	return Address.Bytes[0];
+	return InAddress.Bytes[0];
 }
 
 } // namespace MicroWorld

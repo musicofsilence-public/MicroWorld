@@ -106,8 +106,8 @@ class FOrderingActor final : public AActor
 {
 public:
 	/** Binds this actor to its component reference, the shared sequence, and its event record. */
-	FOrderingActor(FActorComponentRegistryReference Components, FSequenceCounter& InSequence, FActorEventState& InEvents) noexcept
-		: AActor(std::move(Components), OrderingTickConfiguration), Sequence(InSequence), Events(InEvents)
+	FOrderingActor(FActorComponentRegistryReference InComponents, FSequenceCounter& InSequence, FActorEventState& InEvents) noexcept
+		: AActor(std::move(InComponents), OrderingTickConfiguration), Sequence(InSequence), Events(InEvents)
 	{
 	}
 
@@ -151,7 +151,7 @@ class FPlainActor final : public AActor
 {
 public:
 	/** Binds this actor to the caller-owned component registry reference. */
-	explicit FPlainActor(FActorComponentRegistryReference Components) noexcept : AActor(std::move(Components)) {}
+	explicit FPlainActor(FActorComponentRegistryReference InComponents) noexcept : AActor(std::move(InComponents)) {}
 };
 
 /** Environment sized for spawn/destroy tests with room for several actors and components. */
@@ -159,21 +159,22 @@ using FSpawnDestroyEnvironment = TEngineEnvironment<256, 16, 16, 4>;
 
 /** Builds one ordering actor through its derived descriptor in the environment. */
 TObjectPtr<FOrderingActor> MakeOrderingActor(
-	FSpawnDestroyEnvironment& Env, FActorComponentRegistryReference Components, FSequenceCounter& Sequence, FActorEventState& Events) noexcept
+	FSpawnDestroyEnvironment& InEnv, FActorComponentRegistryReference InComponents, FSequenceCounter& InSequence, FActorEventState& InEvents) noexcept
 {
-	return Env.CreateDerivedObject<FOrderingActor>(OrderingActorTypeId, "OrderingActor", std::move(Components), Sequence, Events);
+	return InEnv.CreateDerivedObject<FOrderingActor>(OrderingActorTypeId, "OrderingActor", std::move(InComponents), InSequence, InEvents);
 }
 
 /** Builds one ordering component through its derived descriptor in the environment. */
-TObjectPtr<FOrderingComponent> MakeOrderingComponent(FSpawnDestroyEnvironment& Env, FSequenceCounter& Sequence, FComponentEventState& Events) noexcept
+TObjectPtr<FOrderingComponent> MakeOrderingComponent(
+	FSpawnDestroyEnvironment& InEnv, FSequenceCounter& InSequence, FComponentEventState& InEvents) noexcept
 {
-	return Env.CreateDerivedObject<FOrderingComponent>(OrderingComponentTypeId, "OrderingComponent", Sequence, Events);
+	return InEnv.CreateDerivedObject<FOrderingComponent>(OrderingComponentTypeId, "OrderingComponent", InSequence, InEvents);
 }
 
 /** Builds one plain actor through its derived descriptor in the environment. */
-TObjectPtr<FPlainActor> MakePlainActor(FSpawnDestroyEnvironment& Env, FActorComponentRegistryReference Components) noexcept
+TObjectPtr<FPlainActor> MakePlainActor(FSpawnDestroyEnvironment& InEnv, FActorComponentRegistryReference InComponents) noexcept
 {
-	return Env.CreateDerivedObject<FPlainActor>(PlainActorTypeId, "PlainActor", std::move(Components));
+	return InEnv.CreateDerivedObject<FPlainActor>(PlainActorTypeId, "PlainActor", std::move(InComponents));
 }
 
 /** Owns a fixed worklist and collector bound to an environment's store for GC assertions. */
@@ -181,8 +182,8 @@ class FCollectorFixture final
 {
 public:
 	/** Binds a collector to the store using this fixture's caller-owned worklist storage. */
-	explicit FCollectorFixture(FObjectStore& Store) noexcept
-		: Collector(Store, FGarbageCollectorStorage{Worklist.data(), static_cast<std::uint32_t>(Worklist.size())})
+	explicit FCollectorFixture(FObjectStore& InStore) noexcept
+		: Collector(InStore, FGarbageCollectorStorage{Worklist.data(), static_cast<std::uint32_t>(Worklist.size())})
 	{
 	}
 

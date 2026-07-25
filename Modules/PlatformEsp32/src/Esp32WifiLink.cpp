@@ -17,13 +17,13 @@ namespace
 	constexpr DurationMilliseconds JoinWaitSliceMilliseconds = 100;
 
 	/** Reports the first reason a SoftAP config cannot be used, or `Success`. */
-	ENetResult ValidateAccessPointConfig(const FEsp32AccessPointConfig& Config) noexcept
+	ENetResult ValidateAccessPointConfig(const FEsp32AccessPointConfig& InConfig) noexcept
 	{
-		if (Config.Ssid == nullptr || Config.Ssid[0] == '\0')
+		if (InConfig.Ssid == nullptr || InConfig.Ssid[0] == '\0')
 		{
 			return ENetResult::Invalid;
 		}
-		if (Config.Password == nullptr || std::strlen(Config.Password) < MinimumWpa2PasswordLength)
+		if (InConfig.Password == nullptr || std::strlen(InConfig.Password) < MinimumWpa2PasswordLength)
 		{
 			return ENetResult::Invalid;
 		}
@@ -31,13 +31,13 @@ namespace
 	}
 
 	/** Reports the first reason a station config cannot be used, or `Success`. */
-	ENetResult ValidateStationConfig(const FEsp32StationConfig& Config) noexcept
+	ENetResult ValidateStationConfig(const FEsp32StationConfig& InConfig) noexcept
 	{
-		if (Config.Ssid == nullptr || Config.Ssid[0] == '\0')
+		if (InConfig.Ssid == nullptr || InConfig.Ssid[0] == '\0')
 		{
 			return ENetResult::Invalid;
 		}
-		if (Config.Password == nullptr)
+		if (InConfig.Password == nullptr)
 		{
 			return ENetResult::Invalid;
 		}
@@ -53,9 +53,9 @@ FEsp32WifiLink::~FEsp32WifiLink() noexcept
 	Stop();
 }
 
-ENetResult FEsp32WifiLink::StartAccessPoint(const FEsp32AccessPointConfig& Config) noexcept
+ENetResult FEsp32WifiLink::StartAccessPoint(const FEsp32AccessPointConfig& InConfig) noexcept
 {
-	const ENetResult ValidationResult = ValidateAccessPointConfig(Config);
+	const ENetResult ValidationResult = ValidateAccessPointConfig(InConfig);
 	if (ValidationResult != ENetResult::Success)
 	{
 		return ValidationResult;
@@ -73,7 +73,7 @@ ENetResult FEsp32WifiLink::StartAccessPoint(const FEsp32AccessPointConfig& Confi
 		return ENetResult::Unavailable;
 	}
 
-	wifi_config_t ApConfig = Detail::MakeAccessPointConfig(Config.Ssid, Config.Password, Config.WifiChannel, Config.MaxStations);
+	wifi_config_t ApConfig = Detail::MakeAccessPointConfig(InConfig.Ssid, InConfig.Password, InConfig.WifiChannel, InConfig.MaxStations);
 	if (esp_wifi_set_mode(WIFI_MODE_AP) != ESP_OK || esp_wifi_set_config(WIFI_IF_AP, &ApConfig) != ESP_OK || esp_wifi_start() != ESP_OK)
 	{
 		return ENetResult::Unavailable;
@@ -83,9 +83,9 @@ ENetResult FEsp32WifiLink::StartAccessPoint(const FEsp32AccessPointConfig& Confi
 	return ENetResult::Success;
 }
 
-ENetResult FEsp32WifiLink::JoinAccessPoint(const FEsp32StationConfig& Config) noexcept
+ENetResult FEsp32WifiLink::JoinAccessPoint(const FEsp32StationConfig& InConfig) noexcept
 {
-	const ENetResult ValidationResult = ValidateStationConfig(Config);
+	const ENetResult ValidationResult = ValidateStationConfig(InConfig);
 	if (ValidationResult != ENetResult::Success)
 	{
 		return ValidationResult;
@@ -109,7 +109,7 @@ ENetResult FEsp32WifiLink::JoinAccessPoint(const FEsp32StationConfig& Config) no
 		return ENetResult::Unavailable;
 	}
 
-	wifi_config_t StaConfig = Detail::MakeStationConfig(Config.Ssid, Config.Password);
+	wifi_config_t StaConfig = Detail::MakeStationConfig(InConfig.Ssid, InConfig.Password);
 	if (esp_wifi_set_mode(WIFI_MODE_STA) != ESP_OK || esp_wifi_set_config(WIFI_IF_STA, &StaConfig) != ESP_OK || esp_wifi_start() != ESP_OK)
 	{
 		return ENetResult::Unavailable;
@@ -120,7 +120,7 @@ ENetResult FEsp32WifiLink::JoinAccessPoint(const FEsp32StationConfig& Config) no
 	// is the budget; no real clock is read.
 	Detail::GGotStationIpAddress = false;
 	DurationMilliseconds ElapsedMilliseconds = 0;
-	while (!Detail::GGotStationIpAddress && ElapsedMilliseconds < Config.ConnectTimeoutMilliseconds)
+	while (!Detail::GGotStationIpAddress && ElapsedMilliseconds < InConfig.ConnectTimeoutMilliseconds)
 	{
 		vTaskDelay(pdMS_TO_TICKS(JoinWaitSliceMilliseconds));
 		ElapsedMilliseconds += JoinWaitSliceMilliseconds;

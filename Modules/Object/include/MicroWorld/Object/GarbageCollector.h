@@ -108,11 +108,11 @@ class FReferenceCollector final
 public:
 	/** Marks one typed traced reference while preserving its generation identity. */
 	template<typename T>
-	void AddReferencedObject(const TObjectPtr<T> Object) noexcept
+	void AddReferencedObject(const TObjectPtr<T> InObject) noexcept
 	{
-		if (ExpectedStore != nullptr && Object.BelongsTo(*ExpectedStore))
+		if (ExpectedStore != nullptr && InObject.BelongsTo(*ExpectedStore))
 		{
-			AddReferencedHandle(Object.Handle());
+			AddReferencedHandle(InObject.Handle());
 		}
 	}
 
@@ -120,10 +120,13 @@ private:
 	friend class FGarbageCollector;
 
 	/** Marks one validated same-store identity without exposing a raw public bypass. */
-	void AddReferencedHandle(FObjectHandle Handle) noexcept;
+	void AddReferencedHandle(FObjectHandle InHandle) noexcept;
 
 	/** Restricts discovery to one active visitor and its owning object store. */
-	FReferenceCollector(FGarbageCollector& GarbageCollector, FObjectStore& Store) noexcept : Collector(&GarbageCollector), ExpectedStore(&Store) {}
+	FReferenceCollector(FGarbageCollector& InGarbageCollector, FObjectStore& InStore) noexcept
+		: Collector(&InGarbageCollector), ExpectedStore(&InStore)
+	{
+	}
 
 	/** Identifies the collector that owns mark state and worklist capacity. */
 	FGarbageCollector* Collector{nullptr};
@@ -137,7 +140,7 @@ class FGarbageCollector final
 {
 public:
 	/** Binds one object store to caller-owned iterative worklist storage. */
-	FGarbageCollector(FObjectStore& Store, FGarbageCollectorStorage Storage) noexcept;
+	FGarbageCollector(FObjectStore& InStore, FGarbageCollectorStorage InStorage) noexcept;
 
 	/** Cancels any active cycle and releases store ownership before destruction. */
 	~FGarbageCollector() noexcept;
@@ -158,7 +161,7 @@ public:
 	ERuntimeResult RequestCollection() noexcept;
 
 	/** Performs no more than each phase's caller-provided operation budget. */
-	FGarbageCollectionResult Advance(FGarbageCollectionBudget Budget) noexcept;
+	FGarbageCollectionResult Advance(FGarbageCollectionBudget InBudget) noexcept;
 
 	/** Explicitly completes a cycle without imposing a hidden allocation-time collection. */
 	FGarbageCollectionResult CollectFull() noexcept;
@@ -176,7 +179,7 @@ private:
 	friend class FReferenceCollector;
 
 	/** Marks and queues one live non-pending object once during the active cycle. */
-	void DiscoverReference(FObjectHandle Handle) noexcept;
+	void DiscoverReference(FObjectHandle InHandle) noexcept;
 
 	/** Clears partial marks/cursors and releases the store after completion or abort. */
 	void ResetCycle() noexcept;
@@ -191,19 +194,19 @@ private:
 	ERuntimeResult ValidateAdvancePreconditions() const noexcept;
 
 	/** Scans root-table entries into the worklist within the root budget. */
-	bool AdvanceSeedRootsPhase(const FGarbageCollectionBudget& Budget, FGarbageCollectionResult& Result) noexcept;
+	bool AdvanceSeedRootsPhase(const FGarbageCollectionBudget& InBudget, FGarbageCollectionResult& OutResult) noexcept;
 
 	/** Drains reachable objects through their finite visitors within the mark budget. */
-	bool AdvanceMarkPhase(const FGarbageCollectionBudget& Budget, FGarbageCollectionResult& Result) noexcept;
+	bool AdvanceMarkPhase(const FGarbageCollectionBudget& InBudget, FGarbageCollectionResult& OutResult) noexcept;
 
 	/** Inspects object slots and reclaims unreachable objects within the sweep budget. */
-	bool AdvanceSweepPhase(const FGarbageCollectionBudget& Budget, FGarbageCollectionResult& Result) noexcept;
+	bool AdvanceSweepPhase(const FGarbageCollectionBudget& InBudget, FGarbageCollectionResult& OutResult) noexcept;
 
 	/** Returns the swept cycle to Idle and records its completion. */
-	void FinalizeCompletedCycle(FGarbageCollectionResult& Result) noexcept;
+	void FinalizeCompletedCycle(FGarbageCollectionResult& OutResult) noexcept;
 
 	/** Folds the per-phase operation counts into the reported total. */
-	static void AccumulateOperations(FGarbageCollectionResult& Result) noexcept;
+	static void AccumulateOperations(FGarbageCollectionResult& OutResult) noexcept;
 
 	/** Identifies the fixed object store whose roots, marks, and slots are traversed. */
 	FObjectStore* ObjectStore{nullptr};

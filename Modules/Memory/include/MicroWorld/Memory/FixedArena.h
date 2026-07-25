@@ -47,29 +47,29 @@ public:
 	~TFixedArena() noexcept override = default;
 
 	/** Allocates the first fitting aligned free range without fallback or compaction. */
-	EMemoryResult TryAllocate(const std::size_t SizeBytes, const std::size_t AlignmentBytes, FMemoryBlock& OutBlock) noexcept override
+	EMemoryResult TryAllocate(const std::size_t InSizeBytes, const std::size_t InAlignmentBytes, FMemoryBlock& OutBlock) noexcept override
 	{
 		OutBlock = {};
-		const EMemoryResult RequestResult = ValidateAllocationRequest(SizeBytes, AlignmentBytes);
+		const EMemoryResult RequestResult = ValidateAllocationRequest(InSizeBytes, InAlignmentBytes);
 		if (RequestResult != EMemoryResult::Success)
 		{
 			return RequestResult;
 		}
 		std::size_t StartOffset = 0;
-		if (!FindAlignedFreeRange(SizeBytes, AlignmentBytes, StartOffset))
+		if (!FindAlignedFreeRange(InSizeBytes, InAlignmentBytes, StartOffset))
 		{
 			return EMemoryResult::OutOfMemory;
 		}
-		CommitAllocation(StartOffset, SizeBytes, OutBlock);
+		CommitAllocation(StartOffset, InSizeBytes, OutBlock);
 		return EMemoryResult::Success;
 	}
 
 	/** Releases only an exact active range belonging to this arena. */
-	EMemoryResult Deallocate(const FMemoryBlock Block) noexcept override
+	EMemoryResult Deallocate(const FMemoryBlock InBlock) noexcept override
 	{
 		std::size_t AllocationStart = 0;
 		std::size_t AllocationEnd = 0;
-		const EMemoryResult LocateResult = LocateOwnedAllocation(Block, AllocationStart, AllocationEnd);
+		const EMemoryResult LocateResult = LocateOwnedAllocation(InBlock, AllocationStart, AllocationEnd);
 		if (LocateResult != EMemoryResult::Success)
 		{
 			return LocateResult;
@@ -79,11 +79,11 @@ public:
 		{
 			return BoundaryResult;
 		}
-		if (UsedSizeBytes < Block.SizeBytes)
+		if (UsedSizeBytes < InBlock.SizeBytes)
 		{
 			return EMemoryResult::InvalidBlock;
 		}
-		ReleaseMarkedRange(AllocationStart, AllocationEnd, Block.SizeBytes);
+		ReleaseMarkedRange(AllocationStart, AllocationEnd, InBlock.SizeBytes);
 		return EMemoryResult::Success;
 	}
 
@@ -95,13 +95,13 @@ public:
 
 private:
 	/** Rejects an unsupported alignment or a size that cannot fit the remaining capacity. */
-	EMemoryResult ValidateAllocationRequest(const std::size_t SizeBytes, const std::size_t AlignmentBytes) const noexcept
+	EMemoryResult ValidateAllocationRequest(const std::size_t InSizeBytes, const std::size_t InAlignmentBytes) const noexcept
 	{
-		if (!IsSupportedAlignment(AlignmentBytes))
+		if (!IsSupportedAlignment(InAlignmentBytes))
 		{
 			return EMemoryResult::UnsupportedAlignment;
 		}
-		if (SizeBytes == 0 || SizeBytes > StorageCapacityBytes - UsedSizeBytes)
+		if (InSizeBytes == 0 || InSizeBytes > StorageCapacityBytes - UsedSizeBytes)
 		{
 			return EMemoryResult::OutOfMemory;
 		}
@@ -109,7 +109,7 @@ private:
 	}
 
 	/** Scans for the first aligned run of SizeBytes free bytes and reports its start offset. */
-	bool FindAlignedFreeRange(const std::size_t SizeBytes, const std::size_t AlignmentBytes, std::size_t& OutStartOffset) const noexcept
+	bool FindAlignedFreeRange(const std::size_t InSizeBytes, const std::size_t InAlignmentBytes, std::size_t& OutStartOffset) const noexcept
 	{
 		bool bInsideAllocation = false;
 		std::size_t FreeRangeStart = 0;
@@ -128,12 +128,12 @@ private:
 			{
 				++FreeRangeSize;
 			}
-			else if ((Offset & (AlignmentBytes - 1U)) == 0)
+			else if ((Offset & (InAlignmentBytes - 1U)) == 0)
 			{
 				FreeRangeStart = Offset;
 				FreeRangeSize = 1;
 			}
-			if (FreeRangeSize == SizeBytes)
+			if (FreeRangeSize == InSizeBytes)
 			{
 				OutStartOffset = FreeRangeStart;
 				return true;
@@ -147,36 +147,36 @@ private:
 	}
 
 	/** Marks the found range as one allocation and hands its address back to the caller. */
-	void CommitAllocation(const std::size_t StartOffset, const std::size_t SizeBytes, FMemoryBlock& OutBlock) noexcept
+	void CommitAllocation(const std::size_t InStartOffset, const std::size_t InSizeBytes, FMemoryBlock& OutBlock) noexcept
 	{
-		const std::size_t AllocationEnd = StartOffset + SizeBytes - 1U;
-		WriteMarker(AllocationStartMarkers, StartOffset, true);
+		const std::size_t AllocationEnd = InStartOffset + InSizeBytes - 1U;
+		WriteMarker(AllocationStartMarkers, InStartOffset, true);
 		WriteMarker(AllocationEndMarkers, AllocationEnd, true);
-		UsedSizeBytes += SizeBytes;
-		OutBlock.Address = static_cast<void*>(StorageBegin() + StartOffset);
-		OutBlock.SizeBytes = SizeBytes;
+		UsedSizeBytes += InSizeBytes;
+		OutBlock.Address = static_cast<void*>(StorageBegin() + InStartOffset);
+		OutBlock.SizeBytes = InSizeBytes;
 	}
 
 	/** Maps a block back to its owned byte range, rejecting anything not exactly allocated here. */
-	EMemoryResult LocateOwnedAllocation(const FMemoryBlock Block, std::size_t& OutStart, std::size_t& OutEnd) noexcept
+	EMemoryResult LocateOwnedAllocation(const FMemoryBlock InBlock, std::size_t& OutStart, std::size_t& OutEnd) noexcept
 	{
-		if (Block.Address == nullptr || Block.SizeBytes == 0)
+		if (InBlock.Address == nullptr || InBlock.SizeBytes == 0)
 		{
 			return EMemoryResult::InvalidBlock;
 		}
 		const std::uintptr_t StorageAddress = reinterpret_cast<std::uintptr_t>(StorageBegin());
 		const std::uintptr_t StorageEndAddress = reinterpret_cast<std::uintptr_t>(StorageBegin() + StorageCapacityBytes);
-		const std::uintptr_t BlockAddress = reinterpret_cast<std::uintptr_t>(Block.Address);
+		const std::uintptr_t BlockAddress = reinterpret_cast<std::uintptr_t>(InBlock.Address);
 		if (BlockAddress < StorageAddress || BlockAddress >= StorageEndAddress)
 		{
 			return EMemoryResult::InvalidBlock;
 		}
 		const std::size_t AllocationStart = static_cast<std::size_t>(BlockAddress - StorageAddress);
-		if (Block.SizeBytes > StorageCapacityBytes - AllocationStart)
+		if (InBlock.SizeBytes > StorageCapacityBytes - AllocationStart)
 		{
 			return EMemoryResult::InvalidBlock;
 		}
-		const std::size_t AllocationEnd = AllocationStart + Block.SizeBytes - 1U;
+		const std::size_t AllocationEnd = AllocationStart + InBlock.SizeBytes - 1U;
 		if (!ReadMarker(AllocationStartMarkers, AllocationStart) || !ReadMarker(AllocationEndMarkers, AllocationEnd))
 		{
 			return EMemoryResult::InvalidBlock;
@@ -187,12 +187,12 @@ private:
 	}
 
 	/** Confirms no other allocation boundary falls inside the block's byte range. */
-	EMemoryResult ValidateExactBlockBoundaries(const std::size_t AllocationStart, const std::size_t AllocationEnd) const noexcept
+	EMemoryResult ValidateExactBlockBoundaries(const std::size_t InAllocationStart, const std::size_t InAllocationEnd) const noexcept
 	{
-		for (std::size_t Offset = AllocationStart; Offset <= AllocationEnd; ++Offset)
+		for (std::size_t Offset = InAllocationStart; Offset <= InAllocationEnd; ++Offset)
 		{
-			const bool bUnexpectedStart = Offset != AllocationStart && ReadMarker(AllocationStartMarkers, Offset);
-			const bool bUnexpectedEnd = Offset != AllocationEnd && ReadMarker(AllocationEndMarkers, Offset);
+			const bool bUnexpectedStart = Offset != InAllocationStart && ReadMarker(AllocationStartMarkers, Offset);
+			const bool bUnexpectedEnd = Offset != InAllocationEnd && ReadMarker(AllocationEndMarkers, Offset);
 			if (bUnexpectedStart || bUnexpectedEnd)
 			{
 				return EMemoryResult::InvalidBlock;
@@ -202,11 +202,11 @@ private:
 	}
 
 	/** Clears the block's boundary markers and returns its bytes to the free pool. */
-	void ReleaseMarkedRange(const std::size_t AllocationStart, const std::size_t AllocationEnd, const std::size_t SizeBytes) noexcept
+	void ReleaseMarkedRange(const std::size_t InAllocationStart, const std::size_t InAllocationEnd, const std::size_t InSizeBytes) noexcept
 	{
-		WriteMarker(AllocationStartMarkers, AllocationStart, false);
-		WriteMarker(AllocationEndMarkers, AllocationEnd, false);
-		UsedSizeBytes -= SizeBytes;
+		WriteMarker(AllocationStartMarkers, InAllocationStart, false);
+		WriteMarker(AllocationEndMarkers, InAllocationEnd, false);
+		UsedSizeBytes -= InSizeBytes;
 	}
 
 	/** Packs one allocation-boundary bit per usable byte into bounded metadata. */
@@ -225,32 +225,32 @@ private:
 	}
 
 	/** Confirms the arena can guarantee the requested power-of-two alignment. */
-	static bool IsSupportedAlignment(const std::size_t AlignmentBytes) noexcept
+	static bool IsSupportedAlignment(const std::size_t InAlignmentBytes) noexcept
 	{
-		return AlignmentBytes > 0 && (AlignmentBytes & (AlignmentBytes - 1U)) == 0 && AlignmentBytes <= GuaranteedAlignmentBytes;
+		return InAlignmentBytes > 0 && (InAlignmentBytes & (InAlignmentBytes - 1U)) == 0 && InAlignmentBytes <= GuaranteedAlignmentBytes;
 	}
 
 	/** Reads one boundary marker without exposing bookkeeping to callers. */
-	static bool ReadMarker(const std::array<std::uint8_t, MarkerStorageBytes>& Markers, const std::size_t Offset) noexcept
+	static bool ReadMarker(const std::array<std::uint8_t, MarkerStorageBytes>& InMarkers, const std::size_t InOffset) noexcept
 	{
 		// Hand-rolled bitset: one bit per usable byte, packed 8 to a std::uint8_t
-		// -- byte index = Offset / 8, bit index = Offset % 8.
-		const std::size_t MarkerByte = Offset / 8U;
-		const std::uint8_t MarkerMask = static_cast<std::uint8_t>(1U << (Offset % 8U));
-		return (Markers[MarkerByte] & MarkerMask) != 0;
+		// -- byte index = InOffset / 8, bit index = InOffset % 8.
+		const std::size_t MarkerByte = InOffset / 8U;
+		const std::uint8_t MarkerMask = static_cast<std::uint8_t>(1U << (InOffset % 8U));
+		return (InMarkers[MarkerByte] & MarkerMask) != 0;
 	}
 
 	/** Changes one boundary marker while leaving unrelated allocations intact. */
-	static void WriteMarker(std::array<std::uint8_t, MarkerStorageBytes>& Markers, const std::size_t Offset, const bool bValue) noexcept
+	static void WriteMarker(std::array<std::uint8_t, MarkerStorageBytes>& InMarkers, const std::size_t InOffset, const bool bInValue) noexcept
 	{
-		const std::size_t MarkerByte = Offset / 8U;
-		const std::uint8_t MarkerMask = static_cast<std::uint8_t>(1U << (Offset % 8U));
-		if (bValue)
+		const std::size_t MarkerByte = InOffset / 8U;
+		const std::uint8_t MarkerMask = static_cast<std::uint8_t>(1U << (InOffset % 8U));
+		if (bInValue)
 		{
-			Markers[MarkerByte] = static_cast<std::uint8_t>(Markers[MarkerByte] | MarkerMask);
+			InMarkers[MarkerByte] = static_cast<std::uint8_t>(InMarkers[MarkerByte] | MarkerMask);
 			return;
 		}
-		Markers[MarkerByte] = static_cast<std::uint8_t>(Markers[MarkerByte] & ~MarkerMask);
+		InMarkers[MarkerByte] = static_cast<std::uint8_t>(InMarkers[MarkerByte] & ~MarkerMask);
 	}
 
 	/** Retains caller-owned capacity plus bounded space for the aligned usable start. */

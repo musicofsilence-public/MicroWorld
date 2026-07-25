@@ -53,9 +53,9 @@ public:
 	 * cleared; rejects every mutation while a dispatch pass is active as DispatchLocked.
 	 */
 	EMessageResult AddMessageHandler(
-		const FMessageTypeId MessageTypeId,
-		const FMessageActorId ListenerActorId,
-		FMessageHandlerBinding&& Handler,
+		const FMessageTypeId InMessageTypeId,
+		const FMessageActorId InListenerActorId,
+		FMessageHandlerBinding&& InHandler,
 		FMessageHandlerHandle& OutHandle) noexcept override
 	{
 		OutHandle = {};
@@ -63,7 +63,7 @@ public:
 		{
 			return EMessageResult::DispatchLocked;
 		}
-		if (!Handler.IsBound())
+		if (!InHandler.IsBound())
 		{
 			return EMessageResult::InvalidHandler;
 		}
@@ -75,9 +75,9 @@ public:
 		}
 
 		const std::size_t SlotIndex = static_cast<std::size_t>(AvailableSlot - HandlerSlots);
-		AvailableSlot->TypeId = MessageTypeId;
-		AvailableSlot->ListenerActorId = ListenerActorId;
-		AvailableSlot->Delegate = std::move(Handler);
+		AvailableSlot->TypeId = InMessageTypeId;
+		AvailableSlot->ListenerActorId = InListenerActorId;
+		AvailableSlot->Delegate = std::move(InHandler);
 		AvailableSlot->bActive = true;
 
 		const FMessageHandlerHandle PublishedHandle{static_cast<std::uint16_t>(SlotIndex), AvailableSlot->Generation};
@@ -94,19 +94,19 @@ public:
 	 * slot is free or holds another generation as StaleHandle; rejects every
 	 * mutation while a dispatch pass is active as DispatchLocked.
 	 */
-	EMessageResult RemoveMessageHandler(const FMessageHandlerHandle Handle) noexcept override
+	EMessageResult RemoveMessageHandler(const FMessageHandlerHandle InHandle) noexcept override
 	{
 		if (bDispatchActive)
 		{
 			return EMessageResult::DispatchLocked;
 		}
-		if (!Handle.IsValid() || static_cast<std::size_t>(Handle.Index) >= MaxHandlers)
+		if (!InHandle.IsValid() || static_cast<std::size_t>(InHandle.Index) >= MaxHandlers)
 		{
 			return EMessageResult::InvalidHandler;
 		}
 
-		FHandlerSlot& Slot = HandlerSlots[Handle.Index];
-		if (!Slot.bActive || Slot.Generation != Handle.Generation)
+		FHandlerSlot& Slot = HandlerSlots[InHandle.Index];
+		if (!Slot.bActive || Slot.Generation != InHandle.Generation)
 		{
 			return EMessageResult::StaleHandle;
 		}
@@ -114,7 +114,7 @@ public:
 		Slot.Delegate.Reset();
 		Slot.bActive = false;
 		AdvanceHandlerGenerationOrRetire(Slot);
-		RemoveHandlerFromOrder(Handle);
+		RemoveHandlerFromOrder(InHandle);
 		--ActiveHandlerCount;
 		return EMessageResult::Success;
 	}
@@ -127,28 +127,28 @@ public:
 	 * enqueues; every rejection leaves the outbound queue exactly as it was.
 	 */
 	EMessageResult SendMessageToActor(
-		const FMessageChannelId ChannelId,
-		const FMessageTypeId MessageTypeId,
-		const FMessageActorId TargetActorId,
-		const FMessageActorId SenderActorId,
-		const TSpan<const std::uint8_t> Payload) noexcept override
+		const FMessageChannelId InChannelId,
+		const FMessageTypeId InMessageTypeId,
+		const FMessageActorId InTargetActorId,
+		const FMessageActorId InSenderActorId,
+		const TSpan<const std::uint8_t> InPayload) noexcept override
 	{
-		if (MessageTypeId == 0)
+		if (InMessageTypeId == 0)
 		{
 			return EMessageResult::InvalidType;
 		}
 
 		IMessageChannel* WiredChannel = nullptr;
-		if (ChannelId != LocalChannelId)
+		if (InChannelId != LocalChannelId)
 		{
-			WiredChannel = FindChannel(ChannelId);
+			WiredChannel = FindChannel(InChannelId);
 			if (WiredChannel == nullptr)
 			{
 				return EMessageResult::InvalidChannel;
 			}
 		}
 
-		const std::size_t EncodedSize = ActorMessageHeaderBytes + Payload.Size();
+		const std::size_t EncodedSize = ActorMessageHeaderBytes + InPayload.Size();
 		if (EncodedSize > MaxMessageBytes)
 		{
 			return EMessageResult::PayloadTooLarge;
@@ -162,10 +162,11 @@ public:
 			return EMessageResult::CapacityExceeded;
 		}
 
-		const FActorMessageHeader Header{MessageTypeId, TargetActorId, SenderActorId};
+		const FActorMessageHeader Header{InMessageTypeId, InTargetActorId, InSenderActorId};
 		FQueuedMessage& TailEntry = OutboundEntries[OutboundTailIndex];
 		std::size_t WrittenBytes = 0;
-		const EMessageResult EncodeResult = EncodeActorMessage(Header, Payload, TSpan<std::uint8_t>(TailEntry.Bytes, MaxMessageBytes), WrittenBytes);
+		const EMessageResult EncodeResult =
+			EncodeActorMessage(Header, InPayload, TSpan<std::uint8_t>(TailEntry.Bytes, MaxMessageBytes), WrittenBytes);
 		if (EncodeResult != EMessageResult::Success)
 		{
 			// Unreachable given the size checks above, kept only so a future change to
@@ -173,7 +174,7 @@ public:
 			return EncodeResult;
 		}
 
-		TailEntry.ChannelId = ChannelId;
+		TailEntry.ChannelId = InChannelId;
 		TailEntry.LengthBytes = static_cast<std::uint16_t>(WrittenBytes);
 		OutboundTailIndex = (OutboundTailIndex + 1) % MaxQueuedMessages;
 		++OutboundCount;
@@ -182,12 +183,12 @@ public:
 
 	/** Queues one message for every subscriber of the type on the given channel, using BroadcastActorId as the target. */
 	EMessageResult BroadcastMessage(
-		const FMessageChannelId ChannelId,
-		const FMessageTypeId MessageTypeId,
-		const FMessageActorId SenderActorId,
-		const TSpan<const std::uint8_t> Payload) noexcept override
+		const FMessageChannelId InChannelId,
+		const FMessageTypeId InMessageTypeId,
+		const FMessageActorId InSenderActorId,
+		const TSpan<const std::uint8_t> InPayload) noexcept override
 	{
-		return SendMessageToActor(ChannelId, MessageTypeId, BroadcastActorId, SenderActorId, Payload);
+		return SendMessageToActor(InChannelId, InMessageTypeId, BroadcastActorId, InSenderActorId, InPayload);
 	}
 
 	/**
@@ -197,14 +198,14 @@ public:
 	 * PayloadTooLarge; on a full inbound queue increments DroppedInboundCount
 	 * and returns CapacityExceeded while leaving the queue unchanged.
 	 */
-	EMessageResult ReceiveEncodedMessage(const FMessageChannelId ArrivedOnChannelId, const TSpan<const std::uint8_t> Encoded) noexcept override
+	EMessageResult ReceiveEncodedMessage(const FMessageChannelId InArrivedOnChannelId, const TSpan<const std::uint8_t> InEncoded) noexcept override
 	{
-		if (Encoded.Size() < ActorMessageHeaderBytes || Encoded.Size() > MaxMessageBytes)
+		if (InEncoded.Size() < ActorMessageHeaderBytes || InEncoded.Size() > MaxMessageBytes)
 		{
 			return EMessageResult::PayloadTooLarge;
 		}
 
-		if (!EnqueueRawMessage(InboundEntries, InboundTailIndex, InboundCount, ArrivedOnChannelId, Encoded.Data(), Encoded.Size()))
+		if (!EnqueueRawMessage(InboundEntries, InboundTailIndex, InboundCount, InArrivedOnChannelId, InEncoded.Data(), InEncoded.Size()))
 		{
 			++DroppedInboundMessageCount;
 			return EMessageResult::CapacityExceeded;
@@ -216,9 +217,9 @@ public:
 	 * Delivers exactly the inbound messages queued at entry, oldest first, to their matching handlers.
 	 * Messages enqueued during this pass (including from a handler's own send) wait for the next TickDispatch.
 	 */
-	void TickDispatch(const TimePointMilliseconds NowMilliseconds) noexcept override
+	void TickDispatch(const TimePointMilliseconds InNowMilliseconds) noexcept override
 	{
-		(void)NowMilliseconds; // The router orders delivery by queue position, not by wall-clock time.
+		(void)InNowMilliseconds; // The router orders delivery by queue position, not by wall-clock time.
 
 		const std::size_t MessagesToDeliver = InboundCount;
 		bDispatchActive = true;
@@ -236,9 +237,9 @@ public:
 	 * stalled channel also holds back every later entry queued for a different channel (accepted v1
 	 * head-of-line behavior, matching TNetManager::AdvanceSend's retained-head discipline).
 	 */
-	void TickFlush(const TimePointMilliseconds NowMilliseconds) noexcept override
+	void TickFlush(const TimePointMilliseconds InNowMilliseconds) noexcept override
 	{
-		(void)NowMilliseconds; // Flushing drains whatever is queued; it does not itself schedule by time.
+		(void)InNowMilliseconds; // Flushing drains whatever is queued; it does not itself schedule by time.
 
 		while (OutboundCount > 0)
 		{
@@ -274,9 +275,9 @@ public:
 	}
 
 	/** Registers one outbound channel under its id; rejects LocalChannelId, a duplicate id, and a full channel table. */
-	EMessageResult AddChannel(IMessageChannel& Channel) noexcept
+	EMessageResult AddChannel(IMessageChannel& InChannel) noexcept
 	{
-		const FMessageChannelId ChannelId = Channel.GetChannelId();
+		const FMessageChannelId ChannelId = InChannel.GetChannelId();
 		if (ChannelId == LocalChannelId)
 		{
 			return EMessageResult::InvalidChannel;
@@ -293,7 +294,7 @@ public:
 		}
 
 		AvailableSlot->ChannelId = ChannelId;
-		AvailableSlot->ChannelPtr = &Channel;
+		AvailableSlot->ChannelPtr = &InChannel;
 		AvailableSlot->bOccupied = true;
 		return EMessageResult::Success;
 	}
@@ -385,12 +386,12 @@ private:
 	}
 
 	/** Compacts HandlerOrder after a removal without changing any remaining slot identity or relative order. */
-	void RemoveHandlerFromOrder(const FMessageHandlerHandle RemovedHandle) noexcept
+	void RemoveHandlerFromOrder(const FMessageHandlerHandle InRemovedHandle) noexcept
 	{
 		std::size_t OrderIndex = ActiveHandlerCount;
 		for (std::size_t SearchIndex = 0; SearchIndex < ActiveHandlerCount; ++SearchIndex)
 		{
-			if (HandlerOrder[SearchIndex] == RemovedHandle)
+			if (HandlerOrder[SearchIndex] == InRemovedHandle)
 			{
 				OrderIndex = SearchIndex;
 				break;
@@ -433,31 +434,31 @@ private:
 	 * handler whose ListenerActorId equals it. Add/RemoveMessageHandler are locked out for the
 	 * whole pass, so HandlerOrder cannot change underneath this loop.
 	 */
-	void InvokeMatchingHandlers(const FMessageView& View) noexcept
+	void InvokeMatchingHandlers(const FMessageView& InView) noexcept
 	{
 		for (std::size_t OrderIndex = 0; OrderIndex < ActiveHandlerCount; ++OrderIndex)
 		{
 			const FMessageHandlerHandle Handle = HandlerOrder[OrderIndex];
 			FHandlerSlot& Slot = HandlerSlots[Handle.Index];
-			if (Slot.TypeId != View.Header.MessageTypeId)
+			if (Slot.TypeId != InView.Header.MessageTypeId)
 			{
 				continue;
 			}
-			if (View.Header.TargetActorId != BroadcastActorId && Slot.ListenerActorId != View.Header.TargetActorId)
+			if (InView.Header.TargetActorId != BroadcastActorId && Slot.ListenerActorId != InView.Header.TargetActorId)
 			{
 				continue;
 			}
-			(void)Slot.Delegate.Execute(View);
+			(void)Slot.Delegate.Execute(InView);
 		}
 	}
 
 	/** Finds the channel currently registered under ChannelId, or nullptr when none is configured. */
-	IMessageChannel* FindChannel(const FMessageChannelId ChannelId) noexcept
+	IMessageChannel* FindChannel(const FMessageChannelId InChannelId) noexcept
 	{
 		for (std::size_t Index = 0; Index < MaxChannels; ++Index)
 		{
 			FChannelSlot& Slot = ChannelSlots[Index];
-			if (Slot.bOccupied && Slot.ChannelId == ChannelId)
+			if (Slot.bOccupied && Slot.ChannelId == InChannelId)
 			{
 				return Slot.ChannelPtr;
 			}
@@ -483,28 +484,28 @@ private:
 	 * Returns false without touching the queue when Count has already reached MaxQueuedMessages.
 	 */
 	bool EnqueueRawMessage(
-		FQueuedMessage (&Entries)[MaxQueuedMessages == 0 ? 1 : MaxQueuedMessages],
-		std::size_t& TailIndex,
-		std::size_t& Count,
-		const FMessageChannelId ChannelId,
-		const std::uint8_t* const Bytes,
-		const std::size_t Length) noexcept
+		FQueuedMessage (&InOutEntries)[MaxQueuedMessages == 0 ? 1 : MaxQueuedMessages],
+		std::size_t& InOutTailIndex,
+		std::size_t& InOutCount,
+		const FMessageChannelId InChannelId,
+		const std::uint8_t* const InBytes,
+		const std::size_t InLength) noexcept
 	{
-		if (Count >= MaxQueuedMessages)
+		if (InOutCount >= MaxQueuedMessages)
 		{
 			return false;
 		}
 
-		FQueuedMessage& TailEntry = Entries[TailIndex];
-		TailEntry.ChannelId = ChannelId;
-		TailEntry.LengthBytes = static_cast<std::uint16_t>(Length);
-		for (std::size_t Index = 0; Index < Length; ++Index)
+		FQueuedMessage& TailEntry = InOutEntries[InOutTailIndex];
+		TailEntry.ChannelId = InChannelId;
+		TailEntry.LengthBytes = static_cast<std::uint16_t>(InLength);
+		for (std::size_t Index = 0; Index < InLength; ++Index)
 		{
-			TailEntry.Bytes[Index] = Bytes[Index];
+			TailEntry.Bytes[Index] = InBytes[Index];
 		}
 
-		TailIndex = (TailIndex + 1) % MaxQueuedMessages;
-		++Count;
+		InOutTailIndex = (InOutTailIndex + 1) % MaxQueuedMessages;
+		++InOutCount;
 		return true;
 	}
 

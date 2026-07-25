@@ -70,12 +70,12 @@ private:
 	std::size_t GetCount() const noexcept { return Count != nullptr ? *Count : 0; }
 
 	/** Returns one registered component reference by validated internal index. */
-	const TObjectPtr<UActorComponent>& At(const std::size_t Index) const noexcept { return Components[Index]; }
+	const TObjectPtr<UActorComponent>& At(const std::size_t InIndex) const noexcept { return Components[InIndex]; }
 
 	/** Publishes one validated component and advances the private live count. */
-	void Add(const TObjectPtr<UActorComponent> Component) noexcept
+	void Add(const TObjectPtr<UActorComponent> InComponent) noexcept
 	{
-		Components[*Count] = Component;
+		Components[*Count] = InComponent;
 		++*Count;
 	}
 
@@ -173,19 +173,19 @@ private:
 	std::size_t GetCount() const noexcept { return Count != nullptr ? *Count : 0; }
 
 	/** Returns one registered actor reference by validated internal index. */
-	const TObjectPtr<AActor>& At(const std::size_t Index) const noexcept { return Actors[Index]; }
+	const TObjectPtr<AActor>& At(const std::size_t InIndex) const noexcept { return Actors[InIndex]; }
 
 	/** Publishes one validated actor and advances the private live count. */
-	void Add(const TObjectPtr<AActor> Actor) noexcept
+	void Add(const TObjectPtr<AActor> InActor) noexcept
 	{
-		Actors[*Count] = Actor;
+		Actors[*Count] = InActor;
 		++*Count;
 	}
 
 	/** Removes the live actor at Index and shifts later survivors left, preserving order. */
-	void RemoveAt(const std::size_t Index) noexcept
+	void RemoveAt(const std::size_t InIndex) noexcept
 	{
-		for (std::size_t Slot = Index + 1; Slot < *Count; ++Slot)
+		for (std::size_t Slot = InIndex + 1; Slot < *Count; ++Slot)
 		{
 			Actors[Slot - 1] = Actors[Slot];
 		}
@@ -197,12 +197,12 @@ private:
 	std::size_t GetPendingSpawnCount() const noexcept { return PendingSpawnCount != nullptr ? *PendingSpawnCount : 0; }
 
 	/** Returns one queued-spawn actor reference by validated internal index. */
-	const TObjectPtr<AActor>& PendingSpawnAt(const std::size_t Index) const noexcept { return PendingSpawn[Index]; }
+	const TObjectPtr<AActor>& PendingSpawnAt(const std::size_t InIndex) const noexcept { return PendingSpawn[InIndex]; }
 
 	/** Appends one actor to the bounded pending-spawn list. */
-	void AddPendingSpawn(const TObjectPtr<AActor> Actor) noexcept
+	void AddPendingSpawn(const TObjectPtr<AActor> InActor) noexcept
 	{
-		PendingSpawn[*PendingSpawnCount] = Actor;
+		PendingSpawn[*PendingSpawnCount] = InActor;
 		++*PendingSpawnCount;
 	}
 
@@ -220,12 +220,12 @@ private:
 	std::size_t GetPendingDestroyCount() const noexcept { return PendingDestroyCount != nullptr ? *PendingDestroyCount : 0; }
 
 	/** Returns one queued-destroy actor reference by validated internal index. */
-	const TObjectPtr<AActor>& PendingDestroyAt(const std::size_t Index) const noexcept { return PendingDestroy[Index]; }
+	const TObjectPtr<AActor>& PendingDestroyAt(const std::size_t InIndex) const noexcept { return PendingDestroy[InIndex]; }
 
 	/** Appends one actor to the bounded pending-destroy list. */
-	void AddPendingDestroy(const TObjectPtr<AActor> Actor) noexcept
+	void AddPendingDestroy(const TObjectPtr<AActor> InActor) noexcept
 	{
-		PendingDestroy[*PendingDestroyCount] = Actor;
+		PendingDestroy[*PendingDestroyCount] = InActor;
 		++*PendingDestroyCount;
 	}
 

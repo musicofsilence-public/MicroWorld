@@ -33,13 +33,13 @@ namespace ObjectDetail
 } // namespace ObjectDetail
 
 /** Resolves one generation-checked handle without changing object-store state. */
-UObject* ResolveObjectHandle(const FObjectStore& Store, FObjectHandle Handle) noexcept;
+UObject* ResolveObjectHandle(const FObjectStore& InStore, FObjectHandle InHandle) noexcept;
 
 /** Registers one independently owned explicit root after capacity validation. */
-EObjectResult AddObjectRoot(FObjectStore& Store, FObjectHandle Handle) noexcept;
+EObjectResult AddObjectRoot(FObjectStore& InStore, FObjectHandle InHandle) noexcept;
 
 /** Releases one root token immediately, including during guarded callback cleanup. */
-void ReleaseObjectRoot(FObjectStore& Store, FObjectHandle Handle) noexcept;
+void ReleaseObjectRoot(FObjectStore& InStore, FObjectHandle InHandle) noexcept;
 
 /**
  * Holds a traced managed reference without implicitly rooting its target.
@@ -63,7 +63,7 @@ public:
 	 * it does not perform runtime narrowing or reflection.
 	 */
 	template<typename U, typename = std::enable_if_t<ObjectDetail::TIsManagedObjectPointerConversion<U, T>::value>>
-	TObjectPtr(const TObjectPtr<U>& Other) noexcept : Store(Other.Store), TargetHandle(Other.TargetHandle)
+	TObjectPtr(const TObjectPtr<U>& InOther) noexcept : Store(InOther.Store), TargetHandle(InOther.TargetHandle)
 	{
 	}
 
@@ -81,7 +81,7 @@ public:
 	FObjectHandle Handle() const noexcept { return TargetHandle; }
 
 	/** Confirms that this reference belongs to the store performing traversal. */
-	bool BelongsTo(const FObjectStore& ObjectStore) const noexcept { return Store == &ObjectStore; }
+	bool BelongsTo(const FObjectStore& InObjectStore) const noexcept { return Store == &InObjectStore; }
 
 	/** Reports whether the handle currently resolves to a live, non-pending object. */
 	explicit operator bool() const noexcept { return Get() != nullptr; }
@@ -94,7 +94,7 @@ private:
 	friend class TObjectPtr;
 
 	/** Creates a typed reference only after the store publishes a matching object lifetime. */
-	TObjectPtr(FObjectStore& ObjectStore, const FObjectHandle ObjectHandle) noexcept : Store(&ObjectStore), TargetHandle(ObjectHandle) {}
+	TObjectPtr(FObjectStore& InObjectStore, const FObjectHandle InObjectHandle) noexcept : Store(&InObjectStore), TargetHandle(InObjectHandle) {}
 
 	/** Identifies the store that owns handle validation and object storage. */
 	FObjectStore* Store{nullptr};
@@ -112,7 +112,9 @@ public:
 	TWeakObjectPtr() noexcept = default;
 
 	/** Observes the same store and identity without registering a root. */
-	explicit TWeakObjectPtr(const TObjectPtr<T> ObjectPointer) noexcept : Store(ObjectPointer.Store), TargetHandle(ObjectPointer.TargetHandle) {}
+	explicit TWeakObjectPtr(const TObjectPtr<T> InObjectPointer) noexcept : Store(InObjectPointer.Store), TargetHandle(InObjectPointer.TargetHandle)
+	{
+	}
 
 	/** Resolves index plus generation on every access and returns null after expiry. */
 	T* Get() const noexcept
@@ -209,7 +211,9 @@ private:
 	friend class FObjectStore;
 
 	/** Adopts one token only after the store's fallible AddRoot operation succeeds. */
-	TStrongObjectPtr(FObjectStore& ObjectStore, const FObjectHandle ObjectHandle) noexcept : Store(&ObjectStore), TargetHandle(ObjectHandle) {}
+	TStrongObjectPtr(FObjectStore& InObjectStore, const FObjectHandle InObjectHandle) noexcept : Store(&InObjectStore), TargetHandle(InObjectHandle)
+	{
+	}
 
 	/** Identifies the store holding this instance's independently counted root. */
 	FObjectStore* Store{nullptr};

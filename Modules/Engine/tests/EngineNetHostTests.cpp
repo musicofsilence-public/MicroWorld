@@ -108,8 +108,8 @@ class FNetSpawnedActor final : public AActor
 {
 public:
 	/** Binds the component reference and the begin counter this actor increments when it starts. */
-	FNetSpawnedActor(FActorComponentRegistryReference Components, int& InBeginCount) noexcept
-		: AActor(std::move(Components)), BeginCount(InBeginCount)
+	FNetSpawnedActor(FActorComponentRegistryReference InComponents, int& InBeginCount) noexcept
+		: AActor(std::move(InComponents)), BeginCount(InBeginCount)
 	{
 	}
 

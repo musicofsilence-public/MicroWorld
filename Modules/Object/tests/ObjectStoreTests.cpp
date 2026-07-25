@@ -120,16 +120,16 @@ class FConstructorReentryObject final : public UObject
 public:
 	/** Proves the slot remains unpublished and locked until construction completes. */
 	FConstructorReentryObject(
-		FObjectStore& Store,
-		const FClassDescriptor& NestedDescriptor,
-		FObjectLifetimeState& NestedLifetime,
-		FGarbageCollector& Collector,
+		FObjectStore& InStore,
+		const FClassDescriptor& InNestedDescriptor,
+		FObjectLifetimeState& InNestedLifetime,
+		FGarbageCollector& InCollector,
 		FReentryState& InState) noexcept
 		: State(InState)
 	{
-		State.ConstructionResult = Store.NewObject<FTrackedObject>(NestedDescriptor, NestedLifetime).Result;
-		State.BarrierResult = Store.ApplyPendingDestroy(1).Result;
-		State.CollectionRequestResult = Collector.RequestCollection();
+		State.ConstructionResult = InStore.NewObject<FTrackedObject>(InNestedDescriptor, InNestedLifetime).Result;
+		State.BarrierResult = InStore.ApplyPendingDestroy(1).Result;
+		State.CollectionRequestResult = InCollector.RequestCollection();
 	}
 
 	/** Records exact outer destruction after successful publication. */
@@ -206,7 +206,7 @@ class TObjectStoreFixture final
 {
 public:
 	/** Binds a store to this fixture's aligned slots, metadata, and root entries. */
-	explicit TObjectStoreFixture(const MicroWorld::FClassRegistryView Classes) noexcept : Store(MakeStorage(), Classes) {}
+	explicit TObjectStoreFixture(const MicroWorld::FClassRegistryView InClasses) noexcept : Store(MakeStorage(), InClasses) {}
 
 	/** Provides the public store under test without exposing fixture storage. */
 	FObjectStore& GetStore() noexcept { return Store; }
@@ -245,11 +245,11 @@ private:
 
 /** Registers one tracked-object descriptor and returns its registry-owned identity. */
 EObjectResult RegisterTrackedDescriptor(
-	TClassRegistry<2>& Registry, const FClassDescriptor*& OutDescriptor, const MicroWorld::FTypeId TypeId = 1) noexcept
+	TClassRegistry<2>& InRegistry, const FClassDescriptor*& OutDescriptor, const MicroWorld::FTypeId InTypeId = 1) noexcept
 {
-	const FClassDescriptor Candidate = MakeClassDescriptor<FTrackedObject>(TypeId, "Tracked");
-	const EObjectResult Result = Registry.Register(Candidate);
-	OutDescriptor = Registry.Find(TypeId);
+	const FClassDescriptor Candidate = MakeClassDescriptor<FTrackedObject>(InTypeId, "Tracked");
+	const EObjectResult Result = InRegistry.Register(Candidate);
+	OutDescriptor = InRegistry.Find(InTypeId);
 	return Result;
 }
 

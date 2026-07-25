@@ -20,104 +20,104 @@ namespace
 {
 
 /** Allocates one block with the requested C++17 over-alignment. */
-void* AllocateAligned(const std::size_t Size, const std::size_t Alignment) noexcept
+void* AllocateAligned(const std::size_t InSize, const std::size_t InAlignment) noexcept
 {
 #if defined(_WIN32)
-	return _aligned_malloc(Size, Alignment);
+	return _aligned_malloc(InSize, InAlignment);
 #else
-	const std::size_t RoundedSize = ((Size + Alignment - 1) / Alignment) * Alignment;
-	return std::aligned_alloc(Alignment, RoundedSize);
+	const std::size_t RoundedSize = ((InSize + InAlignment - 1) / InAlignment) * InAlignment;
+	return std::aligned_alloc(InAlignment, RoundedSize);
 #endif
 }
 
 /** Releases one block returned by AllocateAligned on the active host runtime. */
-void FreeAligned(void* const Allocation) noexcept
+void FreeAligned(void* const InAllocation) noexcept
 {
 #if defined(_WIN32)
-	_aligned_free(Allocation);
+	_aligned_free(InAllocation);
 #else
-	std::free(Allocation);
+	std::free(InAllocation);
 #endif
 }
 
 } // namespace
 
-void* operator new(const std::size_t Size)
+void* operator new(const std::size_t InSize)
 {
 	++MicroWorld::Tests::GlobalAllocationCount;
-	if (void* const Allocation = std::malloc(Size))
+	if (void* const Allocation = std::malloc(InSize))
 	{
 		return Allocation;
 	}
 	std::abort();
 }
 
-void* operator new[](const std::size_t Size)
+void* operator new[](const std::size_t InSize)
 {
 	++MicroWorld::Tests::GlobalAllocationCount;
-	if (void* const Allocation = std::malloc(Size))
+	if (void* const Allocation = std::malloc(InSize))
 	{
 		return Allocation;
 	}
 	std::abort();
 }
 
-void* operator new(const std::size_t Size, const std::align_val_t Alignment)
+void* operator new(const std::size_t InSize, const std::align_val_t InAlignment)
 {
 	++MicroWorld::Tests::GlobalAllocationCount;
-	if (void* const Allocation = AllocateAligned(Size, static_cast<std::size_t>(Alignment)))
+	if (void* const Allocation = AllocateAligned(InSize, static_cast<std::size_t>(InAlignment)))
 	{
 		return Allocation;
 	}
 	std::abort();
 }
 
-void* operator new[](const std::size_t Size, const std::align_val_t Alignment)
+void* operator new[](const std::size_t InSize, const std::align_val_t InAlignment)
 {
 	++MicroWorld::Tests::GlobalAllocationCount;
-	if (void* const Allocation = AllocateAligned(Size, static_cast<std::size_t>(Alignment)))
+	if (void* const Allocation = AllocateAligned(InSize, static_cast<std::size_t>(InAlignment)))
 	{
 		return Allocation;
 	}
 	std::abort();
 }
 
-void operator delete(void* const Allocation) noexcept
+void operator delete(void* const InAllocation) noexcept
 {
-	std::free(Allocation);
+	std::free(InAllocation);
 }
 
-void operator delete[](void* const Allocation) noexcept
+void operator delete[](void* const InAllocation) noexcept
 {
-	std::free(Allocation);
+	std::free(InAllocation);
 }
 
-void operator delete(void* const Allocation, const std::size_t) noexcept
+void operator delete(void* const InAllocation, const std::size_t) noexcept
 {
-	std::free(Allocation);
+	std::free(InAllocation);
 }
 
-void operator delete[](void* const Allocation, const std::size_t) noexcept
+void operator delete[](void* const InAllocation, const std::size_t) noexcept
 {
-	std::free(Allocation);
+	std::free(InAllocation);
 }
 
-void operator delete(void* const Allocation, const std::align_val_t) noexcept
+void operator delete(void* const InAllocation, const std::align_val_t) noexcept
 {
-	FreeAligned(Allocation);
+	FreeAligned(InAllocation);
 }
 
-void operator delete[](void* const Allocation, const std::align_val_t) noexcept
+void operator delete[](void* const InAllocation, const std::align_val_t) noexcept
 {
-	FreeAligned(Allocation);
+	FreeAligned(InAllocation);
 }
 
-void operator delete(void* const Allocation, const std::size_t, const std::align_val_t) noexcept
+void operator delete(void* const InAllocation, const std::size_t, const std::align_val_t) noexcept
 {
-	FreeAligned(Allocation);
+	FreeAligned(InAllocation);
 }
 
-void operator delete[](void* const Allocation, const std::size_t, const std::align_val_t) noexcept
+void operator delete[](void* const InAllocation, const std::size_t, const std::align_val_t) noexcept
 {
-	FreeAligned(Allocation);
+	FreeAligned(InAllocation);
 }

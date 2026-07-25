@@ -11,7 +11,7 @@
 namespace MicroWorld
 {
 
-UActorComponent::UActorComponent(FTickConfiguration TickConfiguration) noexcept : FTickable(TickConfiguration) {}
+UActorComponent::UActorComponent(FTickConfiguration InTickConfiguration) noexcept : FTickable(InTickConfiguration) {}
 
 UActorComponent::~UActorComponent() noexcept = default;
 
@@ -34,7 +34,7 @@ AActor* UActorComponent::GetOwnerActor() const noexcept
 	return static_cast<AActor*>(ResolveObjectHandle(*ObjectStore, OwnerObjectHandle));
 }
 
-ERuntimeResult UActorComponent::DispatchBeginPlay(const TimePointMilliseconds NowMilliseconds) noexcept
+ERuntimeResult UActorComponent::DispatchBeginPlay(const TimePointMilliseconds InNowMilliseconds) noexcept
 {
 	const ERuntimeResult BeginResult = Lifecycle.Begin();
 	if (BeginResult != ERuntimeResult::Success)
@@ -44,12 +44,12 @@ ERuntimeResult UActorComponent::DispatchBeginPlay(const TimePointMilliseconds No
 
 	// The primary tick lifecycle starts before the consumer hook so a Tick in
 	// the same dispatcher step observes a baseline time.
-	BeginPrimaryTickLifecycle(NowMilliseconds);
+	BeginPrimaryTickLifecycle(InNowMilliseconds);
 	BeginPlay();
 	return ERuntimeResult::Success;
 }
 
-ERuntimeResult UActorComponent::DispatchAdvance(const TimePointMilliseconds NowMilliseconds) noexcept
+ERuntimeResult UActorComponent::DispatchAdvance(const TimePointMilliseconds InNowMilliseconds) noexcept
 {
 	const ERuntimeResult PlayingResult = Lifecycle.RequirePlaying();
 	if (PlayingResult != ERuntimeResult::Success)
@@ -57,7 +57,7 @@ ERuntimeResult UActorComponent::DispatchAdvance(const TimePointMilliseconds NowM
 		return PlayingResult;
 	}
 
-	const FTickDecision Decision = AdvancePrimaryTick(NowMilliseconds);
+	const FTickDecision Decision = AdvancePrimaryTick(InNowMilliseconds);
 	if (Decision.Result != ERuntimeResult::Success)
 	{
 		return Decision.Result;
@@ -88,9 +88,9 @@ ERuntimeResult UActorComponent::DispatchEndPlay() noexcept
 	return ERuntimeResult::Success;
 }
 
-void UActorComponent::AssignOwner(const FObjectHandle Owner) noexcept
+void UActorComponent::AssignOwner(const FObjectHandle InOwner) noexcept
 {
-	OwnerObjectHandle = Owner;
+	OwnerObjectHandle = InOwner;
 }
 
 } // namespace MicroWorld

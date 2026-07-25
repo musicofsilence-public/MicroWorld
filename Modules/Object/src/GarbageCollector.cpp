@@ -32,33 +32,33 @@ namespace
 	};
 
 	/** Increments a diagnostic counter without allowing long-running wraparound. */
-	void IncrementSaturated(std::uint32_t& Counter) noexcept
+	void IncrementSaturated(std::uint32_t& InOutCounter) noexcept
 	{
-		if (Counter < std::numeric_limits<std::uint32_t>::max())
+		if (InOutCounter < std::numeric_limits<std::uint32_t>::max())
 		{
-			++Counter;
+			++InOutCounter;
 		}
 	}
 
 	/** Adds bounded work to one aggregate without allowing diagnostic wraparound. */
-	void AddSaturated(std::uint32_t& Counter, const std::uint32_t Amount) noexcept
+	void AddSaturated(std::uint32_t& InOutCounter, const std::uint32_t InAmount) noexcept
 	{
-		const std::uint32_t Remaining = std::numeric_limits<std::uint32_t>::max() - Counter;
-		Counter += Amount < Remaining ? Amount : Remaining;
+		const std::uint32_t Remaining = std::numeric_limits<std::uint32_t>::max() - InOutCounter;
+		InOutCounter += InAmount < Remaining ? InAmount : Remaining;
 	}
 
 } // namespace
 
-void FReferenceCollector::AddReferencedHandle(const FObjectHandle Handle) noexcept
+void FReferenceCollector::AddReferencedHandle(const FObjectHandle InHandle) noexcept
 {
 	if (Collector != nullptr)
 	{
-		Collector->DiscoverReference(Handle);
+		Collector->DiscoverReference(InHandle);
 	}
 }
 
-FGarbageCollector::FGarbageCollector(FObjectStore& Store, const FGarbageCollectorStorage Storage) noexcept
-	: ObjectStore(&Store), CollectorStorage(Storage)
+FGarbageCollector::FGarbageCollector(FObjectStore& InStore, const FGarbageCollectorStorage InStorage) noexcept
+	: ObjectStore(&InStore), CollectorStorage(InStorage)
 {
 }
 
@@ -110,7 +110,7 @@ ERuntimeResult FGarbageCollector::ClassifyStartFailure() noexcept
 	return ERuntimeResult::Success;
 }
 
-FGarbageCollectionResult FGarbageCollector::Advance(const FGarbageCollectionBudget Budget) noexcept
+FGarbageCollectionResult FGarbageCollector::Advance(const FGarbageCollectionBudget InBudget) noexcept
 {
 	FGarbageCollectionResult CollectionResult{};
 	CollectionResult.Phase = CurrentPhase;
@@ -130,15 +130,15 @@ FGarbageCollectionResult FGarbageCollector::Advance(const FGarbageCollectionBudg
 		bool bPhaseAdvanced = false;
 		if (CurrentPhase == EGarbageCollectionPhase::SeedRoots)
 		{
-			bPhaseAdvanced = AdvanceSeedRootsPhase(Budget, CollectionResult);
+			bPhaseAdvanced = AdvanceSeedRootsPhase(InBudget, CollectionResult);
 		}
 		else if (CurrentPhase == EGarbageCollectionPhase::Mark)
 		{
-			bPhaseAdvanced = AdvanceMarkPhase(Budget, CollectionResult);
+			bPhaseAdvanced = AdvanceMarkPhase(InBudget, CollectionResult);
 		}
 		else
 		{
-			bPhaseAdvanced = AdvanceSweepPhase(Budget, CollectionResult);
+			bPhaseAdvanced = AdvanceSweepPhase(InBudget, CollectionResult);
 		}
 
 		if (bWorklistOverflowed)
@@ -185,14 +185,14 @@ ERuntimeResult FGarbageCollector::ValidateAdvancePreconditions() const noexcept
 	return ERuntimeResult::Success;
 }
 
-bool FGarbageCollector::AdvanceSeedRootsPhase(const FGarbageCollectionBudget& Budget, FGarbageCollectionResult& Result) noexcept
+bool FGarbageCollector::AdvanceSeedRootsPhase(const FGarbageCollectionBudget& InBudget, FGarbageCollectionResult& OutResult) noexcept
 {
 	const std::uint32_t RootCapacity = ObjectStore->CollectorRootCapacity();
-	while (!bWorklistOverflowed && RootCursor < RootCapacity && Result.RootOperations < Budget.MaxRootOperations)
+	while (!bWorklistOverflowed && RootCursor < RootCapacity && OutResult.RootOperations < InBudget.MaxRootOperations)
 	{
 		const FObjectHandle RootHandle = ObjectStore->CollectorRootAt(RootCursor);
 		++RootCursor;
-		++Result.RootOperations;
+		++OutResult.RootOperations;
 		DiscoverReference(RootHandle);
 	}
 	if (bWorklistOverflowed)
@@ -207,9 +207,9 @@ bool FGarbageCollector::AdvanceSeedRootsPhase(const FGarbageCollectionBudget& Bu
 	return true;
 }
 
-bool FGarbageCollector::AdvanceMarkPhase(const FGarbageCollectionBudget& Budget, FGarbageCollectionResult& Result) noexcept
+bool FGarbageCollector::AdvanceMarkPhase(const FGarbageCollectionBudget& InBudget, FGarbageCollectionResult& OutResult) noexcept
 {
-	while (!bWorklistOverflowed && WorklistCount > 0 && Result.MarkOperations < Budget.MaxMarkOperations)
+	while (!bWorklistOverflowed && WorklistCount > 0 && OutResult.MarkOperations < InBudget.MaxMarkOperations)
 	{
 		--WorklistCount;
 		const FObjectHandle ObjectHandle = CollectorStorage.Worklist[WorklistCount];
@@ -223,7 +223,7 @@ bool FGarbageCollector::AdvanceMarkPhase(const FGarbageCollectionBudget& Budget,
 				Descriptor.TraceReferences(*Object, ReferenceCollector);
 			}
 		}
-		++Result.MarkOperations;
+		++OutResult.MarkOperations;
 	}
 	if (bWorklistOverflowed)
 	{
@@ -237,14 +237,14 @@ bool FGarbageCollector::AdvanceMarkPhase(const FGarbageCollectionBudget& Budget,
 	return true;
 }
 
-bool FGarbageCollector::AdvanceSweepPhase(const FGarbageCollectionBudget& Budget, FGarbageCollectionResult& Result) noexcept
+bool FGarbageCollector::AdvanceSweepPhase(const FGarbageCollectionBudget& InBudget, FGarbageCollectionResult& OutResult) noexcept
 {
 	const std::uint32_t SlotCapacity = ObjectStore->CollectorSlotCapacity();
-	while (SweepCursor < SlotCapacity && Result.SweepOperations < Budget.MaxSweepOperations)
+	while (SweepCursor < SlotCapacity && OutResult.SweepOperations < InBudget.MaxSweepOperations)
 	{
 		const ObjectIndex SlotIndex = SweepCursor;
 		++SweepCursor;
-		++Result.SweepOperations;
+		++OutResult.SweepOperations;
 		if (!ObjectStore->CollectorIsOccupied(SlotIndex) || ObjectStore->CollectorIsPendingDestroy(SlotIndex))
 		{
 			continue;
@@ -257,7 +257,7 @@ bool FGarbageCollector::AdvanceSweepPhase(const FGarbageCollectionBudget& Budget
 		const FObjectHandle UnreachableHandle = ObjectStore->CollectorHandleAt(SlotIndex);
 		if (UnreachableHandle.IsValid() && ObjectStore->CollectorReclaim(UnreachableHandle) == EObjectResult::Success)
 		{
-			++Result.ObjectsReclaimed;
+			++OutResult.ObjectsReclaimed;
 			IncrementSaturated(CollectionStats.ReclaimedObjects);
 		}
 	}
@@ -265,23 +265,23 @@ bool FGarbageCollector::AdvanceSweepPhase(const FGarbageCollectionBudget& Budget
 	{
 		return false;
 	}
-	FinalizeCompletedCycle(Result);
+	FinalizeCompletedCycle(OutResult);
 	return true;
 }
 
-void FGarbageCollector::FinalizeCompletedCycle(FGarbageCollectionResult& Result) noexcept
+void FGarbageCollector::FinalizeCompletedCycle(FGarbageCollectionResult& OutResult) noexcept
 {
 	CurrentPhase = EGarbageCollectionPhase::Idle;
 	IncrementSaturated(CollectionStats.CompletedCycles);
-	Result.bCycleComplete = true;
+	OutResult.bCycleComplete = true;
 	CompleteCycle();
 }
 
-void FGarbageCollector::AccumulateOperations(FGarbageCollectionResult& Result) noexcept
+void FGarbageCollector::AccumulateOperations(FGarbageCollectionResult& OutResult) noexcept
 {
-	AddSaturated(Result.OperationsPerformed, Result.RootOperations);
-	AddSaturated(Result.OperationsPerformed, Result.MarkOperations);
-	AddSaturated(Result.OperationsPerformed, Result.SweepOperations);
+	AddSaturated(OutResult.OperationsPerformed, OutResult.RootOperations);
+	AddSaturated(OutResult.OperationsPerformed, OutResult.MarkOperations);
+	AddSaturated(OutResult.OperationsPerformed, OutResult.SweepOperations);
 }
 
 FGarbageCollectionResult FGarbageCollector::CollectFull() noexcept
@@ -316,16 +316,16 @@ ERuntimeResult FGarbageCollector::CancelCollection() noexcept
 	return ERuntimeResult::Success;
 }
 
-void FGarbageCollector::DiscoverReference(const FObjectHandle Handle) noexcept
+void FGarbageCollector::DiscoverReference(const FObjectHandle InHandle) noexcept
 {
 	const bool bDiscoveryPhase = CurrentPhase == EGarbageCollectionPhase::SeedRoots || CurrentPhase == EGarbageCollectionPhase::Mark;
-	if (!bDiscoveryPhase || ObjectStore == nullptr || !ObjectStore->CollectorIsOwnedBy(*this) || !Handle.IsValid()
-		|| Handle.Index >= ObjectStore->CollectorSlotCapacity())
+	if (!bDiscoveryPhase || ObjectStore == nullptr || !ObjectStore->CollectorIsOwnedBy(*this) || !InHandle.IsValid()
+		|| InHandle.Index >= ObjectStore->CollectorSlotCapacity())
 	{
 		return;
 	}
-	if (ObjectStore->CollectorIsPendingDestroy(Handle.Index) || ObjectStore->CollectorHandleAt(Handle.Index) != Handle
-		|| ObjectStore->CollectorIsMarked(Handle.Index))
+	if (ObjectStore->CollectorIsPendingDestroy(InHandle.Index) || ObjectStore->CollectorHandleAt(InHandle.Index) != InHandle
+		|| ObjectStore->CollectorIsMarked(InHandle.Index))
 	{
 		return;
 	}
@@ -339,8 +339,8 @@ void FGarbageCollector::DiscoverReference(const FObjectHandle Handle) noexcept
 		return;
 	}
 
-	ObjectStore->CollectorSetMarked(Handle.Index, true);
-	CollectorStorage.Worklist[WorklistCount] = Handle;
+	ObjectStore->CollectorSetMarked(InHandle.Index, true);
+	CollectorStorage.Worklist[WorklistCount] = InHandle;
 	++WorklistCount;
 }
 

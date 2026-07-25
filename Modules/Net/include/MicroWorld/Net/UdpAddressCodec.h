@@ -20,23 +20,23 @@ namespace MicroWorld
  * encoding this package's driver reads and writes. The encoding is owned here
  * because `FNetAddress` ascribes no meaning to its bytes.
  *
- * @param A First IPv4 octet.
- * @param B Second IPv4 octet.
- * @param C Third IPv4 octet.
- * @param D Fourth IPv4 octet.
- * @param Port UDP port in host byte order.
+ * @param InA First IPv4 octet.
+ * @param InB Second IPv4 octet.
+ * @param InC Third IPv4 octet.
+ * @param InD Fourth IPv4 octet.
+ * @param InPort UDP port in host byte order.
  * @return Six-byte address carrying the octets and the big-endian port.
  */
 constexpr FNetAddress MakeUdpAddress(
-	const std::uint8_t A, const std::uint8_t B, const std::uint8_t C, const std::uint8_t D, const std::uint16_t Port) noexcept
+	const std::uint8_t InA, const std::uint8_t InB, const std::uint8_t InC, const std::uint8_t InD, const std::uint16_t InPort) noexcept
 {
 	FNetAddress Address{};
-	Address.Bytes[0] = A;
-	Address.Bytes[1] = B;
-	Address.Bytes[2] = C;
-	Address.Bytes[3] = D;
-	Address.Bytes[4] = static_cast<std::uint8_t>(Port >> 8);
-	Address.Bytes[5] = static_cast<std::uint8_t>(Port & 0xFF);
+	Address.Bytes[0] = InA;
+	Address.Bytes[1] = InB;
+	Address.Bytes[2] = InC;
+	Address.Bytes[3] = InD;
+	Address.Bytes[4] = static_cast<std::uint8_t>(InPort >> 8);
+	Address.Bytes[5] = static_cast<std::uint8_t>(InPort & 0xFF);
 	Address.Size = 6;
 	return Address;
 }
@@ -48,12 +48,12 @@ constexpr FNetAddress MakeUdpAddress(
  * driver actually routes the address, so a loopback or LoRa address is never
  * mistaken for a UDP one.
  *
- * @param Address Address whose encoding to test.
+ * @param InAddress Address whose encoding to test.
  * @return True when the active length is exactly six bytes.
  */
-constexpr bool IsUdpAddress(const FNetAddress& Address) noexcept
+constexpr bool IsUdpAddress(const FNetAddress& InAddress) noexcept
 {
-	return Address.Size == 6;
+	return InAddress.Size == 6;
 }
 
 /**
@@ -63,12 +63,12 @@ constexpr bool IsUdpAddress(const FNetAddress& Address) noexcept
  * `MakeUdpAddress` write order so the round trip is exact. Callers must first
  * confirm `IsUdpAddress` to avoid reading unrelated bytes.
  *
- * @param Address Address whose bytes 4-5 hold a network-order port.
+ * @param InAddress Address whose bytes 4-5 hold a network-order port.
  * @return Port in host byte order.
  */
-constexpr std::uint16_t UdpAddressPort(const FNetAddress& Address) noexcept
+constexpr std::uint16_t UdpAddressPort(const FNetAddress& InAddress) noexcept
 {
-	return static_cast<std::uint16_t>((static_cast<std::uint16_t>(Address.Bytes[4]) << 8) | static_cast<std::uint16_t>(Address.Bytes[5]));
+	return static_cast<std::uint16_t>((static_cast<std::uint16_t>(InAddress.Bytes[4]) << 8) | static_cast<std::uint16_t>(InAddress.Bytes[5]));
 }
 
 /**
@@ -79,18 +79,18 @@ constexpr std::uint16_t UdpAddressPort(const FNetAddress& Address) noexcept
  * being hand-copied per platform. The four octets are taken most-significant
  * first to match `MakeUdpAddress`'s dotted order.
  *
- * @param PackedIpv4Address IPv4 address in host byte order (octet A in the high byte).
- * @param Port UDP port in host byte order.
+ * @param InPackedIpv4Address IPv4 address in host byte order (octet A in the high byte).
+ * @param InPort UDP port in host byte order.
  * @return Six-byte address carrying the octets and the big-endian port.
  */
-constexpr FNetAddress MakeUdpAddressFromPackedHostOrder(const std::uint32_t PackedIpv4Address, const std::uint16_t Port) noexcept
+constexpr FNetAddress MakeUdpAddressFromPackedHostOrder(const std::uint32_t InPackedIpv4Address, const std::uint16_t InPort) noexcept
 {
 	return MakeUdpAddress(
-		static_cast<std::uint8_t>(PackedIpv4Address >> 24),
-		static_cast<std::uint8_t>(PackedIpv4Address >> 16),
-		static_cast<std::uint8_t>(PackedIpv4Address >> 8),
-		static_cast<std::uint8_t>(PackedIpv4Address),
-		Port);
+		static_cast<std::uint8_t>(InPackedIpv4Address >> 24),
+		static_cast<std::uint8_t>(InPackedIpv4Address >> 16),
+		static_cast<std::uint8_t>(InPackedIpv4Address >> 8),
+		static_cast<std::uint8_t>(InPackedIpv4Address),
+		InPort);
 }
 
 } // namespace MicroWorld

@@ -40,12 +40,12 @@ using FSockLen = socklen_t;
  * lwIP uses a negative `int` for its invalid descriptor, so callers must not
  * test the raw value against a Windows-style sentinel.
  *
- * @param Socket Handle whose validity is in question.
+ * @param InSocket Handle whose validity is in question.
  * @return True when the handle names an open socket.
  */
-inline bool IsValidHandle(const FSocketHandle Socket) noexcept
+inline bool IsValidHandle(const FSocketHandle InSocket) noexcept
 {
-	return Socket >= 0;
+	return InSocket >= 0;
 }
 
 /**
@@ -54,23 +54,23 @@ inline bool IsValidHandle(const FSocketHandle Socket) noexcept
  * `std::uintptr_t` is at least as wide as `int`, so the round trip is lossless
  * and keeps `std::uintptr_t` out of the public header.
  *
- * @param Stored Opaque handle value saved by the driver.
+ * @param InStored Opaque handle value saved by the driver.
  * @return lwIP socket handle.
  */
-inline FSocketHandle AsSocketHandle(const std::uintptr_t Stored) noexcept
+inline FSocketHandle AsSocketHandle(const std::uintptr_t InStored) noexcept
 {
-	return static_cast<FSocketHandle>(Stored);
+	return static_cast<FSocketHandle>(InStored);
 }
 
 /**
  * Converts an lwIP socket handle to the driver's opaque stored form.
  *
- * @param Socket lwIP socket handle.
+ * @param InSocket lwIP socket handle.
  * @return Opaque handle value the driver stores.
  */
-inline std::uintptr_t AsOpaqueHandle(const FSocketHandle Socket) noexcept
+inline std::uintptr_t AsOpaqueHandle(const FSocketHandle InSocket) noexcept
 {
-	return static_cast<std::uintptr_t>(Socket);
+	return static_cast<std::uintptr_t>(InSocket);
 }
 
 /**
@@ -79,15 +79,15 @@ inline std::uintptr_t AsOpaqueHandle(const FSocketHandle Socket) noexcept
  * A no-op on an invalid handle so the driver's destructor does not need its own
  * validity branch.
  *
- * @param Socket Handle to release.
+ * @param InSocket Handle to release.
  */
-inline void CloseSocket(const FSocketHandle Socket) noexcept
+inline void CloseSocket(const FSocketHandle InSocket) noexcept
 {
-	if (!IsValidHandle(Socket))
+	if (!IsValidHandle(InSocket))
 	{
 		return;
 	}
-	(void)close(Socket);
+	(void)close(InSocket);
 }
 
 /**
@@ -96,17 +96,17 @@ inline void CloseSocket(const FSocketHandle Socket) noexcept
  * Sets `O_NONBLOCK` via `fcntl`; returns false on any syscall failure so the
  * constructor can roll back cleanly.
  *
- * @param Socket Handle whose mode to change.
+ * @param InSocket Handle whose mode to change.
  * @return True when the socket is now non-blocking.
  */
-inline bool SetNonBlocking(const FSocketHandle Socket) noexcept
+inline bool SetNonBlocking(const FSocketHandle InSocket) noexcept
 {
-	const int Flags = fcntl(Socket, F_GETFL, 0);
+	const int Flags = fcntl(InSocket, F_GETFL, 0);
 	if (Flags < 0)
 	{
 		return false;
 	}
-	return fcntl(Socket, F_SETFL, Flags | O_NONBLOCK) == 0;
+	return fcntl(InSocket, F_SETFL, Flags | O_NONBLOCK) == 0;
 }
 
 /**
@@ -115,22 +115,22 @@ inline bool SetNonBlocking(const FSocketHandle Socket) noexcept
  * The octets are packed and converted with `htonl`; the port with `htons`, so the
  * returned address is ready for `bind` or `sendto` without further byte swapping.
  *
- * @param A First IPv4 octet.
- * @param B Second IPv4 octet.
- * @param C Third IPv4 octet.
- * @param D Fourth IPv4 octet.
- * @param Port Host-order UDP port.
+ * @param InA First IPv4 octet.
+ * @param InB Second IPv4 octet.
+ * @param InC Third IPv4 octet.
+ * @param InD Fourth IPv4 octet.
+ * @param InPort Host-order UDP port.
  * @return Network-ready IPv4 socket address.
  */
 inline sockaddr_in MakeSockAddrIn(
-	const std::uint8_t A, const std::uint8_t B, const std::uint8_t C, const std::uint8_t D, const std::uint16_t Port) noexcept
+	const std::uint8_t InA, const std::uint8_t InB, const std::uint8_t InC, const std::uint8_t InD, const std::uint16_t InPort) noexcept
 {
 	sockaddr_in Address{};
 	Address.sin_family = AF_INET;
-	const std::uint32_t PackedIpv4Address = (static_cast<std::uint32_t>(A) << 24) | (static_cast<std::uint32_t>(B) << 16)
-		| (static_cast<std::uint32_t>(C) << 8) | static_cast<std::uint32_t>(D);
+	const std::uint32_t PackedIpv4Address = (static_cast<std::uint32_t>(InA) << 24) | (static_cast<std::uint32_t>(InB) << 16)
+		| (static_cast<std::uint32_t>(InC) << 8) | static_cast<std::uint32_t>(InD);
 	Address.sin_addr.s_addr = htonl(PackedIpv4Address);
-	Address.sin_port = htons(Port);
+	Address.sin_port = htons(InPort);
 	return Address;
 }
 
@@ -152,17 +152,17 @@ enum class ESendOutcome : std::uint8_t
  * it was fully accepted, would block, or failed, so the driver can map it to the
  * shared `ENetResult` without inspecting lwIP error codes.
  *
- * @param Socket Open non-blocking socket.
- * @param DatagramBytes First byte of the datagram to send.
- * @param Length Number of bytes to send.
- * @param To Network-ready destination address.
+ * @param InSocket Open non-blocking socket.
+ * @param InDatagramBytes First byte of the datagram to send.
+ * @param InLength Number of bytes to send.
+ * @param InTo Network-ready destination address.
  * @return Normalized outcome of the single send attempt.
  */
 inline ESendOutcome SendDatagram(
-	const FSocketHandle Socket, const std::uint8_t* const DatagramBytes, const std::size_t Length, const sockaddr_in& To) noexcept
+	const FSocketHandle InSocket, const std::uint8_t* const InDatagramBytes, const std::size_t InLength, const sockaddr_in& InTo) noexcept
 {
-	const ssize_t Sent = sendto(Socket, DatagramBytes, Length, 0, reinterpret_cast<const sockaddr*>(&To), sizeof(To));
-	if (Sent >= 0 && static_cast<std::size_t>(Sent) == Length)
+	const ssize_t Sent = sendto(InSocket, InDatagramBytes, InLength, 0, reinterpret_cast<const sockaddr*>(&InTo), sizeof(InTo));
+	if (Sent >= 0 && static_cast<std::size_t>(Sent) == InLength)
 	{
 		return ESendOutcome::Success;
 	}
@@ -213,12 +213,12 @@ constexpr std::size_t PeekScratchBytes = 1200;
  * is a hard error. lwIP has no oversize-datagram error, so this mirrors the host
  * POSIX branch without a size sentinel.
  *
- * @param ErrorCode Platform last-error captured right after a failed peek.
+ * @param InErrorCode Platform last-error captured right after a failed peek.
  * @return Peek probe the driver acts on without inspecting platform codes.
  */
-inline FPeekProbe ClassifyPeekError(const int ErrorCode) noexcept
+inline FPeekProbe ClassifyPeekError(const int InErrorCode) noexcept
 {
-	if (ErrorCode == EWOULDBLOCK || ErrorCode == EAGAIN)
+	if (InErrorCode == EWOULDBLOCK || InErrorCode == EAGAIN)
 	{
 		return FPeekProbe{EPeekStatus::WouldBlock, 0};
 	}
@@ -236,18 +236,18 @@ inline FPeekProbe ClassifyPeekError(const int ErrorCode) noexcept
  * (compile-only phase). The peek never touches the caller-owned destination,
  * keeping `Full` transactional.
  *
- * @param Socket Open non-blocking socket.
+ * @param InSocket Open non-blocking socket.
  * @return Peek classification with the observed datagram length when `Ready`.
  */
-inline FPeekProbe ProbeReadableDatagram(const FSocketHandle Socket) noexcept
+inline FPeekProbe ProbeReadableDatagram(const FSocketHandle InSocket) noexcept
 {
 	std::uint8_t Scratch[PeekScratchBytes];
 	sockaddr_storage Sender{};
 	FSockLen SenderLen = sizeof(Sender);
 #ifdef MSG_TRUNC
-	const ssize_t Peeked = recvfrom(Socket, Scratch, PeekScratchBytes, MSG_PEEK | MSG_TRUNC, reinterpret_cast<sockaddr*>(&Sender), &SenderLen);
+	const ssize_t Peeked = recvfrom(InSocket, Scratch, PeekScratchBytes, MSG_PEEK | MSG_TRUNC, reinterpret_cast<sockaddr*>(&Sender), &SenderLen);
 #else
-	const ssize_t Peeked = recvfrom(Socket, Scratch, PeekScratchBytes, MSG_PEEK, reinterpret_cast<sockaddr*>(&Sender), &SenderLen);
+	const ssize_t Peeked = recvfrom(InSocket, Scratch, PeekScratchBytes, MSG_PEEK, reinterpret_cast<sockaddr*>(&Sender), &SenderLen);
 #endif
 	if (Peeked < 0)
 	{
@@ -275,17 +275,17 @@ struct FConsumeResult
  * The caller's `OutSender` is filled only on success; the driver decodes its
  * IPv4 fields with `ntohl`/`ntohs`.
  *
- * @param Socket Open non-blocking socket.
- * @param Destination Caller-owned buffer for the received bytes.
- * @param Capacity Byte capacity of `Destination`.
+ * @param InSocket Open non-blocking socket.
+ * @param OutDestination Caller-owned buffer for the received bytes.
+ * @param InCapacity Byte capacity of `OutDestination`.
  * @param OutSender Filled with the sender's IPv4 socket address on success.
  * @return Consume result with byte count on success.
  */
 inline FConsumeResult ConsumeDatagram(
-	const FSocketHandle Socket, std::uint8_t* const Destination, const std::size_t Capacity, sockaddr_in& OutSender) noexcept
+	const FSocketHandle InSocket, std::uint8_t* const OutDestination, const std::size_t InCapacity, sockaddr_in& OutSender) noexcept
 {
 	FSockLen SenderLen = sizeof(OutSender);
-	const ssize_t Received = recvfrom(Socket, Destination, Capacity, 0, reinterpret_cast<sockaddr*>(&OutSender), &SenderLen);
+	const ssize_t Received = recvfrom(InSocket, OutDestination, InCapacity, 0, reinterpret_cast<sockaddr*>(&OutSender), &SenderLen);
 	if (Received < 0)
 	{
 		return FConsumeResult{false, 0};
@@ -315,28 +315,28 @@ struct FOpenedSocket
  * so each failure site reads as one line; the returned descriptor carries the
  * now-closed handle with `bOpen` false.
  *
- * @param Socket Partially opened handle to release.
+ * @param InSocket Partially opened handle to release.
  * @return Failed opened-socket descriptor.
  */
-inline FOpenedSocket CloseAndReportFailure(const FSocketHandle Socket) noexcept
+inline FOpenedSocket CloseAndReportFailure(const FSocketHandle InSocket) noexcept
 {
-	CloseSocket(Socket);
-	return FOpenedSocket{Socket, false, 0};
+	CloseSocket(InSocket);
+	return FOpenedSocket{InSocket, false, 0};
 }
 
 /**
  * Opens, binds, and sizes one non-blocking UDP socket on all IPv4 interfaces.
  *
- * A `BindPort` of zero requests an ephemeral port; the actual port is read back
+ * An `InBindPort` of zero requests an ephemeral port; the actual port is read back
  * via `getsockname`. On any syscall failure the partially opened socket is closed
  * and `bOpen` is false, so the constructor can leave the driver inert without
  * throwing. Binding to `INADDR_ANY` keeps the adapter free of netif assumptions;
  * a real deployment brings up netif/WiFi before any traffic can flow.
  *
- * @param BindPort Host-order UDP port to bind, or zero for an ephemeral port.
+ * @param InBindPort Host-order UDP port to bind, or zero for an ephemeral port.
  * @return Opened-socket descriptor with the actual bound port.
  */
-inline FOpenedSocket OpenBoundUdpSocket(const std::uint16_t BindPort) noexcept
+inline FOpenedSocket OpenBoundUdpSocket(const std::uint16_t InBindPort) noexcept
 {
 	const FSocketHandle Socket = socket(AF_INET, SOCK_DGRAM, 0);
 	if (!IsValidHandle(Socket))
@@ -350,7 +350,7 @@ inline FOpenedSocket OpenBoundUdpSocket(const std::uint16_t BindPort) noexcept
 	sockaddr_in Local{};
 	Local.sin_family = AF_INET;
 	Local.sin_addr.s_addr = htonl(INADDR_ANY);
-	Local.sin_port = htons(BindPort);
+	Local.sin_port = htons(InBindPort);
 	if (bind(Socket, reinterpret_cast<const sockaddr*>(&Local), sizeof(Local)) != 0)
 	{
 		return CloseAndReportFailure(Socket);
@@ -365,26 +365,26 @@ inline FOpenedSocket OpenBoundUdpSocket(const std::uint16_t BindPort) noexcept
 }
 
 /**
- * Waits up to `TimeoutMilliseconds` for the socket to become readable.
+ * Waits up to `InTimeoutMilliseconds` for the socket to become readable.
  *
  * Uses `select()` with a bounded timeout so ESP32 demos wait for readiness
  * deterministically without a sleep-poll loop. A true return means a datagram
  * is ready to consume; a false return means the timeout elapsed.
  *
- * @param Socket Open non-blocking socket.
- * @param TimeoutMilliseconds Upper bound on the readiness wait.
+ * @param InSocket Open non-blocking socket.
+ * @param InTimeoutMilliseconds Upper bound on the readiness wait.
  * @return True when the socket is readable within the timeout.
  */
-inline bool WaitForReadable(const FSocketHandle Socket, const DurationMilliseconds TimeoutMilliseconds) noexcept
+inline bool WaitForReadable(const FSocketHandle InSocket, const DurationMilliseconds InTimeoutMilliseconds) noexcept
 {
 	fd_set ReadSet;
 	FD_ZERO(&ReadSet);
-	FD_SET(Socket, &ReadSet);
+	FD_SET(InSocket, &ReadSet);
 	timeval Timeout{};
-	Timeout.tv_sec = static_cast<long>(TimeoutMilliseconds / 1000u);
-	Timeout.tv_usec = static_cast<long>((TimeoutMilliseconds % 1000u) * 1000u);
+	Timeout.tv_sec = static_cast<long>(InTimeoutMilliseconds / 1000u);
+	Timeout.tv_usec = static_cast<long>((InTimeoutMilliseconds % 1000u) * 1000u);
 	// POSIX select() nfds is the highest descriptor number plus one.
-	const int Ready = select(Socket + 1, &ReadSet, nullptr, nullptr, &Timeout);
+	const int Ready = select(InSocket + 1, &ReadSet, nullptr, nullptr, &Timeout);
 	return Ready > 0;
 }
 

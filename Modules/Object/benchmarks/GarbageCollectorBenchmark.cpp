@@ -56,7 +56,7 @@ public:
 
 protected:
 	/** Presents the bounded outgoing edge to the iterative collector. */
-	void VisitReferences(MicroWorld::FReferenceCollector& Collector) noexcept override { Collector.AddReferencedObject(Next); }
+	void VisitReferences(MicroWorld::FReferenceCollector& InCollector) noexcept override { InCollector.AddReferencedObject(Next); }
 
 private:
 	/** Shares lifetime evidence with the benchmark invocation. */
@@ -71,7 +71,7 @@ class FBenchmarkStoreFixture final
 {
 public:
 	/** Binds the store to fixed caller-owned placement, metadata, and root storage. */
-	explicit FBenchmarkStoreFixture(const MicroWorld::FClassRegistryView Classes) noexcept
+	explicit FBenchmarkStoreFixture(const MicroWorld::FClassRegistryView InClasses) noexcept
 		: Store(
 			  MicroWorld::FObjectStoreStorage{
 				  SlotBytes.data(),
@@ -83,7 +83,7 @@ public:
 				  Roots.data(),
 				  RootCapacity,
 			  },
-			  Classes)
+			  InClasses)
 	{
 	}
 
@@ -131,34 +131,34 @@ struct FBenchmarkObservation final
 
 /** Constructs one rooted chain and one unreachable cycle in fixed storage. */
 bool BuildRepresentativeGraph(
-	MicroWorld::FObjectStore& Store,
-	const MicroWorld::FClassDescriptor& Descriptor,
-	FBenchmarkLifetimeState& Lifetime,
-	std::array<MicroWorld::TObjectPtr<FBenchmarkObject>, NodeCount>& Nodes,
-	MicroWorld::TStrongObjectPointerResult<FBenchmarkObject>& Root) noexcept
+	MicroWorld::FObjectStore& InStore,
+	const MicroWorld::FClassDescriptor& InDescriptor,
+	FBenchmarkLifetimeState& InLifetime,
+	std::array<MicroWorld::TObjectPtr<FBenchmarkObject>, NodeCount>& InNodes,
+	MicroWorld::TStrongObjectPointerResult<FBenchmarkObject>& OutRoot) noexcept
 {
 	for (std::uint32_t NodeIndex = 0; NodeIndex < NodeCount; ++NodeIndex)
 	{
-		const MicroWorld::TObjectCreationResult<FBenchmarkObject> Creation = Store.NewObject<FBenchmarkObject>(Descriptor, Lifetime);
+		const MicroWorld::TObjectCreationResult<FBenchmarkObject> Creation = InStore.NewObject<FBenchmarkObject>(InDescriptor, InLifetime);
 		if (Creation.Result != MicroWorld::EObjectResult::Success)
 		{
 			return false;
 		}
-		Nodes[NodeIndex] = Creation.Object;
+		InNodes[NodeIndex] = Creation.Object;
 	}
 
 	for (std::uint32_t NodeIndex = 1; NodeIndex < ReachableNodeCount; ++NodeIndex)
 	{
-		Nodes[NodeIndex - 1].Get()->SetNext(Nodes[NodeIndex]);
+		InNodes[NodeIndex - 1].Get()->SetNext(InNodes[NodeIndex]);
 	}
 	for (std::uint32_t NodeIndex = ReachableNodeCount; NodeIndex < NodeCount; ++NodeIndex)
 	{
 		const std::uint32_t NextIndex = NodeIndex + 1 < NodeCount ? NodeIndex + 1 : ReachableNodeCount;
-		Nodes[NodeIndex].Get()->SetNext(Nodes[NextIndex]);
+		InNodes[NodeIndex].Get()->SetNext(InNodes[NextIndex]);
 	}
 
-	Root = Store.MakeStrongObjectPtr(Nodes[0]);
-	return Root.Result == MicroWorld::EObjectResult::Success;
+	OutRoot = InStore.MakeStrongObjectPtr(InNodes[0]);
+	return OutRoot.Result == MicroWorld::EObjectResult::Success;
 }
 
 /** Measures one full or incremental cycle over an equivalent fixed graph. */
@@ -226,23 +226,23 @@ FBenchmarkObservation RunCollection(const bool bIncremental) noexcept
 }
 
 /** Emits deterministic storage/work evidence and host-only timing for one mode. */
-void PrintObservation(const char* const Mode, const FBenchmarkObservation& Observation) noexcept
+void PrintObservation(const char* const InMode, const FBenchmarkObservation& InObservation) noexcept
 {
 	std::printf(
 		"%s,passed=%u,nodes=%u,reachable=%u,reclaimed=%u,slices=%u,operations=%u,max_slice_operations=%u,"
 		"slot_bytes=%zu,payload_bytes=%zu,fragmentation_bytes=%zu,host_ns=%llu\n",
-		Mode,
-		Observation.bPassed ? 1U : 0U,
+		InMode,
+		InObservation.bPassed ? 1U : 0U,
 		NodeCount,
 		ReachableNodeCount,
-		Observation.ObjectsReclaimed,
-		Observation.SliceCount,
-		Observation.OperationsPerformed,
-		Observation.MaximumSliceOperations,
-		Observation.StoreStats.SlotSizeBytes * Observation.StoreStats.SlotCapacity,
-		Observation.StoreStats.ObjectPayloadBytes,
-		Observation.StoreStats.InternalFragmentationBytes,
-		static_cast<unsigned long long>(Observation.HostNanoseconds));
+		InObservation.ObjectsReclaimed,
+		InObservation.SliceCount,
+		InObservation.OperationsPerformed,
+		InObservation.MaximumSliceOperations,
+		InObservation.StoreStats.SlotSizeBytes * InObservation.StoreStats.SlotCapacity,
+		InObservation.StoreStats.ObjectPayloadBytes,
+		InObservation.StoreStats.InternalFragmentationBytes,
+		static_cast<unsigned long long>(InObservation.HostNanoseconds));
 }
 
 } // namespace

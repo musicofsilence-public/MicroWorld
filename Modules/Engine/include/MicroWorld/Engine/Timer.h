@@ -76,13 +76,13 @@ struct FTimerHandle final
 	constexpr bool IsValid() const noexcept { return Index != InvalidIndex && Generation != 0; }
 
 	/** Compares the complete stable timer identity. */
-	friend constexpr bool operator==(const FTimerHandle Left, const FTimerHandle Right) noexcept
+	friend constexpr bool operator==(const FTimerHandle InLeft, const FTimerHandle InRight) noexcept
 	{
-		return Left.Index == Right.Index && Left.Generation == Right.Generation;
+		return InLeft.Index == InRight.Index && InLeft.Generation == InRight.Generation;
 	}
 
 	/** Distinguishes handles whose slot or generation identity differs. */
-	friend constexpr bool operator!=(const FTimerHandle Left, const FTimerHandle Right) noexcept { return !(Left == Right); }
+	friend constexpr bool operator!=(const FTimerHandle InLeft, const FTimerHandle InRight) noexcept { return !(InLeft == InRight); }
 };
 
 /**
@@ -91,9 +91,9 @@ struct FTimerHandle final
  * A manager permanently retires the slot when this query is false; wrapping a
  * generation and making an old handle valid again is forbidden.
  */
-constexpr bool CanAdvanceTimerGeneration(const std::uint32_t CurrentGeneration) noexcept
+constexpr bool CanAdvanceTimerGeneration(const std::uint32_t InCurrentGeneration) noexcept
 {
-	return CurrentGeneration < std::numeric_limits<std::uint32_t>::max();
+	return InCurrentGeneration < std::numeric_limits<std::uint32_t>::max();
 }
 
 /**
@@ -110,7 +110,7 @@ class TTimerManager final
 
 public:
 	/** Stores the caller's initial clock as the scheduling baseline for every later operation. */
-	explicit TTimerManager(const TimePointMilliseconds InitialNow) noexcept : LastAcceptedNowMilliseconds{InitialNow} {}
+	explicit TTimerManager(const TimePointMilliseconds InInitialNow) noexcept : LastAcceptedNowMilliseconds{InInitialNow} {}
 
 	/**
 	 * Destroys every bound callback without invoking any of them.
@@ -146,9 +146,9 @@ public:
 	 * delegate into a reusable slot and publishes a fresh generation-checked handle.
 	 */
 	ETimerResult Schedule(
-		TDelegate<void(), InlineTimerCallbackBytes>&& Callback,
-		const DurationMilliseconds DelayAndPeriodMilliseconds,
-		const ETimerMode Mode,
+		TDelegate<void(), InlineTimerCallbackBytes>&& InCallback,
+		const DurationMilliseconds InDelayAndPeriodMilliseconds,
+		const ETimerMode InMode,
 		FTimerHandle& OutHandle) noexcept
 	{
 		OutHandle = {};
@@ -158,11 +158,11 @@ public:
 		}
 		// Explicit allowlist so neither ETimerMode::None nor any arbitrary cast value
 		// (e.g. static_cast<ETimerMode>(3)) can silently become a valid schedule shape.
-		if (Mode != ETimerMode::OneShot && Mode != ETimerMode::Looping)
+		if (InMode != ETimerMode::OneShot && InMode != ETimerMode::Looping)
 		{
 			return ETimerResult::InvalidMode;
 		}
-		if (!Callback.IsBound())
+		if (!InCallback.IsBound())
 		{
 			return ETimerResult::InvalidCallback;
 		}
@@ -174,8 +174,9 @@ public:
 		}
 
 		const std::size_t SlotIndex = static_cast<std::size_t>(AvailableSlot - Slots);
-		const DurationMilliseconds PeriodMilliseconds = (Mode == ETimerMode::Looping) ? DelayAndPeriodMilliseconds : DurationMilliseconds{0};
-		AvailableSlot->Arm(std::move(Callback), SaturatingAdd(LastAcceptedNowMilliseconds, DelayAndPeriodMilliseconds), PeriodMilliseconds, Mode);
+		const DurationMilliseconds PeriodMilliseconds = (InMode == ETimerMode::Looping) ? InDelayAndPeriodMilliseconds : DurationMilliseconds{0};
+		AvailableSlot->Arm(
+			std::move(InCallback), SaturatingAdd(LastAcceptedNowMilliseconds, InDelayAndPeriodMilliseconds), PeriodMilliseconds, InMode);
 
 		const FTimerHandle PublishedHandle{static_cast<std::uint16_t>(SlotIndex), AvailableSlot->Generation};
 		InsertionOrder[ActiveTimerCount] = PublishedHandle;
@@ -185,24 +186,24 @@ public:
 	}
 
 	/** Removes exactly the timer identified by a current generation-checked handle. */
-	ETimerResult Cancel(const FTimerHandle Handle) noexcept
+	ETimerResult Cancel(const FTimerHandle InHandle) noexcept
 	{
 		if (bDispatchActive)
 		{
 			return ETimerResult::DispatchLocked;
 		}
-		if (!Handle.IsValid() || static_cast<std::size_t>(Handle.Index) >= MaxTimers)
+		if (!InHandle.IsValid() || static_cast<std::size_t>(InHandle.Index) >= MaxTimers)
 		{
 			return ETimerResult::InvalidHandle;
 		}
 
-		FTimerSlot& Slot = Slots[Handle.Index];
-		if (!Slot.bActive || Slot.Generation != Handle.Generation)
+		FTimerSlot& Slot = Slots[InHandle.Index];
+		if (!Slot.bActive || Slot.Generation != InHandle.Generation)
 		{
 			return ETimerResult::StaleHandle;
 		}
 
-		CancelActiveSlot(Slot, Handle);
+		CancelActiveSlot(Slot, InHandle);
 		return ETimerResult::Success;
 	}
 
@@ -216,24 +217,24 @@ public:
 	 * clock is rejected transactionally; a nested Advance is rejected while
 	 * another dispatch is still active.
 	 */
-	ETimerResult Advance(const TimePointMilliseconds NowMilliseconds) noexcept
+	ETimerResult Advance(const TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		if (bDispatchActive)
 		{
 			return ETimerResult::DispatchLocked;
 		}
-		if (NowMilliseconds < LastAcceptedNowMilliseconds)
+		if (InNowMilliseconds < LastAcceptedNowMilliseconds)
 		{
 			return ETimerResult::NonMonotonicTime;
 		}
-		LastAcceptedNowMilliseconds = NowMilliseconds;
+		LastAcceptedNowMilliseconds = InNowMilliseconds;
 
 		const std::size_t SnapshotCount = SnapshotActiveTimers();
 
 		bDispatchActive = true;
 		for (std::size_t SnapshotIndex = 0; SnapshotIndex < SnapshotCount; ++SnapshotIndex)
 		{
-			FireAndRescheduleSlot(DispatchSnapshot[SnapshotIndex], NowMilliseconds);
+			FireAndRescheduleSlot(DispatchSnapshot[SnapshotIndex], InNowMilliseconds);
 		}
 		bDispatchActive = false;
 
@@ -278,16 +279,16 @@ private:
 		/** Populates every schedule field for a freshly claimed slot; leaves generation
 		 * and retirement identity untouched so slot reuse stays generation-checked. */
 		void Arm(
-			TDelegate<void(), InlineTimerCallbackBytes>&& NewCallback,
-			const TimePointMilliseconds FirstDeadlineMilliseconds,
-			const DurationMilliseconds NewPeriodMilliseconds,
-			const ETimerMode NewMode) noexcept
+			TDelegate<void(), InlineTimerCallbackBytes>&& InCallback,
+			const TimePointMilliseconds InFirstDeadlineMilliseconds,
+			const DurationMilliseconds InPeriodMilliseconds,
+			const ETimerMode InMode) noexcept
 		{
-			Callback = std::move(NewCallback);
-			DeadlineMilliseconds = FirstDeadlineMilliseconds;
-			PeriodMilliseconds = NewPeriodMilliseconds;
+			Callback = std::move(InCallback);
+			DeadlineMilliseconds = InFirstDeadlineMilliseconds;
+			PeriodMilliseconds = InPeriodMilliseconds;
 			LastFiredMilliseconds = TimePointMilliseconds{0};
-			Mode = NewMode;
+			Mode = InMode;
 			bActive = true;
 		}
 	};
@@ -313,24 +314,24 @@ private:
 	 * removal remains acceptable there. `Advance` clears completed one-shots
 	 * in place and lets the post-dispatch compaction pass drop them together.
 	 */
-	void CancelActiveSlot(FTimerSlot& Slot, const FTimerHandle Handle) noexcept
+	void CancelActiveSlot(FTimerSlot& InSlot, const FTimerHandle InHandle) noexcept
 	{
-		Slot.Callback.Reset();
-		Slot.bActive = false;
-		AdvanceGenerationOrRetire(Slot);
-		RemoveInsertionOrderAt(Handle);
+		InSlot.Callback.Reset();
+		InSlot.bActive = false;
+		AdvanceGenerationOrRetire(InSlot);
+		RemoveInsertionOrderAt(InHandle);
 		--ActiveTimerCount;
 	}
 
 	/** Advances a reusable slot identity or retires it before generation wrap can cause ABA. */
-	static void AdvanceGenerationOrRetire(FTimerSlot& Slot) noexcept
+	static void AdvanceGenerationOrRetire(FTimerSlot& InSlot) noexcept
 	{
-		if (!CanAdvanceTimerGeneration(Slot.Generation))
+		if (!CanAdvanceTimerGeneration(InSlot.Generation))
 		{
-			Slot.bRetired = true;
+			InSlot.bRetired = true;
 			return;
 		}
-		++Slot.Generation;
+		++InSlot.Generation;
 	}
 
 	/**
@@ -357,25 +358,25 @@ private:
 	 * A stale, inactive, not-yet-due, or already-fired-this-instant slot is skipped
 	 * without firing.
 	 */
-	void FireAndRescheduleSlot(const FTimerHandle Handle, const TimePointMilliseconds NowMilliseconds) noexcept
+	void FireAndRescheduleSlot(const FTimerHandle InHandle, const TimePointMilliseconds InNowMilliseconds) noexcept
 	{
-		if (static_cast<std::size_t>(Handle.Index) >= MaxTimers)
+		if (static_cast<std::size_t>(InHandle.Index) >= MaxTimers)
 		{
 			return;
 		}
 
-		FTimerSlot& Slot = Slots[Handle.Index];
-		if (!Slot.bActive || Slot.Generation != Handle.Generation)
+		FTimerSlot& Slot = Slots[InHandle.Index];
+		if (!Slot.bActive || Slot.Generation != InHandle.Generation)
 		{
 			return;
 		}
-		if (NowMilliseconds < Slot.DeadlineMilliseconds)
+		if (InNowMilliseconds < Slot.DeadlineMilliseconds)
 		{
 			return;
 		}
 		// Guards a nonzero-period looping timer against refiring when NowMilliseconds has not advanced
 		// past the previously accepted timestamp, including after deadline saturation.
-		if (Slot.PeriodMilliseconds != 0 && Slot.LastFiredMilliseconds == NowMilliseconds)
+		if (Slot.PeriodMilliseconds != 0 && Slot.LastFiredMilliseconds == InNowMilliseconds)
 		{
 			return;
 		}
@@ -397,9 +398,9 @@ private:
 		{
 			if (Slot.PeriodMilliseconds != 0)
 			{
-				Slot.LastFiredMilliseconds = NowMilliseconds;
+				Slot.LastFiredMilliseconds = InNowMilliseconds;
 			}
-			Slot.DeadlineMilliseconds = SaturatingAdd(NowMilliseconds, Slot.PeriodMilliseconds);
+			Slot.DeadlineMilliseconds = SaturatingAdd(InNowMilliseconds, Slot.PeriodMilliseconds);
 		}
 	}
 
@@ -435,12 +436,12 @@ private:
 	}
 
 	/** Compacts insertion order after a Cancel without changing any remaining slot identity. */
-	void RemoveInsertionOrderAt(const FTimerHandle RemovedHandle) noexcept
+	void RemoveInsertionOrderAt(const FTimerHandle InRemovedHandle) noexcept
 	{
 		std::size_t OrderIndex = ActiveTimerCount;
 		for (std::size_t SearchIndex = 0; SearchIndex < ActiveTimerCount; ++SearchIndex)
 		{
-			if (InsertionOrder[SearchIndex] == RemovedHandle)
+			if (InsertionOrder[SearchIndex] == InRemovedHandle)
 			{
 				OrderIndex = SearchIndex;
 				break;
@@ -458,10 +459,11 @@ private:
 	}
 
 	/** Adds two time values while saturating at the TimePointMilliseconds maximum. */
-	static constexpr TimePointMilliseconds SaturatingAdd(const TimePointMilliseconds Base, const DurationMilliseconds Addend) noexcept
+	static constexpr TimePointMilliseconds SaturatingAdd(const TimePointMilliseconds InBase, const DurationMilliseconds InAddend) noexcept
 	{
 		const TimePointMilliseconds MaximumTime = std::numeric_limits<TimePointMilliseconds>::max();
-		return (MaximumTime - Base < static_cast<TimePointMilliseconds>(Addend)) ? MaximumTime : Base + static_cast<TimePointMilliseconds>(Addend);
+		return (MaximumTime - InBase < static_cast<TimePointMilliseconds>(InAddend)) ? MaximumTime
+																					 : InBase + static_cast<TimePointMilliseconds>(InAddend);
 	}
 
 	/** Owns all bounded callback storage independently of insertion order. */

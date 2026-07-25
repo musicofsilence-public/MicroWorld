@@ -48,7 +48,7 @@ public:
 	 * destination address the driver cannot route. A non-success result leaves
 	 * the transport state unchanged.
 	 */
-	virtual ENetResult TrySend(const FNetAddress& To, TSpan<const std::uint8_t> Packet) noexcept = 0;
+	virtual ENetResult TrySend(const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept = 0;
 
 	/**
 	 * Receives at most one packet into the caller-owned destination.
@@ -59,7 +59,7 @@ public:
 	 * no packet is ready, `Full` when the destination is too small for the queued
 	 * head packet, and `Invalid` for a null destination with nonzero length.
 	 */
-	virtual ENetResult TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> Destination, FNetReceiveResult& OutResult) noexcept = 0;
+	virtual ENetResult TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept = 0;
 
 	/** Reports the largest packet, in bytes, the transport accepts on a single send. */
 	virtual std::size_t MaxPacketBytes() const noexcept = 0;

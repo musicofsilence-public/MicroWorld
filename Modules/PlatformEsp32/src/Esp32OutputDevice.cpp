@@ -5,11 +5,11 @@
 namespace MicroWorld
 {
 
-void WriteEsp32LogRecord(const ELogLevel Level, const char* const Category, const char* const Message) noexcept
+void WriteEsp32LogRecord(const ELogLevel InLevel, const char* const InCategory, const char* const InMessage) noexcept
 {
-	const char* const Tag = (Category != nullptr) ? Category : "MicroWorld";
-	const char* const Body = (Message != nullptr) ? Message : "";
-	switch (Level)
+	const char* const Tag = (InCategory != nullptr) ? InCategory : "MicroWorld";
+	const char* const Body = (InMessage != nullptr) ? InMessage : "";
+	switch (InLevel)
 	{
 		case ELogLevel::Error:
 			ESP_LOGE(Tag, "%s", Body);

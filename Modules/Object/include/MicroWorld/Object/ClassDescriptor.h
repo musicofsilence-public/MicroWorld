@@ -65,13 +65,13 @@ struct FClassDescriptor
 	const void* TypeToken{nullptr};
 
 	/** Tests finite explicit descriptor ancestry without C++ RTTI or cyclic traversal. */
-	bool IsChildOf(const FClassDescriptor& CandidateParent) const noexcept
+	bool IsChildOf(const FClassDescriptor& InCandidateParent) const noexcept
 	{
 		if (!HasAcyclicAncestry())
 		{
 			return false;
 		}
-		return AncestryContains(CandidateParent);
+		return AncestryContains(InCandidateParent);
 	}
 
 	/** Reports whether the Parent chain is loop-free so the ancestry walk always terminates without RTTI. */
@@ -94,12 +94,12 @@ struct FClassDescriptor
 	}
 
 	/** Walks the finite Parent chain and reports whether it reaches the candidate ancestor. */
-	bool AncestryContains(const FClassDescriptor& CandidateParent) const noexcept
+	bool AncestryContains(const FClassDescriptor& InCandidateParent) const noexcept
 	{
 		const FClassDescriptor* CurrentDescriptor = this;
 		while (CurrentDescriptor != nullptr)
 		{
-			if (CurrentDescriptor == &CandidateParent)
+			if (CurrentDescriptor == &InCandidateParent)
 			{
 				return true;
 			}
@@ -130,17 +130,17 @@ public:
 	TClassRegistry& operator=(TClassRegistry&&) = delete;
 
 	/** Registers one fully validated descriptor without allocation or partial mutation. */
-	EObjectResult Register(const FClassDescriptor& Descriptor) noexcept
+	EObjectResult Register(const FClassDescriptor& InDescriptor) noexcept
 	{
-		if (!HasValidLayout(Descriptor) || Descriptor.TypeId == 0 || Descriptor.Destroy == nullptr || Descriptor.TypeToken == nullptr)
+		if (!HasValidLayout(InDescriptor) || InDescriptor.TypeId == 0 || InDescriptor.Destroy == nullptr || InDescriptor.TypeToken == nullptr)
 		{
 			return EObjectResult::InvalidClassDescriptor;
 		}
-		if (Find(Descriptor.TypeId) != nullptr)
+		if (Find(InDescriptor.TypeId) != nullptr)
 		{
 			return EObjectResult::DuplicateClass;
 		}
-		if (!HasValidParentChain(Descriptor))
+		if (!HasValidParentChain(InDescriptor))
 		{
 			return EObjectResult::UnknownClass;
 		}
@@ -149,17 +149,17 @@ public:
 			return EObjectResult::CapacityExceeded;
 		}
 
-		RegisteredClasses[RegisteredClassCount] = Descriptor;
+		RegisteredClasses[RegisteredClassCount] = InDescriptor;
 		++RegisteredClassCount;
 		return EObjectResult::Success;
 	}
 
 	/** Finds a registered descriptor by local type identifier without changing registry state. */
-	const FClassDescriptor* Find(const FTypeId TypeId) const noexcept
+	const FClassDescriptor* Find(const FTypeId InTypeId) const noexcept
 	{
 		for (std::size_t Index = 0; Index < RegisteredClassCount; ++Index)
 		{
-			if (RegisteredClasses[Index].TypeId == TypeId)
+			if (RegisteredClasses[Index].TypeId == InTypeId)
 			{
 				return &RegisteredClasses[Index];
 			}
@@ -172,31 +172,32 @@ public:
 
 private:
 	/** Rejects zero and non-power-of-two layout requirements before registration. */
-	static bool HasValidLayout(const FClassDescriptor& Descriptor) noexcept
+	static bool HasValidLayout(const FClassDescriptor& InDescriptor) noexcept
 	{
-		return Descriptor.SizeBytes > 0 && Descriptor.AlignmentBytes > 0 && (Descriptor.AlignmentBytes & (Descriptor.AlignmentBytes - 1U)) == 0;
+		return InDescriptor.SizeBytes > 0 && InDescriptor.AlignmentBytes > 0
+			&& (InDescriptor.AlignmentBytes & (InDescriptor.AlignmentBytes - 1U)) == 0;
 	}
 
 	/** Requires an already registered, finite parent chain that cannot include the candidate. */
-	bool HasValidParentChain(const FClassDescriptor& Descriptor) const noexcept
+	bool HasValidParentChain(const FClassDescriptor& InDescriptor) const noexcept
 	{
-		if (Descriptor.Parent == nullptr)
+		if (InDescriptor.Parent == nullptr)
 		{
 			return true;
 		}
-		if (Find(Descriptor.Parent->TypeId) != Descriptor.Parent)
+		if (Find(InDescriptor.Parent->TypeId) != InDescriptor.Parent)
 		{
 			return false;
 		}
 
-		const FClassDescriptor* Current = Descriptor.Parent;
+		const FClassDescriptor* Current = InDescriptor.Parent;
 		std::size_t VisitedDescriptors = 0;
 		while (Current != nullptr)
 		{
 			// No valid ancestry is longer than the registry, so reaching
-			// RegisteredClassCount visits (or re-reaching Descriptor) means the
+			// RegisteredClassCount visits (or re-reaching InDescriptor) means the
 			// chain is cyclic or corrupt.
-			if (Current == &Descriptor || VisitedDescriptors >= RegisteredClassCount)
+			if (Current == &InDescriptor || VisitedDescriptors >= RegisteredClassCount)
 			{
 				return false;
 			}

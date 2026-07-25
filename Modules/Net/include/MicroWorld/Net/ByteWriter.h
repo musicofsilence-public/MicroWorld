@@ -22,7 +22,7 @@ class FByteWriter final
 {
 public:
 	/** Binds the writer to a caller-owned destination view; storage is observed, never owned. */
-	constexpr explicit FByteWriter(TSpan<std::uint8_t> Storage) noexcept : Buffer(Storage), WritePosition(0) {}
+	constexpr explicit FByteWriter(TSpan<std::uint8_t> InStorage) noexcept : Buffer(InStorage), WritePosition(0) {}
 
 	/** Prevents the writer from being copied while caller storage has one owner. */
 	FByteWriter(const FByteWriter&) = delete;
@@ -53,7 +53,7 @@ public:
 	 * Returns `Invalid` without advancing when the backing buffer is an invalid `{nullptr, nonzero}` view.
 	 * Returns `Full` without advancing when a valid buffer has no remaining capacity.
 	 */
-	ENetResult WriteByte(const std::uint8_t Value) noexcept
+	ENetResult WriteByte(const std::uint8_t InValue) noexcept
 	{
 		if (!HasValidStorage())
 		{
@@ -63,7 +63,7 @@ public:
 		{
 			return ENetResult::Full;
 		}
-		Buffer[WritePosition] = Value;
+		Buffer[WritePosition] = InValue;
 		++WritePosition;
 		return ENetResult::Success;
 	}
@@ -75,15 +75,15 @@ public:
 	 * A span that fits the total capacity but exceeds remaining capacity returns `Full`.
 	 * None of these failures advances the cursor or alters accepted bytes.
 	 */
-	ENetResult Write(TSpan<const std::uint8_t> Bytes) noexcept
+	ENetResult Write(TSpan<const std::uint8_t> InBytes) noexcept
 	{
-		const std::size_t IncomingSize = Bytes.Size();
+		const std::size_t IncomingSize = InBytes.Size();
 		if (IncomingSize == 0)
 		{
 			// An empty span is a valid no-op whether or not its data pointer is null.
 			return ENetResult::Success;
 		}
-		if (Bytes.Data() == nullptr)
+		if (InBytes.Data() == nullptr)
 		{
 			// A null source with nonzero length cannot be copied honestly.
 			return ENetResult::Invalid;
@@ -103,7 +103,7 @@ public:
 			// The span fits the total buffer but not the remaining capacity.
 			return ENetResult::Full;
 		}
-		std::memcpy(Buffer.Data() + WritePosition, Bytes.Data(), IncomingSize);
+		std::memcpy(Buffer.Data() + WritePosition, InBytes.Data(), IncomingSize);
 		WritePosition += IncomingSize;
 		return ENetResult::Success;
 	}
@@ -155,25 +155,25 @@ private:
 /**
  * Writes a 16-bit value as two big-endian bytes (most significant byte first).
  *
- * @param Value 16-bit value to serialize.
+ * @param InValue 16-bit value to serialize.
  * @param OutBytes Caller-owned destination for exactly two bytes.
  */
-inline void WriteUint16BigEndian(const std::uint16_t Value, std::uint8_t* const OutBytes) noexcept
+inline void WriteUint16BigEndian(const std::uint16_t InValue, std::uint8_t* const OutBytes) noexcept
 {
-	OutBytes[0] = static_cast<std::uint8_t>(Value >> 8);
-	OutBytes[1] = static_cast<std::uint8_t>(Value & 0xFFu);
+	OutBytes[0] = static_cast<std::uint8_t>(InValue >> 8);
+	OutBytes[1] = static_cast<std::uint8_t>(InValue & 0xFFu);
 }
 
 /**
  * Writes a 16-bit value as two little-endian bytes (least significant byte first).
  *
- * @param Value 16-bit value to serialize.
+ * @param InValue 16-bit value to serialize.
  * @param OutBytes Caller-owned destination for exactly two bytes.
  */
-inline void WriteUint16LittleEndian(const std::uint16_t Value, std::uint8_t* const OutBytes) noexcept
+inline void WriteUint16LittleEndian(const std::uint16_t InValue, std::uint8_t* const OutBytes) noexcept
 {
-	OutBytes[0] = static_cast<std::uint8_t>(Value & 0xFFu);
-	OutBytes[1] = static_cast<std::uint8_t>(Value >> 8);
+	OutBytes[0] = static_cast<std::uint8_t>(InValue & 0xFFu);
+	OutBytes[1] = static_cast<std::uint8_t>(InValue >> 8);
 }
 
 } // namespace MicroWorld

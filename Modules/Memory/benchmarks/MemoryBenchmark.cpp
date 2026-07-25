@@ -79,11 +79,11 @@ class FCountingMemoryResource final : public MicroWorld::IMemoryResource
 public:
 	/** Records an allocation attempt before forwarding it to fixed caller-owned storage. */
 	MicroWorld::EMemoryResult TryAllocate(
-		const std::size_t SizeBytes, const std::size_t AlignmentBytes, MicroWorld::FMemoryBlock& OutBlock) noexcept override
+		const std::size_t InSizeBytes, const std::size_t InAlignmentBytes, MicroWorld::FMemoryBlock& OutBlock) noexcept override
 	{
 		++AllocationAttempts;
-		LastRequestedBytes = SizeBytes;
-		const MicroWorld::EMemoryResult Result = Arena.TryAllocate(SizeBytes, AlignmentBytes, OutBlock);
+		LastRequestedBytes = InSizeBytes;
+		const MicroWorld::EMemoryResult Result = Arena.TryAllocate(InSizeBytes, InAlignmentBytes, OutBlock);
 		if (Result == MicroWorld::EMemoryResult::Success)
 		{
 			++SuccessfulAllocations;
@@ -92,9 +92,9 @@ public:
 	}
 
 	/** Records successful exact-block returns while preserving the arena's validation. */
-	MicroWorld::EMemoryResult Deallocate(const MicroWorld::FMemoryBlock Block) noexcept override
+	MicroWorld::EMemoryResult Deallocate(const MicroWorld::FMemoryBlock InBlock) noexcept override
 	{
-		const MicroWorld::EMemoryResult Result = Arena.Deallocate(Block);
+		const MicroWorld::EMemoryResult Result = Arena.Deallocate(InBlock);
 		if (Result == MicroWorld::EMemoryResult::Success)
 		{
 			++SuccessfulDeallocations;
@@ -147,13 +147,13 @@ struct FBenchmarkValue final
 struct FStandardResourceDeleter final
 {
 	/** Destroys one value before returning its exact block to its originating resource. */
-	void operator()(FBenchmarkValue* const Value) noexcept
+	void operator()(FBenchmarkValue* const InValue) noexcept
 	{
-		if (Value == nullptr)
+		if (InValue == nullptr)
 		{
 			return;
 		}
-		Value->~FBenchmarkValue();
+		InValue->~FBenchmarkValue();
 		static_cast<void>(Resource->Deallocate(Allocation));
 	}
 
@@ -193,38 +193,38 @@ public:
 
 	/** Preserves attribution when `allocate_shared` rebinds this allocator. */
 	template<typename OtherElementType>
-	TCountingStandardAllocator(const TCountingStandardAllocator<OtherElementType>& Other) noexcept : Counters(Other.Counters)
+	TCountingStandardAllocator(const TCountingStandardAllocator<OtherElementType>& InOther) noexcept : Counters(InOther.Counters)
 	{
 	}
 
 	/** Allocates one implementation-selected block through the measured host heap. */
-	ElementType* allocate(const std::size_t Count)
+	ElementType* allocate(const std::size_t InCount)
 	{
-		const std::size_t SizeBytes = Count * sizeof(ElementType);
+		const std::size_t SizeBytes = InCount * sizeof(ElementType);
 		++Counters->AllocationCount;
 		Counters->AllocatedBytes += SizeBytes;
 		return static_cast<ElementType*>(::operator new(SizeBytes));
 	}
 
 	/** Returns an attributed standard block through the matching host heap. */
-	void deallocate(ElementType* const Address, const std::size_t) noexcept
+	void deallocate(ElementType* const InAddress, const std::size_t) noexcept
 	{
 		++Counters->DeallocationCount;
-		::operator delete(Address);
+		::operator delete(InAddress);
 	}
 
 	/** Lets allocator traits compare rebound allocators by attribution identity. */
 	template<typename OtherElementType>
-	bool operator==(const TCountingStandardAllocator<OtherElementType>& Other) const noexcept
+	bool operator==(const TCountingStandardAllocator<OtherElementType>& InOther) const noexcept
 	{
-		return Counters == Other.Counters;
+		return Counters == InOther.Counters;
 	}
 
 	/** Distinguishes allocators whose measurement state differs. */
 	template<typename OtherElementType>
-	bool operator!=(const TCountingStandardAllocator<OtherElementType>& Other) const noexcept
+	bool operator!=(const TCountingStandardAllocator<OtherElementType>& InOther) const noexcept
 	{
-		return !(*this == Other);
+		return !(*this == InOther);
 	}
 
 	/** Allows rebound allocator copies to preserve the same counters. */
@@ -237,23 +237,23 @@ private:
 };
 
 /** Reports one invariant failure while allowing all benchmark sections to run. */
-bool Check(const bool bCondition, const char* const Message) noexcept
+bool Check(const bool bInCondition, const char* const InMessage) noexcept
 {
-	if (!bCondition)
+	if (!bInCondition)
 	{
-		std::printf("failure,%s\n", Message);
+		std::printf("failure,%s\n", InMessage);
 	}
-	return bCondition;
+	return bInCondition;
 }
 
 /** Measures elapsed host time around a fixed operation count. */
 template<typename OperationType>
-std::uint64_t MeasureOperations(OperationType&& Operation) noexcept
+std::uint64_t MeasureOperations(OperationType&& InOperation) noexcept
 {
 	const auto StartTime = std::chrono::steady_clock::now();
 	for (std::uint32_t OperationIndex = 0; OperationIndex < OperationCount; ++OperationIndex)
 	{
-		Operation(OperationIndex);
+		InOperation(OperationIndex);
 	}
 	const auto EndTime = std::chrono::steady_clock::now();
 	return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(EndTime - StartTime).count());
@@ -379,10 +379,10 @@ bool RunContainerWorkload() noexcept
 	std::uint64_t VectorSum = 0;
 	const std::size_t GlobalAllocationsBeforeVector = GlobalAllocationCount;
 	const std::uint64_t VectorNanoseconds = MeasureOperations(
-		[&VectorSum](const std::uint32_t OperationIndex) noexcept
+		[&VectorSum](const std::uint32_t InOperationIndex) noexcept
 		{
 			MicroWorld::TStaticVector<std::uint32_t, 4> Values;
-			static_cast<void>(Values.Add(OperationIndex));
+			static_cast<void>(Values.Add(InOperationIndex));
 			static_cast<void>(Values.Add(1U));
 			static_cast<void>(Values.Add(2U));
 			static_cast<void>(Values.Add(3U));
@@ -434,7 +434,7 @@ bool RunDelegateWorkload() noexcept
 	std::uint64_t SingleCount = 0;
 	MicroWorld::TDelegate<void(std::uint32_t), 32> SingleDelegate;
 	bPassed &= Check(
-		SingleDelegate.Bind([&SingleCount](const std::uint32_t Value) noexcept { SingleCount += Value; }) == MicroWorld::EDelegateResult::Success,
+		SingleDelegate.Bind([&SingleCount](const std::uint32_t InValue) noexcept { SingleCount += InValue; }) == MicroWorld::EDelegateResult::Success,
 		"single delegate bind");
 	const std::size_t GlobalAllocationsBeforeSingle = GlobalAllocationCount;
 	const std::uint64_t SingleNanoseconds =
@@ -447,8 +447,8 @@ bool RunDelegateWorkload() noexcept
 	MicroWorld::TMulticastDelegate<void(std::uint32_t), 2, 32> MulticastDelegate;
 	MicroWorld::TDelegate<void(std::uint32_t), 32> FirstBinding;
 	MicroWorld::TDelegate<void(std::uint32_t), 32> SecondBinding;
-	static_cast<void>(FirstBinding.Bind([&MulticastCount](const std::uint32_t Value) noexcept { MulticastCount += Value; }));
-	static_cast<void>(SecondBinding.Bind([&MulticastCount](const std::uint32_t Value) noexcept { MulticastCount += Value * 2U; }));
+	static_cast<void>(FirstBinding.Bind([&MulticastCount](const std::uint32_t InValue) noexcept { MulticastCount += InValue; }));
+	static_cast<void>(SecondBinding.Bind([&MulticastCount](const std::uint32_t InValue) noexcept { MulticastCount += InValue * 2U; }));
 	MicroWorld::FDelegateHandle FirstHandle;
 	MicroWorld::FDelegateHandle SecondHandle;
 	bPassed &= Check(MulticastDelegate.Add(std::move(FirstBinding), FirstHandle) == MicroWorld::EDelegateResult::Success, "multicast first add");

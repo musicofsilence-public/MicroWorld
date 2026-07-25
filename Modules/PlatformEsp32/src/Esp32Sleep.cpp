@@ -6,9 +6,9 @@
 namespace MicroWorld
 {
 
-void SleepMilliseconds(DurationMilliseconds SleepDurationMilliseconds) noexcept
+void SleepMilliseconds(DurationMilliseconds InSleepDurationMilliseconds) noexcept
 {
-	TickType_t Ticks = pdMS_TO_TICKS(SleepDurationMilliseconds);
+	TickType_t Ticks = pdMS_TO_TICKS(InSleepDurationMilliseconds);
 	// A zero-tick delay would not yield to the idle task; guarantee the caller always yields at
 	// least one tick.
 	if (Ticks == 0)

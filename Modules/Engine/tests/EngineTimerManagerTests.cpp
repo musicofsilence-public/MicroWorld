@@ -44,10 +44,10 @@ struct FFireCounter final
 };
 
 /** Binds a nothrow inline callback that increments the supplied counter when invoked. */
-FTestDelegate MakeCounterCallback(FFireCounter& Counter) noexcept
+FTestDelegate MakeCounterCallback(FFireCounter& InCounter) noexcept
 {
 	FTestDelegate Delegate;
-	(void)Delegate.Bind([&Counter]() noexcept { ++Counter.Count; });
+	(void)Delegate.Bind([&InCounter]() noexcept { ++InCounter.Count; });
 	return Delegate;
 }
 
@@ -562,21 +562,21 @@ struct FDispatchOrderRecorder final
 	int Identities[MaximumEntries]{0};
 
 	/** Appends one observed identity when space remains. */
-	void Record(const int Identity) noexcept
+	void Record(const int InIdentity) noexcept
 	{
 		if (Count < MaximumEntries)
 		{
-			Identities[Count] = Identity;
+			Identities[Count] = InIdentity;
 			++Count;
 		}
 	}
 };
 
 /** Binds a callback that records its identity in the shared recorder. */
-FTestDelegate MakeOrderCallback(FDispatchOrderRecorder& Recorder, const int Identity) noexcept
+FTestDelegate MakeOrderCallback(FDispatchOrderRecorder& InRecorder, const int InIdentity) noexcept
 {
 	FTestDelegate Delegate;
-	(void)Delegate.Bind([&Recorder, Identity]() noexcept { Recorder.Record(Identity); });
+	(void)Delegate.Bind([&InRecorder, InIdentity]() noexcept { InRecorder.Record(InIdentity); });
 	return Delegate;
 }
 

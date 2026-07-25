@@ -63,9 +63,9 @@ public:
 	 * every slot, reclaiming all pending destroys each frame).
 	 */
 	explicit TEngineHost(
-		const FGarbageCollectionBudget CollectionBudget, const std::uint32_t ReclamationBudget = static_cast<std::uint32_t>(MaxObjects)) noexcept
-		: GarbageCollectionBudget(CollectionBudget)
-		, FrameReclamationBudget(ReclamationBudget)
+		const FGarbageCollectionBudget InCollectionBudget, const std::uint32_t InReclamationBudget = static_cast<std::uint32_t>(MaxObjects)) noexcept
+		: GarbageCollectionBudget(InCollectionBudget)
+		, FrameReclamationBudget(InReclamationBudget)
 		, Store(MakeStoreStorage(), MakeClassRegistryView(Registry))
 		, Collector(Store, FGarbageCollectorStorage{Worklist.data(), static_cast<std::uint32_t>(MaxObjects)})
 		, Timers(TimePointMilliseconds{0})
@@ -80,12 +80,12 @@ public:
 	 * outlive this host.
 	 */
 	explicit TEngineHost(
-		const FGarbageCollectionBudget CollectionBudget,
-		INetworkFrame& NetworkFrame,
-		const std::uint32_t ReclamationBudget = static_cast<std::uint32_t>(MaxObjects)) noexcept
-		: TEngineHost(CollectionBudget, ReclamationBudget)
+		const FGarbageCollectionBudget InCollectionBudget,
+		INetworkFrame& InNetworkFrame,
+		const std::uint32_t InReclamationBudget = static_cast<std::uint32_t>(MaxObjects)) noexcept
+		: TEngineHost(InCollectionBudget, InReclamationBudget)
 	{
-		Network = &NetworkFrame;
+		Network = &InNetworkFrame;
 	}
 
 	/** Copying or moving would duplicate this host's unique ownership of the
@@ -96,7 +96,7 @@ public:
 	TEngineHost& operator=(TEngineHost&&) = delete;
 
 	/** Registers one user class descriptor so the store accepts its construction. */
-	EObjectResult RegisterClass(const FClassDescriptor& Descriptor) noexcept { return Registry.Register(Descriptor); }
+	EObjectResult RegisterClass(const FClassDescriptor& InDescriptor) noexcept { return Registry.Register(InDescriptor); }
 
 	/**
 	 * Returns one registered descriptor by type id, or null. Callers need this handle
@@ -104,7 +104,7 @@ public:
 	 * and to construct user types, because the store validates descriptor identity
 	 * against the registry's copy rather than the descriptor the caller registered.
 	 */
-	const FClassDescriptor* FindClass(const FTypeId TypeId) const noexcept { return Registry.Find(TypeId); }
+	const FClassDescriptor* FindClass(const FTypeId InTypeId) const noexcept { return Registry.Find(InTypeId); }
 
 	/**
 	 * Registers a user type by deriving its parent from TManagedType's engine base (AActor,
@@ -114,7 +114,7 @@ public:
 	 * must use the descriptor overload with an explicit FindClass parent.
 	 */
 	template<typename TManagedType>
-	EObjectResult RegisterClass(const FTypeId TypeId, const char* const Name) noexcept
+	EObjectResult RegisterClass(const FTypeId InTypeId, const char* const InName) noexcept
 	{
 		const FClassDescriptor* Parent = nullptr;
 		if constexpr (std::is_base_of<AActor, TManagedType>::value)
@@ -129,7 +129,7 @@ public:
 		{
 			Parent = Registry.Find(UWorldClassId);
 		}
-		const FClassDescriptor Candidate = MakeClassDescriptor<TManagedType>(TypeId, Name, Parent, &TraceManagedObjectReferences);
+		const FClassDescriptor Candidate = MakeClassDescriptor<TManagedType>(InTypeId, InName, Parent, &TraceManagedObjectReferences);
 		return Registry.Register(Candidate);
 	}
 
@@ -139,9 +139,9 @@ public:
 	 * Returns an UnknownClass result with a null object if the id was never registered.
 	 */
 	template<typename TManagedType, typename... TArguments>
-	TObjectCreationResult<TManagedType> CreateObject(const FTypeId TypeId, TArguments&&... Arguments) noexcept
+	TObjectCreationResult<TManagedType> CreateObject(const FTypeId InTypeId, TArguments&&... Arguments) noexcept
 	{
-		const FClassDescriptor* const Descriptor = FindClass(TypeId);
+		const FClassDescriptor* const Descriptor = FindClass(InTypeId);
 		if (Descriptor == nullptr)
 		{
 			return TObjectCreationResult<TManagedType>{EObjectResult::UnknownClass, {}};
@@ -203,7 +203,7 @@ public:
 	 * Starts the world at one canonical time and records it as the tick baseline.
 	 * Returns InvalidLifecycle if no world has been created.
 	 */
-	ERuntimeResult BeginPlay(const TimePointMilliseconds NowMilliseconds) noexcept
+	ERuntimeResult BeginPlay(const TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		UWorld* const World = WorldRoot.Get();
 		if (World == nullptr)
@@ -211,8 +211,8 @@ public:
 			return ERuntimeResult::InvalidLifecycle;
 		}
 
-		LastTickMilliseconds = NowMilliseconds;
-		return World->BeginPlay(NowMilliseconds);
+		LastTickMilliseconds = InNowMilliseconds;
+		return World->BeginPlay(InNowMilliseconds);
 	}
 
 	/**
@@ -231,24 +231,24 @@ public:
 	 * authoritative per-frame outcome. The two network slots run only when a frame
 	 * was bound at construction; otherwise they are inert.
 	 */
-	ERuntimeResult Tick(const TimePointMilliseconds NowMilliseconds) noexcept
+	ERuntimeResult Tick(const TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		UWorld* const World = WorldRoot.Get();
 		if (World == nullptr)
 		{
 			return ERuntimeResult::InvalidLifecycle;
 		}
-		if (NowMilliseconds < LastTickMilliseconds)
+		if (InNowMilliseconds < LastTickMilliseconds)
 		{
 			return ERuntimeResult::NonMonotonicTime;
 		}
-		LastTickMilliseconds = NowMilliseconds;
+		LastTickMilliseconds = InNowMilliseconds;
 
-		DispatchInboundNetwork(NowMilliseconds);
-		(void)Timers.Advance(NowMilliseconds);
-		const ERuntimeResult FrameResult = AdvanceWorldAndApplyBarrier(*World, NowMilliseconds);
+		DispatchInboundNetwork(InNowMilliseconds);
+		(void)Timers.Advance(InNowMilliseconds);
+		const ERuntimeResult FrameResult = AdvanceWorldAndApplyBarrier(*World, InNowMilliseconds);
 		ReclaimAndCollect();
-		FlushOutboundNetwork(NowMilliseconds);
+		FlushOutboundNetwork(InNowMilliseconds);
 
 		return FrameResult;
 	}
@@ -294,20 +294,20 @@ private:
 	}
 
 	/** Frame step 1: drains inbound traffic, dispatches messages, and ages peers when a network frame is bound. */
-	void DispatchInboundNetwork(const TimePointMilliseconds NowMilliseconds) noexcept
+	void DispatchInboundNetwork(const TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		if (Network != nullptr)
 		{
-			Network->TickDispatch(NowMilliseconds);
+			Network->TickDispatch(InNowMilliseconds);
 		}
 	}
 
 	/** Frame steps 3-4: advances every actor then applies the spawn/destroy barrier, returning the
 	 * authoritative per-frame result (the advance error if any, otherwise the barrier result). */
-	ERuntimeResult AdvanceWorldAndApplyBarrier(UWorld& World, const TimePointMilliseconds NowMilliseconds) noexcept
+	ERuntimeResult AdvanceWorldAndApplyBarrier(UWorld& InWorld, const TimePointMilliseconds InNowMilliseconds) noexcept
 	{
-		const ERuntimeResult AdvanceResult = World.Advance(NowMilliseconds);
-		const ERuntimeResult PendingResult = World.ApplyPending(NowMilliseconds);
+		const ERuntimeResult AdvanceResult = InWorld.Advance(InNowMilliseconds);
+		const ERuntimeResult PendingResult = InWorld.ApplyPending(InNowMilliseconds);
 		return AdvanceResult != ERuntimeResult::Success ? AdvanceResult : PendingResult;
 	}
 
@@ -324,11 +324,11 @@ private:
 	}
 
 	/** Frame step 7: flushes outbound traffic and heartbeats when a network frame is bound. */
-	void FlushOutboundNetwork(const TimePointMilliseconds NowMilliseconds) noexcept
+	void FlushOutboundNetwork(const TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		if (Network != nullptr)
 		{
-			Network->TickFlush(NowMilliseconds);
+			Network->TickFlush(InNowMilliseconds);
 		}
 	}
 

@@ -69,7 +69,7 @@ public:
 	std::size_t LastSendLength() const noexcept { return LastLength; }
 
 	/** Accesses one byte of the most recently recorded send; the caller must keep Index < LastSendLength(). */
-	std::uint8_t LastSendByte(const std::size_t Index) const noexcept { return LastBytes[Index]; }
+	std::uint8_t LastSendByte(const std::size_t InIndex) const noexcept { return LastBytes[InIndex]; }
 
 	/** Returns the fixed test channel id this stub was configured with. */
 	FMessageChannelId GetChannelId() const noexcept override { return InnerChannelId; }
@@ -78,13 +78,13 @@ public:
 	std::size_t MaxEncodedMessageBytes() const noexcept override { return InnerChannelBudget; }
 
 	/** Records the call and its bytes, then always reports Success. */
-	EMessageResult TrySendEncodedMessage(const TSpan<const std::uint8_t> Encoded) noexcept override
+	EMessageResult TrySendEncodedMessage(const TSpan<const std::uint8_t> InEncoded) noexcept override
 	{
 		++CallCount;
-		LastLength = Encoded.Size() < MaxRecordedBytes ? Encoded.Size() : MaxRecordedBytes;
+		LastLength = InEncoded.Size() < MaxRecordedBytes ? InEncoded.Size() : MaxRecordedBytes;
 		for (std::size_t Index = 0; Index < LastLength; ++Index)
 		{
-			LastBytes[Index] = Encoded.Data()[Index];
+			LastBytes[Index] = InEncoded.Data()[Index];
 		}
 		return EMessageResult::Success;
 	}
@@ -111,14 +111,14 @@ public:
 	std::size_t ForwardedCallCount() const noexcept { return CallCount; }
 
 	/** Records the call and its bytes, then always reports Success. */
-	EMessageResult ReceiveEncodedMessage(const FMessageChannelId ArrivedOnChannelId, const TSpan<const std::uint8_t> Encoded) noexcept override
+	EMessageResult ReceiveEncodedMessage(const FMessageChannelId InArrivedOnChannelId, const TSpan<const std::uint8_t> InEncoded) noexcept override
 	{
-		(void)ArrivedOnChannelId;
+		(void)InArrivedOnChannelId;
 		++CallCount;
-		LastLength = Encoded.Size() < MaxRecordedBytes ? Encoded.Size() : MaxRecordedBytes;
+		LastLength = InEncoded.Size() < MaxRecordedBytes ? InEncoded.Size() : MaxRecordedBytes;
 		for (std::size_t Index = 0; Index < LastLength; ++Index)
 		{
-			LastBytes[Index] = Encoded.Data()[Index];
+			LastBytes[Index] = InEncoded.Data()[Index];
 		}
 		return EMessageResult::Success;
 	}

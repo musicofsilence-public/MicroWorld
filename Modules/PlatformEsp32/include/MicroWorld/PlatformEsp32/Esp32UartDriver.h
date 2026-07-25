@@ -66,9 +66,9 @@ public:
 	 * given TX/RX GPIOs. On any configuration failure the constructor uninstalls what it installed and leaves
 	 * the driver with `IsOpen() == false`; it never throws. The local node id is stamped on every outgoing frame.
 	 *
-	 * @param Config UART, GPIO, baud, and local node id parameters.
+	 * @param InConfig UART, GPIO, baud, and local node id parameters.
 	 */
-	explicit FEsp32UartDriver(const FEsp32UartConfig& Config) noexcept;
+	explicit FEsp32UartDriver(const FEsp32UartConfig& InConfig) noexcept;
 
 	/** Uninstalls the UART driver opened by construction. */
 	~FEsp32UartDriver() noexcept override;
@@ -92,11 +92,11 @@ public:
 	 * with nonzero length; `Full` when the UART write would block; and `Success` only when the whole frame was
 	 * accepted. A non-success result leaves the UART state unchanged.
 	 *
-	 * @param To Destination whose single byte must be a UART node id (validated; the wire is point-to-point).
-	 * @param Packet Caller-owned payload bytes framed and sent as one message.
+	 * @param InTo Destination whose single byte must be a UART node id (validated; the wire is point-to-point).
+	 * @param InPacket Caller-owned payload bytes framed and sent as one message.
 	 * @return Normalized outcome of the single send attempt.
 	 */
-	ENetResult TrySend(const FNetAddress& To, TSpan<const std::uint8_t> Packet) noexcept override;
+	ENetResult TrySend(const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
 	 * Receives at most one framed message into the caller-owned destination, transactionally.
@@ -107,11 +107,11 @@ public:
 	 * after a complete frame copies its payload, the byte count, and the sender node id into `OutFrom`.
 	 *
 	 * @param OutFrom Filled with the sender's UART address only on `Success`.
-	 * @param Destination Caller-owned buffer for the received payload bytes.
+	 * @param InDestination Caller-owned buffer for the received payload bytes.
 	 * @param OutResult Filled with the received byte count only on `Success`.
 	 * @return Normalized outcome of the single receive attempt.
 	 */
-	ENetResult TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> Destination, FNetReceiveResult& OutResult) noexcept override;
+	ENetResult TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept override;
 
 	/** Reports the largest payload, in bytes, one send accepts (excludes framing overhead). */
 	std::size_t MaxPacketBytes() const noexcept override;
@@ -122,14 +122,14 @@ public:
 private:
 	/** Copies the decoder's held frame into the destination and clears it, or returns
 	 * `Full` (leaving the frame held) when the payload exceeds the destination. */
-	ENetResult DeliverFrameToDestination(TSpan<std::uint8_t> Destination, FNetAddress& OutFrom, FNetReceiveResult& OutResult) noexcept;
+	ENetResult DeliverFrameToDestination(TSpan<std::uint8_t> InDestination, FNetAddress& OutFrom, FNetReceiveResult& OutResult) noexcept;
 
 	/** Pumps the bounded UART byte budget through the decoder and delivers the first
 	 * completed frame; returns `Unavailable` when the budget drains with no frame ready. */
-	ENetResult PumpDecoderForFrame(TSpan<std::uint8_t> Destination, FNetAddress& OutFrom, FNetReceiveResult& OutResult) noexcept;
+	ENetResult PumpDecoderForFrame(TSpan<std::uint8_t> InDestination, FNetAddress& OutFrom, FNetReceiveResult& OutResult) noexcept;
 
 	/** Reports the first reason an outgoing packet cannot be framed and sent, or `Success`. */
-	ENetResult ValidateOutgoingPacket(const FNetAddress& To, TSpan<const std::uint8_t> Packet) const noexcept;
+	ENetResult ValidateOutgoingPacket(const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket) const noexcept;
 
 	/** Bounded RX deframer held by value; its capacity matches `UartMaxPayloadBytes`. */
 	TFrameDecoder<UartMaxPayloadBytes> Decoder{};

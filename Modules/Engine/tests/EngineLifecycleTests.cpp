@@ -73,11 +73,11 @@ class FOrderingActor final : public AActor
 {
 public:
 	FOrderingActor(
-		FTickConfiguration TickConfiguration,
-		FActorComponentRegistryReference Components,
+		FTickConfiguration InTickConfiguration,
+		FActorComponentRegistryReference InComponents,
 		FSequenceCounter& InSequence,
 		FActorEventState& InEvents) noexcept
-		: AActor(std::move(Components), TickConfiguration), Sequence(InSequence), Events(InEvents)
+		: AActor(std::move(InComponents), InTickConfiguration), Sequence(InSequence), Events(InEvents)
 	{
 	}
 
@@ -125,11 +125,11 @@ class FMutationAttemptActor final : public AActor
 public:
 	FMutationAttemptActor(
 		FObjectStore& InStore,
-		FActorComponentRegistryReference Components,
+		FActorComponentRegistryReference InComponents,
 		FGarbageCollector& InCollector,
 		const MicroWorld::FClassDescriptor& InComponentDescriptor,
 		FLifecycleMutationState& InState) noexcept
-		: AActor(std::move(Components), OrderingTickConfiguration)
+		: AActor(std::move(InComponents), OrderingTickConfiguration)
 		, Store(InStore)
 		, Collector(InCollector)
 		, ComponentDescriptor(InComponentDescriptor)
@@ -143,14 +143,14 @@ protected:
 	void EndPlay() noexcept override { AttemptMutations(2); }
 
 private:
-	void AttemptMutations(const std::size_t HookIndex) noexcept
+	void AttemptMutations(const std::size_t InHookIndex) noexcept
 	{
-		State.Construction[HookIndex] = Store.NewObject<UActorComponent>(ComponentDescriptor).Result;
-		State.MarkPending[HookIndex] = Store.MarkPendingDestroy(GetObjectHandle());
-		State.ApplyPending[HookIndex] = Store.ApplyPendingDestroy(1).Result;
-		State.AddRoot[HookIndex] = Store.AddRoot(GetObjectHandle());
-		State.RequestCollection[HookIndex] = Collector.RequestCollection();
-		State.AdvanceCollection[HookIndex] = Collector.Advance(FGarbageCollectionBudget{1, 1, 1}).Result;
+		State.Construction[InHookIndex] = Store.NewObject<UActorComponent>(ComponentDescriptor).Result;
+		State.MarkPending[InHookIndex] = Store.MarkPendingDestroy(GetObjectHandle());
+		State.ApplyPending[InHookIndex] = Store.ApplyPendingDestroy(1).Result;
+		State.AddRoot[InHookIndex] = Store.AddRoot(GetObjectHandle());
+		State.RequestCollection[InHookIndex] = Collector.RequestCollection();
+		State.AdvanceCollection[InHookIndex] = Collector.Advance(FGarbageCollectionBudget{1, 1, 1}).Result;
 	}
 
 	FObjectStore& Store;
@@ -162,23 +162,23 @@ private:
 /** Builds one ordering actor through its derived descriptor in the environment. */
 template<std::size_t SlotSizeBytes, std::size_t SlotAlignmentBytes, std::uint32_t SlotCount, std::uint32_t RootCapacity>
 TObjectPtr<FOrderingActor> MakeOrderingActor(
-	TEngineEnvironment<SlotSizeBytes, SlotAlignmentBytes, SlotCount, RootCapacity>& Env,
-	FActorComponentRegistryReference Components,
-	FSequenceCounter& Sequence,
-	FActorEventState& Events) noexcept
+	TEngineEnvironment<SlotSizeBytes, SlotAlignmentBytes, SlotCount, RootCapacity>& InEnv,
+	FActorComponentRegistryReference InComponents,
+	FSequenceCounter& InSequence,
+	FActorEventState& InEvents) noexcept
 {
-	return Env.template CreateDerivedObject<FOrderingActor>(
-		OrderingActorTypeId, "OrderingActor", OrderingTickConfiguration, std::move(Components), Sequence, Events);
+	return InEnv.template CreateDerivedObject<FOrderingActor>(
+		OrderingActorTypeId, "OrderingActor", OrderingTickConfiguration, std::move(InComponents), InSequence, InEvents);
 }
 
 /** Builds one ordering component through its derived descriptor in the environment. */
 template<std::size_t SlotSizeBytes, std::size_t SlotAlignmentBytes, std::uint32_t SlotCount, std::uint32_t RootCapacity>
 TObjectPtr<FOrderingComponent> MakeOrderingComponent(
-	TEngineEnvironment<SlotSizeBytes, SlotAlignmentBytes, SlotCount, RootCapacity>& Env,
-	FSequenceCounter& Sequence,
-	FComponentEventState& Events) noexcept
+	TEngineEnvironment<SlotSizeBytes, SlotAlignmentBytes, SlotCount, RootCapacity>& InEnv,
+	FSequenceCounter& InSequence,
+	FComponentEventState& InEvents) noexcept
 {
-	return Env.template CreateDerivedObject<FOrderingComponent>(OrderingComponentTypeId, "OrderingComponent", Sequence, Events);
+	return InEnv.template CreateDerivedObject<FOrderingComponent>(OrderingComponentTypeId, "OrderingComponent", InSequence, InEvents);
 }
 
 /** Convenience environment sized for the lifecycle ordering tests. */

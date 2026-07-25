@@ -34,20 +34,20 @@ inline volatile bool GGotStationIpAddress = false;
  * Station-role WiFi/IP event handler: connects on start, reconnects on every disconnect, and
  * latches the got-IP flag once a lease arrives.
  *
- * @param EventBase Event family (`WIFI_EVENT` or `IP_EVENT`).
- * @param EventId Specific event within the family.
+ * @param InEventBase Event family (`WIFI_EVENT` or `IP_EVENT`).
+ * @param InEventId Specific event within the family.
  */
-inline void OnStationEvent(void* /*Arg*/, esp_event_base_t EventBase, std::int32_t EventId, void* /*EventData*/) noexcept
+inline void OnStationEvent(void* /*Arg*/, esp_event_base_t InEventBase, std::int32_t InEventId, void* /*EventData*/) noexcept
 {
-	if (EventBase == WIFI_EVENT && EventId == WIFI_EVENT_STA_START)
+	if (InEventBase == WIFI_EVENT && InEventId == WIFI_EVENT_STA_START)
 	{
 		(void)esp_wifi_connect();
 	}
-	else if (EventBase == WIFI_EVENT && EventId == WIFI_EVENT_STA_DISCONNECTED)
+	else if (InEventBase == WIFI_EVENT && InEventId == WIFI_EVENT_STA_DISCONNECTED)
 	{
 		(void)esp_wifi_connect();
 	}
-	else if (EventBase == IP_EVENT && EventId == IP_EVENT_STA_GOT_IP)
+	else if (InEventBase == IP_EVENT && InEventId == IP_EVENT_STA_GOT_IP)
 	{
 		GGotStationIpAddress = true;
 	}
@@ -93,21 +93,21 @@ inline bool InitNetworkStack() noexcept
  * SSID and password are copied with a bounded `strncpy` (bounded by the field size minus one),
  * so an oversize input is truncated rather than overrunning the ESP-IDF struct.
  *
- * @param Ssid Network name to advertise.
- * @param Password WPA2 passphrase.
- * @param WifiChannel 2.4 GHz channel to broadcast on.
- * @param MaxStations Largest number of stations admitted at once.
+ * @param InSsid Network name to advertise.
+ * @param InPassword WPA2 passphrase.
+ * @param InWifiChannel 2.4 GHz channel to broadcast on.
+ * @param InMaxStations Largest number of stations admitted at once.
  * @return SoftAP configuration ready for `esp_wifi_set_config`.
  */
 inline wifi_config_t MakeAccessPointConfig(
-	const char* const Ssid, const char* const Password, const std::uint8_t WifiChannel, const std::uint8_t MaxStations) noexcept
+	const char* const InSsid, const char* const InPassword, const std::uint8_t InWifiChannel, const std::uint8_t InMaxStations) noexcept
 {
 	wifi_config_t Config{};
-	std::strncpy(reinterpret_cast<char*>(Config.ap.ssid), Ssid, sizeof(Config.ap.ssid) - 1);
-	Config.ap.ssid_len = static_cast<std::uint8_t>(std::strlen(Ssid));
-	std::strncpy(reinterpret_cast<char*>(Config.ap.password), Password, sizeof(Config.ap.password) - 1);
-	Config.ap.channel = WifiChannel;
-	Config.ap.max_connection = MaxStations;
+	std::strncpy(reinterpret_cast<char*>(Config.ap.ssid), InSsid, sizeof(Config.ap.ssid) - 1);
+	Config.ap.ssid_len = static_cast<std::uint8_t>(std::strlen(InSsid));
+	std::strncpy(reinterpret_cast<char*>(Config.ap.password), InPassword, sizeof(Config.ap.password) - 1);
+	Config.ap.channel = InWifiChannel;
+	Config.ap.max_connection = InMaxStations;
 	Config.ap.authmode = WIFI_AUTH_WPA2_PSK;
 	Config.ap.pmf_cfg.required = false;
 	return Config;
@@ -118,15 +118,15 @@ inline wifi_config_t MakeAccessPointConfig(
  *
  * SSID and password are copied with a bounded `strncpy` (bounded by the field size minus one).
  *
- * @param Ssid Network name to join.
- * @param Password Passphrase of the network to join.
+ * @param InSsid Network name to join.
+ * @param InPassword Passphrase of the network to join.
  * @return Station configuration ready for `esp_wifi_set_config`.
  */
-inline wifi_config_t MakeStationConfig(const char* const Ssid, const char* const Password) noexcept
+inline wifi_config_t MakeStationConfig(const char* const InSsid, const char* const InPassword) noexcept
 {
 	wifi_config_t Config{};
-	std::strncpy(reinterpret_cast<char*>(Config.sta.ssid), Ssid, sizeof(Config.sta.ssid) - 1);
-	std::strncpy(reinterpret_cast<char*>(Config.sta.password), Password, sizeof(Config.sta.password) - 1);
+	std::strncpy(reinterpret_cast<char*>(Config.sta.ssid), InSsid, sizeof(Config.sta.ssid) - 1);
+	std::strncpy(reinterpret_cast<char*>(Config.sta.password), InPassword, sizeof(Config.sta.password) - 1);
 	return Config;
 }
 

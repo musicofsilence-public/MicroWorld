@@ -71,24 +71,24 @@ struct FHandlerCallRecord final
 	FMessageActorId SenderActorIds[MaxEntries]{0};
 
 	/** Records one observed invocation and the view it was invoked with. */
-	void Record(const int Identity, const FMessageView& View) noexcept
+	void Record(const int InIdentity, const FMessageView& InView) noexcept
 	{
 		if (Count >= MaxEntries)
 		{
 			return;
 		}
-		Identities[Count] = Identity;
-		TargetActorIds[Count] = View.Header.TargetActorId;
-		SenderActorIds[Count] = View.Header.SenderActorId;
+		Identities[Count] = InIdentity;
+		TargetActorIds[Count] = InView.Header.TargetActorId;
+		SenderActorIds[Count] = InView.Header.SenderActorId;
 		++Count;
 	}
 };
 
 /** Binds a nothrow inline handler that records its identity and the delivered view in the shared recorder. */
-FMessageHandlerBinding MakeRecordingHandler(FHandlerCallRecord& Recorder, const int Identity) noexcept
+FMessageHandlerBinding MakeRecordingHandler(FHandlerCallRecord& InRecorder, const int InIdentity) noexcept
 {
 	FMessageHandlerBinding Delegate;
-	(void)Delegate.Bind([&Recorder, Identity](const FMessageView& View) noexcept { Recorder.Record(Identity, View); });
+	(void)Delegate.Bind([&InRecorder, InIdentity](const FMessageView& InView) noexcept { InRecorder.Record(InIdentity, InView); });
 	return Delegate;
 }
 
@@ -115,26 +115,26 @@ public:
 	std::size_t MaxEncodedMessageBytes() const noexcept override { return MaxBytes; }
 
 	/** Appends one scripted result that a future call will return, in call order. */
-	void ScriptResult(const EMessageResult Result) noexcept
+	void ScriptResult(const EMessageResult InResult) noexcept
 	{
 		if (ScriptedResultCount < MaxScriptedResults)
 		{
-			ScriptedResults[ScriptedResultCount] = Result;
+			ScriptedResults[ScriptedResultCount] = InResult;
 			++ScriptedResultCount;
 		}
 	}
 
 	/** Returns the next scripted result (Success once the script is exhausted) and records an accepted send's bytes. */
-	EMessageResult TrySendEncodedMessage(const TSpan<const std::uint8_t> Encoded) noexcept override
+	EMessageResult TrySendEncodedMessage(const TSpan<const std::uint8_t> InEncoded) noexcept override
 	{
 		const EMessageResult Result = (ScriptedReadIndex < ScriptedResultCount) ? ScriptedResults[ScriptedReadIndex++] : EMessageResult::Success;
 		++SendAttemptCount;
 		if (Result == EMessageResult::Success && ReceivedMessageCount < MaxReceivedMessages)
 		{
-			ReceivedLengths[ReceivedMessageCount] = Encoded.Size();
-			for (std::size_t Index = 0; Index < Encoded.Size() && Index < MaxMessageBytes; ++Index)
+			ReceivedLengths[ReceivedMessageCount] = InEncoded.Size();
+			for (std::size_t Index = 0; Index < InEncoded.Size() && Index < MaxMessageBytes; ++Index)
 			{
-				ReceivedBytes[ReceivedMessageCount][Index] = Encoded.Data()[Index];
+				ReceivedBytes[ReceivedMessageCount][Index] = InEncoded.Data()[Index];
 			}
 			++ReceivedMessageCount;
 		}
@@ -148,10 +148,13 @@ public:
 	std::size_t ReceivedCount() const noexcept { return ReceivedMessageCount; }
 
 	/** Reports the encoded length of the Index'th accepted send. */
-	std::size_t ReceivedLength(const std::size_t Index) const noexcept { return ReceivedLengths[Index]; }
+	std::size_t ReceivedLength(const std::size_t InIndex) const noexcept { return ReceivedLengths[InIndex]; }
 
 	/** Reports one byte of the Index'th accepted send's encoded bytes. */
-	std::uint8_t ReceivedByte(const std::size_t Index, const std::size_t ByteOffset) const noexcept { return ReceivedBytes[Index][ByteOffset]; }
+	std::uint8_t ReceivedByte(const std::size_t InIndex, const std::size_t InByteOffset) const noexcept
+	{
+		return ReceivedBytes[InIndex][InByteOffset];
+	}
 
 private:
 	/** Bounds the per-message receive log to the router's own byte budget used across these tests. */
@@ -187,13 +190,13 @@ private:
 
 /** Encodes one zero-payload message of MessageTypeId Type into a caller-owned fixed buffer for direct ReceiveEncodedMessage tests. */
 template<std::size_t BufferBytes>
-std::size_t EncodeZeroPayloadMessage(const FMessageTypeId Type, std::array<std::uint8_t, BufferBytes>& OutBuffer) noexcept
+std::size_t EncodeZeroPayloadMessage(const FMessageTypeId InType, std::array<std::uint8_t, BufferBytes>& InBuffer) noexcept
 {
 	std::size_t WrittenBytes = 0;
 	(void)EncodeActorMessage(
-		FActorMessageHeader{Type, BroadcastActorId, SenderId},
+		FActorMessageHeader{InType, BroadcastActorId, SenderId},
 		TSpan<const std::uint8_t>(nullptr, 0),
-		TSpan<std::uint8_t>(OutBuffer.data(), OutBuffer.size()),
+		TSpan<std::uint8_t>(InBuffer.data(), InBuffer.size()),
 		WrittenBytes);
 	return WrittenBytes;
 }

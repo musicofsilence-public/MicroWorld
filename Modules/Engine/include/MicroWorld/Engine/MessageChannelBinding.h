@@ -96,7 +96,7 @@ public:
 	 * Server target requires a connected server peer, reporting Unavailable otherwise so the
 	 * router retains the message and retries later; AllPeers broadcasts to every active peer.
 	 */
-	EMessageResult TrySendEncodedMessage(const TSpan<const std::uint8_t> Encoded) noexcept override
+	EMessageResult TrySendEncodedMessage(const TSpan<const std::uint8_t> InEncoded) noexcept override
 	{
 		if (SendTarget == EChannelSendTarget::Server)
 		{
@@ -105,9 +105,9 @@ public:
 			{
 				return EMessageResult::Unavailable;
 			}
-			return MapNetSendResult(Host.SendTo(ServerPeer, WireChannelByte, Encoded));
+			return MapNetSendResult(Host.SendTo(ServerPeer, WireChannelByte, InEncoded));
 		}
-		return MapNetSendResult(Host.Broadcast(WireChannelByte, Encoded));
+		return MapNetSendResult(Host.Broadcast(WireChannelByte, InEncoded));
 	}
 
 private:
@@ -118,17 +118,17 @@ private:
 	 * only when a caller instantiates TMessageChannelBinding against a concrete TNet.
 	 */
 	template<typename TNetResult>
-	static EMessageResult MapNetSendResult(const TNetResult Result) noexcept
+	static EMessageResult MapNetSendResult(const TNetResult InResult) noexcept
 	{
-		if (Result == TNetResult::Success)
+		if (InResult == TNetResult::Success)
 		{
 			return EMessageResult::Success;
 		}
-		if (Result == TNetResult::Full)
+		if (InResult == TNetResult::Full)
 		{
 			return EMessageResult::CapacityExceeded;
 		}
-		if (Result == TNetResult::Invalid)
+		if (InResult == TNetResult::Invalid)
 		{
 			return EMessageResult::PayloadTooLarge;
 		}
@@ -140,13 +140,13 @@ private:
 	 * A different wire-channel byte on the same host belongs to some other binding and is silently
 	 * ignored here; a Sink rejection (its own queue full) counts against DroppedInbound.
 	 */
-	void OnWireBytesReceived(const std::uint8_t Channel, const TSpan<const std::uint8_t> Payload) noexcept
+	void OnWireBytesReceived(const std::uint8_t InChannel, const TSpan<const std::uint8_t> InPayload) noexcept
 	{
-		if (Channel != WireChannelByte)
+		if (InChannel != WireChannelByte)
 		{
 			return;
 		}
-		if (Sink.ReceiveEncodedMessage(ChannelId, Payload) != EMessageResult::Success)
+		if (Sink.ReceiveEncodedMessage(ChannelId, InPayload) != EMessageResult::Success)
 		{
 			++DroppedInbound;
 		}

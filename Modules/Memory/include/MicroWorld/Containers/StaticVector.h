@@ -34,17 +34,17 @@ public:
 	TStaticVector& operator=(TStaticVector&&) = delete;
 
 	/** Copy-constructs one element at the end or reports that fixed capacity is exhausted. */
-	ERuntimeResult Add(const ElementType& Element) noexcept
+	ERuntimeResult Add(const ElementType& InElement) noexcept
 	{
 		static_assert(std::is_nothrow_copy_constructible<ElementType>::value, "TStaticVector elements must be nothrow copy constructible");
-		return Emplace(Element);
+		return Emplace(InElement);
 	}
 
 	/** Move-constructs one element at the end or reports that fixed capacity is exhausted. */
-	ERuntimeResult Add(ElementType&& Element) noexcept
+	ERuntimeResult Add(ElementType&& InElement) noexcept
 	{
 		static_assert(std::is_nothrow_move_constructible<ElementType>::value, "TStaticVector elements must be nothrow move constructible");
-		return Emplace(std::move(Element));
+		return Emplace(std::move(InElement));
 	}
 
 	/** Constructs one element in place or reports capacity before changing the sequence. */
@@ -95,10 +95,10 @@ public:
 	bool IsFull() const noexcept { return ElementCount == MaxElements; }
 
 	/** Accesses a live element; the caller must provide an index below `Size()`. */
-	ElementType& operator[](const std::size_t Index) noexcept { return *ElementAt(Index); }
+	ElementType& operator[](const std::size_t InIndex) noexcept { return *ElementAt(InIndex); }
 
 	/** Accesses a live element; the caller must provide an index below `Size()`. */
-	const ElementType& operator[](const std::size_t Index) const noexcept { return *ElementAt(Index); }
+	const ElementType& operator[](const std::size_t InIndex) const noexcept { return *ElementAt(InIndex); }
 
 	/** Begins deterministic mutable iteration in insertion order. */
 	ElementType* begin() noexcept { return Data(); }
@@ -133,10 +133,10 @@ private:
 	static_assert(sizeof(FStorageSlot) == sizeof(ElementType), "TStaticVector requires storage slots with no inter-element padding");
 
 	/** Resolves a live element after placement construction has begun its lifetime. */
-	ElementType* ElementAt(const std::size_t Index) noexcept { return Detail::LaunderedPointer<ElementType>(&Storage[Index]); }
+	ElementType* ElementAt(const std::size_t InIndex) noexcept { return Detail::LaunderedPointer<ElementType>(&Storage[InIndex]); }
 
 	/** Resolves a live element after placement construction has begun its lifetime. */
-	const ElementType* ElementAt(const std::size_t Index) const noexcept { return Detail::LaunderedPointer<ElementType>(&Storage[Index]); }
+	const ElementType* ElementAt(const std::size_t InIndex) const noexcept { return Detail::LaunderedPointer<ElementType>(&Storage[InIndex]); }
 
 	/** Reserves a compile-time-bounded set of slots without constructing or allocating elements. */
 	// C++ forbids zero-length arrays; one dummy slot keeps a zero-capacity

@@ -29,7 +29,7 @@ class TNetManager final
 
 public:
 	/** Binds the manager to one externally referenced driver and caller-owned packet storage. */
-	TNetManager(INetDriver& Driver, TNetPacketStorage<MaxPackets, MaxPacketBytes>& Storage) noexcept : Driver(Driver), Storage(Storage) {}
+	TNetManager(INetDriver& InDriver, TNetPacketStorage<MaxPackets, MaxPacketBytes>& InStorage) noexcept : Driver(InDriver), Storage(InStorage) {}
 
 	/** Prevents copying so one manager value binds one driver and one storage instance. */
 	TNetManager(const TNetManager&) = delete;
@@ -47,14 +47,14 @@ public:
 	 * (it can never fit). Returns `Full` when the FIFO has no free slot. A non-success
 	 * result leaves the FIFO contents and order unchanged.
 	 */
-	ENetResult QueueSend(const FNetAddress& To, TSpan<const std::uint8_t> Packet) noexcept
+	ENetResult QueueSend(const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
 	{
-		const std::size_t PacketSize = Packet.Size();
+		const std::size_t PacketSize = InPacket.Size();
 		if (PacketSize == 0)
 		{
-			return EnqueuePacket(To, Packet);
+			return EnqueuePacket(InTo, InPacket);
 		}
-		if (Packet.Data() == nullptr)
+		if (InPacket.Data() == nullptr)
 		{
 			return ENetResult::Invalid;
 		}
@@ -63,7 +63,7 @@ public:
 			// The packet can never fit a slot; the request is malformed.
 			return ENetResult::Invalid;
 		}
-		return EnqueuePacket(To, Packet);
+		return EnqueuePacket(InTo, InPacket);
 	}
 
 	/**
@@ -99,9 +99,9 @@ public:
 	 * destination, `OutResult.BytesReceived`, and `OutFrom` are unchanged. The
 	 * manager never queues inbound packets.
 	 */
-	ENetResult Receive(FNetAddress& OutFrom, TSpan<std::uint8_t> Destination, FNetReceiveResult& OutResult) noexcept
+	ENetResult Receive(FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept
 	{
-		return Driver.TryReceive(OutFrom, Destination, OutResult);
+		return Driver.TryReceive(OutFrom, InDestination, OutResult);
 	}
 
 	/** Reports the fixed packet-slot capacity of this manager's outbound FIFO. */
@@ -121,26 +121,27 @@ public:
 
 private:
 	/** Copies one already-validated packet into the FIFO tail, or `Full` when no slot is free. */
-	ENetResult EnqueuePacket(const FNetAddress& To, TSpan<const std::uint8_t> Packet) noexcept
+	ENetResult EnqueuePacket(const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
 	{
 		if (QueuedPacketCount >= MaxPackets)
 		{
 			return ENetResult::Full;
 		}
-		StorePacketAt(TailIndex, To, Packet, Packet.Size());
+		StorePacketAt(TailIndex, InTo, InPacket, InPacket.Size());
 		AdvanceTail();
 		return ENetResult::Success;
 	}
 
-	/** Copies one accepted packet, its length, and its destination address into the slot at `Index`. */
-	void StorePacketAt(const std::size_t Index, const FNetAddress& To, TSpan<const std::uint8_t> Packet, const std::size_t PacketSize) noexcept
+	/** Copies one accepted packet, its length, and its destination address into the slot at `InIndex`. */
+	void StorePacketAt(
+		const std::size_t InIndex, const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket, const std::size_t InPacketSize) noexcept
 	{
-		if (PacketSize > 0)
+		if (InPacketSize > 0)
 		{
-			std::memcpy(Storage.PacketBytes[Index].data(), Packet.Data(), PacketSize);
+			std::memcpy(Storage.PacketBytes[InIndex].data(), InPacket.Data(), InPacketSize);
 		}
-		Storage.PacketLengths[Index] = PacketSize;
-		Storage.Destinations[Index] = To;
+		Storage.PacketLengths[InIndex] = InPacketSize;
+		Storage.Destinations[InIndex] = InTo;
 	}
 
 	/** Advances the tail and count after one accepted packet. */

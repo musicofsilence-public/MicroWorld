@@ -117,8 +117,8 @@ class FHostActor final : public AActor
 {
 public:
 	/** Captures the component reference, shared sequence, and per-actor event sink. */
-	FHostActor(MicroWorld::FActorComponentRegistryReference Components, FSequenceCounter& InSequence, FActorEventState& InEvents) noexcept
-		: AActor(std::move(Components), HostTickConfiguration), Sequence(InSequence), Events(InEvents)
+	FHostActor(MicroWorld::FActorComponentRegistryReference InComponents, FSequenceCounter& InSequence, FActorEventState& InEvents) noexcept
+		: AActor(std::move(InComponents), HostTickConfiguration), Sequence(InSequence), Events(InEvents)
 	{
 	}
 
@@ -174,16 +174,16 @@ struct FTimerFireRecord final
  * Registers the actor, recording component, and plain component descriptors on a
  * fresh host so each test builds its graph through the host's own descriptor copies.
  */
-bool RegisterHostTypes(FHost& Host) noexcept
+bool RegisterHostTypes(FHost& InHost) noexcept
 {
 	const FClassDescriptor ActorDescriptor =
-		MakeClassDescriptor<FHostActor>(HostActorTypeId, "HostActor", Host.FindClass(AActorClassId), &TraceManagedObjectReferences);
+		MakeClassDescriptor<FHostActor>(HostActorTypeId, "HostActor", InHost.FindClass(AActorClassId), &TraceManagedObjectReferences);
 	const FClassDescriptor ComponentDescriptor = MakeClassDescriptor<FHostComponent>(
-		HostComponentTypeId, "HostComponent", Host.FindClass(UActorComponentClassId), &TraceManagedObjectReferences);
+		HostComponentTypeId, "HostComponent", InHost.FindClass(UActorComponentClassId), &TraceManagedObjectReferences);
 	const FClassDescriptor PlainComponentDescriptor = MakeClassDescriptor<FHostPlainComponent>(
-		HostPlainComponentTypeId, "HostPlainComponent", Host.FindClass(UActorComponentClassId), &TraceManagedObjectReferences);
-	return Host.RegisterClass(ActorDescriptor) == EObjectResult::Success && Host.RegisterClass(ComponentDescriptor) == EObjectResult::Success
-		&& Host.RegisterClass(PlainComponentDescriptor) == EObjectResult::Success;
+		HostPlainComponentTypeId, "HostPlainComponent", InHost.FindClass(UActorComponentClassId), &TraceManagedObjectReferences);
+	return InHost.RegisterClass(ActorDescriptor) == EObjectResult::Success && InHost.RegisterClass(ComponentDescriptor) == EObjectResult::Success
+		&& InHost.RegisterClass(PlainComponentDescriptor) == EObjectResult::Success;
 }
 
 /**
@@ -219,19 +219,19 @@ struct FHostFixture final
 	 * and wires them onto the host. Returns false if any step fails so the caller can
 	 * assert the common baseline without repeating the graph construction inline.
 	 */
-	bool Build(FHost& Host) noexcept
+	bool Build(FHost& InHost) noexcept
 	{
-		if (!RegisterHostTypes(Host))
+		if (!RegisterHostTypes(InHost))
 		{
 			return false;
 		}
-		const TObjectPtr<UWorld> World = Host.CreateWorld();
+		const TObjectPtr<UWorld> World = InHost.CreateWorld();
 		if (World.Get() == nullptr)
 		{
 			return false;
 		}
-		Actor = Host.NewObject<FHostActor>(*Host.FindClass(HostActorTypeId), ActorComponents.MakeReference(), Sequence, ActorEvents).Object;
-		Component = Host.NewObject<FHostComponent>(*Host.FindClass(HostComponentTypeId), Sequence, ComponentEvents).Object;
+		Actor = InHost.NewObject<FHostActor>(*InHost.FindClass(HostActorTypeId), ActorComponents.MakeReference(), Sequence, ActorEvents).Object;
+		Component = InHost.NewObject<FHostComponent>(*InHost.FindClass(HostComponentTypeId), Sequence, ComponentEvents).Object;
 		if (Actor.Get() == nullptr || Component.Get() == nullptr)
 		{
 			return false;
@@ -240,7 +240,7 @@ struct FHostFixture final
 		{
 			return false;
 		}
-		return Host.GetWorld().RegisterActor(TObjectPtr<AActor>{Actor}) == EEngineResult::Success;
+		return InHost.GetWorld().RegisterActor(TObjectPtr<AActor>{Actor}) == EEngineResult::Success;
 	}
 };
 

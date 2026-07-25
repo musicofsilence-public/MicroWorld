@@ -16,13 +16,13 @@ namespace MicroWorld
  * exactly as the UART and LoRa encodings do. The encoding is owned here because `FNetAddress` ascribes no
  * meaning to its bytes and is shared with the UDP, loopback, LoRa, and UART encodings.
  *
- * @param NodeId Node id of the sender or recipient this address names.
+ * @param InNodeId Node id of the sender or recipient this address names.
  * @return One-byte address carrying the node id.
  */
-constexpr FNetAddress MakeI2cAddress(const std::uint8_t NodeId) noexcept
+constexpr FNetAddress MakeI2cAddress(const std::uint8_t InNodeId) noexcept
 {
 	FNetAddress Address{};
-	Address.Bytes[0] = NodeId;
+	Address.Bytes[0] = InNodeId;
 	Address.Size = 1;
 	return Address;
 }
@@ -35,12 +35,12 @@ constexpr FNetAddress MakeI2cAddress(const std::uint8_t NodeId) noexcept
  * encodings share this shape by design — a single driver instance only ever handles addresses meant for its
  * own transport.
  *
- * @param Address Address whose encoding to test.
+ * @param InAddress Address whose encoding to test.
  * @return True when the active length is exactly one byte.
  */
-constexpr bool IsI2cAddress(const FNetAddress& Address) noexcept
+constexpr bool IsI2cAddress(const FNetAddress& InAddress) noexcept
 {
-	return Address.Size == 1;
+	return InAddress.Size == 1;
 }
 
 /**
@@ -49,12 +49,12 @@ constexpr bool IsI2cAddress(const FNetAddress& Address) noexcept
  * The wire is point-to-point, so this id is meaningful as the sender on a received frame or as the local
  * stamp on an outgoing frame; callers must first confirm `IsI2cAddress` to avoid reading unrelated bytes.
  *
- * @param Address Address whose first byte holds the node id.
+ * @param InAddress Address whose first byte holds the node id.
  * @return Node id carried by the address.
  */
-constexpr std::uint8_t I2cAddressNodeId(const FNetAddress& Address) noexcept
+constexpr std::uint8_t I2cAddressNodeId(const FNetAddress& InAddress) noexcept
 {
-	return Address.Bytes[0];
+	return InAddress.Bytes[0];
 }
 
 } // namespace MicroWorld

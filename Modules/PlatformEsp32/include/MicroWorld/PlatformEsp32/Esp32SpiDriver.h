@@ -115,9 +115,9 @@ public:
 	 * failure the constructor rolls back and leaves `IsOpen() == false`; it never throws. The local node id is
 	 * stamped on every outgoing frame.
 	 *
-	 * @param Config Host, GPIO, clock, and local node id parameters.
+	 * @param InConfig Host, GPIO, clock, and local node id parameters.
 	 */
-	explicit FEsp32SpiMasterDriver(const FEsp32SpiMasterConfig& Config) noexcept;
+	explicit FEsp32SpiMasterDriver(const FEsp32SpiMasterConfig& InConfig) noexcept;
 
 	/** Removes the device and frees the SPI bus opened by construction. */
 	~FEsp32SpiMasterDriver() noexcept override;
@@ -142,11 +142,11 @@ public:
 	 * clocked out. The bytes the slave clocks back during the same transaction are fed to the decoder (SPI is
 	 * full-duplex), so a send never discards a pending reply.
 	 *
-	 * @param To Destination whose single byte must be an SPI node id (validated; the wire is point-to-point).
-	 * @param Packet Caller-owned payload bytes framed and sent as one message.
+	 * @param InTo Destination whose single byte must be an SPI node id (validated; the wire is point-to-point).
+	 * @param InPacket Caller-owned payload bytes framed and sent as one message.
 	 * @return Normalized outcome of the single send attempt.
 	 */
-	ENetResult TrySend(const FNetAddress& To, TSpan<const std::uint8_t> Packet) noexcept override;
+	ENetResult TrySend(const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
 	 * Receives at most one framed message by clocking one idle full-duplex transaction, transactionally.
@@ -157,11 +157,11 @@ public:
 	 * frame copies its payload, byte count, and sender node id into `OutFrom`.
 	 *
 	 * @param OutFrom Filled with the sender's SPI address only on `Success`.
-	 * @param Destination Caller-owned buffer for the received payload bytes.
+	 * @param InDestination Caller-owned buffer for the received payload bytes.
 	 * @param OutResult Filled with the received byte count only on `Success`.
 	 * @return Normalized outcome of the single receive attempt.
 	 */
-	ENetResult TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> Destination, FNetReceiveResult& OutResult) noexcept override;
+	ENetResult TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept override;
 
 	/** Reports the largest payload, in bytes, one send accepts (excludes framing overhead). */
 	std::size_t MaxPacketBytes() const noexcept override;
@@ -172,7 +172,7 @@ public:
 private:
 	/** Runs one full-duplex transaction with the given transmit window and pumps the received window into
 	 * the decoder (only while no frame is already held); returns the transaction's send outcome. */
-	ENetResult ExchangeAndPump(const std::uint8_t* TransmitWindow) noexcept;
+	ENetResult ExchangeAndPump(const std::uint8_t* InTransmitWindow) noexcept;
 
 	/** Bounded RX deframer held by value; its capacity matches `SpiMaxPayloadBytes`. */
 	TFrameDecoder<SpiMaxPayloadBytes> Decoder{};
@@ -218,9 +218,9 @@ public:
 	 * one idle transaction so the master's first clock finds a buffer. On any failure the constructor rolls
 	 * back and leaves `IsOpen() == false`; it never throws. The local node id is stamped on every outgoing frame.
 	 *
-	 * @param Config Host, GPIO, and local node id parameters.
+	 * @param InConfig Host, GPIO, and local node id parameters.
 	 */
-	explicit FEsp32SpiSlaveDriver(const FEsp32SpiSlaveConfig& Config) noexcept;
+	explicit FEsp32SpiSlaveDriver(const FEsp32SpiSlaveConfig& InConfig) noexcept;
 
 	/** Frees the SPI slave bus opened by construction. */
 	~FEsp32SpiSlaveDriver() noexcept override;
@@ -244,11 +244,11 @@ public:
 	 * nonzero length; `Full` when a previously staged frame has not yet been queued; and `Success` when the
 	 * whole frame was staged. The staged frame is sent on the next transaction the master clocks.
 	 *
-	 * @param To Destination whose single byte must be an SPI node id (validated; the wire is point-to-point).
-	 * @param Packet Caller-owned payload bytes framed and staged as one message.
+	 * @param InTo Destination whose single byte must be an SPI node id (validated; the wire is point-to-point).
+	 * @param InPacket Caller-owned payload bytes framed and staged as one message.
 	 * @return Normalized outcome of the single send attempt.
 	 */
-	ENetResult TrySend(const FNetAddress& To, TSpan<const std::uint8_t> Packet) noexcept override;
+	ENetResult TrySend(const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
 	 * Receives at most one framed message by harvesting a completed transaction, transactionally.
@@ -259,11 +259,11 @@ public:
 	 * `Success` after a complete frame copies its payload, byte count, and sender node id into `OutFrom`.
 	 *
 	 * @param OutFrom Filled with the sender's SPI address only on `Success`.
-	 * @param Destination Caller-owned buffer for the received payload bytes.
+	 * @param InDestination Caller-owned buffer for the received payload bytes.
 	 * @param OutResult Filled with the received byte count only on `Success`.
 	 * @return Normalized outcome of the single receive attempt.
 	 */
-	ENetResult TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> Destination, FNetReceiveResult& OutResult) noexcept override;
+	ENetResult TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept override;
 
 	/** Reports the largest payload, in bytes, one send accepts (excludes framing overhead). */
 	std::size_t MaxPacketBytes() const noexcept override;

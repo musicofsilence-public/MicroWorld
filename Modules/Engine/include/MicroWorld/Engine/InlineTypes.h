@@ -63,7 +63,7 @@ class TInlineActor : private Detail::TActorRegistryHolder<MaxComponents>, public
 {
 public:
 	/** Provides a reference to the inline component registry for AActor after the holder base is built. */
-	explicit TInlineActor(FTickConfiguration TickConfiguration = {}) noexcept : AActor(this->Registry.MakeReference(), TickConfiguration) {}
+	explicit TInlineActor(FTickConfiguration InTickConfiguration = {}) noexcept : AActor(this->Registry.MakeReference(), InTickConfiguration) {}
 };
 
 /**

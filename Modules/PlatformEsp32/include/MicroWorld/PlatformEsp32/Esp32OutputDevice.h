@@ -9,14 +9,14 @@ namespace MicroWorld
  * Forwards one MicroWorld log record to the ESP-IDF logging facility.
  *
  * Maps `ELogLevel` to the matching `ESP_LOGE`/`ESP_LOGW`/`ESP_LOGI`/`ESP_LOGV`
- * emitter, using `Category` as the ESP-IDF tag and `Message` as the literal
+ * emitter, using `InCategory` as the ESP-IDF tag and `InMessage` as the literal
  * body. Install it once at startup with `SetOutputDevice(&WriteEsp32LogRecord)` so every
  * `MW_LOG` call site that survives the compile-time floor routes through ESP-IDF.
  *
- * @param Level Severity rank selecting the ESP-IDF emitter.
- * @param Category ESP-IDF tag printed with the record.
- * @param Message Fully formed record body to forward verbatim.
+ * @param InLevel Severity rank selecting the ESP-IDF emitter.
+ * @param InCategory ESP-IDF tag printed with the record.
+ * @param InMessage Fully formed record body to forward verbatim.
  */
-void WriteEsp32LogRecord(ELogLevel Level, const char* Category, const char* Message) noexcept;
+void WriteEsp32LogRecord(ELogLevel InLevel, const char* InCategory, const char* InMessage) noexcept;
 
 } // namespace MicroWorld

@@ -89,13 +89,13 @@ public:
 	 * every pending slot is already in use (CapacityExceeded). Otherwise keeps the pending slot even when the
 	 * initial inner send does not report Success, since TickFlush retries it later instead of losing it.
 	 */
-	EMessageResult TrySendEncodedMessage(const TSpan<const std::uint8_t> Encoded) noexcept override
+	EMessageResult TrySendEncodedMessage(const TSpan<const std::uint8_t> InEncoded) noexcept override
 	{
 		if (InnerChannel == nullptr)
 		{
 			return EMessageResult::Unavailable;
 		}
-		if (ReliableHeaderBytes + Encoded.Size() > MaxMessageBytes || Encoded.Size() > MaxEncodedMessageBytes())
+		if (ReliableHeaderBytes + InEncoded.Size() > MaxMessageBytes || InEncoded.Size() > MaxEncodedMessageBytes())
 		{
 			return EMessageResult::PayloadTooLarge;
 		}
@@ -107,8 +107,8 @@ public:
 
 		const std::uint16_t Sequence = AllocateNextSequence();
 		WriteReliableHeader(Slot->Bytes, EReliablePacketKind::Data, Sequence);
-		CopyBytes(&Slot->Bytes[ReliableHeaderBytes], Encoded.Data(), Encoded.Size());
-		Slot->Length = ReliableHeaderBytes + Encoded.Size();
+		CopyBytes(&Slot->Bytes[ReliableHeaderBytes], InEncoded.Data(), InEncoded.Size());
+		Slot->Length = ReliableHeaderBytes + InEncoded.Size();
 		Slot->Sequence = Sequence;
 		Slot->Attempts = 1;
 		Slot->bBaselineTimeSet = false;
@@ -123,15 +123,15 @@ public:
 	 * triggers an ack (fresh or duplicate, since the sender's first ack may itself have been lost), then
 	 * forwards a fresh payload to ForwardSink once or counts a duplicate; an Acknowledgement frees the matching pending slot.
 	 */
-	EMessageResult ReceiveEncodedMessage(const FMessageChannelId ArrivedOnChannelId, const TSpan<const std::uint8_t> Encoded) noexcept override
+	EMessageResult ReceiveEncodedMessage(const FMessageChannelId InArrivedOnChannelId, const TSpan<const std::uint8_t> InEncoded) noexcept override
 	{
-		if (Encoded.Size() < ReliableHeaderBytes)
+		if (InEncoded.Size() < ReliableHeaderBytes)
 		{
 			return EMessageResult::PayloadTooLarge;
 		}
 
-		const EReliablePacketKind Kind = static_cast<EReliablePacketKind>(Encoded.Data()[0]);
-		const std::uint16_t Sequence = ReadSequence(Encoded.Data());
+		const EReliablePacketKind Kind = static_cast<EReliablePacketKind>(InEncoded.Data()[0]);
+		const std::uint16_t Sequence = ReadSequence(InEncoded.Data());
 
 		if (Kind == EReliablePacketKind::Data)
 		{
@@ -141,7 +141,7 @@ public:
 				// SetInnerChannel before any inbound traffic can reach this sink, but guard anyway.
 				return EMessageResult::Unavailable;
 			}
-			return HandleInboundData(ArrivedOnChannelId, Sequence, Encoded);
+			return HandleInboundData(InArrivedOnChannelId, Sequence, InEncoded);
 		}
 		if (Kind == EReliablePacketKind::Acknowledgement)
 		{
@@ -152,14 +152,14 @@ public:
 	}
 
 	/** No-op: this wrapper has no inbound polling of its own; inbound arrives via ReceiveEncodedMessage. */
-	void TickDispatch(const TimePointMilliseconds NowMilliseconds) noexcept override { (void)NowMilliseconds; }
+	void TickDispatch(const TimePointMilliseconds InNowMilliseconds) noexcept override { (void)InNowMilliseconds; }
 
 	/**
 	 * Paces retries for every pending slot: the first flush after a send only records the retry baseline
 	 * (never resending that same tick), a later flush resends once RetryIntervalMilliseconds has elapsed
 	 * and the slot has not exhausted Config.MaxSendAttempts, and an exhausted slot is dropped and counted lost instead.
 	 */
-	void TickFlush(const TimePointMilliseconds NowMilliseconds) noexcept override
+	void TickFlush(const TimePointMilliseconds InNowMilliseconds) noexcept override
 	{
 		if (InnerChannel == nullptr)
 		{
@@ -170,7 +170,7 @@ public:
 			FPendingMessage& Slot = Pending[Index];
 			if (Slot.bInUse)
 			{
-				TickOnePendingSlot(Slot, NowMilliseconds);
+				TickOnePendingSlot(Slot, InNowMilliseconds);
 			}
 		}
 	}
@@ -226,28 +226,31 @@ private:
 
 	/**
 	 * Serial-number "is newer" comparison over the 16-bit sequence space (roadmap 4.3, normative):
-	 * 0x8000 is half that space, so the smaller forward distance between A and B decides which is newer.
+	 * 0x8000 is half that space, so the smaller forward distance between InCandidate and InReference decides which is newer.
 	 */
-	static bool IsNewer(const std::uint16_t A, const std::uint16_t B) noexcept { return (A != B) && (static_cast<std::uint16_t>(A - B) < 0x8000u); }
+	static bool IsNewer(const std::uint16_t InCandidate, const std::uint16_t InReference) noexcept
+	{
+		return (InCandidate != InReference) && (static_cast<std::uint16_t>(InCandidate - InReference) < 0x8000u);
+	}
 
 	/** Width of the duplicate-detection window: SeenMask's bit count, one bit per sequence older than HighestSequenceSeen. */
 	static constexpr std::uint32_t DuplicateWindowWidth = 32;
 
 	/**
-	 * Reports whether Sequence has already been observed: the current highest itself, anything within
+	 * Reports whether InSequence has already been observed: the current highest itself, anything within
 	 * the DuplicateWindowWidth-wide mask below it and already marked, or anything older than the window.
 	 */
-	bool WasSeen(const std::uint16_t Sequence) const noexcept
+	bool WasSeen(const std::uint16_t InSequence) const noexcept
 	{
-		if (Sequence == HighestSequenceSeen)
+		if (InSequence == HighestSequenceSeen)
 		{
 			return true;
 		}
-		if (IsNewer(Sequence, HighestSequenceSeen))
+		if (IsNewer(InSequence, HighestSequenceSeen))
 		{
 			return false;
 		}
-		const std::uint16_t Delta = static_cast<std::uint16_t>(HighestSequenceSeen - Sequence);
+		const std::uint16_t Delta = static_cast<std::uint16_t>(HighestSequenceSeen - InSequence);
 		if (Delta > DuplicateWindowWidth)
 		{
 			return true;
@@ -255,12 +258,12 @@ private:
 		return ((SeenMask >> (Delta - 1)) & 1u) != 0u;
 	}
 
-	/** Records a fresh Sequence as seen, sliding the window forward when Sequence becomes the new highest. */
-	void MarkSeen(const std::uint16_t Sequence) noexcept
+	/** Records a fresh InSequence as seen, sliding the window forward when InSequence becomes the new highest. */
+	void MarkSeen(const std::uint16_t InSequence) noexcept
 	{
-		if (IsNewer(Sequence, HighestSequenceSeen))
+		if (IsNewer(InSequence, HighestSequenceSeen))
 		{
-			const std::uint16_t Shift = static_cast<std::uint16_t>(Sequence - HighestSequenceSeen);
+			const std::uint16_t Shift = static_cast<std::uint16_t>(InSequence - HighestSequenceSeen);
 			if (Shift > DuplicateWindowWidth)
 			{
 				// The old highest has slid entirely past the window; nothing below the new highest stays tracked.
@@ -277,31 +280,31 @@ private:
 				// The old highest now sits at bit Shift-1; earlier records shift up with it, any past bit 31 fall off.
 				SeenMask = (SeenMask << Shift) | (1u << (Shift - 1));
 			}
-			HighestSequenceSeen = Sequence;
+			HighestSequenceSeen = InSequence;
 		}
 		else
 		{
-			const std::uint16_t Delta = static_cast<std::uint16_t>(HighestSequenceSeen - Sequence);
+			const std::uint16_t Delta = static_cast<std::uint16_t>(HighestSequenceSeen - InSequence);
 			SeenMask |= (1u << (Delta - 1));
 		}
 	}
 
 	/** Writes the three-byte [Kind][Sequence LE] reliable header at the front of OutBytes. */
-	static void WriteReliableHeader(std::uint8_t* const OutBytes, const EReliablePacketKind Kind, const std::uint16_t Sequence) noexcept
+	static void WriteReliableHeader(std::uint8_t* const OutBytes, const EReliablePacketKind InKind, const std::uint16_t InSequence) noexcept
 	{
-		OutBytes[0] = static_cast<std::uint8_t>(Kind);
-		Detail::WriteMessageUint16LittleEndian(Sequence, &OutBytes[1]);
+		OutBytes[0] = static_cast<std::uint8_t>(InKind);
+		Detail::WriteMessageUint16LittleEndian(InSequence, &OutBytes[1]);
 	}
 
 	/** Reads the little-endian Sequence field starting at byte index 1 of a reliable-header-prefixed payload. */
-	static std::uint16_t ReadSequence(const std::uint8_t* const Bytes) noexcept { return Detail::ReadMessageUint16LittleEndian(&Bytes[1]); }
+	static std::uint16_t ReadSequence(const std::uint8_t* const InBytes) noexcept { return Detail::ReadMessageUint16LittleEndian(&InBytes[1]); }
 
-	/** Copies Length bytes from Source to Destination; Length may be 0. */
-	static void CopyBytes(std::uint8_t* const Destination, const std::uint8_t* const Source, const std::size_t Length) noexcept
+	/** Copies InLength bytes from InSource to OutDestination; InLength may be 0. */
+	static void CopyBytes(std::uint8_t* const OutDestination, const std::uint8_t* const InSource, const std::size_t InLength) noexcept
 	{
-		for (std::size_t Index = 0; Index < Length; ++Index)
+		for (std::size_t Index = 0; Index < InLength; ++Index)
 		{
-			Destination[Index] = Source[Index];
+			OutDestination[Index] = InSource[Index];
 		}
 	}
 
@@ -328,11 +331,11 @@ private:
 	}
 
 	/** Frees the pending slot whose Sequence matches, if any; an unmatched Acknowledgement is silently ignored. */
-	void FreePendingBySequence(const std::uint16_t Sequence) noexcept
+	void FreePendingBySequence(const std::uint16_t InSequence) noexcept
 	{
 		for (std::size_t Index = 0; Index < MaxPendingMessages; ++Index)
 		{
-			if (Pending[Index].bInUse && Pending[Index].Sequence == Sequence)
+			if (Pending[Index].bInUse && Pending[Index].Sequence == InSequence)
 			{
 				Pending[Index].bInUse = false;
 				return;
@@ -341,54 +344,54 @@ private:
 	}
 
 	/**
-	 * Acks Sequence unconditionally, then forwards the inner payload once for a fresh sequence or
+	 * Acks InSequence unconditionally, then forwards the inner payload once for a fresh sequence or
 	 * only counts a duplicate; ForwardSink rejecting a fresh forward is an accepted v1 limitation
 	 * (the message is already acked and marked seen, so this wrapper never un-acks or re-delivers it).
 	 */
 	EMessageResult HandleInboundData(
-		const FMessageChannelId ArrivedOnChannelId, const std::uint16_t Sequence, const TSpan<const std::uint8_t> Encoded) noexcept
+		const FMessageChannelId InArrivedOnChannelId, const std::uint16_t InSequence, const TSpan<const std::uint8_t> InEncoded) noexcept
 	{
 		std::uint8_t AckBytes[ReliableHeaderBytes];
-		WriteReliableHeader(AckBytes, EReliablePacketKind::Acknowledgement, Sequence);
+		WriteReliableHeader(AckBytes, EReliablePacketKind::Acknowledgement, InSequence);
 		// Best-effort: a lost ack is recovered by the sender's own retry-driven resend, not by us.
 		(void)InnerChannel->TrySendEncodedMessage(TSpan<const std::uint8_t>(AckBytes, ReliableHeaderBytes));
 
-		if (WasSeen(Sequence))
+		if (WasSeen(InSequence))
 		{
 			++DuplicateDroppedTotal;
 			return EMessageResult::Success;
 		}
 
-		MarkSeen(Sequence);
-		const TSpan<const std::uint8_t> InnerPayload(Encoded.Data() + ReliableHeaderBytes, Encoded.Size() - ReliableHeaderBytes);
-		(void)ForwardSink.ReceiveEncodedMessage(ArrivedOnChannelId, InnerPayload);
+		MarkSeen(InSequence);
+		const TSpan<const std::uint8_t> InnerPayload(InEncoded.Data() + ReliableHeaderBytes, InEncoded.Size() - ReliableHeaderBytes);
+		(void)ForwardSink.ReceiveEncodedMessage(InArrivedOnChannelId, InnerPayload);
 		return EMessageResult::Success;
 	}
 
 	/** Advances one pending slot's retry state by exactly one TickFlush's worth of elapsed time. */
-	void TickOnePendingSlot(FPendingMessage& Slot, const TimePointMilliseconds NowMilliseconds) noexcept
+	void TickOnePendingSlot(FPendingMessage& InSlot, const TimePointMilliseconds InNowMilliseconds) noexcept
 	{
-		if (!Slot.bBaselineTimeSet)
+		if (!InSlot.bBaselineTimeSet)
 		{
-			Slot.LastSendTimeMilliseconds = NowMilliseconds;
-			Slot.bBaselineTimeSet = true;
+			InSlot.LastSendTimeMilliseconds = InNowMilliseconds;
+			InSlot.bBaselineTimeSet = true;
 			return;
 		}
-		if (NowMilliseconds - Slot.LastSendTimeMilliseconds < Config.RetryIntervalMilliseconds)
+		if (InNowMilliseconds - InSlot.LastSendTimeMilliseconds < Config.RetryIntervalMilliseconds)
 		{
 			return;
 		}
-		if (Slot.Attempts >= Config.MaxSendAttempts)
+		if (InSlot.Attempts >= Config.MaxSendAttempts)
 		{
-			Slot.bInUse = false;
+			InSlot.bInUse = false;
 			++LostTotal;
 			return;
 		}
 
-		(void)InnerChannel->TrySendEncodedMessage(TSpan<const std::uint8_t>(Slot.Bytes, Slot.Length));
-		++Slot.Attempts;
+		(void)InnerChannel->TrySendEncodedMessage(TSpan<const std::uint8_t>(InSlot.Bytes, InSlot.Length));
+		++InSlot.Attempts;
 		++ResentTotal;
-		Slot.LastSendTimeMilliseconds = NowMilliseconds;
+		InSlot.LastSendTimeMilliseconds = InNowMilliseconds;
 	}
 
 	/** Externally owned sink that receives forwarded fresh payloads; never owned here. */

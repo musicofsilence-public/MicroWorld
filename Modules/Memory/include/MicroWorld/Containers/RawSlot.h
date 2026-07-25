@@ -26,51 +26,51 @@ namespace MicroWorld::Detail
  *
  * @tparam ValueType Type to construct; specify explicitly (it is not deduced).
  * @tparam ConstructorArgumentTypes Argument types forwarded to the constructor.
- * @param Storage Address of storage already sized and aligned for `ValueType`.
+ * @param InStorage Address of storage already sized and aligned for `ValueType`.
  * @param Arguments Constructor arguments forwarded to `ValueType`.
  * @return Pointer to the newly live object.
  */
 template<typename ValueType, typename... ConstructorArgumentTypes>
-ValueType* ConstructAt(void* const Storage, ConstructorArgumentTypes&&... Arguments) noexcept
+ValueType* ConstructAt(void* const InStorage, ConstructorArgumentTypes&&... Arguments) noexcept
 {
-	return ::new (Storage) ValueType(std::forward<ConstructorArgumentTypes>(Arguments)...);
+	return ::new (InStorage) ValueType(std::forward<ConstructorArgumentTypes>(Arguments)...);
 }
 
 /**
  * Ends the lifetime a prior `ConstructAt` began; the storage bytes stay caller-owned.
  *
- * @param Value Live object whose destructor to run.
+ * @param InValue Live object whose destructor to run.
  */
 template<typename ValueType>
-void DestroyAt(ValueType* const Value) noexcept
+void DestroyAt(ValueType* const InValue) noexcept
 {
-	Value->~ValueType();
+	InValue->~ValueType();
 }
 
 /**
  * Resolves the live `ValueType` begun in raw storage (see the launder rule above).
  *
  * @tparam ValueType Type of the live object; specify explicitly.
- * @param Storage Address whose bytes hold a live `ValueType`.
+ * @param InStorage Address whose bytes hold a live `ValueType`.
  * @return Laundered pointer safe to read and write through.
  */
 template<typename ValueType>
-ValueType* LaunderedPointer(void* const Storage) noexcept
+ValueType* LaunderedPointer(void* const InStorage) noexcept
 {
-	return std::launder(reinterpret_cast<ValueType*>(Storage));
+	return std::launder(reinterpret_cast<ValueType*>(InStorage));
 }
 
 /**
  * Const overload: resolves a live read-only `ValueType` in raw storage.
  *
  * @tparam ValueType Type of the live object; specify explicitly.
- * @param Storage Address whose bytes hold a live `ValueType`.
+ * @param InStorage Address whose bytes hold a live `ValueType`.
  * @return Laundered read-only pointer.
  */
 template<typename ValueType>
-const ValueType* LaunderedPointer(const void* const Storage) noexcept
+const ValueType* LaunderedPointer(const void* const InStorage) noexcept
 {
-	return std::launder(reinterpret_cast<const ValueType*>(Storage));
+	return std::launder(reinterpret_cast<const ValueType*>(InStorage));
 }
 
 } // namespace MicroWorld::Detail

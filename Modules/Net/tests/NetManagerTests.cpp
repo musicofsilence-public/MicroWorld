@@ -22,10 +22,10 @@ using MicroWorld::TNetManager;
 using MicroWorld::TNetPacketStorage;
 using MicroWorld::TSpan;
 
-/** Builds a 1-byte destination address whose single byte is `Index`; keeps queue call sites concise. */
-constexpr FNetAddress MakeDest(const std::uint8_t Index) noexcept
+/** Builds a 1-byte destination address whose single byte is `InIndex`; keeps queue call sites concise. */
+constexpr FNetAddress MakeDest(const std::uint8_t InIndex) noexcept
 {
-	return MicroWorld::MakeLoopbackAddress(Index);
+	return MicroWorld::MakeLoopbackAddress(InIndex);
 }
 
 /**
@@ -42,33 +42,33 @@ public:
 	~FRecordingDriver() noexcept override = default;
 
 	/** Counts every attempt and records the destination address and bytes of every successful send so FIFO order of delivered packets is provable. */
-	ENetResult TrySend(const FNetAddress& To, TSpan<const std::uint8_t> Packet) noexcept override
+	ENetResult TrySend(const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override
 	{
 		++SendCount;
 		if (ForcedSendResult == ENetResult::Success && SuccessfulSendCount < MaxRecordedSends)
 		{
-			const std::size_t CopyLength = Packet.Size() <= MaxRecordedBytes ? Packet.Size() : MaxRecordedBytes;
+			const std::size_t CopyLength = InPacket.Size() <= MaxRecordedBytes ? InPacket.Size() : MaxRecordedBytes;
 			for (std::size_t Index = 0; Index < CopyLength; ++Index)
 			{
-				RecordedSendBytes[SuccessfulSendCount][Index] = Packet[Index];
+				RecordedSendBytes[SuccessfulSendCount][Index] = InPacket[Index];
 			}
-			RecordedSendLengths[SuccessfulSendCount] = Packet.Size();
-			RecordedSendDestinations[SuccessfulSendCount] = To;
+			RecordedSendLengths[SuccessfulSendCount] = InPacket.Size();
+			RecordedSendDestinations[SuccessfulSendCount] = InTo;
 			++SuccessfulSendCount;
 		}
 		return ForcedSendResult;
 	}
 
 	/** Returns the forced result, fills the destination on success, and stamps a deterministic sender into OutFrom only on success. */
-	ENetResult TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> Destination, FNetReceiveResult& OutResult) noexcept override
+	ENetResult TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept override
 	{
 		++ReceiveAttemptCount;
 		if (ForcedReceiveResult == ENetResult::Success)
 		{
-			const std::size_t CopyLength = ReceiveByteCount <= Destination.Size() ? ReceiveByteCount : Destination.Size();
+			const std::size_t CopyLength = ReceiveByteCount <= InDestination.Size() ? ReceiveByteCount : InDestination.Size();
 			for (std::size_t Index = 0; Index < CopyLength; ++Index)
 			{
-				Destination[Index] = ReceiveFillerByte;
+				InDestination[Index] = ReceiveFillerByte;
 			}
 			OutResult.BytesReceived = ReceiveByteCount;
 			OutFrom = ReceiveSender;

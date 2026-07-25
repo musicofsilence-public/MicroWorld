@@ -16,8 +16,8 @@
 namespace MicroWorld
 {
 
-AActor::AActor(FActorComponentRegistryReference ComponentStorage, const FTickConfiguration TickConfiguration) noexcept
-	: UObject(), FTickable(TickConfiguration), Components(std::move(ComponentStorage))
+AActor::AActor(FActorComponentRegistryReference InComponentStorage, const FTickConfiguration InTickConfiguration) noexcept
+	: UObject(), FTickable(InTickConfiguration), Components(std::move(InComponentStorage))
 {
 }
 
@@ -29,18 +29,18 @@ const FClassDescriptor& AActor::StaticClassDescriptor() noexcept
 	return Descriptor;
 }
 
-EEngineResult AActor::RegisterComponent(const TObjectPtr<UActorComponent> Component) noexcept
+EEngineResult AActor::RegisterComponent(const TObjectPtr<UActorComponent> InComponent) noexcept
 {
-	const EEngineResult Verdict = CheckComponentRegistrable(Component);
+	const EEngineResult Verdict = CheckComponentRegistrable(InComponent);
 	if (Verdict != EEngineResult::Success)
 	{
 		return Verdict;
 	}
-	PublishComponent(Component);
+	PublishComponent(InComponent);
 	return EEngineResult::Success;
 }
 
-EEngineResult AActor::CheckComponentRegistrable(const TObjectPtr<UActorComponent> Component) const noexcept
+EEngineResult AActor::CheckComponentRegistrable(const TObjectPtr<UActorComponent> InComponent) const noexcept
 {
 	// Registration is only permitted before BeginPlay can begin dispatch.
 	if (!IsRegistrationOpen())
@@ -56,14 +56,14 @@ EEngineResult AActor::CheckComponentRegistrable(const TObjectPtr<UActorComponent
 	{
 		return EEngineResult::LifecycleLocked;
 	}
-	UActorComponent* const Resolved = Component.Get();
+	UActorComponent* const Resolved = InComponent.Get();
 	if (Resolved == nullptr)
 	{
 		return EEngineResult::InvalidReference;
 	}
 	// The component must belong to the same canonical store as this actor so a
 	// foreign handle can never be traced through this owner.
-	if (!Component.BelongsTo(*ObjectStore))
+	if (!InComponent.BelongsTo(*ObjectStore))
 	{
 		return EEngineResult::CrossStore;
 	}
@@ -75,7 +75,7 @@ EEngineResult AActor::CheckComponentRegistrable(const TObjectPtr<UActorComponent
 	// before the cross-owner check so a repeated registration stays honest.
 	for (std::size_t Index = 0; Index < Components.GetCount(); ++Index)
 	{
-		if (Components.At(Index).Handle() == Component.Handle())
+		if (Components.At(Index).Handle() == InComponent.Handle())
 		{
 			return EEngineResult::Duplicate;
 		}
@@ -93,12 +93,12 @@ EEngineResult AActor::CheckComponentRegistrable(const TObjectPtr<UActorComponent
 	return EEngineResult::Success;
 }
 
-void AActor::PublishComponent(const TObjectPtr<UActorComponent> Component) noexcept
+void AActor::PublishComponent(const TObjectPtr<UActorComponent> InComponent) noexcept
 {
 	// Atomic publish: every fallible check precedes the parent link and registry update.
-	UActorComponent* const Resolved = Component.Get();
+	UActorComponent* const Resolved = InComponent.Get();
 	Resolved->AssignOwner(GetObjectHandle());
-	Components.Add(Component);
+	Components.Add(InComponent);
 }
 
 UWorld* AActor::GetOwnerWorld() const noexcept
@@ -113,7 +113,7 @@ UWorld* AActor::GetOwnerWorld() const noexcept
 	return static_cast<UWorld*>(ResolveObjectHandle(*ObjectStore, WorldObjectHandle));
 }
 
-ERuntimeResult AActor::DispatchBeginPlay(const TimePointMilliseconds NowMilliseconds) noexcept
+ERuntimeResult AActor::DispatchBeginPlay(const TimePointMilliseconds InNowMilliseconds) noexcept
 {
 	if (!Components.IsValid())
 	{
@@ -124,9 +124,9 @@ ERuntimeResult AActor::DispatchBeginPlay(const TimePointMilliseconds NowMillisec
 	{
 		return BeginResult;
 	}
-	BeginPrimaryTickLifecycle(NowMilliseconds);
+	BeginPrimaryTickLifecycle(InNowMilliseconds);
 
-	const ERuntimeResult ComponentsResult = BeginComponentsWithRollback(NowMilliseconds);
+	const ERuntimeResult ComponentsResult = BeginComponentsWithRollback(InNowMilliseconds);
 	if (ComponentsResult != ERuntimeResult::Success)
 	{
 		return ComponentsResult;
@@ -136,7 +136,7 @@ ERuntimeResult AActor::DispatchBeginPlay(const TimePointMilliseconds NowMillisec
 	return ERuntimeResult::Success;
 }
 
-ERuntimeResult AActor::BeginComponentsWithRollback(const TimePointMilliseconds NowMilliseconds) noexcept
+ERuntimeResult AActor::BeginComponentsWithRollback(const TimePointMilliseconds InNowMilliseconds) noexcept
 {
 	// Components begin in registration order; on first failure the previously
 	// begun components are ended in reverse so the actor never observes a
@@ -146,7 +146,7 @@ ERuntimeResult AActor::BeginComponentsWithRollback(const TimePointMilliseconds N
 	{
 		UActorComponent* const Component = Components.At(Index).Get();
 		const ERuntimeResult ComponentResult =
-			Component != nullptr ? Component->DispatchBeginPlay(NowMilliseconds) : ERuntimeResult::InvalidLifecycle;
+			Component != nullptr ? Component->DispatchBeginPlay(InNowMilliseconds) : ERuntimeResult::InvalidLifecycle;
 		if (ComponentResult != ERuntimeResult::Success)
 		{
 			for (std::size_t RollbackIndex = BegunComponentCount; RollbackIndex > 0; --RollbackIndex)
@@ -165,7 +165,7 @@ ERuntimeResult AActor::BeginComponentsWithRollback(const TimePointMilliseconds N
 	return ERuntimeResult::Success;
 }
 
-ERuntimeResult AActor::DispatchAdvance(const TimePointMilliseconds NowMilliseconds) noexcept
+ERuntimeResult AActor::DispatchAdvance(const TimePointMilliseconds InNowMilliseconds) noexcept
 {
 	const ERuntimeResult PlayingResult = Lifecycle.RequirePlaying();
 	if (PlayingResult != ERuntimeResult::Success)
@@ -182,14 +182,14 @@ ERuntimeResult AActor::DispatchAdvance(const TimePointMilliseconds NowMillisecon
 		{
 			return ERuntimeResult::InvalidLifecycle;
 		}
-		const ERuntimeResult ComponentResult = Component->DispatchAdvance(NowMilliseconds);
+		const ERuntimeResult ComponentResult = Component->DispatchAdvance(InNowMilliseconds);
 		if (ComponentResult != ERuntimeResult::Success)
 		{
 			return ComponentResult;
 		}
 	}
 
-	const FTickDecision Decision = AdvancePrimaryTick(NowMilliseconds);
+	const FTickDecision Decision = AdvancePrimaryTick(InNowMilliseconds);
 	if (Decision.Result != ERuntimeResult::Success)
 	{
 		return Decision.Result;
@@ -233,9 +233,9 @@ ERuntimeResult AActor::DispatchEndPlay() noexcept
 	return FirstError;
 }
 
-void AActor::AssignWorld(const FObjectHandle World) noexcept
+void AActor::AssignWorld(const FObjectHandle InWorld) noexcept
 {
-	WorldObjectHandle = World;
+	WorldObjectHandle = InWorld;
 }
 
 void AActor::MarkRegisteredComponentsPendingDestroy() noexcept
@@ -254,13 +254,13 @@ void AActor::MarkRegisteredComponentsPendingDestroy() noexcept
 	}
 }
 
-void AActor::VisitReferences(FReferenceCollector& Collector) noexcept
+void AActor::VisitReferences(FReferenceCollector& InCollector) noexcept
 {
 	// Every registered component is a traced downward edge; the weak world link
 	// is deliberately not traced so the parent-child graph stays acyclic.
 	for (std::size_t Index = 0; Index < Components.GetCount(); ++Index)
 	{
-		Collector.AddReferencedObject(Components.At(Index));
+		InCollector.AddReferencedObject(Components.At(Index));
 	}
 }
 

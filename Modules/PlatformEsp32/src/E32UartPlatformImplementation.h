@@ -32,12 +32,12 @@ using FUartPort = uart_port_t;
  * The public header stores the port as a plain `std::int32_t` so it stays free of the ESP-IDF enum; this
  * helper restores the type only where the UART syscalls expect it.
  *
- * @param Stored Opaque port number saved by the driver.
+ * @param InStored Opaque port number saved by the driver.
  * @return ESP-IDF UART port number.
  */
-inline FUartPort AsUartPort(const std::int32_t Stored) noexcept
+inline FUartPort AsUartPort(const std::int32_t InStored) noexcept
 {
-	return static_cast<FUartPort>(Stored);
+	return static_cast<FUartPort>(InStored);
 }
 
 /** Normalized result of one non-blocking UART write attempt. */
@@ -59,19 +59,19 @@ enum class EUartWriteOutcome : std::uint8_t
  * full-accept path is runtime-verified (example 18, 2026-07-23); the short-write would-block branch stays
  * unexercised, so a short write is still mapped to `WouldBlock` to treat the UART as transiently full.
  *
- * @param Port Open UART port number.
- * @param FrameBytes First byte of the framed message to send.
- * @param Length Number of bytes to send.
+ * @param InPort Open UART port number.
+ * @param InFrameBytes First byte of the framed message to send.
+ * @param InLength Number of bytes to send.
  * @return Normalized outcome of the single write attempt.
  */
-inline EUartWriteOutcome WriteUart(const FUartPort Port, const std::uint8_t* const FrameBytes, const std::size_t Length) noexcept
+inline EUartWriteOutcome WriteUart(const FUartPort InPort, const std::uint8_t* const InFrameBytes, const std::size_t InLength) noexcept
 {
-	const int Written = uart_write_bytes(Port, reinterpret_cast<const char*>(FrameBytes), Length);
+	const int Written = uart_write_bytes(InPort, reinterpret_cast<const char*>(InFrameBytes), InLength);
 	if (Written < 0)
 	{
 		return EUartWriteOutcome::Error;
 	}
-	if (static_cast<std::size_t>(Written) != Length)
+	if (static_cast<std::size_t>(Written) != InLength)
 	{
 		return EUartWriteOutcome::WouldBlock;
 	}
@@ -96,13 +96,13 @@ enum class EUartReadStatus : std::uint8_t
  * means the UART is empty and the pump should drain, while a negative return is an error. The one-byte drain
  * is runtime-verified by example 18's ping-pong (2026-07-23).
  *
- * @param Port Open UART port number.
+ * @param InPort Open UART port number.
  * @param OutByte Filled with the received byte only when the status is GotByte.
  * @return Normalized status of the single-byte read.
  */
-inline EUartReadStatus ReadUartByte(const FUartPort Port, std::uint8_t& OutByte) noexcept
+inline EUartReadStatus ReadUartByte(const FUartPort InPort, std::uint8_t& OutByte) noexcept
 {
-	const int Read = uart_read_bytes(Port, &OutByte, 1, 0);
+	const int Read = uart_read_bytes(InPort, &OutByte, 1, 0);
 	if (Read < 0)
 	{
 		return EUartReadStatus::Error;
@@ -131,35 +131,35 @@ struct FOpenedUart
  * throwing. The ring-buffer headroom suits LoRa baud between receive pumps; airtime-tuned sizing is deferred
  * to measured bring-up.
  *
- * @param Port UART port number to open.
- * @param TxGpio TX GPIO number wired to the E32 module's RX pin.
- * @param RxGpio RX GPIO number wired to the E32 module's TX pin.
- * @param BaudRate Baud rate shared with the E32 module's UART configuration.
+ * @param InPort UART port number to open.
+ * @param InTxGpio TX GPIO number wired to the E32 module's RX pin.
+ * @param InRxGpio RX GPIO number wired to the E32 module's TX pin.
+ * @param InBaudRate Baud rate shared with the E32 module's UART configuration.
  * @return Opened-UART descriptor reporting whether installation succeeded.
  */
 inline FOpenedUart OpenConfiguredUartPort(
-	const FUartPort Port, const std::int32_t TxGpio, const std::int32_t RxGpio, const std::uint32_t BaudRate) noexcept
+	const FUartPort InPort, const std::int32_t InTxGpio, const std::int32_t InRxGpio, const std::uint32_t InBaudRate) noexcept
 {
 	uart_config_t Config{};
-	Config.baud_rate = static_cast<uint32_t>(BaudRate);
+	Config.baud_rate = static_cast<uint32_t>(InBaudRate);
 	Config.data_bits = UART_DATA_8_BITS;
 	Config.parity = UART_PARITY_DISABLE;
 	Config.stop_bits = UART_STOP_BITS_1;
 	Config.flow_ctrl = UART_HW_FLOWCTRL_DISABLE;
 	Config.source_clk = UART_SCLK_DEFAULT;
-	if (uart_param_config(Port, &Config) != ESP_OK)
+	if (uart_param_config(InPort, &Config) != ESP_OK)
 	{
 		return FOpenedUart{false};
 	}
-	if (uart_set_pin(Port, static_cast<int>(TxGpio), static_cast<int>(RxGpio), UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE) != ESP_OK)
+	if (uart_set_pin(InPort, static_cast<int>(InTxGpio), static_cast<int>(InRxGpio), UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE) != ESP_OK)
 	{
 		return FOpenedUart{false};
 	}
 	// ESP-IDF requires the RX ring buffer to exceed the hardware FIFO and the TX ring buffer to be zero or
 	// exceed it (esp_driver_uart/src/uart.c); a nonzero TX buffer also keeps uart_write_bytes non-blocking.
 	// Two hardware FIFOs clears that floor with headroom for one E32 frame at LoRa baud between pumps.
-	const int RingBufferBytes = 2 * UART_HW_FIFO_LEN(Port);
-	if (uart_driver_install(Port, RingBufferBytes, RingBufferBytes, 0, nullptr, 0) != ESP_OK)
+	const int RingBufferBytes = 2 * UART_HW_FIFO_LEN(InPort);
+	if (uart_driver_install(InPort, RingBufferBytes, RingBufferBytes, 0, nullptr, 0) != ESP_OK)
 	{
 		return FOpenedUart{false};
 	}
@@ -172,11 +172,11 @@ inline FOpenedUart OpenConfiguredUartPort(
  * A safe no-op when the UART was never installed; the return value is ignored because the driver is already
  * inert and there is no recovery action at this layer.
  *
- * @param Port UART port number to release.
+ * @param InPort UART port number to release.
  */
-inline void CloseUart(const FUartPort Port) noexcept
+inline void CloseUart(const FUartPort InPort) noexcept
 {
-	(void)uart_driver_delete(Port);
+	(void)uart_driver_delete(InPort);
 }
 
 } // namespace MicroWorld::Detail

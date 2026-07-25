@@ -28,12 +28,12 @@ protected:
 	void BeginPlay() noexcept override { std::printf("sensor begin\n"); }
 
 	/** Prints canonical time and per-Component delta to demonstrate schedule ownership. */
-	void TickComponent(const MicroWorld::FTickContext& Context) noexcept override
+	void TickComponent(const MicroWorld::FTickContext& InContext) noexcept override
 	{
 		std::printf(
 			"sensor tick now=%llu delta=%u\n",
-			static_cast<unsigned long long>(Context.NowMilliseconds),
-			static_cast<unsigned>(Context.DeltaMilliseconds));
+			static_cast<unsigned long long>(InContext.NowMilliseconds),
+			static_cast<unsigned>(InContext.DeltaMilliseconds));
 	}
 
 	/** Marks Component shutdown so reverse lifecycle order is visible. */

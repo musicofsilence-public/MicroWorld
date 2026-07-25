@@ -12,7 +12,7 @@ class FReferenceCollector;
 class UObject;
 
 /** Dispatches the managed object's protected virtual reference visitor for a descriptor callback. */
-void TraceManagedObjectReferences(UObject& Object, FReferenceCollector& Collector) noexcept;
+void TraceManagedObjectReferences(UObject& InObject, FReferenceCollector& InCollector) noexcept;
 
 /**
  * Provides store-owned identity, tracing, and deferred destruction to managed objects.
@@ -68,7 +68,7 @@ private:
 
 	// The default descriptor tracer calls the protected VisitReferences to hand
 	// this object's managed references to the collector during a mark cycle.
-	friend void TraceManagedObjectReferences(UObject& Object, FReferenceCollector& Collector) noexcept;
+	friend void TraceManagedObjectReferences(UObject& InObject, FReferenceCollector& InCollector) noexcept;
 
 	/** Identifies the only store allowed to resolve and destroy this object. */
 	FObjectStore* Store{nullptr};

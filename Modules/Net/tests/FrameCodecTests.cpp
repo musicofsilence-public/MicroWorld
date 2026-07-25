@@ -29,27 +29,27 @@ constexpr std::size_t DecoderMaxPayload = 8;
 using FDecoder = TFrameDecoder<DecoderMaxPayload>;
 
 /** Feeds a byte sequence through a decoder and returns the event produced by the final byte. */
-EFrameEvent FeedBytes(FDecoder& Decoder, const std::uint8_t* const Bytes, const std::size_t Count) noexcept
+EFrameEvent FeedBytes(FDecoder& InDecoder, const std::uint8_t* const InBytes, const std::size_t InCount) noexcept
 {
 	EFrameEvent Last = EFrameEvent::None;
-	for (std::size_t Index = 0; Index < Count; ++Index)
+	for (std::size_t Index = 0; Index < InCount; ++Index)
 	{
-		Last = Decoder.PushByte(Bytes[Index]);
+		Last = InDecoder.PushByte(InBytes[Index]);
 	}
 	return Last;
 }
 
 /** Reports whether the decoder's held payload equals the expected bytes and length. */
-bool PayloadMatches(const FDecoder& Decoder, const std::uint8_t* const Expected, const std::size_t Count) noexcept
+bool PayloadMatches(const FDecoder& InDecoder, const std::uint8_t* const InExpected, const std::size_t InCount) noexcept
 {
-	if (Decoder.FramePayload().Size() != Count)
+	if (InDecoder.FramePayload().Size() != InCount)
 	{
 		return false;
 	}
-	const std::uint8_t* const Data = Decoder.FramePayload().Data();
-	for (std::size_t Index = 0; Index < Count; ++Index)
+	const std::uint8_t* const Data = InDecoder.FramePayload().Data();
+	for (std::size_t Index = 0; Index < InCount; ++Index)
 	{
-		if (Data[Index] != Expected[Index])
+		if (Data[Index] != InExpected[Index])
 		{
 			return false;
 		}

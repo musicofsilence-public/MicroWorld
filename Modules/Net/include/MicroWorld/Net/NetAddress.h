@@ -28,15 +28,15 @@ struct FNetAddress
 };
 
 /** Compares two addresses by active length and the leading `Size` bytes only. */
-constexpr bool operator==(const FNetAddress& Left, const FNetAddress& Right) noexcept
+constexpr bool operator==(const FNetAddress& InLeft, const FNetAddress& InRight) noexcept
 {
-	if (Left.Size != Right.Size)
+	if (InLeft.Size != InRight.Size)
 	{
 		return false;
 	}
-	for (std::size_t Index = 0; Index < Left.Size; ++Index)
+	for (std::size_t Index = 0; Index < InLeft.Size; ++Index)
 	{
-		if (Left.Bytes[Index] != Right.Bytes[Index])
+		if (InLeft.Bytes[Index] != InRight.Bytes[Index])
 		{
 			return false;
 		}
@@ -45,16 +45,16 @@ constexpr bool operator==(const FNetAddress& Left, const FNetAddress& Right) noe
 }
 
 /** Negates `operator==` so callers can test address inequality directly. */
-constexpr bool operator!=(const FNetAddress& Left, const FNetAddress& Right) noexcept
+constexpr bool operator!=(const FNetAddress& InLeft, const FNetAddress& InRight) noexcept
 {
-	return !(Left == Right);
+	return !(InLeft == InRight);
 }
 
 /** Builds a 1-byte loopback address whose single byte is the destination port index. */
-constexpr FNetAddress MakeLoopbackAddress(const std::uint8_t PortIndex) noexcept
+constexpr FNetAddress MakeLoopbackAddress(const std::uint8_t InPortIndex) noexcept
 {
 	FNetAddress Address{};
-	Address.Bytes[0] = PortIndex;
+	Address.Bytes[0] = InPortIndex;
 	Address.Size = 1;
 	return Address;
 }

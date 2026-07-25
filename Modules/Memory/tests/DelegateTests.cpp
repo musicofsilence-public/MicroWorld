@@ -67,10 +67,10 @@ public:
 	}
 
 	/** Records one delivered value through the public delegate execution path. */
-	void operator()(const int Value) noexcept
+	void operator()(const int InValue) noexcept
 	{
 		++State->InvocationCount;
-		State->LastValue = Value;
+		State->LastValue = InValue;
 	}
 
 private:
@@ -140,11 +140,11 @@ class TIntEventLog final
 {
 public:
 	/** Appends one event only within the caller-selected observation bound. */
-	void Add(const int Event) noexcept
+	void Add(const int InEvent) noexcept
 	{
 		if (EventCount < Capacity)
 		{
-			Events[EventCount] = Event;
+			Events[EventCount] = InEvent;
 			++EventCount;
 		}
 	}
@@ -156,7 +156,7 @@ public:
 	std::size_t Size() const noexcept { return EventCount; }
 
 	/** Exposes one observed callback identity in broadcast order. */
-	int At(const std::size_t Index) const noexcept { return Events[Index]; }
+	int At(const std::size_t InIndex) const noexcept { return Events[InIndex]; }
 
 private:
 	/** Retains only the bounded event sequence needed by the current test. */
@@ -478,13 +478,13 @@ MW_TEST_CASE(MulticastCopiesValueArgumentForEveryBinding)
 	TDelegate<void(FMutableValue), 64> FirstBinding;
 	TDelegate<void(FMutableValue), 64> SecondBinding;
 	const EDelegateResult FirstBindResult = FirstBinding.Bind(
-		[&FirstObservedValue](FMutableValue Value) noexcept
+		[&FirstObservedValue](FMutableValue InValue) noexcept
 		{
-			FirstObservedValue = Value.Value;
-			Value.Value = 99;
+			FirstObservedValue = InValue.Value;
+			InValue.Value = 99;
 		});
 	const EDelegateResult SecondBindResult =
-		SecondBinding.Bind([&SecondObservedValue](FMutableValue Value) noexcept { SecondObservedValue = Value.Value; });
+		SecondBinding.Bind([&SecondObservedValue](FMutableValue InValue) noexcept { SecondObservedValue = InValue.Value; });
 	FDelegateHandle FirstHandle{};
 	FDelegateHandle SecondHandle{};
 	const EDelegateResult FirstAddResult = Multicast.Add(std::move(FirstBinding), FirstHandle);

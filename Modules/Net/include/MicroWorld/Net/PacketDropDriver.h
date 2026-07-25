@@ -20,7 +20,7 @@ class FPacketDropDriver final : public INetDriver
 {
 public:
 	/** Binds the driver to wrap and the drop interval; `DropEveryNthSend == 0` disables dropping. */
-	FPacketDropDriver(INetDriver& InnerDriver, std::uint32_t DropEveryNthSend) noexcept;
+	FPacketDropDriver(INetDriver& InInnerDriver, std::uint32_t InDropEveryNthSend) noexcept;
 
 	/** Deleted: this driver holds `InnerDriver` by reference and is itself held by reference, so copying would risk dangling. */
 	FPacketDropDriver(const FPacketDropDriver&) = delete;
@@ -41,10 +41,10 @@ public:
 	 * Counts this call and, on every `DropEveryNthSend`-th call, drops the packet by returning
 	 * `Success` without forwarding it; every other call forwards verbatim to the inner driver.
 	 */
-	ENetResult TrySend(const FNetAddress& To, TSpan<const std::uint8_t> Packet) noexcept override;
+	ENetResult TrySend(const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/** Forwards verbatim to the inner driver; receives are never counted or dropped. */
-	ENetResult TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> Destination, FNetReceiveResult& OutResult) noexcept override;
+	ENetResult TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept override;
 
 	/** Forwards verbatim to the inner driver. */
 	std::size_t MaxPacketBytes() const noexcept override;

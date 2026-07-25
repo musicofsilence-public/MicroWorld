@@ -49,49 +49,49 @@ struct FHandlerCapture
 };
 
 /** Builds a fast-heartbeat host config with a short timeout window for deterministic tests. */
-FNetHostConfig MakeHostConfig(const std::uint8_t ProtocolVersion) noexcept
+FNetHostConfig MakeHostConfig(const std::uint8_t InProtocolVersion) noexcept
 {
 	FNetHostConfig Config{};
 	Config.HeartbeatIntervalMilliseconds = 100;
 	Config.PeerTimeoutMilliseconds = 500;
-	Config.ProtocolVersion = ProtocolVersion;
+	Config.ProtocolVersion = InProtocolVersion;
 	return Config;
 }
 
-/** Builds a client config that greets the loopback port `ServerPort`. */
-FNetHostConfig MakeClientConfig(const std::uint8_t ProtocolVersion, const std::uint8_t ServerPort) noexcept
+/** Builds a client config that greets the loopback port `InServerPort`. */
+FNetHostConfig MakeClientConfig(const std::uint8_t InProtocolVersion, const std::uint8_t InServerPort) noexcept
 {
-	FNetHostConfig Config = MakeHostConfig(ProtocolVersion);
-	Config.ServerAddress = MakeLoopbackAddress(ServerPort);
+	FNetHostConfig Config = MakeHostConfig(InProtocolVersion);
+	Config.ServerAddress = MakeLoopbackAddress(InServerPort);
 	return Config;
 }
 
 /** Binds one capturing handler into a host and returns its removal handle. */
 template<typename HostType>
-FDelegateHandle InstallCapture(HostType& Host, FHandlerCapture& Capture) noexcept
+FDelegateHandle InstallCapture(HostType& InHost, FHandlerCapture& InCapture) noexcept
 {
 	typename HostType::FMessageHandlerBinding Binding;
 	Binding.Bind(
-		[&Capture](const FPeerId From, const std::uint8_t Channel, TSpan<const std::uint8_t> Payload) noexcept
+		[&InCapture](const FPeerId InFrom, const std::uint8_t InChannel, TSpan<const std::uint8_t> InPayload) noexcept
 		{
-			++Capture.Count;
-			Capture.From = From;
-			Capture.Channel = Channel;
-			Capture.FirstByte = Payload.Size() > 0 ? Payload[0] : std::uint8_t{0};
+			++InCapture.Count;
+			InCapture.From = InFrom;
+			InCapture.Channel = InChannel;
+			InCapture.FirstByte = InPayload.Size() > 0 ? InPayload[0] : std::uint8_t{0};
 		});
 	FDelegateHandle Handle{};
-	(void)Host.AddMessageHandler(std::move(Binding), Handle);
+	(void)InHost.AddMessageHandler(std::move(Binding), Handle);
 	return Handle;
 }
 
-/** Runs one full Hello->Welcome handshake round at `NowMilliseconds`. */
+/** Runs one full Hello->Welcome handshake round at `InNowMilliseconds`. */
 template<typename ServerType, typename ClientType>
-void RunHandshake(ServerType& Server, ClientType& Client, const TimePointMilliseconds NowMilliseconds) noexcept
+void RunHandshake(ServerType& InServer, ClientType& InClient, const TimePointMilliseconds InNowMilliseconds) noexcept
 {
-	Client.PumpSend(NowMilliseconds);
-	Server.PumpReceive(NowMilliseconds);
-	Server.PumpSend(NowMilliseconds);
-	Client.PumpReceive(NowMilliseconds);
+	InClient.PumpSend(InNowMilliseconds);
+	InServer.PumpReceive(InNowMilliseconds);
+	InServer.PumpSend(InNowMilliseconds);
+	InClient.PumpReceive(InNowMilliseconds);
 }
 
 /** Proves a server admits one client and issues a Welcome that connects it. */
@@ -507,18 +507,18 @@ public:
 	ENetResult TrySend(const FNetAddress&, TSpan<const std::uint8_t>) noexcept override { return ENetResult::Success; }
 
 	/** Delivers one empty control frame per call and counts the call. */
-	ENetResult TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> Destination, FNetReceiveResult& OutResult) noexcept override
+	ENetResult TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept override
 	{
-		if (Destination.Size() < 4)
+		if (InDestination.Size() < 4)
 		{
 			return ENetResult::Unavailable;
 		}
 		++ReceiveCallCount;
 		OutFrom = MakeLoopbackAddress(9);
-		Destination[0] = 0;
-		Destination[1] = 0;
-		Destination[2] = 0;
-		Destination[3] = 0;
+		InDestination[0] = 0;
+		InDestination[1] = 0;
+		InDestination[2] = 0;
+		InDestination[3] = 0;
 		OutResult.BytesReceived = 4;
 		return ENetResult::Success;
 	}

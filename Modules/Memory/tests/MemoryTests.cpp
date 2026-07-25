@@ -84,11 +84,11 @@ class TTrackingMemoryResource final : public IMemoryResource
 {
 public:
 	/** Records one public allocation request and the exact successful block. */
-	EMemoryResult TryAllocate(const std::size_t SizeBytes, const std::size_t AlignmentBytes, FMemoryBlock& OutBlock) noexcept override
+	EMemoryResult TryAllocate(const std::size_t InSizeBytes, const std::size_t InAlignmentBytes, FMemoryBlock& OutBlock) noexcept override
 	{
 		++AllocationRequestCount;
 
-		const EMemoryResult Result = Arena.TryAllocate(SizeBytes, AlignmentBytes, OutBlock);
+		const EMemoryResult Result = Arena.TryAllocate(InSizeBytes, InAlignmentBytes, OutBlock);
 		if (Result == EMemoryResult::Success)
 		{
 			++SuccessfulAllocationCount;
@@ -98,11 +98,11 @@ public:
 	}
 
 	/** Records the exact block returned through the public deallocation boundary. */
-	EMemoryResult Deallocate(const FMemoryBlock Block) noexcept override
+	EMemoryResult Deallocate(const FMemoryBlock InBlock) noexcept override
 	{
 		++DeallocationRequestCount;
-		LastDeallocatedBlock = Block;
-		return Arena.Deallocate(Block);
+		LastDeallocatedBlock = InBlock;
+		return Arena.Deallocate(InBlock);
 	}
 
 	/** Preserves the wrapped arena's public caller-usable capacity. */
