@@ -21,11 +21,11 @@ It is written so that any LLM (including a weak one) can pick it up, find the
 next task, complete it, and record progress without extra context. The
 companion documents are:
 
-- `docs/SIMPLICITY_ROADMAP.md` — the completed simplicity plan. Its protocol
-  (section 1) is the model for this document's protocol.
+- `docs/Style.md` — the simplicity rules and the reference-file list every
+  example is held to.
 - `PROGRESS.md` — the live evidence record. Add one short line per finished
   phase (see protocol rule 8).
-- `docs/Porting.md` — the three adapter seams every example composes.
+- `docs/Porting.md` — the four adapter points every example composes.
 
 ---
 
@@ -194,7 +194,7 @@ credentials, and never print a password to the serial console.
 
 - Anything under `Modules/` (library is read-only for this roadmap; defects are
   `⛔ BLOCKED`, protocol rule 7).
-- `docs/ROADMAP.md`, `docs/SIMPLICITY_ROADMAP.md` — frozen/completed plans.
+- `docs/ROADMAP.md` — frozen/completed plan.
 - Existing entries in `CHANGELOG.md` (appending a new entry is allowed).
 - `Modules/*/benchmarks/Results/*.md`, `LICENSE`, `VERSION`, anything under
   `build/` or `.git/`.

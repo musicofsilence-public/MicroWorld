@@ -19,3 +19,4 @@ examples/*/sdkconfig.*
 !examples/esp32-common/sdkconfig.defaults
 # Per-site WiFi credentials (committed template: NetworkConfig.example.h)
 examples/*/src/NetworkConfig.h
+.idea/

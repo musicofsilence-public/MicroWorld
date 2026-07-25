@@ -14,8 +14,8 @@ Documentation is short and tied to current code.
 - ADRs preserve durable decisions; a later decision supersedes history rather
   than hiding it.
 - `Style.md`, `Porting.md`, and `Performance.md` give practical guidance.
-- `SIMPLICITY_ROADMAP.md` is the active improvement plan and task tracker;
-  `ROADMAP.md` is the completed implementation plan, frozen as history.
+- `Style.md` owns the simplicity rules and the reference-file list every review
+  cites; `ROADMAP.md` is the completed implementation plan, frozen as history.
 
 Do not turn future ideas into API claims, roadmaps, or extra process documents.
 Verify links, symbols, behavior statements, and measured values against their

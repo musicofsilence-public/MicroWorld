@@ -83,7 +83,21 @@ Write a comment only when the reason, safety constraint, or edge case is not
 already visible in the code. Never narrate syntax (`// increment the
 counter`); state the invariant a line protects or the boundary it honors.
 
-### Worked example — task 3.1, `FTickFunction::Advance`
+### Reference files — already at the target bar; imitate them, cite them
+
+When a review argues about style, cite one of these rather than re-deriving the
+rule. Each file already meets Rules N, F, and W.
+
+| Module | Exemplary files |
+| --- | --- |
+| Core | `Lifecycle.h` (the single best file in the repo), `TickFunction.h`, `Application.h` |
+| Memory | `Containers/Span.h`, `Memory/MemoryResource.h` |
+| Object | `ObjectHandle.h`, `Object.h` |
+| Engine | `EngineStorage.h` (member-level ownership docs), `NetworkFrame.h`, the enums in `EngineResult.h` / `Timer.h` |
+| Net | `ByteReader.h`, `ByteWriter.h` |
+| Platform | `WinSockScope.h`, `HostTimeSource.h`, `Esp32TimeSource.h`, and the boundary documentation in `src/UdpSocketPlatformImplementation.h` |
+
+### Worked example — `FTickFunction::Advance`
 
 Before, one function performs four logical actions: validate lifecycle and
 time, first-tick reset, cadence gate, and produce the tick. After, the

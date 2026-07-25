@@ -18,8 +18,9 @@ owner's target model:
 This document is the active plan and progress tracker for delivering that
 model. It is written so that any LLM (including a weak one) can pick it up,
 find the next task, complete it, and record progress without extra context.
-Companion documents: `docs/ROADMAP.md` and `docs/SIMPLICITY_ROADMAP.md` are
-**frozen history — never edit them**; `docs/EXAMPLES_ROADMAP.md` and
+Companion documents: `docs/ROADMAP.md` is **frozen history — never edit it**;
+`docs/Style.md` owns the simplicity rules and reference files;
+`docs/EXAMPLES_ROADMAP.md` and
 `docs/WIRED_TRANSPORTS_ROADMAP.md` own their own example sets — this plan never
 edits their task sections; `PROGRESS.md` is the live evidence record.
 
@@ -95,7 +96,7 @@ symbol** (`rg -n "SymbolName" Modules`), never by a remembered offset.
 
 ### 1.5 Files you must never edit
 
-- `docs/ROADMAP.md`, `docs/SIMPLICITY_ROADMAP.md` — frozen historical plans.
+- `docs/ROADMAP.md` — frozen historical plan.
 - The task sections of `docs/EXAMPLES_ROADMAP.md` and
   `docs/WIRED_TRANSPORTS_ROADMAP.md` (their catalogs/trackers belong to them;
   this plan's examples are registered in `examples/README.md` only).
@@ -212,8 +213,8 @@ is the observable; secrets never enter git.
   messaging) and a global router (hidden state).
 - **D10 — The word `Reliable`** (industry vocabulary students must learn, like
   `Delta` in the simplicity plan) names the guaranteed-delivery wrapper:
-  `TReliableChannel`. The owner may rename before Phase 5 starts; the rename
-  procedure of `SIMPLICITY_ROADMAP.md` §1.3 applies if so.
+  `TReliableChannel`. The owner may rename before Phase 5 starts, updating every
+  reference and the `CheckClassDocumentation.py` gate in the same commit.
 - **D11 — World "modes" are composition recipes, not a world enum.**
   Standalone = router only; client/server = `TNetHost` configured with the
   existing `ENetMode` plus the same router. `UWorld` stays mode-agnostic.

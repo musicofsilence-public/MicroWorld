@@ -102,8 +102,7 @@ quoted symbol (`rg -n "SymbolName" Modules`), never by remembered offsets.
 
 ### 1.5 Files you must never edit
 
-- `docs/ROADMAP.md`, `docs/SIMPLICITY_ROADMAP.md`,
-  `docs/WIRED_TRANSPORTS_ROADMAP.md` — frozen history.
+- `docs/ROADMAP.md`, `docs/WIRED_TRANSPORTS_ROADMAP.md` — frozen history.
 - The task/catalog sections of `docs/EXAMPLES_ROADMAP.md` and
   `docs/MESSAGING_ROADMAP.md` (each plan tracks its own tasks; shared example
   registration happens **only** in `examples/README.md`).

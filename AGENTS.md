@@ -11,8 +11,7 @@ pointers, a simple `TNetManager`/`INetDriver` networking layer, and explicit
 hardware boundaries. Platform support is verified one target at a time, not
 claimed for every board.
 
-`PROGRESS.md` is the sole live implementation status and next-milestone record;
-`docs/SIMPLICITY_ROADMAP.md` is the active improvement plan and task tracker
+`PROGRESS.md` is the sole live implementation status and next-milestone record
 (`docs/ROADMAP.md` is the completed implementation plan, kept as a frozen
 historical record). `docs/MESSAGING_ROADMAP.md` is the active plan for actor
 messaging and engine-first examples, and `docs/RADIO_TRANSPORTS_ROADMAP.md` is

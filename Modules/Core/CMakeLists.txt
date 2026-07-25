@@ -52,6 +52,8 @@ if(MICROWORLD_BUILD_TESTS)
         tests/TestMain.cpp
         tests/LogTests.cpp
         tests/TickFunctionTests.cpp
+        tests/ApplicationTests.cpp
+        tests/ApplicationRunnerTests.cpp
     )
     target_link_libraries(microworld_tests PRIVATE MicroWorld::Core)
     microworld_enable_strict_warnings(microworld_tests)

@@ -44,8 +44,7 @@ next task, complete it, and record progress without extra context. Companion
 documents: `docs/EXAMPLES_ROADMAP.md` (scaffold §3 and hardware-checkpoint
 protocol §1.2 are reused by reference), `docs/Porting.md` (seam 2 — the
 `INetDriver` contract every driver here implements), `PROGRESS.md` (live
-evidence record), `docs/SIMPLICITY_ROADMAP.md` §1 (the protocol style this
-document follows).
+evidence record).
 
 ---
 

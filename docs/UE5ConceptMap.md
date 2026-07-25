@@ -6,6 +6,7 @@ editor, or asset compatible with UE.
 | Familiar concept | MicroWorld | State | Difference |
 | --- | --- | --- | --- |
 | Application root | `FApplication` | Core (0.2.0) | Consumer owns and orders concrete services; no global engine |
+| Run loop / entry point | `TApplicationRunner` | Core (unreleased) | Owns the begin/advance/end sequence on an injected clock and pacing function; a platform supplies a clock and a sleep instead of a hand-rolled `for (;;)` |
 | Primary tick | `FTickFunction` | Core (0.2.0) | Caller supplies time; no tick groups or catch-up bursts |
 | Managed object | `UObject`, handles, roots, GC | Object (0.2.0) | Fixed caller-owned storage and explicit tracing |
 | Managed World / Actor / Component | `UWorld`, `AActor`, `UActorComponent` | Engine (0.2.0) | Application roots World; World/Actor trace children; parent references are weak |

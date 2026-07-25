@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- **`TApplicationRunner` + the first `FApplication` tests.** A new header-only
+  Core template, `Modules/Core/include/MicroWorld/ApplicationRunner.h`, drives
+  one `FApplication` through its whole lifecycle on an injected clock and pacing
+  function (`FSleepFunction`, a `void(DurationMilliseconds) noexcept` function
+  pointer). `Run` calls `BeginPlay` once, then `Advance` once per frame, then
+  `EndPlay` after the first non-`Success` frame; a failed `BeginPlay` returns
+  immediately without `EndPlay` because the lifecycle is already latched
+  `Failed`. Core still never reads a real clock. Two new Core host-test files
+  cover it: `ApplicationTests.cpp` (the first tests `FApplication` has ever had
+  — 8 cases over begin/fail/advance/monotonic-time/end-play/idempotence) and
+  `ApplicationRunnerTests.cpp` (5 cases over the stopping frame, the
+  end-after-stop rule, the no-end-after-failed-begin rule, once-per-frame
+  pacing, and clock-value feed-through). `docs/Porting.md` now documents pacing
+  as a fourth adapter (time source, net driver, log sink, pacing).
 - **Examples 24 & 25 hardware-verified; example logs now on the native USB port.**
   The two WiFi-riding messaging demos were run on two ESP32-S3 boards
   (2026-07-24): `24-TwoChannelWorld` (telemetry over WiFi UDP and commands over a

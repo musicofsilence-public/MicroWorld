@@ -1,12 +1,12 @@
 # Porting MicroWorld
 
-MicroWorld targets a new platform through **three adapter seams**. The runtime
-itself is platform-free: it never reads a clock, never opens a socket, and
-never logs to hardware. A port fills those three gaps and otherwise reuses the
-shipped portable packages unchanged. Each seam below names the shipped adapter
-that implements it as a worked reference.
+MicroWorld targets a new platform through **four adapter seams**. The runtime
+itself is platform-free: it never reads a clock, never opens a socket, never
+paces a loop, and never logs to hardware. A port fills those four gaps and
+otherwise reuses the shipped portable packages unchanged. Each seam below names
+the shipped adapter that implements it as a worked reference.
 
-## The three seams
+## The four seams
 
 ### 1. Time source
 
@@ -73,6 +73,18 @@ the sink before the first `MW_LOG` / `MW_LOG_MSG` call.
 - ESP32 reference:
   [`Esp32LogSink`](../Modules/PlatformEsp32/include/MicroWorld/PlatformEsp32/Esp32LogSink.h)
   maps each `ELogLevel` to the matching `ESP_LOG*` macro.
+
+### 4. Pacing
+
+`TApplicationRunner` (in Core) drives one `FApplication` through its
+begin/advance/end lifecycle, but it paces the frame loop through an injected
+function pointer so the platform's idle task and watchdog still run. Supply a
+free `void(DurationMilliseconds) noexcept` function (typically the platform's
+existing sleep) and a cadence; the runner calls it once per successful frame.
+
+- ESP32 reference:
+  [`SleepMilliseconds`](../Modules/PlatformEsp32/include/MicroWorld/PlatformEsp32/Esp32Sleep.h)
+  wraps `vTaskDelay` and binds directly to `FSleepFunction` with no wrapper.
 
 ## Where the adapter code lives
 

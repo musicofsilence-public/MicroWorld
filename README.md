@@ -8,10 +8,10 @@ UE5 developers can build small applications and games for these devices without
 first learning every hardware detail. Platform support is verified one target at
 a time, not claimed for every board.
 
-Current development status is in [PROGRESS.md](PROGRESS.md); the active
-improvement plan is in [docs/SIMPLICITY_ROADMAP.md](docs/SIMPLICITY_ROADMAP.md)
-(the completed implementation plan remains in [docs/ROADMAP.md](docs/ROADMAP.md)
-as a historical record). The active examples plan is in
+Current development status is in [PROGRESS.md](PROGRESS.md); the completed
+implementation plan remains in [docs/ROADMAP.md](docs/ROADMAP.md) as a
+historical record. The style contract every module follows is in
+[docs/Style.md](docs/Style.md). The active examples plan is in
 [docs/EXAMPLES_ROADMAP.md](docs/EXAMPLES_ROADMAP.md), building one runnable
 ESP32-S3 example per engine feature under [examples/](examples/README.md). The
 active plan for actor messaging and engine-first examples is in
