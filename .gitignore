@@ -20,3 +20,5 @@ examples/*/sdkconfig.*
 # Per-site WiFi credentials (committed template: NetworkConfig.example.h)
 examples/*/src/NetworkConfig.h
 .idea/
+/build-engine
+/build-object
