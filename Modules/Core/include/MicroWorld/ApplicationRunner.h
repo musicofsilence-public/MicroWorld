@@ -8,43 +8,44 @@ namespace MicroWorld
 {
 
 /**
- * Signature of the pacing function a runner calls between frames.
+ * The pacing function a runner calls between frames.
  *
- * noexcept is part of the type, so a platform's existing sleep function binds
- * directly and the compiler rejects one that could throw into a noexcept Run.
+ * noexcept is part of the type, so a platform's existing sleep function binds with
+ * no wrapper and the compiler rejects one that could throw into a noexcept Run.
  */
 using FSleepFunction = void (*)(DurationMilliseconds SleepDurationMilliseconds) noexcept;
 
 /**
- * Drives one FApplication through its whole lifecycle on an injected clock.
+ * Runs one application: begin once, then advance and sleep until a frame fails.
  *
- * Owns the begin/advance/end sequence every consumer would otherwise hand-roll,
- * so a platform entry point supplies a clock and a pacing function instead of a
- * loop. Core still never reads real time: both arrive from the caller.
+ * This is the loop a platform entry point would otherwise hand-roll, so it supplies
+ * a clock and a sleep function instead of writing one. Core still reads no real
+ * time of its own — both arrive from the caller.
  */
 template<typename TimeSourceType>
 class TApplicationRunner final
 {
 public:
-	/** Binds one runner to the clock, pacing function, and cadence the platform selected. */
+	/** Binds the clock, the sleep function, and the frame period; none of the three can change later. */
 	TApplicationRunner(TimeSourceType& InTimeSource, const FSleepFunction InSleepFunction, const DurationMilliseconds InPacingMilliseconds) noexcept
 		: TimeSource(InTimeSource), SleepFunction(InSleepFunction), PacingMilliseconds(InPacingMilliseconds)
 	{
 	}
 
-	/** Keeps one runner bound to the single composition it was constructed for. */
+	/** No copying: two runners would advance the same application twice per frame. */
 	TApplicationRunner(const TApplicationRunner&) = delete;
 
-	/** Prevents reassigning the injected clock and pacing function after construction. */
+	/** No copy assignment: all three bindings are fixed at construction. */
 	TApplicationRunner& operator=(const TApplicationRunner&) = delete;
 
 	/**
-	 * Runs the application until one frame reports a non-success result.
+	 * Runs the application and returns the result of the frame that failed.
 	 *
-	 * Returns the result that stopped the run. A failed BeginPlay returns
-	 * immediately without EndPlay: FApplication has already invoked
-	 * OnBeginPlayFailed and latched the Failed state, so EndPlay could only
-	 * answer InvalidLifecycle and would hide the real begin failure.
+	 * A healthy application never fails a frame, so in normal operation this call
+	 * does not return and nothing written after it runs. A failed BeginPlay returns
+	 * at once without EndPlay: FApplication has already run OnBeginPlayFailed and
+	 * latched Failed, so EndPlay could only answer InvalidLifecycle and would hide
+	 * the real reason.
 	 */
 	ERuntimeResult Run(FApplication& Application) noexcept
 	{
@@ -68,13 +69,13 @@ public:
 	}
 
 private:
-	/** Supplies monotonic milliseconds; owned by the platform entry point. */
+	/** The clock, held by reference: it must outlive the runner. */
 	TimeSourceType& TimeSource;
 
-	/** Yields the processor between frames so platform idle work still runs. */
+	/** Hands the processor back between frames so the platform's own tasks still run. */
 	FSleepFunction SleepFunction;
 
-	/** Paces the loop so one frame never starves the platform scheduler. */
+	/** How long to sleep each frame; too short and the platform's tasks starve. */
 	DurationMilliseconds PacingMilliseconds;
 };
 
