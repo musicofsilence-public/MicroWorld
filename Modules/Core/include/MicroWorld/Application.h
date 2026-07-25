@@ -5,55 +5,61 @@
 namespace MicroWorld
 {
 
-/** Guards a consumer-owned composition root's lifecycle and monotonic updates. */
+/**
+ * Base class for an application: BeginPlay runs once, Advance every frame, EndPlay once.
+ *
+ * This class enforces that order and rejects time that moves backward, so the
+ * OnBeginPlay, OnAdvance, and OnEndPlay overrides never run out of order and
+ * never see time go back.
+ */
 class FApplication
 {
 public:
-	/** Prevents duplicating a live composition-root lifecycle. */
+	/** No copying: a copy would be a second object claiming the same started application. */
 	FApplication(const FApplication&) = delete;
 
-	/** Prevents assigning lifecycle state across composition roots. */
+	/** No copy assignment: it would overwrite the lifecycle of an application already running. */
 	FApplication& operator=(const FApplication&) = delete;
 
-	/** Keeps the composition root address and consumer references stable. */
+	/** No moving: the runner holds a reference to this object, and a move would change its address. */
 	FApplication(FApplication&&) = delete;
 
-	/** Prevents moving lifecycle state behind consumer-held references. */
+	/** No move assignment: same reason — every reference to this object must stay valid. */
 	FApplication& operator=(FApplication&&) = delete;
 
-	/** Allows consumers to destroy derived composition roots polymorphically. */
+	/** Virtual so deleting through an FApplication& also destroys the derived class. */
 	virtual ~FApplication() = default;
 
-	/** Starts the consumer composition once from canonical time. */
+	/** Starts the application once, at the caller's current time; fails if already started. */
 	ERuntimeResult BeginPlay(TimePointMilliseconds NowMilliseconds) noexcept;
 
-	/** Validates monotonic time before forwarding one consumer frame. */
+	/** Runs one frame; rejects a time earlier than the last one instead of forwarding it. */
 	ERuntimeResult Advance(TimePointMilliseconds NowMilliseconds) noexcept;
 
-	/** Ends the consumer composition once and is idempotent after success. */
+	/** Stops the application; calling it again after success does nothing and still succeeds. */
 	ERuntimeResult EndPlay() noexcept;
 
 protected:
-	/** Restricts construction to a concrete consumer composition root. */
+	/** Protected so only a derived application can be constructed. */
 	FApplication() = default;
 
-	/** Lets the consumer start subsystems in its policy-selected order. */
+	/** Starts the application's subsystems, in whatever order it needs. */
 	virtual ERuntimeResult OnBeginPlay(TimePointMilliseconds NowMilliseconds) = 0;
 
-	/** Requires the consumer to roll back partial startup after a failed begin. */
+	/** Undoes whatever OnBeginPlay started before it failed; it runs on the failure path, so it cannot throw. */
 	virtual void OnBeginPlayFailed() noexcept = 0;
 
-	/** Lets the consumer route one canonical update through its subsystems. */
+	/** Does one frame of work; NowMilliseconds never moves backward. */
 	virtual ERuntimeResult OnAdvance(TimePointMilliseconds NowMilliseconds) = 0;
 
-	/** Lets the consumer stop subsystems in its policy-selected reverse order. */
+	/** Stops the subsystems, normally in reverse start order. */
 	virtual void OnEndPlay() = 0;
 
 private:
-	/** Makes failed startup terminal and successful end idempotent. */
+	/** Tracks the current phase, so a failed start stays dead and a second EndPlay is harmless. */
 	FLifecycleGuard Lifecycle;
 
-	/** Rejects backward composition time before any subsystem observes it. */
+	/** The last time Advance accepted; a smaller one is rejected before any override sees it. */
 	TimePointMilliseconds LastUpdateMilliseconds{0};
 };
 

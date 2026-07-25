@@ -5,20 +5,25 @@
 namespace MicroWorld
 {
 
-/** Identifies the only legal lifecycle phases for a runtime object. */
+/** The phases an application can be in; it never returns to an earlier one. */
 enum class ELifecycleState : std::uint8_t
 {
-	Constructed, ///< Allows registration and one future begin transition.
-	Playing,	 ///< Allows updates and the one legal end transition.
-	Failed,		 ///< Makes partial begin failure terminal and non-dispatchable.
-	Ended,		 ///< Makes successful shutdown observable and idempotent.
+	Constructed, ///< Built but not started; Begin may still be called once.
+	Playing,	 ///< Started; updates run and End may be called once.
+	Failed,		 ///< Begin failed; nothing runs again and there is no way back.
+	Ended,		 ///< Stopped cleanly; a further End succeeds without doing anything.
 };
 
-/** Validates lifecycle transitions without invoking hooks or platform code. */
+/**
+ * Tracks the current phase and rejects any illegal move between phases.
+ *
+ * Pure state: it calls no hooks and touches no hardware, so an owner can ask what
+ * is legal before doing any real work.
+ */
 class FLifecycleGuard final
 {
 public:
-	/** Enters play exactly once from the constructed state. */
+	/** Moves Constructed to Playing; fails from any other phase. */
 	ERuntimeResult Begin() noexcept
 	{
 		if (CurrentState != ELifecycleState::Constructed)
@@ -29,16 +34,16 @@ public:
 		return ERuntimeResult::Success;
 	}
 
-	/** Confirms that dispatch is legal in the current state. */
+	/** Succeeds only while Playing, so a caller can guard work in one line. */
 	ERuntimeResult RequirePlaying() const noexcept
 	{
 		return CurrentState == ELifecycleState::Playing ? ERuntimeResult::Success : ERuntimeResult::InvalidLifecycle;
 	}
 
-	/** Makes a failed lifecycle terminal. */
+	/** Marks the lifecycle dead for good; nothing recovers from Failed. */
 	void Fail() noexcept { CurrentState = ELifecycleState::Failed; }
 
-	/** Leaves play exactly once; ending an ended lifecycle is idempotent. */
+	/** Moves Playing to Ended; a second call succeeds without doing anything. */
 	ERuntimeResult End() noexcept
 	{
 		if (CurrentState == ELifecycleState::Ended)
@@ -53,11 +58,11 @@ public:
 		return ERuntimeResult::Success;
 	}
 
-	/** Exposes lifecycle state so owners can guard registration and idempotence. */
+	/** Reports the current phase for owners that branch on it. */
 	ELifecycleState GetState() const noexcept { return CurrentState; }
 
 private:
-	/** Centralizes the forward-only invariant instead of scattering boolean flags. */
+	/** One enum instead of several bool flags, so no impossible combination exists. */
 	ELifecycleState CurrentState{ELifecycleState::Constructed};
 };
 
