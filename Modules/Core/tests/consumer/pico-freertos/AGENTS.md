@@ -5,8 +5,10 @@ Inherits `../AGENTS.md`.
 ## Architecture
 
 This is the native RP2040 proof for MicroWorld Core. It is a standalone CMake
-consumer: it adds only `Modules/Core`, links the official Pico SDK and the
-FreeRTOS RP2040 static kernel, and keeps Pico/FreeRTOS headers out of Core.
+consumer: its Core-only images add `Modules/Core`, while the consumer-local
+LoRa image also adds `Modules/Net`; all link the official Pico SDK and the
+FreeRTOS RP2040 static kernel, and keep Pico/FreeRTOS headers out of released
+packages.
 The Pico SDK is pinned to commit `a1438dff1d38bd9c65dbd693f0e5db4b9ae91779`
 (2.2.0); FreeRTOS-Kernel is pinned to
 `9b777ae5c5b8e9e456065a00294d1e5f5f9facf5` (V11.3.0). CMake verifies both
@@ -31,6 +33,9 @@ host-picotool toolchain while preserving normal Pico UF2 output.
   behavior; it has no logging or peripheral policy.
 - `tests` links existing Core test translation units only; it never runs or
   uploads their stack-heavy behavior on RP2040.
+- `lora` is a Pico-local E32 interoperability image, not a public platform
+  driver. It uses UART1 GP4/GP5 with a static `INetDriver` adapter and speaks
+  the existing ESP32 example-17 frame format as node 1.
 - PlatformIO supplies cached host tools when present, but the firmware build
   remains the official Pico SDK CMake flow rather than an Arduino framework.
 
@@ -43,13 +48,15 @@ Modules\Core\tests\consumer\pico-freertos\pico.bat build
 Modules\Core\tests\consumer\pico-freertos\pico.bat build probe
 Modules\Core\tests\consumer\pico-freertos\pico.bat build example
 Modules\Core\tests\consumer\pico-freertos\pico.bat build tests
+Modules\Core\tests\consumer\pico-freertos\pico.bat build lora
 py -3 -m unittest Modules\Core\tests\consumer\pico-freertos\test_pico.py
 ```
 
 `pico.bat` resolves CMake, Git, Ninja, GNU Arm, and `elf2uf2` from `PATH`
 first, then from the normal PlatformIO package cache. Its `build` default
-creates the Core probe, the portable CoreTick example image, and the
-compile/link-only Core test image under `build/`.
+creates the Core probe, the portable CoreTick example image, the compile/link-
+only Core test image, and the Pico E32 LoRa interoperability image under
+`build/`.
 
 Upload is human-gated. Only after explicit authorization, put one Pico into
 BOOTSEL mode and run one of these commands:
@@ -57,6 +64,7 @@ BOOTSEL mode and run one of these commands:
 ```bat
 Modules\Core\tests\consumer\pico-freertos\pico.bat upload probe [--drive E:]
 Modules\Core\tests\consumer\pico-freertos\pico.bat upload example [--drive E:]
+Modules\Core\tests\consumer\pico-freertos\pico.bat upload lora [--drive E:]
 ```
 
 The script rejects the test selector, a non-root drive argument, an unexpected
@@ -66,8 +74,14 @@ validation.
 
 ## Verification
 
-Use `pico.bat build` for all three images. Validate every generated map with
+Use `pico.bat build` for all four images. Validate the Core-only maps with
 `python tools/CheckProfileMap.py --map <image>.elf.map --profile Core`; check
 that `pvPortMalloc`, `vPortFree`, and `heap_[1-5].c` are absent. Build output,
 SDK source, and FreeRTOS source live under ignored `build/` only; do not vendor
 either dependency into MicroWorld.
+
+Validate the `lora` map with the `Core+Net` profile and confirm a
+`microworld_net` archive member is present. Before a paired hardware test,
+power both E32 modules with antennas attached, wire Pico GP4 TX → E32 RXD and
+GP5 RX ← E32 TXD, tie M0/M1 low for transparent mode, and use the unchanged
+ESP32 example-17 node-B log as the proof of the Pico exchange.

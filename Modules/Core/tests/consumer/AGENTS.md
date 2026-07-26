@@ -38,7 +38,8 @@ MicroWorld never depends on these fixtures.
   public scheduling API.
 - The native Pico consumer pins and verifies the Pico SDK plus FreeRTOS-Kernel
   at configure time, then emits ELF, BIN, UF2, and linker-map evidence for its
-  Core probe, portable CoreTick example, and compile/link-only Core test image.
+  Core probe, portable CoreTick example, compile/link-only Core test image, and
+  consumer-local E32 LoRa interoperability image.
 - PlatformIO source filtering selects the native entry point; the ESP-IDF
   component CMake file selects exactly one `app_main` from the environment's
   isolated build directory.
@@ -56,6 +57,9 @@ probe on Windows requires GNU `g++` on `PATH` and currently uses WinLibs GCC
 `-DMICROWORLD_STANDALONE_MEMORY_CONSUMER=ON`.
 Use `-DMICROWORLD_STANDALONE_OBJECT_CONSUMER=ON` for the Object profile.
 Use `-DMICROWORLD_STANDALONE_ENGINE_CONSUMER=ON` for the Engine profile.
-For native Pico commands, use `pico-freertos\\pico.bat build [probe|example|tests]`;
-the default builds all three. `pico-freertos\\pico.bat upload probe|example`
-is human-gated and validates the RPI-RP2 BOOTSEL volume before copying a UF2.
+For native Pico commands, use
+`pico-freertos\\pico.bat build [probe|example|tests|lora]`; the default builds
+all four. `pico-freertos\\pico.bat upload probe|example|lora` is human-gated
+and validates the RPI-RP2 BOOTSEL volume before copying a UF2. The `lora`
+image is a downstream hardware proof and does not make Pico headers or a driver
+part of a released MicroWorld package.

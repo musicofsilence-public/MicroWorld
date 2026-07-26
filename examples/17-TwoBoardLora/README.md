@@ -130,6 +130,44 @@ I (12156) ex17: tx n=6 result=Success
 Unlike a wire, an occasional LoRa gap is radio weather (distance,
 interference) rather than necessarily a defect.
 
+## Pico H pairing (hardware-verified 2026-07-26)
+
+The Pico-native `lora` consumer acts as node 1 and uses a private, static
+`INetDriver` adapter; this ESP32 source remains unchanged as node 2. Wire the
+Pico's E32 as GP4 TX → RXD, GP5 RX ← TXD, 3V3 → VCC, GND → GND/M0/M1, and leave
+AUX open. Attach antennas before power.
+
+```bat
+mw flash 17 esp32-s3-node-b COMx
+mw log COMx
+Modules\Core\tests\consumer\pico-freertos\pico.bat build lora
+Modules\Core\tests\consumer\pico-freertos\pico.bat upload lora --drive E:
+```
+
+Use the ESP32 trace as the Pico runtime observation. A fresh node-B boot should
+show `node=2 open=1`, followed by `rx n=1 from=1`,
+`tx n=2 result=Success`, `rx n=3 from=1`, and `tx n=4 result=Success`.
+
+Captured on 2026-07-26 after uploading the Pico `lora` image to the wired Pico
+H and flashing ESP32 node B on COM5. The ESP32 log proved the initial exchange
+and continued past Pico counter 49, exercising the Pico task's stack-headroom
+assertion throughout sustained traffic:
+
+```text
+I (445166) ex17: rx n=1 from=1
+I (446166) ex17: tx n=2 result=Success
+I (447936) ex17: rx n=3 from=1
+I (448936) ex17: tx n=4 result=Success
+I (450706) ex17: rx n=5 from=1
+I (451706) ex17: tx n=6 result=Success
+...
+I (503336) ex17: rx n=45 from=1
+I (504336) ex17: tx n=46 result=Success
+I (506106) ex17: rx n=47 from=1
+I (507106) ex17: tx n=48 result=Success
+I (508876) ex17: rx n=49 from=1
+```
+
 ## Image size
 
 From `pio run` (release build, ESP32-S3-DevKitC-1). Both role environments

@@ -1,6 +1,7 @@
 # Native Pico H + FreeRTOS build
 
-Status: all three native Pico images compile and link; no image has been
+Status: all four native Pico images compile and link. Pico-to-ESP32 LoRa
+hardware evidence is recorded with its ESP32 peer in example 17's README.
 uploaded or verified on hardware.
 
 This is MicroWorld's native RP2040 path. It uses the Raspberry Pi Pico C/C++
@@ -27,6 +28,7 @@ Build one image when iterating:
 Modules\Core\tests\consumer\pico-freertos\pico.bat build probe
 Modules\Core\tests\consumer\pico-freertos\pico.bat build example
 Modules\Core\tests\consumer\pico-freertos\pico.bat build tests
+Modules\Core\tests\consumer\pico-freertos\pico.bat build lora
 ```
 
 | Selector | Firmware target | Meaning |
@@ -34,6 +36,7 @@ Modules\Core\tests\consumer\pico-freertos\pico.bat build tests
 | `probe` | `microworld_pico_freertos_consumer.uf2` | Links the public Core consumer probe in one static FreeRTOS task. |
 | `example` | `microworld_pico_core_tick_example.uf2` | Runs the portable CoreTick behavior from Pico monotonic time. |
 | `tests` | `microworld_pico_core_tests.uf2` | Compiles and links Core test translation units only; it does not run them on-device. |
+| `lora` | `microworld_pico_lora_interop.uf2` | Pico node 1 E32 interoperability image for ESP32 example 17 node B. |
 
 Each target also produces an ELF, BIN, and `<target>.elf.map` in `build/`.
 
@@ -71,8 +74,33 @@ after explicit authorization:
 ```bat
 Modules\Core\tests\consumer\pico-freertos\pico.bat upload probe --drive E:
 Modules\Core\tests\consumer\pico-freertos\pico.bat upload example --drive E:
+Modules\Core\tests\consumer\pico-freertos\pico.bat upload lora --drive E:
 ```
 
 The optional drive must be its root. The script checks the `RPI-RP2` label and
 `INFO_UF2.TXT` Board-ID before copying the selected UF2. `tests` intentionally
 has no upload command.
+
+## Pico + ESP32 LoRa pairing (hardware-gated)
+
+The `lora` image is a consumer-local interoperability proof, not a reusable
+Pico platform driver. It is Pico node 1 and sends the same five-byte counter
+payload and MicroWorld frame format as ESP32 example 17. Its static UART driver
+uses UART1 at 9600 baud, 8N1, then advances one queued byte every 10 ms so the
+Net calls remain non-blocking.
+
+| Pico H | E32-433T20D | Purpose |
+| --- | --- | --- |
+| GND | GND | common ground |
+| 3V3 | VCC | 3.3 V power |
+| GP4 / pin 6 (TX) | RXD | Pico sends radio UART bytes |
+| GP5 / pin 7 (RX) | TXD | Pico receives radio UART bytes |
+| GND | M0 | transparent mode |
+| GND | M1 | transparent mode |
+| — | AUX | unused |
+
+Attach both antennas before power. Flash `examples/17-TwoBoardLora` environment
+`esp32-s3-node-b`, begin `mw log COMx`, then BOOTSEL-upload `lora`. A successful
+Pico exchange is proved by a fresh ESP32 trace containing `node=2 open=1`,
+`rx n=1 from=1`, `tx n=2 result=Success`, `rx n=3 from=1`, and
+`tx n=4 result=Success`.

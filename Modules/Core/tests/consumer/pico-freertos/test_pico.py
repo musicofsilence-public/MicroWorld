@@ -51,10 +51,29 @@ class PicoBuildCommandTests(unittest.TestCase):
             list(run_command.call_args.args[0]),
         )
 
-    def test_build_all_requires_each_expected_uf2(self) -> None:
-        """Proves the default command fails when one of its three promised artifacts is absent."""
+    def test_build_lora_targets_only_the_lora_firmware(self) -> None:
+        """Proves the LoRa selector requests only its dedicated Pico target."""
 
-        for target in ("microworld_pico_freertos_consumer", "microworld_pico_core_tick_example"):
+        (pico.BUILD_DIRECTORY / "microworld_pico_lora_interop.uf2").touch()
+        with mock.patch.object(pico, "discover_build_tools", return_value=self.tools), mock.patch.object(
+            pico, "configure_build", return_value=0
+        ), mock.patch.object(pico, "run_command", return_value=0) as run_command:
+            result = pico.build("lora")
+
+        self.assertEqual(0, result)
+        self.assertEqual(
+            ["cmake", "--build", str(pico.BUILD_DIRECTORY), "--target", "microworld_pico_lora_interop"],
+            list(run_command.call_args.args[0]),
+        )
+
+    def test_build_all_requires_each_expected_uf2(self) -> None:
+        """Proves the default command fails when its new LoRa artifact is absent."""
+
+        for target in (
+            "microworld_pico_freertos_consumer",
+            "microworld_pico_core_tick_example",
+            "microworld_pico_core_tests",
+        ):
             (pico.BUILD_DIRECTORY / f"{target}.uf2").touch()
 
         with mock.patch.object(pico, "discover_build_tools", return_value=self.tools), mock.patch.object(
@@ -116,6 +135,32 @@ class PicoUploadSafetyTests(unittest.TestCase):
             pico.BUILD_DIRECTORY / "microworld_pico_freertos_consumer.uf2",
             destination_directory / "microworld_pico_freertos_consumer.uf2",
         )
+
+    def test_upload_copies_only_the_selected_lora_uf2_after_validation(self) -> None:
+        """Proves an accepted LoRa upload copies exactly its own UF2 artifact."""
+
+        lora_uf2 = pico.BUILD_DIRECTORY / "microworld_pico_lora_interop.uf2"
+        lora_uf2.write_bytes(b"UF2")
+        destination_directory = self.temporary_path / "RPI-RP2"
+        destination_directory.mkdir()
+        with mock.patch.object(pico, "build", return_value=0), mock.patch.object(
+            pico, "find_bootsel_drive", return_value=destination_directory
+        ), mock.patch.object(pico.shutil, "copyfile") as copyfile:
+            result = pico.upload("lora", "E:")
+
+        self.assertEqual(0, result)
+        copyfile.assert_called_once_with(lora_uf2, destination_directory / lora_uf2.name)
+
+    def test_upload_lora_rejects_an_invalid_drive_without_copying(self) -> None:
+        """Proves a rejected BOOTSEL drive cannot receive the LoRa image."""
+
+        with mock.patch.object(pico, "build", return_value=0), mock.patch.object(
+            pico, "find_bootsel_drive", return_value=None
+        ), mock.patch.object(pico.shutil, "copyfile") as copyfile:
+            result = pico.upload("lora", "E:")
+
+        self.assertEqual(1, result)
+        copyfile.assert_not_called()
 
     def test_automatic_discovery_rejects_multiple_validated_drives(self) -> None:
         """Proves automatic upload refuses to guess between multiple BOOTSEL volumes."""

@@ -73,6 +73,10 @@ set(MICROWORLD_BUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
 set(MICROWORLD_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 add_subdirectory("../../.." "${CMAKE_CURRENT_BINARY_DIR}/microworld")
 
+set(MICROWORLD_NET_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(MICROWORLD_NET_BUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
+add_subdirectory("../../../../Net" "${CMAKE_CURRENT_BINARY_DIR}/microworld-net")
+
 set(
 	MICROWORLD_PICO_CORE_TEST_SOURCES
 	PicoCoreAllocationCounters.cpp
@@ -112,6 +116,7 @@ endfunction()
 set(
 	MICROWORLD_PICO_OWNED_SOURCES
 	PicoFreeRtosMain.cpp
+	PicoLoraInteropMain.cpp
 	PicoCoreTestsMain.cpp
 	"${MICROWORLD_CORE_TICK_SOURCE_DIRECTORY}/PicoMain.cpp"
 	"${MICROWORLD_CORE_TICK_SOURCE_DIRECTORY}/CoreTickExample.cpp"
@@ -151,3 +156,10 @@ target_include_directories(
 microworld_pico_configure_owned_target(microworld_pico_core_tests)
 pico_add_extra_outputs(microworld_pico_core_tests)
 microworld_pico_add_uf2_output(microworld_pico_core_tests)
+
+add_executable(microworld_pico_lora_interop PicoLoraInteropMain.cpp)
+microworld_pico_configure_owned_target(microworld_pico_lora_interop)
+target_compile_definitions(microworld_pico_lora_interop PRIVATE PICO_CXX_DISABLE_ALLOCATION_OVERRIDES=1)
+target_link_libraries(microworld_pico_lora_interop PRIVATE MicroWorld::Net hardware_uart)
+pico_add_extra_outputs(microworld_pico_lora_interop)
+microworld_pico_add_uf2_output(microworld_pico_lora_interop)

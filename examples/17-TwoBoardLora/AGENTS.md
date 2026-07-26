@@ -26,6 +26,9 @@ environments share one source file.
   example's 500 ms, to avoid congesting the channel.
 - A LoRa link is radio, not a wire: an occasional gap can be weather
   (distance, interference) rather than a defect to chase.
+- Pico pairing keeps this ESP32 runtime source unchanged: the Pico-local
+  consumer is node 1, while the `esp32-s3-node-b` image remains node 2 and its
+  `mw log` output is the observable proof of the cross-board volley.
 
 ## Verification
 
@@ -35,3 +38,8 @@ roadmap task 1.2) flashes node 1 to one board and node 2 to the other,
 expects both monitors to show the counter climbing alternately, and flips
 this example's "not yet verified on hardware" status once a captured trace is
 pasted into the README.
+
+For Pico pairing, build this example's node-B environment, then use
+`pico-freertos\\pico.bat build lora` and the human-gated `upload lora` command.
+The paired trace must include node B's `rx n=1 from=1` and
+`tx n=2 result=Success` lines before claiming Pico interoperability.
