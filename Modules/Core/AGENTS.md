@@ -11,7 +11,8 @@ forward-only begin/tick/end lifecycle. Consumers own concrete objects. Core
 retired its own World/Actor/Component model in the Phase 1 consolidation; the
 managed Engine package is the sole Actor model.
 
-Memory, Object, and Engine are adjacent packages above Core. Their current
+Object, Messaging, Net, Engine, Application, and Integration are the packages
+above Core; Memory is folded into Core and is no longer one. Their current
 acceptance state and next milestone live only in `PROGRESS.md`; this guide owns
 durable Core boundaries rather than volatile roadmap sequencing.
 

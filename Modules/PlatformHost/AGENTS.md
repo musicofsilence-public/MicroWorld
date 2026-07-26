@@ -9,7 +9,7 @@ host UDP transport over OS sockets (WinSock on Windows, BSD on POSIX) and a
 `steady_clock`-based time source behind the portable `INetDriver` /
 `TimePointMilliseconds` seams described in `docs/Porting.md`. It ships the
 two-node UDP demo as its worked acceptance evidence. It depends inward on
-Core, Memory, Object, Engine, and Net as needed and never the reverse, and it
+Core, Object, Engine, and Net as needed and never the reverse, and it
 is **excluded from `CheckDependencyBoundaries.py`** — it has no module key in
 that tool's portable table.
 

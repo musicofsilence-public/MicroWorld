@@ -5,9 +5,8 @@ Inherits `../AGENTS.md`.
 ## Architecture
 
 `microworld-object` is the adjacent portable managed-identity package above
-Memory. Its dependency direction is `Core <- Memory <- Object`: higher
-packages may depend on Object, while Object may depend only on Memory, Core,
-and the C++17 standard library.
+Core. Its dependency direction is `Core <- Object`: higher packages may depend
+on Object, while Object may depend only on Core and the C++17 standard library.
 
 ## Concepts and boundaries
 

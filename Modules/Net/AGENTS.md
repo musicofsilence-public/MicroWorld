@@ -4,11 +4,11 @@ Inherits `../AGENTS.md`.
 
 ## Architecture
 
-`microworld-net` is the adjacent portable byte-I/O package above Memory.
-Its dependency direction is `Core <- Memory <- Net`: higher packages may
-depend on Net, while Net may depend only on Core, Memory, and the C++17
-standard library. Net must not depend on Object or Engine; applications call
-Engine and Net independently.
+`microworld-net` is the adjacent portable byte-I/O package above Core.
+Its dependency direction is `Core <- Net`: higher packages may depend on Net,
+while Net may depend only on Core and the C++17 standard library. Net must not
+depend on Object or Engine; the Integration package is the only one permitted
+to see both.
 
 The package owns a bounded byte reader/writer, one non-blocking `INetDriver`
 contract, one caller-storage-backed fixed-capacity `TNetManager`, explicit
@@ -39,7 +39,7 @@ vendor SDK code.
   (`MakeUdpAddress`, `IsUdpAddress`, `UdpAddressPort`, and
   `MakeUdpAddressFromPackedHostOrder`) as pure `constexpr` arithmetic with no OS
   includes, so both UDP platform adapters and their drivers share one definition
-  without breaching the `Core <- Memory <- Net` boundary.
+  without breaching the `Core <- Net` boundary.
 - `INetDriver` exposes one bounded non-blocking `TrySend` and one bounded
   non-blocking `TryReceive`. One call performs at most one transport
   operation. Every receive is transactional: on `Full`, `Invalid`, or
@@ -75,8 +75,8 @@ vendor SDK code.
 
 Configure and build this package independently with CMake, compile its public
 headers under C++17 with strict warnings, exceptions disabled, and RTTI
-disabled, run the Core dependency-boundary checker with explicit Core, Memory,
-and Net package roots, run the profile-map checker on a Core+Net consumer
+disabled, run the Core dependency-boundary checker with explicit Core and Net
+package roots, run the profile-map checker on a Core+Net consumer
 link map, and run the package tests required by the current package scope.
 Keep Net absent from Object-only and Engine-only profiles. Live status and
 evidence belong only in `../../PROGRESS.md`.

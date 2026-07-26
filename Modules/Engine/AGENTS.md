@@ -4,9 +4,8 @@ Inherits `../AGENTS.md`.
 
 ## Architecture
 
-Engine is the managed-runtime layer above Object:
-`Core <- Memory <- Object <- Engine`. It may depend only on those inward
-packages and the C++17 standard library.
+Engine is the managed-runtime layer above Object: `Core <- Object <- Engine`.
+It may depend only on those inward packages and the C++17 standard library.
 
 The package owns `UWorld`, `AActor`, `UActorComponent`, and a bounded
 caller-time timer facility. Downward ownership is traced, parent observations

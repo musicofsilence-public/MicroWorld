@@ -15,6 +15,12 @@ channel participate in caller-owned frame ordering without owning a world or
 engine. It is transport-agnostic: callers provide a channel or a duck-typed
 network facade at the edge rather than giving Messaging a Net dependency.
 
+There is no production translation unit and no archive: every primitive is a
+template or an inline codec whose caller-selected capacities must stay visible at
+instantiation, so `microworld_messaging` is an INTERFACE target. Any source file
+added later may depend only on Messaging's public headers and Core, and must
+introduce no hidden transport, engine, clock, heap, or SDK coupling.
+
 ## Concepts and boundaries
 
 - All routing, handler, queue, retry, and frame-set capacities are caller

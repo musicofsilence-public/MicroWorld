@@ -10,7 +10,7 @@ wired point-to-point I2C master/slave pair, and a wired point-to-point SPI
 master/slave pair), a time source (`esp_timer`),
 and an output device (`ESP_LOG*`) behind the portable `INetDriver` /
 `TimePointMilliseconds` / `FOutputDeviceFunction` seams described in `docs/Porting.md`. It
-depends inward on Core, Memory, Object, Engine, and Net as needed and never
+depends inward on Core, Object, Engine, and Net as needed and never
 the reverse, and it is **excluded from `CheckDependencyBoundaries.py`** — it
 has no module key in that tool's portable table.
 
