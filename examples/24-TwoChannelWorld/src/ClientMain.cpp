@@ -39,14 +39,14 @@ FEsp32TimeSource GTimeSource{};
  * synthetic reading over the telemetry (UDP) channel; re-times its own cadence when the server
  * commands a new rate over the commands (UART) channel.
  *
- * Takes the router by constructor injection (D9); this actor owns no components (TInlineActor<0>).
+ * Takes the router by constructor injection (D9); this actor owns no components (AActor).
  */
-class FSensorActor final : public TInlineActor<0>
+class FSensorActor final : public AActor
 {
 public:
 	/** Aligns this actor's own tick to the base reporting cadence and stores the injected router. */
 	explicit FSensorActor(IMessageRouter& InRouter) noexcept
-		: TInlineActor<0>(FTickConfiguration::EnabledEvery(BaseReportingIntervalMilliseconds)), Router(InRouter)
+		: AActor(FTickConfiguration::EnabledEvery(BaseReportingIntervalMilliseconds)), Router(InRouter)
 	{
 	}
 

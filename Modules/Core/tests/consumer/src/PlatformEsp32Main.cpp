@@ -16,6 +16,7 @@
 #include <MicroWorld/Engine/Actor.h>
 #include <MicroWorld/Engine/ActorComponent.h>
 #include <MicroWorld/Engine/EngineHost.h>
+#include <MicroWorld/Engine/EngineSystem.h>
 #include <MicroWorld/Engine/EngineStorage.h>
 #include <MicroWorld/Log.h>
 #include <MicroWorld/Net/NetHost.h>
@@ -60,8 +61,8 @@ public:
 class FDemoActor final : public MicroWorld::AActor
 {
 public:
-	/** Forwards store and component storage to the managed actor base. */
-	explicit FDemoActor(MicroWorld::FActorComponentRegistryReference Components) noexcept : AActor(std::move(Components)) {}
+	/** Initializes the managed actor base, which owns its bounded component slots. */
+	explicit FDemoActor() noexcept : AActor() {}
 
 	/** Keeps exact descriptor-driven destruction publicly instantiable. */
 	~FDemoActor() noexcept override = default;
@@ -144,10 +145,8 @@ extern "C" void app_main()
 	(void)Host.RegisterClass<FDemoComponent>(DemoComponentTypeId, "DemoComponent");
 
 	const TObjectPtr<UWorld> World = Host.CreateWorld();
-	// The actor embeds no inline registry; take one caller-owned reference at construction,
-	// mirroring the Engine profile probe (EngineConsumerProbe.h) so the slot stays 256 bytes.
-	static FActorComponentRegistry<1> ActorComponents;
-	const TObjectPtr<FDemoActor> Actor = Host.CreateObject<FDemoActor>(DemoActorTypeId, ActorComponents.MakeReference()).Object;
+	// The actor owns its bounded component slots directly, matching the Engine profile probe.
+	const TObjectPtr<FDemoActor> Actor = Host.CreateObject<FDemoActor>(DemoActorTypeId).Object;
 	const TObjectPtr<FDemoComponent> Component = Host.CreateObject<FDemoComponent>(DemoComponentTypeId).Object;
 	if (World.Get() == nullptr || Actor.Get() == nullptr || Component.Get() == nullptr)
 	{

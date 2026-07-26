@@ -16,6 +16,8 @@ Thumbs.db
 **/.pio/
 # ESP-IDF sdkconfig files PlatformIO generates per environment (sdkconfig.<env>)
 examples/*/sdkconfig.*
+# Consumer SDK configs are likewise generated per PlatformIO environment.
+Modules/Core/tests/consumer/sdkconfig.*
 # ...but the shared board profile's sdkconfig.defaults is committed source, not
 # generated output, so keep tracking it (the pattern above would eat it).
 !examples/esp32-common/sdkconfig.defaults
@@ -27,3 +29,4 @@ examples/*/src/NetworkConfig.h
 /build-integration
 /build-integration-messaging
 /build-messaging
+/build-engine-consumer

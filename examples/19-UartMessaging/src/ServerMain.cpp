@@ -51,11 +51,8 @@ using FServerNet = TNetHost<2, 120>;
 class FDemoSpawnedActor final : public AActor
 {
 public:
-	/** Forwards the one-shot component reference and the begin counter it bumps on play. */
-	FDemoSpawnedActor(FActorComponentRegistryReference Components, int& InBeginCount) noexcept
-		: AActor(std::move(Components)), BeginCount(InBeginCount)
-	{
-	}
+	/** Binds the begin counter this actor bumps on play. */
+	FDemoSpawnedActor(int& InBeginCount) noexcept : AActor(), BeginCount(InBeginCount) {}
 
 	/** Keeps exact descriptor-driven destruction publicly instantiable. */
 	~FDemoSpawnedActor() noexcept override = default;
@@ -85,7 +82,6 @@ void RunServer() noexcept
 	static FServerNet ServerNet{Driver};
 	static TNetHostSystem<FServerNet> ServerFrame{ServerNet};
 	static FServerEngine ServerHost{FGarbageCollectionBudget{1, 4, 8}, ServerFrame};
-	static FActorComponentRegistry<0> SpawnedRegistries[MaxSpawns]{};
 	static int SpawnSequence = 0;
 	static int SpawnedBeginCount = 0;
 	static int WorldActorCount = 0;
@@ -107,10 +103,8 @@ void RunServer() noexcept
 			{
 				return;
 			}
-			const std::size_t Slot = static_cast<std::size_t>(SpawnSequence);
 			++SpawnSequence;
-			const auto Creation =
-				ServerHost.CreateObject<FDemoSpawnedActor>(DemoSpawnedActorTypeId, SpawnedRegistries[Slot].MakeReference(), SpawnedBeginCount);
+			const auto Creation = ServerHost.CreateObject<FDemoSpawnedActor>(DemoSpawnedActorTypeId, SpawnedBeginCount);
 			if (Creation.Result != EObjectResult::Success
 				|| ServerHost.GetWorld().SpawnActor(TObjectPtr<AActor>{Creation.Object}) != EEngineResult::Success)
 			{

@@ -19,7 +19,6 @@ using MicroWorld::EEngineResult;
 using MicroWorld::ERuntimeResult;
 using MicroWorld::FTickConfiguration;
 using MicroWorld::FTickContext;
-using MicroWorld::TInlineActor;
 using MicroWorld::TInlineWorld;
 using MicroWorld::TObjectPtr;
 using MicroWorld::UActorComponent;
@@ -29,15 +28,15 @@ using MicroWorld::Tests::FComponentEventState;
 using MicroWorld::Tests::FSequenceCounter;
 using MicroWorld::Tests::TEngineEnvironment;
 
-/** Tick configuration that lets the inline actor and component tick every advance. */
+/** Tick configuration that lets the plain actor and component tick every advance. */
 constexpr FTickConfiguration OrderingTickConfiguration{true, true, DurationMilliseconds{0}};
 
 /** Test-local type ids for the inline world, actor, and component descriptors. */
 constexpr MicroWorld::FTypeId InlineWorldTypeId{0x00050001u};
-constexpr MicroWorld::FTypeId InlineActorTypeId{0x00050002u};
+constexpr MicroWorld::FTypeId WorldActorTypeId{0x00050002u};
 constexpr MicroWorld::FTypeId InlineComponentTypeId{0x00050003u};
 
-/** A component that records begin/tick/end ordering; components need no inline registry. */
+/** A component that records begin/tick/end ordering without separate storage wrappers. */
 class FInlineComponent final : public UActorComponent
 {
 public:
@@ -74,13 +73,13 @@ private:
 	FComponentEventState& Events;
 };
 
-/** An actor that owns its component registry inline and records lifecycle ordering. */
-class FInlineActor final : public TInlineActor<1>
+/** A plain actor that records lifecycle ordering through direct component storage. */
+class FWorldActor final : public AActor
 {
 public:
-	/** Constructs on the inline component registry and binds the shared sequence and record. */
-	FInlineActor(FSequenceCounter& InSequence, FActorEventState& InEvents) noexcept
-		: TInlineActor<1>(OrderingTickConfiguration), Sequence(InSequence), Events(InEvents)
+	/** Uses direct actor component storage and binds the shared sequence and record. */
+	FWorldActor(FSequenceCounter& InSequence, FActorEventState& InEvents) noexcept
+		: AActor(OrderingTickConfiguration), Sequence(InSequence), Events(InEvents)
 	{
 	}
 
@@ -111,15 +110,15 @@ private:
 	FActorEventState& Events;
 };
 
-/** Environment sized so inline types (which embed their registries) fit each slot. */
+/** Environment sized so the inline world's registry and its actors fit each slot. */
 using FInlineEnvironment = TEngineEnvironment<512, 16, 8, 2>;
 
 /**
- * Proves a world, actor, and component built entirely from inline types (no
- * caller-composed registry references) begin, tick, and end in the same
- * deterministic order as the reference-composed managed types.
+ * Proves an inline world, a plain actor, and a component begin, tick, and end
+ * in the same deterministic order without caller-composed component
+ * storage.
  */
-MW_TEST_CASE(EngineInlineTypesComposeAndDispatchLikeReferenceComposedTypes)
+MW_TEST_CASE(EngineInlineWorldComposesAndDispatchesPlainActor)
 {
 	FSequenceCounter Sequence{};
 	FActorEventState ActorEvents{};
@@ -127,16 +126,15 @@ MW_TEST_CASE(EngineInlineTypesComposeAndDispatchLikeReferenceComposedTypes)
 
 	FInlineEnvironment Env{};
 
-	// The world and actor own their registries inline: no FWorldActorRegistry or
-	// FActorComponentRegistry object is composed at the call site.
+	// The inline world owns its registry while the actor uses direct component storage.
 	const TObjectPtr<TInlineWorld<1>> World = Env.CreateDerivedObject<TInlineWorld<1>>(InlineWorldTypeId, "InlineWorld");
-	const TObjectPtr<FInlineActor> Actor = Env.CreateDerivedObject<FInlineActor>(InlineActorTypeId, "InlineActor", Sequence, ActorEvents);
+	const TObjectPtr<FWorldActor> Actor = Env.CreateDerivedObject<FWorldActor>(WorldActorTypeId, "WorldActor", Sequence, ActorEvents);
 	const TObjectPtr<FInlineComponent> Component =
 		Env.CreateDerivedObject<FInlineComponent>(InlineComponentTypeId, "InlineComponent", Sequence, ComponentEvents);
 
 	MW_EXPECT_TRUE(Test, World.Get() != nullptr, "The inline world constructs within one store slot");
-	MW_EXPECT_TRUE(Test, Actor.Get() != nullptr, "The inline actor constructs within one store slot");
-	MW_EXPECT_TRUE(Test, Component.Get() != nullptr, "The inline component constructs within one store slot");
+	MW_EXPECT_TRUE(Test, Actor.Get() != nullptr, "The plain actor constructs within one store slot");
+	MW_EXPECT_TRUE(Test, Component.Get() != nullptr, "The component constructs within one store slot");
 
 	const EEngineResult ComponentRegistration = Actor.Get()->RegisterComponent(Component);
 	const EEngineResult ActorRegistration = World.Get()->RegisterActor(TObjectPtr<AActor>{Actor});
@@ -146,25 +144,24 @@ MW_TEST_CASE(EngineInlineTypesComposeAndDispatchLikeReferenceComposedTypes)
 	Sequence.Next(); // Delimits tick ordering from the exact end ordering.
 	const ERuntimeResult EndResult = World.Get()->EndPlay();
 
-	MW_EXPECT_EQ(Test, EEngineResult::Success, ComponentRegistration, "The inline actor's inline registry accepts the component");
-	MW_EXPECT_EQ(Test, EEngineResult::Success, ActorRegistration, "The inline world's inline registry accepts the actor");
-	MW_EXPECT_EQ(Test, ERuntimeResult::Success, BeginResult, "BeginPlay over inline types succeeds");
-	MW_EXPECT_EQ(Test, ERuntimeResult::Success, AdvanceResult, "Advance over inline types succeeds");
-	MW_EXPECT_EQ(Test, ERuntimeResult::Success, EndResult, "EndPlay over inline types succeeds");
-	MW_EXPECT_EQ(Test, std::uint32_t{1}, ComponentEvents.BeginCount, "The inline component begins exactly once");
-	MW_EXPECT_EQ(Test, std::uint32_t{1}, ActorEvents.BeginCount, "The inline actor begins exactly once");
+	MW_EXPECT_EQ(Test, EEngineResult::Success, ComponentRegistration, "The plain actor accepts the component");
+	MW_EXPECT_EQ(Test, EEngineResult::Success, ActorRegistration, "The inline world's registry accepts the actor");
+	MW_EXPECT_EQ(Test, ERuntimeResult::Success, BeginResult, "BeginPlay over the inline world succeeds");
+	MW_EXPECT_EQ(Test, ERuntimeResult::Success, AdvanceResult, "Advance over the inline world succeeds");
+	MW_EXPECT_EQ(Test, ERuntimeResult::Success, EndResult, "EndPlay over the inline world succeeds");
+	MW_EXPECT_EQ(Test, std::uint32_t{1}, ComponentEvents.BeginCount, "The component begins exactly once");
+	MW_EXPECT_EQ(Test, std::uint32_t{1}, ActorEvents.BeginCount, "The plain actor begins exactly once");
 	MW_EXPECT_TRUE(Test, ComponentEvents.BeginOrder < ActorEvents.BeginOrder, "The component begins before its actor");
 	MW_EXPECT_TRUE(Test, ComponentEvents.TickOrder < ActorEvents.TickOrder, "The component ticks before its actor");
 	MW_EXPECT_TRUE(Test, ActorEvents.EndOrder < ComponentEvents.EndOrder, "The actor ends before its component");
-	MW_EXPECT_EQ(Test, std::uint32_t{1}, ComponentEvents.EndCount, "The inline component ends exactly once");
-	MW_EXPECT_EQ(Test, std::uint32_t{1}, ActorEvents.EndCount, "The inline actor ends exactly once");
+	MW_EXPECT_EQ(Test, std::uint32_t{1}, ComponentEvents.EndCount, "The component ends exactly once");
+	MW_EXPECT_EQ(Test, std::uint32_t{1}, ActorEvents.EndCount, "The plain actor ends exactly once");
 }
 
 /**
- * Proves an inline actor still spawns and destroys through the deferred barrier,
- * so the ergonomic wrapper preserves the runtime structural behavior.
+ * Proves an inline world still spawns and destroys a plain actor through the deferred barrier.
  */
-MW_TEST_CASE(EngineInlineActorSpawnsAndDestroysThroughBarrier)
+MW_TEST_CASE(EngineInlineWorldSpawnsAndDestroysPlainActor)
 {
 	FSequenceCounter Sequence{};
 	FActorEventState ActorEvents{};
@@ -172,7 +169,7 @@ MW_TEST_CASE(EngineInlineActorSpawnsAndDestroysThroughBarrier)
 	FInlineEnvironment Env{};
 
 	const TObjectPtr<TInlineWorld<1>> World = Env.CreateDerivedObject<TInlineWorld<1>>(InlineWorldTypeId, "InlineWorld");
-	const TObjectPtr<FInlineActor> Actor = Env.CreateDerivedObject<FInlineActor>(InlineActorTypeId, "InlineActor", Sequence, ActorEvents);
+	const TObjectPtr<FWorldActor> Actor = Env.CreateDerivedObject<FWorldActor>(WorldActorTypeId, "WorldActor", Sequence, ActorEvents);
 	(void)World.Get()->BeginPlay(0);
 
 	const EEngineResult SpawnResult = World.Get()->SpawnActor(TObjectPtr<AActor>{Actor});
@@ -184,14 +181,14 @@ MW_TEST_CASE(EngineInlineActorSpawnsAndDestroysThroughBarrier)
 	const std::uint32_t EndCountAfterQueue = ActorEvents.EndCount;
 	const ERuntimeResult DestroyBarrier = World.Get()->ApplyPending(20);
 
-	MW_EXPECT_EQ(Test, EEngineResult::Success, SpawnResult, "The inline actor is accepted for deferred spawn");
-	MW_EXPECT_EQ(Test, std::uint32_t{0}, BeginCountAfterQueue, "The inline spawn does not begin before the barrier");
+	MW_EXPECT_EQ(Test, EEngineResult::Success, SpawnResult, "The plain actor is accepted for deferred spawn");
+	MW_EXPECT_EQ(Test, std::uint32_t{0}, BeginCountAfterQueue, "The deferred spawn does not begin before the barrier");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, SpawnBarrier, "The spawn barrier succeeds");
-	MW_EXPECT_EQ(Test, std::uint32_t{1}, BeginCountAfterBarrier, "The inline spawn begins at the barrier");
-	MW_EXPECT_EQ(Test, EEngineResult::Success, DestroyResult, "The inline actor is accepted for deferred destroy");
-	MW_EXPECT_EQ(Test, std::uint32_t{0}, EndCountAfterQueue, "The inline destroy does not end before the barrier");
+	MW_EXPECT_EQ(Test, std::uint32_t{1}, BeginCountAfterBarrier, "The deferred spawn begins at the barrier");
+	MW_EXPECT_EQ(Test, EEngineResult::Success, DestroyResult, "The plain actor is accepted for deferred destroy");
+	MW_EXPECT_EQ(Test, std::uint32_t{0}, EndCountAfterQueue, "The deferred destroy does not end before the barrier");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, DestroyBarrier, "The destroy barrier succeeds");
-	MW_EXPECT_EQ(Test, std::uint32_t{1}, ActorEvents.EndCount, "The inline destroy ends at the barrier");
+	MW_EXPECT_EQ(Test, std::uint32_t{1}, ActorEvents.EndCount, "The deferred destroy ends at the barrier");
 }
 
 } // namespace

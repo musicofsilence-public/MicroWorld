@@ -20,8 +20,6 @@ using MicroWorld::Tests::GlobalAllocationCount;
 using MicroWorld::AActor;
 using MicroWorld::EEngineResult;
 using MicroWorld::ERuntimeResult;
-using MicroWorld::FActorComponentRegistry;
-using MicroWorld::FActorComponentRegistryReference;
 using MicroWorld::FGarbageCollectionBudget;
 using MicroWorld::FGarbageCollector;
 using MicroWorld::FGarbageCollectorStorage;
@@ -50,7 +48,7 @@ public:
 class FTrackedActor final : public AActor
 {
 public:
-	explicit FTrackedActor(FActorComponentRegistryReference InComponents) noexcept : AActor(std::move(InComponents)) {}
+	explicit FTrackedActor() noexcept : AActor() {}
 };
 
 constexpr MicroWorld::FTypeId TrackedActorTypeId{0x00030001u};
@@ -60,9 +58,9 @@ constexpr MicroWorld::FTypeId TrackedComponentTypeId{0x00030002u};
 using FGarbageCollectionEnvironment = TEngineEnvironment<256, 16, 8, 4>;
 
 /** Builds a tracked actor through its own derived descriptor. */
-TObjectPtr<FTrackedActor> MakeTrackedActor(FGarbageCollectionEnvironment& InEnv, FActorComponentRegistryReference InComponents) noexcept
+TObjectPtr<FTrackedActor> MakeTrackedActor(FGarbageCollectionEnvironment& InEnv) noexcept
 {
-	return InEnv.CreateDerivedObject<FTrackedActor>(TrackedActorTypeId, "TrackedActor", std::move(InComponents));
+	return InEnv.CreateDerivedObject<FTrackedActor>(TrackedActorTypeId, "TrackedActor");
 }
 
 /** Builds a tracked component through its own derived descriptor. */
@@ -98,12 +96,11 @@ MW_TEST_CASE(EngineRootedWorldRetainsActorsAndComponentsThroughFullGC)
 	FCollectorFixture Fixture{Store};
 	FGarbageCollector& Collector = Fixture.GetCollector();
 
-	FActorComponentRegistry<2> ActorComponents;
 	FWorldActorRegistry<2> WorldActors;
 	FWorldActorRegistryReference WorldActorsView = WorldActors.MakeReference();
 
 	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, std::move(WorldActorsView));
-	const TObjectPtr<FTrackedActor> Actor = MakeTrackedActor(Env, ActorComponents.MakeReference());
+	const TObjectPtr<FTrackedActor> Actor = MakeTrackedActor(Env);
 	const TObjectPtr<FTrackedComponent> Component = MakeTrackedComponent(Env);
 	(void)Actor.Get()->RegisterComponent(Component);
 	(void)World.Get()->RegisterActor(TObjectPtr<AActor>{Actor});
@@ -134,12 +131,11 @@ MW_TEST_CASE(EngineReleasingWorldRootReclaimsEntireGraph)
 	FCollectorFixture Fixture{Store};
 	FGarbageCollector& Collector = Fixture.GetCollector();
 
-	FActorComponentRegistry<2> ActorComponents;
 	FWorldActorRegistry<2> WorldActors;
 	FWorldActorRegistryReference WorldActorsView = WorldActors.MakeReference();
 
 	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, std::move(WorldActorsView));
-	const TObjectPtr<FTrackedActor> Actor = MakeTrackedActor(Env, ActorComponents.MakeReference());
+	const TObjectPtr<FTrackedActor> Actor = MakeTrackedActor(Env);
 	const TObjectPtr<FTrackedComponent> Component = MakeTrackedComponent(Env);
 	(void)Actor.Get()->RegisterComponent(Component);
 	(void)World.Get()->RegisterActor(TObjectPtr<AActor>{Actor});
@@ -177,12 +173,11 @@ MW_TEST_CASE(EngineWeakParentReferencesExpireCorrectly)
 	FCollectorFixture Fixture{Store};
 	FGarbageCollector& Collector = Fixture.GetCollector();
 
-	FActorComponentRegistry<2> ActorComponents;
 	FWorldActorRegistry<2> WorldActors;
 	FWorldActorRegistryReference WorldActorsView = WorldActors.MakeReference();
 
 	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, std::move(WorldActorsView));
-	const TObjectPtr<FTrackedActor> Actor = MakeTrackedActor(Env, ActorComponents.MakeReference());
+	const TObjectPtr<FTrackedActor> Actor = MakeTrackedActor(Env);
 	const TObjectPtr<FTrackedComponent> Component = MakeTrackedComponent(Env);
 	const EEngineResult ComponentRegistration = Actor.Get()->RegisterComponent(Component);
 	const EEngineResult ActorRegistration = World.Get()->RegisterActor(TObjectPtr<AActor>{Actor});
@@ -221,8 +216,7 @@ MW_TEST_CASE(EngineWeakParentReferencesExpireCorrectly)
 	ActorRoot.Reset();
 	const ERuntimeResult ActorCollectionRequest = Collector.RequestCollection();
 	const MicroWorld::FGarbageCollectionResult ActorCollection = Collector.CollectFull();
-	FActorComponentRegistry<1> ReplacementActorComponents;
-	const TObjectPtr<FTrackedActor> ReplacementActor = MakeTrackedActor(Env, ReplacementActorComponents.MakeReference());
+	const TObjectPtr<FTrackedActor> ReplacementActor = MakeTrackedActor(Env);
 	TStrongObjectPtr<AActor> ReplacementActorRoot = Env.MakeRoot(TObjectPtr<AActor>{ReplacementActor});
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, ActorCollectionRequest, "Actor reclamation request succeeds");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, ActorCollection.Result, "Actor reclamation succeeds");
@@ -242,12 +236,11 @@ MW_TEST_CASE(EngineAdvancePerformsNoObservableAllocation)
 	FGarbageCollectionEnvironment Env{};
 	FObjectStore& Store = Env.GetStore();
 
-	FActorComponentRegistry<2> ActorComponents;
 	FWorldActorRegistry<2> WorldActors;
 	FWorldActorRegistryReference WorldActorsView = WorldActors.MakeReference();
 
 	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, std::move(WorldActorsView));
-	const TObjectPtr<FTrackedActor> Actor = MakeTrackedActor(Env, ActorComponents.MakeReference());
+	const TObjectPtr<FTrackedActor> Actor = MakeTrackedActor(Env);
 	const TObjectPtr<FTrackedComponent> Component = MakeTrackedComponent(Env);
 	(void)Actor.Get()->RegisterComponent(Component);
 	(void)World.Get()->RegisterActor(TObjectPtr<AActor>{Actor});
@@ -282,12 +275,11 @@ MW_TEST_CASE(EngineEndPlayIsIdempotentAndRepeatedLifecycleCallsMatchCore)
 {
 	FGarbageCollectionEnvironment Env{};
 
-	FActorComponentRegistry<2> ActorComponents;
 	FWorldActorRegistry<2> WorldActors;
 	FWorldActorRegistryReference WorldActorsView = WorldActors.MakeReference();
 
 	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, std::move(WorldActorsView));
-	const TObjectPtr<FTrackedActor> Actor = MakeTrackedActor(Env, ActorComponents.MakeReference());
+	const TObjectPtr<FTrackedActor> Actor = MakeTrackedActor(Env);
 	(void)World.Get()->RegisterActor(TObjectPtr<AActor>{Actor});
 
 	const ERuntimeResult FirstBegin = World.Get()->BeginPlay(0);

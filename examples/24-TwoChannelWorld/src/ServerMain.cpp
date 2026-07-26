@@ -37,12 +37,12 @@ FEsp32TimeSource GTimeSource{};
  *
  * Takes the router by constructor injection (D9); never ticks, since it only reacts to a message.
  */
-class FTelemetrySinkActor final : public TInlineActor<0>
+class FTelemetrySinkActor final : public AActor
 {
 public:
 	/** Stores the injected router; this actor's tick is disabled, matching FDisplayActor in example 23. */
 	explicit FTelemetrySinkActor(IMessageRouter& InRouter) noexcept
-		: TInlineActor<0>({/*bCanEverTick*/ false, /*bStartWithTickEnabled*/ false, /*TickIntervalMilliseconds*/ 0}), Router(InRouter)
+		: AActor({/*bCanEverTick*/ false, /*bStartWithTickEnabled*/ false, /*TickIntervalMilliseconds*/ 0}), Router(InRouter)
 	{
 	}
 
@@ -88,14 +88,14 @@ private:
  * Every CommandIntervalMilliseconds, sends a targeted SetReportingRateMessageId (over UART) to the
  * client's sensor actor, alternating its reporting interval between halved and base.
  *
- * Takes the router by constructor injection (D9); this actor owns no components (TInlineActor<0>).
+ * Takes the router by constructor injection (D9); this actor owns no components (AActor).
  */
-class FCommanderActor final : public TInlineActor<0>
+class FCommanderActor final : public AActor
 {
 public:
 	/** Aligns this actor's own tick to the command cadence and stores the injected router. */
 	explicit FCommanderActor(IMessageRouter& InRouter) noexcept
-		: TInlineActor<0>(FTickConfiguration::EnabledEvery(CommandIntervalMilliseconds)), Router(InRouter)
+		: AActor(FTickConfiguration::EnabledEvery(CommandIntervalMilliseconds)), Router(InRouter)
 	{
 	}
 

@@ -84,7 +84,7 @@ using FWireFrame = MicroWorld::TNetHostSystem<FWireNet>;
 /** Two-way adapter binding one FWireNet wire channel to the local FWireRouter. */
 using FWireBinding = MicroWorld::TMessageChannelBinding<FWireNet>;
 
-/** The engine both roles compose; sized for one world with a couple of small inline actors (the default ESP32-S3 traits). */
+/** The engine both roles compose; sized for one world with a couple of small actors using direct component storage. */
 using FWireEngine = MicroWorld::TEngine<>;
 
 /** Builds a board's UART driver configuration from the fixed pins and baud. */

@@ -32,8 +32,6 @@ using MicroWorld::ENetMode;
 using MicroWorld::ENetResult;
 using MicroWorld::EObjectResult;
 using MicroWorld::ERuntimeResult;
-using MicroWorld::FActorComponentRegistry;
-using MicroWorld::FActorComponentRegistryReference;
 using MicroWorld::FDefaultEngineTraits;
 using MicroWorld::FDelegateHandle;
 using MicroWorld::FGarbageCollectionBudget;
@@ -123,11 +121,8 @@ private:
 class FNetSpawnedActor final : public AActor
 {
 public:
-	/** Binds the component reference and the begin counter this actor increments when it starts. */
-	FNetSpawnedActor(FActorComponentRegistryReference InComponents, int& InBeginCount) noexcept
-		: AActor(std::move(InComponents)), BeginCount(InBeginCount)
-	{
-	}
+	/** Binds the begin counter this actor increments when it starts. */
+	FNetSpawnedActor(int& InBeginCount) noexcept : AActor(), BeginCount(InBeginCount) {}
 
 protected:
 	/** Records that the server world began this spawned actor exactly at the barrier. */
@@ -143,15 +138,8 @@ class FNetHostLifecycleActor final : public AActor
 {
 public:
 	/** Binds the host state observations to test-owned values that outlive the managed actor. */
-	FNetHostLifecycleActor(
-		FActorComponentRegistryReference InComponents,
-		TNetHost<1, 64>& InNetHost,
-		ENetHostState& OutStateDuringBeginPlay,
-		ENetHostState& OutStateDuringEndPlay) noexcept
-		: AActor(std::move(InComponents))
-		, NetHost(InNetHost)
-		, StateDuringBeginPlay(OutStateDuringBeginPlay)
-		, StateDuringEndPlay(OutStateDuringEndPlay)
+	FNetHostLifecycleActor(TNetHost<1, 64>& InNetHost, ENetHostState& OutStateDuringBeginPlay, ENetHostState& OutStateDuringEndPlay) noexcept
+		: AActor(), NetHost(InNetHost), StateDuringBeginPlay(OutStateDuringBeginPlay), StateDuringEndPlay(OutStateDuringEndPlay)
 	{
 	}
 
@@ -179,9 +167,6 @@ struct FServerSpawnContext
 	/** The server engine host whose world receives the spawned actor. */
 	FHost& Host;
 
-	/** The caller-owned component reference the spawned actor holds for its lifetime. */
-	FActorComponentRegistry<0>& SpawnedComponents;
-
 	/** Counts how many application messages the server handler observed. */
 	int& HandlerInvocationCount;
 
@@ -208,7 +193,6 @@ MW_TEST_CASE(EngineNetHost_BeginPlayStartsHostBeforeWorldAndEndPlayStopsHostAfte
 	TNetHost<1, 64> NetHost(Network.Port(0));
 	TNetHostSystem<TNetHost<1, 64>> NetSystem{NetHost};
 	FHost Host{FGarbageCollectionBudget{1, 4, 8}, NetSystem};
-	FActorComponentRegistry<0> ActorComponents;
 	ENetHostState StateDuringBeginPlay = ENetHostState::Idle;
 	ENetHostState StateDuringEndPlay = ENetHostState::Idle;
 	const FNetHostConfig Config = MakeConfig();
@@ -217,8 +201,8 @@ MW_TEST_CASE(EngineNetHost_BeginPlayStartsHostBeforeWorldAndEndPlayStopsHostAfte
 	const EObjectResult RegisterResult = Host.RegisterClass<FNetHostLifecycleActor>(NetHostLifecycleActorTypeId, "NetHostLifecycleActor");
 	const TObjectPtr<UWorld> World = Host.CreateWorld();
 	UWorld* const WorldInstance = World.Get();
-	const TObjectCreationResult<FNetHostLifecycleActor> ActorCreation = Host.CreateObject<FNetHostLifecycleActor>(
-		NetHostLifecycleActorTypeId, ActorComponents.MakeReference(), NetHost, StateDuringBeginPlay, StateDuringEndPlay);
+	const TObjectCreationResult<FNetHostLifecycleActor> ActorCreation =
+		Host.CreateObject<FNetHostLifecycleActor>(NetHostLifecycleActorTypeId, NetHost, StateDuringBeginPlay, StateDuringEndPlay);
 	const EEngineResult ActorRegistration =
 		WorldInstance == nullptr ? EEngineResult::InvalidReference : WorldInstance->RegisterActor(TObjectPtr<AActor>{ActorCreation.Object});
 	const ENetHostState StateBeforeBeginPlay = NetHost.GetState();
@@ -279,11 +263,9 @@ MW_TEST_CASE(EngineNetHostClientMessageSpawnsActorOnServerWorld)
 	// The test owns the spawn observables so they outlive the host whose store holds the actor.
 	int HandlerInvocationCount = 0;
 	int SpawnedBeginCount = 0;
-	FActorComponentRegistry<0> SpawnedComponents;
-
 	FHost ServerHost{FGarbageCollectionBudget{1, 4, 8}, ServerFrame};
 	FHost ClientHost{FGarbageCollectionBudget{1, 4, 8}, ClientFrame};
-	FServerSpawnContext Context{ServerHost, SpawnedComponents, HandlerInvocationCount, SpawnedBeginCount};
+	FServerSpawnContext Context{ServerHost, HandlerInvocationCount, SpawnedBeginCount};
 
 	// The server can construct the actor its handler spawns; both hosts root a world.
 	MW_EXPECT_EQ(
@@ -300,8 +282,8 @@ MW_TEST_CASE(EngineNetHostClientMessageSpawnsActorOnServerWorld)
 		[&Context](const FPeerId, const std::uint8_t, TSpan<const std::uint8_t>) noexcept
 		{
 			++Context.HandlerInvocationCount;
-			const TObjectCreationResult<FNetSpawnedActor> Creation = Context.Host.CreateObject<FNetSpawnedActor>(
-				NetSpawnedActorTypeId, Context.SpawnedComponents.MakeReference(), Context.SpawnedBeginCount);
+			const TObjectCreationResult<FNetSpawnedActor> Creation =
+				Context.Host.CreateObject<FNetSpawnedActor>(NetSpawnedActorTypeId, Context.SpawnedBeginCount);
 			if (Creation.Result == EObjectResult::Success)
 			{
 				(void)Context.Host.GetWorld().SpawnActor(TObjectPtr<AActor>{Creation.Object});

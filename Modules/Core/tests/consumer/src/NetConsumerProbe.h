@@ -55,7 +55,7 @@ enum class ENetConsumerExitCode : int
 
 } // namespace MicroWorldConsumer
 
-/** Exercises representative Core+Memory+Net public APIs without platform I/O. */
+/** Exercises representative Core+Net public APIs without platform I/O. */
 inline int RunNetConsumerProbe() noexcept
 {
 	using namespace MicroWorld;

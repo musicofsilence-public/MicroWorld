@@ -20,6 +20,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <utility>
 
 namespace
@@ -119,7 +120,7 @@ private:
  * Takes the router and its sensor by constructor injection (D9) instead of
  * reaching into a global -- see the constructor below.
  */
-class FThermometerActor final : public MicroWorld::TInlineActor<1>
+class FThermometerActor final : public MicroWorld::AActor
 {
 public:
 	/**
@@ -128,7 +129,7 @@ public:
 	 * composed with.
 	 */
 	FThermometerActor(MicroWorld::IMessageRouter& InRouter, MicroWorld::TObjectPtr<FReadingSensorComponent> InSensor) noexcept
-		: TInlineActor<1>(MicroWorld::FTickConfiguration::EnabledEvery(ReadingCadenceMilliseconds)), Router(InRouter), Sensor(InSensor)
+		: AActor(MicroWorld::FTickConfiguration::EnabledEvery(ReadingCadenceMilliseconds)), Router(InRouter), Sensor(InSensor)
 	{
 	}
 
@@ -215,16 +216,15 @@ private:
  * Purely reactive: logs every broadcast reading and, after enough of them, sends
  * one targeted calibrate back to the thermometer to demonstrate SendMessageToActor.
  *
- * Uses TInlineActor<0> because it owns no components -- a zero-element fixed-size
- * array is valid in C++17, so the zero-capacity component registry this
- * instantiates compiles cleanly (confirmed by this file's own build).
+ * Uses AActor directly: it reserves bounded component slots but registers
+ * none, which keeps this display-only actor deliberately simple.
  */
-class FDisplayActor final : public MicroWorld::TInlineActor<0>
+class FDisplayActor final : public MicroWorld::AActor
 {
 public:
 	/** Stores the injected router (D9); this actor never ticks on its own (see the disabled tick config below). */
 	explicit FDisplayActor(MicroWorld::IMessageRouter& InRouter) noexcept
-		: TInlineActor<0>({/*bCanEverTick*/ false, /*bStartWithTickEnabled*/ false, /*TickIntervalMilliseconds*/ 0}), Router(InRouter)
+		: AActor({/*bCanEverTick*/ false, /*bStartWithTickEnabled*/ false, /*TickIntervalMilliseconds*/ 0}), Router(InRouter)
 	{
 	}
 
@@ -386,7 +386,8 @@ extern "C" void app_main(void)
 	}
 
 	// Queue the display during composition so BeginPlay proves typed spawning also works before play starts.
-	const MicroWorld::FActorSpawnRequest DisplaySpawnRequest = GEngine.GetWorld().SpawnActor<FDisplayActor>(GRouter);
+	// Deferred spawning stores arguments by value; std::ref preserves the router injection without copying it.
+	const MicroWorld::FActorSpawnRequest DisplaySpawnRequest = GEngine.GetWorld().SpawnActor<FDisplayActor>(std::ref(GRouter));
 	if (DisplaySpawnRequest.Result != MicroWorld::EActorSpawnRequestResult::Queued)
 	{
 		MW_LOG(Error, "ex22", "display spawn request failed");

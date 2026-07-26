@@ -96,7 +96,7 @@ using FGuaranteedChannel = MicroWorld::TReliableChannel<8, 96>;
 /** Pumps the net frame, the reliable channel, and the router behind one IEngineSystem slot (D3 order). */
 using FWorldFrameSet = MicroWorld::TEngineSystemSet<3>;
 
-/** The engine both roles compose; sized for one world with a couple of small inline actors (the default ESP32-S3 traits). */
+/** The engine both roles compose; sized for one world with a couple of small actors using direct component storage. */
 using FWorldEngine = MicroWorld::TEngine<>;
 
 /** Builds the shared session config; heartbeats keep the point-to-point peer alive between sends. */

@@ -6,8 +6,7 @@ Inherits `../AGENTS.md`.
 
 This is a downstream CMake/PlatformIO project, not part of the MicroWorld
 library. Standalone CMake adds selected adjacent packages as subdirectories and
-links `MicroWorld::Core`, `MicroWorld::Memory`, `MicroWorld::Object`, or
-`MicroWorld::Engine`.
+links `MicroWorld::Core`, `MicroWorld::Object`, or `MicroWorld::Engine`.
 PlatformIO resolves local packages through `symlink://`, then builds mutually
 exclusive native, Core ESP32-S3, Memory ESP32-S3, Object ESP32-S3, Engine
 ESP32-S3, and executable benchmark applications.
@@ -19,16 +18,16 @@ MicroWorld never depends on these fixtures.
   and RTTI disabled.
 - The standalone CMake mode provides an independent MSVC Windows host probe
   alongside the PlatformIO Native GCC probe.
-- The standalone Memory mode proves Core+Memory public APIs compile and link
-  together with exceptions and RTTI disabled.
+- The standalone memory-API mode proves Core's memory public APIs compile and
+  link together with exceptions and RTTI disabled.
 - The basic ESP32-S3 environment proves the public package crosses the
   ESP-IDF/toolchain boundary without platform headers entering MicroWorld.
-- The Memory ESP32-S3 environment composes the Core and Memory manifests and
-  records compile-only whole-image evidence.
-- The Object ESP32-S3 environment composes Core, Memory, and Object manifests.
+- The memory-API ESP32-S3 environment composes the Core manifest and records
+  compile-only whole-image evidence.
+- The Object ESP32-S3 environment composes Core and Object manifests.
   Its public-API probe exercises fixed storage, explicit roots, weak expiry,
   and full collection without target hardware I/O.
-- The Engine ESP32-S3 environment composes Core, Memory, Object, and Engine.
+- The Engine ESP32-S3 environment composes Core, Object, and Engine.
   Its probe exercises registration, lifecycle, tick, rooted retention,
   unrooted collection, and the bounded `TTimerManager` (schedule, caller-time
   Advance, one-shot completion, stale-handle rejection) without target

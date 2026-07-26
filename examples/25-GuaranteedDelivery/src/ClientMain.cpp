@@ -40,16 +40,16 @@ FEsp32TimeSource GTimeSource{};
  * Every CounterIntervalMilliseconds, sends the next value in 1..LastCounterValue to the server's
  * FLedgerActor on BOTH the best-effort and the guaranteed channel, then idles once all 30 are sent.
  *
- * Takes the router by constructor injection (D9); this actor owns no components (TInlineActor<0>)
+ * Takes the router by constructor injection (D9); this actor owns no components (AActor)
  * and has no handlers -- it only sends, and acknowledgements are consumed entirely inside the
  * guaranteed channel's own wrapper, never surfaced as an actor message.
  */
-class FCounterActor final : public TInlineActor<0>
+class FCounterActor final : public AActor
 {
 public:
 	/** Aligns this actor's own tick to the counter cadence and stores the injected router. */
 	explicit FCounterActor(IMessageRouter& InRouter) noexcept
-		: TInlineActor<0>(FTickConfiguration::EnabledEvery(CounterIntervalMilliseconds)), Router(InRouter)
+		: AActor(FTickConfiguration::EnabledEvery(CounterIntervalMilliseconds)), Router(InRouter)
 	{
 	}
 

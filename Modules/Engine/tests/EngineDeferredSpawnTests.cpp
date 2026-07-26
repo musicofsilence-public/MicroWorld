@@ -17,7 +17,6 @@ using MicroWorld::EActorSpawnRequestResult;
 using MicroWorld::EActorSpawnState;
 using MicroWorld::EObjectResult;
 using MicroWorld::ERuntimeResult;
-using MicroWorld::FActorComponentRegistry;
 using MicroWorld::FDefaultEngineTraits;
 using MicroWorld::FGarbageCollectionBudget;
 using MicroWorld::FGarbageCollector;
@@ -123,11 +122,8 @@ struct FDeferredMoveProbe final
 class FDeferredActor final : public AActor
 {
 public:
-	/** Takes caller-owned component storage and a per-test event sink through the deferred factory. */
-	FDeferredActor(MicroWorld::FActorComponentRegistryReference InComponents, FDeferredSpawnState* const InState) noexcept
-		: AActor(std::move(InComponents)), State(InState)
-	{
-	}
+	/** Binds the per-test event sink through the deferred factory. */
+	FDeferredActor(FDeferredSpawnState* const InState) noexcept : AActor(), State(InState) {}
 
 protected:
 	/** Makes barrier publication directly observable through the actor lifecycle contract. */
@@ -143,11 +139,7 @@ class FOrderedDeferredActor final : public AActor
 {
 public:
 	/** Retains isolated component storage, the shared order sink, and this actor's expected label. */
-	FOrderedDeferredActor(
-		MicroWorld::FActorComponentRegistryReference InComponents, FDeferredSpawnOrderState* const InState, const std::uint32_t InLabel) noexcept
-		: AActor(std::move(InComponents)), State(InState), Label(InLabel)
-	{
-	}
+	FOrderedDeferredActor(FDeferredSpawnOrderState* const InState, const std::uint32_t InLabel) noexcept : AActor(), State(InState), Label(InLabel) {}
 
 protected:
 	/** Makes the public actor lifecycle order directly observable without reading World internals. */
@@ -173,10 +165,7 @@ class FLargeDeferredActor final : public AActor
 {
 public:
 	/** Retains the same observable state dependency while intentionally ignoring the oversized value. */
-	FLargeDeferredActor(MicroWorld::FActorComponentRegistryReference InComponents, FDeferredSpawnState* const InState, FDeferredLargeCapture) noexcept
-		: AActor(std::move(InComponents)), State(InState)
-	{
-	}
+	FLargeDeferredActor(FDeferredSpawnState* const InState, FDeferredLargeCapture) noexcept : AActor(), State(InState) {}
 
 protected:
 	/** Makes any accidental admission observable through the normal actor lifecycle. */
@@ -199,11 +188,7 @@ class FOveralignedDeferredActor final : public AActor
 {
 public:
 	/** Keeps the test actor constructible if a future storage policy supports this alignment. */
-	FOveralignedDeferredActor(
-		MicroWorld::FActorComponentRegistryReference InComponents, FDeferredSpawnState* const InState, FOveralignedCapture) noexcept
-		: AActor(std::move(InComponents)), State(InState)
-	{
-	}
+	FOveralignedDeferredActor(FDeferredSpawnState* const InState, FOveralignedCapture) noexcept : AActor(), State(InState) {}
 
 protected:
 	/** Makes unexpected admission observable. */
@@ -219,9 +204,7 @@ class FLvaluePointerDeferredActor final : public AActor
 {
 public:
 	/** Captures an lvalue managed pointer by value for later barrier-time construction. */
-	FLvaluePointerDeferredActor(
-		MicroWorld::FActorComponentRegistryReference InComponents, const MicroWorld::TObjectPtr<MicroWorld::UWorld> InCapturedWorld) noexcept
-		: AActor(std::move(InComponents)), CapturedWorld(InCapturedWorld)
+	FLvaluePointerDeferredActor(const MicroWorld::TObjectPtr<MicroWorld::UWorld> InCapturedWorld) noexcept : AActor(), CapturedWorld(InCapturedWorld)
 	{
 	}
 
@@ -238,9 +221,7 @@ class FMoveProbeDeferredActor final : public AActor
 {
 public:
 	/** Takes ownership only if deferred request admission reaches factory construction. */
-	FMoveProbeDeferredActor(MicroWorld::FActorComponentRegistryReference InComponents, FDeferredMoveProbe) noexcept : AActor(std::move(InComponents))
-	{
-	}
+	FMoveProbeDeferredActor(FDeferredMoveProbe) noexcept : AActor() {}
 };
 
 /** Retains a captured managed object so queued-factory tracing is directly observable through collection. */
@@ -248,10 +229,7 @@ class FObjectCaptureDeferredActor final : public AActor
 {
 public:
 	/** Stores the direct managed capture until the World publishes this actor. */
-	FObjectCaptureDeferredActor(MicroWorld::FActorComponentRegistryReference InComponents, const TObjectPtr<UObject> InCapturedObject) noexcept
-		: AActor(std::move(InComponents)), CapturedObject(InCapturedObject)
-	{
-	}
+	FObjectCaptureDeferredActor(const TObjectPtr<UObject> InCapturedObject) noexcept : AActor(), CapturedObject(InCapturedObject) {}
 
 private:
 	/** Keeps the managed capture meaningful after barrier-time construction. */
@@ -263,13 +241,12 @@ MW_TEST_CASE(EngineDeferredSpawnReportsQueuedThenSpawnedAtBarrier)
 {
 	FDeferredSpawnHost Host{FGarbageCollectionBudget{8, 8, 8}};
 	const auto World = Host.CreateWorld();
-	FActorComponentRegistry<0> Components;
 	FDeferredSpawnState State{};
 
 	MW_EXPECT_TRUE(Test, World.Get() != nullptr, "The composition root creates a configured world");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, Host.BeginPlay(0), "The empty world begins before deferred spawn admission");
 
-	const auto Request = Host.GetWorld().SpawnActor<FDeferredActor>(Components.MakeReference(), &State);
+	const auto Request = Host.GetWorld().SpawnActor<FDeferredActor>(&State);
 	const auto QueuedStatus = Host.GetWorld().GetSpawnStatus(Request.Handle);
 	MW_EXPECT_EQ(Test, EActorSpawnRequestResult::Queued, Request.Result, "Typed spawning queues a bounded factory during play");
 	MW_EXPECT_EQ(Test, EActorSpawnState::Queued, QueuedStatus.State, "The completion handle stays queued before the barrier");
@@ -287,11 +264,10 @@ MW_TEST_CASE(EngineDeferredSpawnBeforeBeginPlayStartsWhenPlayBegins)
 {
 	FDeferredSpawnHost Host{FGarbageCollectionBudget{8, 8, 8}};
 	const auto World = Host.CreateWorld();
-	FActorComponentRegistry<0> Components;
 	FDeferredSpawnState State{};
 
 	MW_EXPECT_TRUE(Test, World.Get() != nullptr, "The composition root creates a configured world");
-	const auto Request = Host.GetWorld().SpawnActor<FDeferredActor>(Components.MakeReference(), &State);
+	const auto Request = Host.GetWorld().SpawnActor<FDeferredActor>(&State);
 	MW_EXPECT_EQ(Test, EActorSpawnRequestResult::Queued, Request.Result, "A typed request is admitted before play begins");
 	MW_EXPECT_EQ(
 		Test, EActorSpawnState::Queued, Host.GetWorld().GetSpawnStatus(Request.Handle).State, "The pre-play request remains queued before BeginPlay");
@@ -311,13 +287,11 @@ MW_TEST_CASE(EngineDeferredSpawnBeforeBeginPlayStartsInQueueOrder)
 {
 	FDeferredSpawnHost Host{FGarbageCollectionBudget{8, 8, 8}};
 	const auto World = Host.CreateWorld();
-	FActorComponentRegistry<0> FirstComponents;
-	FActorComponentRegistry<0> SecondComponents;
 	FDeferredSpawnOrderState State{};
 
 	MW_EXPECT_TRUE(Test, World.Get() != nullptr, "The queue-order test creates a configured world");
-	const auto FirstRequest = Host.GetWorld().SpawnActor<FOrderedDeferredActor>(FirstComponents.MakeReference(), &State, 1);
-	const auto SecondRequest = Host.GetWorld().SpawnActor<FOrderedDeferredActor>(SecondComponents.MakeReference(), &State, 2);
+	const auto FirstRequest = Host.GetWorld().SpawnActor<FOrderedDeferredActor>(&State, 1);
+	const auto SecondRequest = Host.GetWorld().SpawnActor<FOrderedDeferredActor>(&State, 2);
 	MW_EXPECT_EQ(Test, EActorSpawnRequestResult::Queued, FirstRequest.Result, "The first pre-play typed request is queued");
 	MW_EXPECT_EQ(Test, EActorSpawnRequestResult::Queued, SecondRequest.Result, "The second pre-play typed request is queued");
 
@@ -333,17 +307,14 @@ MW_TEST_CASE(EngineDeferredSpawnBeforeBeginPlayStartsInQueueOrder)
 MW_TEST_CASE(EngineDeferredSpawnBeforeBeginPlayBeginsAfterRegisteredActors)
 {
 	FDeferredSpawnHost Host{FGarbageCollectionBudget{8, 8, 8}};
-	FActorComponentRegistry<0> RegisteredComponents;
-	FActorComponentRegistry<0> QueuedComponents;
 	FDeferredSpawnOrderState State{};
 	constexpr MicroWorld::FTypeId OrderedDeferredActorTypeId{0x00070002u};
 
 	const EObjectResult RegistrationResult = Host.RegisterClass<FOrderedDeferredActor>(OrderedDeferredActorTypeId, "OrderedDeferredActor");
 	const auto World = Host.CreateWorld();
-	const auto RegisteredActor =
-		Host.CreateObject<FOrderedDeferredActor>(OrderedDeferredActorTypeId, RegisteredComponents.MakeReference(), &State, 1);
+	const auto RegisteredActor = Host.CreateObject<FOrderedDeferredActor>(OrderedDeferredActorTypeId, &State, 1);
 	const MicroWorld::EEngineResult RegisterActorResult = World.Get()->RegisterActor(MicroWorld::TObjectPtr<AActor>{RegisteredActor.Object});
-	const auto QueuedRequest = Host.GetWorld().SpawnActor<FOrderedDeferredActor>(QueuedComponents.MakeReference(), &State, 2);
+	const auto QueuedRequest = Host.GetWorld().SpawnActor<FOrderedDeferredActor>(&State, 2);
 
 	MW_EXPECT_EQ(Test, EObjectResult::Success, RegistrationResult, "The registered actor class is available before world creation");
 	MW_EXPECT_TRUE(Test, World.Get() != nullptr, "The ordering test creates a configured world");
@@ -362,13 +333,11 @@ MW_TEST_CASE(EngineDeferredSpawnBeforeBeginPlayRejectsCapacityExhaustion)
 {
 	FCombinedSpawnCapacityHost Host{FGarbageCollectionBudget{8, 8, 8}};
 	const auto World = Host.CreateWorld();
-	FActorComponentRegistry<0> FirstComponents;
-	FActorComponentRegistry<0> SecondComponents;
 	FDeferredSpawnState State{};
 
 	MW_EXPECT_TRUE(Test, World.Get() != nullptr, "The capacity test creates a configured world");
-	const auto FirstRequest = Host.GetWorld().SpawnActor<FDeferredActor>(FirstComponents.MakeReference(), &State);
-	const auto SecondRequest = Host.GetWorld().SpawnActor<FDeferredActor>(SecondComponents.MakeReference(), &State);
+	const auto FirstRequest = Host.GetWorld().SpawnActor<FDeferredActor>(&State);
+	const auto SecondRequest = Host.GetWorld().SpawnActor<FDeferredActor>(&State);
 	MW_EXPECT_EQ(Test, EActorSpawnRequestResult::Queued, FirstRequest.Result, "The only actor slot admits the first pre-play request");
 	MW_EXPECT_EQ(
 		Test, EActorSpawnRequestResult::CapacityExceeded, SecondRequest.Result, "The second pre-play request is rejected at fixed actor capacity");
@@ -385,14 +354,13 @@ MW_TEST_CASE(EngineDeferredSpawnRejectsEndedWorld)
 {
 	FDeferredSpawnHost Host{FGarbageCollectionBudget{8, 8, 8}};
 	const auto World = Host.CreateWorld();
-	FActorComponentRegistry<0> Components;
 	FDeferredSpawnState State{};
 
 	MW_EXPECT_TRUE(Test, World.Get() != nullptr, "The ended-world test creates a configured world");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, Host.BeginPlay(0), "The world enters play before ending");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, Host.EndPlay(), "The world completes its terminal lifecycle transition");
 
-	const auto Request = Host.GetWorld().SpawnActor<FDeferredActor>(Components.MakeReference(), &State);
+	const auto Request = Host.GetWorld().SpawnActor<FDeferredActor>(&State);
 	MW_EXPECT_EQ(Test, EActorSpawnRequestResult::LifecycleLocked, Request.Result, "An ended world rejects typed spawn requests");
 	MW_EXPECT_TRUE(Test, !Request.Handle.IsValid(), "An ended-world rejection returns no completion handle");
 	MW_EXPECT_EQ(Test, std::uint32_t{0}, State.BeginCount, "An ended world cannot dispatch another actor begin");
@@ -403,12 +371,11 @@ MW_TEST_CASE(EngineDeferredSpawnRejectsOversizedFactoryWithoutMutation)
 {
 	FDeferredSpawnHost Host{FGarbageCollectionBudget{8, 8, 8}};
 	const auto World = Host.CreateWorld();
-	FActorComponentRegistry<0> Components;
 	FDeferredSpawnState State{};
 
 	MW_EXPECT_TRUE(Test, World.Get() != nullptr, "The composition root creates a configured world");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, Host.BeginPlay(0), "The world enters play before queue preflight");
-	const auto Request = Host.GetWorld().SpawnActor<FLargeDeferredActor>(Components.MakeReference(), &State, FDeferredLargeCapture{});
+	const auto Request = Host.GetWorld().SpawnActor<FLargeDeferredActor>(&State, FDeferredLargeCapture{});
 	MW_EXPECT_EQ(Test, EActorSpawnRequestResult::FactoryTooLarge, Request.Result, "Oversized captures are rejected before factory construction");
 	MW_EXPECT_TRUE(Test, !Request.Handle.IsValid(), "A rejected request returns no completion handle");
 	MW_EXPECT_EQ(Test, std::uint32_t{0}, State.BeginCount, "Layout rejection leaves no actor lifecycle side effect");
@@ -419,12 +386,11 @@ MW_TEST_CASE(EngineDeferredSpawnRejectsUnsupportedFactoryAlignment)
 {
 	FDeferredSpawnHost Host{FGarbageCollectionBudget{8, 8, 8}};
 	const auto World = Host.CreateWorld();
-	FActorComponentRegistry<0> Components;
 	FDeferredSpawnState State{};
 
 	MW_EXPECT_TRUE(Test, World.Get() != nullptr, "The composition root creates a configured world");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, Host.BeginPlay(0), "The world enters play before factory-layout preflight");
-	const auto Request = Host.GetWorld().SpawnActor<FOveralignedDeferredActor>(Components.MakeReference(), &State, FOveralignedCapture{});
+	const auto Request = Host.GetWorld().SpawnActor<FOveralignedDeferredActor>(&State, FOveralignedCapture{});
 	MW_EXPECT_EQ(
 		Test,
 		EActorSpawnRequestResult::FactoryAlignmentUnsupported,
@@ -437,13 +403,11 @@ MW_TEST_CASE(EngineDeferredSpawnRejectsUnsupportedFactoryAlignment)
 MW_TEST_CASE(EngineDeferredSpawnRejectsManualSpawnWhenTypedRequestUsesRemainingCapacity)
 {
 	FCombinedSpawnCapacityHost Host{FGarbageCollectionBudget{8, 8, 8}};
-	FActorComponentRegistry<0> TypedComponents;
-	FActorComponentRegistry<0> ManualComponents;
 	FDeferredSpawnState State{};
 
 	const MicroWorld::EObjectResult RegisterResult = Host.RegisterClass<FDeferredActor>(DeferredActorTypeId, "DeferredActor");
 	const auto World = Host.CreateWorld();
-	const auto ManualCreation = Host.CreateObject<FDeferredActor>(DeferredActorTypeId, ManualComponents.MakeReference(), &State);
+	const auto ManualCreation = Host.CreateObject<FDeferredActor>(DeferredActorTypeId, &State);
 	const bool bWorldCreated = World.Get() != nullptr;
 	const bool bManualActorCreated = ManualCreation.Object.Get() != nullptr;
 	const ERuntimeResult BeginResult = Host.BeginPlay(0);
@@ -453,7 +417,7 @@ MW_TEST_CASE(EngineDeferredSpawnRejectsManualSpawnWhenTypedRequestUsesRemainingC
 	MW_EXPECT_TRUE(Test, bManualActorCreated, "The manual actor has a valid managed reference before queueing");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, BeginResult, "The empty capacity test world begins before spawn requests");
 
-	const auto TypedRequest = Host.GetWorld().SpawnActor<FDeferredActor>(TypedComponents.MakeReference(), &State);
+	const auto TypedRequest = Host.GetWorld().SpawnActor<FDeferredActor>(&State);
 	const auto TypedStatus = Host.GetWorld().GetSpawnStatus(TypedRequest.Handle);
 	const MicroWorld::EEngineResult ManualSpawnResult = Host.GetWorld().SpawnActor(MicroWorld::TObjectPtr<AActor>{ManualCreation.Object});
 	const std::size_t PendingManualSpawnCount = Host.GetWorld().PendingSpawnCount();
@@ -473,14 +437,13 @@ MW_TEST_CASE(EngineDeferredSpawnDeliversLvalueObjectPointerToSpawnedActor)
 {
 	FDeferredSpawnHost Host{FGarbageCollectionBudget{8, 8, 8}};
 	const auto World = Host.CreateWorld();
-	FActorComponentRegistry<0> Components;
 	const MicroWorld::TObjectPtr<MicroWorld::UWorld> WorldReference = World;
 	const bool bWorldCreated = World.Get() != nullptr;
 	const ERuntimeResult BeginResult = Host.BeginPlay(0);
 	MW_EXPECT_TRUE(Test, bWorldCreated, "The lvalue capture test creates an isolated configured world");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, BeginResult, "The world begins before deferred lvalue capture admission");
 
-	const auto Request = Host.GetWorld().SpawnActor<FLvaluePointerDeferredActor>(Components.MakeReference(), WorldReference);
+	const auto Request = Host.GetWorld().SpawnActor<FLvaluePointerDeferredActor>(WorldReference);
 	const ERuntimeResult TickResult = Host.Tick(10);
 	const auto SpawnedStatus = Host.GetWorld().GetSpawnStatus(Request.Handle);
 	FLvaluePointerDeferredActor* const SpawnedActor = static_cast<FLvaluePointerDeferredActor*>(SpawnedStatus.Actor.Get());
@@ -504,7 +467,6 @@ MW_TEST_CASE(EngineDeferredSpawnRejectsActiveCollectionBeforeMovingArguments)
 	FGarbageCollector& Collector = CollectorFixture.GetCollector();
 	FWorldActorRegistry<1> WorldActors;
 	TDeferredActorSpawnStorage<1, 96> DeferredSpawns;
-	FActorComponentRegistry<0> Components;
 	const auto WorldCreation = Store.NewObject<UWorld>(
 		*Env.FindDescriptor(MicroWorld::UWorldClassId),
 		WorldActors.MakeReference(),
@@ -522,7 +484,7 @@ MW_TEST_CASE(EngineDeferredSpawnRejectsActiveCollectionBeforeMovingArguments)
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, BeginResult, "The configured world begins before collection admission");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, CollectionRequestResult, "The collector enters an active collection phase");
 
-	const auto Request = World.Get()->SpawnActor<FMoveProbeDeferredActor>(Components.MakeReference(), std::move(MoveProbe));
+	const auto Request = World.Get()->SpawnActor<FMoveProbeDeferredActor>(std::move(MoveProbe));
 	const bool bMoveProbeWasMoved = MoveProbe.bWasMovedFrom;
 	const ERuntimeResult CancelResult = Collector.CancelCollection();
 
@@ -540,8 +502,6 @@ MW_TEST_CASE(EngineDeferredSpawnTracesCapturedObjectThroughCollectionThenPublish
 	FGarbageCollector& Collector = CollectorFixture.GetCollector();
 	FWorldActorRegistry<1> WorldActors;
 	TDeferredActorSpawnStorage<1, 96> DeferredSpawns;
-	FActorComponentRegistry<0> CaptureComponents;
-	FActorComponentRegistry<0> TypedComponents;
 	const auto WorldCreation = Store.NewObject<UWorld>(
 		*Env.FindDescriptor(MicroWorld::UWorldClassId),
 		WorldActors.MakeReference(),
@@ -549,7 +509,7 @@ MW_TEST_CASE(EngineDeferredSpawnTracesCapturedObjectThroughCollectionThenPublish
 		MicroWorld::MakeClassRegistryRegistrationView(Env.GetRegistry()));
 	const TObjectPtr<UWorld> World = WorldCreation.Object;
 	auto WorldRoot = Env.MakeRoot(World);
-	const auto CaptureCreation = Store.NewObject<AActor>(*Env.FindDescriptor(MicroWorld::AActorClassId), CaptureComponents.MakeReference());
+	const auto CaptureCreation = Store.NewObject<AActor>(*Env.FindDescriptor(MicroWorld::AActorClassId));
 	const TObjectPtr<UObject> UnrootedCapture{CaptureCreation.Object};
 	const bool bWorldCreated = World.Get() != nullptr;
 	const bool bCaptureCreated = UnrootedCapture.Get() != nullptr;
@@ -561,7 +521,7 @@ MW_TEST_CASE(EngineDeferredSpawnTracesCapturedObjectThroughCollectionThenPublish
 	MW_EXPECT_TRUE(Test, bCaptureCreated, "The unrooted capture resolves before it enters the factory");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, BeginResult, "The tracing fixture begins the configured world");
 
-	const auto Request = World.Get()->SpawnActor<FObjectCaptureDeferredActor>(TypedComponents.MakeReference(), UnrootedCapture);
+	const auto Request = World.Get()->SpawnActor<FObjectCaptureDeferredActor>(UnrootedCapture);
 	const auto CollectionResult = Collector.CollectFull();
 	const bool bCaptureSurvivedCollection = UnrootedCapture.Get() != nullptr;
 	const ERuntimeResult ApplyResult = World.Get()->ApplyPending(10);
@@ -583,8 +543,6 @@ MW_TEST_CASE(EngineDeferredSpawnReportsStoreCapacityFailureWithoutPublication)
 	FObjectStore& Store = Env.GetStore();
 	FWorldActorRegistry<1> WorldActors;
 	TDeferredActorSpawnStorage<1, 96> DeferredSpawns;
-	FActorComponentRegistry<0> BlockingComponents;
-	FActorComponentRegistry<0> TypedComponents;
 	FDeferredSpawnState State{};
 	const auto WorldCreation = Store.NewObject<UWorld>(
 		*Env.FindDescriptor(MicroWorld::UWorldClassId),
@@ -592,7 +550,7 @@ MW_TEST_CASE(EngineDeferredSpawnReportsStoreCapacityFailureWithoutPublication)
 		DeferredSpawns.MakeReference(),
 		MicroWorld::MakeClassRegistryRegistrationView(Env.GetRegistry()));
 	const TObjectPtr<UWorld> World = WorldCreation.Object;
-	const auto BlockingCreation = Store.NewObject<AActor>(*Env.FindDescriptor(MicroWorld::AActorClassId), BlockingComponents.MakeReference());
+	const auto BlockingCreation = Store.NewObject<AActor>(*Env.FindDescriptor(MicroWorld::AActorClassId));
 	const bool bWorldCreated = World.Get() != nullptr;
 	const bool bBlockingObjectCreated = BlockingCreation.Object.Get() != nullptr;
 	const ERuntimeResult BeginResult = World.Get()->BeginPlay(0);
@@ -603,7 +561,7 @@ MW_TEST_CASE(EngineDeferredSpawnReportsStoreCapacityFailureWithoutPublication)
 	MW_EXPECT_TRUE(Test, bBlockingObjectCreated, "The blocking object occupies the store before the deferred barrier");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, BeginResult, "The full-store fixture begins the world before typed queue admission");
 
-	const auto Request = World.Get()->SpawnActor<FDeferredActor>(TypedComponents.MakeReference(), &State);
+	const auto Request = World.Get()->SpawnActor<FDeferredActor>(&State);
 	const ERuntimeResult ApplyResult = World.Get()->ApplyPending(10);
 	const auto SpawnStatus = World.Get()->GetSpawnStatus(Request.Handle);
 	const bool bPublishedActorExists = SpawnStatus.Actor.Get() != nullptr;
@@ -624,13 +582,11 @@ MW_TEST_CASE(EngineDeferredSpawnPinsThenInvalidatesReusedHandle)
 {
 	FDeferredSpawnHost Host{FGarbageCollectionBudget{8, 8, 8}};
 	const auto World = Host.CreateWorld();
-	FActorComponentRegistry<0> FirstComponents;
-	FActorComponentRegistry<0> SecondComponents;
 	FDeferredSpawnState State{};
 
 	MW_EXPECT_TRUE(Test, World.Get() != nullptr, "The composition root creates a configured world");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, Host.BeginPlay(0), "The world begins before the deferred request");
-	const auto FirstRequest = Host.GetWorld().SpawnActor<FDeferredActor>(FirstComponents.MakeReference(), &State);
+	const auto FirstRequest = Host.GetWorld().SpawnActor<FDeferredActor>(&State);
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, Host.Tick(10), "The first deferred actor publishes at the barrier");
 	const auto FirstStatus = Host.GetWorld().GetSpawnStatus(FirstRequest.Handle);
 	MW_EXPECT_EQ(Test, EActorSpawnState::Spawned, FirstStatus.State, "A live actor pins its completion handle");
@@ -643,7 +599,7 @@ MW_TEST_CASE(EngineDeferredSpawnPinsThenInvalidatesReusedHandle)
 		Host.GetWorld().GetSpawnStatus(FirstRequest.Handle).State,
 		"Destroyed actor releases but does not immediately reuse its handle");
 
-	const auto SecondRequest = Host.GetWorld().SpawnActor<FDeferredActor>(SecondComponents.MakeReference(), &State);
+	const auto SecondRequest = Host.GetWorld().SpawnActor<FDeferredActor>(&State);
 	MW_EXPECT_EQ(Test, EActorSpawnRequestResult::Queued, SecondRequest.Result, "A released terminal slot accepts the next request");
 	MW_EXPECT_EQ(
 		Test,

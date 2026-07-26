@@ -1,7 +1,6 @@
 #include <MicroWorld/Engine/Actor.h>
 #include <MicroWorld/Engine/ActorComponent.h>
 #include <MicroWorld/Engine/EngineClassIds.h>
-#include <MicroWorld/Engine/EngineStorage.h>
 #include <MicroWorld/Engine/World.h>
 
 #include <MicroWorld/Object/ClassDescriptor.h>
@@ -11,15 +10,10 @@
 #include <MicroWorld/Object/ObjectPtr.h>
 #include <MicroWorld/TickFunction.h>
 
-#include <utility>
-
 namespace MicroWorld
 {
 
-AActor::AActor(FActorComponentRegistryReference InComponentStorage, const FTickConfiguration InTickConfiguration) noexcept
-	: UObject(), FTickable(InTickConfiguration), Components(std::move(InComponentStorage))
-{
-}
+AActor::AActor(const FTickConfiguration InTickConfiguration) noexcept : UObject(), FTickable(InTickConfiguration) {}
 
 AActor::~AActor() noexcept = default;
 
@@ -67,22 +61,18 @@ EEngineResult AActor::CheckComponentRegistrable(const TObjectPtr<UActorComponent
 	{
 		return EEngineResult::CrossStore;
 	}
-	if (!Components.IsValid())
-	{
-		return EEngineResult::CapacityExceeded;
-	}
 	// A duplicate of a component already registered with this actor is reported
 	// before the cross-owner check so a repeated registration stays honest.
-	for (std::size_t Index = 0; Index < Components.GetCount(); ++Index)
+	for (std::size_t Index = 0; Index < ComponentCount; ++Index)
 	{
-		if (Components.At(Index).Handle() == InComponent.Handle())
+		if (Components[Index].Handle() == InComponent.Handle())
 		{
 			return EEngineResult::Duplicate;
 		}
 	}
 	// Capacity (including zero capacity) is a structural property of this actor,
 	// so it is reported before the candidate's existing ownership is inspected.
-	if (Components.GetCount() >= Components.GetCapacity())
+	if (ComponentCount >= MaxComponentsPerActor)
 	{
 		return EEngineResult::CapacityExceeded;
 	}
@@ -98,7 +88,8 @@ void AActor::PublishComponent(const TObjectPtr<UActorComponent> InComponent) noe
 	// Atomic publish: every fallible check precedes the parent link and registry update.
 	UActorComponent* const Resolved = InComponent.Get();
 	Resolved->AssignOwner(GetObjectHandle());
-	Components.Add(InComponent);
+	Components[ComponentCount] = InComponent;
+	++ComponentCount;
 }
 
 UWorld* AActor::GetOwnerWorld() const noexcept
@@ -115,10 +106,6 @@ UWorld* AActor::GetOwnerWorld() const noexcept
 
 ERuntimeResult AActor::DispatchBeginPlay(const TimePointMilliseconds InNowMilliseconds) noexcept
 {
-	if (!Components.IsValid())
-	{
-		return ERuntimeResult::CapacityExceeded;
-	}
 	const ERuntimeResult BeginResult = Lifecycle.Begin();
 	if (BeginResult != ERuntimeResult::Success)
 	{
@@ -142,16 +129,16 @@ ERuntimeResult AActor::BeginComponentsWithRollback(const TimePointMilliseconds I
 	// begun components are ended in reverse so the actor never observes a
 	// partially begun set.
 	std::size_t BegunComponentCount = 0;
-	for (std::size_t Index = 0; Index < Components.GetCount(); ++Index)
+	for (std::size_t Index = 0; Index < ComponentCount; ++Index)
 	{
-		UActorComponent* const Component = Components.At(Index).Get();
+		UActorComponent* const Component = Components[Index].Get();
 		const ERuntimeResult ComponentResult =
 			Component != nullptr ? Component->DispatchBeginPlay(InNowMilliseconds) : ERuntimeResult::InvalidLifecycle;
 		if (ComponentResult != ERuntimeResult::Success)
 		{
 			for (std::size_t RollbackIndex = BegunComponentCount; RollbackIndex > 0; --RollbackIndex)
 			{
-				if (UActorComponent* const Begun = Components.At(RollbackIndex - 1).Get())
+				if (UActorComponent* const Begun = Components[RollbackIndex - 1].Get())
 				{
 					(void)Begun->DispatchEndPlay();
 				}
@@ -175,9 +162,9 @@ ERuntimeResult AActor::DispatchAdvance(const TimePointMilliseconds InNowMillisec
 
 	// Components tick before their actor so a Tick hook can observe component
 	// state already advanced for this dispatcher step.
-	for (std::size_t Index = 0; Index < Components.GetCount(); ++Index)
+	for (std::size_t Index = 0; Index < ComponentCount; ++Index)
 	{
-		UActorComponent* const Component = Components.At(Index).Get();
+		UActorComponent* const Component = Components[Index].Get();
 		if (Component == nullptr)
 		{
 			return ERuntimeResult::InvalidLifecycle;
@@ -218,9 +205,9 @@ ERuntimeResult AActor::DispatchEndPlay() noexcept
 	// The actor's own hook runs before its components end, matching Core.
 	EndPlay();
 	ERuntimeResult FirstError = ERuntimeResult::Success;
-	for (std::size_t Index = Components.GetCount(); Index > 0; --Index)
+	for (std::size_t Index = ComponentCount; Index > 0; --Index)
 	{
-		if (UActorComponent* const Component = Components.At(Index - 1).Get())
+		if (UActorComponent* const Component = Components[Index - 1].Get())
 		{
 			const ERuntimeResult ComponentResult = Component->DispatchEndPlay();
 			if (FirstError == ERuntimeResult::Success && ComponentResult != ERuntimeResult::Success)
@@ -248,9 +235,9 @@ void AActor::MarkRegisteredComponentsPendingDestroy() noexcept
 	// Components have already ended (reverse order in DispatchEndPlay); marking
 	// each one queues it for the same destruction barrier as its owning actor.
 	// The caller invokes this outside any dispatch guard so the store accepts it.
-	for (std::size_t Index = 0; Index < Components.GetCount(); ++Index)
+	for (std::size_t Index = 0; Index < ComponentCount; ++Index)
 	{
-		(void)ObjectStore->MarkPendingDestroy(Components.At(Index).Handle());
+		(void)ObjectStore->MarkPendingDestroy(Components[Index].Handle());
 	}
 }
 
@@ -258,9 +245,9 @@ void AActor::VisitReferences(FReferenceCollector& InCollector) noexcept
 {
 	// Every registered component is a traced downward edge; the weak world link
 	// is deliberately not traced so the parent-child graph stays acyclic.
-	for (std::size_t Index = 0; Index < Components.GetCount(); ++Index)
+	for (std::size_t Index = 0; Index < ComponentCount; ++Index)
 	{
-		InCollector.AddReferencedObject(Components.At(Index));
+		InCollector.AddReferencedObject(Components[Index]);
 	}
 }
 

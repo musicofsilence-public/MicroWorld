@@ -41,12 +41,12 @@ FEsp32TimeSource GTimeSource{};
  *
  * Takes the router by constructor injection (D9); never ticks, since it only reacts to messages.
  */
-class FLedgerActor final : public TInlineActor<0>
+class FLedgerActor final : public AActor
 {
 public:
 	/** Stores the injected router; this actor's tick is disabled, matching example 24's sink actor. */
 	explicit FLedgerActor(IMessageRouter& InRouter) noexcept
-		: TInlineActor<0>({/*bCanEverTick*/ false, /*bStartWithTickEnabled*/ false, /*TickIntervalMilliseconds*/ 0}), Router(InRouter)
+		: AActor({/*bCanEverTick*/ false, /*bStartWithTickEnabled*/ false, /*TickIntervalMilliseconds*/ 0}), Router(InRouter)
 	{
 	}
 

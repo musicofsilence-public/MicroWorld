@@ -8,7 +8,7 @@ volatile int MemoryConsumerProbeResult = -1;
 
 } // namespace
 
-/** Proves ESP-IDF can compile and link the Core+Memory profile without executing hardware I/O. */
+/** Proves ESP-IDF can compile and link Core memory APIs without executing hardware I/O. */
 extern "C" void app_main()
 {
 	MemoryConsumerProbeResult = RunMemoryConsumerProbe();

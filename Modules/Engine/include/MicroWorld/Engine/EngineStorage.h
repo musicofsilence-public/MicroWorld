@@ -1,7 +1,6 @@
 #pragma once
 
 #include <MicroWorld/Engine/Actor.h>
-#include <MicroWorld/Engine/ActorComponent.h>
 #include <MicroWorld/Engine/DeferredActorSpawn.h>
 #include <MicroWorld/Engine/EngineRegistryView.h>
 
@@ -10,63 +9,6 @@
 
 namespace MicroWorld
 {
-
-/**
- * Owns one actor's fixed-capacity component registry.
- *
- * The private array and count must outlive the actor that consumes the one-shot
- * reference returned by MakeReference. Registry storage cannot be copied or moved after
- * its address becomes part of managed-object state.
- */
-template<std::size_t MaxComponents>
-class FActorComponentRegistry final
-{
-public:
-	/** Preserves the stable address retained by a registry reference. */
-	FActorComponentRegistry() noexcept = default;
-
-	/** Prevents two registry owners from sharing one array. */
-	FActorComponentRegistry(const FActorComponentRegistry&) = delete;
-
-	/** Prevents replacing registry storage behind an actor. */
-	FActorComponentRegistry& operator=(const FActorComponentRegistry&) = delete;
-
-	/** Prevents moving registry storage after a reference may have escaped. */
-	FActorComponentRegistry(FActorComponentRegistry&&) = delete;
-
-	/** Prevents replacing registry storage behind an actor. */
-	FActorComponentRegistry& operator=(FActorComponentRegistry&&) = delete;
-
-	/** Transfers the only reference that may mutate this registry to one actor. */
-	FActorComponentRegistryReference MakeReference() & noexcept
-	{
-		if (bReferenceMade)
-		{
-			return {};
-		}
-		bReferenceMade = true;
-		return FActorComponentRegistryReference{Components.data(), MaxComponents, Count};
-	}
-
-	/** Prevents a view from outliving a temporary registry owner. */
-	FActorComponentRegistryReference MakeReference() && = delete;
-
-	/** Reports registration occupancy without exposing mutable storage. */
-	std::size_t GetCount() const noexcept { return Count; }
-
-	/** Reports the immutable registration capacity. */
-	static constexpr std::size_t GetCapacity() noexcept { return MaxComponents; }
-
-private:
-	/** Holds traced component references without exposing post-begin mutation. */
-	std::array<TObjectPtr<UActorComponent>, MaxComponents> Components{};
-
-	/** Records the number of entries published only through the owning actor. */
-	std::size_t Count{0};
-
-	/** Ensures this storage cannot be shared or rebound to a second actor. */
-	bool bReferenceMade{false};
-};
 
 /**
  * Owns one world's fixed-capacity actor registry.

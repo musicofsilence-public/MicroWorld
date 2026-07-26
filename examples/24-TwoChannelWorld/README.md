@@ -45,7 +45,7 @@ wire, simultaneously, between the same two boards.
 - `FEsp32UartDriver`, `FEsp32UartConfig`, `MakeUartAddress`
 - `AActor::SetTickInterval` — the sensor re-times its own reporting cadence
 - `TEngine` (`RegisterClass` / `CreateWorld` / `CreateObject` /
-  `BeginPlay` / `Tick`), `TInlineActor`, `UWorld::RegisterActor`
+  `BeginPlay` / `Tick`), `AActor`, `UWorld::RegisterActor`
 - `FEsp32TimeSource::Now`, `SleepMilliseconds`, `WriteEsp32LogRecord`, `MW_LOG`
 
 ## Hardware required

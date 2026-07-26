@@ -100,11 +100,8 @@ using FClientNet = TNetHost<1 /*MaxPeers*/, 256 /*MaxPacketBytes*/>;
 class FDemoSpawnedActor final : public AActor
 {
 public:
-	/** Forwards the component reference and the begin counter the actor bumps on play. */
-	FDemoSpawnedActor(FActorComponentRegistryReference Components, int& InBeginCount) noexcept
-		: AActor(std::move(Components)), BeginCount(InBeginCount)
-	{
-	}
+	/** Binds the begin counter the actor bumps on play. */
+	FDemoSpawnedActor(int& InBeginCount) noexcept : AActor(), BeginCount(InBeginCount) {}
 
 	/** Keeps exact descriptor-driven destruction publicly instantiable. */
 	~FDemoSpawnedActor() noexcept override = default;
@@ -120,19 +117,15 @@ private:
 
 /**
  * Everything the server's channel-1 handler needs to spawn one actor into the
- * server world on each input event. The registries are pre-allocated and
- * indexed by a monotonic sequence because each FActorComponentRegistry reference is
- * one-shot (MakeReference may be issued only once per registry).
+ * server world on each input event. A monotonic sequence bounds accepted
+ * requests and gives each accepted request a stable position.
  */
 struct FDemoSpawnContext
 {
 	/** The server engine host whose world receives the spawned actor. */
 	FServerEngine& Host;
 
-	/** Caller-owned component registries, one per permitted spawn; indexed by sequence. */
-	std::array<FActorComponentRegistry<0>, MaxSpawns>& SpawnedRegistries;
-
-	/** Monotonic count of input events handled; selects the next one-shot registry. */
+	/** Monotonic count of input events handled; enforces the bounded spawn limit. */
 	int& SpawnSequence;
 
 	/** Live actor count the server reports each step; bumped exactly once per accepted spawn. */
@@ -246,10 +239,9 @@ bool RegisterDemoWorld(FServerEngine& ServerHost) noexcept
 }
 
 /**
- * Spawns one server-world actor in response to a client input event, drawing
- * from the next pre-allocated one-shot component registry. Does nothing once
- * MaxSpawns requests have already been handled, since no further registry
- * remains to hand out.
+ * Spawns one server-world actor in response to a client input event. Does
+ * nothing once MaxSpawns requests have already been handled, keeping the
+ * demonstration's world usage bounded.
  */
 void HandleClientSpawnRequest(FDemoSpawnContext& SpawnContext, int& SpawnedBeginCount) noexcept
 {
@@ -257,10 +249,9 @@ void HandleClientSpawnRequest(FDemoSpawnContext& SpawnContext, int& SpawnedBegin
 	{
 		return;
 	}
-	const int Slot = SpawnContext.SpawnSequence;
 	++SpawnContext.SpawnSequence;
-	const TObjectCreationResult<FDemoSpawnedActor> Creation = SpawnContext.Host.CreateObject<FDemoSpawnedActor>(
-		DemoSpawnedActorTypeId, SpawnContext.SpawnedRegistries[static_cast<std::size_t>(Slot)].MakeReference(), SpawnedBeginCount);
+	const TObjectCreationResult<FDemoSpawnedActor> Creation =
+		SpawnContext.Host.CreateObject<FDemoSpawnedActor>(DemoSpawnedActorTypeId, SpawnedBeginCount);
 	if (Creation.Result != EObjectResult::Success)
 	{
 		return;
@@ -488,13 +479,12 @@ int main()
 	FClientNet ClientNet(ClientDriver);
 	TNetHostSystem<FServerNet> ServerFrame{ServerNet};
 
-	std::array<FActorComponentRegistry<0>, MaxSpawns> SpawnedRegistries{};
 	int SpawnSequence = 0;
 	int SpawnedBeginCount = 0;
 	int WorldActorCount = 0;
 
 	FServerEngine ServerHost{FGarbageCollectionBudget{1, 4, 8}, ServerFrame};
-	FDemoSpawnContext SpawnContext{ServerHost, SpawnedRegistries, SpawnSequence, WorldActorCount};
+	FDemoSpawnContext SpawnContext{ServerHost, SpawnSequence, WorldActorCount};
 	FDemoStateCapture StateCapture{};
 	FDelegateHandle SpawnHandle{};
 	FDelegateHandle StateHandle{};

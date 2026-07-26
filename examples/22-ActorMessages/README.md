@@ -55,7 +55,7 @@ followed one poll later by `calibrated`.
   / `SendMessageToActor`)
 - `FMessageView`, `FMessageHandlerBinding`
 - `LocalChannelId`, `BroadcastActorId`
-- `TInlineActor`, `UActorComponent`
+- `AActor`, `UActorComponent`
 - `TEngineHost` (network-frame constructor, `RegisterClass` / `CreateWorld` /
   `CreateObject` / `RegisterComponent` / `BeginPlay` / `Tick` / `EndPlay`)
 - `FEsp32TimeSource`, `WriteEsp32LogRecord`, `SleepMilliseconds`

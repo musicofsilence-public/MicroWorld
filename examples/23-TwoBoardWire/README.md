@@ -33,7 +33,7 @@ over WiFi.
 - `TNetHost` (`Configure` / `Start`), `TNetHostSystem`, `ENetMode`
 - `FEsp32UartDriver`, `FEsp32UartConfig`, `MakeUartAddress`
 - `TEngineHost` (`RegisterClass` / `CreateWorld` / `CreateObject` /
-  `BeginPlay` / `Tick`), `TInlineActor`, `UWorld::RegisterActor`
+  `BeginPlay` / `Tick`), `AActor`, `UWorld::RegisterActor`
 - `FEsp32TimeSource::Now`, `SleepMilliseconds`, `WriteEsp32LogRecord`, `MW_LOG`
 
 ## Hardware required

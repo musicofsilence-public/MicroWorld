@@ -51,7 +51,7 @@ gap positions as illustrative, not fixed.
 - `FEsp32WifiLink` (`StartAccessPoint` / `JoinAccessPoint`), `FEsp32UdpDriver`,
   `MakeUdpAddress`
 - `TEngineHost` (`RegisterClass` / `CreateWorld` / `CreateObject` /
-  `BeginPlay` / `Tick`), `TInlineActor`, `UWorld::RegisterActor`
+  `BeginPlay` / `Tick`), `AActor`, `UWorld::RegisterActor`
 - `FEsp32TimeSource::Now`, `SleepMilliseconds`, `WriteEsp32LogRecord`, `MW_LOG`
 
 ## Hardware required

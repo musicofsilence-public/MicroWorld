@@ -39,14 +39,14 @@ constexpr DurationMilliseconds SwitchToggleIntervalMilliseconds = 2000;
  * Every SwitchToggleIntervalMilliseconds, toggles a lamp state and sends it to FLampActor, and
  * broadcasts an incrementing heartbeat counter.
  *
- * Takes the router by constructor injection (D9); this actor owns no components (TInlineActor<0>).
+ * Takes the router by constructor injection (D9); this actor owns no components (AActor).
  */
-class FSwitchActor final : public TInlineActor<0>
+class FSwitchActor final : public AActor
 {
 public:
 	/** Aligns this actor's own tick to the 2 s toggle cadence and stores the injected router. */
 	explicit FSwitchActor(IMessageRouter& InRouter) noexcept
-		: TInlineActor<0>(FTickConfiguration::EnabledEvery(SwitchToggleIntervalMilliseconds)), Router(InRouter)
+		: AActor(FTickConfiguration::EnabledEvery(SwitchToggleIntervalMilliseconds)), Router(InRouter)
 	{
 	}
 

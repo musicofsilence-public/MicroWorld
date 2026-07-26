@@ -38,12 +38,12 @@ FEsp32TimeSource GTimeSource{};
  *
  * Takes the router by constructor injection (D9); never ticks, since it only reacts to a message.
  */
-class FLampActor final : public TInlineActor<0>
+class FLampActor final : public AActor
 {
 public:
 	/** Stores the injected router; this actor's tick is disabled, matching FDisplayActor in example 22. */
 	explicit FLampActor(IMessageRouter& InRouter) noexcept
-		: TInlineActor<0>({/*bCanEverTick*/ false, /*bStartWithTickEnabled*/ false, /*TickIntervalMilliseconds*/ 0}), Router(InRouter)
+		: AActor({/*bCanEverTick*/ false, /*bStartWithTickEnabled*/ false, /*TickIntervalMilliseconds*/ 0}), Router(InRouter)
 	{
 	}
 
@@ -90,12 +90,12 @@ private:
  *
  * Takes the router by constructor injection (D9); never ticks, since it only reacts to a message.
  */
-class FDisplayActor final : public TInlineActor<0>
+class FDisplayActor final : public AActor
 {
 public:
 	/** Stores the injected router; this actor's tick is disabled, matching FDisplayActor in example 22. */
 	explicit FDisplayActor(IMessageRouter& InRouter) noexcept
-		: TInlineActor<0>({/*bCanEverTick*/ false, /*bStartWithTickEnabled*/ false, /*TickIntervalMilliseconds*/ 0}), Router(InRouter)
+		: AActor({/*bCanEverTick*/ false, /*bStartWithTickEnabled*/ false, /*TickIntervalMilliseconds*/ 0}), Router(InRouter)
 	{
 	}
 

@@ -8,86 +8,9 @@ namespace MicroWorld
 {
 
 class AActor;
-class UActorComponent;
 class UWorld;
-template<std::size_t MaxComponents>
-class FActorComponentRegistry;
 template<std::size_t MaxActors>
 class FWorldActorRegistry;
-
-/**
- * Move-only reference over one caller-owned fixed component registry.
- *
- * Only FActorComponentRegistry can create a reference, and only AActor can inspect
- * or mutate it. This keeps the owning array and count inaccessible to callers
- * after construction while AActor remains a non-template type.
- */
-class FActorComponentRegistryReference final
-{
-public:
-	/** Transfers the only usable reference and invalidates the source. */
-	FActorComponentRegistryReference(FActorComponentRegistryReference&& Other) noexcept
-		: Components(Other.Components), Capacity(Other.Capacity), Count(Other.Count)
-	{
-		Other.Components = nullptr;
-		Other.Capacity = 0;
-		Other.Count = nullptr;
-	}
-
-	/** Prevents two actors from sharing one mutable registry reference. */
-	FActorComponentRegistryReference(const FActorComponentRegistryReference&) = delete;
-
-	/** Prevents rebinding an actor's registry after construction. */
-	FActorComponentRegistryReference& operator=(const FActorComponentRegistryReference&) = delete;
-
-	/** Prevents rebinding an actor's registry after construction. */
-	FActorComponentRegistryReference& operator=(FActorComponentRegistryReference&&) = delete;
-
-private:
-	// AActor reads and mutates its own component registry only through this reference.
-	friend class AActor;
-
-	// The owning fixed registry is the only type that can mint a valid reference over its storage.
-	template<std::size_t>
-	friend class FActorComponentRegistry;
-
-	/** Creates an invalid reference when registry storage has already been claimed. */
-	FActorComponentRegistryReference() noexcept = default;
-
-	/** Creates one validated reference from its owning fixed registry. */
-	FActorComponentRegistryReference(TObjectPtr<UActorComponent>* InComponents, const std::size_t InCapacity, std::size_t& InCount) noexcept
-		: Components(InComponents), Capacity(InCapacity), Count(&InCount)
-	{
-	}
-
-	/** Reports whether this reference still identifies one fixed registry. */
-	bool IsValid() const noexcept { return Count != nullptr && (Capacity == 0 || Components != nullptr) && *Count <= Capacity; }
-
-	/** Returns the maximum number of components accepted by this registry. */
-	std::size_t GetCapacity() const noexcept { return Capacity; }
-
-	/** Returns the number of components registered by the owning actor. */
-	std::size_t GetCount() const noexcept { return Count != nullptr ? *Count : 0; }
-
-	/** Returns one registered component reference by validated internal index. */
-	const TObjectPtr<UActorComponent>& At(const std::size_t InIndex) const noexcept { return Components[InIndex]; }
-
-	/** Publishes one validated component and advances the private live count. */
-	void Add(const TObjectPtr<UActorComponent> InComponent) noexcept
-	{
-		Components[*Count] = InComponent;
-		++*Count;
-	}
-
-	/** Points at the private caller-owned component array. */
-	TObjectPtr<UActorComponent>* Components{nullptr};
-
-	/** Records the immutable capacity of the caller-owned component array. */
-	std::size_t Capacity{0};
-
-	/** Points at the private caller-owned live count advanced only by AActor. */
-	std::size_t* Count{nullptr};
-};
 
 /**
  * Move-only reference over one caller-owned fixed actor registry.

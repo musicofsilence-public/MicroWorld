@@ -1,6 +1,5 @@
 #pragma once
 
-#include <MicroWorld/Engine/EngineRegistryView.h>
 #include <MicroWorld/Engine/EngineResult.h>
 #include <MicroWorld/Lifecycle.h>
 #include <MicroWorld/Object/Object.h>
@@ -8,6 +7,8 @@
 #include <MicroWorld/Object/ObjectPtr.h>
 #include <MicroWorld/Tickable.h>
 #include <MicroWorld/Time.h>
+
+#include <cstddef>
 
 namespace MicroWorld
 {
@@ -29,6 +30,9 @@ class UWorld;
 class AActor : public UObject, private FTickable
 {
 public:
+	/** Bounds how many components one actor may register before BeginPlay. */
+	static constexpr std::size_t MaxComponentsPerActor = 4;
+
 	/** Copying or moving would duplicate a managed object's slot identity; each
 	 * lives and dies in one object-store slot. */
 	AActor(const AActor&) = delete;
@@ -39,14 +43,8 @@ public:
 	/** Returns the stable descriptor that lets the store construct and trace this type. */
 	static const FClassDescriptor& StaticClassDescriptor() noexcept;
 
-	/**
-	 * Binds this actor to the unique caller-owned component registry reference that
-	 * will hold its registered components.
-	 *
-	 * The object store assigns canonical ownership only after construction
-	 * publishes this UObject, so callers cannot supply a second store identity.
-	 */
-	explicit AActor(FActorComponentRegistryReference InComponentStorage, FTickConfiguration InTickConfiguration = {}) noexcept;
+	/** Configures only this actor's primary tick; components are registered afterwards. */
+	explicit AActor(FTickConfiguration InTickConfiguration = {}) noexcept;
 
 	/** Keeps exact derived destruction behind the descriptor/store boundary. */
 	~AActor() noexcept override;
@@ -106,7 +104,7 @@ private:
 	/** Reports the first reason a component cannot register, or Success. */
 	EEngineResult CheckComponentRegistrable(TObjectPtr<UActorComponent> InComponent) const noexcept;
 
-	/** Links a component to this actor and adds it to the registry after all checks pass. */
+	/** Links a component to this actor and adds it to the fixed slots after all checks pass. */
 	void PublishComponent(TObjectPtr<UActorComponent> InComponent) noexcept;
 
 	/** Begins this actor's lifecycle, primary tick, components, and consumer hook. */
@@ -134,8 +132,11 @@ private:
 	/** Presents every registered component to the active iterative collector. */
 	void VisitReferences(FReferenceCollector& InCollector) noexcept override;
 
-	/** Holds the unique caller-owned component registry reference for this actor's lifetime. */
-	FActorComponentRegistryReference Components;
+	/** Holds components registered before BeginPlay; slots at or past ComponentCount are empty. */
+	TObjectPtr<UActorComponent> Components[MaxComponentsPerActor]{};
+
+	/** Records how many leading Components slots hold a registered component. */
+	std::size_t ComponentCount{0};
 
 	/** Carries the weak world identity without keeping the world reachable. */
 	FObjectHandle WorldObjectHandle{};

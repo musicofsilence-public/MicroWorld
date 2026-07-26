@@ -40,12 +40,12 @@ protected:
 	void EndPlay() noexcept override { std::printf("sensor end\n"); }
 };
 
-/** Aggregates Component state while owning its component registry inline. */
-class FDeviceActor final : public MicroWorld::TInlineActor<1>
+/** Aggregates component state through the actor's fixed component slots. */
+class FDeviceActor final : public MicroWorld::AActor
 {
 public:
 	/** Disables only the Actor schedule so Component independence is observable. */
-	FDeviceActor() noexcept : TInlineActor<1>({/*bCanEverTick*/ true, /*bStartWithTickEnabled*/ false, /*TickIntervalMilliseconds*/ 0}) {}
+	FDeviceActor() noexcept : AActor({/*bCanEverTick*/ true, /*bStartWithTickEnabled*/ false, /*TickIntervalMilliseconds*/ 0}) {}
 
 protected:
 	/** Marks Actor startup after the Component begin hook. */
@@ -84,7 +84,7 @@ int main()
 
 	// TEngine owns every subsystem — class registry, object store, garbage collector, world
 	// actor registry, and timer manager — and registers the three engine base descriptors itself.
-	// The inline actor embeds its component registry, so slots stay as wide as before (512 bytes).
+	// The 512-byte object slots cover this actor and its fixed component storage.
 	using FDeviceHost = TEngine<FDeviceHostTraits>;
 	// Per-tick garbage-collection slice for this demo's tiny managed graph: one
 	// root (the world), a few mark steps for world -> actor -> component, and

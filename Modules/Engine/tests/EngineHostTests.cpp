@@ -128,9 +128,9 @@ private:
 class FHostActor final : public AActor
 {
 public:
-	/** Captures the component reference, shared sequence, and per-actor event sink. */
-	FHostActor(MicroWorld::FActorComponentRegistryReference InComponents, FSequenceCounter& InSequence, FActorEventState& InEvents) noexcept
-		: AActor(std::move(InComponents), HostTickConfiguration), Sequence(InSequence), Events(InEvents)
+	/** Captures the shared sequence and per-actor event sink. */
+	FHostActor(FSequenceCounter& InSequence, FActorEventState& InEvents) noexcept
+		: AActor(HostTickConfiguration), Sequence(InSequence), Events(InEvents)
 	{
 	}
 
@@ -202,7 +202,7 @@ bool RegisterHostTypes(FHost& InHost) noexcept
  * Owns the shared per-test state and builds one registered, world-attached actor
  * and component graph on a host so each case starts from the same baseline.
  *
- * The fixture owns the sequence, event sinks, component registry, and constructed
+ * The fixture owns the sequence, event sinks, and constructed
  * handles so they outlive the host whose store retains the actor; declare it
  * before the host in each test so destruction order drops the host first.
  */
@@ -216,9 +216,6 @@ struct FHostFixture final
 
 	/** Records the component's begin/tick/end counts and ordering stamps. */
 	FComponentEventState ComponentEvents{};
-
-	/** Owns the component registry the actor holds a reference into for its lifetime. */
-	MicroWorld::FActorComponentRegistry<2> ActorComponents{};
 
 	/** Holds the constructed actor handle so the test can drive and observe its lifecycle. */
 	TObjectPtr<FHostActor> Actor{};
@@ -242,7 +239,7 @@ struct FHostFixture final
 		{
 			return false;
 		}
-		Actor = InHost.NewObject<FHostActor>(*InHost.FindClass(HostActorTypeId), ActorComponents.MakeReference(), Sequence, ActorEvents).Object;
+		Actor = InHost.NewObject<FHostActor>(*InHost.FindClass(HostActorTypeId), Sequence, ActorEvents).Object;
 		Component = InHost.NewObject<FHostComponent>(*InHost.FindClass(HostComponentTypeId), Sequence, ComponentEvents).Object;
 		if (Actor.Get() == nullptr || Component.Get() == nullptr)
 		{
@@ -420,7 +417,6 @@ MW_TEST_CASE(EngineHostTemplateHelpersRegisterAndConstructUserTypes)
 	FSequenceCounter Sequence{};
 	FActorEventState ActorEvents{};
 	FComponentEventState ComponentEvents{};
-	MicroWorld::FActorComponentRegistry<2> ActorComponents{};
 	FHost Host{FGarbageCollectionBudget{1, 4, 8}};
 
 	MW_EXPECT_EQ(
@@ -437,8 +433,7 @@ MW_TEST_CASE(EngineHostTemplateHelpersRegisterAndConstructUserTypes)
 	const TObjectPtr<UWorld> World = Host.CreateWorld();
 	MW_EXPECT_TRUE(Test, World.Get() != nullptr, "CreateWorld roots the world after the helpers register user types");
 
-	const TObjectCreationResult<FHostActor> Actor =
-		Host.CreateObject<FHostActor>(HostActorTypeId, ActorComponents.MakeReference(), Sequence, ActorEvents);
+	const TObjectCreationResult<FHostActor> Actor = Host.CreateObject<FHostActor>(HostActorTypeId, Sequence, ActorEvents);
 	const TObjectCreationResult<FHostComponent> Component = Host.CreateObject<FHostComponent>(HostComponentTypeId, Sequence, ComponentEvents);
 	MW_EXPECT_EQ(
 		Test, EObjectResult::Success, Actor.Result, "CreateObject<FHostActor> constructs the actor through the helper-registered descriptor");

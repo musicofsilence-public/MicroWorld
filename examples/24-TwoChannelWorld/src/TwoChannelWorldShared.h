@@ -110,7 +110,7 @@ struct FWorldNetSystemTraits : MicroWorld::FDefaultNetSystemTraits
 /** The one networked engine system both roles compose before their engine begins play. */
 using FWorldNetSystem = MicroWorld::TNetSystem<FWorldNetSystemTraits>;
 
-/** The engine both roles compose; sized for one world with a couple of small inline actors (the default ESP32-S3 traits). */
+/** The engine both roles compose; sized for one world with a couple of small actors using direct component storage. */
 using FWorldEngine = MicroWorld::TEngine<>;
 
 /** Builds a board's UART driver configuration from the fixed pins and baud. */

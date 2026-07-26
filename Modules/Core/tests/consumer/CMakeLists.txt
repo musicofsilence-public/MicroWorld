@@ -7,22 +7,22 @@ option(
 )
 option(
     MICROWORLD_STANDALONE_MEMORY_CONSUMER
-    "Build the host Core+Memory consumer without PlatformIO/ESP-IDF"
+    "Build the host Core memory-API consumer without PlatformIO/ESP-IDF"
     OFF
 )
 option(
     MICROWORLD_STANDALONE_OBJECT_CONSUMER
-    "Build the host Core+Memory+Object consumer without PlatformIO/ESP-IDF"
+    "Build the host Core+Object consumer without PlatformIO/ESP-IDF"
     OFF
 )
 option(
     MICROWORLD_STANDALONE_ENGINE_CONSUMER
-    "Build the host Core+Memory+Object+Engine consumer without PlatformIO/ESP-IDF"
+    "Build the host Core+Object+Engine consumer without PlatformIO/ESP-IDF"
     OFF
 )
 option(
     MICROWORLD_STANDALONE_NET_CONSUMER
-    "Build the host Core+Memory+Net consumer without PlatformIO/ESP-IDF"
+    "Build the host Core+Net consumer without PlatformIO/ESP-IDF"
     OFF
 )
 
@@ -85,38 +85,22 @@ if(
         )
     endif()
 
-    if(MICROWORLD_STANDALONE_MEMORY_CONSUMER OR MICROWORLD_STANDALONE_OBJECT_CONSUMER)
-        set(
-            MICROWORLD_MEMORY_BUILD_TESTS
-            OFF
-            CACHE BOOL "" FORCE
+    if(MICROWORLD_STANDALONE_MEMORY_CONSUMER)
+        add_executable(
+            microworld_memory_consumer
+            src/MemoryNativeMain.cpp
         )
-        set(
-            MICROWORLD_MEMORY_BUILD_BENCHMARKS
-            OFF
-            CACHE BOOL "" FORCE
+        target_link_libraries(
+            microworld_memory_consumer
+            PRIVATE MicroWorld::Core
         )
-        add_subdirectory(
-            "${CMAKE_CURRENT_LIST_DIR}/../../../Memory"
-            "${CMAKE_CURRENT_BINARY_DIR}/Memory"
+        microworld_consumer_enable_strict_portable_flags(
+            microworld_memory_consumer
         )
-        if(MICROWORLD_STANDALONE_MEMORY_CONSUMER)
-            add_executable(
-                microworld_memory_consumer
-                src/MemoryNativeMain.cpp
-            )
-            target_link_libraries(
-                microworld_memory_consumer
-                PRIVATE MicroWorld::Memory
-            )
-            microworld_consumer_enable_strict_portable_flags(
-                microworld_memory_consumer
-            )
-            microworld_enable_profile_map(
-                microworld_memory_consumer
-                "${CMAKE_CURRENT_BINARY_DIR}/microworld_memory_profile.map"
-            )
-        endif()
+        microworld_enable_profile_map(
+            microworld_memory_consumer
+            "${CMAKE_CURRENT_BINARY_DIR}/microworld_memory_profile.map"
+        )
     endif()
 
     if(MICROWORLD_STANDALONE_OBJECT_CONSUMER)
@@ -198,20 +182,6 @@ if(
     endif()
 
     if(MICROWORLD_STANDALONE_NET_CONSUMER)
-        set(
-            MICROWORLD_MEMORY_BUILD_TESTS
-            OFF
-            CACHE BOOL "" FORCE
-        )
-        set(
-            MICROWORLD_MEMORY_BUILD_BENCHMARKS
-            OFF
-            CACHE BOOL "" FORCE
-        )
-        add_subdirectory(
-            "${CMAKE_CURRENT_LIST_DIR}/../../../Memory"
-            "${CMAKE_CURRENT_BINARY_DIR}/Memory"
-        )
         set(
             MICROWORLD_NET_BUILD_TESTS
             OFF

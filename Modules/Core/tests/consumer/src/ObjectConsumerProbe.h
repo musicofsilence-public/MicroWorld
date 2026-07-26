@@ -28,7 +28,7 @@ public:
 
 } // namespace MicroWorldConsumer
 
-/** Exercises representative Core+Memory+Object public APIs without platform I/O. */
+/** Exercises representative Core+Object public APIs without platform I/O. */
 inline int RunObjectConsumerProbe() noexcept
 {
 	using namespace MicroWorld;

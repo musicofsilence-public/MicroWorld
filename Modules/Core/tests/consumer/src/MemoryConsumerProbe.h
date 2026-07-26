@@ -20,7 +20,7 @@ static_assert(MicroWorld::Version.Minor == 3);
 static_assert(MicroWorld::Version.Patch == 0);
 static_assert(std::is_nothrow_destructible_v<MicroWorld::TUniquePtr<std::uint32_t>>);
 
-/** Exercises representative Core+Memory public APIs without platform dependencies. */
+/** Exercises representative Core memory public APIs without platform dependencies. */
 inline int RunMemoryConsumerProbe() noexcept
 {
 	MicroWorld::FTickFunction CoreArchiveProbe({true, true, 0});
