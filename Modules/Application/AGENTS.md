@@ -24,10 +24,11 @@ implementation — the clock and sleep arrive from the caller.
 - `FApplication` takes `IEngine&` at construction and never rebinds it. The
   per-frame `BeginPlay`/`Advance`/`EndPlay` calls are public but their work is
   sealed: private non-virtual forwarders call `IEngine::BeginPlay`/`Tick`/`EndPlay`.
-- The only work a subclass overrides is `OnConfigure(IEngine&, TimePoint)`,
-  which runs once during `BeginPlay` before the engine begins, so a subclass
-  spawns actors and configures systems into a world that exists but has not
-  started. `OnBeginPlayFailed` remains the rollback hook on the failure path.
+- A subclass must override `OnBeginPlayFailed`, the rollback hook on the failure
+  path, and may override `OnConfigure(IEngine&, TimePoint)`, which runs once
+  during `BeginPlay` before the engine begins so a subclass spawns actors and
+  configures systems into a world that exists but has not started. `OnConfigure`
+  defaults to success, so an application with nothing to configure writes no body.
 - `BeginPlay` calls `OnConfigure` first and `IEngine::BeginPlay` second with
   the same timestamp and returns the first failure; a failed configure fires
   `OnBeginPlayFailed` and latches the lifecycle terminal.

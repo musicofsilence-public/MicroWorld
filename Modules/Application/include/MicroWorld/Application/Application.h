@@ -12,11 +12,12 @@ namespace MicroWorld
  *
  * The application holds its engine by IEngine& so a subclass cannot get the
  * lifecycle wrong: the per-frame BeginPlay/Tick/EndPlay calls are sealed behind
- * private non-virtual forwarders, and the only work a subclass overrides is
- * OnConfigure, which runs once at BeginPlay (before the engine begins) to spawn
- * actors and configure systems. This class still enforces begin/tick/end order
- * and rejects time that moves backward, so OnConfigure never runs out of order
- * and the engine never sees time go back.
+ * private non-virtual forwarders, the one thing a subclass must supply is what
+ * happens when startup fails (OnBeginPlayFailed), and the one thing it may
+ * override is OnConfigure, which runs once at BeginPlay (before the engine
+ * begins) to spawn actors and configure systems. This class still enforces
+ * begin/tick/end order and rejects time that moves backward, so OnConfigure
+ * never runs out of order and the engine never sees time go back.
  */
 class FApplication
 {
@@ -49,8 +50,13 @@ protected:
 	/** Binds this application to the one engine it will drive for its lifetime. */
 	explicit FApplication(IEngine& InEngine) noexcept : Engine(InEngine) {}
 
-	/** The world exists and nothing has begun. Spawn actors and configure systems here. */
-	virtual ERuntimeResult OnConfigure(IEngine& InEngine, TimePointMilliseconds InNowMilliseconds) = 0;
+	/**
+	 * The world exists and nothing has begun. Spawn actors and configure systems here.
+	 *
+	 * Defaulted to success so an application with nothing to configure writes no body
+	 * at all, rather than a hook that discards both parameters to satisfy the compiler.
+	 */
+	virtual ERuntimeResult OnConfigure(IEngine&, TimePointMilliseconds) { return ERuntimeResult::Success; }
 
 	/** Undoes whatever OnConfigure started before it failed; it runs on the failure path, so it cannot throw. */
 	virtual void OnBeginPlayFailed() noexcept = 0;
