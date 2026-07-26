@@ -2,6 +2,7 @@
 
 #include <MicroWorld/Engine/Actor.h>
 #include <MicroWorld/Engine/ActorComponent.h>
+#include <MicroWorld/Engine/DeferredActorSpawn.h>
 #include <MicroWorld/Engine/EngineClassIds.h>
 #include <MicroWorld/Engine/EngineStorage.h>
 #include <MicroWorld/EngineSystem.h>
@@ -131,9 +132,6 @@ public:
 
 	/** Alias for the timer manager this engine owns, so callers name one concrete type. */
 	using FTimerManager = TTimerManager<MaxTimers, InlineTimerCallbackBytes>;
-
-	/** Alias for caller-owned deferred factory storage supplied to the single World. */
-	using FDeferredSpawnStorage = TDeferredActorSpawnRegistry<MaxActors, InlineDeferredSpawnFactoryBytes>;
 
 	/**
 	 * Builds every subsystem over this host's storage and registers the three
@@ -453,7 +451,7 @@ private:
 	TClassRegistry<MaxClasses> Registry;
 
 	/** Owns typed factory captures and completion slots that must outlive Store and World destruction. */
-	FDeferredSpawnStorage DeferredSpawns;
+	TDeferredActorSpawnStorage<MaxActors, InlineDeferredSpawnFactoryBytes> DeferredSpawns;
 
 	/** Provides the first byte of equal-size, non-moving object slots. */
 	alignas(SlotAlign) std::array<std::byte, SlotSizeBytes * MaxObjects> SlotStorage{};

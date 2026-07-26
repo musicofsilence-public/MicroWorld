@@ -54,6 +54,25 @@ by [ResourceBudgets.md](../../docs/ResourceBudgets.md).
 The application owns the object store, root table, GC worklist, caller-owned
 registration storage, and one `TStrongObjectPtr<UWorld>` root.
 
+## Why registration storage sits outside the objects
+
+The object store hands out `MaxObjects` fixed slots of `SlotSizeBytes` each, and
+every slot is the same width because any slot must be able to hold any managed
+type. The width is therefore set by the largest type — so a byte added to
+`UWorld` is charged once per slot, for a world there is exactly one of.
+
+The world's registration storage is not small. The live, pending-spawn, and
+pending-destroy arrays plus `MaxActors × InlineDeferredSpawnFactoryBytes` of
+deferred factory space come to several hundred bytes at default traits. Inside
+`UWorld` they would widen every slot; as `TEngineHost` members they are paid for
+once. That is the only benefit `FWorldActorRegistry` and
+`FWorldActorRegistryReference` deliver, and the indirection is worth it only
+because the target's RAM is measured in hundreds of kilobytes.
+
+`AActor` does the opposite, for the mirror-image reason: its components are a
+plain member array, because those bytes already sat inside the actor's own slot
+and moving them out would have bought nothing.
+
 ## Build
 
 ```sh
