@@ -14,6 +14,18 @@ namespace MicroWorld
 /** Encoded byte count of the reliable wrapper's own header prefix: one Kind byte plus a little-endian u16 sequence. */
 inline constexpr std::size_t ReliableHeaderBytes = 3;
 
+/** Half of the 16-bit sequence space; the threshold that separates "newer" from "older" after wrap. */
+inline constexpr std::uint16_t HalfSequenceSpace = 0x8000u;
+
+/** First sequence number ever sent; 0 is reserved as "never sent" so allocations start here. */
+inline constexpr std::uint16_t FirstOutgoingSequence = 1;
+
+/** Byte offset of the little-endian sequence field within a reliable header. */
+inline constexpr std::size_t ReliableSequenceFieldByteIndex = 1;
+
+/** Byte offset of the Kind byte within a reliable header. */
+inline constexpr std::size_t ReliableKindByteIndex = 0;
+
 /** Distinguishes an original wrapped message from a bare acknowledgement on the reliable wire format. */
 enum class EReliablePacketKind : std::uint8_t
 {
@@ -230,7 +242,7 @@ private:
 	 */
 	static bool IsNewer(const std::uint16_t InCandidate, const std::uint16_t InReference) noexcept
 	{
-		return (InCandidate != InReference) && (static_cast<std::uint16_t>(InCandidate - InReference) < 0x8000u);
+		return (InCandidate != InReference) && (static_cast<std::uint16_t>(InCandidate - InReference) < HalfSequenceSpace);
 	}
 
 	/** Width of the duplicate-detection window: SeenMask's bit count, one bit per sequence older than HighestSequenceSeen. */
@@ -292,12 +304,15 @@ private:
 	/** Writes the three-byte [Kind][Sequence LE] reliable header at the front of OutBytes. */
 	static void WriteReliableHeader(std::uint8_t* const OutBytes, const EReliablePacketKind InKind, const std::uint16_t InSequence) noexcept
 	{
-		OutBytes[0] = static_cast<std::uint8_t>(InKind);
-		Detail::WriteMessageUint16LittleEndian(InSequence, &OutBytes[1]);
+		OutBytes[ReliableKindByteIndex] = static_cast<std::uint8_t>(InKind);
+		Detail::WriteMessageUint16LittleEndian(InSequence, &OutBytes[ReliableSequenceFieldByteIndex]);
 	}
 
 	/** Reads the little-endian Sequence field starting at byte index 1 of a reliable-header-prefixed payload. */
-	static std::uint16_t ReadSequence(const std::uint8_t* const InBytes) noexcept { return Detail::ReadMessageUint16LittleEndian(&InBytes[1]); }
+	static std::uint16_t ReadSequence(const std::uint8_t* const InBytes) noexcept
+	{
+		return Detail::ReadMessageUint16LittleEndian(&InBytes[ReliableSequenceFieldByteIndex]);
+	}
 
 	/** Copies InLength bytes from InSource to OutDestination; InLength may be 0. */
 	static void CopyBytes(std::uint8_t* const OutDestination, const std::uint8_t* const InSource, const std::size_t InLength) noexcept
@@ -313,7 +328,7 @@ private:
 	{
 		const std::uint16_t Sequence = NextSequenceToSend;
 		const std::uint16_t Incremented = static_cast<std::uint16_t>(NextSequenceToSend + 1);
-		NextSequenceToSend = Incremented == 0 ? std::uint16_t{1} : Incremented;
+		NextSequenceToSend = Incremented == 0 ? FirstOutgoingSequence : Incremented;
 		return Sequence;
 	}
 

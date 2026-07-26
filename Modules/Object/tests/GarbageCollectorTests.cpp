@@ -33,6 +33,18 @@ using MicroWorld::TraceManagedObjectReferences;
 using MicroWorld::TWeakObjectPtr;
 using MicroWorld::UObject;
 
+/** Per-slice operation budget used by the bounded-slice test: one root, one mark, one sweep per advance. */
+constexpr FGarbageCollectionBudget UnitSliceBudget{1, 1, 1};
+
+/** Zero-budget advance used to prove a no-op slice performs no work. */
+constexpr FGarbageCollectionBudget ZeroSliceBudget{0, 0, 0};
+
+/** Upper bound on bounded-slice iterations before the test declares the cycle cannot complete. */
+constexpr std::uint32_t BoundedSliceIterationCap = 16;
+
+/** Largest total operation count one UnitSliceBudget advance may report (root + mark + sweep). */
+constexpr std::uint32_t MaxOperationsPerUnitSlice = 3;
+
 /** Records collector-visible lifetime completion in fresh per-test state. */
 struct FGraphLifetimeState final
 {
@@ -403,14 +415,17 @@ MW_TEST_CASE(GarbageCollectorHonorsZeroAndOneOperationBudgets)
 	FGarbageCollector Collector(Store, FGarbageCollectorStorage{Worklist.data(), static_cast<std::uint32_t>(Worklist.size())});
 	const ERuntimeResult RequestResult = Collector.RequestCollection();
 
-	const FGarbageCollectionResult ZeroBudgetResult = Collector.Advance(FGarbageCollectionBudget{0, 0, 0});
+	const FGarbageCollectionResult ZeroBudgetResult = Collector.Advance(ZeroSliceBudget);
 	bool bEverySliceBounded = true;
 	FGarbageCollectionResult FinalResult{};
-	for (std::uint32_t Slice = 0; Slice < 16 && Collector.Phase() != EGarbageCollectionPhase::Idle; ++Slice)
+	for (std::uint32_t Slice = 0; Slice < BoundedSliceIterationCap && Collector.Phase() != EGarbageCollectionPhase::Idle; ++Slice)
 	{
-		const FGarbageCollectionResult SliceResult = Collector.Advance(FGarbageCollectionBudget{1, 1, 1});
-		if (SliceResult.RootOperations > 1 || SliceResult.MarkOperations > 1 || SliceResult.SweepOperations > 1
-			|| SliceResult.OperationsPerformed > 3)
+		const FGarbageCollectionResult SliceResult = Collector.Advance(UnitSliceBudget);
+		const bool bRootWithinBudget = SliceResult.RootOperations <= UnitSliceBudget.MaxRootOperations;
+		const bool bMarkWithinBudget = SliceResult.MarkOperations <= UnitSliceBudget.MaxMarkOperations;
+		const bool bSweepWithinBudget = SliceResult.SweepOperations <= UnitSliceBudget.MaxSweepOperations;
+		const bool bTotalWithinBudget = SliceResult.OperationsPerformed <= MaxOperationsPerUnitSlice;
+		if (!bRootWithinBudget || !bMarkWithinBudget || !bSweepWithinBudget || !bTotalWithinBudget)
 		{
 			bEverySliceBounded = false;
 		}

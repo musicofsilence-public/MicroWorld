@@ -47,10 +47,14 @@ MW_TEST_CASE(PacketDropDriver_DropsEveryThirdSendDeliveringTheRest)
 	std::array<std::uint8_t, 4> Destination{};
 	FNetReceiveResult ReceiveResult{};
 	FNetAddress ReceiveFrom{};
-	while (DeliveredCount < DeliveredMarkers.size()
-		   && Loopback.Port(1).TryReceive(ReceiveFrom, TSpan<std::uint8_t>(Destination.data(), Destination.size()), ReceiveResult)
-			   == ENetResult::Success)
+	while (DeliveredCount < DeliveredMarkers.size())
 	{
+		const ENetResult ReceiveOutcome =
+			Loopback.Port(1).TryReceive(ReceiveFrom, TSpan<std::uint8_t>(Destination.data(), Destination.size()), ReceiveResult);
+		if (ReceiveOutcome != ENetResult::Success)
+		{
+			break;
+		}
 		DeliveredMarkers[DeliveredCount] = Destination[0];
 		++DeliveredCount;
 	}

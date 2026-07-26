@@ -20,58 +20,105 @@ static_assert(MicroWorld::Version.Minor == 3);
 static_assert(MicroWorld::Version.Patch == 0);
 static_assert(std::is_nothrow_destructible_v<MicroWorld::TUniquePtr<std::uint32_t>>);
 
+namespace MicroWorldConsumer
+{
+
+/** Stable exit codes for the Core memory public-API probe; 0 reports full success. */
+enum class EMemoryConsumerExitCode : int
+{
+	Success = 0,
+	UniquePointerConstructionFailed = 1,
+	SharedPointerConstructionFailed = 2,
+	WeakAcquireFailed = 3,
+	StaticVectorAddFailed = 4,
+	DelegateBindFailed = 5,
+	MulticastAddOrBroadcastFailed = 6,
+	ProbeOutcomeMismatch = 7,
+};
+
+/** Fixed arena byte capacity exercised by the probe. */
+inline constexpr std::size_t ProbeArenaBytes = 256;
+
+/** Distinct u32 values the probe threads through each Core container type. */
+inline constexpr std::uint32_t UniqueProbeValue = 11U;
+inline constexpr std::uint32_t SharedProbeValue = 13U;
+inline constexpr std::uint32_t FirstStaticVectorValue = 17U;
+inline constexpr std::uint32_t SecondStaticVectorValue = 19U;
+
+/** Bounded element count and inline callable bytes used by the probe's containers and delegates. */
+inline constexpr std::size_t StaticVectorCapacity = 2;
+inline constexpr std::size_t DelegateInlineBytes = 32;
+inline constexpr std::size_t MulticastHandlerCount = 1;
+
+} // namespace MicroWorldConsumer
+
 /** Exercises representative Core memory public APIs without platform dependencies. */
 inline int RunMemoryConsumerProbe() noexcept
 {
+	using namespace MicroWorld;
+	using MicroWorldConsumer::EMemoryConsumerExitCode;
+
 	MicroWorld::FTickFunction CoreArchiveProbe({true, true, 0});
 	CoreArchiveProbe.BeginPlay(0);
 	const MicroWorld::FTickDecision TickDecision = CoreArchiveProbe.Advance(0);
 	CoreArchiveProbe.EndPlay();
 
-	MicroWorld::TFixedArena<256, alignof(std::max_align_t)> Arena;
+	MicroWorld::TFixedArena<MicroWorldConsumer::ProbeArenaBytes, alignof(std::max_align_t)> Arena;
 	{
-		auto UniqueResult = MicroWorld::MakeUnique<std::uint32_t>(Arena, 11U);
-		if (UniqueResult.Result != MicroWorld::EMemoryResult::Success || !UniqueResult.Pointer.IsValid() || *UniqueResult.Pointer.Get() != 11U)
+		const TUniquePointerResult<std::uint32_t> UniqueResult = MicroWorld::MakeUnique<std::uint32_t>(Arena, MicroWorldConsumer::UniqueProbeValue);
+		const bool bUniqueAccepted = UniqueResult.Result == MicroWorld::EMemoryResult::Success && UniqueResult.Pointer.IsValid();
+		const bool bUniqueValueIntact = bUniqueAccepted && *UniqueResult.Pointer.Get() == MicroWorldConsumer::UniqueProbeValue;
+		if (!bUniqueValueIntact)
 		{
-			return 1;
+			return static_cast<int>(EMemoryConsumerExitCode::UniquePointerConstructionFailed);
 		}
 	}
 	{
-		auto SharedResult = MicroWorld::MakeShared<std::uint32_t>(Arena, 13U);
-		if (SharedResult.Result != MicroWorld::ESharedPointerResult::Success || !SharedResult.Pointer.IsValid())
+		const TSharedPointerResult<std::uint32_t, ESharedPointerMode::SingleThreaded> SharedResult =
+			MicroWorld::MakeShared<std::uint32_t>(Arena, MicroWorldConsumer::SharedProbeValue);
+		const bool bSharedAccepted = SharedResult.Result == MicroWorld::ESharedPointerResult::Success && SharedResult.Pointer.IsValid();
+		if (!bSharedAccepted)
 		{
-			return 2;
+			return static_cast<int>(EMemoryConsumerExitCode::SharedPointerConstructionFailed);
 		}
-		auto WeakResult = SharedResult.Pointer.TryAcquireWeak();
-		if (WeakResult.Result != MicroWorld::ESharedPointerResult::Success || WeakResult.Pointer.IsExpired())
+		const TWeakPointerResult<std::uint32_t, ESharedPointerMode::SingleThreaded> WeakResult = SharedResult.Pointer.TryAcquireWeak();
+		const bool bWeakLive = WeakResult.Result == MicroWorld::ESharedPointerResult::Success && !WeakResult.Pointer.IsExpired();
+		if (!bWeakLive)
 		{
-			return 3;
+			return static_cast<int>(EMemoryConsumerExitCode::WeakAcquireFailed);
 		}
 	}
 
-	MicroWorld::TStaticVector<std::uint32_t, 2> Values;
-	if (Values.Add(17U) != MicroWorld::ERuntimeResult::Success || Values.Add(19U) != MicroWorld::ERuntimeResult::Success)
+	MicroWorld::TStaticVector<std::uint32_t, MicroWorldConsumer::StaticVectorCapacity> Values;
+	const bool bBothAddsAccepted = Values.Add(MicroWorldConsumer::FirstStaticVectorValue) == MicroWorld::ERuntimeResult::Success
+		&& Values.Add(MicroWorldConsumer::SecondStaticVectorValue) == MicroWorld::ERuntimeResult::Success;
+	if (!bBothAddsAccepted)
 	{
-		return 4;
+		return static_cast<int>(EMemoryConsumerExitCode::StaticVectorAddFailed);
 	}
 	const MicroWorld::TSpan<const std::uint32_t> ValuesView(Values.Data(), Values.Size());
 
 	std::uint32_t DelegateTotal = 0;
-	MicroWorld::TDelegate<void(std::uint32_t), 32> Binding;
-	if (Binding.Bind([&DelegateTotal](const std::uint32_t Value) noexcept { DelegateTotal += Value; }) != MicroWorld::EDelegateResult::Success)
+	MicroWorld::TDelegate<void(std::uint32_t), MicroWorldConsumer::DelegateInlineBytes> Binding;
+	const EDelegateResult BindResult = Binding.Bind([&DelegateTotal](const std::uint32_t Value) noexcept { DelegateTotal += Value; });
+	if (BindResult != MicroWorld::EDelegateResult::Success)
 	{
-		return 5;
+		return static_cast<int>(EMemoryConsumerExitCode::DelegateBindFailed);
 	}
-	MicroWorld::TMulticastDelegate<void(std::uint32_t), 1, 32> Multicast;
+	MicroWorld::TMulticastDelegate<void(std::uint32_t), MicroWorldConsumer::MulticastHandlerCount, MicroWorldConsumer::DelegateInlineBytes> Multicast;
 	MicroWorld::FDelegateHandle Handle;
-	if (Multicast.Add(std::move(Binding), Handle) != MicroWorld::EDelegateResult::Success
-		|| Multicast.Broadcast(ValuesView[0]) != MicroWorld::EDelegateResult::Success)
+	const EDelegateResult AddResult = Multicast.Add(std::move(Binding), Handle);
+	const EDelegateResult BroadcastResult = Multicast.Broadcast(ValuesView[0]);
+	const bool bMulticastDelivered = AddResult == MicroWorld::EDelegateResult::Success && BroadcastResult == MicroWorld::EDelegateResult::Success;
+	if (!bMulticastDelivered)
 	{
-		return 6;
+		return static_cast<int>(EMemoryConsumerExitCode::MulticastAddOrBroadcastFailed);
 	}
 
-	return TickDecision.Result == MicroWorld::ERuntimeResult::Success && TickDecision.bShouldTick && DelegateTotal == 17U && ValuesView[1] == 19U
-			&& Arena.UsedBytes() == 0
-		? 0
-		: 7;
+	const bool bTickSucceeded = TickDecision.Result == MicroWorld::ERuntimeResult::Success && TickDecision.bShouldTick;
+	const bool bDelegateAccumulated = DelegateTotal == MicroWorldConsumer::FirstStaticVectorValue;
+	const bool bStaticVectorSecondValueIntact = ValuesView[1] == MicroWorldConsumer::SecondStaticVectorValue;
+	const bool bArenaReclaimed = Arena.UsedBytes() == 0;
+	const bool bProbeSucceeded = bTickSucceeded && bDelegateAccumulated && bStaticVectorSecondValueIntact && bArenaReclaimed;
+	return bProbeSucceeded ? static_cast<int>(EMemoryConsumerExitCode::Success) : static_cast<int>(EMemoryConsumerExitCode::ProbeOutcomeMismatch);
 }

@@ -314,11 +314,13 @@ void PumpSide(FHost& InHost, const TimePointMilliseconds InNowMilliseconds) noex
 TimePointMilliseconds ConnectClientToServer(
 	FHost& InClientHost, FNet& InClientNet, FHost& InServerHost, TimePointMilliseconds InNowMilliseconds) noexcept
 {
-	for (int Frame = 0; Frame < MaxHandshakeFrames && InClientNet.GetState() != ENetHostState::Connected; ++Frame)
+	bool bClientConnected = InClientNet.GetState() == ENetHostState::Connected;
+	for (int Frame = 0; Frame < MaxHandshakeFrames && !bClientConnected; ++Frame)
 	{
 		InNowMilliseconds += FrameStepMilliseconds;
 		PumpSide(InClientHost, InNowMilliseconds);
 		PumpSide(InServerHost, InNowMilliseconds);
+		bClientConnected = InClientNet.GetState() == ENetHostState::Connected;
 	}
 	return InNowMilliseconds;
 }
@@ -331,13 +333,13 @@ TimePointMilliseconds ConnectClientToServer(
 TimePointMilliseconds ConnectClientToServerOverTwoWires(
 	FHost& InClientHost, FNet& InClientNetA, FNet& InClientNetB, FHost& InServerHost, TimePointMilliseconds InNowMilliseconds) noexcept
 {
-	for (int Frame = 0;
-		 Frame < MaxHandshakeFrames && (InClientNetA.GetState() != ENetHostState::Connected || InClientNetB.GetState() != ENetHostState::Connected);
-		 ++Frame)
+	bool bBothClientsConnected = InClientNetA.GetState() == ENetHostState::Connected && InClientNetB.GetState() == ENetHostState::Connected;
+	for (int Frame = 0; Frame < MaxHandshakeFrames && !bBothClientsConnected; ++Frame)
 	{
 		InNowMilliseconds += FrameStepMilliseconds;
 		PumpSide(InClientHost, InNowMilliseconds);
 		PumpSide(InServerHost, InNowMilliseconds);
+		bBothClientsConnected = InClientNetA.GetState() == ENetHostState::Connected && InClientNetB.GetState() == ENetHostState::Connected;
 	}
 	return InNowMilliseconds;
 }
@@ -519,11 +521,13 @@ MW_TEST_CASE(EngineMessageChannel_ForeignWireChannelNeverReachesBoundSink)
 	// The client sends raw wire bytes directly (bypassing any router), so only the server binding's
 	// own channel filter is exercised; the client side needs no router pumped alongside its tick.
 	TimePointMilliseconds Now = 0;
-	for (int Frame = 0; Frame < MaxHandshakeFrames && ClientNet.GetState() != ENetHostState::Connected; ++Frame)
+	bool bClientConnected = ClientNet.GetState() == ENetHostState::Connected;
+	for (int Frame = 0; Frame < MaxHandshakeFrames && !bClientConnected; ++Frame)
 	{
 		Now += FrameStepMilliseconds;
 		(void)ClientHost.Tick(Now);
 		PumpSide(ServerHost, Now);
+		bClientConnected = ClientNet.GetState() == ENetHostState::Connected;
 	}
 	MW_EXPECT_EQ(Test, ENetHostState::Connected, ClientNet.GetState(), "The client must connect before sending the foreign-channel message");
 

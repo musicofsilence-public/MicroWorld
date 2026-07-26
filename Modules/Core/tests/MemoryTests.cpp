@@ -18,16 +18,20 @@ namespace
 
 using MicroWorld::EMemoryResult;
 using MicroWorld::ERuntimeResult;
+using MicroWorld::ESharedPointerMode;
 using MicroWorld::ESharedPointerResult;
 using MicroWorld::FMemoryBlock;
 using MicroWorld::IMemoryResource;
 using MicroWorld::MakeShared;
 using MicroWorld::MakeUnique;
 using MicroWorld::TFixedArena;
+using MicroWorld::TSharedPointerResult;
 using MicroWorld::TSharedPtr;
 using MicroWorld::TSpan;
 using MicroWorld::TStaticVector;
+using MicroWorld::TUniquePointerResult;
 using MicroWorld::TUniquePtr;
+using MicroWorld::TWeakPointerResult;
 using MicroWorld::TWeakPtr;
 
 /** Records value construction and destruction without sharing state between tests. */
@@ -379,7 +383,8 @@ MW_TEST_CASE(UniqueFactoryOutOfMemoryNeverConstructsValue)
 	FLifetimeState Lifetime;
 	const EMemoryResult FillResult = Arena.TryAllocate(Arena.CapacityBytes(), 1, CapacityBlock);
 
-	auto UniqueResult = MakeUnique<FTrackedValue>(Arena, Lifetime, 7);
+	constexpr std::uint32_t ConstructedValue = 7;
+	const TUniquePointerResult<FTrackedValue> UniqueResult = MakeUnique<FTrackedValue>(Arena, Lifetime, ConstructedValue);
 
 	const EMemoryResult FactoryResult = UniqueResult.Result;
 	const bool bPointerInvalid = !UniqueResult.Pointer.IsValid();
@@ -399,7 +404,7 @@ MW_TEST_CASE(UniquePtrMoveAndResetReturnExactOriginalBlockOnce)
 {
 	TTrackingMemoryResource<128, 16> Resource;
 	FLifetimeState Lifetime;
-	auto UniqueResult = MakeUnique<FTrackedValue>(Resource, Lifetime, 19);
+	TUniquePointerResult<FTrackedValue> UniqueResult = MakeUnique<FTrackedValue>(Resource, Lifetime, 19);
 	const FMemoryBlock OriginalBlock = Resource.LastAllocatedBlock;
 
 	TUniquePtr<FTrackedValue> MovedPointer(std::move(UniqueResult.Pointer));
@@ -436,7 +441,7 @@ MW_TEST_CASE(UniquePtrScopeExitDestroysAndDeallocatesExactlyOnce)
 	FLifetimeState Lifetime;
 
 	{
-		auto UniqueResult = MakeUnique<FTrackedValue>(Resource, Lifetime, 3);
+		const TUniquePointerResult<FTrackedValue> UniqueResult = MakeUnique<FTrackedValue>(Resource, Lifetime, 3);
 		const EMemoryResult FactoryResult = UniqueResult.Result;
 		const bool bPointerValid = UniqueResult.Pointer.IsValid();
 		MW_EXPECT_EQ(Test, EMemoryResult::Success, FactoryResult, "Unique factory should succeed before scope-exit test");
@@ -456,14 +461,14 @@ MW_TEST_CASE(SharedAndWeakOwnersPreserveValueUntilFinalStrongAndWeakRelease)
 {
 	TTrackingMemoryResource<256, 64> Resource;
 	FLifetimeState Lifetime;
-	auto SharedFactoryResult = MakeShared<FTrackedValue>(Resource, Lifetime, 41);
+	TSharedPointerResult<FTrackedValue, ESharedPointerMode::SingleThreaded> SharedFactoryResult = MakeShared<FTrackedValue>(Resource, Lifetime, 41);
 	TSharedPtr<FTrackedValue> Owner = std::move(SharedFactoryResult.Pointer);
 
-	auto ShareResult = Owner.TryShare();
+	TSharedPointerResult<FTrackedValue, ESharedPointerMode::SingleThreaded> ShareResult = Owner.TryShare();
 	TSharedPtr<FTrackedValue> SecondOwner = std::move(ShareResult.Pointer);
-	auto WeakResult = Owner.TryAcquireWeak();
+	TWeakPointerResult<FTrackedValue, ESharedPointerMode::SingleThreaded> WeakResult = Owner.TryAcquireWeak();
 	TWeakPtr<FTrackedValue> Observer = std::move(WeakResult.Pointer);
-	auto PinResult = Observer.Pin();
+	TSharedPointerResult<FTrackedValue, ESharedPointerMode::SingleThreaded> PinResult = Observer.Pin();
 	TSharedPtr<FTrackedValue> PinnedOwner = std::move(PinResult.Pointer);
 
 	const ESharedPointerResult FactoryResult = SharedFactoryResult.Result;
@@ -493,7 +498,7 @@ MW_TEST_CASE(SharedAndWeakOwnersPreserveValueUntilFinalStrongAndWeakRelease)
 	const std::size_t DestructionAfterFinalStrong = Lifetime.DestructionCount;
 	const bool bObserverExpired = Observer.IsExpired();
 	const std::size_t DeallocationBeforeFinalWeak = Resource.DeallocationRequestCount;
-	auto ExpiredPinResult = Observer.Pin();
+	const TSharedPointerResult<FTrackedValue, ESharedPointerMode::SingleThreaded> ExpiredPinResult = Observer.Pin();
 	const ESharedPointerResult ExpiredPinOperationResult = ExpiredPinResult.Result;
 	const bool bExpiredPinInvalid = !ExpiredPinResult.Pointer.IsValid();
 	MW_EXPECT_EQ(Test, std::size_t{0}, DestructionBeforeFinalStrong, "Value should remain live while one strong owner remains");
@@ -520,7 +525,7 @@ MW_TEST_CASE(SharedFactoryOutOfMemoryNeverConstructsValue)
 	TTrackingMemoryResource<1, 64> Resource;
 	FLifetimeState Lifetime;
 
-	auto SharedResult = MakeShared<FTrackedValue>(Resource, Lifetime, 5);
+	const TSharedPointerResult<FTrackedValue, ESharedPointerMode::SingleThreaded> SharedResult = MakeShared<FTrackedValue>(Resource, Lifetime, 5);
 
 	const ESharedPointerResult FactoryResult = SharedResult.Result;
 	const bool bPointerInvalid = !SharedResult.Pointer.IsValid();
@@ -540,7 +545,8 @@ MW_TEST_CASE(SharedFactoryRejectsUnsupportedAlignmentBeforeConstruction)
 	TTrackingMemoryResource<256, 16> Resource;
 	FLifetimeState Lifetime;
 
-	auto SharedResult = MakeShared<FOverAlignedTrackedValue>(Resource, Lifetime);
+	const TSharedPointerResult<FOverAlignedTrackedValue, ESharedPointerMode::SingleThreaded> SharedResult =
+		MakeShared<FOverAlignedTrackedValue>(Resource, Lifetime);
 
 	const ESharedPointerResult FactoryResult = SharedResult.Result;
 	const bool bPointerInvalid = !SharedResult.Pointer.IsValid();
@@ -559,9 +565,9 @@ MW_TEST_CASE(SharedPtrDefersSelfOwnedFinalWeakDeallocationUntilValueDestructionC
 {
 	TTrackingMemoryResource<256, 64> Resource;
 	FLifetimeState Lifetime;
-	auto SharedResult = MakeShared<FSelfObservingValue>(Resource, Lifetime);
+	TSharedPointerResult<FSelfObservingValue, ESharedPointerMode::SingleThreaded> SharedResult = MakeShared<FSelfObservingValue>(Resource, Lifetime);
 	TSharedPtr<FSelfObservingValue> Owner = std::move(SharedResult.Pointer);
-	auto WeakResult = Owner.TryAcquireWeak();
+	TWeakPointerResult<FSelfObservingValue, ESharedPointerMode::SingleThreaded> WeakResult = Owner.TryAcquireWeak();
 	TWeakPtr<FSelfObservingValue> SelfObserver = std::move(WeakResult.Pointer);
 	FSelfObservingValue* const Value = Owner.Get();
 	if (Value != nullptr)
@@ -594,7 +600,7 @@ MW_TEST_CASE(SharedPtrRejectsStrongReferenceCountOverflowWithoutWrap)
 	constexpr std::size_t MaximumCount = FSharedPointer::MaximumReferenceCount();
 	TTrackingMemoryResource<256, 64> Resource;
 	FLifetimeState Lifetime;
-	auto SharedResult = MakeShared<FTrackedValue>(Resource, Lifetime, 8);
+	TSharedPointerResult<FTrackedValue, ESharedPointerMode::SingleThreaded> SharedResult = MakeShared<FTrackedValue>(Resource, Lifetime, 8);
 	FSharedPointer Owner = std::move(SharedResult.Pointer);
 	const ESharedPointerResult FactoryResult = SharedResult.Result;
 	std::array<FSharedPointer, MaximumCount - 1U> AdditionalOwners{};
@@ -602,7 +608,7 @@ MW_TEST_CASE(SharedPtrRejectsStrongReferenceCountOverflowWithoutWrap)
 
 	for (std::size_t OwnerIndex = 0; OwnerIndex < AdditionalOwners.size(); ++OwnerIndex)
 	{
-		auto ShareResult = Owner.TryShare();
+		TSharedPointerResult<FTrackedValue, ESharedPointerMode::SingleThreaded> ShareResult = Owner.TryShare();
 		if (ShareResult.Result != ESharedPointerResult::Success)
 		{
 			bAllBoundaryAcquisitionsSucceeded = false;
@@ -612,7 +618,7 @@ MW_TEST_CASE(SharedPtrRejectsStrongReferenceCountOverflowWithoutWrap)
 	}
 
 	const std::size_t CountAtBoundary = Owner.StrongReferenceCount();
-	auto OverflowResult = Owner.TryShare();
+	const TSharedPointerResult<FTrackedValue, ESharedPointerMode::SingleThreaded> OverflowResult = Owner.TryShare();
 	const ESharedPointerResult OverflowOperationResult = OverflowResult.Result;
 	const std::size_t CountAfterOverflow = Owner.StrongReferenceCount();
 	const bool bOverflowPointerInvalid = !OverflowResult.Pointer.IsValid();
@@ -645,7 +651,7 @@ MW_TEST_CASE(SharedPtrRejectsWeakReferenceCountOverflowWithoutWrap)
 	constexpr std::size_t MaximumCount = FWeakPointer::MaximumReferenceCount();
 	TTrackingMemoryResource<256, 64> Resource;
 	FLifetimeState Lifetime;
-	auto SharedResult = MakeShared<FTrackedValue>(Resource, Lifetime, 13);
+	TSharedPointerResult<FTrackedValue, ESharedPointerMode::SingleThreaded> SharedResult = MakeShared<FTrackedValue>(Resource, Lifetime, 13);
 	FSharedPointer Owner = std::move(SharedResult.Pointer);
 	const ESharedPointerResult FactoryResult = SharedResult.Result;
 	std::array<FWeakPointer, MaximumCount> Observers{};
@@ -653,7 +659,7 @@ MW_TEST_CASE(SharedPtrRejectsWeakReferenceCountOverflowWithoutWrap)
 
 	for (std::size_t ObserverIndex = 0; ObserverIndex < Observers.size(); ++ObserverIndex)
 	{
-		auto WeakResult = Owner.TryAcquireWeak();
+		TWeakPointerResult<FTrackedValue, ESharedPointerMode::SingleThreaded> WeakResult = Owner.TryAcquireWeak();
 		if (WeakResult.Result != ESharedPointerResult::Success)
 		{
 			bAllBoundaryAcquisitionsSucceeded = false;
@@ -663,7 +669,7 @@ MW_TEST_CASE(SharedPtrRejectsWeakReferenceCountOverflowWithoutWrap)
 	}
 
 	const std::size_t CountAtBoundary = Owner.WeakReferenceCount();
-	auto OverflowResult = Owner.TryAcquireWeak();
+	const TWeakPointerResult<FTrackedValue, ESharedPointerMode::SingleThreaded> OverflowResult = Owner.TryAcquireWeak();
 	const ESharedPointerResult OverflowOperationResult = OverflowResult.Result;
 	const std::size_t CountAfterOverflow = Owner.WeakReferenceCount();
 	const bool bOverflowPointerExpired = OverflowResult.Pointer.IsExpired();

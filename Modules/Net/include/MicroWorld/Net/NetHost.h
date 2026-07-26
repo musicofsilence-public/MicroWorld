@@ -15,6 +15,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <utility>
 
 namespace MicroWorld
@@ -52,20 +53,29 @@ enum class ENetHostState : std::uint8_t
 	Listening,
 };
 
+/** Default heartbeat cadence used when a caller does not override `FNetHostConfig`. */
+inline constexpr DurationMilliseconds DefaultHeartbeatIntervalMilliseconds = 1000;
+
+/** Default peer eviction window used when a caller does not override `FNetHostConfig`. */
+inline constexpr DurationMilliseconds DefaultPeerTimeoutMilliseconds = 5000;
+
+/** Default protocol version advertised in `Hello`/`Welcome` when a caller does not override it. */
+inline constexpr std::uint8_t DefaultProtocolVersion = 1;
+
 /** Session timing and identity supplied once before `Start`. */
 struct FNetHostConfig
 {
 	/** Interval between outgoing heartbeats (and client `Hello` retries while connecting). */
-	DurationMilliseconds HeartbeatIntervalMilliseconds{1000};
+	DurationMilliseconds HeartbeatIntervalMilliseconds{DefaultHeartbeatIntervalMilliseconds};
 
 	/** Silence window after which a peer is evicted; must exceed the heartbeat interval. */
-	DurationMilliseconds PeerTimeoutMilliseconds{5000};
+	DurationMilliseconds PeerTimeoutMilliseconds{DefaultPeerTimeoutMilliseconds};
 
 	/** Address the client greets with `Hello`; ignored by every non-client mode. */
 	FNetAddress ServerAddress{};
 
 	/** Protocol version advertised in `Hello`/`Welcome`; a mismatch is ignored, not admitted. */
-	std::uint8_t ProtocolVersion{1};
+	std::uint8_t ProtocolVersion{DefaultProtocolVersion};
 };
 
 /** Generation-checked identity of one peer, so a reused slot never answers to a stale id. */
@@ -113,11 +123,17 @@ class TNetHost final
 		MaxPacketBytes >= MessageHeaderBytes + MaxControlPayloadBytes, "TNetHost packets must fit the largest control frame (header + Welcome).");
 
 public:
+	/** Number of packets one full peer broadcast occupies in the outbound FIFO. */
+	static constexpr std::size_t BroadcastPacketsPerPeer = 1;
+
+	/** Packets reserved per peer for heartbeats and replies between pumps. */
+	static constexpr std::size_t HeartbeatPacketsPerPeer = 1;
+
 	/** Extra outbound/inbound packet headroom so a burst of control traffic between pumps is not dropped. */
 	static constexpr std::size_t PumpSlackPackets = 4;
 
 	/** Outbound FIFO depth: one full broadcast plus pending heartbeats plus slack. */
-	static constexpr std::size_t SendQueueDepth = 2 * MaxPeers + PumpSlackPackets;
+	static constexpr std::size_t SendQueueDepth = (BroadcastPacketsPerPeer + HeartbeatPacketsPerPeer) * MaxPeers + PumpSlackPackets;
 
 	/** Fixed number of message-handler bindings; small because one dispatcher usually suffices. */
 	static constexpr std::size_t MaxMessageHandlers = 4;
@@ -388,8 +404,20 @@ private:
 		const TimePointMilliseconds Delta = InNowMilliseconds - InPastMilliseconds;
 		// DurationMilliseconds is u32 (~49 days max), so clamp a wider gap to that
 		// ceiling instead of overflowing when it is narrowed.
-		constexpr TimePointMilliseconds MaxDuration = 0xFFFFFFFFu;
+		constexpr TimePointMilliseconds MaxDuration = std::numeric_limits<DurationMilliseconds>::max();
 		return Delta > MaxDuration ? static_cast<DurationMilliseconds>(MaxDuration) : static_cast<DurationMilliseconds>(Delta);
+	}
+
+	/** Reports whether an active peer has been silent past the configured eviction window. */
+	bool IsPeerTimedOut(const FNetPeerSlot& InSlot, const TimePointMilliseconds InNowMilliseconds) const noexcept
+	{
+		return ElapsedSince(InNowMilliseconds, InSlot.LastReceiveMilliseconds) > Config.PeerTimeoutMilliseconds;
+	}
+
+	/** Reports whether a peer's last send is older than the heartbeat cadence. */
+	bool IsHeartbeatDue(const FNetPeerSlot& InSlot, const TimePointMilliseconds InNowMilliseconds) const noexcept
+	{
+		return ElapsedSince(InNowMilliseconds, InSlot.LastSendMilliseconds) >= Config.HeartbeatIntervalMilliseconds;
 	}
 
 	/** Reports whether this host admits remote peers. */
@@ -471,7 +499,7 @@ private:
 			{
 				continue;
 			}
-			if (ElapsedSince(InNowMilliseconds, Slot.LastReceiveMilliseconds) > Config.PeerTimeoutMilliseconds)
+			if (IsPeerTimedOut(Slot, InNowMilliseconds))
 			{
 				MW_LOG(Log, "NetHost", "evicting peer %u (timeout)", static_cast<unsigned>(Index));
 				EvictPeer(Index);
@@ -717,7 +745,7 @@ private:
 		for (std::size_t Index = 0; Index < MaxPeers; ++Index)
 		{
 			FNetPeerSlot& Slot = Peers[Index];
-			if (Slot.bActive && ElapsedSince(InNowMilliseconds, Slot.LastSendMilliseconds) >= Config.HeartbeatIntervalMilliseconds)
+			if (Slot.bActive && IsHeartbeatDue(Slot, InNowMilliseconds))
 			{
 				FControlMessage HeartbeatMessage{};
 				HeartbeatMessage.Type = EControlMessageType::Heartbeat;

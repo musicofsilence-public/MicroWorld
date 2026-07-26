@@ -13,7 +13,6 @@
 #include <MicroWorld/Timer.h>
 #include <MicroWorld/Version.h>
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <utility>
@@ -76,6 +75,30 @@ public:
 	~FConsumerActor() noexcept override = default;
 };
 
+/** Object-store and registry capacities the engine probe exercises. */
+inline constexpr std::uint32_t EngineProbeSlotCount = 4;
+inline constexpr std::uint32_t EngineProbeRootCapacity = 2;
+inline constexpr std::size_t EngineProbeSlotSizeBytes = 256;
+inline constexpr std::size_t EngineProbeSlotAlignmentBytes = 16;
+inline constexpr std::size_t EngineProbeRegistryCapacity = 8;
+inline constexpr std::size_t EngineProbeWorldActorCapacity = 1;
+inline constexpr std::size_t EngineProbeTimerCapacity = 4;
+inline constexpr std::size_t EngineProbeTimerInlineBytes = 32;
+
+/** Type ids assigned to the probe's derived actor and component classes. */
+inline constexpr MicroWorld::FTypeId ConsumerActorTypeId{0x00040001u};
+inline constexpr MicroWorld::FTypeId ConsumerComponentTypeId{0x00040002u};
+
+/** Number of managed objects the unrooted collection is expected to reclaim (world, actor, component). */
+inline constexpr std::uint32_t EngineProbeExpectedReclaimedObjectCount = 3;
+
+/** Timer probe inputs: a base clock reading and the one-shot fire delay. */
+inline constexpr MicroWorld::TimePointMilliseconds EngineProbeTimerInitialNow = 1000;
+inline constexpr MicroWorld::DurationMilliseconds EngineProbeTimerDuration = 100;
+
+/** Expected timer fire count after exactly one one-shot schedule has elapsed. */
+inline constexpr std::uint32_t EngineProbeExpectedTimerFireCount = 1;
+
 } // namespace MicroWorldConsumer
 
 /** Exercises representative Core+Object+Engine public APIs without platform I/O. */
@@ -92,14 +115,7 @@ inline int RunEngineConsumerProbe() noexcept
 		return static_cast<int>(EEngineConsumerExitCode::ObjectProfileFailureOffset) + ObjectProfileResult;
 	}
 
-	constexpr std::uint32_t SlotCount = 4;
-	constexpr std::uint32_t RootCapacity = 2;
-	constexpr std::size_t SlotSizeBytes = 256;
-	constexpr std::size_t SlotAlignmentBytes = 16;
-	constexpr FTypeId ConsumerActorTypeId{0x00040001u};
-	constexpr FTypeId ConsumerComponentTypeId{0x00040002u};
-
-	TClassRegistry<8> Registry;
+	TClassRegistry<MicroWorldConsumer::EngineProbeRegistryCapacity> Registry;
 	if (Registry.Register(UActorComponent::StaticClassDescriptor()) != EObjectResult::Success)
 	{
 		return static_cast<int>(EEngineConsumerExitCode::ComponentBaseRegistrationFailed);
@@ -112,28 +128,31 @@ inline int RunEngineConsumerProbe() noexcept
 	{
 		return static_cast<int>(EEngineConsumerExitCode::WorldBaseRegistrationFailed);
 	}
-	const FClassDescriptor ActorDescriptor =
-		MakeClassDescriptor<FConsumerActor>(ConsumerActorTypeId, "ConsumerActor", Registry.Find(AActorClassId), &TraceManagedObjectReferences);
+	const FClassDescriptor ActorDescriptor = MakeClassDescriptor<FConsumerActor>(
+		MicroWorldConsumer::ConsumerActorTypeId, "ConsumerActor", Registry.Find(AActorClassId), &TraceManagedObjectReferences);
 	const FClassDescriptor ComponentDescriptor = MakeClassDescriptor<FConsumerComponent>(
-		ConsumerComponentTypeId, "ConsumerComponent", Registry.Find(UActorComponentClassId), &TraceManagedObjectReferences);
-	if (Registry.Register(ActorDescriptor) != EObjectResult::Success || Registry.Register(ComponentDescriptor) != EObjectResult::Success)
+		MicroWorldConsumer::ConsumerComponentTypeId, "ConsumerComponent", Registry.Find(UActorComponentClassId), &TraceManagedObjectReferences);
+	const bool bDerivedRegistered =
+		Registry.Register(ActorDescriptor) == EObjectResult::Success && Registry.Register(ComponentDescriptor) == EObjectResult::Success;
+	if (!bDerivedRegistered)
 	{
 		return static_cast<int>(EEngineConsumerExitCode::DerivedRegistrationFailed);
 	}
 
-	alignas(SlotAlignmentBytes) std::array<std::byte, SlotSizeBytes * SlotCount> SlotBytes{};
-	std::array<FObjectSlotMetadata, SlotCount> Slots{};
-	std::array<FObjectRootEntry, RootCapacity> Roots{};
+	alignas(MicroWorldConsumer::EngineProbeSlotAlignmentBytes)
+		std::byte SlotBytes[MicroWorldConsumer::EngineProbeSlotSizeBytes * MicroWorldConsumer::EngineProbeSlotCount]{};
+	FObjectSlotMetadata Slots[MicroWorldConsumer::EngineProbeSlotCount]{};
+	FObjectRootEntry Roots[MicroWorldConsumer::EngineProbeRootCapacity]{};
 	FObjectStore Store(
 		FObjectStoreStorage{
-			SlotBytes.data(),
-			SlotBytes.size(),
-			Slots.data(),
-			SlotCount,
-			SlotSizeBytes,
-			SlotAlignmentBytes,
-			Roots.data(),
-			RootCapacity,
+			SlotBytes,
+			sizeof(SlotBytes),
+			Slots,
+			MicroWorldConsumer::EngineProbeSlotCount,
+			MicroWorldConsumer::EngineProbeSlotSizeBytes,
+			MicroWorldConsumer::EngineProbeSlotAlignmentBytes,
+			Roots,
+			MicroWorldConsumer::EngineProbeRootCapacity,
 		},
 		MakeClassRegistryView(Registry));
 	if (Store.ConfigurationResult() != EObjectResult::Success)
@@ -141,11 +160,13 @@ inline int RunEngineConsumerProbe() noexcept
 		return static_cast<int>(EEngineConsumerExitCode::StoreConfigurationFailed);
 	}
 
-	FWorldActorRegistry<1> WorldActors;
+	FWorldActorRegistry<MicroWorldConsumer::EngineProbeWorldActorCapacity> WorldActors;
 	const TObjectPtr<UWorld> World = Store.NewObject<UWorld>(*Registry.Find(UWorldClassId), WorldActors.MakeReference()).Object;
-	const TObjectPtr<FConsumerActor> Actor = Store.NewObject<FConsumerActor>(*Registry.Find(ConsumerActorTypeId)).Object;
-	const TObjectPtr<FConsumerComponent> Component = Store.NewObject<FConsumerComponent>(*Registry.Find(ConsumerComponentTypeId)).Object;
-	if (World.Get() == nullptr || Actor.Get() == nullptr || Component.Get() == nullptr)
+	const TObjectPtr<FConsumerActor> Actor = Store.NewObject<FConsumerActor>(*Registry.Find(MicroWorldConsumer::ConsumerActorTypeId)).Object;
+	const TObjectPtr<FConsumerComponent> Component =
+		Store.NewObject<FConsumerComponent>(*Registry.Find(MicroWorldConsumer::ConsumerComponentTypeId)).Object;
+	const bool bAllObjectsCreated = World.Get() != nullptr && Actor.Get() != nullptr && Component.Get() != nullptr;
+	if (!bAllObjectsCreated)
 	{
 		return static_cast<int>(EEngineConsumerExitCode::ObjectCreationFailed);
 	}
@@ -177,10 +198,11 @@ inline int RunEngineConsumerProbe() noexcept
 		return static_cast<int>(EEngineConsumerExitCode::EndPlayFailed);
 	}
 
-	std::array<FObjectHandle, SlotCount> Worklist{};
-	FGarbageCollector Collector(Store, FGarbageCollectorStorage{Worklist.data(), SlotCount});
+	FObjectHandle Worklist[MicroWorldConsumer::EngineProbeSlotCount]{};
+	FGarbageCollector Collector(Store, FGarbageCollectorStorage{Worklist, MicroWorldConsumer::EngineProbeSlotCount});
 	const FGarbageCollectionResult RootedCollection = Collector.CollectFull();
-	if (RootedCollection.Result != ERuntimeResult::Success || RootedCollection.ObjectsReclaimed != 0)
+	const bool bRootedCollectionHeldObjects = RootedCollection.Result == ERuntimeResult::Success && RootedCollection.ObjectsReclaimed == 0;
+	if (!bRootedCollectionHeldObjects)
 	{
 		return static_cast<int>(EEngineConsumerExitCode::RootedCollectionFailed);
 	}
@@ -188,42 +210,48 @@ inline int RunEngineConsumerProbe() noexcept
 	WorldRoot.Pointer.Reset();
 	const FGarbageCollectionResult UnrootedCollection = Collector.CollectFull();
 	const FObjectStoreStats FinalStats = Store.Stats();
-	const bool bUnrootedCollectionSucceeded =
-		UnrootedCollection.Result == ERuntimeResult::Success && UnrootedCollection.ObjectsReclaimed == 3 && FinalStats.OccupiedSlots == 0;
-	if (!bUnrootedCollectionSucceeded)
+	const bool bUnrootedReclaimedAll = UnrootedCollection.Result == ERuntimeResult::Success
+		&& UnrootedCollection.ObjectsReclaimed == MicroWorldConsumer::EngineProbeExpectedReclaimedObjectCount && FinalStats.OccupiedSlots == 0;
+	if (!bUnrootedReclaimedAll)
 	{
 		return static_cast<int>(EEngineConsumerExitCode::UnrootedCollectionFailed);
 	}
 
 	// Exercises the bounded timer facility the same way a host application would: the caller owns the
 	// manager value, supplies every clock reading, and the bound inline callback observes its dispatch.
-	constexpr TimePointMilliseconds TimerInitialNow = 1000;
-	constexpr DurationMilliseconds TimerDuration = 100;
-	TTimerManager<4, 32> TimerManager{TimerInitialNow};
+	TTimerManager<MicroWorldConsumer::EngineProbeTimerCapacity, MicroWorldConsumer::EngineProbeTimerInlineBytes> TimerManager{
+		MicroWorldConsumer::EngineProbeTimerInitialNow};
 	std::uint32_t TimerFireCount{0};
-	TDelegate<void(), 32> TimerCallback;
+	TDelegate<void(), MicroWorldConsumer::EngineProbeTimerInlineBytes> TimerCallback;
 	(void)TimerCallback.Bind([&TimerFireCount]() noexcept { ++TimerFireCount; });
 
 	FTimerHandle TimerHandle{};
-	const ETimerResult TimerScheduleResult = TimerManager.Schedule(std::move(TimerCallback), TimerDuration, ETimerMode::OneShot, TimerHandle);
-	if (TimerScheduleResult != ETimerResult::Success || !TimerHandle.IsValid())
+	const ETimerResult TimerScheduleResult =
+		TimerManager.Schedule(std::move(TimerCallback), MicroWorldConsumer::EngineProbeTimerDuration, ETimerMode::OneShot, TimerHandle);
+	const bool bTimerScheduled = TimerScheduleResult == ETimerResult::Success && TimerHandle.IsValid();
+	if (!bTimerScheduled)
 	{
 		return static_cast<int>(EEngineConsumerExitCode::TimerScheduleFailed);
 	}
 
-	const ETimerResult AdvanceAtDeadlineResult = TimerManager.Advance(TimerInitialNow);
-	const ETimerResult AdvancePastDeadlineResult = TimerManager.Advance(TimerInitialNow + TimerDuration);
-	if (AdvanceAtDeadlineResult != ETimerResult::Success || AdvancePastDeadlineResult != ETimerResult::Success)
+	const ETimerResult AdvanceAtDeadlineResult = TimerManager.Advance(MicroWorldConsumer::EngineProbeTimerInitialNow);
+	const ETimerResult AdvancePastDeadlineResult =
+		TimerManager.Advance(MicroWorldConsumer::EngineProbeTimerInitialNow + MicroWorldConsumer::EngineProbeTimerDuration);
+	const bool bBothAdvancesSucceeded = AdvanceAtDeadlineResult == ETimerResult::Success && AdvancePastDeadlineResult == ETimerResult::Success;
+	if (!bBothAdvancesSucceeded)
 	{
 		return static_cast<int>(EEngineConsumerExitCode::TimerAdvanceFailed);
 	}
-	if (TimerFireCount != 1u)
+	if (TimerFireCount != MicroWorldConsumer::EngineProbeExpectedTimerFireCount)
 	{
 		return static_cast<int>(EEngineConsumerExitCode::TimerDidNotFireOnce);
 	}
 
-	const ETimerResult AdvanceAfterCompletionResult = TimerManager.Advance(TimerInitialNow + TimerDuration + TimerDuration);
-	if (AdvanceAfterCompletionResult != ETimerResult::Success || TimerFireCount != 1u)
+	const ETimerResult AdvanceAfterCompletionResult = TimerManager.Advance(
+		MicroWorldConsumer::EngineProbeTimerInitialNow + MicroWorldConsumer::EngineProbeTimerDuration + MicroWorldConsumer::EngineProbeTimerDuration);
+	const bool bNoExtraFire =
+		AdvanceAfterCompletionResult == ETimerResult::Success && TimerFireCount == MicroWorldConsumer::EngineProbeExpectedTimerFireCount;
+	if (!bNoExtraFire)
 	{
 		return static_cast<int>(EEngineConsumerExitCode::TimerFiredAfterCompletion);
 	}

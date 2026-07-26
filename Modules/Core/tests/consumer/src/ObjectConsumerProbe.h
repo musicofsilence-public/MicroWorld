@@ -6,7 +6,6 @@
 #include <MicroWorld/Object/ObjectStore.h>
 #include <MicroWorld/Version.h>
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
 
@@ -18,6 +17,20 @@ static_assert(MicroWorld::Version.Patch == 0);
 namespace MicroWorldConsumer
 {
 
+/** Stable process exit codes that identify the exact Core+Object public-API probe failure. */
+enum class EObjectConsumerExitCode : int
+{
+	Success = 0,
+	ClassRegistrationFailed = 1,
+	RegisteredDescriptorMissing = 2,
+	StoreConfigurationFailed = 3,
+	ObjectCreationFailed = 4,
+	StrongRootAcquireFailed = 5,
+	RootedCollectionDidNotRetain = 6,
+	ProbeOutcomeMismatch = 7,
+	MemoryProfileFailureOffset = 100,
+};
+
 /** Supplies one concrete managed type for downstream construction and collection. */
 class FConsumerObject final : public MicroWorld::UObject
 {
@@ -26,82 +39,92 @@ public:
 	~FConsumerObject() noexcept override = default;
 };
 
+/** One-slot object store configuration the probe exercises. */
+inline constexpr std::uint32_t ProbeSlotCount = 1;
+inline constexpr std::uint32_t ProbeRootCapacity = 1;
+inline constexpr std::size_t ProbeSlotSizeBytes = 128;
+inline constexpr std::size_t ProbeSlotAlignmentBytes = 16;
+inline constexpr MicroWorld::FTypeId ConsumerObjectTypeId = 1;
+
 } // namespace MicroWorldConsumer
 
 /** Exercises representative Core+Object public APIs without platform I/O. */
 inline int RunObjectConsumerProbe() noexcept
 {
 	using namespace MicroWorld;
+	using MicroWorldConsumer::EObjectConsumerExitCode;
 	using MicroWorldConsumer::FConsumerObject;
 
 	const int MemoryProfileResult = RunMemoryConsumerProbe();
 	if (MemoryProfileResult != 0)
 	{
-		return 10 + MemoryProfileResult;
+		return static_cast<int>(EObjectConsumerExitCode::MemoryProfileFailureOffset) + MemoryProfileResult;
 	}
 
-	constexpr std::uint32_t SlotCount = 1;
-	constexpr std::uint32_t RootCapacity = 1;
-	constexpr std::size_t SlotSizeBytes = 128;
-	constexpr std::size_t SlotAlignmentBytes = 16;
-
-	TClassRegistry<1> Registry;
-	const FClassDescriptor Descriptor = MakeClassDescriptor<FConsumerObject>(1, "ConsumerObject");
+	TClassRegistry<MicroWorldConsumer::ProbeSlotCount> Registry;
+	const FClassDescriptor Descriptor = MakeClassDescriptor<FConsumerObject>(MicroWorldConsumer::ConsumerObjectTypeId, "ConsumerObject");
 	if (Registry.Register(Descriptor) != EObjectResult::Success)
 	{
-		return 1;
+		return static_cast<int>(EObjectConsumerExitCode::ClassRegistrationFailed);
 	}
 	const FClassDescriptor* const RegisteredDescriptor = Registry.Find(Descriptor.TypeId);
 	if (RegisteredDescriptor == nullptr)
 	{
-		return 2;
+		return static_cast<int>(EObjectConsumerExitCode::RegisteredDescriptorMissing);
 	}
 
-	alignas(SlotAlignmentBytes) std::array<std::byte, SlotSizeBytes * SlotCount> SlotBytes{};
-	std::array<FObjectSlotMetadata, SlotCount> Slots{};
-	std::array<FObjectRootEntry, RootCapacity> Roots{};
+	alignas(MicroWorldConsumer::ProbeSlotAlignmentBytes)
+		std::byte SlotBytes[MicroWorldConsumer::ProbeSlotSizeBytes * MicroWorldConsumer::ProbeSlotCount]{};
+	FObjectSlotMetadata Slots[MicroWorldConsumer::ProbeSlotCount]{};
+	FObjectRootEntry Roots[MicroWorldConsumer::ProbeRootCapacity]{};
 	FObjectStore Store(
 		FObjectStoreStorage{
-			SlotBytes.data(),
-			SlotBytes.size(),
-			Slots.data(),
-			SlotCount,
-			SlotSizeBytes,
-			SlotAlignmentBytes,
-			Roots.data(),
-			RootCapacity,
+			SlotBytes,
+			sizeof(SlotBytes),
+			Slots,
+			MicroWorldConsumer::ProbeSlotCount,
+			MicroWorldConsumer::ProbeSlotSizeBytes,
+			MicroWorldConsumer::ProbeSlotAlignmentBytes,
+			Roots,
+			MicroWorldConsumer::ProbeRootCapacity,
 		},
 		MakeClassRegistryView(Registry));
 	if (Store.ConfigurationResult() != EObjectResult::Success)
 	{
-		return 3;
+		return static_cast<int>(EObjectConsumerExitCode::StoreConfigurationFailed);
 	}
 
 	const TObjectCreationResult<FConsumerObject> Creation = Store.NewObject<FConsumerObject>(*RegisteredDescriptor);
-	if (Creation.Result != EObjectResult::Success || Creation.Object.Get() == nullptr)
+	const bool bCreationSucceeded = Creation.Result == EObjectResult::Success && Creation.Object.Get() != nullptr;
+	if (!bCreationSucceeded)
 	{
-		return 4;
+		return static_cast<int>(EObjectConsumerExitCode::ObjectCreationFailed);
 	}
 	const TWeakObjectPtr<FConsumerObject> WeakObject(Creation.Object);
 	TStrongObjectPointerResult<FConsumerObject> Root = Store.MakeStrongObjectPtr(Creation.Object);
-	if (Root.Result != EObjectResult::Success || Root.Pointer.Get() == nullptr)
+	const bool bRootAcquired = Root.Result == EObjectResult::Success && Root.Pointer.Get() != nullptr;
+	if (!bRootAcquired)
 	{
-		return 5;
+		return static_cast<int>(EObjectConsumerExitCode::StrongRootAcquireFailed);
 	}
 
-	std::array<FObjectHandle, SlotCount> Worklist{};
-	FGarbageCollector Collector(Store, FGarbageCollectorStorage{Worklist.data(), SlotCount});
+	FObjectHandle Worklist[MicroWorldConsumer::ProbeSlotCount]{};
+	FGarbageCollector Collector(Store, FGarbageCollectorStorage{Worklist, MicroWorldConsumer::ProbeSlotCount});
 	const FGarbageCollectionResult RootedCollection = Collector.CollectFull();
-	if (RootedCollection.Result != ERuntimeResult::Success || !RootedCollection.bCycleComplete || RootedCollection.ObjectsReclaimed != 0)
+	const bool bRootedCollectionHeldObject =
+		RootedCollection.Result == ERuntimeResult::Success && RootedCollection.bCycleComplete && RootedCollection.ObjectsReclaimed == 0;
+	if (!bRootedCollectionHeldObject)
 	{
-		return 6;
+		return static_cast<int>(EObjectConsumerExitCode::RootedCollectionDidNotRetain);
 	}
 
 	Root.Pointer.Reset();
 	const FGarbageCollectionResult UnrootedCollection = Collector.CollectFull();
 	const FObjectStoreStats FinalStats = Store.Stats();
-	return UnrootedCollection.Result == ERuntimeResult::Success && UnrootedCollection.bCycleComplete && UnrootedCollection.ObjectsReclaimed == 1
-			&& WeakObject.IsExpired() && FinalStats.OccupiedSlots == 0
-		? 0
-		: 7;
+	const bool bUnrootedReclaimed = UnrootedCollection.Result == ERuntimeResult::Success && UnrootedCollection.bCycleComplete
+		&& UnrootedCollection.ObjectsReclaimed == MicroWorldConsumer::ProbeSlotCount;
+	const bool bWeakExpired = WeakObject.IsExpired();
+	const bool bStoreEmpty = FinalStats.OccupiedSlots == 0;
+	const bool bProbeSucceeded = bUnrootedReclaimed && bWeakExpired && bStoreEmpty;
+	return bProbeSucceeded ? static_cast<int>(EObjectConsumerExitCode::Success) : static_cast<int>(EObjectConsumerExitCode::ProbeOutcomeMismatch);
 }

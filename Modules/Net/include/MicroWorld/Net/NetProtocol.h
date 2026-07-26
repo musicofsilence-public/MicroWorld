@@ -1,5 +1,6 @@
 #pragma once
 
+#include <MicroWorld/ByteCodecConstants.h>
 #include <MicroWorld/Containers/Span.h>
 #include <MicroWorld/Net/ByteReader.h>
 #include <MicroWorld/Net/ByteWriter.h>
@@ -20,6 +21,45 @@ constexpr std::uint8_t ControlChannel = 0;
 
 /** Largest control payload, sized for `Welcome` (type byte plus three fields). */
 constexpr std::size_t MaxControlPayloadBytes = 4;
+
+/** Byte offset of the channel field within a framed message header. */
+constexpr std::size_t MessageChannelByteIndex = 0;
+
+/** Byte offset of the flags field within a framed message header. */
+constexpr std::size_t MessageFlagsByteIndex = 1;
+
+/** Byte offset of the little-endian payload length field within a framed message header. */
+constexpr std::size_t MessagePayloadLengthByteIndex = 2;
+
+/** Encoded size of the payload length field, in bytes. */
+constexpr std::size_t MessagePayloadLengthFieldBytes = 2;
+
+/** Reserved flags value; a valid message always transmits zero and the reader rejects any other. */
+constexpr std::uint8_t MessageReservedFlags = 0;
+
+/** Payload length the per-type control validators expect for `Hello`. */
+constexpr std::size_t HelloControlPayloadBytes = 2;
+
+/** Payload length the per-type control validators expect for `Welcome`. */
+constexpr std::size_t WelcomeControlPayloadBytes = 4;
+
+/** Payload length the per-type control validators expect for `Heartbeat` and `Bye`. */
+constexpr std::size_t HeartbeatControlPayloadBytes = 1;
+
+/** Index of the type byte within every channel-0 control payload. */
+constexpr std::size_t ControlTypeByteIndex = 0;
+
+/** Index of the protocol version byte in a `Hello` control payload. */
+constexpr std::size_t HelloProtocolVersionByteIndex = 1;
+
+/** Index of the protocol version byte in a `Welcome` control payload. */
+constexpr std::size_t WelcomeProtocolVersionByteIndex = 1;
+
+/** Index of the assigned peer index byte in a `Welcome` control payload. */
+constexpr std::size_t WelcomePeerIndexByteIndex = 2;
+
+/** Index of the assigned peer generation byte in a `Welcome` control payload. */
+constexpr std::size_t WelcomePeerGenerationByteIndex = 3;
 
 /**
  * Parsed view of one message header.
@@ -87,7 +127,7 @@ struct FControlMessage
 inline ENetResult WriteMessage(FByteWriter& InWriter, std::uint8_t InChannel, TSpan<const std::uint8_t> InPayload) noexcept
 {
 	const std::size_t PayloadSize = InPayload.Size();
-	if (PayloadSize > 0xFFFF)
+	if (PayloadSize > Uint16Max)
 	{
 		// A u16 length field cannot represent a payload this large; reject before any write.
 		return ENetResult::Invalid;
@@ -100,11 +140,11 @@ inline ENetResult WriteMessage(FByteWriter& InWriter, std::uint8_t InChannel, TS
 	}
 	const std::uint16_t PayloadBytes = static_cast<std::uint16_t>(PayloadSize);
 	(void)InWriter.WriteByte(InChannel);
-	(void)InWriter.WriteByte(std::uint8_t{0}); // Flags is reserved and always transmitted as zero.
+	(void)InWriter.WriteByte(MessageReservedFlags); // Flags is reserved and always transmitted as zero.
 	// The message header length is little-endian to match this layer's byte I/O convention (D6).
-	std::uint8_t PayloadLengthBytes[2];
+	std::uint8_t PayloadLengthBytes[MessagePayloadLengthFieldBytes];
 	WriteUint16LittleEndian(PayloadBytes, PayloadLengthBytes);
-	(void)InWriter.Write(TSpan<const std::uint8_t>(PayloadLengthBytes, 2));
+	(void)InWriter.Write(TSpan<const std::uint8_t>(PayloadLengthBytes, MessagePayloadLengthFieldBytes));
 	if (PayloadSize > 0)
 	{
 		(void)InWriter.Write(InPayload);
@@ -125,21 +165,21 @@ inline ENetResult ReadMessage(TSpan<const std::uint8_t> InMessage, FMessageHeade
 		// Not even a header is present; nothing can be parsed.
 		return ENetResult::Invalid;
 	}
-	const std::uint8_t Flags = InMessage[1];
-	if (Flags != 0)
+	const std::uint8_t Flags = InMessage[MessageFlagsByteIndex];
+	if (Flags != MessageReservedFlags)
 	{
 		// Flags is reserved; a nonzero value is a malformed or unknown-framing message.
 		return ENetResult::Invalid;
 	}
 	// The message header length is little-endian to match this layer's byte I/O convention (D6).
-	const std::uint16_t PayloadBytes = ReadUint16LittleEndian(&InMessage[2]);
+	const std::uint16_t PayloadBytes = ReadUint16LittleEndian(&InMessage[MessagePayloadLengthByteIndex]);
 	if (InMessage.Size() - MessageHeaderBytes != PayloadBytes)
 	{
 		// The declared length disagrees with the actual trailing payload: truncation or corruption.
 		return ENetResult::Invalid;
 	}
-	OutHeader.Channel = InMessage[0];
-	OutHeader.Flags = std::uint8_t{0};
+	OutHeader.Channel = InMessage[MessageChannelByteIndex];
+	OutHeader.Flags = MessageReservedFlags;
 	OutHeader.PayloadBytes = PayloadBytes;
 	OutPayload = TSpan<const std::uint8_t>(InMessage.Data() + MessageHeaderBytes, PayloadBytes);
 	return ENetResult::Success;
@@ -155,23 +195,23 @@ inline ENetResult ReadMessage(TSpan<const std::uint8_t> InMessage, FMessageHeade
 inline ENetResult WriteControlMessage(FByteWriter& InWriter, const FControlMessage& InMessage) noexcept
 {
 	std::array<std::uint8_t, MaxControlPayloadBytes> Payload{};
-	Payload[0] = static_cast<std::uint8_t>(InMessage.Type);
-	std::size_t PayloadLength = 1;
+	Payload[ControlTypeByteIndex] = static_cast<std::uint8_t>(InMessage.Type);
+	std::size_t PayloadLength = HeartbeatControlPayloadBytes;
 	switch (InMessage.Type)
 	{
 		case EControlMessageType::Hello:
-			Payload[1] = InMessage.ProtocolVersion;
-			PayloadLength = 2;
+			Payload[HelloProtocolVersionByteIndex] = InMessage.ProtocolVersion;
+			PayloadLength = HelloControlPayloadBytes;
 			break;
 		case EControlMessageType::Welcome:
-			Payload[1] = InMessage.ProtocolVersion;
-			Payload[2] = InMessage.PeerIndex;
-			Payload[3] = InMessage.PeerGeneration;
-			PayloadLength = 4;
+			Payload[HelloProtocolVersionByteIndex] = InMessage.ProtocolVersion;
+			Payload[WelcomePeerIndexByteIndex] = InMessage.PeerIndex;
+			Payload[WelcomePeerGenerationByteIndex] = InMessage.PeerGeneration;
+			PayloadLength = WelcomeControlPayloadBytes;
 			break;
 		case EControlMessageType::Heartbeat:
 		case EControlMessageType::Bye:
-			PayloadLength = 1;
+			PayloadLength = HeartbeatControlPayloadBytes;
 			break;
 		default:
 			// An unknown type has no defined encoding; reject before any write.
@@ -195,20 +235,20 @@ namespace Detail
 		switch (InTypeByte)
 		{
 			case static_cast<std::uint8_t>(EControlMessageType::Hello):
-				if (InPayloadSize != 2)
+				if (InPayloadSize != HelloControlPayloadBytes)
 				{
 					return ENetResult::Invalid;
 				}
 				return ENetResult::Success;
 			case static_cast<std::uint8_t>(EControlMessageType::Welcome):
-				if (InPayloadSize != 4)
+				if (InPayloadSize != WelcomeControlPayloadBytes)
 				{
 					return ENetResult::Invalid;
 				}
 				return ENetResult::Success;
 			case static_cast<std::uint8_t>(EControlMessageType::Heartbeat):
 			case static_cast<std::uint8_t>(EControlMessageType::Bye):
-				if (InPayloadSize != 1)
+				if (InPayloadSize != HeartbeatControlPayloadBytes)
 				{
 					return ENetResult::Invalid;
 				}

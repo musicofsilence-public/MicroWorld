@@ -43,6 +43,20 @@ EEngineResult UWorld::RegisterActor(const TObjectPtr<AActor> InActor) noexcept
 	return EEngineResult::Success;
 }
 
+bool UWorld::CanAcceptMoreActors() const noexcept
+{
+	const std::size_t LiveAndPendingActorCount = Actors.GetCount() + Actors.GetPendingSpawnCount() + DeferredSpawns.PendingCount();
+	return LiveAndPendingActorCount < Actors.GetCapacity();
+}
+
+bool UWorld::HasPendingBarrierWork() const noexcept
+{
+	const bool bHasPendingDestroys = Actors.GetPendingDestroyCount() != 0;
+	const bool bHasPendingSpawns = Actors.GetPendingSpawnCount() != 0;
+	const bool bHasDeferredSpawns = DeferredSpawns.PendingCount() != 0;
+	return bHasPendingDestroys || bHasPendingSpawns || bHasDeferredSpawns;
+}
+
 EEngineResult UWorld::CheckActorRegistrable(const TObjectPtr<AActor> InActor) const noexcept
 {
 	// Registration is only permitted before BeginPlay can begin dispatch.
@@ -335,7 +349,7 @@ EActorSpawnRequestResult UWorld::CheckDeferredSpawnRequest() const noexcept
 	{
 		return EActorSpawnRequestResult::CapacityExceeded;
 	}
-	if (Actors.GetCount() + Actors.GetPendingSpawnCount() + DeferredSpawns.PendingCount() >= Actors.GetCapacity())
+	if (!CanAcceptMoreActors())
 	{
 		return EActorSpawnRequestResult::CapacityExceeded;
 	}
@@ -390,7 +404,7 @@ EEngineResult UWorld::CheckSpawnable(const TObjectPtr<AActor> InActor) const noe
 	}
 	// Capacity counts every actor that can enter the live registry at the next
 	// barrier so manual and typed requests cannot overfill the fixed world limit.
-	if (Actors.GetCount() + Actors.GetPendingSpawnCount() + DeferredSpawns.PendingCount() >= Actors.GetCapacity())
+	if (!CanAcceptMoreActors())
 	{
 		return EEngineResult::CapacityExceeded;
 	}
@@ -474,7 +488,7 @@ ERuntimeResult UWorld::ApplyPending(const TimePointMilliseconds InNowMillisecond
 	{
 		DeferredSpawns.SealBarrier();
 	}
-	if (Actors.GetPendingDestroyCount() == 0 && Actors.GetPendingSpawnCount() == 0 && DeferredSpawns.PendingCount() == 0)
+	if (!HasPendingBarrierWork())
 	{
 		return ERuntimeResult::Success;
 	}

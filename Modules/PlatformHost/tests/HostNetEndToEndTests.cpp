@@ -45,6 +45,16 @@ constexpr std::uint8_t OctetD = 1;
 /** Application payload delivered after the handshake; kept short so the host's 256-byte scratch is never exceeded. */
 const std::array<std::uint8_t, 4> AppPayload = {0x10, 0x20, 0x30, 0x40};
 
+/** Upper bound on handshake pump iterations before the test gives up waiting for Connected. */
+constexpr int HandshakeIterationCap = 20;
+
+/** Milliseconds `PollReadable` blocks waiting for a readable datagram during the handshake. */
+constexpr int HandshakePollTimeoutMilliseconds = 500;
+
+/** Distinct byte values carried by the four-byte application payload. */
+constexpr std::uint8_t AppPayloadByte0 = 0x10;
+constexpr std::uint8_t AppPayloadByte1 = 0x20;
+
 /** Drives one client and one server through the Hello/Welcome handshake over UDP, bounded by the iteration cap. */
 void PumpHandshake(
 	FHostUdpDriver& ServerDriver,
@@ -53,19 +63,22 @@ void PumpHandshake(
 	TNetHost<4, 256>& Client,
 	const TimePointMilliseconds Now) noexcept
 {
-	for (int Iteration = 0; Iteration < 20; ++Iteration)
+	for (int Iteration = 0; Iteration < HandshakeIterationCap; ++Iteration)
 	{
 		(void)Client.PumpSend(Now);
-		if (ServerDriver.PollReadable(500))
+		const bool bServerReadable = ServerDriver.PollReadable(HandshakePollTimeoutMilliseconds);
+		if (bServerReadable)
 		{
 			(void)Server.PumpReceive(Now);
 		}
 		(void)Server.PumpSend(Now);
-		if (ClientDriver.PollReadable(500))
+		const bool bClientReadable = ClientDriver.PollReadable(HandshakePollTimeoutMilliseconds);
+		if (bClientReadable)
 		{
 			(void)Client.PumpReceive(Now);
 		}
-		if (Client.GetState() == ENetHostState::Connected)
+		const bool bClientConnected = Client.GetState() == ENetHostState::Connected;
+		if (bClientConnected)
 		{
 			break;
 		}
@@ -121,11 +134,12 @@ MW_TEST_CASE(HostNetHandshakeAndApplicationMessageCrossRealUdp)
 		Client.SendTo(ServerPeer, 1, TSpan<const std::uint8_t>(AppPayload.data(), AppPayload.size())),
 		"The client queues one channel-1 message to the server");
 	(void)Client.PumpSend(Now);
-	if (ServerDriver.PollReadable(500))
+	const bool bServerDelivered = ServerDriver.PollReadable(HandshakePollTimeoutMilliseconds);
+	if (bServerDelivered)
 	{
 		(void)Server.PumpReceive(Now);
 	}
 	MW_EXPECT_EQ(Test, std::size_t{1}, Capture.Count, "The server handler observed exactly one message");
 	MW_EXPECT_EQ(Test, std::uint8_t{1}, Capture.Channel, "The message arrived on the requested channel");
-	MW_EXPECT_EQ(Test, std::uint8_t{0x10}, Capture.FirstByte, "The message carried the sent payload's first byte");
+	MW_EXPECT_EQ(Test, AppPayloadByte0, Capture.FirstByte, "The message carried the sent payload's first byte");
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <MicroWorld/ByteCodecConstants.h>
 #include <MicroWorld/Containers/Span.h>
 #include <MicroWorld/Net/NetResult.h>
 
@@ -164,7 +165,7 @@ private:
  */
 inline std::uint16_t ReadUint16BigEndian(const std::uint8_t* const InBytes) noexcept
 {
-	return static_cast<std::uint16_t>((static_cast<std::uint16_t>(InBytes[0]) << 8) | static_cast<std::uint16_t>(InBytes[1]));
+	return static_cast<std::uint16_t>((static_cast<std::uint16_t>(InBytes[0]) << HighByteShift) | static_cast<std::uint16_t>(InBytes[1]));
 }
 
 /**
@@ -176,7 +177,7 @@ inline std::uint16_t ReadUint16BigEndian(const std::uint8_t* const InBytes) noex
 inline std::uint16_t ReadUint16LittleEndian(const std::uint8_t* const InBytes) noexcept
 {
 	return static_cast<std::uint16_t>(
-		static_cast<std::uint16_t>(InBytes[0]) | static_cast<std::uint16_t>(static_cast<std::uint16_t>(InBytes[1]) << 8));
+		static_cast<std::uint16_t>(InBytes[0]) | static_cast<std::uint16_t>(static_cast<std::uint16_t>(InBytes[1]) << HighByteShift));
 }
 
 } // namespace MicroWorld

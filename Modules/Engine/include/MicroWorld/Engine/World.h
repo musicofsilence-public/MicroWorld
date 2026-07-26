@@ -170,6 +170,12 @@ public:
 	std::size_t PendingDestroyCount() const noexcept;
 
 private:
+	/** Reports whether the live registry still has room for one more actor at the next barrier. */
+	bool CanAcceptMoreActors() const noexcept;
+
+	/** Reports whether spawn or destroy work remains queued for the next barrier. */
+	bool HasPendingBarrierWork() const noexcept;
+
 	/** Reports the first reason an actor cannot register, or Success. */
 	EEngineResult CheckActorRegistrable(TObjectPtr<AActor> InActor) const noexcept;
 

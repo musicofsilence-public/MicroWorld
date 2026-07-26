@@ -181,6 +181,12 @@ private:
 	/** Marks and queues one live non-pending object once during the active cycle. */
 	void DiscoverReference(FObjectHandle InHandle) noexcept;
 
+	/** Reports whether the cycle is in a discovery phase and the handle names a live same-store slot. */
+	bool IsHandleDiscoverable(FObjectHandle InHandle) const noexcept;
+
+	/** Reports whether the handle's slot is already pending, marked, or held under another generation. */
+	bool IsHandleAlreadyProcessed(FObjectHandle InHandle) const noexcept;
+
 	/** Clears partial marks/cursors and releases the store after completion or abort. */
 	void ResetCycle() noexcept;
 

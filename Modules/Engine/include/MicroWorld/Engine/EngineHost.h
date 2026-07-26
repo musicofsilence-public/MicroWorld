@@ -401,8 +401,12 @@ private:
 	ERuntimeResult AdvanceWorldAndApplyBarrier(UWorld& InWorld, const TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		const ERuntimeResult AdvanceResult = InWorld.Advance(InNowMilliseconds);
+		if (AdvanceResult != ERuntimeResult::Success)
+		{
+			return AdvanceResult;
+		}
 		const ERuntimeResult PendingResult = InWorld.ApplyPending(InNowMilliseconds);
-		return AdvanceResult != ERuntimeResult::Success ? AdvanceResult : PendingResult;
+		return PendingResult;
 	}
 
 	/** Frame steps 5-6: reclaims the slots the barrier marked, then starts a GC cycle when idle and advances one bounded slice. */

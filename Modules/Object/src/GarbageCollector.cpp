@@ -316,16 +316,31 @@ ERuntimeResult FGarbageCollector::CancelCollection() noexcept
 	return ERuntimeResult::Success;
 }
 
-void FGarbageCollector::DiscoverReference(const FObjectHandle InHandle) noexcept
+bool FGarbageCollector::IsHandleDiscoverable(const FObjectHandle InHandle) const noexcept
 {
 	const bool bDiscoveryPhase = CurrentPhase == EGarbageCollectionPhase::SeedRoots || CurrentPhase == EGarbageCollectionPhase::Mark;
-	if (!bDiscoveryPhase || ObjectStore == nullptr || !ObjectStore->CollectorIsOwnedBy(*this) || !InHandle.IsValid()
-		|| InHandle.Index >= ObjectStore->CollectorSlotCapacity())
+	if (!bDiscoveryPhase || ObjectStore == nullptr || !ObjectStore->CollectorIsOwnedBy(*this))
+	{
+		return false;
+	}
+	return InHandle.IsValid() && InHandle.Index < ObjectStore->CollectorSlotCapacity();
+}
+
+bool FGarbageCollector::IsHandleAlreadyProcessed(const FObjectHandle InHandle) const noexcept
+{
+	const bool bPendingDestroy = ObjectStore->CollectorIsPendingDestroy(InHandle.Index);
+	const bool bGenerationMismatch = ObjectStore->CollectorHandleAt(InHandle.Index) != InHandle;
+	const bool bAlreadyMarked = ObjectStore->CollectorIsMarked(InHandle.Index);
+	return bPendingDestroy || bGenerationMismatch || bAlreadyMarked;
+}
+
+void FGarbageCollector::DiscoverReference(const FObjectHandle InHandle) noexcept
+{
+	if (!IsHandleDiscoverable(InHandle))
 	{
 		return;
 	}
-	if (ObjectStore->CollectorIsPendingDestroy(InHandle.Index) || ObjectStore->CollectorHandleAt(InHandle.Index) != InHandle
-		|| ObjectStore->CollectorIsMarked(InHandle.Index))
+	if (IsHandleAlreadyProcessed(InHandle))
 	{
 		return;
 	}

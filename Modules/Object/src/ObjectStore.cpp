@@ -265,7 +265,9 @@ const FObjectSlotMetadata* FObjectStore::FindMatchingSlot(const FObjectHandle In
 
 	const FObjectSlotMetadata& Slot = Storage.SlotMetadata[InHandle.Index];
 	const bool bStateAccepted = Slot.State == EObjectSlotState::Live || (bInAllowPending && Slot.State == EObjectSlotState::PendingDestroy);
-	if (!bStateAccepted || Slot.Generation != InHandle.Generation || Slot.Object == nullptr)
+	const bool bGenerationMatches = Slot.Generation == InHandle.Generation;
+	const bool bHoldsLiveObject = Slot.Object != nullptr;
+	if (!bStateAccepted || !bGenerationMatches || !bHoldsLiveObject)
 	{
 		return nullptr;
 	}
@@ -305,12 +307,20 @@ EObjectResult FObjectStore::ValidateDestroyableSlot(const ObjectIndex InSlotInde
 		return EObjectResult::StaleHandle;
 	}
 	const FObjectSlotMetadata& Slot = Storage.SlotMetadata[InSlotIndex];
-	if ((Slot.State != EObjectSlotState::Live && Slot.State != EObjectSlotState::PendingDestroy) || Slot.Object == nullptr
-		|| Slot.Descriptor == nullptr || Slot.Descriptor->Destroy == nullptr)
+	if (!IsSlotDestroyable(Slot))
 	{
 		return EObjectResult::StaleHandle;
 	}
 	return EObjectResult::Success;
+}
+
+bool FObjectStore::IsSlotDestroyable(const FObjectSlotMetadata& InSlot) noexcept
+{
+	const bool bStateIsDestroyable = InSlot.State == EObjectSlotState::Live || InSlot.State == EObjectSlotState::PendingDestroy;
+	const bool bHasObject = InSlot.Object != nullptr;
+	const bool bHasDescriptor = InSlot.Descriptor != nullptr;
+	const bool bHasDestructor = InSlot.Descriptor != nullptr && InSlot.Descriptor->Destroy != nullptr;
+	return bStateIsDestroyable && bHasObject && bHasDescriptor && bHasDestructor;
 }
 
 void FObjectStore::RunDestructionCallbacks(FObjectSlotMetadata& InSlot, const FObjectHandle InHandle) noexcept
@@ -418,9 +428,21 @@ FObjectHandle FObjectStore::CollectorHandleAt(const ObjectIndex InSlotIndex) con
 
 UObject* FObjectStore::CollectorObjectAt(const ObjectIndex InSlotIndex) const noexcept
 {
-	return InSlotIndex < Storage.SlotCount && Storage.SlotMetadata[InSlotIndex].State == EObjectSlotState::Live
-		? Storage.SlotMetadata[InSlotIndex].Object
-		: nullptr;
+	if (InSlotIndex >= Storage.SlotCount || Storage.SlotMetadata[InSlotIndex].State != EObjectSlotState::Live)
+	{
+		return nullptr;
+	}
+	return Storage.SlotMetadata[InSlotIndex].Object;
+}
+
+bool FObjectStore::IsStateOccupied(const EObjectSlotState InState) noexcept
+{
+	return InState == EObjectSlotState::Live || InState == EObjectSlotState::PendingDestroy || InState == EObjectSlotState::Destroying;
+}
+
+bool FObjectStore::IsStatePendingDestroy(const EObjectSlotState InState) noexcept
+{
+	return InState == EObjectSlotState::PendingDestroy || InState == EObjectSlotState::Destroying;
 }
 
 bool FObjectStore::CollectorIsOccupied(const ObjectIndex InSlotIndex) const noexcept
@@ -430,7 +452,7 @@ bool FObjectStore::CollectorIsOccupied(const ObjectIndex InSlotIndex) const noex
 		return false;
 	}
 	const EObjectSlotState State = Storage.SlotMetadata[InSlotIndex].State;
-	return State == EObjectSlotState::Live || State == EObjectSlotState::PendingDestroy || State == EObjectSlotState::Destroying;
+	return IsStateOccupied(State);
 }
 
 bool FObjectStore::CollectorIsPendingDestroy(const ObjectIndex InSlotIndex) const noexcept
@@ -440,7 +462,7 @@ bool FObjectStore::CollectorIsPendingDestroy(const ObjectIndex InSlotIndex) cons
 		return false;
 	}
 	const EObjectSlotState State = Storage.SlotMetadata[InSlotIndex].State;
-	return State == EObjectSlotState::PendingDestroy || State == EObjectSlotState::Destroying;
+	return IsStatePendingDestroy(State);
 }
 
 bool FObjectStore::CollectorIsMarked(const ObjectIndex InSlotIndex) const noexcept

@@ -153,7 +153,7 @@ public:
 		{
 			return EMessageResult::PayloadTooLarge;
 		}
-		if (WiredChannel != nullptr && EncodedSize > WiredChannel->MaxEncodedMessageBytes())
+		if (ExceedsWiredChannelCapacity(WiredChannel, EncodedSize))
 		{
 			return EMessageResult::PayloadTooLarge;
 		}
@@ -200,7 +200,7 @@ public:
 	 */
 	EMessageResult ReceiveEncodedMessage(const FMessageChannelId InArrivedOnChannelId, const TSpan<const std::uint8_t> InEncoded) noexcept override
 	{
-		if (InEncoded.Size() < ActorMessageHeaderBytes || InEncoded.Size() > MaxMessageBytes)
+		if (!IsEncodedSizeAccepted(InEncoded.Size()))
 		{
 			return EMessageResult::PayloadTooLarge;
 		}
@@ -450,6 +450,18 @@ private:
 			}
 			(void)Slot.Delegate.Execute(InView);
 		}
+	}
+
+	/** Reports whether an encoded payload length fits this router's accepted [header, max] window. */
+	static bool IsEncodedSizeAccepted(const std::size_t InEncodedSize) noexcept
+	{
+		return InEncodedSize >= ActorMessageHeaderBytes && InEncodedSize <= MaxMessageBytes;
+	}
+
+	/** Reports whether a wired channel exists and rejects the encoded size as too large. */
+	static bool ExceedsWiredChannelCapacity(const IMessageChannel* const InChannel, const std::size_t InEncodedSize) noexcept
+	{
+		return InChannel != nullptr && InEncodedSize > InChannel->MaxEncodedMessageBytes();
 	}
 
 	/** Finds the channel currently registered under ChannelId, or nullptr when none is configured. */

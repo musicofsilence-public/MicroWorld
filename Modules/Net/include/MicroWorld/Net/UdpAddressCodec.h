@@ -5,12 +5,43 @@
 // than hand-copying it per package. It is pure arithmetic over FNetAddress with
 // no OS includes, so the Core <- Memory <- Net dependency direction still holds.
 
+#include <MicroWorld/ByteCodecConstants.h>
 #include <MicroWorld/Net/NetAddress.h>
 
 #include <cstdint>
 
 namespace MicroWorld
 {
+
+/** Active byte count of a 6-byte UDP `FNetAddress`: four IPv4 octets plus two port bytes. */
+inline constexpr std::uint8_t UdpAddressByteCount = 6;
+
+/** Index of the first IPv4 octet stored in a UDP `FNetAddress`. */
+inline constexpr std::uint8_t UdpAddressOctetAIndex = 0;
+
+/** Index of the second IPv4 octet stored in a UDP `FNetAddress`. */
+inline constexpr std::uint8_t UdpAddressOctetBIndex = 1;
+
+/** Index of the third IPv4 octet stored in a UDP `FNetAddress`. */
+inline constexpr std::uint8_t UdpAddressOctetCIndex = 2;
+
+/** Index of the fourth IPv4 octet stored in a UDP `FNetAddress`. */
+inline constexpr std::uint8_t UdpAddressOctetDIndex = 3;
+
+/** Index of the high (most-significant) byte of the network-order port in a UDP `FNetAddress`. */
+inline constexpr std::uint8_t UdpAddressPortHighByteIndex = 4;
+
+/** Index of the low (least-significant) byte of the network-order port in a UDP `FNetAddress`. */
+inline constexpr std::uint8_t UdpAddressPortLowByteIndex = 5;
+
+/** Shift placing the high IPv4 octet at the top of a host-order 32-bit address. */
+inline constexpr std::uint32_t Ipv4OctetAShift = 24u;
+
+/** Shift placing the second IPv4 octet within a host-order 32-bit address. */
+inline constexpr std::uint32_t Ipv4OctetBShift = 16u;
+
+/** Shift placing the third IPv4 octet within a host-order 32-bit address. */
+inline constexpr std::uint32_t Ipv4OctetCShift = 8u;
 
 /**
  * Encodes an IPv4 UDP endpoint into an opaque 6-byte `FNetAddress`.
@@ -31,13 +62,13 @@ constexpr FNetAddress MakeUdpAddress(
 	const std::uint8_t InA, const std::uint8_t InB, const std::uint8_t InC, const std::uint8_t InD, const std::uint16_t InPort) noexcept
 {
 	FNetAddress Address{};
-	Address.Bytes[0] = InA;
-	Address.Bytes[1] = InB;
-	Address.Bytes[2] = InC;
-	Address.Bytes[3] = InD;
-	Address.Bytes[4] = static_cast<std::uint8_t>(InPort >> 8);
-	Address.Bytes[5] = static_cast<std::uint8_t>(InPort & 0xFF);
-	Address.Size = 6;
+	Address.Bytes[UdpAddressOctetAIndex] = InA;
+	Address.Bytes[UdpAddressOctetBIndex] = InB;
+	Address.Bytes[UdpAddressOctetCIndex] = InC;
+	Address.Bytes[UdpAddressOctetDIndex] = InD;
+	Address.Bytes[UdpAddressPortHighByteIndex] = static_cast<std::uint8_t>(InPort >> HighByteShift);
+	Address.Bytes[UdpAddressPortLowByteIndex] = static_cast<std::uint8_t>(InPort & LowByteMask);
+	Address.Size = UdpAddressByteCount;
 	return Address;
 }
 
@@ -53,7 +84,7 @@ constexpr FNetAddress MakeUdpAddress(
  */
 constexpr bool IsUdpAddress(const FNetAddress& InAddress) noexcept
 {
-	return InAddress.Size == 6;
+	return InAddress.Size == UdpAddressByteCount;
 }
 
 /**
@@ -68,7 +99,9 @@ constexpr bool IsUdpAddress(const FNetAddress& InAddress) noexcept
  */
 constexpr std::uint16_t UdpAddressPort(const FNetAddress& InAddress) noexcept
 {
-	return static_cast<std::uint16_t>((static_cast<std::uint16_t>(InAddress.Bytes[4]) << 8) | static_cast<std::uint16_t>(InAddress.Bytes[5]));
+	return static_cast<std::uint16_t>(
+		(static_cast<std::uint16_t>(InAddress.Bytes[UdpAddressPortHighByteIndex]) << HighByteShift)
+		| static_cast<std::uint16_t>(InAddress.Bytes[UdpAddressPortLowByteIndex]));
 }
 
 /**
@@ -86,9 +119,9 @@ constexpr std::uint16_t UdpAddressPort(const FNetAddress& InAddress) noexcept
 constexpr FNetAddress MakeUdpAddressFromPackedHostOrder(const std::uint32_t InPackedIpv4Address, const std::uint16_t InPort) noexcept
 {
 	return MakeUdpAddress(
-		static_cast<std::uint8_t>(InPackedIpv4Address >> 24),
-		static_cast<std::uint8_t>(InPackedIpv4Address >> 16),
-		static_cast<std::uint8_t>(InPackedIpv4Address >> 8),
+		static_cast<std::uint8_t>(InPackedIpv4Address >> Ipv4OctetAShift),
+		static_cast<std::uint8_t>(InPackedIpv4Address >> Ipv4OctetBShift),
+		static_cast<std::uint8_t>(InPackedIpv4Address >> Ipv4OctetCShift),
 		static_cast<std::uint8_t>(InPackedIpv4Address),
 		InPort);
 }

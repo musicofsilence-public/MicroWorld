@@ -1,5 +1,6 @@
 #pragma once
 
+#include <MicroWorld/ByteCodecConstants.h>
 #include <MicroWorld/Memory/MemoryResource.h>
 
 #include <array>
@@ -101,7 +102,7 @@ private:
 		{
 			return EMemoryResult::UnsupportedAlignment;
 		}
-		if (InSizeBytes == 0 || InSizeBytes > StorageCapacityBytes - UsedSizeBytes)
+		if (!FitsFreeCapacity(InSizeBytes))
 		{
 			return EMemoryResult::OutOfMemory;
 		}
@@ -167,7 +168,7 @@ private:
 		const std::uintptr_t StorageAddress = reinterpret_cast<std::uintptr_t>(StorageBegin());
 		const std::uintptr_t StorageEndAddress = reinterpret_cast<std::uintptr_t>(StorageBegin() + StorageCapacityBytes);
 		const std::uintptr_t BlockAddress = reinterpret_cast<std::uintptr_t>(InBlock.Address);
-		if (BlockAddress < StorageAddress || BlockAddress >= StorageEndAddress)
+		if (!IsBlockInRange(BlockAddress, StorageAddress, StorageEndAddress))
 		{
 			return EMemoryResult::InvalidBlock;
 		}
@@ -210,7 +211,7 @@ private:
 	}
 
 	/** Packs one allocation-boundary bit per usable byte into bounded metadata. */
-	static constexpr std::size_t MarkerStorageBytes = (StorageCapacityBytes + 7U) / 8U;
+	static constexpr std::size_t MarkerStorageBytes = (StorageCapacityBytes + (BitsPerByte - 1)) / BitsPerByte;
 
 	/** Reserves enough local bytes to expose StorageCapacityBytes after aligning the first usable byte. */
 	static constexpr std::size_t RawStorageSizeBytes = StorageCapacityBytes + GuaranteedAlignmentBytes - 1U;
@@ -227,24 +228,40 @@ private:
 	/** Confirms the arena can guarantee the requested power-of-two alignment. */
 	static bool IsSupportedAlignment(const std::size_t InAlignmentBytes) noexcept
 	{
-		return InAlignmentBytes > 0 && (InAlignmentBytes & (InAlignmentBytes - 1U)) == 0 && InAlignmentBytes <= GuaranteedAlignmentBytes;
+		const bool bIsPositive = InAlignmentBytes > 0;
+		const bool bIsPowerOfTwo = (InAlignmentBytes & (InAlignmentBytes - 1U)) == 0;
+		const bool bFitsGuarantee = InAlignmentBytes <= GuaranteedAlignmentBytes;
+		return bIsPositive && bIsPowerOfTwo && bFitsGuarantee;
+	}
+
+	/** Reports whether a non-zero allocation request still fits the unused capacity. */
+	bool FitsFreeCapacity(const std::size_t InSizeBytes) const noexcept
+	{
+		return InSizeBytes != 0 && InSizeBytes <= StorageCapacityBytes - UsedSizeBytes;
+	}
+
+	/** Reports whether a block address falls within the arena's aligned storage window. */
+	static bool IsBlockInRange(
+		const std::uintptr_t InBlockAddress, const std::uintptr_t InStorageAddress, const std::uintptr_t InStorageEndAddress) noexcept
+	{
+		return InBlockAddress >= InStorageAddress && InBlockAddress < InStorageEndAddress;
 	}
 
 	/** Reads one boundary marker without exposing bookkeeping to callers. */
 	static bool ReadMarker(const std::array<std::uint8_t, MarkerStorageBytes>& InMarkers, const std::size_t InOffset) noexcept
 	{
-		// Hand-rolled bitset: one bit per usable byte, packed 8 to a std::uint8_t
-		// -- byte index = InOffset / 8, bit index = InOffset % 8.
-		const std::size_t MarkerByte = InOffset / 8U;
-		const std::uint8_t MarkerMask = static_cast<std::uint8_t>(1U << (InOffset % 8U));
+		// Hand-rolled bitset: one bit per usable byte, packed BitsPerByte to a std::uint8_t
+		// -- byte index = InOffset / BitsPerByte, bit index = InOffset % BitsPerByte.
+		const std::size_t MarkerByte = InOffset / BitsPerByte;
+		const std::uint8_t MarkerMask = static_cast<std::uint8_t>(1U << (InOffset % BitsPerByte));
 		return (InMarkers[MarkerByte] & MarkerMask) != 0;
 	}
 
 	/** Changes one boundary marker while leaving unrelated allocations intact. */
 	static void WriteMarker(std::array<std::uint8_t, MarkerStorageBytes>& InMarkers, const std::size_t InOffset, const bool bInValue) noexcept
 	{
-		const std::size_t MarkerByte = InOffset / 8U;
-		const std::uint8_t MarkerMask = static_cast<std::uint8_t>(1U << (InOffset % 8U));
+		const std::size_t MarkerByte = InOffset / BitsPerByte;
+		const std::uint8_t MarkerMask = static_cast<std::uint8_t>(1U << (InOffset % BitsPerByte));
 		if (bInValue)
 		{
 			InMarkers[MarkerByte] = static_cast<std::uint8_t>(InMarkers[MarkerByte] | MarkerMask);

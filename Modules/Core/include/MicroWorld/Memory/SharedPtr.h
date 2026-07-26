@@ -99,6 +99,12 @@ namespace Detail
 		 * MemoryTests.cpp:558).
 		 */
 		bool bValueDestructionInProgress{false};
+
+		/** Reports whether at least one strong handle still keeps this block alive. */
+		bool HasLiveStrongReference() const noexcept { return StrongReferenceCount != 0; }
+
+		/** Reports whether the value is still constructed and observable through a strong handle. */
+		bool HasLiveValue() const noexcept { return StrongReferenceCount != 0 && Value != nullptr; }
 	};
 
 	/** Converts allocation-boundary failures into the shared-pointer result domain. */
@@ -427,7 +433,7 @@ template<typename ValueType, ESharedPointerMode Mode>
 TSharedPointerResult<ValueType, Mode> TSharedPtr<ValueType, Mode>::TryShare() const noexcept
 {
 	TSharedPointerResult<ValueType, Mode> ShareResult{};
-	if (ControlBlock == nullptr || ControlBlock->StrongReferenceCount == 0)
+	if (ControlBlock == nullptr || !ControlBlock->HasLiveStrongReference())
 	{
 		ShareResult.Result = ESharedPointerResult::Expired;
 		return ShareResult;
@@ -449,7 +455,7 @@ template<typename ValueType, ESharedPointerMode Mode>
 TWeakPointerResult<ValueType, Mode> TSharedPtr<ValueType, Mode>::TryAcquireWeak() const noexcept
 {
 	TWeakPointerResult<ValueType, Mode> WeakResult{};
-	if (ControlBlock == nullptr || ControlBlock->StrongReferenceCount == 0)
+	if (ControlBlock == nullptr || !ControlBlock->HasLiveStrongReference())
 	{
 		WeakResult.Result = ESharedPointerResult::Expired;
 		return WeakResult;
@@ -471,7 +477,7 @@ template<typename ValueType, ESharedPointerMode Mode>
 TWeakPointerResult<ValueType, Mode> TWeakPtr<ValueType, Mode>::TryObserve() const noexcept
 {
 	TWeakPointerResult<ValueType, Mode> ObserveResult{};
-	if (ControlBlock == nullptr || ControlBlock->StrongReferenceCount == 0 || ControlBlock->Value == nullptr)
+	if (ControlBlock == nullptr || !ControlBlock->HasLiveValue())
 	{
 		ObserveResult.Result = ESharedPointerResult::Expired;
 		return ObserveResult;
@@ -493,7 +499,7 @@ template<typename ValueType, ESharedPointerMode Mode>
 TSharedPointerResult<ValueType, Mode> TWeakPtr<ValueType, Mode>::TryAcquireStrong() const noexcept
 {
 	TSharedPointerResult<ValueType, Mode> StrongResult{};
-	if (ControlBlock == nullptr || ControlBlock->StrongReferenceCount == 0 || ControlBlock->Value == nullptr)
+	if (ControlBlock == nullptr || !ControlBlock->HasLiveValue())
 	{
 		StrongResult.Result = ESharedPointerResult::Expired;
 		return StrongResult;

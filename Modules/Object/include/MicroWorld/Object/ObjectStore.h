@@ -524,6 +524,9 @@ private:
 	/** Rejects an index that is out of range or not a destroyable live/pending slot. */
 	EObjectResult ValidateDestroyableSlot(ObjectIndex InSlotIndex) const noexcept;
 
+	/** Reports whether a slot holds a destroyable object with a complete destructor chain. */
+	static bool IsSlotDestroyable(const FObjectSlotMetadata& InSlot) noexcept;
+
 	/** Runs BeginDestroy and exact destruction, then drops the lifetime's root tokens. */
 	void RunDestructionCallbacks(FObjectSlotMetadata& InSlot, FObjectHandle InHandle) noexcept;
 
@@ -567,6 +570,12 @@ private:
 
 	/** Reports whether a slot is irreversibly pending destruction. */
 	bool CollectorIsPendingDestroy(ObjectIndex InSlotIndex) const noexcept;
+
+	/** Reports whether a slot state counts as occupied (live, pending destroy, or destroying). */
+	static bool IsStateOccupied(EObjectSlotState InState) noexcept;
+
+	/** Reports whether a slot state is irreversibly pending destruction. */
+	static bool IsStatePendingDestroy(EObjectSlotState InState) noexcept;
 
 	/** Prevents a collector cycle from starting inside construction or destruction callbacks. */
 	bool CollectorIsMutationLocked() const noexcept { return bMutationLocked || bDispatchLocked; }

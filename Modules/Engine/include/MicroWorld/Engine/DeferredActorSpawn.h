@@ -427,7 +427,7 @@ public:
 		for (std::size_t Index = 0; Index < MaxRequests; ++Index)
 		{
 			FSlot& Slot = Slots[Index];
-			if (Slot.State != ESlotState::Free && Slot.State != ESlotState::Failed && Slot.State != ESlotState::Released)
+			if (!IsSlotReusable(Slot))
 			{
 				continue;
 			}
@@ -537,8 +537,7 @@ public:
 	void Construct(const FActorSpawnHandle InHandle, FObjectStore& InStore, const FClassRegistryRegistrationView InClasses) noexcept override
 	{
 		FSlot* const Slot = FindSlot(InHandle);
-		if (Slot == nullptr || Slot->State != ESlotState::Queued || Slot->Operations.Invoke == nullptr
-			|| Slot->Operations.ResolveDescriptor == nullptr)
+		if (!IsSlotReadyForConstruction(Slot))
 		{
 			return;
 		}
@@ -689,18 +688,46 @@ private:
 		std::array<std::byte, InlineFactoryBytes> FactoryBytes{};
 	};
 
+	/** Reports whether a slot is in one of the states that allow a fresh reservation. */
+	static bool IsSlotReusable(const FSlot& InSlot) noexcept
+	{
+		return InSlot.State == ESlotState::Free || InSlot.State == ESlotState::Failed || InSlot.State == ESlotState::Released;
+	}
+
+	/** Reports whether a queued slot carries the factory operations Construct requires. */
+	static bool IsSlotReadyForConstruction(const FSlot* const InSlot) noexcept
+	{
+		if (InSlot == nullptr || InSlot->State != ESlotState::Queued)
+		{
+			return false;
+		}
+		return InSlot->Operations.Invoke != nullptr && InSlot->Operations.ResolveDescriptor != nullptr;
+	}
+
+	/** Reports whether a handle names a slot at a valid index whose generation still matches. */
+	bool IsHandleSlotMatch(const FActorSpawnHandle InHandle) const noexcept
+	{
+		return InHandle.IsValid() && InHandle.Index < MaxRequests && Slots[InHandle.Index].Generation == InHandle.Generation;
+	}
+
 	/** Returns a slot only when the caller supplies its current valid generation. */
 	FSlot* FindSlot(const FActorSpawnHandle InHandle) noexcept
 	{
-		return InHandle.IsValid() && InHandle.Index < MaxRequests && Slots[InHandle.Index].Generation == InHandle.Generation ? &Slots[InHandle.Index]
-																															 : nullptr;
+		if (!IsHandleSlotMatch(InHandle))
+		{
+			return nullptr;
+		}
+		return &Slots[InHandle.Index];
 	}
 
 	/** Provides a const generation-checked slot lookup for query and tracing paths. */
 	const FSlot* FindSlot(const FActorSpawnHandle InHandle) const noexcept
 	{
-		return InHandle.IsValid() && InHandle.Index < MaxRequests && Slots[InHandle.Index].Generation == InHandle.Generation ? &Slots[InHandle.Index]
-																															 : nullptr;
+		if (!IsHandleSlotMatch(InHandle))
+		{
+			return nullptr;
+		}
+		return &Slots[InHandle.Index];
 	}
 
 	/** Destroys active factory capture state and clears callable operations exactly once. */

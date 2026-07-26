@@ -1,5 +1,6 @@
 #pragma once
 
+#include <MicroWorld/ByteCodecConstants.h>
 #include <MicroWorld/Containers/Span.h>
 #include <MicroWorld/Net/ByteReader.h>
 #include <MicroWorld/Net/ByteWriter.h>
@@ -21,6 +22,21 @@ constexpr std::size_t FrameOverheadBytes = 6;
 /** Header bytes written before the payload: one magic, one source node id, and two length bytes. */
 constexpr std::size_t FrameHeaderBytes = 4;
 
+/** Frame offset of the source node id byte (immediately after the magic byte). */
+constexpr std::size_t FrameSourceNodeIdByteIndex = 1;
+
+/** Byte count covered by the running CRC: source id, both length bytes, and the payload. */
+constexpr std::size_t FrameCrcCoveredPrefixBytes = 3;
+
+/** CRC-16/CCITT-FALSE initializer; the accumulator value before the first covered byte. */
+constexpr std::uint16_t Crc16InitValue = 0xFFFFu;
+
+/** Mask selecting the CRC-16 top bit, tested once per bit advance. */
+constexpr std::uint16_t Crc16TopBitMask = 0x8000u;
+
+/** CRC-16/CCITT generator polynomial applied when the top bit is set. */
+constexpr std::uint16_t Crc16CcittPolynomial = 0x1021u;
+
 static_assert(FrameOverheadBytes == FrameHeaderBytes + 2, "Frame overhead is the header plus the two trailing CRC bytes.");
 
 namespace Detail
@@ -34,12 +50,12 @@ namespace Detail
 	 */
 	inline void UpdateCrc16Byte(std::uint16_t& InOutCrc, const std::uint8_t InByte) noexcept
 	{
-		InOutCrc = static_cast<std::uint16_t>(InOutCrc ^ static_cast<std::uint16_t>(static_cast<std::uint16_t>(InByte) << 8));
-		for (int Bit = 0; Bit < 8; ++Bit)
+		InOutCrc = static_cast<std::uint16_t>(InOutCrc ^ static_cast<std::uint16_t>(static_cast<std::uint16_t>(InByte) << HighByteShift));
+		for (int Bit = 0; Bit < BitsPerByte; ++Bit)
 		{
-			if ((InOutCrc & 0x8000u) != 0u)
+			if ((InOutCrc & Crc16TopBitMask) != 0u)
 			{
-				InOutCrc = static_cast<std::uint16_t>(static_cast<std::uint16_t>(InOutCrc << 1) ^ 0x1021u);
+				InOutCrc = static_cast<std::uint16_t>(static_cast<std::uint16_t>(InOutCrc << 1) ^ Crc16CcittPolynomial);
 			}
 			else
 			{
@@ -61,7 +77,7 @@ namespace Detail
  */
 inline std::uint16_t ComputeCrc16Ccitt(const TSpan<const std::uint8_t> InBytes) noexcept
 {
-	std::uint16_t Crc = 0xFFFFu;
+	std::uint16_t Crc = Crc16InitValue;
 	const std::uint8_t* const ChecksumBytes = InBytes.Data();
 	const std::size_t ByteCount = InBytes.Size();
 	// A null pointer with a nonzero count is an invalid view; do not dereference it.
@@ -97,7 +113,7 @@ namespace Detail
 		{
 			return ENetResult::Invalid;
 		}
-		if (PayloadSize > 0xFFFFu)
+		if (PayloadSize > Uint16Max)
 		{
 			// Oversize input can never fit the 16-bit length field, so it can never succeed on retry (D7).
 			return ENetResult::Invalid;
@@ -127,9 +143,10 @@ namespace Detail
 			std::memcpy(&OutFrame[FrameHeaderBytes], InPayload.Data(), PayloadSize);
 		}
 		// CRC covers the source node id, both length bytes, and the payload; magic and CRC are excluded.
-		const std::uint16_t Crc = ComputeCrc16Ccitt(TSpan<const std::uint8_t>(&OutFrame[1], 3 + PayloadSize));
-		OutFrame[FrameHeaderBytes + PayloadSize] = static_cast<std::uint8_t>(Crc >> 8);
-		OutFrame[FrameHeaderBytes + PayloadSize + 1] = static_cast<std::uint8_t>(Crc & 0xFFu);
+		const std::uint16_t Crc =
+			ComputeCrc16Ccitt(TSpan<const std::uint8_t>(&OutFrame[FrameSourceNodeIdByteIndex], FrameCrcCoveredPrefixBytes + PayloadSize));
+		OutFrame[FrameHeaderBytes + PayloadSize] = static_cast<std::uint8_t>(Crc >> HighByteShift);
+		OutFrame[FrameHeaderBytes + PayloadSize + 1] = static_cast<std::uint8_t>(Crc & LowByteMask);
 	}
 
 } // namespace Detail
@@ -281,7 +298,7 @@ private:
 	{
 		if (InByte == FrameMagicByte)
 		{
-			RunningCrc = 0xFFFFu;
+			RunningCrc = Crc16InitValue;
 			State = EState::ReadingSourceNodeId;
 		}
 		return EFrameEvent::None;
@@ -350,7 +367,7 @@ private:
 	EFrameEvent CompleteFrameIfChecksumMatches(const std::uint8_t InByte) noexcept
 	{
 		const std::uint16_t ReceivedCrc =
-			static_cast<std::uint16_t>((static_cast<std::uint16_t>(PendingCrcHighByte) << 8) | static_cast<std::uint16_t>(InByte));
+			static_cast<std::uint16_t>((static_cast<std::uint16_t>(PendingCrcHighByte) << HighByteShift) | static_cast<std::uint16_t>(InByte));
 		State = EState::WaitingForMagic;
 		// A CRC mismatch means the candidate was corrupted; resync at the next magic.
 		if (ReceivedCrc != RunningCrc)

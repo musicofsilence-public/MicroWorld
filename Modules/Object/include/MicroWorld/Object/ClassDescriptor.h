@@ -134,7 +134,7 @@ public:
 	/** Registers one fully validated descriptor without allocation or partial mutation. */
 	EObjectResult Register(const FClassDescriptor& InDescriptor) noexcept
 	{
-		if (!HasValidLayout(InDescriptor) || InDescriptor.TypeId == 0 || InDescriptor.Destroy == nullptr || InDescriptor.TypeToken == nullptr)
+		if (!HasExplicitDescriptorIdentity(InDescriptor))
 		{
 			return EObjectResult::InvalidClassDescriptor;
 		}
@@ -195,7 +195,7 @@ public:
 			OutDescriptor = Existing;
 			return EObjectResult::Success;
 		}
-		if (InCandidate.TypeId != 0 || !HasValidLayout(InCandidate) || InCandidate.Destroy == nullptr || InCandidate.TypeToken == nullptr)
+		if (!HasUnassignedAutomaticIdentity(InCandidate))
 		{
 			return EObjectResult::InvalidClassDescriptor;
 		}
@@ -247,6 +247,24 @@ private:
 	{
 		return InDescriptor.SizeBytes > 0 && InDescriptor.AlignmentBytes > 0
 			&& (InDescriptor.AlignmentBytes & (InDescriptor.AlignmentBytes - 1U)) == 0;
+	}
+
+	/** Reports whether a descriptor carries the non-zero id, layout, and callables an explicit Register requires. */
+	static bool HasExplicitDescriptorIdentity(const FClassDescriptor& InDescriptor) noexcept
+	{
+		const bool bHasValidId = InDescriptor.TypeId != 0;
+		const bool bHasDestructor = InDescriptor.Destroy != nullptr;
+		const bool bHasTypeToken = InDescriptor.TypeToken != nullptr;
+		return HasValidLayout(InDescriptor) && bHasValidId && bHasDestructor && bHasTypeToken;
+	}
+
+	/** Reports whether a candidate is well-formed and carries no caller-assigned id (so automatic allocation may assign one). */
+	static bool HasUnassignedAutomaticIdentity(const FClassDescriptor& InDescriptor) noexcept
+	{
+		const bool bIdUnassigned = InDescriptor.TypeId == 0;
+		const bool bHasDestructor = InDescriptor.Destroy != nullptr;
+		const bool bHasTypeToken = InDescriptor.TypeToken != nullptr;
+		return bIdUnassigned && HasValidLayout(InDescriptor) && bHasDestructor && bHasTypeToken;
 	}
 
 	/** Requires an already registered, finite parent chain that cannot include the candidate. */

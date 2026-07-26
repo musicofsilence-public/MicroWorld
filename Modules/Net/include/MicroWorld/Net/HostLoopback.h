@@ -15,6 +15,9 @@ namespace MicroWorld
 namespace Detail
 {
 
+	/** Active byte count of a loopback port address: one byte naming the destination port index. */
+	inline constexpr std::uint8_t LoopbackPortAddressBytes = 1;
+
 	/**
 	 * Owns the N per-port inbound mailboxes and the address-keyed routing for one
 	 * in-process loopback network. Each mailbox is a bounded FIFO of packets carrying
@@ -146,7 +149,7 @@ namespace Detail
 		/** Validates a loopback destination: it must be exactly one byte naming a valid port. */
 		static ENetResult ValidateDeliverAddress(const FNetAddress& InTo) noexcept
 		{
-			if (InTo.Size != 1 || InTo.Bytes[0] >= MaxPorts)
+			if (InTo.Size != LoopbackPortAddressBytes || InTo.Bytes[0] >= MaxPorts)
 			{
 				return ENetResult::Invalid;
 			}
