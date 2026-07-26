@@ -32,8 +32,8 @@ config, the fixed server IP (`192.168.4.1`), and the channel/opcode/spawn protoc
 
 ## Verification
 
-Build Verify (`docs/EXAMPLES_ROADMAP.md` §1.1): `pio run -d examples/16-TwoBoardUdp`
+Build Verify (`../AGENTS.md`): `pio run -d examples/16-TwoBoardUdp`
 (both role envs) then the root `cmake --build` / `ctest`. Hardware checkpoint
-(§1.2, human-gated): flash both roles, capture the server console showing the
+(`../AGENTS.md`, human-gated): flash both roles, capture the server console showing the
 actor count reach 2 (driven by the remote client's requests) — pending re-verification
 after the `FEsp32WifiLink`/`MW_LOG` rewrite, which changed the trace shape.

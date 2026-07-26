@@ -60,7 +60,7 @@ node 2), which differ only by `-DMICROWORLD_EXAMPLE_NODE_ID`.
 
 ## Flash and observe
 
-Human-gated (see `docs/EXAMPLES_ROADMAP.md` §1.2). Flash node 1 to board A and
+Human-gated (see `../AGENTS.md`). Flash node 1 to board A and
 node 2 to board B, then open both monitors:
 
 ```sh

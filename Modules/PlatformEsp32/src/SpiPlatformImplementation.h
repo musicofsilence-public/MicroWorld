@@ -14,7 +14,8 @@
 // gap produces. Error/timeout branches stayed unexercised (every exchange succeeded).
 // DMA is used (SPI_DMA_CH_AUTO), so the driver's transmit/receive buffers must live in
 // internal RAM — the example composition root makes each driver static, as the ESP32-S3
-// stack lesson (docs/WIRED_TRANSPORTS_ROADMAP.md §2.2) already requires. See §1.2.
+// main-task stack lesson in examples/AGENTS.md already requires. See ../AGENTS.md for
+// the rule this comment satisfies.
 // =============================================================================
 
 #include <MicroWorld/PlatformEsp32/Esp32SpiDriver.h>

@@ -29,7 +29,7 @@ no `TNetHost`, no world. The role is a compile-time constant from
 
 ## Verification
 
-Build Verify (`docs/EXAMPLES_ROADMAP.md` §1.1): `pio run -d examples/21-TwoBoardSpi`
-builds both role environments. Hardware checkpoint (§1.2, human-gated) flashes the
+Build Verify (`../AGENTS.md`): `pio run -d examples/21-TwoBoardSpi`
+builds both role environments. Hardware checkpoint (`../AGENTS.md`, human-gated) flashes the
 master to one board and the slave to the other and expects both monitors to show
 the counter climbing with no stalls.

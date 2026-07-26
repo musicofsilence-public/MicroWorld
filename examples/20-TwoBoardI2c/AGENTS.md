@@ -27,7 +27,7 @@ no `TNetHost`, no world. The role is a compile-time constant from
 
 ## Verification
 
-Build Verify (`docs/EXAMPLES_ROADMAP.md` §1.1): `pio run -d examples/20-TwoBoardI2c`
-builds both role environments. Hardware checkpoint (§1.2, human-gated) needs two
+Build Verify (`../AGENTS.md`): `pio run -d examples/20-TwoBoardI2c`
+builds both role environments. Hardware checkpoint (`../AGENTS.md`, human-gated) needs two
 external ~4.7 kΩ pull-ups; it flashes the master to one board and the slave to
 the other and expects both monitors to show the counter climbing with no stalls.

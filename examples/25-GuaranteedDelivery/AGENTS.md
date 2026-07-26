@@ -49,10 +49,10 @@ Every composition object is `static` and allocation-free.
 
 ## Verification
 
-Build Verify (`docs/EXAMPLES_ROADMAP.md` §1.1): `pio run -d
+Build Verify (`../AGENTS.md`): `pio run -d
 examples/25-GuaranteedDelivery` builds both role environments, then the root
 `cmake --build` / `ctest` runs the repo-wide format and unit-test gates.
-Hardware checkpoint (§1.2, human-gated) flashes the server to one board and
+Hardware checkpoint (`../AGENTS.md`, human-gated) flashes the server to one board and
 the client to the other -- no wiring, WiFi only -- and expects the server
 console's best-effort column to show gaps while the guaranteed column stays
 complete.

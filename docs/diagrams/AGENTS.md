@@ -12,9 +12,10 @@ single editable artifact; the `.svg` and `.png` are generated exports.
 
 ## Concepts
 
-- The implementation-journey diagram summarizes `MICROWORLD_ROADMAP.md`
-  (repository root) — that roadmap is the source of truth for phase order,
-  tasks, and status; the diagram is a visual aid, not the record.
+- The implementation-journey diagram summarizes how the engine was built, and
+  the plan it summarized is finished and deleted — git history is the record now.
+  The diagram is a visual aid, so a phase label drifting from history is not a
+  defect worth chasing.
 - The C4 container diagram summarizes the package architecture described in
   `../ModulePackaging.md` and the per-package READMEs — those prose docs own
   the authoritative module/dependency description.

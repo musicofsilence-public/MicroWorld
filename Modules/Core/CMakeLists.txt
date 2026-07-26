@@ -7,11 +7,10 @@ option(MICROWORLD_BUILD_TESTS "Build MicroWorld host tests" ON)
 # Core owns the engine's primitive layer: lifecycle, tick, and the explicit
 # memory resources, bounded containers, and fixed delegates that every higher
 # module reuses. The World/Actor/Component and Network sources were retired in
-# favor of the managed Engine layer (see MICROWORLD_ROADMAP.md Phase 1); Memory
-# was folded in here because it was one translation unit plus header-only
-# templates with no boundary of its own to protect; the program-entry
-# Application/Runner types moved to the Application package, which owns an
-# engine and therefore cannot live in Core.
+# favor of the managed Engine layer; Memory was folded in here because it was one
+# translation unit plus header-only templates with no boundary of its own to
+# protect; FApplication moved to the Application package, which owns an engine
+# and therefore cannot live in Core.
 set(MICROWORLD_CORE_SOURCES
     src/Log.cpp
     src/MemoryResource.cpp
@@ -162,5 +161,4 @@ endif()
 
 # The dispatch benchmark and HostLifecycle example were retired with the Core
 # actor model. Dispatch is now covered by microworld-engine; the HostLifecycle
-# example was rewritten on the managed types and moved to microworld-engine
-# (see MICROWORLD_ROADMAP.md Phase 1).
+# example was rewritten on the managed types and moved to microworld-engine.

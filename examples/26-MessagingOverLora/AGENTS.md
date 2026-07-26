@@ -33,8 +33,8 @@ client is a bare `TNetHost` (Client). Both run over `FEsp32E32LoraDriver`.
 
 ## Verification
 
-Build Verify (`docs/EXAMPLES_ROADMAP.md` §1.1): `pio run -d examples/26-MessagingOverLora`
+Build Verify (`../AGENTS.md`): `pio run -d examples/26-MessagingOverLora`
 builds both role environments (each compiles both role files). Hardware
-checkpoint (§1.2, human-gated, roadmap task RADIO 1.4) flashes the server to
+checkpoint (`../AGENTS.md`, human-gated; RADIO roadmap task 1.4) flashes the server to
 one board and the client to the other; the client trace must show the actor
 count reaching 2, as in example 19.

@@ -56,7 +56,7 @@ Builds both role environments (`esp32-s3-server`, `esp32-s3-client`), which diff
 
 ## Flash and observe
 
-Human-gated (see `docs/EXAMPLES_ROADMAP.md` §1.2). Flash each role to a board and capture
+Human-gated (see `../AGENTS.md`). Flash each role to a board and capture
 the **server** — its console shows the `spawned actor → count` proof that the remote
 client's requests arrived (both consoles work; the server side needs no IP lookup):
 

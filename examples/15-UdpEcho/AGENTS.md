@@ -22,7 +22,7 @@ holds the one copy of the demo AP config (SSID/password) and the echo port.
 
 ## Verification
 
-Build Verify (`docs/EXAMPLES_ROADMAP.md` §1.1): `pio run -d examples/15-UdpEcho` (single
-`esp32-s3` env) then the root `cmake --build` / `ctest`. Hardware checkpoint (§1.2,
+Build Verify (`../AGENTS.md`): `pio run -d examples/15-UdpEcho` (single
+`esp32-s3` env) then the root `cmake --build` / `ctest`. Hardware checkpoint (`../AGENTS.md`,
 human-gated): flash one board, join its SoftAP from a phone or second device, send a UDP
 datagram to `192.168.4.1:40404`, and capture the `rx` / `echo` lines. Pending.

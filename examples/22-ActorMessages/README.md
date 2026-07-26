@@ -73,7 +73,7 @@ pio run -d examples/22-ActorMessages
 
 ## Flash and observe
 
-Human-gated (see `docs/EXAMPLES_ROADMAP.md` §1.2):
+Human-gated (see `../AGENTS.md`):
 
 ```sh
 pio run -d examples/22-ActorMessages -t upload --upload-port <COM-port>

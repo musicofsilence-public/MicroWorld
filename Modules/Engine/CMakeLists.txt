@@ -132,8 +132,8 @@ if(MICROWORLD_ENGINE_BUILD_BENCHMARKS AND EXISTS "${MICROWORLD_ENGINE_BENCHMARK_
 endif()
 
 # The HostLifecycle example is the canonical managed "hello MicroWorld" demo,
-# rewritten on UWorld/AActor/UActorComponent when the Core actor model was
-# retired (see MICROWORLD_ROADMAP.md Phase 1).
+# rewritten on UWorld/AActor/UActorComponent when Core's duplicate actor model
+# was retired in favor of this package's.
 set(MICROWORLD_ENGINE_EXAMPLE_SOURCE
     "${CMAKE_CURRENT_SOURCE_DIR}/examples/HostLifecycle/Main.cpp"
 )

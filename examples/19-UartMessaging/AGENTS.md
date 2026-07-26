@@ -29,8 +29,8 @@ client is a bare `TNetHost` (Client). Both run over `FEsp32UartDriver`.
 
 ## Verification
 
-Build Verify (`docs/EXAMPLES_ROADMAP.md` §1.1): `pio run -d examples/19-UartMessaging`
+Build Verify (`../AGENTS.md`): `pio run -d examples/19-UartMessaging`
 builds both role environments (each compiles both role files). Hardware
-checkpoint (§1.2, human-gated) flashes the server to one board and the client to
+checkpoint (`../AGENTS.md`, human-gated) flashes the server to one board and the client to
 the other; the client trace must show the actor count reaching 2, as in
 example 16.

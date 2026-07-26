@@ -1,11 +1,11 @@
 # MicroWorld ESP32 Examples
 
 One small standalone project per engine feature, each runnable on a real
-ESP32-S3 and readable in one sitting. The active plan and task tracker is
-[`docs/EXAMPLES_ROADMAP.md`](../docs/EXAMPLES_ROADMAP.md); this file is the living
-catalog students read to find an example. Examples climb the dependency ladder
-(`Core → Memory → Object → Engine → Net`) and end with two boards talking over
-WiFi UDP, E32 LoRa, and plain wires.
+ESP32-S3 and readable in one sitting. This file is the living catalog students
+read to find an example; [`AGENTS.md`](AGENTS.md) owns the build and
+hardware-verification procedure. Examples climb the dependency ladder
+(`Core → Object → Engine → Net`) and end with two boards talking over WiFi UDP,
+E32 LoRa, and plain wires.
 
 ## Hardware shopping list
 
@@ -39,7 +39,7 @@ drop the port into the ROM download loader. [`LOGGING.md`](LOGGING.md) explains 
 the console is routed and how to write your own `MW_LOG` lines.
 
 `pio run` ending with `[SUCCESS]` is a compile-only proof. Flashing a board is
-human-gated (`docs/EXAMPLES_ROADMAP.md` §1.2); until an example's real trace is
+human-gated ([`AGENTS.md`](AGENTS.md)); until an example's real trace is
 captured, its README says so.
 
 ## Catalog
@@ -75,6 +75,5 @@ Status: ⬜ planned · 🟨 built (compiles) · ✅ hardware-verified
 | 25 | `25-GuaranteedDelivery` | best-effort vs guaranteed delivery on one WiFi-UDP link: `TReliableChannel` recovers packets `FPacketDropDriver` drops | 2nd board + WiFi | ✅ |
 | 26 | `26-MessagingOverLora` | full `TNetHost` client/server message design over E32 LoRa — example 19's protocol at the D8 airtime profile (heartbeat 3 s, state broadcast paced 1 s) | 2nd board, 2 × E32 | ✅ |
 
-Wired board-to-board transports (examples 18–21) are planned in
-[`docs/WIRED_TRANSPORTS_ROADMAP.md`](../docs/WIRED_TRANSPORTS_ROADMAP.md) and are
-appended to this catalog as they are built.
+Wired board-to-board transports (examples 18–21) share one pattern: swapping the
+`INetDriver` line swaps the transport, and everything above it stays put.

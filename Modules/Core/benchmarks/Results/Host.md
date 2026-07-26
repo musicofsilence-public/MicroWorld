@@ -6,8 +6,8 @@ not target approval.
 
 > **Historical (retired model).** The `FActorComponent`, `TActor<4>`,
 > `TWorld<8>`, and `FNetwork` object-size rows and the dispatch profiles below
-> measure the Core actor model retired in the Phase 1 consolidation
-> ([roadmap](../../../../MICROWORLD_ROADMAP.md)). They are kept as the original
+> measure the Core actor model retired in the Phase 1 consolidation, when
+> `UWorld`/`AActor`/`UActorComponent` moved to Engine. They are kept as the original
 > 0.1.0 host baseline, not current Core structure — Core is now lifecycle/tick
 > primitives only. Managed-engine runtime measurement returns in Phase 6.
 

@@ -38,7 +38,7 @@ pio run -d examples/01-CoreTick
 
 ## Flash and observe
 
-Human-gated (see `docs/EXAMPLES_ROADMAP.md` §1.2):
+Human-gated (see `../AGENTS.md`):
 
 ```sh
 pio run -d examples/01-CoreTick -t upload --upload-port <COM-port>

@@ -11,10 +11,11 @@ pointers, a simple `TNetManager`/`INetDriver` networking layer, and explicit
 hardware boundaries. Platform support is verified one target at a time, not
 claimed for every board.
 
-`docs/RADIO_TRANSPORTS_ROADMAP.md` is the one still-active plan (E32 LoRa and
-Bluetooth LE radio transports) and the only place next work is tracked. Every
-other `docs/*_ROADMAP.md` is a finished plan kept only as a historical record —
-do not read one as guidance.
+`docs/RADIO_TRANSPORTS_ROADMAP.md` is the one plan in this repository, and the
+only place next work is tracked. The four finished plans that used to sit beside
+it were deleted once their still-useful sections moved to durable homes — a
+finished tracker nobody may act on earns no place in `docs/`. When this plan
+closes, it goes the same way.
 
 Status has four owners, and no file summarizes them. What changed lives in git
 history; headers and tests define current behavior; hardware evidence lives in
@@ -39,7 +40,7 @@ MicroWorld/
 │   ├── Integration/    TNetSystem — the only Engine + Net joiner
 │   ├── PlatformHost/   host UDP transport (non-portable)
 │   └── PlatformEsp32/  ESP32 UDP + E32 LoRa UART (PlatformIO/ESP-IDF only)
-├── docs/               engine-wide design docs, ADRs, diagrams, ROADMAP
+├── docs/               engine-wide design docs, ADRs, diagrams, the one plan
 ├── tools/              CheckDependencyBoundaries, CheckProfileMap,
 │                       CheckFolderAgents, CheckClassDocumentation
 ├── CMakeLists.txt      root superbuild (adds every portable/host module)

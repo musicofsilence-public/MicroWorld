@@ -20,8 +20,8 @@ board clock feeding it.
 
 ## Verification
 
-Build Verify (`docs/EXAMPLES_ROADMAP.md` §1.1): `pio run -d examples/01-CoreTick`
-then the root `cmake --build` / `ctest`. Hardware checkpoint (§1.2, human-gated):
+Build Verify (`../AGENTS.md`): `pio run -d examples/01-CoreTick`
+then the root `cmake --build` / `ctest`. Hardware checkpoint (`../AGENTS.md`, human-gated):
 
 ```sh
 pio run -d examples/01-CoreTick -t upload --upload-port <COM-port>

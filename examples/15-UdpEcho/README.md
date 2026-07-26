@@ -41,7 +41,7 @@ Builds the single `esp32-s3` environment.
 
 ## Flash and observe
 
-Human-gated (see `docs/EXAMPLES_ROADMAP.md` §1.2).
+Human-gated (see `../AGENTS.md`).
 
 ```sh
 pio run -d examples/15-UdpEcho -t upload --upload-port <COM-x>

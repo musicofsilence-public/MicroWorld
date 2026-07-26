@@ -14,7 +14,8 @@
 // clean co-start: I2C is open-drain, so resetting one board mid-transaction can latch the
 // bus low until both restart. The on_receive callback and the byte push it calls run in
 // ISR context and assume CONFIG_I2C_ISR_IRAM_SAFE stays disabled (the default); enabling
-// it would require placing both in IRAM. See docs/WIRED_TRANSPORTS_ROADMAP.md §1.2.
+// it would require placing both in IRAM. See ../AGENTS.md for the rule this
+// comment satisfies.
 // =============================================================================
 
 #include <MicroWorld/PlatformEsp32/Esp32I2cDriver.h>

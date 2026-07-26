@@ -29,7 +29,7 @@ environments share one source file.
 
 ## Verification
 
-Build Verify (`docs/RADIO_TRANSPORTS_ROADMAP.md` §1.2): `pio run -d examples/17-TwoBoardLora`
+Build Verify (`../AGENTS.md`): `pio run -d examples/17-TwoBoardLora`
 builds both role environments. The hardware checkpoint (§1.3, human-gated,
 roadmap task 1.2) flashes node 1 to one board and node 2 to the other,
 expects both monitors to show the counter climbing alternately, and flips

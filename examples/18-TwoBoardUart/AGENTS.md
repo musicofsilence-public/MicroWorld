@@ -25,8 +25,7 @@ source file.
 
 ## Verification
 
-Build Verify (`docs/EXAMPLES_ROADMAP.md` §1.1): `pio run -d examples/18-TwoBoardUart`
-builds both role environments. Hardware checkpoint (§1.2, human-gated) flashes
+Build Verify (`../AGENTS.md`): `pio run -d examples/18-TwoBoardUart`
+builds both role environments. Hardware checkpoint (`../AGENTS.md`, human-gated) flashes
 node 1 to one board and node 2 to the other and expects both monitors to show
-the counter climbing alternately with no stalls; that checkpoint also flips
-task 1.1's Hardware-verified box (`docs/WIRED_TRANSPORTS_ROADMAP.md`).
+the counter climbing alternately with no stalls.

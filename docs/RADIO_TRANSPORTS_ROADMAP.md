@@ -20,9 +20,9 @@ way the wired links were proven:
 This document is the active plan and progress tracker for that work, written
 so that any LLM (including a weak one) can pick it up, find the next task,
 complete it, and record progress without extra context. Companions:
-`docs/MESSAGING_ROADMAP.md` (finished; the Phase 5 gate it owned is open),
-`docs/WIRED_TRANSPORTS_ROADMAP.md` (frozen precedent this plan imitates),
-`docs/EXAMPLES_ROADMAP.md` (owns the example scaffold + hardware checkpoint).
+`examples/AGENTS.md` (owns the build and hardware-verification procedure),
+`Modules/Messaging/AGENTS.md` (owns the composition recipes), and examples
+18–21 (the wired driver pattern this plan imitates for radios).
 
 Completed tasks below still cite `PROGRESS.md` and `CHANGELOG.md`. Both files
 were deleted on 2026-07-26 because they had become a third and fourth record of
@@ -66,8 +66,7 @@ Status legend: ⬜ not started · 🟨 in progress · ✅ done · ⛔ blocked/ga
 
 ### 1.1 Standard Verify (host edition)
 
-Same as `docs/MESSAGING_ROADMAP.md` §1.1 — run from the repo root for every
-task touching `Modules/`:
+Run from the repo root, in this order, for every task touching `Modules/`:
 
 ```sh
 clang-format --style=file:clang-format -i <every .h/.cpp file you touched>
@@ -92,7 +91,7 @@ claim.
 
 ### 1.3 Hardware checkpoint (owner-gated — never self-serve)
 
-Reuses `docs/EXAMPLES_ROADMAP.md` §1.2 verbatim: building never flashes;
+Reuses the `examples/AGENTS.md` hardware checkpoint verbatim: building never flashes;
 upload/monitor requires explicit human authorization; READMEs carry
 "not yet verified on hardware" until a captured trace is pasted in. Rig
 notes that are already paid for:
@@ -110,10 +109,9 @@ quoted symbol (`rg -n "SymbolName" Modules`), never by remembered offsets.
 
 ### 1.5 Files you must never edit
 
-- `docs/WIRED_TRANSPORTS_ROADMAP.md` — frozen history.
-- The task/catalog sections of `docs/EXAMPLES_ROADMAP.md` and
-  `docs/MESSAGING_ROADMAP.md` (each plan tracks its own tasks; shared example
-  registration happens **only** in `examples/README.md`).
+- `Modules/*/benchmarks/Results/*.md` — measured evidence, not prose to edit.
+- `examples/README.md` is the one place a new example is registered; this plan
+  tracks only its own tasks.
 - `Modules/*/benchmarks/Results/*.md`;
   `examples/esp32-common/sdkconfig.defaults` and `partitions.csv` (frozen
   board profile — D11 shows how BLE builds extend it without editing it);
@@ -125,7 +123,7 @@ quoted symbol (`rg -n "SymbolName" Modules`), never by remembered offsets.
 
 ### 2.1 Inherited embedded invariants (unchanged)
 
-Same as `docs/MESSAGING_ROADMAP.md` §2.1: C++17, no exceptions/RTTI, no
+The portable-code rules of the root `AGENTS.md`: C++17, no exceptions/RTTI, no
 steady-state allocation, no hidden clock (only platform adapters read real
 clocks), enum errors with transactional failure, determinism (no RNG),
 dependency direction enforced, frozen identity, Doxygen `/** */` on every
@@ -157,10 +155,10 @@ join the allowed industry vocabulary alongside `Udp`/`Uart`), format with
   regulations are the operator's responsibility.
 - **BLE security posture (goes in BLE READMEs):** v1 links are unencrypted,
   unauthenticated Just-Works connections for bench use only (D6).
-- Engine-first example rule of `docs/MESSAGING_ROADMAP.md` §2.2 applies to
-  every example this plan creates **from Phase 1 onward** — with one
-  amendment: until MESSAGING Phase 1 ships the log/sleep facades, examples
-  here may use the same `std::printf`/`vTaskDelay` baseline as examples
+- The engine-first example rule in `examples/AGENTS.md` applies to every example
+  this plan creates. Its facade amendment has expired: `WriteEsp32LogRecord` and
+  `SleepMilliseconds` shipped, so no new example may fall back to the old
+  `std::printf`/`vTaskDelay` baseline used by examples
   18–21, and task 6.1 sweeps them onto the facades if those exist by then.
 
 ### 2.3 Decisions record (settled — do not relitigate while executing)
@@ -199,11 +197,12 @@ join the allowed industry vocabulary alongside `Udp`/`Uart`), format with
   `17-TwoBoardLora` catalog slot, then takes `26`–`29`
   (26 LoraMessaging, 27 TwoBoardBle, 28 BleMessaging, 29 WirelessWorld).
   Registration happens only in `examples/README.md` (§1.5).
-- **D10 — Phase 5 is gated** on `docs/MESSAGING_ROADMAP.md` tracker showing
-  **Phases 3 and 4 ✅** (actor messaging over a wire, plus `TNetworkFrameSet`
-  — example 29 always composes two channels). Do not start 5.x before that;
-  everything in Phases 0–4 here uses only shipped API (`TNetHost`,
-  `TNetHostFrame`, `TEngineHost`).
+- **D10 — Phase 5's messaging gate is satisfied.** It required actor messaging
+  over a wire plus `TNetworkFrameSet`, because example 29 always composes two
+  channels. `TMessageRouter`, `TMessageChannelBinding`, `TNetworkFrameSet` and
+  `TReliableChannel` all shipped, and examples 22–25 exercise them. Everything
+  in Phases 0–4 here uses only shipped API (`TNetHost`, `TNetHostFrame`,
+  `TEngineHost`).
 - **D11 — BLE builds extend sdkconfig additively.** The shared
   `examples/esp32-common/sdkconfig.defaults` is frozen; BLE examples pass a
   **second** defaults file (`examples/esp32-common/sdkconfig.ble.defaults`,
@@ -225,7 +224,7 @@ join the allowed industry vocabulary alongside `Udp`/`Uart`), format with
 | Design-spike ADR with header-derived answers | `docs/decisions/0003-wired-transports.md` Appendices A/B |
 | Driver volley example | `examples/18-TwoBoardUart` |
 | Full TNetHost + engine messaging example | `examples/19-UartMessaging` |
-| Two-link, one-world composition (Phase 5 only) | `docs/MESSAGING_ROADMAP.md` §4.4 recipes |
+| Two-link, one-world composition (Phase 5 only) | `Modules/Messaging/AGENTS.md` composition recipes |
 
 ---
 
@@ -638,22 +637,20 @@ bench, first as a raw volley, then under the full engine.
 
 ---
 
-### Phase 5 — Wireless actor-messaging world ⛔ (gated — D10)
+### Phase 5 — Wireless actor-messaging world ⬜
 
-**Gate:** do not start until `docs/MESSAGING_ROADMAP.md` §5 tracker shows
-Phase 3 ✅ (actor messaging over one wire shipped: `TMessageRouter`,
-`TMessageChannelBinding`, and — if its Phase 4 is also ✅ —
-`TNetworkFrameSet`; if Phase 4 is not done yet, this phase is blocked on it
-too, since two channels need the frame set). Record the gate check in the
-evidence line.
+**Gate (open):** the messaging API this phase needs has shipped —
+`TMessageRouter`, `TMessageChannelBinding`, `TNetworkFrameSet`, and
+`TReliableChannel`, all exercised by examples 22–25. Nothing blocks 5.x but the
+BLE work in Phases 2–4.
 
 - [ ] **5.1 Example `29-WirelessWorld` (capstone: two radios, zero wires).**
   Two boards, no wire between them (D12 keeps WiFi out): **channel 1
   telemetry over BLE** (`TNetHost<2, 120>`), **channel 2 commands over LoRa**
   (`TNetHost<2, 58>`, D8 profile). One world per board, one `TMessageRouter`
   per board with `MaxMessageBytes = 48` (§4.1 — the LoRa channel is the
-  binding constraint), frame-set composition per
-  `docs/MESSAGING_ROADMAP.md` §4.4 (net frames first, router last). Client
+  binding constraint), frame-set composition per the `Modules/Messaging/AGENTS.md`
+  recipes (net frames first, router last). Client
   board: sensor actor streams readings on telemetry; server board: control
   actor sends a targeted rate-change command on the LoRa channel every 15 s.
   Tag `[ex29]`. README: both radios' safety/security blocks, the

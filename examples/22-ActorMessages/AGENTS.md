@@ -31,9 +31,9 @@ and allocation-free; no wire, no second board.
 
 ## Verification
 
-Build Verify (`docs/EXAMPLES_ROADMAP.md` §1.1): `pio run -d
+Build Verify (`../AGENTS.md`): `pio run -d
 examples/22-ActorMessages` then the root `cmake --build` / `ctest`. Hardware
-checkpoint (§1.2, human-gated):
+checkpoint (`../AGENTS.md`, human-gated):
 
 ```sh
 pio run -d examples/22-ActorMessages -t upload --upload-port <COM-port>

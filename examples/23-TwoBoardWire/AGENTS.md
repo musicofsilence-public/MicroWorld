@@ -38,10 +38,10 @@ allocation-free, sized at compile time.
 
 ## Verification
 
-Build Verify (`docs/EXAMPLES_ROADMAP.md` §1.1): `pio run -d
+Build Verify (`../AGENTS.md`): `pio run -d
 examples/23-TwoBoardWire` builds both role environments, then the root
 `cmake --build` / `ctest` runs the repo-wide format and unit-test gates.
-Hardware checkpoint (§1.2, human-gated) flashes the server to one board and the
+Hardware checkpoint (`../AGENTS.md`, human-gated) flashes the server to one board and the
 client to the other; expect the server's `lamp ON`/`lamp OFF` and
 `heartbeat=<n>` lines to track the client's `switch -> lamp <state>` and
 `switch broadcast heartbeat=<n>` lines one wire-hop later.

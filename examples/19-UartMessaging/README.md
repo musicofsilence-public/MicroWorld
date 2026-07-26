@@ -70,7 +70,7 @@ differ only by `-DMICROWORLD_EXAMPLE_SERVER`.
 
 ## Flash and observe
 
-Human-gated (see `docs/EXAMPLES_ROADMAP.md` §1.2). Flash the server to board A
+Human-gated (see `../AGENTS.md`). Flash the server to board A
 and the client to board B, then open both monitors:
 
 ```sh

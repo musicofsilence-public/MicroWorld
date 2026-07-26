@@ -35,9 +35,50 @@ from the shared `PlatformEsp32` facades (`FEsp32WifiLink`, `SleepMilliseconds`,
 
 ## Verification
 
-Build every example with the Build Verify in `docs/EXAMPLES_ROADMAP.md` §1.1
-(`pio run` is the compile gate; the repo-wide `ctest` format gate covers example
-sources once they are tracked). Compile success is never a runtime claim: a
-board is flashed and monitored only through the human-gated hardware checkpoint
-of §1.2, and each example README carries the "not yet verified on hardware"
-sentence until its captured trace is pasted in.
+### Build Verify (run for every example change)
+
+Run from the repository root, in this order:
+
+```sh
+clang-format --style=file:clang-format -i <every .h/.cpp file you touched>
+pio run -d examples/<NN-Name>
+cmake --build build --config Release
+ctest --test-dir build -C Release --output-on-failure
+```
+
+Expected:
+
+- `pio run` ends with `[SUCCESS]` (exit 0). Record the `RAM:`/`Flash:` usage
+  lines it prints — they belong in the example's README.
+- The root `ctest` still passes with the same test count as before the change.
+  `tools/CheckFormatting.py` (wired into ctest as `microworld_format_check`)
+  checks **every git-tracked `.h`/`.cpp` in the repository**, so the moment
+  example sources are tracked the repo-wide format gate covers them. One
+  unformatted example breaks the whole build's gate.
+- If `build/` is missing, create it first with `cmake -S . -B build`.
+
+The first `pio run` of a fresh checkout downloads the Espressif toolchain and
+takes several minutes; later runs are incremental.
+
+### Hardware checkpoint (human-gated — never self-serve)
+
+Flashing and monitoring touch a physical board. Compile success is never a
+runtime claim (see `Modules/PlatformEsp32/AGENTS.md` and `../docs/Porting.md`),
+and a worker must never run `pio run -t upload` or `pio device monitor` without
+explicit human authorization in the current session.
+
+1. Announce that the example is ready for hardware verification and print the
+   two commands the human (or the authorized worker) runs:
+
+   ```sh
+   pio run -d examples/<NN-Name> -t upload --upload-port <COM-port>
+   pio device monitor -d examples/<NN-Name>
+   ```
+
+2. Compare the captured serial output against the example's documented trace
+   shape.
+3. Paste the real captured trace into the example README's "Verified output"
+   section and add the evidence line.
+
+Until step 3 happens, the example's README must carry the sentence:
+*"Status: compiled for ESP32-S3; not yet verified on hardware."*

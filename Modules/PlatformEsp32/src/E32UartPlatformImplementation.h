@@ -12,7 +12,7 @@
 // empty-drain outcomes below are proven on real hardware. Two branches stay
 // unexercised: the short-write would-block mapping (the ping-pong never saturates the
 // TX FIFO) and E32 radio frame traffic (Phase 6.2 measured only no-traffic pump
-// overhead). See docs/WIRED_TRANSPORTS_ROADMAP.md §1.2.
+// overhead). See ../AGENTS.md for the rule this comment satisfies.
 // =============================================================================
 
 #include <driver/uart.h>

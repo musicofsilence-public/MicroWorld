@@ -34,6 +34,12 @@ has no module key in that tool's portable table.
 - Compile success on this package is a compile-only proof, never a runtime,
   timing, heap, stack, radio, or wired-link claim; see `benchmarks/Results/`
   for the measured evidence that closes that gap.
+- Each driver's `src/*PlatformImplementation.h` header opens with a comment
+  stating exactly which branches real hardware has exercised and which stay
+  unverified. A new driver says "UNVERIFIED at runtime" there until its
+  example's hardware checkpoint passes, and the same commit that records the
+  checkpoint updates the wording. These headers are the per-driver runtime
+  record; `benchmarks/Results/` holds the numbers.
 
 ## Verification
 

@@ -69,7 +69,7 @@ differ only by `-DMICROWORLD_EXAMPLE_SPI_MASTER`.
 
 ## Flash and observe
 
-Human-gated (see `docs/EXAMPLES_ROADMAP.md` §1.2). Flash the master to board A
+Human-gated (see `../AGENTS.md`). Flash the master to board A
 and the slave to board B, then open both monitors:
 
 ```sh
