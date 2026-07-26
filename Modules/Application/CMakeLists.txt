@@ -77,7 +77,7 @@ if(MICROWORLD_APPLICATION_BUILD_TESTS)
     set(MICROWORLD_APPLICATION_TEST_SOURCES
         "${CMAKE_CURRENT_SOURCE_DIR}/../Core/tests/TestMain.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/ApplicationTests.cpp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/tests/ApplicationRunnerTests.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/ApplicationRunTests.cpp"
     )
 
     if(BUILD_TESTING)

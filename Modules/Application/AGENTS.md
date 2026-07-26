@@ -12,12 +12,11 @@ C++17 standard library. It must not depend on Net directly — a networked
 application receives its already-bound engine the same way a standalone one
 does.
 
-The package owns `FApplication` (a base class that binds one `IEngine&` and
-seals the begin/tick/end forwarding so a subclass cannot get the lifecycle
-wrong) and `TApplicationRunner<TimeSourceType>` (the begin-then-advance-then-
-sleep loop a platform entry point would otherwise hand-roll). It does not own
-the engine, the world, actors, components, networking, a clock, or a sleep
-implementation — the clock and sleep arrive from the caller.
+The package owns `FApplication` (a base class that binds one `IEngine&`, seals
+the begin/tick/end forwarding, and supplies the begin-then-advance-then-sleep
+`Run` member template a platform entry point would otherwise hand-roll). It
+does not own the engine, the world, actors, components, networking, a clock, or
+a sleep implementation — the clock and sleep arrive from the caller.
 
 ## Concepts and boundaries
 
@@ -34,9 +33,9 @@ implementation — the clock and sleep arrive from the caller.
   `OnBeginPlayFailed` and latches the lifecycle terminal.
 - `Advance` still rejects a backward clock before the engine sees it; the
   engine receives only monotonic-or-equal timestamps.
-- `TApplicationRunner<TimeSourceType>` is a template so a platform names its
-  concrete clock; it holds the clock, a `noexcept` sleep function pointer, and
-  a frame period by value/reference and runs until a frame fails.
+- `FApplication::Run` is a member template so a platform names its concrete
+  clock; it takes the clock by reference plus a `noexcept` sleep function
+  pointer and a frame period, then runs until a frame fails.
 - Portable code uses fixed-width/value types, deterministic lifetimes, and no
   RTTI, exceptions, logging, threads, clocks, heap containers, SDK calls, or
   global mutable state.

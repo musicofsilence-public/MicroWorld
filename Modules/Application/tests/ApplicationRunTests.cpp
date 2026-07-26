@@ -1,7 +1,6 @@
 #include "TestSupport.h"
 
 #include <MicroWorld/Application/Application.h>
-#include <MicroWorld/Application/ApplicationRunner.h>
 #include <MicroWorld/Object/ObjectStore.h>
 
 #include <array>
@@ -188,9 +187,8 @@ MW_TEST_CASE(RunnerStopsOnFirstNonSuccessFrameAndReturnsIt)
 	FScriptedEngine Engine;
 	Engine.ConfigureStopOnFrame(1);
 	FRunnerApplication Application{Engine};
-	MicroWorld::TApplicationRunner<FScriptedClock> Runner{Clock, &CountingSleepFunction, 1};
 
-	const MicroWorld::ERuntimeResult StopResult = Runner.Run(Application);
+	const MicroWorld::ERuntimeResult StopResult = Application.Run(Clock, &CountingSleepFunction, 1);
 
 	MW_EXPECT_EQ(Test, MicroWorld::ERuntimeResult::CapacityExceeded, StopResult, "Runner should return the stopping frame's result");
 }
@@ -202,9 +200,8 @@ MW_TEST_CASE(RunnerEndsPlayAfterAStoppingFrame)
 	FScriptedEngine Engine;
 	Engine.ConfigureStopOnFrame(0);
 	FRunnerApplication Application{Engine};
-	MicroWorld::TApplicationRunner<FScriptedClock> Runner{Clock, &CountingSleepFunction, 1};
 
-	(void)Runner.Run(Application);
+	(void)Application.Run(Clock, &CountingSleepFunction, 1);
 
 	MW_EXPECT_EQ(Test, 1, Engine.EndPlayCount, "Runner should invoke EndPlay once after a stopping frame");
 }
@@ -216,9 +213,8 @@ MW_TEST_CASE(RunnerDoesNotEndPlayAfterFailedBeginPlay)
 	FScriptedEngine Engine;
 	Engine.ConfigureBeginPlayResult(MicroWorld::ERuntimeResult::CapacityExceeded);
 	FRunnerApplication Application{Engine};
-	MicroWorld::TApplicationRunner<FScriptedClock> Runner{Clock, &CountingSleepFunction, 1};
 
-	const MicroWorld::ERuntimeResult StopResult = Runner.Run(Application);
+	const MicroWorld::ERuntimeResult StopResult = Application.Run(Clock, &CountingSleepFunction, 1);
 
 	MW_EXPECT_EQ(Test, MicroWorld::ERuntimeResult::CapacityExceeded, StopResult, "Runner should return the begin failure result");
 	MW_EXPECT_EQ(Test, 0, Engine.EndPlayCount, "Runner must not invoke EndPlay after a failed begin");
@@ -232,9 +228,8 @@ MW_TEST_CASE(RunnerSleepsOncePerSuccessfulFrameOnly)
 	FScriptedEngine Engine;
 	Engine.ConfigureStopOnFrame(2);
 	FRunnerApplication Application{Engine};
-	MicroWorld::TApplicationRunner<FScriptedClock> Runner{Clock, &CountingSleepFunction, 1};
 
-	(void)Runner.Run(Application);
+	(void)Application.Run(Clock, &CountingSleepFunction, 1);
 
 	MW_EXPECT_EQ(Test, 2, GPacingCallCount, "Pacing should fire once per successful frame only");
 }
@@ -246,9 +241,8 @@ MW_TEST_CASE(RunnerFeedsClockValuesIntoTick)
 	FScriptedEngine Engine;
 	Engine.ConfigureStopOnFrame(1);
 	FRunnerApplication Application{Engine};
-	MicroWorld::TApplicationRunner<FScriptedClock> Runner{Clock, &CountingSleepFunction, 1};
 
-	(void)Runner.Run(Application);
+	(void)Application.Run(Clock, &CountingSleepFunction, 1);
 
 	const bool bFirstFrameSawSecondClockValue = Engine.ObservedTickTimestamps[0] == MicroWorld::TimePointMilliseconds{20};
 	const bool bSecondFrameSawThirdClockValue = Engine.ObservedTickTimestamps[1] == MicroWorld::TimePointMilliseconds{30};

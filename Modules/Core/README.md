@@ -8,10 +8,6 @@ Current development status is in [PROGRESS.md](../../PROGRESS.md).
 
 ## What Core provides
 
-- `FApplication` guards a consumer composition root.
-- `TApplicationRunner` drives one `FApplication` through its begin/advance/end
-  lifecycle on an injected clock and pacing function, so a platform entry point
-  supplies a clock and a sleep instead of a hand-rolled loop.
 - `FTickFunction` owns bounded per-object scheduling: each object carries its
   own tick configuration and enable flags.
 - Caller-supplied monotonic milliseconds drive scheduling. Late ticks run once,
@@ -28,8 +24,6 @@ consolidation. Consumers still own their concrete objects.
 
 ## Public headers
 
-- `MicroWorld/Application.h`
-- `MicroWorld/ApplicationRunner.h`
 - `MicroWorld/Lifecycle.h`
 - `MicroWorld/Log.h`
 - `MicroWorld/TickFunction.h`

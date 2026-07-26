@@ -5,10 +5,10 @@ Inherits `../AGENTS.md`.
 ## Architecture
 
 Public headers under `include/MicroWorld/Application/` expose the program-entry
-contract: `FApplication` (engine-owning application base) and
-`TApplicationRunner` (the bounded frame loop). `Application.cpp` is the only
-out-of-line source; it gives the package stable linker evidence and keeps the
-lifecycle state machine in one translation unit.
+contract: `FApplication` (the engine-owning application base and bounded `Run`
+frame loop). `Application.cpp` is the only out-of-line source; it gives the
+package stable linker evidence and keeps the lifecycle state machine in one
+translation unit.
 
 ## Concepts and boundaries
 

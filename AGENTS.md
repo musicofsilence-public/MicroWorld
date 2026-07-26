@@ -29,7 +29,7 @@ MicroWorld/
 │   ├── Engine/         UWorld / AActor / UActorComponent, TEngine, IEngine
 │   ├── Messaging/      message router, channel bindings (header-only)
 │   ├── Net/            byte I/O, frame codec, TNetHost
-│   ├── Application/    FApplication, TApplicationRunner
+│   ├── Application/    FApplication (including the Run template)
 │   ├── Integration/    TNetSystem — the only Engine + Net joiner
 │   ├── PlatformHost/   host UDP transport (non-portable)
 │   └── PlatformEsp32/  ESP32 UDP + E32 LoRa UART (PlatformIO/ESP-IDF only)

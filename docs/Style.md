@@ -86,8 +86,8 @@ Read the two suppliers in one `app_main` side by side; both announce themselves:
 
 ```cpp
 MicroWorld::SetOutputDevice(&MicroWorld::WriteEsp32LogRecord);
-static MicroWorld::TApplicationRunner<MicroWorld::FEsp32TimeSource> Runner{
-	TimeSource, &MicroWorld::SleepMilliseconds, kFramePacingMilliseconds};
+const MicroWorld::ERuntimeResult StopResult = ValveApplication.Run(
+        TimeSource, &MicroWorld::SleepMilliseconds, kFramePacingMilliseconds);
 ```
 
 Adding `Function` to an alias whose root word is borrowed from UE5 is worth the

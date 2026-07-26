@@ -55,7 +55,7 @@ edges. Only they may include OS or SDK headers.
 | **Engine** | Core, Object | The managed runtime: `UWorld`, `AActor`, `UActorComponent`, the `TEngine`/`IEngine` front door, timer manager |
 | **Messaging** | Core | Actor messaging: message types, router, channel bindings, reliable channel. Header-only — no archive |
 | **Net** | Core | Byte I/O: `INetDriver`, `TNetHost`, protocol, framing |
-| **Application** | Core, Object, Engine | Program entry: `FApplication` holds one engine for its lifetime, `TApplicationRunner` drives the frame loop |
+| **Application** | Core, Object, Engine | Program entry: `FApplication` holds one engine for its lifetime and owns the `Run` frame-loop template |
 | **Integration** | Core, Object, Messaging, Engine, Net | `TNetSystem` — the one place Engine and Net meet |
 | **PlatformHost** | non-portable | Host UDP over OS sockets, `steady_clock` time source |
 | **PlatformEsp32** | non-portable | ESP32-S3 transports (lwIP UDP, E32 LoRa UART, wired UART/I2C/SPI), ESP timer and log |

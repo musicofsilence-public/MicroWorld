@@ -76,11 +76,12 @@ the output device before the first `MW_LOG` / `MW_LOG_MSG` call.
 
 ### 4. Pacing
 
-`TApplicationRunner` (in Core) drives one `FApplication` through its
+`FApplication::Run` (in Application) drives one `FApplication` through its
 begin/advance/end lifecycle, but it paces the frame loop through an injected
 function pointer so the platform's idle task and watchdog still run. Supply a
-free `void(DurationMilliseconds) noexcept` function (typically the platform's
-existing sleep) and a cadence; the runner calls it once per successful frame.
+clock, a free `void(DurationMilliseconds) noexcept` function (typically the
+platform's existing sleep), and a cadence; `Run` calls it once per successful
+frame.
 
 - ESP32 reference:
   [`SleepMilliseconds`](../Modules/PlatformEsp32/include/MicroWorld/PlatformEsp32/Esp32Sleep.h)

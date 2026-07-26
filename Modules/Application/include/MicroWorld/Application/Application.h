@@ -2,9 +2,20 @@
 
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Lifecycle.h>
+#include <MicroWorld/RuntimeResult.h>
+#include <MicroWorld/Time.h>
 
 namespace MicroWorld
 {
+
+/**
+ * The pacing function a runner calls between frames.
+ *
+ * noexcept is part of the type, so a platform's existing sleep function binds with
+ * no
+ * wrapper and the compiler rejects one that could throw into a noexcept Run.
+ */
+using FSleepFunction = void (*)(DurationMilliseconds InSleepDurationMilliseconds) noexcept;
 
 /**
  * Base class for an application that owns one engine: BeginPlay runs once,
@@ -28,7 +39,7 @@ public:
 	/** No copy assignment: it would overwrite the lifecycle of an application already running. */
 	FApplication& operator=(const FApplication&) = delete;
 
-	/** No moving: the runner holds a reference to this object, and a move would change its address. */
+	/** No moving: this application holds its IEngine& for life, and callers can retain its FApplication&. */
 	FApplication(FApplication&&) = delete;
 
 	/** No move assignment: same reason — every reference to this object must stay valid. */
@@ -45,6 +56,40 @@ public:
 
 	/** Stops the application; calling it again after success does nothing and still succeeds. */
 	ERuntimeResult EndPlay() noexcept;
+
+	/**
+	 * Runs the application and returns the result of the frame that failed.
+	 *
+	 * A healthy application never fails a frame, so in normal
+	 * operation this call
+	 * does not return and nothing written after it runs. A failed BeginPlay returns
+	 * at once without EndPlay:
+	 * FApplication has already run OnBeginPlayFailed and
+	 * latched Failed, so EndPlay could only answer InvalidLifecycle and would hide
+	 * the
+	 * real reason.
+	 */
+	template<typename TimeSourceType>
+	ERuntimeResult Run(TimeSourceType& InTimeSource, const FSleepFunction InSleep, const DurationMilliseconds InPacingMilliseconds) noexcept
+	{
+		const ERuntimeResult BeginResult = BeginPlay(InTimeSource.Now());
+		if (BeginResult != ERuntimeResult::Success)
+		{
+			return BeginResult;
+		}
+
+		for (;;)
+		{
+			const ERuntimeResult FrameResult = Advance(InTimeSource.Now());
+			if (FrameResult != ERuntimeResult::Success)
+			{
+				(void)EndPlay();
+				return FrameResult;
+			}
+
+			InSleep(InPacingMilliseconds);
+		}
+	}
 
 protected:
 	/** Binds this application to the one engine it will drive for its lifetime. */
