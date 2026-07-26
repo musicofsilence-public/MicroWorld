@@ -6,13 +6,10 @@
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Engine/EngineResult.h>
 #include <MicroWorld/Engine/InlineTypes.h>
-#include <MicroWorld/Engine/Message.h>
-#include <MicroWorld/Engine/MessageChannelBinding.h>
-#include <MicroWorld/Engine/MessageRouter.h>
-#include <MicroWorld/Engine/EngineSystem.h>
+#include <MicroWorld/Messaging/Message.h>
 #include <MicroWorld/Engine/World.h>
+#include <MicroWorld/Integration/NetSystem.h>
 #include <MicroWorld/Log.h>
-#include <MicroWorld/Net/NetHost.h>
 #include <MicroWorld/Net/NetResult.h>
 #include <MicroWorld/Object/ClassDescriptor.h>
 #include <MicroWorld/Object/GarbageCollector.h>
@@ -131,10 +128,8 @@ private:
 } // namespace
 
 /**
- * Server board: hosts the WiFi SoftAP and runs FTelemetrySinkActor + FCommanderActor over one
- * TMessageRouter wired to two nets (UDP telemetry, UART commands) through two
- * TMessageChannelBinding, with the engine holding both net frames and the router behind one
- * TEngineSystemSet<3> (Phase 4.1; see AGENTS.md for why this is the first example to use it).
+ * Server board: hosts the WiFi SoftAP and runs FTelemetrySinkActor + FCommanderActor over the
+ * shared router owned by one TNetSystem. Its two drivers carry UDP telemetry and UART commands.
  */
 void RunServer() noexcept
 {
@@ -163,36 +158,23 @@ void RunServer() noexcept
 		return;
 	}
 
-	// All composition objects are static (the ESP32-S3 stack lesson, §2.2).
-	static FTelemetryNet TelemetryNet{TelemetryDriver};
-	static FCommandNet CommandNet{CommandDriver};
-	static FWorldRouter Router;
-	static FTelemetryBinding TelemetryWire{TelemetryNet, TelemetryWireChannelByte, TelemetryChannelId, EChannelSendTarget::AllPeers, Router};
-	static FCommandBinding CommandWire{CommandNet, CommandsWireChannelByte, CommandsChannelId, EChannelSendTarget::AllPeers, Router};
-	static FTelemetryFrame TelemetryFrame{TelemetryNet};
-	static FCommandFrame CommandFrame{CommandNet};
-
-	// D3 frame-set order: nets first (each delivers its own inbound traffic), router last (it then
-	// dispatches what the nets just delivered) -- see TwoChannelWorldShared.h's FWorldFrameSet alias.
-	static FWorldFrameSet Frames;
-	if (Frames.Add(TelemetryFrame) != EEngineResult::Success || Frames.Add(CommandFrame) != EEngineResult::Success
-		|| Frames.Add(Router) != EEngineResult::Success)
+	// TNetSystem owns all hosts, bindings, and the shared router; the engine starts the hosts at BeginPlay.
+	static FWorldNetSystem NetSystem;
+	const FNetDriverHandle TelemetryHandle = NetSystem.AddNetDriver(TelemetryDriver, ENetMode::DedicatedServer, MakeHostConfig());
+	const FNetDriverHandle CommandHandle = NetSystem.AddNetDriver(CommandDriver, ENetMode::DedicatedServer, MakeHostConfig());
+	if (!TelemetryHandle.IsValid() || !CommandHandle.IsValid())
 	{
-		MW_LOG(Error, "ex24", "server frame set rejected a frame; halting");
+		MW_LOG(Error, "ex24", "server net system rejected a driver; halting");
 		return;
 	}
-	static FWorldEngine Engine{FGarbageCollectionBudget{1, 4, 8}, Frames};
-
-	if (!TelemetryWire.IsAttached() || !CommandWire.IsAttached())
+	const FChannelHandle TelemetryChannel = NetSystem.AddChannel(TelemetryHandle, TelemetryChannelId, EChannelReliability::BestEffort);
+	const FChannelHandle CommandsChannel = NetSystem.AddChannel(CommandHandle, CommandsChannelId, EChannelReliability::BestEffort);
+	if (!TelemetryChannel.IsValid() || !CommandsChannel.IsValid())
 	{
-		MW_LOG(Error, "ex24", "server binding failed to attach; halting");
+		MW_LOG(Error, "ex24", "server net system rejected a channel; halting");
 		return;
 	}
-	if (Router.AddChannel(TelemetryWire) != EMessageResult::Success || Router.AddChannel(CommandWire) != EMessageResult::Success)
-	{
-		MW_LOG(Error, "ex24", "server router rejected a channel; halting");
-		return;
-	}
+	static FWorldEngine Engine{FGarbageCollectionBudget{1, 4, 8}, NetSystem};
 
 	if (Engine.RegisterClass<FTelemetrySinkActor>(TelemetrySinkActorTypeId, "TelemetrySinkActor") != EObjectResult::Success
 		|| Engine.RegisterClass<FCommanderActor>(CommanderActorTypeId, "CommanderActor") != EObjectResult::Success)
@@ -202,8 +184,8 @@ void RunServer() noexcept
 	}
 
 	const TObjectPtr<UWorld> World = Engine.CreateWorld();
-	const TObjectPtr<FTelemetrySinkActor> Sink = Engine.CreateObject<FTelemetrySinkActor>(TelemetrySinkActorTypeId, Router).Object;
-	const TObjectPtr<FCommanderActor> Commander = Engine.CreateObject<FCommanderActor>(CommanderActorTypeId, Router).Object;
+	const TObjectPtr<FTelemetrySinkActor> Sink = Engine.CreateObject<FTelemetrySinkActor>(TelemetrySinkActorTypeId, NetSystem.GetRouter()).Object;
+	const TObjectPtr<FCommanderActor> Commander = Engine.CreateObject<FCommanderActor>(CommanderActorTypeId, NetSystem.GetRouter()).Object;
 	if (World.Get() == nullptr || Sink.Get() == nullptr || Commander.Get() == nullptr)
 	{
 		MW_LOG(Error, "ex24", "server world or actor creation failed; halting");
@@ -216,11 +198,6 @@ void RunServer() noexcept
 		MW_LOG(Error, "ex24", "server actor registration failed; halting");
 		return;
 	}
-
-	(void)TelemetryNet.Configure(ENetMode::DedicatedServer, MakeHostConfig());
-	(void)TelemetryNet.Start(GTimeSource.Now());
-	(void)CommandNet.Configure(ENetMode::DedicatedServer, MakeHostConfig());
-	(void)CommandNet.Start(GTimeSource.Now());
 
 	const TimePointMilliseconds BootTime = GTimeSource.Now();
 	if (Engine.BeginPlay(BootTime) != ERuntimeResult::Success)

@@ -1,12 +1,11 @@
 # 24-TwoChannelWorld
 
 **Feature:** one world, two live channels on two different physical links at
-once — a single `TMessageRouter` behind one `TEngineSystemSet<3>` carries
-telemetry over WiFi UDP and commands over a UART wire, simultaneously, between
-the same two boards. This is the first example to use `TEngineSystemSet`
-(Phase 4.1), replacing 23-TwoBoardWire's manual per-frame router pump.
+once — one `TNetSystem` owns the shared `TMessageRouter`, host bindings, and
+engine-system ordering for telemetry over WiFi UDP and commands over a UART
+wire, simultaneously, between the same two boards.
 
-> Status: hardware-verified on two ESP32-S3 boards, 2026-07-24 (WiFi UDP + UART wire).
+> Status: not yet hardware-verified after the `TNetSystem` conversion.
 
 ## What it does
 
@@ -35,18 +34,17 @@ the same two boards. This is the first example to use `TEngineSystemSet`
 
 ## MicroWorld APIs used
 
-- `TMessageRouter`, `IMessageRouter` (`AddMessageHandler` / `SendMessageToActor`
-  / `BroadcastMessage`)
-- `TMessageChannelBinding`, `EChannelSendTarget` (`Server` on the client,
-  `AllPeers` on the server, per channel)
-- `TEngineSystemSet` (`Add`, D3 dispatch/flush order) — the per-frame seam
-  that pumps both nets and the router behind one `TEngineHost`
-- `TNetHost` (`Configure` / `Start`), `TNetHostSystem`, `ENetMode`
+- `TNetSystem` (`AddNetDriver` / `AddChannel` / `GetRouter`) — configures
+  both drivers, derives wire channels and peer targets, and starts hosts at
+  engine `BeginPlay`
+- `IMessageRouter` (`AddMessageHandler` / `SendMessageToActor` /
+  `BroadcastMessage`)
+- `ENetMode` and `FNetHostConfig` — explicit client/server session policy
 - `FEsp32WifiLink` (`StartAccessPoint` / `JoinAccessPoint`), `FEsp32UdpDriver`,
   `MakeUdpAddress`
 - `FEsp32UartDriver`, `FEsp32UartConfig`, `MakeUartAddress`
 - `AActor::SetTickInterval` — the sensor re-times its own reporting cadence
-- `TEngineHost` (`RegisterClass` / `CreateWorld` / `CreateObject` /
+- `TEngine` (`RegisterClass` / `CreateWorld` / `CreateObject` /
   `BeginPlay` / `Tick`), `TInlineActor`, `UWorld::RegisterActor`
 - `FEsp32TimeSource::Now`, `SleepMilliseconds`, `WriteEsp32LogRecord`, `MW_LOG`
 
@@ -101,12 +99,12 @@ mw log   COM7                        :: client: tx telemetry (UDP) + rate change
 on these boards -- its reset-on-open can drop the native-USB port into the ROM
 download loader; `mw log` holds the line steady and reconnects across resets.
 
-## Hardware verification
+## Historical hardware verification
 
-Verified on two ESP32-S3-DevKitC-1 boards on **2026-07-24** (server COM5, client
-COM7; UART1 GPIO17↔18 crossover wired; console on USB-Serial-JTAG). Both links
-ran at once — telemetry values flowing client→server over UDP while rate commands
-flowed server→client over the wire.
+The following trace was captured on two ESP32-S3-DevKitC-1 boards on
+**2026-07-24**, before this example was converted to `TNetSystem`. It documents
+the physical setup only; the current composition still needs a fresh hardware
+run.
 
 **Server** — UDP telemetry in and UART commands out, interleaved:
 
@@ -133,14 +131,13 @@ I (56921) ex24: sensor reporting rate -> 1000 ms
 The reading values match end to end (client `tx telemetry reading=62` →
 server `rx telemetry reading=62`), and each server `tx command -> sensor
 rate=N` lands on the client as `sensor reporting rate -> N`, alternating
-500/1000 ms every 10 s — two transports, one `TEngineSystemSet`, at the same
-time.
+500/1000 ms every 10 s across both transports.
 
 ## Image size
 
-From `pio run` (release build, ESP32-S3-DevKitC-1). Both role environments
-carry the full engine/object/GC stack plus both the WiFi/lwIP and UART
-transports:
+Historical output from `pio run` before the `TNetSystem` conversion (release
+build, ESP32-S3-DevKitC-1). Fresh size evidence is required for the current
+example:
 
 ```text
 server  RAM:   18.2% (used 59696 bytes from 327680 bytes)

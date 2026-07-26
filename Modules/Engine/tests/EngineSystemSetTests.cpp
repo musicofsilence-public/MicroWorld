@@ -1,5 +1,6 @@
 #include "TestSupport.h"
 
+#include <MicroWorld/EngineSystem.h>
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Engine/EngineResult.h>
 #include <MicroWorld/Engine/EngineSystem.h>
@@ -50,6 +51,12 @@ private:
 /** Records how many times one frame's two slots ran and their stamps from a shared sequence. */
 struct FFrameCallRecord
 {
+	/** Number of play-start lifecycle invocations observed. */
+	int BeginCount{0};
+
+	/** Number of play-end lifecycle invocations observed. */
+	int EndCount{0};
+
 	/** Number of inbound-dispatch slot invocations observed. */
 	int DispatchCount{0};
 
@@ -61,6 +68,12 @@ struct FFrameCallRecord
 
 	/** This frame's stamp from the shared sequence at its most recent flush. */
 	std::uint32_t FlushOrder{0};
+
+	/** This frame's stamp from the shared sequence at its most recent play start. */
+	std::uint32_t BeginOrder{0};
+
+	/** This frame's stamp from the shared sequence at its most recent play end. */
+	std::uint32_t EndOrder{0};
 };
 
 /** A network frame that only records its two slot calls, isolating TEngineSystemSet's pump order from any real transport. */
@@ -69,6 +82,13 @@ class FRecordingEngineSystem final : public IEngineSystem
 public:
 	/** Binds this stub to the caller-owned record it stamps and the sequence every recording frame in the test shares. */
 	FRecordingEngineSystem(FFrameCallRecord& InRecord, FSharedFrameSequence& InSequence) noexcept : Record(InRecord), Sequence(InSequence) {}
+
+	/** Stamps the play-start turn so lifecycle add-order is observable. */
+	void BeginPlay(const TimePointMilliseconds) noexcept override
+	{
+		++Record.BeginCount;
+		Record.BeginOrder = Sequence.Next();
+	}
 
 	/** Stamps the inbound-dispatch slot's count and shared-sequence order. */
 	void PreAdvance(const TimePointMilliseconds) noexcept override
@@ -84,6 +104,13 @@ public:
 		Record.FlushOrder = Sequence.Next();
 	}
 
+	/** Stamps the play-end turn so lifecycle reverse add-order is observable. */
+	void EndPlay() noexcept override
+	{
+		++Record.EndCount;
+		Record.EndOrder = Sequence.Next();
+	}
+
 private:
 	/** Receives this stub's observed slot counts and ordering; never owned here. */
 	FFrameCallRecord& Record;
@@ -93,6 +120,40 @@ private:
 };
 
 } // namespace
+
+/** Proves lifecycle turns preserve add-order at begin and reverse add-order at end. */
+MW_TEST_CASE(EngineSystemSet_BeginPlayRunsAddOrderAndEndPlayRunsReverseOrder)
+{
+	FSharedFrameSequence Sequence;
+	FFrameCallRecord RecordA{};
+	FFrameCallRecord RecordB{};
+	FFrameCallRecord RecordC{};
+	FRecordingEngineSystem FrameA{RecordA, Sequence};
+	FRecordingEngineSystem FrameB{RecordB, Sequence};
+	FRecordingEngineSystem FrameC{RecordC, Sequence};
+	TEngineSystemSet<3> Set;
+
+	const EEngineResult AddAResult = Set.Add(FrameA);
+	const EEngineResult AddBResult = Set.Add(FrameB);
+	const EEngineResult AddCResult = Set.Add(FrameC);
+
+	Set.BeginPlay(10);
+	Set.EndPlay();
+
+	MW_EXPECT_EQ(Test, EEngineResult::Success, AddAResult, "Adding the first lifecycle system must succeed");
+	MW_EXPECT_EQ(Test, EEngineResult::Success, AddBResult, "Adding the second lifecycle system must succeed");
+	MW_EXPECT_EQ(Test, EEngineResult::Success, AddCResult, "Adding the third lifecycle system must succeed");
+	MW_EXPECT_EQ(Test, 1, RecordA.BeginCount, "Each added system must receive one BeginPlay turn");
+	MW_EXPECT_EQ(Test, 1, RecordB.BeginCount, "Each added system must receive one BeginPlay turn");
+	MW_EXPECT_EQ(Test, 1, RecordC.BeginCount, "Each added system must receive one BeginPlay turn");
+	MW_EXPECT_TRUE(Test, RecordA.BeginOrder < RecordB.BeginOrder, "BeginPlay must run the first-added system before the second");
+	MW_EXPECT_TRUE(Test, RecordB.BeginOrder < RecordC.BeginOrder, "BeginPlay must run the second-added system before the third");
+	MW_EXPECT_EQ(Test, 1, RecordA.EndCount, "Each added system must receive one EndPlay turn");
+	MW_EXPECT_EQ(Test, 1, RecordB.EndCount, "Each added system must receive one EndPlay turn");
+	MW_EXPECT_EQ(Test, 1, RecordC.EndCount, "Each added system must receive one EndPlay turn");
+	MW_EXPECT_TRUE(Test, RecordC.EndOrder < RecordB.EndOrder, "EndPlay must run the third-added system before the second");
+	MW_EXPECT_TRUE(Test, RecordB.EndOrder < RecordA.EndOrder, "EndPlay must run the second-added system before the first");
+}
 
 /** Proves TEngineSystemSet's PreAdvance runs its frames in add-order and PostAdvance runs them in reverse add-order, called directly. */
 MW_TEST_CASE(EngineSystemSet_PreAdvanceRunsAddOrderPostAdvanceRunsReverseOrder)

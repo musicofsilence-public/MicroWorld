@@ -119,20 +119,49 @@ ERuntimeResult UWorld::BeginPlay(const TimePointMilliseconds InNowMilliseconds) 
 	{
 		return ERuntimeResult::InvalidLifecycle;
 	}
-	FObjectStoreDispatchGuard DispatchGuard(*ObjectStore);
-	if (!DispatchGuard.IsAcquired())
+	if (DeferredSpawns.IsValid() && ObjectStore->IsCollectionActive())
 	{
 		return ERuntimeResult::LifecycleLocked;
 	}
-
-	const ERuntimeResult BeginResult = Lifecycle.Begin();
-	if (BeginResult != ERuntimeResult::Success)
 	{
-		return BeginResult;
+		FObjectStoreDispatchGuard DispatchGuard(*ObjectStore);
+		if (!DispatchGuard.IsAcquired())
+		{
+			return ERuntimeResult::LifecycleLocked;
+		}
+
+		const ERuntimeResult BeginResult = Lifecycle.Begin();
+		if (BeginResult != ERuntimeResult::Success)
+		{
+			return BeginResult;
+		}
 	}
 	LastUpdateMilliseconds = InNowMilliseconds;
 
-	return BeginRegisteredActorsWithRollback(InNowMilliseconds);
+	if (DeferredSpawns.IsValid())
+	{
+		// Freeze composition-time requests before actor callbacks can append
+		// play-time work, then use the normal barrier construction path.
+		DeferredSpawns.SealBarrier();
+		ConstructDeferredSpawns(*ObjectStore);
+	}
+
+	{
+		FObjectStoreDispatchGuard DispatchGuard(*ObjectStore);
+		if (!DispatchGuard.IsAcquired())
+		{
+			return ERuntimeResult::LifecycleLocked;
+		}
+
+		const ERuntimeResult BeginResult = BeginRegisteredActorsWithRollback(InNowMilliseconds);
+		if (BeginResult != ERuntimeResult::Success)
+		{
+			return BeginResult;
+		}
+	}
+
+	ERuntimeResult FirstError = ERuntimeResult::Success;
+	return BeginDeferredSpawnsUnderGuard(*ObjectStore, InNowMilliseconds, FirstError);
 }
 
 ERuntimeResult UWorld::Advance(const TimePointMilliseconds InNowMilliseconds) noexcept
@@ -288,7 +317,8 @@ FActorSpawnStatus UWorld::GetSpawnStatus(const FActorSpawnHandle InHandle) const
 
 EActorSpawnRequestResult UWorld::CheckDeferredSpawnRequest() const noexcept
 {
-	if (Lifecycle.GetState() != ELifecycleState::Playing)
+	const ELifecycleState LifecycleState = Lifecycle.GetState();
+	if (LifecycleState != ELifecycleState::Constructed && LifecycleState != ELifecycleState::Playing)
 	{
 		return EActorSpawnRequestResult::LifecycleLocked;
 	}

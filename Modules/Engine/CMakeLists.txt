@@ -81,17 +81,6 @@ microworld_engine_disable_exceptions_and_rtti(
 if(MICROWORLD_ENGINE_BUILD_TESTS)
     include(CTest)
 
-    # The net-composition test links Net into the test executable only; production
-    # microworld_engine never depends on Net (the dependency checker enforces this).
-    if(NOT TARGET MicroWorld::Net)
-        set(MICROWORLD_NET_BUILD_TESTS OFF)
-        set(MICROWORLD_NET_BUILD_BENCHMARKS OFF)
-        add_subdirectory(
-            "${CMAKE_CURRENT_SOURCE_DIR}/../Net"
-            "${CMAKE_CURRENT_BINARY_DIR}/Net"
-        )
-    endif()
-
     set(MICROWORLD_ENGINE_TEST_SOURCES
         "${CMAKE_CURRENT_SOURCE_DIR}/../Core/tests/TestMain.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/EngineAllocationCounters.cpp"
@@ -101,12 +90,7 @@ if(MICROWORLD_ENGINE_BUILD_TESTS)
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/EngineDeferredSpawnTests.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/EngineInlineTypesTests.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/EngineHostTests.cpp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/tests/EngineNetHostTests.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/EngineGarbageCollectionTests.cpp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/tests/EngineMessageCodecTests.cpp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/tests/EngineMessageRouterTests.cpp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/tests/EngineMessageChannelTests.cpp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/tests/EngineReliableChannelTests.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/EngineSystemSetTests.cpp"
     )
 
@@ -124,7 +108,7 @@ if(MICROWORLD_ENGINE_BUILD_TESTS)
         target_include_directories(microworld_engine_tests PRIVATE
             "${CMAKE_CURRENT_SOURCE_DIR}/../Core/tests"
         )
-        target_link_libraries(microworld_engine_tests PRIVATE MicroWorld::Engine MicroWorld::Net)
+        target_link_libraries(microworld_engine_tests PRIVATE MicroWorld::Engine)
         microworld_engine_enable_strict_portable_options(microworld_engine_tests)
         microworld_engine_disable_exceptions_and_rtti(
             "${MICROWORLD_ENGINE_TEST_SOURCES}"

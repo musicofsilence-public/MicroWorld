@@ -2,6 +2,7 @@
 
 #include <MicroWorld/Containers/Span.h>
 #include <MicroWorld/Delegates/Delegate.h>
+#include <MicroWorld/EngineSystem.h>
 #include <MicroWorld/Engine/Actor.h>
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Engine/EngineResult.h>
@@ -70,6 +71,9 @@ constexpr std::uint8_t AppChannel = 1;
 /** Stable type id for the actor a server spawns in response to a client message. */
 constexpr MicroWorld::FTypeId NetSpawnedActorTypeId{0x00070001u};
 
+/** Stable type id for the actor that observes the net host on both world lifecycle boundaries. */
+constexpr MicroWorld::FTypeId NetHostLifecycleActorTypeId{0x00070002u};
+
 /** Records how many times each frame slot ran and their order so a test can assert the contract. */
 struct FFrameCallRecord
 {
@@ -134,6 +138,41 @@ private:
 	int& BeginCount;
 };
 
+/** Observes that the engine starts a bound host before actor BeginPlay and stops it after actor EndPlay. */
+class FNetHostLifecycleActor final : public AActor
+{
+public:
+	/** Binds the host state observations to test-owned values that outlive the managed actor. */
+	FNetHostLifecycleActor(
+		FActorComponentRegistryReference InComponents,
+		TNetHost<1, 64>& InNetHost,
+		ENetHostState& OutStateDuringBeginPlay,
+		ENetHostState& OutStateDuringEndPlay) noexcept
+		: AActor(std::move(InComponents))
+		, NetHost(InNetHost)
+		, StateDuringBeginPlay(OutStateDuringBeginPlay)
+		, StateDuringEndPlay(OutStateDuringEndPlay)
+	{
+	}
+
+protected:
+	/** Captures the host state at the world start boundary. */
+	void BeginPlay() noexcept override { StateDuringBeginPlay = NetHost.GetState(); }
+
+	/** Captures the host state before the engine gives the adapter its play-end turn. */
+	void EndPlay() noexcept override { StateDuringEndPlay = NetHost.GetState(); }
+
+private:
+	/** The caller-owned host whose lifecycle the engine adapter drives. */
+	TNetHost<1, 64>& NetHost;
+
+	/** Receives the host state observed while this actor's BeginPlay runs. */
+	ENetHostState& StateDuringBeginPlay;
+
+	/** Receives the host state observed while this actor's EndPlay runs. */
+	ENetHostState& StateDuringEndPlay;
+};
+
 /** Everything a server message handler needs to spawn one actor in the server host's world. */
 struct FServerSpawnContext
 {
@@ -161,6 +200,46 @@ FNetHostConfig MakeConfig() noexcept
 }
 
 } // namespace
+
+/** Proves TEngine starts its bound host before world BeginPlay and stops it only after world EndPlay. */
+MW_TEST_CASE(EngineNetHost_BeginPlayStartsHostBeforeWorldAndEndPlayStopsHostAfterWorld)
+{
+	THostLoopback<2, 8, 64> Network;
+	TNetHost<1, 64> NetHost(Network.Port(0));
+	TNetHostSystem<TNetHost<1, 64>> NetSystem{NetHost};
+	FHost Host{FGarbageCollectionBudget{1, 4, 8}, NetSystem};
+	FActorComponentRegistry<0> ActorComponents;
+	ENetHostState StateDuringBeginPlay = ENetHostState::Idle;
+	ENetHostState StateDuringEndPlay = ENetHostState::Idle;
+	const FNetHostConfig Config = MakeConfig();
+
+	const ENetResult ConfigureResult = NetHost.Configure(ENetMode::DedicatedServer, Config);
+	const EObjectResult RegisterResult = Host.RegisterClass<FNetHostLifecycleActor>(NetHostLifecycleActorTypeId, "NetHostLifecycleActor");
+	const TObjectPtr<UWorld> World = Host.CreateWorld();
+	UWorld* const WorldInstance = World.Get();
+	const TObjectCreationResult<FNetHostLifecycleActor> ActorCreation = Host.CreateObject<FNetHostLifecycleActor>(
+		NetHostLifecycleActorTypeId, ActorComponents.MakeReference(), NetHost, StateDuringBeginPlay, StateDuringEndPlay);
+	const EEngineResult ActorRegistration =
+		WorldInstance == nullptr ? EEngineResult::InvalidReference : WorldInstance->RegisterActor(TObjectPtr<AActor>{ActorCreation.Object});
+	const ENetHostState StateBeforeBeginPlay = NetHost.GetState();
+	const ERuntimeResult BeginResult = Host.BeginPlay(123);
+	const ENetHostState StateAfterBeginPlay = NetHost.GetState();
+	const ERuntimeResult EndResult = Host.EndPlay();
+	const ENetHostState StateAfterEndPlay = NetHost.GetState();
+
+	MW_EXPECT_EQ(Test, ENetResult::Success, ConfigureResult, "The server host must accept its configuration before engine BeginPlay");
+	MW_EXPECT_EQ(Test, EObjectResult::Success, RegisterResult, "The engine must register the lifecycle observer actor type");
+	MW_EXPECT_TRUE(Test, WorldInstance != nullptr, "The engine must root a world before registering the observer actor");
+	MW_EXPECT_EQ(Test, EObjectResult::Success, ActorCreation.Result, "The engine must create the lifecycle observer actor");
+	MW_EXPECT_EQ(Test, EEngineResult::Success, ActorRegistration, "The world must register the lifecycle observer actor");
+	MW_EXPECT_EQ(Test, ENetHostState::Idle, StateBeforeBeginPlay, "A configured host must stay idle before the engine lifecycle begins");
+	MW_EXPECT_EQ(Test, ERuntimeResult::Success, BeginResult, "Engine BeginPlay must complete at the supplied canonical time");
+	MW_EXPECT_EQ(Test, ENetHostState::Listening, StateDuringBeginPlay, "The host must listen before any world actor receives BeginPlay");
+	MW_EXPECT_EQ(Test, ENetHostState::Listening, StateAfterBeginPlay, "The bound host must remain active after world BeginPlay completes");
+	MW_EXPECT_EQ(Test, ERuntimeResult::Success, EndResult, "Engine EndPlay must complete after ending the rooted world");
+	MW_EXPECT_EQ(Test, ENetHostState::Listening, StateDuringEndPlay, "The host must remain active while world actors receive EndPlay");
+	MW_EXPECT_EQ(Test, ENetHostState::Idle, StateAfterEndPlay, "The engine must stop the host after world EndPlay completes");
+}
 
 /** Proves a bound network frame's inbound slot runs before its outbound slot on every accepted tick, and neither runs on a rejected one. */
 MW_TEST_CASE(EngineHostTickDrivesBoundSystemPreAdvanceThenPostAdvance)
@@ -235,8 +314,6 @@ MW_TEST_CASE(EngineNetHostClientMessageSpawnsActorOnServerWorld)
 	ClientConfig.ServerAddress = MakeLoopbackAddress(0);
 	(void)ServerNet.Configure(ENetMode::DedicatedServer, MakeConfig());
 	(void)ClientNet.Configure(ENetMode::Client, ClientConfig);
-	(void)ServerNet.Start(0);
-	(void)ClientNet.Start(0);
 
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, ServerHost.BeginPlay(0), "The server world begins play at the baseline");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, ClientHost.BeginPlay(0), "The client world begins play at the baseline");

@@ -2,7 +2,7 @@
 #include "TestSupport.h"
 
 #include <MicroWorld/Containers/Span.h>
-#include <MicroWorld/Engine/Message.h>
+#include <MicroWorld/Messaging/Message.h>
 
 #include <array>
 #include <cstddef>

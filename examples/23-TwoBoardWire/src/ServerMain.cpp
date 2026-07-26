@@ -6,9 +6,9 @@
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Engine/EngineResult.h>
 #include <MicroWorld/Engine/InlineTypes.h>
-#include <MicroWorld/Engine/Message.h>
-#include <MicroWorld/Engine/MessageChannelBinding.h>
-#include <MicroWorld/Engine/MessageRouter.h>
+#include <MicroWorld/Messaging/Message.h>
+#include <MicroWorld/Messaging/MessageChannelBinding.h>
+#include <MicroWorld/Messaging/MessageRouter.h>
 #include <MicroWorld/Engine/EngineSystem.h>
 #include <MicroWorld/Engine/World.h>
 #include <MicroWorld/Log.h>

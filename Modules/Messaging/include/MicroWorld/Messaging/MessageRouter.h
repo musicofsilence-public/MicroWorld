@@ -1,7 +1,7 @@
 #pragma once
 
-#include <MicroWorld/Engine/Message.h>
-#include <MicroWorld/Engine/EngineSystem.h>
+#include <MicroWorld/Messaging/Message.h>
+#include <MicroWorld/EngineSystem.h>
 #include <MicroWorld/Time.h>
 
 #include <cstddef>

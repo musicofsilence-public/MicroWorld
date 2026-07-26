@@ -22,3 +22,6 @@ examples/*/src/NetworkConfig.h
 .idea/
 /build-engine
 /build-object
+/build-integration
+/build-integration-messaging
+/build-messaging

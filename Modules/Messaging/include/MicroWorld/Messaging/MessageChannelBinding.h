@@ -2,7 +2,7 @@
 
 #include <MicroWorld/Containers/Span.h>
 #include <MicroWorld/Delegates/Delegate.h>
-#include <MicroWorld/Engine/Message.h>
+#include <MicroWorld/Messaging/Message.h>
 
 #include <cstddef>
 #include <cstdint>

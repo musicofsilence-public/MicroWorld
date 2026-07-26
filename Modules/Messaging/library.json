@@ -1,0 +1,19 @@
+{
+  "name": "MicroWorldMessaging",
+  "version": "0.3.0",
+  "description": "MicroWorld Messaging: bounded, transport-agnostic actor message routing and delivery primitives",
+  "keywords": [
+    "embedded",
+    "messaging",
+    "actors",
+    "routing"
+  ],
+  "license": "MIT",
+  "frameworks": "*",
+  "platforms": "*",
+  "build": {
+    "includeDir": "include",
+    "srcDir": "src",
+    "libArchive": true
+  }
+}

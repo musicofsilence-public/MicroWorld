@@ -4,14 +4,15 @@ project(MicroWorld VERSION 0.3.0 LANGUAGES CXX)
 
 option(MICROWORLD_BUILD_TESTS "Build MicroWorld host tests" ON)
 
-# Core owns the engine's primitive layer: lifecycle, tick, application, and the
-# explicit memory resources, bounded containers, and fixed delegates that every
-# higher module reuses. The World/Actor/Component and Network sources were
-# retired in favor of the managed Engine layer (see MICROWORLD_ROADMAP.md Phase
-# 1); Memory was folded in here because it was one translation unit plus
-# header-only templates with no boundary of its own to protect.
+# Core owns the engine's primitive layer: lifecycle, tick, and the explicit
+# memory resources, bounded containers, and fixed delegates that every higher
+# module reuses. The World/Actor/Component and Network sources were retired in
+# favor of the managed Engine layer (see MICROWORLD_ROADMAP.md Phase 1); Memory
+# was folded in here because it was one translation unit plus header-only
+# templates with no boundary of its own to protect; the program-entry
+# Application/Runner types moved to the Application package, which owns an
+# engine and therefore cannot live in Core.
 set(MICROWORLD_CORE_SOURCES
-    src/Application.cpp
     src/Log.cpp
     src/MemoryResource.cpp
     src/TickFunction.cpp
@@ -57,8 +58,6 @@ if(MICROWORLD_BUILD_TESTS)
         tests/CoreAllocationCounters.cpp
         tests/LogTests.cpp
         tests/TickFunctionTests.cpp
-        tests/ApplicationTests.cpp
-        tests/ApplicationRunnerTests.cpp
         tests/MemoryTests.cpp
         tests/DelegateTests.cpp
         tests/TimerManagerTests.cpp

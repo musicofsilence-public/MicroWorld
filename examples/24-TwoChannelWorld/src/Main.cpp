@@ -4,9 +4,8 @@
 // Role is chosen at build time: server (=1) or client (=0). Both roles always
 // compile -- ServerMain.cpp and ClientMain.cpp are always built -- and this
 // define only selects which one runs; never build_src_filter, which ESP-IDF
-// ignores. This is the first example to run one world's TMessageRouter over TWO
-// simultaneous physical links (WiFi UDP telemetry + a UART command wire) behind
-// one TEngineSystemSet<3>.
+// ignores. This example runs one world's router over TWO simultaneous physical
+// links (WiFi UDP telemetry + a UART command wire) behind one TNetSystem.
 #ifndef MICROWORLD_EXAMPLE_SERVER
 #error "Define MICROWORLD_EXAMPLE_SERVER=1 (server) or 0 (client) via the build environment."
 #endif

@@ -39,6 +39,16 @@ struct FDeferredSpawnState final
 	std::uint32_t BeginCount{0};
 };
 
+/** Records BeginPlay order so composition-time and registered actor order stays externally observable. */
+struct FDeferredSpawnOrderState final
+{
+	/** Holds the actor labels in the order the World began them. */
+	std::array<std::uint32_t, 2> BeginOrder{};
+
+	/** Identifies the next observation slot in the fixed test sequence. */
+	std::size_t BeginCount{0};
+};
+
 /** Deliberately exceeds the configured inline factory budget without side effects. */
 struct FDeferredLargeCapture final
 {
@@ -126,6 +136,36 @@ protected:
 private:
 	/** Belongs to the test and proves the world did not call BeginPlay at queue time. */
 	FDeferredSpawnState* State{nullptr};
+};
+
+/** Records a caller-selected label when World dispatches this actor's BeginPlay. */
+class FOrderedDeferredActor final : public AActor
+{
+public:
+	/** Retains isolated component storage, the shared order sink, and this actor's expected label. */
+	FOrderedDeferredActor(
+		MicroWorld::FActorComponentRegistryReference InComponents, FDeferredSpawnOrderState* const InState, const std::uint32_t InLabel) noexcept
+		: AActor(std::move(InComponents)), State(InState), Label(InLabel)
+	{
+	}
+
+protected:
+	/** Makes the public actor lifecycle order directly observable without reading World internals. */
+	void BeginPlay() noexcept override
+	{
+		if (State->BeginCount < State->BeginOrder.size())
+		{
+			State->BeginOrder[State->BeginCount] = Label;
+		}
+		++State->BeginCount;
+	}
+
+private:
+	/** Belongs to the test and records dispatch order across registered and queued actors. */
+	FDeferredSpawnOrderState* State{nullptr};
+
+	/** Distinguishes the actor in the compact fixed-size observation sequence. */
+	std::uint32_t Label{0};
 };
 
 /** Accepts the large capture only so the request tests factory layout rather than constructor validity. */
@@ -240,6 +280,122 @@ MW_TEST_CASE(EngineDeferredSpawnReportsQueuedThenSpawnedAtBarrier)
 	MW_EXPECT_EQ(Test, EActorSpawnState::Spawned, SpawnedStatus.State, "The handle becomes spawned after world publication");
 	MW_EXPECT_TRUE(Test, SpawnedStatus.Actor.Get() != nullptr, "A spawned handle resolves to the live world-owned actor");
 	MW_EXPECT_EQ(Test, std::uint32_t{1}, State.BeginCount, "The actor begins exactly once at the barrier");
+}
+
+/** Proves a typed request accepted during composition begins when the World enters play. */
+MW_TEST_CASE(EngineDeferredSpawnBeforeBeginPlayStartsWhenPlayBegins)
+{
+	FDeferredSpawnHost Host{FGarbageCollectionBudget{8, 8, 8}};
+	const auto World = Host.CreateWorld();
+	FActorComponentRegistry<0> Components;
+	FDeferredSpawnState State{};
+
+	MW_EXPECT_TRUE(Test, World.Get() != nullptr, "The composition root creates a configured world");
+	const auto Request = Host.GetWorld().SpawnActor<FDeferredActor>(Components.MakeReference(), &State);
+	MW_EXPECT_EQ(Test, EActorSpawnRequestResult::Queued, Request.Result, "A typed request is admitted before play begins");
+	MW_EXPECT_EQ(
+		Test, EActorSpawnState::Queued, Host.GetWorld().GetSpawnStatus(Request.Handle).State, "The pre-play request remains queued before BeginPlay");
+	MW_EXPECT_EQ(Test, std::uint32_t{0}, State.BeginCount, "Queue admission does not begin the actor during composition");
+
+	MW_EXPECT_EQ(Test, ERuntimeResult::Success, Host.BeginPlay(0), "BeginPlay drains the pre-play typed request");
+	MW_EXPECT_EQ(
+		Test,
+		EActorSpawnState::Spawned,
+		Host.GetWorld().GetSpawnStatus(Request.Handle).State,
+		"The pre-play request becomes a live actor at BeginPlay");
+	MW_EXPECT_EQ(Test, std::uint32_t{1}, State.BeginCount, "The pre-play actor begins exactly once");
+}
+
+/** Proves pre-play typed requests preserve their FIFO queue order when BeginPlay starts them. */
+MW_TEST_CASE(EngineDeferredSpawnBeforeBeginPlayStartsInQueueOrder)
+{
+	FDeferredSpawnHost Host{FGarbageCollectionBudget{8, 8, 8}};
+	const auto World = Host.CreateWorld();
+	FActorComponentRegistry<0> FirstComponents;
+	FActorComponentRegistry<0> SecondComponents;
+	FDeferredSpawnOrderState State{};
+
+	MW_EXPECT_TRUE(Test, World.Get() != nullptr, "The queue-order test creates a configured world");
+	const auto FirstRequest = Host.GetWorld().SpawnActor<FOrderedDeferredActor>(FirstComponents.MakeReference(), &State, 1);
+	const auto SecondRequest = Host.GetWorld().SpawnActor<FOrderedDeferredActor>(SecondComponents.MakeReference(), &State, 2);
+	MW_EXPECT_EQ(Test, EActorSpawnRequestResult::Queued, FirstRequest.Result, "The first pre-play typed request is queued");
+	MW_EXPECT_EQ(Test, EActorSpawnRequestResult::Queued, SecondRequest.Result, "The second pre-play typed request is queued");
+
+	MW_EXPECT_EQ(Test, ERuntimeResult::Success, Host.BeginPlay(0), "BeginPlay starts both pre-play typed actors");
+	MW_EXPECT_EQ(Test, std::size_t{2}, State.BeginCount, "Both queued actors begin once");
+	MW_EXPECT_EQ(Test, std::uint32_t{1}, State.BeginOrder[0], "The first queued actor begins first");
+	MW_EXPECT_EQ(Test, std::uint32_t{2}, State.BeginOrder[1], "The second queued actor begins second");
+	MW_EXPECT_EQ(Test, EActorSpawnState::Spawned, Host.GetWorld().GetSpawnStatus(FirstRequest.Handle).State, "The first queued actor becomes live");
+	MW_EXPECT_EQ(Test, EActorSpawnState::Spawned, Host.GetWorld().GetSpawnStatus(SecondRequest.Handle).State, "The second queued actor becomes live");
+}
+
+/** Proves registered actors retain their established priority over composition-time typed requests. */
+MW_TEST_CASE(EngineDeferredSpawnBeforeBeginPlayBeginsAfterRegisteredActors)
+{
+	FDeferredSpawnHost Host{FGarbageCollectionBudget{8, 8, 8}};
+	FActorComponentRegistry<0> RegisteredComponents;
+	FActorComponentRegistry<0> QueuedComponents;
+	FDeferredSpawnOrderState State{};
+	constexpr MicroWorld::FTypeId OrderedDeferredActorTypeId{0x00070002u};
+
+	const EObjectResult RegistrationResult = Host.RegisterClass<FOrderedDeferredActor>(OrderedDeferredActorTypeId, "OrderedDeferredActor");
+	const auto World = Host.CreateWorld();
+	const auto RegisteredActor =
+		Host.CreateObject<FOrderedDeferredActor>(OrderedDeferredActorTypeId, RegisteredComponents.MakeReference(), &State, 1);
+	const MicroWorld::EEngineResult RegisterActorResult = World.Get()->RegisterActor(MicroWorld::TObjectPtr<AActor>{RegisteredActor.Object});
+	const auto QueuedRequest = Host.GetWorld().SpawnActor<FOrderedDeferredActor>(QueuedComponents.MakeReference(), &State, 2);
+
+	MW_EXPECT_EQ(Test, EObjectResult::Success, RegistrationResult, "The registered actor class is available before world creation");
+	MW_EXPECT_TRUE(Test, World.Get() != nullptr, "The ordering test creates a configured world");
+	MW_EXPECT_EQ(Test, EObjectResult::Success, RegisteredActor.Result, "The registered actor constructs before play");
+	MW_EXPECT_EQ(Test, MicroWorld::EEngineResult::Success, RegisterActorResult, "The registered actor attaches before the typed request");
+	MW_EXPECT_EQ(Test, EActorSpawnRequestResult::Queued, QueuedRequest.Result, "The composition-time typed request is queued");
+
+	MW_EXPECT_EQ(Test, ERuntimeResult::Success, Host.BeginPlay(0), "BeginPlay starts registered and queued actors");
+	MW_EXPECT_EQ(Test, std::size_t{2}, State.BeginCount, "Both actors begin exactly once");
+	MW_EXPECT_EQ(Test, std::uint32_t{1}, State.BeginOrder[0], "The registered actor begins before queued actors");
+	MW_EXPECT_EQ(Test, std::uint32_t{2}, State.BeginOrder[1], "The queued actor begins after the registered actor");
+}
+
+/** Proves composition-time requests reserve the same fixed actor capacity before they are constructed. */
+MW_TEST_CASE(EngineDeferredSpawnBeforeBeginPlayRejectsCapacityExhaustion)
+{
+	FCombinedSpawnCapacityHost Host{FGarbageCollectionBudget{8, 8, 8}};
+	const auto World = Host.CreateWorld();
+	FActorComponentRegistry<0> FirstComponents;
+	FActorComponentRegistry<0> SecondComponents;
+	FDeferredSpawnState State{};
+
+	MW_EXPECT_TRUE(Test, World.Get() != nullptr, "The capacity test creates a configured world");
+	const auto FirstRequest = Host.GetWorld().SpawnActor<FDeferredActor>(FirstComponents.MakeReference(), &State);
+	const auto SecondRequest = Host.GetWorld().SpawnActor<FDeferredActor>(SecondComponents.MakeReference(), &State);
+	MW_EXPECT_EQ(Test, EActorSpawnRequestResult::Queued, FirstRequest.Result, "The only actor slot admits the first pre-play request");
+	MW_EXPECT_EQ(
+		Test, EActorSpawnRequestResult::CapacityExceeded, SecondRequest.Result, "The second pre-play request is rejected at fixed actor capacity");
+	MW_EXPECT_TRUE(Test, !SecondRequest.Handle.IsValid(), "A capacity-rejected request returns no completion handle");
+
+	MW_EXPECT_EQ(Test, ERuntimeResult::Success, Host.BeginPlay(0), "The admitted pre-play request still begins successfully");
+	MW_EXPECT_EQ(
+		Test, EActorSpawnState::Spawned, Host.GetWorld().GetSpawnStatus(FirstRequest.Handle).State, "The admitted request becomes a live actor");
+	MW_EXPECT_EQ(Test, std::uint32_t{1}, State.BeginCount, "Only the admitted actor receives BeginPlay");
+}
+
+/** Proves a terminal world never reopens typed actor admission after it has ended. */
+MW_TEST_CASE(EngineDeferredSpawnRejectsEndedWorld)
+{
+	FDeferredSpawnHost Host{FGarbageCollectionBudget{8, 8, 8}};
+	const auto World = Host.CreateWorld();
+	FActorComponentRegistry<0> Components;
+	FDeferredSpawnState State{};
+
+	MW_EXPECT_TRUE(Test, World.Get() != nullptr, "The ended-world test creates a configured world");
+	MW_EXPECT_EQ(Test, ERuntimeResult::Success, Host.BeginPlay(0), "The world enters play before ending");
+	MW_EXPECT_EQ(Test, ERuntimeResult::Success, Host.EndPlay(), "The world completes its terminal lifecycle transition");
+
+	const auto Request = Host.GetWorld().SpawnActor<FDeferredActor>(Components.MakeReference(), &State);
+	MW_EXPECT_EQ(Test, EActorSpawnRequestResult::LifecycleLocked, Request.Result, "An ended world rejects typed spawn requests");
+	MW_EXPECT_TRUE(Test, !Request.Handle.IsValid(), "An ended-world rejection returns no completion handle");
+	MW_EXPECT_EQ(Test, std::uint32_t{0}, State.BeginCount, "An ended world cannot dispatch another actor begin");
 }
 
 /** Proves factory byte preflight rejects before consuming an actor-storage reference or reserving a request. */

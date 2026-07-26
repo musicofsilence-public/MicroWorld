@@ -4,7 +4,7 @@
 #include <MicroWorld/Engine/ActorComponent.h>
 #include <MicroWorld/Engine/EngineClassIds.h>
 #include <MicroWorld/Engine/EngineStorage.h>
-#include <MicroWorld/Engine/EngineSystem.h>
+#include <MicroWorld/EngineSystem.h>
 #include <MicroWorld/Engine/World.h>
 #include <MicroWorld/Object/ClassDescriptor.h>
 #include <MicroWorld/Object/GarbageCollector.h>
@@ -39,13 +39,13 @@ public:
 	/** Defaulted virtual so a TEngine destructs through this interface. */
 	virtual ~IEngine() noexcept = default;
 
-	/** Starts the world at one canonical time and records it as the tick baseline. */
+	/** Starts the bound system then the world at one canonical time and records it as the tick baseline. */
 	virtual ERuntimeResult BeginPlay(TimePointMilliseconds InNowMilliseconds) noexcept = 0;
 
 	/** Runs one canonical frame in the documented fixed order and returns the world's advance/apply result. */
 	virtual ERuntimeResult Tick(TimePointMilliseconds InNowMilliseconds) noexcept = 0;
 
-	/** Ends the world in reverse registration order; idempotent after success. */
+	/** Ends the world in reverse registration order, then ends the bound system; idempotent after success. */
 	virtual ERuntimeResult EndPlay() noexcept = 0;
 
 	/** Returns the rooted world; only valid after CreateWorld has succeeded. */
@@ -102,12 +102,15 @@ struct FDefaultEngineTraits
  * Owns and wires every fixed-capacity runtime subsystem — class registry, object
  * store, garbage collector, world actor registry, and timer manager — behind one
  * canonical per-frame order, sizing all storage at compile time and never
- * allocating; an optional caller-owned engine system bound at construction makes
- * the per-frame system turns live.
+ * allocating; an optional caller-owned engine system bound at construction
+ * makes
+ * its lifecycle and per-frame system turns live.
  *
  * TTraits supplies the eight compile-time capacities as static constexpr members
+ *
  * (see FDefaultEngineTraits) and defaults to FDefaultEngineTraits, so a consumer
- * whose needs match the ESP32-S3 starting point writes TEngine<> with no args;
+ * whose needs match the ESP32-S3 starting point writes TEngine<>
+ * with no args;
  * deriving IEngine lets an application hold and drive the engine without naming
  * its traits.
  */
@@ -153,9 +156,10 @@ public:
 
 	/**
 	 * Builds the engine exactly as the budget-only constructor does, then binds a
-	 * caller-owned engine system so Tick drives its pre-advance turn first (step 1)
-	 * and its post-advance turn last (step 7). The system and whatever stands behind
-	 * it must outlive this engine.
+	 * caller-owned engine system so BeginPlay and EndPlay drive its lifecycle turns,
+	 * while Tick drives its pre-advance turn first (step 1) and
+	 * post-advance turn
+	 * last (step 7). The system and whatever stands behind it must outlive this engine.
 	 */
 	explicit TEngine(
 		const FGarbageCollectionBudget InCollectionBudget,
@@ -279,8 +283,9 @@ public:
 	FTimerManager& GetTimerManager() noexcept { return Timers; }
 
 	/**
-	 * Starts the world at one canonical time and records it as the tick baseline.
-	 * Returns InvalidLifecycle if no world has been created.
+	 * Starts the bound system then the world at one canonical time and records it as
+	 * the tick baseline. Returns InvalidLifecycle if no world has
+	 * been created.
 	 */
 	ERuntimeResult BeginPlay(const TimePointMilliseconds InNowMilliseconds) noexcept override
 	{
@@ -291,6 +296,7 @@ public:
 		}
 
 		LastTickMilliseconds = InNowMilliseconds;
+		BeginPlaySystem(InNowMilliseconds);
 		return World->BeginPlay(InNowMilliseconds);
 	}
 
@@ -332,7 +338,7 @@ public:
 		return FrameResult;
 	}
 
-	/** Ends the world in reverse registration order; idempotent after success. */
+	/** Ends the world in reverse registration order, then ends the bound system; idempotent after success. */
 	ERuntimeResult EndPlay() noexcept override
 	{
 		UWorld* const World = WorldRoot.Get();
@@ -341,7 +347,9 @@ public:
 			return ERuntimeResult::InvalidLifecycle;
 		}
 
-		return World->EndPlay();
+		const ERuntimeResult EndResult = World->EndPlay();
+		EndPlaySystem();
+		return EndResult;
 	}
 
 private:
@@ -370,6 +378,15 @@ private:
 			RootStorage.data(),
 			static_cast<std::uint32_t>(MaxRoots),
 		};
+	}
+
+	/** Starts the bound system before the world's actors receive their BeginPlay turn. */
+	void BeginPlaySystem(const TimePointMilliseconds InNowMilliseconds) noexcept
+	{
+		if (System != nullptr)
+		{
+			System->BeginPlay(InNowMilliseconds);
+		}
 	}
 
 	/** Frame step 1: drains inbound traffic, dispatches messages, and ages peers when a network frame is bound. */
@@ -411,13 +428,22 @@ private:
 		}
 	}
 
+	/** Ends the bound system after the world has delivered all actor EndPlay turns. */
+	void EndPlaySystem() noexcept
+	{
+		if (System != nullptr)
+		{
+			System->EndPlay();
+		}
+	}
+
 	/** Bounds the per-tick garbage-collection slice supplied at construction. */
 	FGarbageCollectionBudget GarbageCollectionBudget;
 
 	/** Bounds the per-tick store slots inspected by the destruction barrier. */
 	std::uint32_t FrameReclamationBudget;
 
-	/** Optional caller-owned engine system advanced first and last each tick; null when standalone. */
+	/** Optional caller-owned system started before and stopped after the world, then advanced first and last each tick. */
 	IEngineSystem* System{nullptr};
 
 	/** Records the last accepted tick time so a rolled-back clock is rejected. */

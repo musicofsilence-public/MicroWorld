@@ -26,9 +26,10 @@ class FReferenceCollector;
  * The smallest managed world anchored on UObject.
  *
  * The application creates one UWorld (or a user-derived class) inside an
- * FObjectStore, registers zero or more AActor instances before BeginPlay, then
- * roots the world with one TStrongObjectPtr<UWorld>. UWorld traces its actors;
- * it does not tick on its own.
+ * FObjectStore, registers or queues zero or more AActor instances before
+ * BeginPlay, then roots the world with one TStrongObjectPtr<UWorld>.
+ * UWorld
+ * traces its actors; it does not tick on its own.
  */
 class UWorld : public UObject
 {
@@ -71,7 +72,7 @@ public:
 	 */
 	EEngineResult RegisterActor(TObjectPtr<AActor> InActor) noexcept;
 
-	/** Starts every registered actor in registration order from one canonical time. */
+	/** Starts registered actors, then pre-play queued actors, from one canonical time. */
 	ERuntimeResult BeginPlay(TimePointMilliseconds InNowMilliseconds) noexcept;
 
 	/** Advances every registered actor once after validating monotonic world time. */
@@ -93,9 +94,14 @@ public:
 	/**
 	 * Captures a typed actor factory for safe construction at the next world barrier.
 	 *
-	 * No actor or argument capture is created until
-	 * lifecycle, collection, capacity,
+	 * A request accepted before BeginPlay is
+	 * constructed and begun by BeginPlay;
+	 * a request accepted during play waits for the next frame barrier.
+	 *
+	 * No actor or argument
+	 * capture is created until lifecycle, collection, capacity,
 	 * and inline-layout preflight succeeds, so calls from actor callbacks are safe.
+
 	 */
 	template<typename TActor, typename... TArguments>
 	[[nodiscard]] FActorSpawnRequest SpawnActor(TArguments&&... InArguments) noexcept

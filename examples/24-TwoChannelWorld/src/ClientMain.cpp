@@ -6,13 +6,10 @@
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Engine/EngineResult.h>
 #include <MicroWorld/Engine/InlineTypes.h>
-#include <MicroWorld/Engine/Message.h>
-#include <MicroWorld/Engine/MessageChannelBinding.h>
-#include <MicroWorld/Engine/MessageRouter.h>
-#include <MicroWorld/Engine/EngineSystem.h>
+#include <MicroWorld/Messaging/Message.h>
 #include <MicroWorld/Engine/World.h>
+#include <MicroWorld/Integration/NetSystem.h>
 #include <MicroWorld/Log.h>
-#include <MicroWorld/Net/NetHost.h>
 #include <MicroWorld/Net/NetResult.h>
 #include <MicroWorld/Net/UdpAddressCodec.h>
 #include <MicroWorld/Object/ClassDescriptor.h>
@@ -127,9 +124,8 @@ private:
 } // namespace
 
 /**
- * Client board: joins the WiFi SoftAP and runs FSensorActor over one TMessageRouter wired to two
- * nets (UDP telemetry, UART commands) through two TMessageChannelBinding, with the engine holding
- * both net frames and the router behind one TEngineSystemSet<3>.
+ * Client board: joins the WiFi SoftAP and runs FSensorActor over the shared router owned by one
+ * TNetSystem. Its two client drivers carry UDP telemetry and UART commands.
  */
 void RunClient() noexcept
 {
@@ -159,36 +155,28 @@ void RunClient() noexcept
 		return;
 	}
 
-	// All composition objects are static (the ESP32-S3 stack lesson, §2.2).
-	static FTelemetryNet TelemetryNet{TelemetryDriver};
-	static FCommandNet CommandNet{CommandDriver};
-	static FWorldRouter Router;
-	static FTelemetryBinding TelemetryWire{TelemetryNet, TelemetryWireChannelByte, TelemetryChannelId, EChannelSendTarget::Server, Router};
-	static FCommandBinding CommandWire{CommandNet, CommandsWireChannelByte, CommandsChannelId, EChannelSendTarget::Server, Router};
-	static FTelemetryFrame TelemetryFrame{TelemetryNet};
-	static FCommandFrame CommandFrame{CommandNet};
+	FNetHostConfig TelemetryConfig = MakeHostConfig();
+	TelemetryConfig.ServerAddress = MakeUdpAddress(ServerIpv4[0], ServerIpv4[1], ServerIpv4[2], ServerIpv4[3], ServerPort);
+	FNetHostConfig CommandConfig = MakeHostConfig();
+	CommandConfig.ServerAddress = MakeUartAddress(ServerNodeId);
 
-	// D3 frame-set order: nets first (each delivers its own inbound traffic), router last (it then
-	// dispatches what the nets just delivered) -- see TwoChannelWorldShared.h's FWorldFrameSet alias.
-	static FWorldFrameSet Frames;
-	if (Frames.Add(TelemetryFrame) != EEngineResult::Success || Frames.Add(CommandFrame) != EEngineResult::Success
-		|| Frames.Add(Router) != EEngineResult::Success)
+	// TNetSystem owns all hosts, bindings, and the shared router; the engine starts the hosts at BeginPlay.
+	static FWorldNetSystem NetSystem;
+	const FNetDriverHandle TelemetryHandle = NetSystem.AddNetDriver(TelemetryDriver, ENetMode::Client, TelemetryConfig);
+	const FNetDriverHandle CommandHandle = NetSystem.AddNetDriver(CommandDriver, ENetMode::Client, CommandConfig);
+	if (!TelemetryHandle.IsValid() || !CommandHandle.IsValid())
 	{
-		MW_LOG(Error, "ex24", "client frame set rejected a frame; halting");
+		MW_LOG(Error, "ex24", "client net system rejected a driver; halting");
 		return;
 	}
-	static FWorldEngine Engine{FGarbageCollectionBudget{1, 4, 8}, Frames};
-
-	if (!TelemetryWire.IsAttached() || !CommandWire.IsAttached())
+	const FChannelHandle TelemetryChannel = NetSystem.AddChannel(TelemetryHandle, TelemetryChannelId, EChannelReliability::BestEffort);
+	const FChannelHandle CommandsChannel = NetSystem.AddChannel(CommandHandle, CommandsChannelId, EChannelReliability::BestEffort);
+	if (!TelemetryChannel.IsValid() || !CommandsChannel.IsValid())
 	{
-		MW_LOG(Error, "ex24", "client binding failed to attach; halting");
+		MW_LOG(Error, "ex24", "client net system rejected a channel; halting");
 		return;
 	}
-	if (Router.AddChannel(TelemetryWire) != EMessageResult::Success || Router.AddChannel(CommandWire) != EMessageResult::Success)
-	{
-		MW_LOG(Error, "ex24", "client router rejected a channel; halting");
-		return;
-	}
+	static FWorldEngine Engine{FGarbageCollectionBudget{1, 4, 8}, NetSystem};
 
 	if (Engine.RegisterClass<FSensorActor>(SensorActorTypeId, "SensorActor") != EObjectResult::Success)
 	{
@@ -197,7 +185,7 @@ void RunClient() noexcept
 	}
 
 	const TObjectPtr<UWorld> World = Engine.CreateWorld();
-	const TObjectPtr<FSensorActor> Sensor = Engine.CreateObject<FSensorActor>(SensorActorTypeId, Router).Object;
+	const TObjectPtr<FSensorActor> Sensor = Engine.CreateObject<FSensorActor>(SensorActorTypeId, NetSystem.GetRouter()).Object;
 	if (World.Get() == nullptr || Sensor.Get() == nullptr)
 	{
 		MW_LOG(Error, "ex24", "client world or actor creation failed; halting");
@@ -209,16 +197,6 @@ void RunClient() noexcept
 		MW_LOG(Error, "ex24", "client actor registration failed; halting");
 		return;
 	}
-
-	FNetHostConfig TelemetryConfig = MakeHostConfig();
-	TelemetryConfig.ServerAddress = MakeUdpAddress(ServerIpv4[0], ServerIpv4[1], ServerIpv4[2], ServerIpv4[3], ServerPort);
-	(void)TelemetryNet.Configure(ENetMode::Client, TelemetryConfig);
-	(void)TelemetryNet.Start(GTimeSource.Now());
-
-	FNetHostConfig CommandConfig = MakeHostConfig();
-	CommandConfig.ServerAddress = MakeUartAddress(ServerNodeId);
-	(void)CommandNet.Configure(ENetMode::Client, CommandConfig);
-	(void)CommandNet.Start(GTimeSource.Now());
 
 	const TimePointMilliseconds BootTime = GTimeSource.Now();
 	if (Engine.BeginPlay(BootTime) != ERuntimeResult::Success)

@@ -11,8 +11,8 @@ from pathlib import Path
 
 
 # Each module may include itself plus only these inward portable dependencies.
-# Serialization and Integration are intentionally absent: those packages do not
-# exist and predeclaring them would authorize package paths that are not built.
+# Serialization is intentionally absent: that package does not exist and
+# predeclaring it would authorize package paths that are not built.
 # Memory is folded into Core: its former public segments (Containers, Delegates,
 # Memory) resolve to Core, and no Memory package edge remains.
 MODULE_DEPENDENCIES = {
@@ -20,6 +20,9 @@ MODULE_DEPENDENCIES = {
     "Object": {"Core"},
     "Engine": {"Core", "Object"},
     "Net": {"Core"},
+    "Messaging": {"Core"},
+    "Application": {"Core", "Object", "Engine"},
+    "Integration": {"Core", "Object", "Messaging", "Engine", "Net"},
 }
 
 # Platform-facing APIs are intentionally absent: portable packages may use only

@@ -19,12 +19,13 @@ PROFILE_MODULES = {
     "Core+Net": {"Core", "Net"},
     "Managed": {"Core", "Object", "Engine"},
     "Managed+Net": {"Core", "Object", "Engine", "Net"},
+    "Application": {"Core", "Object", "Engine", "Application"},
 }
 
 # Markers cover planned CMake target/archive names, PlatformIO package archives,
-# public include paths, and characteristic public symbols. Serialization and
-# Integration stay listed so any accidental linkage is still detected even though
-# no active profile selects them. Memory's former markers (fmemoryresource,
+# public include paths, and characteristic public symbols. Serialization,
+# Integration, and Messaging stay listed so any accidental linkage is still
+# detected even though no active profile selects them. Memory's former markers (fmemoryresource,
 # tfixedarena, tsharedptr) are intentionally absent: those symbols now live in
 # the Core archive after the fold.
 MODULE_MARKERS = {
@@ -46,6 +47,13 @@ MODULE_MARKERS = {
         "aactor",
         "uactorcomponent",
     ),
+    "Messaging": (
+        "microworld_messaging",
+        "microworld-messaging",
+        "/microworld/messaging/",
+        "tmessagerouter",
+        "treliablechannel",
+    ),
     "Serialization": (
         "microworld_serialization",
         "microworld-serialization",
@@ -63,7 +71,14 @@ MODULE_MARKERS = {
         "microworld_integration",
         "microworld-integration",
         "/microworld/integration/",
-        "fnetenginesubsystem",
+        "tnetsystem",
+    ),
+    "Application": (
+        "microworld_application",
+        "microworld-application",
+        "/microworld/application/",
+        "fapplication",
+        "tapplicationrunner",
     ),
 }
 
@@ -93,6 +108,17 @@ NET_ARCHIVE_MARKERS = (
     "libmicroworld_net.a",
     "libmicroworld-net.a",
     "libmicroworldnet.a",
+)
+
+# Application profiles must link their separate package archive. The engine-
+# binding header alone does not prove that the Application lifecycle state
+# machine participated.
+APPLICATION_ARCHIVE_MARKERS = (
+    "microworld_application:",
+    "microworld_application.lib",
+    "libmicroworld_application.a",
+    "libmicroworld-application.a",
+    "libmicroworldapplication.a",
 )
 
 
@@ -143,6 +169,14 @@ def analyze_map(
         errors.append(
             "map does not contain the MicroWorld Net archive "
             f"({', '.join(NET_ARCHIVE_MARKERS)})"
+        )
+
+    if "Application" in selected_modules and not any(
+        marker in normalized_text for marker in APPLICATION_ARCHIVE_MARKERS
+    ):
+        errors.append(
+            "map does not contain the MicroWorld Application archive "
+            f"({', '.join(APPLICATION_ARCHIVE_MARKERS)})"
         )
 
     for module, markers in MODULE_MARKERS.items():

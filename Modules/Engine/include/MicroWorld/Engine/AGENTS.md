@@ -7,9 +7,9 @@ Inherits `../../AGENTS.md`.
 `Engine/` owns the managed-runtime contracts above Object: `UWorld` traces
 `AActor`, `AActor` traces `UActorComponent`, and `TEngineHost` wires the class
 registry, object store, garbage collector, world root, and `TTimerManager`
-behind one canonical per-tick frame order. `EngineSystem.h` defines the
-`IEngineSystem` seam so `TEngineHost` can drive an optional caller-owned
-network host without this package depending on `microworld-net`.
+behind one canonical per-tick frame order. `EngineSystem.h` provides the
+`TNetHostSystem` and `TEngineSystemSet` helpers, while Core owns the
+`IEngineSystem` seam Engine consumes without depending on `microworld-net`.
 
 ## Concepts
 

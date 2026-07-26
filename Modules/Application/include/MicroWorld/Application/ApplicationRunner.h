@@ -1,6 +1,6 @@
 #pragma once
 
-#include <MicroWorld/Application.h>
+#include <MicroWorld/Application/Application.h>
 #include <MicroWorld/RuntimeResult.h>
 #include <MicroWorld/Time.h>
 

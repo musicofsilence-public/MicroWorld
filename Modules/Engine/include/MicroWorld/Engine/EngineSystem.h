@@ -1,7 +1,7 @@
 #pragma once
 
+#include <MicroWorld/EngineSystem.h>
 #include <MicroWorld/Engine/EngineResult.h>
-#include <MicroWorld/Time.h>
 
 #include <cstddef>
 
@@ -9,37 +9,16 @@ namespace MicroWorld
 {
 
 /**
- * The contract for a system the engine ticks either side of the world's advance:
- * TEngine::Tick step 1 gives a bound system its pre-advance turn and step 7
- * gives it its post-advance turn, so a system can pump work in and out without
- * the engine naming what that work is.
+ * Adapts one caller-owned network host to IEngineSystem by forwarding lifecycle
+ * turns to Start/Stop and frame turns to PumpReceive/PumpSend,
+ * discarding each
+ * result exactly as the engine already discards timer and collector step results.
  *
- * TEngine holds only this interface, so microworld-engine never depends on
- * microworld-net; a concrete system (a network host, a message router, a reliable
- * channel) is bound by the caller through TNetHostSystem, and a null system
- * leaves both turns inert.
- */
-class IEngineSystem
-{
-public:
-	/** Defaulted virtual so a derived system adapter destructs through this interface. */
-	virtual ~IEngineSystem() noexcept = default;
-
-	/** Step 1 turn: a bound system does its pre-advance work (for a net host, drain inbound traffic, dispatch messages, age peers). */
-	virtual void PreAdvance(TimePointMilliseconds InNowMilliseconds) noexcept = 0;
-
-	/** Step 7 turn: a bound system does its post-advance work (for a net host, flush the queue and emit due heartbeats). */
-	virtual void PostAdvance(TimePointMilliseconds InNowMilliseconds) noexcept = 0;
-};
-
-/**
- * Adapts one caller-owned network host to IEngineSystem by forwarding the two
- * frame steps to its PumpReceive/PumpSend, discarding the transport result exactly
- * as the engine already discards its timer and collector step results.
- *
- * TNet is deduced at the call site, so the engine binds a network host without
+ * TNet is deduced at the call site, so the
+ * engine binds a network host without
  * naming its concrete type or including its package. The host must outlive this
- * adapter, and the adapter must outlive the TEngine it is bound to.
+ * adapter, and the adapter
+ * must outlive the TEngine it is bound to.
  */
 template<typename TNet>
 class TNetHostSystem final : public IEngineSystem
@@ -48,11 +27,17 @@ public:
 	/** Binds this adapter to one externally owned network host for its lifetime. */
 	explicit TNetHostSystem(TNet& InHost) noexcept : Host(InHost) {}
 
+	/** Opens the bound host session at the engine's canonical play-start time. */
+	void BeginPlay(const TimePointMilliseconds InNowMilliseconds) noexcept override { (void)Host.Start(InNowMilliseconds); }
+
 	/** Forwards the frame's inbound step to the bound host. */
 	void PreAdvance(const TimePointMilliseconds InNowMilliseconds) noexcept override { (void)Host.PumpReceive(InNowMilliseconds); }
 
 	/** Forwards the frame's outbound step to the bound host. */
 	void PostAdvance(const TimePointMilliseconds InNowMilliseconds) noexcept override { (void)Host.PumpSend(InNowMilliseconds); }
+
+	/** Closes the bound host session after the engine world has ended. */
+	void EndPlay() noexcept override { Host.Stop(); }
 
 private:
 	/** The externally owned network host this adapter drives; never owned here. */
@@ -60,14 +45,17 @@ private:
 };
 
 /**
- * Pumps several caller-owned network frames as one bound IEngineSystem (roadmap D3): dispatch
- * runs in add-order (a net frame first delivers its inbound traffic before a router dispatches
- * it to handlers), while flush runs in reverse add-order (the router queues its outbound traffic
- * before the net frame sends it). This is how a message channel binding composes a TNetHostSystem
- * and a TMessageRouter behind the one IEngineSystem slot TEngine drives.
+ * Pumps several caller-owned systems as one bound IEngineSystem (roadmap D3):
+ * lifecycle start and inbound dispatch run in add-order, while
+ * lifecycle end
+ * and outbound flush run in reverse add-order. This lets a net host deliver
+ * inbound traffic before a router handles it, then lets
+ * the router queue
+ * outbound traffic before the net host sends it.
  *
- * The set only stores pointers to caller-owned frames, so it never allocates and never owns their
- * lifetime; every added frame must outlive this set.
+ * The set only stores pointers to caller-owned systems, so it never
+ * allocates
+ * and never owns their lifetime; every added system must outlive this set.
  */
 template<std::size_t MaxFrames>
 class TEngineSystemSet final : public IEngineSystem
@@ -88,8 +76,10 @@ public:
 	TEngineSystemSet& operator=(TEngineSystemSet&&) = delete;
 
 	/**
-	 * Adds one caller-owned frame; the order of Add calls becomes the PreAdvance order.
-	 * Rejects a frame already present as Duplicate (matched by pointer identity) and a full
+	 * Adds one caller-owned system; the order of Add calls becomes the BeginPlay
+	 * and PreAdvance order. Rejects a system already present as
+	 * Duplicate (matched
+	 * by pointer identity) and a full
 	 * set as CapacityExceeded, leaving the set unchanged in both cases.
 	 */
 	EEngineResult Add(IEngineSystem& InFrame) noexcept
@@ -111,7 +101,16 @@ public:
 		return EEngineResult::Success;
 	}
 
-	/** Dispatches every added frame's inbound step in add-order. An empty set does nothing. */
+	/** Starts every added system in add-order. An empty set does nothing. */
+	void BeginPlay(const TimePointMilliseconds InNowMilliseconds) noexcept override
+	{
+		for (std::size_t Index = 0; Index < Count; ++Index)
+		{
+			Frames[Index]->BeginPlay(InNowMilliseconds);
+		}
+	}
+
+	/** Dispatches every added system's inbound step in add-order. An empty set does nothing. */
 	void PreAdvance(const TimePointMilliseconds InNowMilliseconds) noexcept override
 	{
 		for (std::size_t Index = 0; Index < Count; ++Index)
@@ -120,7 +119,7 @@ public:
 		}
 	}
 
-	/** Flushes every added frame's outbound step in reverse add-order. An empty set does nothing. */
+	/** Flushes every added system's outbound step in reverse add-order. An empty set does nothing. */
 	void PostAdvance(const TimePointMilliseconds InNowMilliseconds) noexcept override
 	{
 		for (std::size_t Index = Count; Index > 0; --Index)
@@ -129,11 +128,20 @@ public:
 		}
 	}
 
+	/** Ends every added system in reverse add-order. An empty set does nothing. */
+	void EndPlay() noexcept override
+	{
+		for (std::size_t Index = Count; Index > 0; --Index)
+		{
+			Frames[Index - 1]->EndPlay();
+		}
+	}
+
 	/** Reports how many frames have been added so far. */
 	std::size_t FrameCount() const noexcept { return Count; }
 
 private:
-	/** Caller-owned frames in add-order; never owned here. */
+	/** Caller-owned systems in add-order; never owned here. */
 	IEngineSystem* Frames[MaxFrames == 0 ? 1 : MaxFrames]{};
 
 	/** Number of occupied entries at the front of Frames. */

@@ -8,8 +8,8 @@
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Engine/EngineResult.h>
 #include <MicroWorld/Engine/InlineTypes.h>
-#include <MicroWorld/Engine/Message.h>
-#include <MicroWorld/Engine/MessageRouter.h>
+#include <MicroWorld/Messaging/Message.h>
+#include <MicroWorld/Messaging/MessageRouter.h>
 
 #include <MicroWorld/Object/ClassDescriptor.h>
 #include <MicroWorld/Object/ObjectPtr.h>
@@ -43,9 +43,6 @@ inline constexpr MicroWorld::FMessageActorId DisplayActorId = 11;
 
 /** Stable descriptor id for the managed FThermometerActor type (0x0016 == example 22). */
 constexpr MicroWorld::FTypeId ThermometerActorTypeId{0x00160001u};
-
-/** Stable descriptor id for the managed FDisplayActor type. */
-constexpr MicroWorld::FTypeId DisplayActorTypeId{0x00160002u};
 
 /** Stable descriptor id for the managed FReadingSensorComponent type. */
 constexpr MicroWorld::FTypeId ReadingSensorComponentTypeId{0x00160003u};
@@ -364,7 +361,6 @@ extern "C" void app_main(void)
 		MicroWorld::FGarbageCollectionBudget{GcRootOperationsPerTick, GcMarkOperationsPerTick, GcSweepOperationsPerTick}, GRouter};
 
 	if (GEngine.RegisterClass<FThermometerActor>(ThermometerActorTypeId, "ThermometerActor") != MicroWorld::EObjectResult::Success
-		|| GEngine.RegisterClass<FDisplayActor>(DisplayActorTypeId, "DisplayActor") != MicroWorld::EObjectResult::Success
 		|| GEngine.RegisterClass<FReadingSensorComponent>(ReadingSensorComponentTypeId, "ReadingSensorComponent")
 			!= MicroWorld::EObjectResult::Success)
 	{
@@ -376,18 +372,24 @@ extern "C" void app_main(void)
 	const MicroWorld::TObjectPtr<FReadingSensorComponent> Sensor = GEngine.CreateObject<FReadingSensorComponent>(ReadingSensorComponentTypeId).Object;
 	const MicroWorld::TObjectPtr<FThermometerActor> Thermometer =
 		GEngine.CreateObject<FThermometerActor>(ThermometerActorTypeId, GRouter, Sensor).Object;
-	const MicroWorld::TObjectPtr<FDisplayActor> Display = GEngine.CreateObject<FDisplayActor>(DisplayActorTypeId, GRouter).Object;
-	if (World.Get() == nullptr || Sensor.Get() == nullptr || Thermometer.Get() == nullptr || Display.Get() == nullptr)
+	if (World.Get() == nullptr || Sensor.Get() == nullptr || Thermometer.Get() == nullptr)
 	{
 		MW_LOG(Error, "ex22", "world or object creation failed");
 		return;
 	}
 
 	if (Thermometer.Get()->RegisterComponent(MicroWorld::TObjectPtr<MicroWorld::UActorComponent>{Sensor}) != MicroWorld::EEngineResult::Success
-		|| GEngine.GetWorld().RegisterActor(MicroWorld::TObjectPtr<MicroWorld::AActor>{Thermometer}) != MicroWorld::EEngineResult::Success
-		|| GEngine.GetWorld().RegisterActor(MicroWorld::TObjectPtr<MicroWorld::AActor>{Display}) != MicroWorld::EEngineResult::Success)
+		|| GEngine.GetWorld().RegisterActor(MicroWorld::TObjectPtr<MicroWorld::AActor>{Thermometer}) != MicroWorld::EEngineResult::Success)
 	{
 		MW_LOG(Error, "ex22", "component or actor registration failed");
+		return;
+	}
+
+	// Queue the display during composition so BeginPlay proves typed spawning also works before play starts.
+	const MicroWorld::FActorSpawnRequest DisplaySpawnRequest = GEngine.GetWorld().SpawnActor<FDisplayActor>(GRouter);
+	if (DisplaySpawnRequest.Result != MicroWorld::EActorSpawnRequestResult::Queued)
+	{
+		MW_LOG(Error, "ex22", "display spawn request failed");
 		return;
 	}
 
@@ -399,9 +401,16 @@ extern "C" void app_main(void)
 		return;
 	}
 
+	const MicroWorld::FActorSpawnStatus DisplaySpawnStatus = GEngine.GetWorld().GetSpawnStatus(DisplaySpawnRequest.Handle);
+	FDisplayActor* const DisplayPtr = static_cast<FDisplayActor*>(DisplaySpawnStatus.Actor.Get());
+	if (DisplaySpawnStatus.State != MicroWorld::EActorSpawnState::Spawned || DisplayPtr == nullptr)
+	{
+		MW_LOG(Error, "ex22", "display spawn failed during begin play");
+		return;
+	}
+
 	// Bounded, deterministic run: stop as soon as the display's own query says done
 	// (no side effects in the loop condition, just IsDone()).
-	FDisplayActor* const DisplayPtr = Display.Get();
 	while (!DisplayPtr->IsDone())
 	{
 		if (GEngine.Tick(GTimeSource.Now()) != MicroWorld::ERuntimeResult::Success)

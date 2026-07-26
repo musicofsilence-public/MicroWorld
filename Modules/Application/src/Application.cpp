@@ -1,4 +1,4 @@
-#include <MicroWorld/Application.h>
+#include <MicroWorld/Application/Application.h>
 
 namespace MicroWorld
 {
@@ -49,8 +49,30 @@ ERuntimeResult FApplication::EndPlay() noexcept
 	{
 		return EndResult;
 	}
-	OnEndPlay();
-	return ERuntimeResult::Success;
+	return OnEndPlay();
+}
+
+ERuntimeResult FApplication::OnBeginPlay(const TimePointMilliseconds InNowMilliseconds) noexcept
+{
+	// OnConfigure runs before the engine begins so a subclass can spawn actors and
+	// configure systems into a world that exists but has not yet started; either
+	// failure short-circuits the engine begin and surfaces the first cause.
+	const ERuntimeResult ConfigureResult = OnConfigure(Engine, InNowMilliseconds);
+	if (ConfigureResult != ERuntimeResult::Success)
+	{
+		return ConfigureResult;
+	}
+	return Engine.BeginPlay(InNowMilliseconds);
+}
+
+ERuntimeResult FApplication::OnAdvance(const TimePointMilliseconds InNowMilliseconds) noexcept
+{
+	return Engine.Tick(InNowMilliseconds);
+}
+
+ERuntimeResult FApplication::OnEndPlay() noexcept
+{
+	return Engine.EndPlay();
 }
 
 } // namespace MicroWorld

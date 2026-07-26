@@ -2,8 +2,8 @@
 #include "TestSupport.h"
 
 #include <MicroWorld/Containers/Span.h>
-#include <MicroWorld/Engine/Message.h>
-#include <MicroWorld/Engine/MessageRouter.h>
+#include <MicroWorld/Messaging/Message.h>
+#include <MicroWorld/Messaging/MessageRouter.h>
 #include <MicroWorld/Time.h>
 
 #include <array>

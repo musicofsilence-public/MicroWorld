@@ -3,11 +3,11 @@
 #include <MicroWorld/Containers/Span.h>
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Engine/EngineResult.h>
-#include <MicroWorld/Engine/Message.h>
-#include <MicroWorld/Engine/MessageChannelBinding.h>
-#include <MicroWorld/Engine/MessageRouter.h>
+#include <MicroWorld/Messaging/Message.h>
+#include <MicroWorld/Messaging/MessageChannelBinding.h>
+#include <MicroWorld/Messaging/MessageRouter.h>
 #include <MicroWorld/Engine/EngineSystem.h>
-#include <MicroWorld/Engine/ReliableChannel.h>
+#include <MicroWorld/Messaging/ReliableChannel.h>
 #include <MicroWorld/Net/HostLoopback.h>
 #include <MicroWorld/Net/NetAddress.h>
 #include <MicroWorld/Net/NetHost.h>

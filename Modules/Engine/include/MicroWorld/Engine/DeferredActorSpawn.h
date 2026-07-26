@@ -2,6 +2,7 @@
 
 #include <MicroWorld/Engine/Actor.h>
 #include <MicroWorld/Engine/EngineClassIds.h>
+#include <MicroWorld/Object/GarbageCollector.h>
 #include <MicroWorld/Object/ObjectStore.h>
 
 #include <array>
@@ -114,8 +115,8 @@ namespace DeferredActorSpawnDetail
 	class TActorFactory final
 	{
 	public:
-	/** Captures decayed constructor values only after every non-mutating queue preflight has passed. */
-	explicit TActorFactory(TArguments... InArguments) noexcept : Arguments(std::move(InArguments)...) {}
+		/** Captures decayed constructor values only after every non-mutating queue preflight has passed. */
+		explicit TActorFactory(TArguments... InArguments) noexcept : Arguments(std::move(InArguments)...) {}
 
 		/** Uses the canonical registered descriptor to construct the actor in the world's store. */
 		static TObjectCreationResult<AActor> Invoke(void* const InFactory, FObjectStore& InStore, const FClassDescriptor& InDescriptor) noexcept

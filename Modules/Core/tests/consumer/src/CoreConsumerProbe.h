@@ -1,13 +1,9 @@
 #pragma once
 
-#include <MicroWorld/Application.h>
 #include <MicroWorld/TickFunction.h>
 #include <MicroWorld/Version.h>
 
-#include <type_traits>
-
 static_assert(__cplusplus >= 201703L);
-static_assert(std::is_nothrow_destructible_v<MicroWorld::FApplication>);
 static_assert(MicroWorld::Version.Major == 0);
 static_assert(MicroWorld::Version.Minor == 3);
 static_assert(MicroWorld::Version.Patch == 0);

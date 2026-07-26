@@ -1,17 +1,15 @@
 #pragma once
 
 #include <MicroWorld/Engine/EngineHost.h>
-#include <MicroWorld/Engine/Message.h>
-#include <MicroWorld/Engine/MessageChannelBinding.h>
-#include <MicroWorld/Engine/MessageRouter.h>
-#include <MicroWorld/Engine/EngineSystem.h>
-#include <MicroWorld/Net/NetHost.h>
+#include <MicroWorld/Messaging/Message.h>
+#include <MicroWorld/Integration/NetSystem.h>
 #include <MicroWorld/Net/UdpAddressCodec.h>
 #include <MicroWorld/Object/ClassDescriptor.h>
 #include <MicroWorld/PlatformEsp32/Esp32UartDriver.h>
 #include <MicroWorld/PlatformEsp32/Esp32UdpDriver.h>
 #include <MicroWorld/PlatformEsp32/Esp32WifiLink.h>
 
+#include <cstddef>
 #include <cstdint>
 
 /**
@@ -19,10 +17,8 @@
  * 24's two roles.
  *
  * Both role translation units (ServerMain.cpp, ClientMain.cpp) include this so the
- * message/actor/channel ids, UART/WiFi/UDP configuration, and the
- * TNetHost/TMessageRouter/TEngine/TEngineSystemSet shapes are defined exactly
- * once -- DRY within this one example (mirrors 23-TwoBoardWire's
- * TwoBoardWireShared.h).
+ * message/actor/channel ids, UART/WiFi/UDP configuration, and the TNetSystem
+ * and engine shapes are defined exactly once -- DRY within this one example.
  */
 namespace Ex24
 {
@@ -46,12 +42,6 @@ inline constexpr MicroWorld::FMessageChannelId TelemetryChannelId = 1;
 
 /** Router-facing channel id both roles register their UART commands binding under. */
 inline constexpr MicroWorld::FMessageChannelId CommandsChannelId = 2;
-
-/** Wire-level channel byte the UDP host's binding reads and writes (channel 0 is reserved control). */
-inline constexpr std::uint8_t TelemetryWireChannelByte = 1;
-
-/** Wire-level channel byte the UART host's binding reads and writes; a different host, so the value may repeat. */
-inline constexpr std::uint8_t CommandsWireChannelByte = 1;
 
 /** The sensor's start/restored reporting cadence. */
 inline constexpr MicroWorld::DurationMilliseconds BaseReportingIntervalMilliseconds = 1000;
@@ -104,29 +94,21 @@ constexpr MicroWorld::FTypeId TelemetrySinkActorTypeId{0x00180002u};
 /** Stable descriptor id for the managed FCommanderActor type. */
 constexpr MicroWorld::FTypeId CommanderActorTypeId{0x00180003u};
 
-/** The WiFi-backed network host both roles compose their telemetry channel through (256-byte packet, matching example 16). */
-using FTelemetryNet = MicroWorld::TNetHost<2, 256>;
+/** Sizes the one TNetSystem for two links, two router channels, and the example's existing 96-byte messages. */
+struct FWorldNetSystemTraits : MicroWorld::FDefaultNetSystemTraits
+{
+	/** The example configures one UDP and one UART driver. */
+	static constexpr std::size_t MaxNetDrivers = 2;
 
-/** The wired network host both roles compose their commands channel through (120-byte wire, matching example 23). */
-using FCommandNet = MicroWorld::TNetHost<2, 120>;
+	/** The shared router owns exactly the telemetry and command channels. */
+	static constexpr std::size_t MaxRouterChannels = 2;
 
-/** The one local actor-message router both roles compose, sized for this example's two channels and few handlers. */
-using FWorldRouter = MicroWorld::TMessageRouter<16, 8, 96, 2>;
+	/** The composition front door accepts exactly the telemetry and command channels. */
+	static constexpr std::size_t MaxChannels = 2;
+};
 
-/** Adapts FTelemetryNet to the engine's per-frame network slot inside the frame set. */
-using FTelemetryFrame = MicroWorld::TNetHostSystem<FTelemetryNet>;
-
-/** Adapts FCommandNet to the engine's per-frame network slot inside the frame set. */
-using FCommandFrame = MicroWorld::TNetHostSystem<FCommandNet>;
-
-/** Two-way adapter binding the telemetry wire channel to the shared FWorldRouter. */
-using FTelemetryBinding = MicroWorld::TMessageChannelBinding<FTelemetryNet>;
-
-/** Two-way adapter binding the commands wire channel to the shared FWorldRouter. */
-using FCommandBinding = MicroWorld::TMessageChannelBinding<FCommandNet>;
-
-/** Pumps both net frames and the router behind the one IEngineSystem slot TEngine drives (Phase 4.1's D3 order). */
-using FWorldFrameSet = MicroWorld::TEngineSystemSet<3>;
+/** The one networked engine system both roles compose before their engine begins play. */
+using FWorldNetSystem = MicroWorld::TNetSystem<FWorldNetSystemTraits>;
 
 /** The engine both roles compose; sized for one world with a couple of small inline actors (the default ESP32-S3 traits). */
 using FWorldEngine = MicroWorld::TEngine<>;
