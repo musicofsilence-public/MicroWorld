@@ -141,6 +141,23 @@ if(MICROWORLD_BUILD_TESTS)
             ${CMAKE_CURRENT_SOURCE_DIR}/../../tools/CheckFolderAgents.py
             --root ${CMAKE_CURRENT_SOURCE_DIR}/../../Modules
     )
+    add_test(
+        NAME microworld_class_documentation_self_test
+        COMMAND
+            ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/../../tools/CheckClassDocumentation.py
+            --self-test
+    )
+    # The repository root, not Modules: examples are maintained source too, and
+    # the checker's default exclusions keep every generated tree out.
+    add_test(
+        NAME microworld_class_documentation
+        COMMAND
+            ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/../../tools/CheckClassDocumentation.py
+            --root ${CMAKE_CURRENT_SOURCE_DIR}/../..
+            --require-doxygen
+    )
 endif()
 
 # The dispatch benchmark and HostLifecycle example were retired with the Core

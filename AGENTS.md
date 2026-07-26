@@ -116,13 +116,16 @@ python tools/CheckDependencyBoundaries.py --self-test
 python tools/CheckProfileMap.py --self-test
 python tools/CheckFolderAgents.py --self-test
 python tools/CheckFolderAgents.py --root Modules
-python tools/CheckClassDocumentation.py --root Modules --require-doxygen
+python tools/CheckClassDocumentation.py --self-test
+python tools/CheckClassDocumentation.py --root . --require-doxygen
 python tools/CheckFormatting.py
 ```
 
-Only `CheckClassDocumentation.py` needs running by hand: `ctest --test-dir build`
-already runs formatting, the dependency boundaries, the profile map, and the
-folder guides, each with its self-test where the checker has one.
+`ctest --test-dir build` runs every one of them, each alongside its self-test, so
+the list above is for reproducing one failure in isolation rather than a routine
+step. Each checker skips generated trees through its own
+`DEFAULT_EXCLUDED_DIRECTORY_NAMES`, so no `--exclude` chain belongs in a normal
+invocation.
 
 Formatting gate (mandatory — not covered by any other gate). `CheckFormatting.py`
 is also wired into ctest as `microworld_format_check`, so it runs with every

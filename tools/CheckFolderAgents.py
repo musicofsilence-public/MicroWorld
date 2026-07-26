@@ -4,9 +4,11 @@
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import sys
 import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 
 
@@ -29,7 +31,12 @@ DEFAULT_EXCLUDED_DIRECTORY_NAMES = frozenset(
         ".vs",
         "__pycache__",
         "build",
+        "build-engine",
         "build-final",
+        "build-integration",
+        "build-integration-messaging",
+        "build-messaging",
+        "build-object",
         "cmake-build-debug",
         "cmake-build-release",
     }
@@ -54,16 +61,22 @@ def parse_arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def is_excluded(path: Path, root: Path, excluded_names: set[str]) -> bool:
+def iter_directories_below(root: Path, excluded_names: set[str]) -> Iterator[Path]:
     """
-    Apply directory-name exclusion to the part of a path below the scan root.
+    Walk the root and every directory below it in deterministic order, pruning
+    excluded names.
 
-    Only names below the root count: matching the whole path would let a checkout
-    living under any excluded name skip its entire tree and still report success,
-    which is the one answer a coverage gate must never give. Because the root's own
-    relative path is empty, the root is always scanned and a pass is never empty.
+    Pruning during the walk rather than filtering afterwards is what keeps a
+    generated tree cheap, and it decides the exclusion question structurally: only
+    names below the root are ever tested, and the root is always yielded, so a
+    checkout living under an excluded name can never scan nothing and still report
+    success — the one answer a coverage gate must not give.
     """
-    return any(part in excluded_names for part in path.relative_to(root).parts)
+    for directory_path, directory_names, _ in os.walk(root):
+        directory_names[:] = sorted(
+            name for name in directory_names if name not in excluded_names
+        )
+        yield Path(directory_path)
 
 
 def find_missing_sections(guide: Path) -> list[str]:
@@ -81,15 +94,10 @@ def scan_root(root: Path, excluded_names: set[str]) -> tuple[list[str], int]:
     if not root.is_dir():
         return [f"{root}: scan root is not a directory"], 0
 
-    directories = [root]
-    directories.extend(
-        path
-        for path in root.rglob("*")
-        if path.is_dir() and not is_excluded(path, root, excluded_names)
-    )
+    directories = list(iter_directories_below(root, excluded_names))
 
     errors: list[str] = []
-    for directory in sorted(directories):
+    for directory in directories:
         guide = directory / "AGENTS.md"
         if not guide.is_file():
             errors.append(f"{directory}: missing AGENTS.md")

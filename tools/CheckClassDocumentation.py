@@ -4,8 +4,11 @@
 from __future__ import annotations
 
 import argparse
+import os
 import re
 import sys
+import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 
 
@@ -20,26 +23,62 @@ FENCE_PATTERN = re.compile(
     re.DOTALL | re.IGNORECASE,
 )
 
+# Generated trees and tool metadata hold no maintained source, so every caller
+# skipped the same names by hand. Matching is by exact directory name, so a build
+# tree this list does not anticipate still enters the scan loudly and is added
+# here or passed with --exclude, rather than inferred and skipped in silence.
+DEFAULT_EXCLUDED_DIRECTORY_NAMES = frozenset(
+    {
+        ".git",
+        ".idea",
+        ".pio",
+        ".vs",
+        "__pycache__",
+        "build",
+        "build-engine",
+        "build-final",
+        "build-integration",
+        "build-integration-messaging",
+        "build-messaging",
+        "build-object",
+        "cmake-build-debug",
+        "cmake-build-release",
+    }
+)
+
 
 def parse_arguments() -> argparse.Namespace:
-    """Define explicit scan boundaries so generated trees never enter by accident."""
+    """Take the scan roots and contract policy, or run the isolated deterministic self-test."""
     parser = argparse.ArgumentParser()
-    parser.add_argument("--root", action="append", required=True, type=Path)
-    parser.add_argument("--exclude", action="append", default=[])
+    parser.add_argument("--root", action="append", default=[], type=Path)
+    parser.add_argument(
+        "--exclude",
+        action="append",
+        default=[],
+        help="Directory name to skip in addition to DEFAULT_EXCLUDED_DIRECTORY_NAMES.",
+    )
     parser.add_argument("--require-doxygen", action="store_true")
     parser.add_argument("--max-sentences", type=int, default=3)
     parser.add_argument("--scan-markdown-fences", action="store_true")
+    parser.add_argument("--self-test", action="store_true")
     return parser.parse_args()
 
 
-def is_excluded(path: Path, root: Path, excluded_names: set[str]) -> bool:
+def iter_files_below(root: Path, excluded_names: set[str]) -> Iterator[Path]:
     """
-    Keep caller-selected build/cache directory names out of maintained-source results.
+    Walk below one root in deterministic order, pruning excluded directories.
 
-    Only names below the scan root count: matching the whole path would let a
-    checkout living under an excluded name scan nothing and still report success.
+    Pruning during the walk rather than filtering afterwards is what keeps a
+    generated tree cheap: a .pio or build directory is never descended into, and
+    only names below the root are ever tested, so a checkout living under an
+    excluded name cannot scan nothing and still report success.
     """
-    return any(part in excluded_names for part in path.relative_to(root).parts)
+    for directory_path, directory_names, file_names in os.walk(root):
+        directory_names[:] = sorted(
+            name for name in directory_names if name not in excluded_names
+        )
+        for file_name in sorted(file_names):
+            yield Path(directory_path) / file_name
 
 
 def find_contract(text: str, declaration_offset: int) -> str | None:
@@ -129,37 +168,116 @@ def scan_file(
     return errors
 
 
+def scan_root(
+    root: Path,
+    excluded_names: set[str],
+    arguments: argparse.Namespace,
+) -> tuple[list[str], int]:
+    """Validate every maintained source below one root, reporting its errors and scanned count."""
+    if not root.is_dir():
+        return [f"{root}: scan root is not a directory"], 0
+
+    errors: list[str] = []
+    scanned_files = 0
+    for path in iter_files_below(root, excluded_names):
+        suffix = path.suffix.lower()
+        if suffix not in {".h", ".hpp", ".cpp", ".cc", ".cxx", ".md"}:
+            continue
+        if suffix == ".md" and not arguments.scan_markdown_fences:
+            continue
+        scanned_files += 1
+        errors.extend(
+            scan_file(
+                path,
+                arguments.scan_markdown_fences,
+                arguments.require_doxygen,
+                arguments.max_sentences,
+            )
+        )
+    return errors, scanned_files
+
+
+def run_self_test() -> int:
+    """Prove a documented type passes and that missing and overlong contracts each fail."""
+    policy = argparse.Namespace(
+        scan_markdown_fences=False, require_doxygen=True, max_sentences=3
+    )
+    documented_header = "/** Owns one thing. */\nclass FGood\n{\n};\n"
+    with tempfile.TemporaryDirectory() as temporary_directory:
+        root = Path(temporary_directory)
+        excluded_names = set(DEFAULT_EXCLUDED_DIRECTORY_NAMES)
+
+        # A documented definition passes, a generated tree below the root is
+        # skipped, and a forward declaration owns no contract to check.
+        package = root / "package"
+        package.mkdir()
+        (package / "build").mkdir()
+        (package / "Good.h").write_text(documented_header, encoding="utf-8")
+        (package / "Forward.h").write_text("class FLater;\n", encoding="utf-8")
+        (package / "build" / "Generated.h").write_text(
+            "class FUndocumented\n{\n};\n", encoding="utf-8"
+        )
+        errors, scanned = scan_root(package, excluded_names, policy)
+        if errors or scanned != 2:
+            print(
+                f"Documented-source self-test failed: {errors}, scanned {scanned}",
+                file=sys.stderr,
+            )
+            return 1
+
+        # A definition with no adjacent contract must be named under --require-doxygen.
+        bare_header = package / "Bare.h"
+        bare_header.write_text("class FBare\n{\n};\n", encoding="utf-8")
+        errors, _ = scan_root(package, excluded_names, policy)
+        if len(errors) != 1 or "lacks an adjacent" not in errors[0]:
+            print(f"Missing-contract self-test failed: {errors}", file=sys.stderr)
+            return 1
+
+        # A contract past the bound must be named together with its sentence count.
+        bare_header.write_text(
+            "/** One. Two. Three. Four. */\nclass FBare\n{\n};\n", encoding="utf-8"
+        )
+        errors, _ = scan_root(package, excluded_names, policy)
+        if len(errors) != 1 or "maximum is 3" not in errors[0]:
+            print(f"Overlong-contract self-test failed: {errors}", file=sys.stderr)
+            return 1
+
+        # An excluded name in an ancestor must not empty the scan, which a
+        # whole-path match reported as a pass over zero files.
+        buried_package = root / "build" / "package"
+        buried_package.mkdir(parents=True)
+        (buried_package / "Good.h").write_text(documented_header, encoding="utf-8")
+        errors, scanned = scan_root(buried_package, excluded_names, policy)
+        if errors or scanned != 1:
+            print(
+                f"Ancestor-exclusion self-test failed: {errors}, scanned {scanned}",
+                file=sys.stderr,
+            )
+            return 1
+
+    print("Class-documentation checker self-test passed.")
+    return 0
+
+
 def main() -> int:
     """Aggregate deterministic diagnostics and expose pass/fail through process status."""
     arguments = parse_arguments()
+    if arguments.self_test:
+        return run_self_test()
+    if not arguments.root:
+        print("At least one --root is required.", file=sys.stderr)
+        return 2
     if arguments.max_sentences < 1:
         print("--max-sentences must be positive", file=sys.stderr)
         return 2
 
-    excluded_names = set(arguments.exclude)
+    excluded_names = DEFAULT_EXCLUDED_DIRECTORY_NAMES | set(arguments.exclude)
     errors: list[str] = []
     scanned_files = 0
     for root in arguments.root:
-        if not root.is_dir():
-            errors.append(f"{root}: scan root is not a directory")
-            continue
-        for path in sorted(root.rglob("*")):
-            if not path.is_file() or is_excluded(path, root, excluded_names):
-                continue
-            suffix = path.suffix.lower()
-            if suffix not in {".h", ".hpp", ".cpp", ".cc", ".cxx", ".md"}:
-                continue
-            if suffix == ".md" and not arguments.scan_markdown_fences:
-                continue
-            scanned_files += 1
-            errors.extend(
-                scan_file(
-                    path,
-                    arguments.scan_markdown_fences,
-                    arguments.require_doxygen,
-                    arguments.max_sentences,
-                )
-            )
+        root_errors, scanned = scan_root(root, excluded_names, arguments)
+        errors.extend(root_errors)
+        scanned_files += scanned
 
     for error in errors:
         print(error, file=sys.stderr)

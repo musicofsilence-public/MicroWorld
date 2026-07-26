@@ -44,16 +44,17 @@ subdirectory to add a local guide.
 
 Every Python function and module-level policy constant needs a purpose-focused
 docstring or comment. Keep scans deterministic and side-effect free. Verify with
-`python tools/CheckClassDocumentation.py --root Modules/Core --exclude build --exclude .pio --exclude __pycache__ --require-doxygen --max-sentences 3`
+`python tools/CheckClassDocumentation.py --root Modules/Core --require-doxygen --max-sentences 3`
 and
 `python tools/CheckFolderAgents.py --root Modules/Core --require-file AGENTS.md`.
-`CheckFolderAgents.py` skips generated trees and tool metadata through
-`DEFAULT_EXCLUDED_DIRECTORY_NAMES`, so no `--exclude` chain belongs in a normal
-invocation. Matching is by exact directory name, so a build tree the defaults do
-not anticipate fails the scan loudly; add the name to that constant, or pass
-`--exclude` for a one-off. `--self-test` covers a covered tree, a directory with
-no guide, a guide missing its required sections, and the case where an excluded
-name sits in an ancestor of the scan root — which once reported an empty pass.
+
+`CheckClassDocumentation.py` and `CheckFolderAgents.py` each skip generated trees
+and tool metadata through their own `DEFAULT_EXCLUDED_DIRECTORY_NAMES`, so no
+`--exclude` chain belongs in a normal invocation. Matching is by exact directory
+name, so a build tree the defaults do not anticipate enters the scan loudly; add
+the name to that constant, or pass `--exclude` for a one-off. Both carry a
+`--self-test` that pins the case where an excluded name sits in an *ancestor* of
+the scan root, which once made either checker report a pass over zero files.
 Verify module boundaries with
 `python tools/CheckDependencyBoundaries.py --package Core=Modules/Core`
 and verify a built Core map with
