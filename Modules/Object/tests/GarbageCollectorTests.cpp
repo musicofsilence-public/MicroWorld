@@ -28,8 +28,10 @@ using MicroWorld::FReferenceCollector;
 using MicroWorld::MakeClassDescriptor;
 using MicroWorld::MakeClassRegistryView;
 using MicroWorld::TClassRegistry;
+using MicroWorld::TObjectCreationResult;
 using MicroWorld::TObjectPtr;
 using MicroWorld::TraceManagedObjectReferences;
+using MicroWorld::TStrongObjectPointerResult;
 using MicroWorld::TWeakObjectPtr;
 using MicroWorld::UObject;
 
@@ -249,14 +251,14 @@ FCollectionObservation ObserveEquivalentCollection(const bool bIncremental) noex
 	(void)RegisterGraphDescriptor(Registry, Descriptor);
 	TGraphStoreFixture<4, 1> Fixture(MakeClassRegistryView(Registry));
 	FObjectStore& Store = Fixture.GetStore();
-	const auto First = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
-	const auto Second = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
-	const auto Third = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
-	const auto Unreachable = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
+	const TObjectCreationResult<FGraphObject> First = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
+	const TObjectCreationResult<FGraphObject> Second = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
+	const TObjectCreationResult<FGraphObject> Third = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
+	const TObjectCreationResult<FGraphObject> Unreachable = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
 	static_cast<void>(Unreachable);
 	First.Object.Get()->SetReference(0, Second.Object);
 	Second.Object.Get()->SetReference(0, Third.Object);
-	auto Root = Store.MakeStrongObjectPtr(First.Object);
+	TStrongObjectPointerResult<FGraphObject> Root = Store.MakeStrongObjectPtr(First.Object);
 	static_cast<void>(Root);
 
 	std::array<FObjectHandle, 4> Worklist{};
@@ -294,12 +296,12 @@ MW_TEST_CASE(GarbageCollectorPreservesRootedGraph)
 	const EObjectResult RegistrationResult = RegisterGraphDescriptor(Registry, Descriptor);
 	TGraphStoreFixture<3, 1> Fixture(MakeClassRegistryView(Registry));
 	FObjectStore& Store = Fixture.GetStore();
-	const auto First = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
-	const auto Second = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
-	const auto Third = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
+	const TObjectCreationResult<FGraphObject> First = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
+	const TObjectCreationResult<FGraphObject> Second = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
+	const TObjectCreationResult<FGraphObject> Third = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
 	First.Object.Get()->SetReference(0, Second.Object);
 	Second.Object.Get()->SetReference(0, Third.Object);
-	auto Root = Store.MakeStrongObjectPtr(First.Object);
+	TStrongObjectPointerResult<FGraphObject> Root = Store.MakeStrongObjectPtr(First.Object);
 	std::array<FObjectHandle, 3> Worklist{};
 	FGarbageCollector Collector(Store, FGarbageCollectorStorage{Worklist.data(), static_cast<std::uint32_t>(Worklist.size())});
 
@@ -332,8 +334,8 @@ MW_TEST_CASE(GarbageCollectorReclaimsUnrootedCycle)
 	const EObjectResult RegistrationResult = RegisterGraphDescriptor(Registry, Descriptor);
 	TGraphStoreFixture<2, 0> Fixture(MakeClassRegistryView(Registry));
 	FObjectStore& Store = Fixture.GetStore();
-	const auto First = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
-	const auto Second = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
+	const TObjectCreationResult<FGraphObject> First = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
+	const TObjectCreationResult<FGraphObject> Second = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
 	First.Object.Get()->SetReference(0, Second.Object);
 	Second.Object.Get()->SetReference(0, First.Object);
 	TWeakObjectPtr<FGraphObject> FirstWeak(First.Object);
@@ -366,7 +368,7 @@ MW_TEST_CASE(GarbageCollectorExpiresWeakReferenceWithoutRooting)
 	const EObjectResult RegistrationResult = RegisterGraphDescriptor(Registry, Descriptor);
 	TGraphStoreFixture<1, 0> Fixture(MakeClassRegistryView(Registry));
 	FObjectStore& Store = Fixture.GetStore();
-	const auto Creation = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
+	const TObjectCreationResult<FGraphObject> Creation = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
 	TWeakObjectPtr<FGraphObject> WeakObject(Creation.Object);
 	std::array<FObjectHandle, 1> Worklist{};
 	FGarbageCollector Collector(Store, FGarbageCollectorStorage{Worklist.data(), static_cast<std::uint32_t>(Worklist.size())});
@@ -406,10 +408,10 @@ MW_TEST_CASE(GarbageCollectorHonorsZeroAndOneOperationBudgets)
 	const EObjectResult RegistrationResult = RegisterGraphDescriptor(Registry, Descriptor);
 	TGraphStoreFixture<2, 1> Fixture(MakeClassRegistryView(Registry));
 	FObjectStore& Store = Fixture.GetStore();
-	const auto Rooted = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
-	const auto Unreachable = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
+	const TObjectCreationResult<FGraphObject> Rooted = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
+	const TObjectCreationResult<FGraphObject> Unreachable = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
 	static_cast<void>(Unreachable);
-	auto Root = Store.MakeStrongObjectPtr(Rooted.Object);
+	TStrongObjectPointerResult<FGraphObject> Root = Store.MakeStrongObjectPtr(Rooted.Object);
 	static_cast<void>(Root);
 	std::array<FObjectHandle, 2> Worklist{};
 	FGarbageCollector Collector(Store, FGarbageCollectorStorage{Worklist.data(), static_cast<std::uint32_t>(Worklist.size())});
@@ -455,12 +457,12 @@ MW_TEST_CASE(GarbageCollectorMultiReferenceVisitorCountsOneMarkAndPreservesGraph
 	const EObjectResult RegistrationResult = RegisterGraphDescriptor(Registry, Descriptor);
 	TGraphStoreFixture<3, 1> Fixture(MakeClassRegistryView(Registry));
 	FObjectStore& Store = Fixture.GetStore();
-	const auto Parent = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
-	const auto FirstChild = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
-	const auto SecondChild = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
+	const TObjectCreationResult<FGraphObject> Parent = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
+	const TObjectCreationResult<FGraphObject> FirstChild = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
+	const TObjectCreationResult<FGraphObject> SecondChild = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
 	Parent.Object.Get()->SetReference(0, FirstChild.Object);
 	Parent.Object.Get()->SetReference(1, SecondChild.Object);
-	auto Root = Store.MakeStrongObjectPtr(Parent.Object);
+	TStrongObjectPointerResult<FGraphObject> Root = Store.MakeStrongObjectPtr(Parent.Object);
 	static_cast<void>(Root);
 	std::array<FObjectHandle, 3> Worklist{};
 	FGarbageCollector Collector(Store, FGarbageCollectorStorage{Worklist.data(), static_cast<std::uint32_t>(Worklist.size())});
@@ -506,7 +508,7 @@ MW_TEST_CASE(GarbageCollectorTraversesDeepGraphWithoutRecursion)
 	bool bAllCreated = true;
 	for (std::uint32_t Index = 0; Index < NodeCount; ++Index)
 	{
-		const auto Creation = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
+		const TObjectCreationResult<FGraphObject> Creation = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
 		Nodes[Index] = Creation.Object;
 		if (Creation.Result != EObjectResult::Success)
 		{
@@ -517,7 +519,7 @@ MW_TEST_CASE(GarbageCollectorTraversesDeepGraphWithoutRecursion)
 	{
 		Nodes[Index - 1].Get()->SetReference(0, Nodes[Index]);
 	}
-	auto Root = Store.MakeStrongObjectPtr(Nodes[0]);
+	TStrongObjectPointerResult<FGraphObject> Root = Store.MakeStrongObjectPtr(Nodes[0]);
 	std::array<FObjectHandle, NodeCount> Worklist{};
 	FGarbageCollector Collector(Store, FGarbageCollectorStorage{Worklist.data(), static_cast<std::uint32_t>(Worklist.size())});
 
@@ -552,8 +554,8 @@ MW_TEST_CASE(GarbageCollectorLocksMutationAndSecondCollectorBetweenSlices)
 	}
 	TGraphStoreFixture<2, 2> Fixture(MakeClassRegistryView(Registry));
 	FObjectStore& Store = Fixture.GetStore();
-	const auto Rooted = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
-	auto Root = Store.MakeStrongObjectPtr(Rooted.Object);
+	const TObjectCreationResult<FGraphObject> Rooted = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
+	TStrongObjectPointerResult<FGraphObject> Root = Store.MakeStrongObjectPtr(Rooted.Object);
 	std::array<FObjectHandle, 2> FirstWorklist{};
 	std::array<FObjectHandle, 2> SecondWorklist{};
 	FGarbageCollector FirstCollector(Store, FGarbageCollectorStorage{FirstWorklist.data(), static_cast<std::uint32_t>(FirstWorklist.size())});
@@ -561,15 +563,15 @@ MW_TEST_CASE(GarbageCollectorLocksMutationAndSecondCollectorBetweenSlices)
 
 	const ERuntimeResult RequestResult = FirstCollector.RequestCollection();
 	const FGarbageCollectionResult RootSlice = FirstCollector.Advance(FGarbageCollectionBudget{1, 0, 0});
-	const auto RejectedCreation = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
+	const TObjectCreationResult<FGraphObject> RejectedCreation = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
 	const EObjectResult RejectedPending = Store.MarkPendingDestroy(Rooted.Object.Handle());
-	auto RejectedRoot = Store.MakeStrongObjectPtr(Rooted.Object);
+	TStrongObjectPointerResult<FGraphObject> RejectedRoot = Store.MakeStrongObjectPtr(Rooted.Object);
 	const MicroWorld::FObjectMutationResult RejectedBarrier = Store.ApplyPendingDestroy(1);
 	const ERuntimeResult RejectedSecondCollector = SecondCollector.RequestCollection();
 	Root.Pointer.Reset();
 	const FObjectStoreStats StatsAfterRootRemoval = Store.Stats();
 	const ERuntimeResult CancelResult = FirstCollector.CancelCollection();
-	const auto CreationAfterCancel = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
+	const TObjectCreationResult<FGraphObject> CreationAfterCancel = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
 	const FGarbageCollectionResult Cleanup = SecondCollector.CollectFull();
 
 	MW_EXPECT_EQ(Test, EObjectResult::Success, RegistrationResult, "The graph class should register");
@@ -602,8 +604,8 @@ MW_TEST_CASE(GarbageCollectorDestructorReleasesActiveCycleAndPartialMarks)
 	}
 	TGraphStoreFixture<1, 1> Fixture(MakeClassRegistryView(Registry));
 	FObjectStore& Store = Fixture.GetStore();
-	const auto Creation = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
-	auto Root = Store.MakeStrongObjectPtr(Creation.Object);
+	const TObjectCreationResult<FGraphObject> Creation = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
+	TStrongObjectPointerResult<FGraphObject> Root = Store.MakeStrongObjectPtr(Creation.Object);
 	ERuntimeResult RequestResult = ERuntimeResult::InvalidLifecycle;
 	EGarbageCollectionPhase PausedPhase = EGarbageCollectionPhase::Idle;
 	{
@@ -642,8 +644,8 @@ MW_TEST_CASE(GarbageCollectorRejectsRecursiveAdvanceFromReferenceVisitor)
 	}
 	TGraphStoreFixture<1, 1> Fixture(MakeClassRegistryView(Registry));
 	FObjectStore& Store = Fixture.GetStore();
-	const auto Creation = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
-	auto Root = Store.MakeStrongObjectPtr(Creation.Object);
+	const TObjectCreationResult<FGraphObject> Creation = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
+	TStrongObjectPointerResult<FGraphObject> Root = Store.MakeStrongObjectPtr(Creation.Object);
 	static_cast<void>(Root);
 	std::array<FObjectHandle, 1> Worklist{};
 	FGarbageCollector Collector(Store, FGarbageCollectorStorage{Worklist.data(), static_cast<std::uint32_t>(Worklist.size())});
@@ -669,7 +671,7 @@ MW_TEST_CASE(GarbageCollectorRejectsInsufficientWorklistAtomically)
 	const EObjectResult RegistrationResult = RegisterGraphDescriptor(Registry, Descriptor);
 	TGraphStoreFixture<3, 0> Fixture(MakeClassRegistryView(Registry));
 	FObjectStore& Store = Fixture.GetStore();
-	const auto Creation = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
+	const TObjectCreationResult<FGraphObject> Creation = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
 	std::array<FObjectHandle, 2> TooSmallWorklist{};
 	FGarbageCollector Collector(Store, FGarbageCollectorStorage{TooSmallWorklist.data(), static_cast<std::uint32_t>(TooSmallWorklist.size())});
 
@@ -714,10 +716,12 @@ MW_TEST_CASE(GarbageCollectorIgnoresCrossStoreSameValuedReference)
 		return;
 	}
 
-	const auto StoreAHolder = StoreA.NewObject<FCrossStoreReferenceHolder>(*RegisteredHolderDescriptor, StoreALifetime);
-	const auto StoreAUnrelated = StoreA.NewObject<FCrossStoreLeaf>(*RegisteredLeafDescriptor, StoreALifetime);
-	const auto StoreBDummy = StoreB.NewObject<FCrossStoreReferenceHolder>(*RegisteredHolderDescriptor, StoreBLifetime);
-	const auto StoreBReferenced = StoreB.NewObject<FCrossStoreLeaf>(*RegisteredLeafDescriptor, StoreBLifetime);
+	const TObjectCreationResult<FCrossStoreReferenceHolder> StoreAHolder =
+		StoreA.NewObject<FCrossStoreReferenceHolder>(*RegisteredHolderDescriptor, StoreALifetime);
+	const TObjectCreationResult<FCrossStoreLeaf> StoreAUnrelated = StoreA.NewObject<FCrossStoreLeaf>(*RegisteredLeafDescriptor, StoreALifetime);
+	const TObjectCreationResult<FCrossStoreReferenceHolder> StoreBDummy =
+		StoreB.NewObject<FCrossStoreReferenceHolder>(*RegisteredHolderDescriptor, StoreBLifetime);
+	const TObjectCreationResult<FCrossStoreLeaf> StoreBReferenced = StoreB.NewObject<FCrossStoreLeaf>(*RegisteredLeafDescriptor, StoreBLifetime);
 	MW_EXPECT_EQ(Test, EObjectResult::Success, StoreAHolder.Result, "Store A should create the holder before tracing it");
 	MW_EXPECT_EQ(Test, EObjectResult::Success, StoreAUnrelated.Result, "Store A should create the unrelated leaf");
 	MW_EXPECT_EQ(Test, EObjectResult::Success, StoreBDummy.Result, "Store B should align handle values for the regression");
@@ -730,7 +734,7 @@ MW_TEST_CASE(GarbageCollectorIgnoresCrossStoreSameValuedReference)
 
 	static_cast<void>(StoreBDummy);
 	StoreAHolder.Object.Get()->SetReference(StoreBReferenced.Object);
-	auto HolderRoot = StoreA.MakeStrongObjectPtr(StoreAHolder.Object);
+	TStrongObjectPointerResult<FCrossStoreReferenceHolder> HolderRoot = StoreA.MakeStrongObjectPtr(StoreAHolder.Object);
 	static_cast<void>(HolderRoot);
 	std::array<FObjectHandle, 2> Worklist{};
 	FGarbageCollector Collector(StoreA, FGarbageCollectorStorage{Worklist.data(), static_cast<std::uint32_t>(Worklist.size())});

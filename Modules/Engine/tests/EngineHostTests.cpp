@@ -241,7 +241,8 @@ struct FHostFixture final
 		}
 		Actor = InHost.NewObject<FHostActor>(*InHost.FindClass(HostActorTypeId), Sequence, ActorEvents).Object;
 		Component = InHost.NewObject<FHostComponent>(*InHost.FindClass(HostComponentTypeId), Sequence, ComponentEvents).Object;
-		if (Actor.Get() == nullptr || Component.Get() == nullptr)
+		const bool bBothObjectsCreated = Actor.Get() != nullptr && Component.Get() != nullptr;
+		if (!bBothObjectsCreated)
 		{
 			return false;
 		}
@@ -249,7 +250,8 @@ struct FHostFixture final
 		{
 			return false;
 		}
-		return InHost.GetWorld().RegisterActor(TObjectPtr<AActor>{Actor}) == EEngineResult::Success;
+		const EEngineResult RegisterResult = InHost.GetWorld().RegisterActor(TObjectPtr<AActor>{Actor});
+		return RegisterResult == EEngineResult::Success;
 	}
 };
 

@@ -11,6 +11,9 @@ namespace MicroWorld::Tests
 namespace
 {
 
+	/** Dispatcher timestamp every lifecycle test passes to BeginPlay and Advance. */
+	constexpr MicroWorld::TimePointMilliseconds DispatcherStartTime{100};
+
 	/**
 	 * Records every IEngine call so FApplication's sealed forwarding is observed behaviourally.
 	 *
@@ -106,7 +109,7 @@ MW_TEST_CASE(ApplicationBeginPlayInvokesOnConfigureThenEngineBeginPlay)
 	FRecordingEngine Engine;
 	FConfiguringApplication Application{Engine};
 
-	const MicroWorld::ERuntimeResult BeginResult = Application.BeginPlay(100);
+	const MicroWorld::ERuntimeResult BeginResult = Application.BeginPlay(DispatcherStartTime);
 
 	MW_EXPECT_EQ(Test, MicroWorld::ERuntimeResult::Success, BeginResult, "First BeginPlay should succeed");
 	MW_EXPECT_EQ(Test, 1, Application.ConfigureCount, "First BeginPlay should invoke OnConfigure once");
@@ -120,8 +123,8 @@ MW_TEST_CASE(ApplicationFailedConfigureInvokesFailureHookAndLatchesTerminal)
 	FConfiguringApplication Application{Engine};
 	Application.ConfigureConfigureResult(MicroWorld::ERuntimeResult::CapacityExceeded);
 
-	const MicroWorld::ERuntimeResult BeginResult = Application.BeginPlay(100);
-	const MicroWorld::ERuntimeResult AdvanceAfterFailedBeginResult = Application.Advance(100);
+	const MicroWorld::ERuntimeResult BeginResult = Application.BeginPlay(DispatcherStartTime);
+	const MicroWorld::ERuntimeResult AdvanceAfterFailedBeginResult = Application.Advance(DispatcherStartTime);
 	const MicroWorld::ERuntimeResult EndAfterFailedBeginResult = Application.EndPlay();
 
 	MW_EXPECT_EQ(Test, MicroWorld::ERuntimeResult::CapacityExceeded, BeginResult, "Failed configure should surface the OnConfigure result");
@@ -138,9 +141,9 @@ MW_TEST_CASE(ApplicationSecondBeginPlayIsRejected)
 {
 	FRecordingEngine Engine;
 	FConfiguringApplication Application{Engine};
-	Application.BeginPlay(100);
+	Application.BeginPlay(DispatcherStartTime);
 
-	const MicroWorld::ERuntimeResult SecondBeginResult = Application.BeginPlay(100);
+	const MicroWorld::ERuntimeResult SecondBeginResult = Application.BeginPlay(DispatcherStartTime);
 
 	MW_EXPECT_EQ(Test, MicroWorld::ERuntimeResult::InvalidLifecycle, SecondBeginResult, "Second BeginPlay should be rejected");
 	MW_EXPECT_EQ(Test, 1, Application.ConfigureCount, "Second BeginPlay should not re-invoke OnConfigure");
@@ -153,7 +156,7 @@ MW_TEST_CASE(ApplicationAdvanceBeforeBeginPlayIsRejected)
 	FRecordingEngine Engine;
 	FConfiguringApplication Application{Engine};
 
-	const MicroWorld::ERuntimeResult AdvanceResult = Application.Advance(100);
+	const MicroWorld::ERuntimeResult AdvanceResult = Application.Advance(DispatcherStartTime);
 
 	MW_EXPECT_EQ(Test, MicroWorld::ERuntimeResult::InvalidLifecycle, AdvanceResult, "Advance before BeginPlay should be rejected");
 	MW_EXPECT_EQ(Test, 0, Engine.TickCount, "Advance before BeginPlay should not invoke the engine Tick");
@@ -164,10 +167,10 @@ MW_TEST_CASE(ApplicationAdvanceRejectsBackwardTime)
 {
 	FRecordingEngine Engine;
 	FConfiguringApplication Application{Engine};
-	Application.BeginPlay(100);
-	Application.Advance(100);
+	Application.BeginPlay(DispatcherStartTime);
+	Application.Advance(DispatcherStartTime);
 
-	const MicroWorld::ERuntimeResult BackwardResult = Application.Advance(99);
+	const MicroWorld::ERuntimeResult BackwardResult = Application.Advance(DispatcherStartTime - MicroWorld::TimePointMilliseconds{1});
 
 	MW_EXPECT_EQ(Test, MicroWorld::ERuntimeResult::NonMonotonicTime, BackwardResult, "Backward time should be rejected");
 	MW_EXPECT_EQ(Test, 1, Engine.TickCount, "Backward Advance should not invoke the engine Tick");
@@ -178,10 +181,10 @@ MW_TEST_CASE(ApplicationAdvanceAcceptsRepeatedSameTimestamp)
 {
 	FRecordingEngine Engine;
 	FConfiguringApplication Application{Engine};
-	Application.BeginPlay(100);
-	Application.Advance(100);
+	Application.BeginPlay(DispatcherStartTime);
+	Application.Advance(DispatcherStartTime);
 
-	const MicroWorld::ERuntimeResult RepeatedTimeResult = Application.Advance(100);
+	const MicroWorld::ERuntimeResult RepeatedTimeResult = Application.Advance(DispatcherStartTime);
 
 	MW_EXPECT_EQ(Test, MicroWorld::ERuntimeResult::Success, RepeatedTimeResult, "Repeated timestamp should be accepted as monotonic");
 	MW_EXPECT_EQ(Test, 2, Engine.TickCount, "Repeated-timestamp Advance should still invoke the engine Tick");
@@ -192,7 +195,7 @@ MW_TEST_CASE(ApplicationEndPlayIsIdempotent)
 {
 	FRecordingEngine Engine;
 	FConfiguringApplication Application{Engine};
-	Application.BeginPlay(100);
+	Application.BeginPlay(DispatcherStartTime);
 
 	const MicroWorld::ERuntimeResult FirstEndResult = Application.EndPlay();
 	const MicroWorld::ERuntimeResult SecondEndResult = Application.EndPlay();
@@ -207,10 +210,10 @@ MW_TEST_CASE(ApplicationAdvanceAfterEndPlayIsRejected)
 {
 	FRecordingEngine Engine;
 	FConfiguringApplication Application{Engine};
-	Application.BeginPlay(100);
+	Application.BeginPlay(DispatcherStartTime);
 	Application.EndPlay();
 
-	const MicroWorld::ERuntimeResult AdvanceResult = Application.Advance(100);
+	const MicroWorld::ERuntimeResult AdvanceResult = Application.Advance(DispatcherStartTime);
 
 	MW_EXPECT_EQ(Test, MicroWorld::ERuntimeResult::InvalidLifecycle, AdvanceResult, "Advance after EndPlay should be rejected");
 	MW_EXPECT_EQ(Test, 0, Engine.TickCount, "Advance after EndPlay should not invoke the engine Tick");

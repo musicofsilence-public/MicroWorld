@@ -7,10 +7,19 @@
 namespace MicroWorld::Tests
 {
 
+/** Fast cadence shared by the multi-test tick interval scenarios. */
+constexpr DurationMilliseconds FastTickInterval{10};
+
+/** Slow cadence shared by the late-arrival and sibling-tickable scenarios. */
+constexpr DurationMilliseconds SlowTickInterval{25};
+
+/** Cadence the live interval-change test switches to so the new deadline is observable. */
+constexpr DurationMilliseconds ChangedTickInterval{20};
+
 /** Proves startup establishes a fresh schedule instead of inventing elapsed time. */
 MW_TEST_CASE(Tick_FirstAdvanceTicksWithZeroDelta)
 {
-	const FTickConfiguration Configuration = FTickConfiguration::EnabledEvery(25);
+	const FTickConfiguration Configuration = FTickConfiguration::EnabledEvery(SlowTickInterval);
 	FTickFunction Tick(Configuration);
 	Tick.BeginPlay(100);
 
@@ -29,7 +38,7 @@ MW_TEST_CASE(Tick_FirstAdvanceTicksWithZeroDelta)
 /** Proves runtime enablement cannot silently replace the configured cadence. */
 MW_TEST_CASE(Tick_EnablingDisabledTickPreservesInterval)
 {
-	const FTickConfiguration Configuration{true, false, 25};
+	const FTickConfiguration Configuration{true, false, SlowTickInterval};
 	FTickFunction Tick(Configuration);
 
 	const ERuntimeResult EnableResult = Tick.SetEnabled(true);
@@ -38,13 +47,13 @@ MW_TEST_CASE(Tick_EnablingDisabledTickPreservesInterval)
 	const DurationMilliseconds ActualInterval = Tick.GetInterval();
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, EnableResult, "Enabling a tick-capable function should succeed");
 	MW_EXPECT_TRUE(Test, bEnabled, "Tick-capable function should become enabled");
-	MW_EXPECT_EQ(Test, DurationMilliseconds{25}, ActualInterval, "Enabling should preserve the configured interval");
+	MW_EXPECT_EQ(Test, SlowTickInterval, ActualInterval, "Enabling should preserve the configured interval");
 }
 
 /** Proves disabled time is not charged to a newly re-enabled schedule. */
 MW_TEST_CASE(Tick_ReenabledTickUsesFreshZeroDeltaSchedule)
 {
-	const FTickConfiguration Configuration = FTickConfiguration::EnabledEvery(10);
+	const FTickConfiguration Configuration = FTickConfiguration::EnabledEvery(FastTickInterval);
 	FTickFunction Tick(Configuration);
 	Tick.BeginPlay(100);
 	const FTickDecision FirstDecision = Tick.Advance(100);
@@ -67,7 +76,7 @@ MW_TEST_CASE(Tick_ReenabledTickUsesFreshZeroDeltaSchedule)
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, EnableResult, "Re-enabling a tick-capable function should succeed");
 	MW_EXPECT_TRUE(Test, bReenabledTicked, "First advance after re-enable should execute");
 	MW_EXPECT_EQ(Test, DurationMilliseconds{0}, ReenabledDelta, "First tick after re-enable should have zero delta");
-	MW_EXPECT_EQ(Test, DurationMilliseconds{10}, ActualInterval, "Disable and re-enable should preserve interval");
+	MW_EXPECT_EQ(Test, FastTickInterval, ActualInterval, "Disable and re-enable should preserve interval");
 }
 
 /** Proves interval zero means once per caller update rather than an unbounded loop. */
@@ -98,7 +107,7 @@ MW_TEST_CASE(Tick_ZeroIntervalTicksOnEveryAdvance)
 /** Proves a late caller produces one tick and schedules from actual execution time. */
 MW_TEST_CASE(Tick_LateIntervalTickDoesNotCatchUp)
 {
-	const FTickConfiguration Configuration = FTickConfiguration::EnabledEvery(10);
+	const FTickConfiguration Configuration = FTickConfiguration::EnabledEvery(FastTickInterval);
 	FTickFunction Tick(Configuration);
 	Tick.BeginPlay(0);
 	const FTickDecision FirstDecision = Tick.Advance(0);
@@ -121,14 +130,14 @@ MW_TEST_CASE(Tick_LateIntervalTickDoesNotCatchUp)
 	MW_EXPECT_EQ(Test, false, bSameTimeTicked, "Late tick should not leave catch-up work due");
 	MW_EXPECT_EQ(Test, false, bBeforeNextDueTicked, "Next tick should wait from actual execution time");
 	MW_EXPECT_TRUE(Test, bNextDueTicked, "Tick should execute at rescheduled deadline");
-	MW_EXPECT_EQ(Test, DurationMilliseconds{10}, NextDueDelta, "Rescheduled tick should use its own elapsed time");
+	MW_EXPECT_EQ(Test, FastTickInterval, NextDueDelta, "Rescheduled tick should use its own elapsed time");
 }
 
 /** Proves sibling tickables calculate elapsed time from their own execution history. */
 MW_TEST_CASE(Tick_DeltaBelongsToIndividualTickFunction)
 {
-	const FTickConfiguration FastConfiguration = FTickConfiguration::EnabledEvery(10);
-	const FTickConfiguration SlowConfiguration = FTickConfiguration::EnabledEvery(25);
+	const FTickConfiguration FastConfiguration = FTickConfiguration::EnabledEvery(FastTickInterval);
+	const FTickConfiguration SlowConfiguration = FTickConfiguration::EnabledEvery(SlowTickInterval);
 	FTickFunction FastTick(FastConfiguration);
 	FTickFunction SlowTick(SlowConfiguration);
 	FastTick.BeginPlay(0);
@@ -153,10 +162,10 @@ MW_TEST_CASE(Tick_DeltaBelongsToIndividualTickFunction)
 	MW_EXPECT_TRUE(Test, bFastFirstTicked, "Fast tick should establish its own schedule");
 	MW_EXPECT_TRUE(Test, bSlowFirstTicked, "Slow tick should establish its own schedule");
 	MW_EXPECT_TRUE(Test, bFastSecondTicked, "Fast tick should execute at its interval");
-	MW_EXPECT_EQ(Test, DurationMilliseconds{10}, FastSecondDelta, "Fast tick delta should use fast history");
+	MW_EXPECT_EQ(Test, FastTickInterval, FastSecondDelta, "Fast tick delta should use fast history");
 	MW_EXPECT_EQ(Test, false, bSlowEarlyTicked, "Slow tick should remain pending before interval");
 	MW_EXPECT_TRUE(Test, bSlowSecondTicked, "Slow tick should execute at its interval");
-	MW_EXPECT_EQ(Test, DurationMilliseconds{25}, SlowSecondDelta, "Slow tick delta should use slow history");
+	MW_EXPECT_EQ(Test, SlowTickInterval, SlowSecondDelta, "Slow tick delta should use slow history");
 	MW_EXPECT_TRUE(Test, bFastLateTicked, "Fast tick should execute once when observed late");
 	MW_EXPECT_EQ(Test, DurationMilliseconds{15}, FastLateDelta, "Fast late delta should ignore slow tick history");
 }
@@ -164,11 +173,11 @@ MW_TEST_CASE(Tick_DeltaBelongsToIndividualTickFunction)
 /** Proves cadence configuration cannot override independent enablement intent. */
 MW_TEST_CASE(Tick_IntervalChangeDoesNotEnableTick)
 {
-	const FTickConfiguration Configuration{true, false, 10};
+	const FTickConfiguration Configuration{true, false, FastTickInterval};
 	FTickFunction Tick(Configuration);
 	Tick.BeginPlay(0);
 
-	const ERuntimeResult SetIntervalResult = Tick.SetInterval(25);
+	const ERuntimeResult SetIntervalResult = Tick.SetInterval(SlowTickInterval);
 	const FTickDecision Decision = Tick.Advance(25);
 
 	const bool bEnabled = Tick.IsEnabled();
@@ -177,7 +186,7 @@ MW_TEST_CASE(Tick_IntervalChangeDoesNotEnableTick)
 	const bool bShouldTick = Decision.bShouldTick;
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, SetIntervalResult, "Changing tick interval should succeed");
 	MW_EXPECT_EQ(Test, false, bEnabled, "Interval change should preserve disabled state");
-	MW_EXPECT_EQ(Test, DurationMilliseconds{25}, ActualInterval, "Interval change should store requested value");
+	MW_EXPECT_EQ(Test, SlowTickInterval, ActualInterval, "Interval change should store requested value");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, AdvanceResult, "Disabled tick advance should remain valid");
 	MW_EXPECT_EQ(Test, false, bShouldTick, "Interval change should not cause disabled work");
 }
@@ -185,12 +194,12 @@ MW_TEST_CASE(Tick_IntervalChangeDoesNotEnableTick)
 /** Proves a live cadence change starts a fresh schedule without stale delta. */
 MW_TEST_CASE(Tick_EnabledIntervalChangeResetsNextAdvance)
 {
-	const FTickConfiguration Configuration = FTickConfiguration::EnabledEvery(10);
+	const FTickConfiguration Configuration = FTickConfiguration::EnabledEvery(FastTickInterval);
 	FTickFunction Tick(Configuration);
 	Tick.BeginPlay(0);
 	const FTickDecision FirstDecision = Tick.Advance(0);
 	const FTickDecision EarlyDecision = Tick.Advance(5);
-	const ERuntimeResult SetIntervalResult = Tick.SetInterval(20);
+	const ERuntimeResult SetIntervalResult = Tick.SetInterval(ChangedTickInterval);
 
 	const FTickDecision ResetDecision = Tick.Advance(6);
 	const FTickDecision BeforeNewDueDecision = Tick.Advance(25);
@@ -210,13 +219,13 @@ MW_TEST_CASE(Tick_EnabledIntervalChangeResetsNextAdvance)
 	MW_EXPECT_EQ(Test, DurationMilliseconds{0}, ResetDelta, "Changed interval schedule should start at zero delta");
 	MW_EXPECT_EQ(Test, false, bBeforeNewDueTicked, "Changed interval should wait from reset time");
 	MW_EXPECT_TRUE(Test, bNewDueTicked, "Changed interval should tick at new deadline");
-	MW_EXPECT_EQ(Test, DurationMilliseconds{20}, NewDueDelta, "Changed interval tick should report new interval");
+	MW_EXPECT_EQ(Test, ChangedTickInterval, NewDueDelta, "Changed interval tick should report new interval");
 }
 
 /** Proves construction-time tick capability remains a permanent invariant. */
 MW_TEST_CASE(Tick_CannotEverTickRejectsEnable)
 {
-	const FTickConfiguration Configuration{false, true, 10};
+	const FTickConfiguration Configuration{false, true, FastTickInterval};
 	FTickFunction Tick(Configuration);
 	Tick.BeginPlay(0);
 
@@ -235,7 +244,7 @@ MW_TEST_CASE(Tick_CannotEverTickRejectsEnable)
 /** Proves rejected time rollback cannot corrupt a later valid deadline or delta. */
 MW_TEST_CASE(Tick_BackwardTimePreservesSchedule)
 {
-	const FTickConfiguration Configuration = FTickConfiguration::EnabledEvery(10);
+	const FTickConfiguration Configuration = FTickConfiguration::EnabledEvery(FastTickInterval);
 	FTickFunction Tick(Configuration);
 	Tick.BeginPlay(100);
 	const FTickDecision FirstDecision = Tick.Advance(100);
@@ -255,7 +264,7 @@ MW_TEST_CASE(Tick_BackwardTimePreservesSchedule)
 	MW_EXPECT_EQ(Test, ERuntimeResult::NonMonotonicTime, BackwardResult, "Backward time should return explicit error");
 	MW_EXPECT_EQ(Test, false, bBackwardTicked, "Backward time should never execute a tick");
 	MW_EXPECT_TRUE(Test, bDueTicked, "Original deadline should survive backward time");
-	MW_EXPECT_EQ(Test, DurationMilliseconds{10}, DueDelta, "Preserved schedule should retain original delta");
+	MW_EXPECT_EQ(Test, FastTickInterval, DueDelta, "Preserved schedule should retain original delta");
 }
 
 /** Proves wide clock gaps remain bounded by the public duration representation. */

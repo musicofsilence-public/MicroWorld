@@ -30,6 +30,12 @@ constexpr std::size_t TestInlineCallbackBytes = 64;
 /** Capacity large enough for ordering and mutation tests without masking capacity behavior. */
 constexpr std::size_t TestTimerCapacity = 4;
 
+/** Timer period most scheduling tests use so their deadlines land on round Advance timestamps. */
+constexpr DurationMilliseconds StandardTimerPeriod{100};
+
+/** Initial clock the zero-delay tests start at so a first Advance at the same timestamp is due. */
+constexpr TimePointMilliseconds SaturatedTestInitialNow{1000};
+
 using FTestManager = TTimerManager<TestTimerCapacity, TestInlineCallbackBytes>;
 using FTestDelegate = TDelegate<void(), TestInlineCallbackBytes>;
 
@@ -72,10 +78,10 @@ ETimerMode MakeOutOfRangeTimerMode() noexcept
 MW_TEST_CASE(EngineTimerOneShotDoesNotFireBeforeDeadline)
 {
 	FFireCounter Counter;
-	FTestManager Manager{1000};
+	FTestManager Manager{SaturatedTestInitialNow};
 	FTimerHandle Handle{};
 
-	const ETimerResult Result = Manager.Schedule(MakeCounterCallback(Counter), 100, ETimerMode::OneShot, Handle);
+	const ETimerResult Result = Manager.Schedule(MakeCounterCallback(Counter), StandardTimerPeriod, ETimerMode::OneShot, Handle);
 	MW_EXPECT_SUCCESS(Test, Result, "A valid one-shot schedule should succeed");
 	MW_EXPECT_TRUE(Test, Handle.IsValid(), "A successful schedule publishes a valid handle");
 
@@ -92,7 +98,8 @@ MW_TEST_CASE(EngineTimerOneShotFiresOnceWhenDue)
 	FTestManager Manager{0};
 	FTimerHandle Handle{};
 
-	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeCounterCallback(Counter), 100, ETimerMode::OneShot, Handle), "Schedule should succeed");
+	MW_EXPECT_SUCCESS(
+		Test, Manager.Schedule(MakeCounterCallback(Counter), StandardTimerPeriod, ETimerMode::OneShot, Handle), "Schedule should succeed");
 	MW_EXPECT_TRUE(Test, Handle.IsValid(), "A successful schedule publishes a valid handle");
 
 	MW_EXPECT_SUCCESS(Test, Manager.Advance(100), "Advance to the deadline should succeed");
@@ -107,7 +114,8 @@ MW_TEST_CASE(EngineTimerOneShotIsRemovedAfterFiring)
 	FTestManager Manager{0};
 	FTimerHandle Handle{};
 
-	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeCounterCallback(Counter), 100, ETimerMode::OneShot, Handle), "Schedule should succeed");
+	MW_EXPECT_SUCCESS(
+		Test, Manager.Schedule(MakeCounterCallback(Counter), StandardTimerPeriod, ETimerMode::OneShot, Handle), "Schedule should succeed");
 	MW_EXPECT_EQ(Test, 1u, Manager.TimerCount(), "One schedule should occupy one slot");
 
 	MW_EXPECT_SUCCESS(Test, Manager.Advance(100), "Advance to the deadline should succeed");
@@ -122,7 +130,8 @@ MW_TEST_CASE(EngineTimerOneShotHandleBecomesStaleAfterFiring)
 	FTestManager Manager{0};
 	FTimerHandle Handle{};
 
-	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeCounterCallback(Counter), 100, ETimerMode::OneShot, Handle), "Schedule should succeed");
+	MW_EXPECT_SUCCESS(
+		Test, Manager.Schedule(MakeCounterCallback(Counter), StandardTimerPeriod, ETimerMode::OneShot, Handle), "Schedule should succeed");
 	MW_EXPECT_SUCCESS(Test, Manager.Advance(100), "Advance to the deadline should succeed");
 	MW_EXPECT_EQ(Test, 1u, Counter.Count, "The one-shot should have fired exactly once");
 
@@ -141,7 +150,8 @@ MW_TEST_CASE(EngineTimerLoopingFiresOnCadence)
 	FTestManager Manager{0};
 	FTimerHandle Handle{};
 
-	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeCounterCallback(Counter), 100, ETimerMode::Looping, Handle), "Schedule should succeed");
+	MW_EXPECT_SUCCESS(
+		Test, Manager.Schedule(MakeCounterCallback(Counter), StandardTimerPeriod, ETimerMode::Looping, Handle), "Schedule should succeed");
 
 	MW_EXPECT_SUCCESS(Test, Manager.Advance(100), "Advance to the first deadline should succeed");
 	MW_EXPECT_EQ(Test, 1u, Counter.Count, "The looping timer should fire at its first deadline");
@@ -160,7 +170,8 @@ MW_TEST_CASE(EngineTimerLoopingFiresAtMostOncePerAdvance)
 	FTestManager Manager{0};
 	FTimerHandle Handle{};
 
-	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeCounterCallback(Counter), 100, ETimerMode::Looping, Handle), "Schedule should succeed");
+	MW_EXPECT_SUCCESS(
+		Test, Manager.Schedule(MakeCounterCallback(Counter), StandardTimerPeriod, ETimerMode::Looping, Handle), "Schedule should succeed");
 
 	MW_EXPECT_SUCCESS(Test, Manager.Advance(100), "Advance to the first deadline should succeed");
 	MW_EXPECT_EQ(Test, 1u, Counter.Count, "The looping timer should fire once at its first deadline");
@@ -176,7 +187,8 @@ MW_TEST_CASE(EngineTimerLoopingNextDeadlineUsesActualNow)
 	FTestManager Manager{0};
 	FTimerHandle Handle{};
 
-	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeCounterCallback(Counter), 100, ETimerMode::Looping, Handle), "Schedule should succeed");
+	MW_EXPECT_SUCCESS(
+		Test, Manager.Schedule(MakeCounterCallback(Counter), StandardTimerPeriod, ETimerMode::Looping, Handle), "Schedule should succeed");
 
 	MW_EXPECT_SUCCESS(Test, Manager.Advance(100), "Advance to the first deadline should succeed");
 	MW_EXPECT_EQ(Test, 1u, Counter.Count, "The looping timer should fire at its first deadline");
@@ -197,15 +209,15 @@ MW_TEST_CASE(EngineTimerLoopingNextDeadlineUsesActualNow)
 MW_TEST_CASE(EngineTimerZeroPeriodLoopingFiresOncePerAdvance)
 {
 	FFireCounter Counter;
-	FTestManager Manager{1000};
+	FTestManager Manager{SaturatedTestInitialNow};
 	FTimerHandle Handle{};
 
 	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeCounterCallback(Counter), 0, ETimerMode::Looping, Handle), "Schedule should succeed");
 
-	MW_EXPECT_SUCCESS(Test, Manager.Advance(1000), "The first Advance at InitialNow should succeed");
+	MW_EXPECT_SUCCESS(Test, Manager.Advance(SaturatedTestInitialNow), "The first Advance at InitialNow should succeed");
 	MW_EXPECT_EQ(Test, 1u, Counter.Count, "A zero-period looping timer should fire on the first Advance");
 
-	MW_EXPECT_SUCCESS(Test, Manager.Advance(1000), "A second Advance at the same timestamp should succeed");
+	MW_EXPECT_SUCCESS(Test, Manager.Advance(SaturatedTestInitialNow), "A second Advance at the same timestamp should succeed");
 	MW_EXPECT_EQ(Test, 2u, Counter.Count, "A zero-period looping timer fires once per Advance, including at the same timestamp");
 }
 
@@ -217,7 +229,7 @@ MW_TEST_CASE(EngineTimerNonzeroPeriodLoopingDoesNotRepeatAtSaturatedTimestamp)
 	FTestManager Manager{SaturatedNow};
 	FTimerHandle Handle{};
 
-	const ETimerResult ScheduleResult = Manager.Schedule(MakeCounterCallback(Counter), 100, ETimerMode::Looping, Handle);
+	const ETimerResult ScheduleResult = Manager.Schedule(MakeCounterCallback(Counter), StandardTimerPeriod, ETimerMode::Looping, Handle);
 	MW_EXPECT_SUCCESS(Test, ScheduleResult, "Scheduling near saturation should succeed");
 
 	const ETimerResult FirstAdvance = Manager.Advance(SaturatedNow);
@@ -240,7 +252,8 @@ MW_TEST_CASE(EngineTimerCancellationBeforeDuePreventsInvocation)
 	FTestManager Manager{0};
 	FTimerHandle Handle{};
 
-	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeCounterCallback(Counter), 100, ETimerMode::OneShot, Handle), "Schedule should succeed");
+	MW_EXPECT_SUCCESS(
+		Test, Manager.Schedule(MakeCounterCallback(Counter), StandardTimerPeriod, ETimerMode::OneShot, Handle), "Schedule should succeed");
 	MW_EXPECT_EQ(Test, 1u, Manager.TimerCount(), "One schedule should occupy one slot");
 
 	const ETimerResult CancelResult = Manager.Cancel(Handle);
@@ -258,7 +271,8 @@ MW_TEST_CASE(EngineTimerCancellationReducesOccupancy)
 	FTestManager Manager{0};
 	FTimerHandle Handle{};
 
-	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeCounterCallback(Counter), 100, ETimerMode::OneShot, Handle), "Schedule should succeed");
+	MW_EXPECT_SUCCESS(
+		Test, Manager.Schedule(MakeCounterCallback(Counter), StandardTimerPeriod, ETimerMode::OneShot, Handle), "Schedule should succeed");
 	MW_EXPECT_EQ(Test, 1u, Manager.TimerCount(), "One schedule should occupy one slot");
 
 	MW_EXPECT_SUCCESS(Test, Manager.Cancel(Handle), "Cancellation should succeed");
@@ -272,7 +286,8 @@ MW_TEST_CASE(EngineTimerRepeatedCancellationReturnsStaleHandle)
 	FTestManager Manager{0};
 	FTimerHandle Handle{};
 
-	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeCounterCallback(Counter), 100, ETimerMode::OneShot, Handle), "Schedule should succeed");
+	MW_EXPECT_SUCCESS(
+		Test, Manager.Schedule(MakeCounterCallback(Counter), StandardTimerPeriod, ETimerMode::OneShot, Handle), "Schedule should succeed");
 
 	const ETimerResult FirstCancel = Manager.Cancel(Handle);
 	MW_EXPECT_SUCCESS(Test, FirstCancel, "The first cancellation should succeed");
@@ -288,7 +303,8 @@ MW_TEST_CASE(EngineTimerCancellationAfterCompletionReturnsStaleHandle)
 	FTestManager Manager{0};
 	FTimerHandle Handle{};
 
-	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeCounterCallback(Counter), 100, ETimerMode::OneShot, Handle), "Schedule should succeed");
+	MW_EXPECT_SUCCESS(
+		Test, Manager.Schedule(MakeCounterCallback(Counter), StandardTimerPeriod, ETimerMode::OneShot, Handle), "Schedule should succeed");
 	MW_EXPECT_SUCCESS(Test, Manager.Advance(100), "Advance to the deadline should succeed");
 	MW_EXPECT_EQ(Test, 1u, Counter.Count, "The one-shot should have fired exactly once");
 
@@ -325,7 +341,8 @@ MW_TEST_CASE(EngineTimerStaleAndGenerationMismatchedHandlesRejected)
 	FTestManager Manager{0};
 	FTimerHandle Handle{};
 
-	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeCounterCallback(Counter), 100, ETimerMode::Looping, Handle), "Schedule should succeed");
+	MW_EXPECT_SUCCESS(
+		Test, Manager.Schedule(MakeCounterCallback(Counter), StandardTimerPeriod, ETimerMode::Looping, Handle), "Schedule should succeed");
 	const std::uint16_t SlotIndex = Handle.Index;
 	const std::uint32_t PublishedGeneration = Handle.Generation;
 
@@ -344,11 +361,15 @@ MW_TEST_CASE(EngineTimerSlotReusePublishesDifferentGeneration)
 	FTestManager Manager{0};
 	FTimerHandle FirstHandle{};
 
-	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeCounterCallback(Counter), 100, ETimerMode::OneShot, FirstHandle), "First schedule should succeed");
+	MW_EXPECT_SUCCESS(
+		Test, Manager.Schedule(MakeCounterCallback(Counter), StandardTimerPeriod, ETimerMode::OneShot, FirstHandle), "First schedule should succeed");
 	MW_EXPECT_SUCCESS(Test, Manager.Cancel(FirstHandle), "Canceling the first timer should succeed");
 
 	FTimerHandle SecondHandle{};
-	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeCounterCallback(Counter), 100, ETimerMode::OneShot, SecondHandle), "Second schedule should succeed");
+	MW_EXPECT_SUCCESS(
+		Test,
+		Manager.Schedule(MakeCounterCallback(Counter), StandardTimerPeriod, ETimerMode::OneShot, SecondHandle),
+		"Second schedule should succeed");
 
 	MW_EXPECT_TRUE(Test, FirstHandle.Index == SecondHandle.Index, "A freed slot should be reused first");
 	MW_EXPECT_TRUE(Test, FirstHandle.Generation != SecondHandle.Generation, "Reused slot must publish a different generation");
@@ -361,12 +382,15 @@ MW_TEST_CASE(EngineTimerStaleHandleCannotAffectReplacement)
 	FTestManager Manager{0};
 	FTimerHandle FirstHandle{};
 
-	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeCounterCallback(Counter), 100, ETimerMode::Looping, FirstHandle), "First schedule should succeed");
+	MW_EXPECT_SUCCESS(
+		Test, Manager.Schedule(MakeCounterCallback(Counter), StandardTimerPeriod, ETimerMode::Looping, FirstHandle), "First schedule should succeed");
 	MW_EXPECT_SUCCESS(Test, Manager.Cancel(FirstHandle), "Canceling the first timer should succeed");
 
 	FTimerHandle SecondHandle{};
 	MW_EXPECT_SUCCESS(
-		Test, Manager.Schedule(MakeCounterCallback(Counter), 100, ETimerMode::Looping, SecondHandle), "Replacement schedule should succeed");
+		Test,
+		Manager.Schedule(MakeCounterCallback(Counter), StandardTimerPeriod, ETimerMode::Looping, SecondHandle),
+		"Replacement schedule should succeed");
 	MW_EXPECT_EQ(Test, 1u, Manager.TimerCount(), "The replacement should occupy one slot");
 
 	const ETimerResult StaleCancel = Manager.Cancel(FirstHandle);
@@ -420,12 +444,16 @@ MW_TEST_CASE(EngineTimerFullManagerPreservesCallbackOnFailure)
 	FTimerHandle ThirdHandle{CanaryHandle};
 
 	MW_EXPECT_SUCCESS(
-		Test, Manager.Schedule(MakeCounterCallback(OccupantCounter), 100, ETimerMode::Looping, FirstHandle), "First occupant should schedule");
+		Test,
+		Manager.Schedule(MakeCounterCallback(OccupantCounter), StandardTimerPeriod, ETimerMode::Looping, FirstHandle),
+		"First occupant should schedule");
 	MW_EXPECT_SUCCESS(
-		Test, Manager.Schedule(MakeCounterCallback(OccupantCounter), 100, ETimerMode::Looping, SecondHandle), "Second occupant should schedule");
+		Test,
+		Manager.Schedule(MakeCounterCallback(OccupantCounter), StandardTimerPeriod, ETimerMode::Looping, SecondHandle),
+		"Second occupant should schedule");
 
 	FTestDelegate ThirdCallback = MakeCounterCallback(ThirdCounter);
-	const ETimerResult Result = Manager.Schedule(std::move(ThirdCallback), 100, ETimerMode::OneShot, ThirdHandle);
+	const ETimerResult Result = Manager.Schedule(std::move(ThirdCallback), StandardTimerPeriod, ETimerMode::OneShot, ThirdHandle);
 
 	MW_EXPECT_EQ(Test, ETimerResult::CapacityExceeded, Result, "A full manager must report CapacityExceeded");
 	MW_EXPECT_TRUE(Test, !ThirdHandle.IsValid(), "The failed schedule must clear the canary output handle");
@@ -440,7 +468,7 @@ MW_TEST_CASE(EngineTimerUnboundCallbackRejected)
 	FTestDelegate Unbound;
 	FTimerHandle Handle{CanaryHandle};
 
-	const ETimerResult Result = Manager.Schedule(std::move(Unbound), 100, ETimerMode::OneShot, Handle);
+	const ETimerResult Result = Manager.Schedule(std::move(Unbound), StandardTimerPeriod, ETimerMode::OneShot, Handle);
 
 	MW_EXPECT_EQ(Test, ETimerResult::InvalidCallback, Result, "An unbound delegate must be rejected");
 	MW_EXPECT_TRUE(Test, !Handle.IsValid(), "The failed schedule must clear the canary output handle");
@@ -454,7 +482,7 @@ MW_TEST_CASE(EngineTimerInvalidModeRejected)
 	FTestManager Manager{0};
 	FTimerHandle Handle{CanaryHandle};
 
-	const ETimerResult Result = Manager.Schedule(MakeCounterCallback(Counter), 100, ETimerMode::None, Handle);
+	const ETimerResult Result = Manager.Schedule(MakeCounterCallback(Counter), StandardTimerPeriod, ETimerMode::None, Handle);
 
 	MW_EXPECT_EQ(Test, ETimerResult::InvalidMode, Result, "The None mode must be rejected");
 	MW_EXPECT_TRUE(Test, !Handle.IsValid(), "The failed schedule must clear the canary output handle");
@@ -484,14 +512,14 @@ MW_TEST_CASE(EngineTimerOutOfRangeModeRejectedTransactionally)
 MW_TEST_CASE(EngineTimerZeroDelayBecomesDueOnNextAdvance)
 {
 	FFireCounter Counter;
-	FTestManager Manager{1000};
+	FTestManager Manager{SaturatedTestInitialNow};
 	FTimerHandle Handle{};
 
 	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeCounterCallback(Counter), 0, ETimerMode::OneShot, Handle), "Schedule should succeed");
 	MW_EXPECT_EQ(Test, 0u, Counter.Count, "Schedule must not synchronously invoke a zero-delay timer");
 	MW_EXPECT_EQ(Test, 1u, Manager.TimerCount(), "A scheduled zero-delay timer must occupy a slot before the first Advance");
 
-	MW_EXPECT_SUCCESS(Test, Manager.Advance(1000), "The first Advance at InitialNow should succeed");
+	MW_EXPECT_SUCCESS(Test, Manager.Advance(SaturatedTestInitialNow), "The first Advance at InitialNow should succeed");
 	MW_EXPECT_EQ(Test, 1u, Counter.Count, "A zero-delay timer must fire on the first Advance at InitialNow");
 	MW_EXPECT_EQ(Test, 0u, Manager.TimerCount(), "The fired zero-delay one-shot must be removed");
 }
@@ -589,9 +617,9 @@ MW_TEST_CASE(EngineTimerSimultaneouslyDueTimersFireInInsertionOrder)
 	FTimerHandle HandleB{};
 	FTimerHandle HandleC{};
 
-	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeOrderCallback(Recorder, 1), 100, ETimerMode::OneShot, HandleA), "A should schedule");
-	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeOrderCallback(Recorder, 2), 100, ETimerMode::OneShot, HandleB), "B should schedule");
-	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeOrderCallback(Recorder, 3), 100, ETimerMode::OneShot, HandleC), "C should schedule");
+	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeOrderCallback(Recorder, 1), StandardTimerPeriod, ETimerMode::OneShot, HandleA), "A should schedule");
+	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeOrderCallback(Recorder, 2), StandardTimerPeriod, ETimerMode::OneShot, HandleB), "B should schedule");
+	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeOrderCallback(Recorder, 3), StandardTimerPeriod, ETimerMode::OneShot, HandleC), "C should schedule");
 
 	MW_EXPECT_SUCCESS(Test, Manager.Advance(100), "Advance at the shared deadline should succeed");
 	MW_EXPECT_EQ(Test, std::size_t{3}, Recorder.Count, "All three due timers should fire");
@@ -611,13 +639,16 @@ MW_TEST_CASE(EngineTimerCancelReuseAppendsReplacementAtInsertionTail)
 	FTimerHandle HandleC{};
 	FTimerHandle HandleD{};
 
-	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeOrderCallback(Recorder, 1), 100, ETimerMode::OneShot, HandleA), "A should schedule");
-	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeOrderCallback(Recorder, 2), 100, ETimerMode::OneShot, HandleB), "B should schedule");
-	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeOrderCallback(Recorder, 3), 100, ETimerMode::OneShot, HandleC), "C should schedule");
+	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeOrderCallback(Recorder, 1), StandardTimerPeriod, ETimerMode::OneShot, HandleA), "A should schedule");
+	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeOrderCallback(Recorder, 2), StandardTimerPeriod, ETimerMode::OneShot, HandleB), "B should schedule");
+	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeOrderCallback(Recorder, 3), StandardTimerPeriod, ETimerMode::OneShot, HandleC), "C should schedule");
 	MW_EXPECT_SUCCESS(Test, Manager.Cancel(HandleB), "Canceling B should succeed");
 
 	// The replacement reuses the freed slot but must dispatch after C, not between A and C.
-	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeOrderCallback(Recorder, 4), 100, ETimerMode::OneShot, HandleD), "D should schedule as replacement");
+	MW_EXPECT_SUCCESS(
+		Test,
+		Manager.Schedule(MakeOrderCallback(Recorder, 4), StandardTimerPeriod, ETimerMode::OneShot, HandleD),
+		"D should schedule as replacement");
 
 	MW_EXPECT_SUCCESS(Test, Manager.Advance(100), "Advance at the shared deadline should succeed");
 	MW_EXPECT_EQ(Test, std::size_t{3}, Recorder.Count, "Three timers should fire after the cancel/reuse");
@@ -636,10 +667,10 @@ MW_TEST_CASE(EngineTimerFullCapacitySameDeadlineStableOrderAndReuse)
 	FTimerHandle HandleC{};
 	FTimerHandle HandleD{};
 
-	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeOrderCallback(Recorder, 1), 100, ETimerMode::OneShot, HandleA), "A should schedule");
-	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeOrderCallback(Recorder, 2), 100, ETimerMode::OneShot, HandleB), "B should schedule");
-	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeOrderCallback(Recorder, 3), 100, ETimerMode::OneShot, HandleC), "C should schedule");
-	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeOrderCallback(Recorder, 4), 100, ETimerMode::OneShot, HandleD), "D should schedule");
+	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeOrderCallback(Recorder, 1), StandardTimerPeriod, ETimerMode::OneShot, HandleA), "A should schedule");
+	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeOrderCallback(Recorder, 2), StandardTimerPeriod, ETimerMode::OneShot, HandleB), "B should schedule");
+	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeOrderCallback(Recorder, 3), StandardTimerPeriod, ETimerMode::OneShot, HandleC), "C should schedule");
+	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeOrderCallback(Recorder, 4), StandardTimerPeriod, ETimerMode::OneShot, HandleD), "D should schedule");
 	MW_EXPECT_EQ(Test, TestTimerCapacity, Manager.TimerCount(), "Four timers should occupy every slot");
 
 	MW_EXPECT_SUCCESS(Test, Manager.Advance(100), "Advance at the shared deadline should succeed");
@@ -652,7 +683,8 @@ MW_TEST_CASE(EngineTimerFullCapacitySameDeadlineStableOrderAndReuse)
 
 	// Every slot was freed by the single post-dispatch compaction pass; a fresh schedule must reuse one.
 	FTimerHandle ReusedHandle{};
-	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeOrderCallback(Recorder, 9), 100, ETimerMode::OneShot, ReusedHandle), "Slot reuse should succeed");
+	MW_EXPECT_SUCCESS(
+		Test, Manager.Schedule(MakeOrderCallback(Recorder, 9), StandardTimerPeriod, ETimerMode::OneShot, ReusedHandle), "Slot reuse should succeed");
 	MW_EXPECT_EQ(Test, 1u, Manager.TimerCount(), "The reused slot should be occupied");
 
 	MW_EXPECT_SUCCESS(Test, Manager.Advance(200), "Advance past the reused deadline should succeed");
@@ -677,9 +709,12 @@ MW_TEST_CASE(EngineTimerMixedStableCompactionPreservesSurvivorsAndTailReuse)
 	FTimerHandle HandleB{};
 	FTimerHandle HandleC{};
 
-	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeOrderCallback(Recorder, 1), 100, ETimerMode::Looping, HandleA), "Looping A should schedule");
-	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeOrderCallback(Recorder, 2), 100, ETimerMode::OneShot, HandleB), "OneShot B should schedule");
-	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeOrderCallback(Recorder, 3), 100, ETimerMode::Looping, HandleC), "Looping C should schedule");
+	MW_EXPECT_SUCCESS(
+		Test, Manager.Schedule(MakeOrderCallback(Recorder, 1), StandardTimerPeriod, ETimerMode::Looping, HandleA), "Looping A should schedule");
+	MW_EXPECT_SUCCESS(
+		Test, Manager.Schedule(MakeOrderCallback(Recorder, 2), StandardTimerPeriod, ETimerMode::OneShot, HandleB), "OneShot B should schedule");
+	MW_EXPECT_SUCCESS(
+		Test, Manager.Schedule(MakeOrderCallback(Recorder, 3), StandardTimerPeriod, ETimerMode::Looping, HandleC), "Looping C should schedule");
 	MW_EXPECT_EQ(Test, 3u, Manager.TimerCount(), "A, B, and C should occupy three slots");
 
 	const std::uint16_t SlotIndexOfB = HandleB.Index;
@@ -700,7 +735,8 @@ MW_TEST_CASE(EngineTimerMixedStableCompactionPreservesSurvivorsAndTailReuse)
 	// Schedule replacement D. It must reuse B's freed physical slot (lowest free index) but append
 	// at the logical insertion tail, not restore B's original position between A and C.
 	FTimerHandle HandleD{};
-	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeOrderCallback(Recorder, 4), 100, ETimerMode::OneShot, HandleD), "Replacement D should schedule");
+	MW_EXPECT_SUCCESS(
+		Test, Manager.Schedule(MakeOrderCallback(Recorder, 4), StandardTimerPeriod, ETimerMode::OneShot, HandleD), "Replacement D should schedule");
 	MW_EXPECT_EQ(Test, SlotIndexOfB, HandleD.Index, "D must reuse B's freed physical slot");
 	MW_EXPECT_TRUE(Test, HandleD.Generation != HandleB.Generation, "D must publish a fresh generation distinct from B's retired handle");
 	MW_EXPECT_EQ(Test, 3u, Manager.TimerCount(), "A, C, and D should occupy three slots after reuse");
@@ -750,11 +786,11 @@ MW_TEST_CASE(EngineTimerCallbackScheduleRejectedAndDelegatePreserved)
 	(void)FirstCallback.Bind(
 		[&Manager, &RejectedDelegate, &RejectedHandle, &CapturedSchedule]() noexcept
 		{
-			CapturedSchedule.Result = Manager.Schedule(std::move(RejectedDelegate), 100, ETimerMode::OneShot, RejectedHandle);
+			CapturedSchedule.Result = Manager.Schedule(std::move(RejectedDelegate), StandardTimerPeriod, ETimerMode::OneShot, RejectedHandle);
 			CapturedSchedule.bObserved = true;
 		});
 
-	const ETimerResult ScheduleResult = Manager.Schedule(std::move(FirstCallback), 100, ETimerMode::OneShot, FirstHandle);
+	const ETimerResult ScheduleResult = Manager.Schedule(std::move(FirstCallback), StandardTimerPeriod, ETimerMode::OneShot, FirstHandle);
 	MW_EXPECT_SUCCESS(Test, ScheduleResult, "The observing timer should schedule successfully");
 
 	MW_EXPECT_SUCCESS(Test, Manager.Advance(100), "Advance should succeed and fire the observing callback");
@@ -785,9 +821,12 @@ MW_TEST_CASE(EngineTimerCallbackCancellationRejectedAndOtherTimerStillFires)
 			SelfCancel.bObserved = true;
 		});
 
-	MW_EXPECT_SUCCESS(Test, Manager.Schedule(std::move(LoopingCallback), 100, ETimerMode::Looping, LoopingHandle), "Looping timer should schedule");
 	MW_EXPECT_SUCCESS(
-		Test, Manager.Schedule(MakeOrderCallback(Recorder, 7), 100, ETimerMode::OneShot, OneShotHandle), "One-shot timer should schedule");
+		Test, Manager.Schedule(std::move(LoopingCallback), StandardTimerPeriod, ETimerMode::Looping, LoopingHandle), "Looping timer should schedule");
+	MW_EXPECT_SUCCESS(
+		Test,
+		Manager.Schedule(MakeOrderCallback(Recorder, 7), StandardTimerPeriod, ETimerMode::OneShot, OneShotHandle),
+		"One-shot timer should schedule");
 
 	MW_EXPECT_SUCCESS(Test, Manager.Advance(100), "Advance at the shared deadline should succeed");
 	MW_EXPECT_TRUE(Test, SelfCancel.bObserved, "The looping callback should have executed");
@@ -813,7 +852,7 @@ MW_TEST_CASE(EngineTimerNestedAdvanceRejected)
 			NestedAdvance.bObserved = true;
 		});
 
-	MW_EXPECT_SUCCESS(Test, Manager.Schedule(std::move(Callback), 100, ETimerMode::OneShot, Handle), "Setup schedule should succeed");
+	MW_EXPECT_SUCCESS(Test, Manager.Schedule(std::move(Callback), StandardTimerPeriod, ETimerMode::OneShot, Handle), "Setup schedule should succeed");
 	MW_EXPECT_SUCCESS(Test, Manager.Advance(100), "Outer Advance to 100 should succeed and fire the callback");
 
 	MW_EXPECT_TRUE(Test, NestedAdvance.bObserved, "The callback should have executed");
@@ -841,7 +880,9 @@ MW_TEST_CASE(EngineTimerOperationsPerformNoObservableAllocation)
 	const std::uint32_t AllocationsBefore = GlobalAllocationCount;
 
 	MW_EXPECT_SUCCESS(
-		Test, Manager.Schedule(MakeCounterCallback(Counter), 100, ETimerMode::OneShot, OneShotHandle), "One-shot schedule should succeed");
+		Test,
+		Manager.Schedule(MakeCounterCallback(Counter), StandardTimerPeriod, ETimerMode::OneShot, OneShotHandle),
+		"One-shot schedule should succeed");
 	MW_EXPECT_SUCCESS(
 		Test, Manager.Schedule(MakeCounterCallback(Counter), 50, ETimerMode::Looping, LoopingHandle), "Looping schedule should succeed");
 	MW_EXPECT_EQ(Test, 2u, Manager.TimerCount(), "Two schedules should occupy two slots");
@@ -860,7 +901,10 @@ MW_TEST_CASE(EngineTimerOperationsPerformNoObservableAllocation)
 
 	// Reuse the freed slot and actually dispatch the reused one-shot at its calculated deadline.
 	FTimerHandle ReusedHandle{};
-	MW_EXPECT_SUCCESS(Test, Manager.Schedule(MakeCounterCallback(Counter), 100, ETimerMode::OneShot, ReusedHandle), "Reused schedule should succeed");
+	MW_EXPECT_SUCCESS(
+		Test,
+		Manager.Schedule(MakeCounterCallback(Counter), StandardTimerPeriod, ETimerMode::OneShot, ReusedHandle),
+		"Reused schedule should succeed");
 	MW_EXPECT_EQ(Test, 1u, Manager.TimerCount(), "The reused slot should be occupied");
 	// The reused one-shot deadline is LastAcceptedNow (100) + 100 = 200; prove it actually fires there.
 	MW_EXPECT_SUCCESS(Test, Manager.Advance(200), "Advance to the reused calculated deadline should succeed");

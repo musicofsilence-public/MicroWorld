@@ -57,6 +57,12 @@ constexpr MicroWorld::FTypeId TrackedComponentTypeId{0x00030002u};
 /** Environment sized for GC tests with enough slots for world, actors, components, and roots. */
 using FGarbageCollectionEnvironment = TEngineEnvironment<256, 16, 8, 4>;
 
+/** Fixed capacity of the GC fixture worklist, large enough for every reachable object in these tests. */
+constexpr std::uint32_t CollectorWorklistCapacity = 16;
+
+/** Canonical monotonic baseline every BeginPlay call uses as its starting world time. */
+constexpr MicroWorld::TimePointMilliseconds BaselineTimeMilliseconds{0};
+
 /** Builds a tracked actor through its own derived descriptor. */
 TObjectPtr<FTrackedActor> MakeTrackedActor(FGarbageCollectionEnvironment& InEnv) noexcept
 {
@@ -73,15 +79,14 @@ TObjectPtr<FTrackedComponent> MakeTrackedComponent(FGarbageCollectionEnvironment
 class FCollectorFixture final
 {
 public:
-	explicit FCollectorFixture(FObjectStore& InStore) noexcept
-		: Collector(InStore, FGarbageCollectorStorage{Worklist.data(), static_cast<std::uint32_t>(Worklist.size())})
-	{
-	}
+	explicit FCollectorFixture(FObjectStore& InStore) noexcept : Collector(InStore, FGarbageCollectorStorage{Worklist, CollectorWorklistCapacity}) {}
 
 	FGarbageCollector& GetCollector() noexcept { return Collector; }
 
 private:
-	std::array<FObjectHandle, 16> Worklist{};
+	/** Backs the collector's reachable-object queue without heap storage. */
+	FObjectHandle Worklist[CollectorWorklistCapacity]{};
+	/** Owns the collector bound to this fixture's worklist for the test's lifetime. */
 	FGarbageCollector Collector;
 };
 
@@ -246,7 +251,7 @@ MW_TEST_CASE(EngineAdvancePerformsNoObservableAllocation)
 	(void)World.Get()->RegisterActor(TObjectPtr<AActor>{Actor});
 
 	TStrongObjectPtr<UWorld> WorldRoot = Env.MakeRoot(World);
-	(void)World.Get()->BeginPlay(0);
+	(void)World.Get()->BeginPlay(BaselineTimeMilliseconds);
 
 	const FObjectStoreStats BeforeStats = Store.Stats();
 	const std::uint32_t AllocationsBeforeAdvance = GlobalAllocationCount;
@@ -282,8 +287,8 @@ MW_TEST_CASE(EngineEndPlayIsIdempotentAndRepeatedLifecycleCallsMatchCore)
 	const TObjectPtr<FTrackedActor> Actor = MakeTrackedActor(Env);
 	(void)World.Get()->RegisterActor(TObjectPtr<AActor>{Actor});
 
-	const ERuntimeResult FirstBegin = World.Get()->BeginPlay(0);
-	const ERuntimeResult SecondBegin = World.Get()->BeginPlay(0);
+	const ERuntimeResult FirstBegin = World.Get()->BeginPlay(BaselineTimeMilliseconds);
+	const ERuntimeResult SecondBegin = World.Get()->BeginPlay(BaselineTimeMilliseconds);
 	const ERuntimeResult AdvanceWhilePlaying = World.Get()->Advance(1);
 	const ERuntimeResult FirstEnd = World.Get()->EndPlay();
 	const ERuntimeResult SecondEnd = World.Get()->EndPlay();

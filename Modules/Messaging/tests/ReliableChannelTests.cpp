@@ -5,7 +5,6 @@
 #include <MicroWorld/Messaging/ReliableChannel.h>
 #include <MicroWorld/Time.h>
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
 
@@ -13,11 +12,15 @@ namespace
 {
 using MicroWorld::DurationMilliseconds;
 using MicroWorld::EMessageResult;
+using MicroWorld::EReliablePacketKind;
 using MicroWorld::FMessageChannelId;
 using MicroWorld::FReliableChannelConfig;
+using MicroWorld::HighByteShift;
 using MicroWorld::IEncodedMessageSink;
 using MicroWorld::IMessageChannel;
 using MicroWorld::LocalChannelId;
+using MicroWorld::LowByteMask;
+using MicroWorld::ReliableHeaderBytes;
 using MicroWorld::TimePointMilliseconds;
 using MicroWorld::TReliableChannel;
 using MicroWorld::TSpan;
@@ -39,6 +42,42 @@ constexpr DurationMilliseconds TestRetryIntervalMilliseconds = 250;
 
 /** Attempt ceiling used by every case's config, distinct so case 4's counts stay unambiguous. */
 constexpr std::uint8_t TestMaxSendAttempts = 4;
+
+/** Distinct payload bytes the wrapping and forwarding cases thread through the reliable channel. */
+constexpr std::uint8_t PayloadByte01 = 0x01;
+constexpr std::uint8_t PayloadByte11 = 0x11;
+constexpr std::uint8_t PayloadByte22 = 0x22;
+constexpr std::uint8_t PayloadByte33 = 0x33;
+constexpr std::uint8_t PayloadByte77 = 0x77;
+constexpr std::uint8_t PayloadByteAA = 0xAA;
+constexpr std::uint8_t PayloadByteBB = 0xBB;
+constexpr std::uint8_t PayloadByteCC = 0xCC;
+constexpr std::uint8_t PayloadByteA1 = 0xA1;
+constexpr std::uint8_t PayloadByteA2 = 0xA2;
+
+/** Sequence number the wrapping case assigns to its first outbound Data packet. */
+constexpr std::uint16_t FirstAssignedSequence = 1;
+
+/** Sequence number the duplicate-forward case threads through its single inbound Data packet. */
+constexpr std::uint16_t SequenceFive = 5;
+
+/** Sequence number the window-edge case uses for its second (one-window-newer) Data packet. */
+constexpr std::uint16_t SequenceThirtyThree = 33;
+
+/** Wall-clock baseline the retry cases establish before advancing toward the retry interval. */
+constexpr TimePointMilliseconds BaselineTime = 1000;
+
+/** One-byte payload count shared by every one-byte payload and ack-handling span in this suite. */
+constexpr std::size_t OneBytePayloadCount = 1;
+
+/** Three-byte payload count the wrapping case sends and its matching ack packet both use. */
+constexpr std::size_t ThreeBytePayloadCount = 3;
+
+/** Four-byte wire-packet count the inbound Data cases feed to ReceiveEncodedMessage. */
+constexpr std::size_t FourByteWirePacketCount = 4;
+
+/** Wrapped Data packet length for a three-byte payload: ReliableHeaderBytes plus the payload. */
+constexpr std::size_t WrappedThreeByteDataLength = ReliableHeaderBytes + ThreeBytePayloadCount;
 
 /** The reliable channel profile under test in this suite. */
 using FTestReliableChannel = TReliableChannel<TestMaxPendingMessages, TestMaxMessageBytes>;
@@ -142,21 +181,34 @@ MW_TEST_CASE(EngineReliableChannel_DataIsWrappedWithKindAndSequence)
 	FTestReliableChannel Reliable(ForwardSink, MakeTestConfig());
 	Reliable.SetInnerChannel(InnerChannel);
 
-	const std::array<std::uint8_t, 3> Payload{0x11, 0x22, 0x33};
+	const std::uint8_t Payload[ThreeBytePayloadCount] = {PayloadByte11, PayloadByte22, PayloadByte33};
 	MW_EXPECT_EQ(
 		Test,
 		EMessageResult::Success,
-		Reliable.TrySendEncodedMessage(TSpan<const std::uint8_t>(Payload.data(), Payload.size())),
+		Reliable.TrySendEncodedMessage(TSpan<const std::uint8_t>(Payload, ThreeBytePayloadCount)),
 		"A reliable channel with its inner channel set must accept a well-formed send");
 
 	MW_EXPECT_EQ(Test, std::size_t{1}, InnerChannel.SendCallCount(), "The wrapped Data packet must reach the inner channel exactly once");
-	MW_EXPECT_EQ(Test, std::size_t{6}, InnerChannel.LastSendLength(), "The wrapped packet must be ReliableHeaderBytes (3) plus the 3-byte payload");
-	MW_EXPECT_EQ(Test, std::uint8_t{1}, InnerChannel.LastSendByte(0), "Byte 0 must be EReliablePacketKind::Data (1)");
-	MW_EXPECT_EQ(Test, std::uint8_t{1}, InnerChannel.LastSendByte(1), "Byte 1 must be the low byte of the first assigned sequence (1)");
-	MW_EXPECT_EQ(Test, std::uint8_t{0}, InnerChannel.LastSendByte(2), "Byte 2 must be the high byte of sequence 1");
-	MW_EXPECT_EQ(Test, std::uint8_t{0x11}, InnerChannel.LastSendByte(3), "Byte 3 must be the original payload's first byte");
-	MW_EXPECT_EQ(Test, std::uint8_t{0x22}, InnerChannel.LastSendByte(4), "Byte 4 must be the original payload's second byte");
-	MW_EXPECT_EQ(Test, std::uint8_t{0x33}, InnerChannel.LastSendByte(5), "Byte 5 must be the original payload's third byte");
+	MW_EXPECT_EQ(
+		Test,
+		WrappedThreeByteDataLength,
+		InnerChannel.LastSendLength(),
+		"The wrapped packet must be ReliableHeaderBytes (3) plus the 3-byte payload");
+	MW_EXPECT_EQ(
+		Test, static_cast<std::uint8_t>(EReliablePacketKind::Data), InnerChannel.LastSendByte(0), "Byte 0 must be EReliablePacketKind::Data (1)");
+	MW_EXPECT_EQ(
+		Test,
+		static_cast<std::uint8_t>(FirstAssignedSequence & LowByteMask),
+		InnerChannel.LastSendByte(1),
+		"Byte 1 must be the low byte of the first assigned sequence (1)");
+	MW_EXPECT_EQ(
+		Test,
+		static_cast<std::uint8_t>((FirstAssignedSequence >> HighByteShift) & LowByteMask),
+		InnerChannel.LastSendByte(2),
+		"Byte 2 must be the high byte of sequence 1");
+	MW_EXPECT_EQ(Test, PayloadByte11, InnerChannel.LastSendByte(3), "Byte 3 must be the original payload's first byte");
+	MW_EXPECT_EQ(Test, PayloadByte22, InnerChannel.LastSendByte(4), "Byte 4 must be the original payload's second byte");
+	MW_EXPECT_EQ(Test, PayloadByte33, InnerChannel.LastSendByte(5), "Byte 5 must be the original payload's third byte");
 	MW_EXPECT_EQ(Test, std::size_t{1}, Reliable.PendingCount(), "The sent message must remain pending until acknowledged");
 }
 
@@ -168,16 +220,23 @@ MW_TEST_CASE(EngineReliableChannel_AckClearsPending)
 	FTestReliableChannel Reliable(ForwardSink, MakeTestConfig());
 	Reliable.SetInnerChannel(InnerChannel);
 
-	const std::array<std::uint8_t, 1> Payload{0xAA};
-	MW_EXPECT_EQ(
-		Test, EMessageResult::Success, Reliable.TrySendEncodedMessage(TSpan<const std::uint8_t>(Payload.data(), 1)), "The send must be accepted");
-	MW_EXPECT_EQ(Test, std::size_t{1}, Reliable.PendingCount(), "The sent message must be pending before any ack arrives");
-
-	const std::array<std::uint8_t, 3> AckBytes{2, 1, 0}; // [Acknowledgement][Sequence=1 LE]
+	const std::uint8_t Payload[OneBytePayloadCount] = {PayloadByteAA};
 	MW_EXPECT_EQ(
 		Test,
 		EMessageResult::Success,
-		Reliable.ReceiveEncodedMessage(InnerChannelId, TSpan<const std::uint8_t>(AckBytes.data(), AckBytes.size())),
+		Reliable.TrySendEncodedMessage(TSpan<const std::uint8_t>(Payload, OneBytePayloadCount)),
+		"The send must be accepted");
+	MW_EXPECT_EQ(Test, std::size_t{1}, Reliable.PendingCount(), "The sent message must be pending before any ack arrives");
+
+	// [Acknowledgement][Sequence=1 LE]
+	const std::uint8_t AckBytes[ReliableHeaderBytes] = {
+		static_cast<std::uint8_t>(EReliablePacketKind::Acknowledgement),
+		static_cast<std::uint8_t>(FirstAssignedSequence & LowByteMask),
+		static_cast<std::uint8_t>((FirstAssignedSequence >> HighByteShift) & LowByteMask)};
+	MW_EXPECT_EQ(
+		Test,
+		EMessageResult::Success,
+		Reliable.ReceiveEncodedMessage(InnerChannelId, TSpan<const std::uint8_t>(AckBytes, ReliableHeaderBytes)),
 		"An ack naming the outstanding sequence must be accepted");
 	MW_EXPECT_EQ(Test, std::size_t{0}, Reliable.PendingCount(), "The ack must clear the matching pending slot");
 
@@ -195,12 +254,14 @@ MW_TEST_CASE(EngineReliableChannel_NoAckResendsAfterExactlyRetryInterval)
 	FTestReliableChannel Reliable(ForwardSink, MakeTestConfig());
 	Reliable.SetInnerChannel(InnerChannel);
 
-	const std::array<std::uint8_t, 1> Payload{0xBB};
+	const std::uint8_t Payload[OneBytePayloadCount] = {PayloadByteBB};
 	MW_EXPECT_EQ(
-		Test, EMessageResult::Success, Reliable.TrySendEncodedMessage(TSpan<const std::uint8_t>(Payload.data(), 1)), "The send must be accepted");
+		Test,
+		EMessageResult::Success,
+		Reliable.TrySendEncodedMessage(TSpan<const std::uint8_t>(Payload, OneBytePayloadCount)),
+		"The send must be accepted");
 	MW_EXPECT_EQ(Test, std::size_t{1}, InnerChannel.SendCallCount(), "The initial send must reach the inner channel once");
 
-	constexpr TimePointMilliseconds BaselineTime = 1000;
 	Reliable.PostAdvance(BaselineTime);
 	MW_EXPECT_EQ(
 		Test, std::size_t{1}, InnerChannel.SendCallCount(), "The first PostAdvance after a send only establishes the retry baseline, never resends");
@@ -222,11 +283,14 @@ MW_TEST_CASE(EngineReliableChannel_DropsAfterMaxSendAttempts)
 	FTestReliableChannel Reliable(ForwardSink, MakeTestConfig());
 	Reliable.SetInnerChannel(InnerChannel);
 
-	const std::array<std::uint8_t, 1> Payload{0xCC};
+	const std::uint8_t Payload[OneBytePayloadCount] = {PayloadByteCC};
 	MW_EXPECT_EQ(
-		Test, EMessageResult::Success, Reliable.TrySendEncodedMessage(TSpan<const std::uint8_t>(Payload.data(), 1)), "The send must be accepted");
+		Test,
+		EMessageResult::Success,
+		Reliable.TrySendEncodedMessage(TSpan<const std::uint8_t>(Payload, OneBytePayloadCount)),
+		"The send must be accepted");
 
-	TimePointMilliseconds Now = 1000;
+	TimePointMilliseconds Now = BaselineTime;
 	Reliable.PostAdvance(Now); // Establishes the retry baseline; the initial send already counts as attempt 1.
 
 	for (int RetryIndex = 0; RetryIndex < TestMaxSendAttempts - 1; ++RetryIndex)
@@ -261,8 +325,13 @@ MW_TEST_CASE(EngineReliableChannel_DuplicateDataForwardedOnceAckedTwice)
 	FTestReliableChannel Reliable(ForwardSink, MakeTestConfig());
 	Reliable.SetInnerChannel(InnerChannel);
 
-	const std::array<std::uint8_t, 4> DataBytes{1, 5, 0, 0x77}; // [Data][Sequence=5 LE][payload=0x77]
-	const TSpan<const std::uint8_t> DataView(DataBytes.data(), DataBytes.size());
+	// [Data][Sequence=5 LE][payload=0x77]
+	const std::uint8_t DataBytes[FourByteWirePacketCount] = {
+		static_cast<std::uint8_t>(EReliablePacketKind::Data),
+		static_cast<std::uint8_t>(SequenceFive & LowByteMask),
+		static_cast<std::uint8_t>((SequenceFive >> HighByteShift) & LowByteMask),
+		PayloadByte77};
+	const TSpan<const std::uint8_t> DataView(DataBytes, FourByteWirePacketCount);
 
 	MW_EXPECT_EQ(
 		Test,
@@ -294,10 +363,20 @@ MW_TEST_CASE(EngineReliableChannel_WindowEdgeJumpStillDropsOldHighestDuplicate)
 	FTestReliableChannel Reliable(ForwardSink, MakeTestConfig());
 	Reliable.SetInnerChannel(InnerChannel);
 
-	const std::array<std::uint8_t, 4> DataSequence1{1, 1, 0, 0xA1};	  // [Data][Sequence=1 LE][payload]
-	const std::array<std::uint8_t, 4> DataSequence33{1, 33, 0, 0xA2}; // [Data][Sequence=33 LE][payload], exactly 32 newer
-	const TSpan<const std::uint8_t> Sequence1View(DataSequence1.data(), DataSequence1.size());
-	const TSpan<const std::uint8_t> Sequence33View(DataSequence33.data(), DataSequence33.size());
+	// [Data][Sequence=1 LE][payload]
+	const std::uint8_t DataSequence1[FourByteWirePacketCount] = {
+		static_cast<std::uint8_t>(EReliablePacketKind::Data),
+		static_cast<std::uint8_t>(FirstAssignedSequence & LowByteMask),
+		static_cast<std::uint8_t>((FirstAssignedSequence >> HighByteShift) & LowByteMask),
+		PayloadByteA1};
+	// [Data][Sequence=33 LE][payload], exactly 32 newer
+	const std::uint8_t DataSequence33[FourByteWirePacketCount] = {
+		static_cast<std::uint8_t>(EReliablePacketKind::Data),
+		static_cast<std::uint8_t>(SequenceThirtyThree & LowByteMask),
+		static_cast<std::uint8_t>((SequenceThirtyThree >> HighByteShift) & LowByteMask),
+		PayloadByteA2};
+	const TSpan<const std::uint8_t> Sequence1View(DataSequence1, FourByteWirePacketCount);
+	const TSpan<const std::uint8_t> Sequence33View(DataSequence33, FourByteWirePacketCount);
 
 	MW_EXPECT_EQ(
 		Test, EMessageResult::Success, Reliable.ReceiveEncodedMessage(InnerChannelId, Sequence1View), "Sequence 1 is fresh and must be accepted");
@@ -329,13 +408,13 @@ MW_TEST_CASE(EngineReliableChannel_PendingTableFullReportsCapacityExceededTransa
 	FTestReliableChannel Reliable(ForwardSink, MakeTestConfig());
 	Reliable.SetInnerChannel(InnerChannel);
 
-	const std::array<std::uint8_t, 1> Payload{0x01};
+	const std::uint8_t Payload[OneBytePayloadCount] = {PayloadByte01};
 	for (std::size_t Index = 0; Index < TestMaxPendingMessages; ++Index)
 	{
 		MW_EXPECT_EQ(
 			Test,
 			EMessageResult::Success,
-			Reliable.TrySendEncodedMessage(TSpan<const std::uint8_t>(Payload.data(), 1)),
+			Reliable.TrySendEncodedMessage(TSpan<const std::uint8_t>(Payload, OneBytePayloadCount)),
 			"Filling every pending slot with an unacked send must succeed");
 	}
 	MW_EXPECT_EQ(Test, TestMaxPendingMessages, Reliable.PendingCount(), "Every pending slot must now be in use");
@@ -344,7 +423,7 @@ MW_TEST_CASE(EngineReliableChannel_PendingTableFullReportsCapacityExceededTransa
 	MW_EXPECT_EQ(
 		Test,
 		EMessageResult::CapacityExceeded,
-		Reliable.TrySendEncodedMessage(TSpan<const std::uint8_t>(Payload.data(), 1)),
+		Reliable.TrySendEncodedMessage(TSpan<const std::uint8_t>(Payload, OneBytePayloadCount)),
 		"A send with every pending slot in use must report CapacityExceeded");
 	MW_EXPECT_EQ(Test, TestMaxPendingMessages, Reliable.PendingCount(), "A rejected send must leave the pending table unchanged");
 	MW_EXPECT_EQ(Test, SendCountBeforeRejection, InnerChannel.SendCallCount(), "A rejected send must never reach the inner channel (transactional)");
@@ -356,11 +435,11 @@ MW_TEST_CASE(EngineReliableChannel_UnsetInnerChannelReportsUnavailable)
 	FRecordingForwardSink ForwardSink;
 	FTestReliableChannel Reliable(ForwardSink, MakeTestConfig());
 
-	const std::array<std::uint8_t, 1> Payload{0x01};
+	const std::uint8_t Payload[OneBytePayloadCount] = {PayloadByte01};
 	MW_EXPECT_EQ(
 		Test,
 		EMessageResult::Unavailable,
-		Reliable.TrySendEncodedMessage(TSpan<const std::uint8_t>(Payload.data(), 1)),
+		Reliable.TrySendEncodedMessage(TSpan<const std::uint8_t>(Payload, OneBytePayloadCount)),
 		"A send before SetInnerChannel must report Unavailable");
 	MW_EXPECT_EQ(Test, LocalChannelId, Reliable.GetChannelId(), "GetChannelId must report LocalChannelId (0) before SetInnerChannel");
 	MW_EXPECT_EQ(Test, std::size_t{0}, Reliable.MaxEncodedMessageBytes(), "MaxEncodedMessageBytes must report 0 before SetInnerChannel");

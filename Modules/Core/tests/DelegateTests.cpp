@@ -2,7 +2,6 @@
 
 #include <MicroWorld/Delegates/Delegate.h>
 
-#include <array>
 #include <cstddef>
 #include <type_traits>
 #include <utility>
@@ -14,6 +13,27 @@ using MicroWorld::EDelegateResult;
 using MicroWorld::FDelegateHandle;
 using MicroWorld::TDelegate;
 using MicroWorld::TMulticastDelegate;
+
+/** Inline storage the small-capacity delegates and bindings share across the layout tests. */
+constexpr std::size_t SmallInlineBytes = 32;
+
+/** Inline storage the value-argument and large-layout delegates use across the broadcast tests. */
+constexpr std::size_t StandardInlineBytes = 64;
+
+/** Inline storage large enough that only alignment, not size, can reject the over-aligned probe. */
+constexpr std::size_t LargeInlineBytes = 128;
+
+/** Byte count of the oversized probe payload, sized to exceed the small delegate's inline capacity. */
+constexpr std::size_t OversizedPayloadByteCount = 128;
+
+/** Multicast slot count the insertion-order and value-copy tests exercise below capacity. */
+constexpr std::size_t SmallMulticastCapacity = 2;
+
+/** Multicast slot count the active-broadcast mutation test fills so iteration order is observable. */
+constexpr std::size_t LargeMulticastCapacity = 4;
+
+/** Multicast slot count the zero-capacity test uses to prove Add rejection and empty broadcast. */
+constexpr std::size_t ZeroMulticastCapacity = 0;
 
 /** Records callable movement, invocation, and owned-lifetime destruction per test. */
 struct FCallableState final
@@ -88,10 +108,17 @@ struct FOversizedCallable final
 	FCallableState* State{nullptr};
 
 	/** Forces the callable object above the tested inline capacity. */
-	std::array<std::byte, 128> Payload{};
+	std::byte Payload[OversizedPayloadByteCount]{};
 
 	/** Records any unexpected attempt to construct a stored callable by moving. */
-	FOversizedCallable(FOversizedCallable&& Other) noexcept : State(Other.State), Payload(Other.Payload) { ++State->MoveCount; }
+	FOversizedCallable(FOversizedCallable&& Other) noexcept : State(Other.State)
+	{
+		for (std::size_t Index = 0; Index < OversizedPayloadByteCount; ++Index)
+		{
+			Payload[Index] = Other.Payload[Index];
+		}
+		++State->MoveCount;
+	}
 
 	/** Begins one caller-owned source callable for layout rejection. */
 	explicit FOversizedCallable(FCallableState& InState) noexcept : State(&InState) {}
@@ -160,7 +187,7 @@ public:
 
 private:
 	/** Retains only the bounded event sequence needed by the current test. */
-	std::array<int, Capacity> Events{};
+	int Events[Capacity]{};
 
 	/** Separates initialized observations from unused fixed capacity. */
 	std::size_t EventCount{0};
@@ -170,10 +197,10 @@ private:
 struct FBroadcastMutationState final
 {
 	/** Selects the multicast whose active iteration must remain unchanged. */
-	TMulticastDelegate<void(), 4, 128>* Multicast{nullptr};
+	TMulticastDelegate<void(), LargeMulticastCapacity, LargeInlineBytes>* Multicast{nullptr};
 
 	/** Supplies a binding whose rejected Add must retain ownership. */
-	TDelegate<void(), 128>* PendingBinding{nullptr};
+	TDelegate<void(), LargeInlineBytes>* PendingBinding{nullptr};
 
 	/** Identifies a live callback whose rejected Remove must leave it active. */
 	FDelegateHandle HandleToRemove{};
@@ -224,11 +251,11 @@ MW_TEST_CASE(DelegateBindExecuteMoveAndResetOwnCallableExactlyOnce)
 {
 	FCallableState State;
 	FTrackedCallable Callable(State);
-	TDelegate<void(int), 64> SourceDelegate;
+	TDelegate<void(int), StandardInlineBytes> SourceDelegate;
 	const EDelegateResult BindResult = SourceDelegate.Bind(std::move(Callable));
 	const bool bSourceBoundAfterBind = SourceDelegate.IsBound();
 
-	TDelegate<void(int), 64> MovedDelegate(std::move(SourceDelegate));
+	TDelegate<void(int), StandardInlineBytes> MovedDelegate(std::move(SourceDelegate));
 	const bool bSourceBoundAfterMove = SourceDelegate.IsBound();
 	const bool bSourceUnboundAfterMove = !bSourceBoundAfterMove;
 	const bool bDestinationBoundAfterMove = MovedDelegate.IsBound();
@@ -255,7 +282,7 @@ MW_TEST_CASE(DelegateBindExecuteMoveAndResetOwnCallableExactlyOnce)
 /** Proves unbound delegates reject execution without beginning callable behavior. */
 MW_TEST_CASE(UnboundDelegateExecuteReturnsInvalidHandle)
 {
-	TDelegate<void(), 32> Delegate;
+	TDelegate<void(), SmallInlineBytes> Delegate;
 
 	const EDelegateResult ExecuteResult = Delegate.Execute();
 
@@ -270,7 +297,7 @@ MW_TEST_CASE(DelegateRejectsUnsupportedCallableLayoutsBeforeConstruction)
 {
 	FCallableState OversizedState;
 	FOversizedCallable OversizedCallable(OversizedState);
-	TDelegate<void(), 32> SmallDelegate;
+	TDelegate<void(), SmallInlineBytes> SmallDelegate;
 	const EDelegateResult OversizedResult = SmallDelegate.Bind(std::move(OversizedCallable));
 	const bool bSmallDelegateBound = SmallDelegate.IsBound();
 	const bool bSmallDelegateUnbound = !bSmallDelegateBound;
@@ -278,7 +305,7 @@ MW_TEST_CASE(DelegateRejectsUnsupportedCallableLayoutsBeforeConstruction)
 
 	FCallableState OverAlignedState;
 	FOverAlignedCallable OverAlignedCallable(OverAlignedState);
-	TDelegate<void(), 128> AlignedDelegate;
+	TDelegate<void(), LargeInlineBytes> AlignedDelegate;
 	const EDelegateResult OverAlignedResult = AlignedDelegate.Bind(std::move(OverAlignedCallable));
 	const bool bAlignedDelegateBound = AlignedDelegate.IsBound();
 	const bool bAlignedDelegateUnbound = !bAlignedDelegateBound;
@@ -296,12 +323,12 @@ MW_TEST_CASE(DelegateRejectsUnsupportedCallableLayoutsBeforeConstruction)
 /** Proves multicast exact capacity preserves insertion order and rejects capacity plus one atomically. */
 MW_TEST_CASE(MulticastPreservesInsertionOrderAndRejectsCapacityPlusOne)
 {
-	using FMulticast = TMulticastDelegate<void(), 2, 64>;
+	using FMulticast = TMulticastDelegate<void(), SmallMulticastCapacity, StandardInlineBytes>;
 	FMulticast Multicast;
 	TIntEventLog<4> Events;
-	TDelegate<void(), 64> FirstBinding;
-	TDelegate<void(), 64> SecondBinding;
-	TDelegate<void(), 64> ExcessBinding;
+	TDelegate<void(), StandardInlineBytes> FirstBinding;
+	TDelegate<void(), StandardInlineBytes> SecondBinding;
+	TDelegate<void(), StandardInlineBytes> ExcessBinding;
 	const EDelegateResult FirstBindResult = FirstBinding.Bind([&Events]() noexcept { Events.Add(1); });
 	const EDelegateResult SecondBindResult = SecondBinding.Bind([&Events]() noexcept { Events.Add(2); });
 	const EDelegateResult ExcessBindResult = ExcessBinding.Bind([&Events]() noexcept { Events.Add(3); });
@@ -340,12 +367,12 @@ MW_TEST_CASE(MulticastPreservesInsertionOrderAndRejectsCapacityPlusOne)
 /** Proves slot reuse changes generation so stale removal cannot affect the new binding. */
 MW_TEST_CASE(MulticastReusedSlotRejectsStaleHandleAndKeepsNewBinding)
 {
-	using FMulticast = TMulticastDelegate<void(), 2, 64>;
+	using FMulticast = TMulticastDelegate<void(), SmallMulticastCapacity, StandardInlineBytes>;
 	FMulticast Multicast;
 	TIntEventLog<4> Events;
-	TDelegate<void(), 64> FirstBinding;
-	TDelegate<void(), 64> SecondBinding;
-	TDelegate<void(), 64> ReusedBinding;
+	TDelegate<void(), StandardInlineBytes> FirstBinding;
+	TDelegate<void(), StandardInlineBytes> SecondBinding;
+	TDelegate<void(), StandardInlineBytes> ReusedBinding;
 	const EDelegateResult FirstBindResult = FirstBinding.Bind([&Events]() noexcept { Events.Add(1); });
 	const EDelegateResult SecondBindResult = SecondBinding.Bind([&Events]() noexcept { Events.Add(2); });
 	const EDelegateResult ReusedBindResult = ReusedBinding.Bind([&Events]() noexcept { Events.Add(3); });
@@ -388,13 +415,13 @@ MW_TEST_CASE(MulticastReusedSlotRejectsStaleHandleAndKeepsNewBinding)
 /** Proves callback mutation and reentry are locked without changing active order or count. */
 MW_TEST_CASE(MulticastRejectsMutationAndNestedBroadcastDuringActiveBroadcast)
 {
-	using FMulticast = TMulticastDelegate<void(), 4, 128>;
+	using FMulticast = TMulticastDelegate<void(), LargeMulticastCapacity, LargeInlineBytes>;
 	FMulticast Multicast;
 	TIntEventLog<8> Events;
-	TDelegate<void(), 128> PendingBinding;
-	TDelegate<void(), 128> MutatingBinding;
-	TDelegate<void(), 128> MiddleBinding;
-	TDelegate<void(), 128> RemovalTargetBinding;
+	TDelegate<void(), LargeInlineBytes> PendingBinding;
+	TDelegate<void(), LargeInlineBytes> MutatingBinding;
+	TDelegate<void(), LargeInlineBytes> MiddleBinding;
+	TDelegate<void(), LargeInlineBytes> RemovalTargetBinding;
 	const EDelegateResult PendingBindResult = PendingBinding.Bind([&Events]() noexcept { Events.Add(4); });
 	FBroadcastMutationState MutationState;
 	MutationState.Multicast = &Multicast;
@@ -472,11 +499,11 @@ MW_TEST_CASE(MulticastRejectsMutationAndNestedBroadcastDuringActiveBroadcast)
 /** Proves each multicast value binding receives an independent copy of the argument. */
 MW_TEST_CASE(MulticastCopiesValueArgumentForEveryBinding)
 {
-	TMulticastDelegate<void(FMutableValue), 2, 64> Multicast;
+	TMulticastDelegate<void(FMutableValue), SmallMulticastCapacity, StandardInlineBytes> Multicast;
 	int FirstObservedValue = 0;
 	int SecondObservedValue = 0;
-	TDelegate<void(FMutableValue), 64> FirstBinding;
-	TDelegate<void(FMutableValue), 64> SecondBinding;
+	TDelegate<void(FMutableValue), StandardInlineBytes> FirstBinding;
+	TDelegate<void(FMutableValue), StandardInlineBytes> SecondBinding;
 	const EDelegateResult FirstBindResult = FirstBinding.Bind(
 		[&FirstObservedValue](FMutableValue InValue) noexcept
 		{
@@ -507,9 +534,9 @@ MW_TEST_CASE(MulticastCopiesValueArgumentForEveryBinding)
 /** Proves zero-capacity multicast rejects Add while empty Broadcast remains valid. */
 MW_TEST_CASE(ZeroCapacityMulticastRejectsAddAndBroadcastsEmptySet)
 {
-	TMulticastDelegate<void(), 0, 32> Multicast;
+	TMulticastDelegate<void(), ZeroMulticastCapacity, SmallInlineBytes> Multicast;
 	std::size_t InvocationCount = 0;
-	TDelegate<void(), 32> Binding;
+	TDelegate<void(), SmallInlineBytes> Binding;
 	const EDelegateResult BindResult = Binding.Bind([&InvocationCount]() noexcept { ++InvocationCount; });
 	FDelegateHandle Handle{};
 

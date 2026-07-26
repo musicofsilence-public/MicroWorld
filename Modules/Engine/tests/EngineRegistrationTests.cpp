@@ -47,6 +47,12 @@ public:
 constexpr MicroWorld::FTypeId PlainActorTypeId{0x00020001u};
 constexpr MicroWorld::FTypeId PlainComponentTypeId{0x00020002u};
 
+/** Canonical monotonic baseline every BeginPlay call uses as its starting world time. */
+constexpr MicroWorld::TimePointMilliseconds BaselineTimeMilliseconds{0};
+
+/** Fixed capacity of the GC worklist used by the active-collection guard test. */
+constexpr std::uint32_t CollectorWorklistCapacity = 16;
+
 /** Environment sized for registration tests with capacity for several actors and components. */
 using FRegistrationEnvironment = TEngineEnvironment<256, 16, 16, 4>;
 
@@ -186,7 +192,7 @@ MW_TEST_CASE(EngineRegistrationAfterBeginPlayRejected)
 	const TObjectPtr<FPlainComponent> Component = MakePlainComponent(Env);
 	(void)World.Get()->RegisterActor(TObjectPtr<AActor>{ActorA});
 	(void)ActorA.Get()->RegisterComponent(Component);
-	(void)World.Get()->BeginPlay(0);
+	(void)World.Get()->BeginPlay(BaselineTimeMilliseconds);
 
 	const EEngineResult ActorAfterBegin = World.Get()->RegisterActor(TObjectPtr<AActor>{ActorB});
 	const EEngineResult ComponentAfterBegin = ActorA.Get()->RegisterComponent(MakePlainComponent(Env));
@@ -340,9 +346,8 @@ MW_TEST_CASE(EngineRegistrationRejectedDuringActiveCollection)
 	FRegistrationEnvironment Env{};
 	FObjectStore& Store = Env.GetStore();
 	FWorldActorRegistry<2> WorldActors;
-	std::array<MicroWorld::FObjectHandle, 16> Worklist{};
-	MicroWorld::FGarbageCollector Collector{
-		Store, MicroWorld::FGarbageCollectorStorage{Worklist.data(), static_cast<std::uint32_t>(Worklist.size())}};
+	MicroWorld::FObjectHandle Worklist[CollectorWorklistCapacity]{};
+	MicroWorld::FGarbageCollector Collector{Store, MicroWorld::FGarbageCollectorStorage{Worklist, CollectorWorklistCapacity}};
 
 	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, WorldActors.MakeReference());
 	const TObjectPtr<FPlainActor> HostActor = MakePlainActor(Env);
@@ -392,7 +397,7 @@ MW_TEST_CASE(EngineReusedWorldRegistryReferenceFailsBeginPlay)
 	const TObjectPtr<UWorld> FirstWorld = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, SharedWorldActors.MakeReference());
 	const TObjectPtr<UWorld> ReusedReferenceWorld = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, SharedWorldActors.MakeReference());
 
-	const ERuntimeResult WorldBeginResult = ReusedReferenceWorld.Get()->BeginPlay(0);
+	const ERuntimeResult WorldBeginResult = ReusedReferenceWorld.Get()->BeginPlay(BaselineTimeMilliseconds);
 
 	MW_EXPECT_TRUE(Test, FirstWorld.Get() != nullptr, "The first world consumes the valid registry reference");
 	MW_EXPECT_EQ(Test, ERuntimeResult::CapacityExceeded, WorldBeginResult, "A world with a reused registry reference rejects BeginPlay");

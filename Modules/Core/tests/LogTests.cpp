@@ -14,6 +14,12 @@ namespace MicroWorld::Tests
 namespace
 {
 
+	/** Capacity of the bounded captured-message copy in bytes. */
+	constexpr std::size_t CapturedMessageByteCount = 64;
+
+	/** Marker value the evaluated-integer probe returns, so the formatted-message test can assert it. */
+	constexpr int EvaluatedIntegerMarker = 42;
+
 	/** Captures the last record the output device received without dynamic storage. */
 	struct FLogCapture
 	{
@@ -27,7 +33,7 @@ namespace
 		const char* Category{nullptr};
 
 		/** Owns a bounded copy of the message, since formatting buffers are transient. */
-		char Message[64]{};
+		char Message[CapturedMessageByteCount]{};
 	};
 
 	/** Holds the single capture the function-pointer output device writes into. */
@@ -49,7 +55,7 @@ namespace
 	int EvaluatedInteger()
 	{
 		++GArgumentEvaluations;
-		return 42;
+		return EvaluatedIntegerMarker;
 	}
 
 	/** Returns a marker string while recording that the argument was evaluated. */

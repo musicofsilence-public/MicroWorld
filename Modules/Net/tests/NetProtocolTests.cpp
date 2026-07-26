@@ -5,7 +5,6 @@
 #include <MicroWorld/Net/NetProtocol.h>
 #include <MicroWorld/Net/NetResult.h>
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
 
@@ -26,125 +25,200 @@ using MicroWorld::TSpan;
 using MicroWorld::WriteControlMessage;
 using MicroWorld::WriteMessage;
 
+/** Channel byte the round-trip and control cases encode as the message channel. */
+constexpr std::uint8_t ApplicationChannel = 7;
+/** Channel byte the multi-byte round-trip case encodes, distinct from the standard channel. */
+constexpr std::uint8_t DistinctChannel = 42;
+
+/** Capacity for a buffer holding a header plus one payload byte. */
+constexpr std::size_t HeaderPlusOneByteCapacity = MessageHeaderBytes + 1;
+/** Capacity for a buffer holding a header plus two payload bytes. */
+constexpr std::size_t HeaderPlusTwoByteCapacity = MessageHeaderBytes + 2;
+/** Capacity for a buffer holding a header plus four payload bytes. */
+constexpr std::size_t HeaderPlusFourByteCapacity = MessageHeaderBytes + 4;
+/** Capacity for a header-only buffer used by the empty-payload round-trip case. */
+constexpr std::size_t HeaderOnlyBufferCapacity = MessageHeaderBytes;
+/** Capacity for a four-byte buffer too small for a header plus a two-byte payload. */
+constexpr std::size_t UndersizedBufferCapacity = 4;
+/** Capacity for the single-byte header byte plus no payload used by the truncated-header case. */
+constexpr std::size_t TruncatedHeaderBufferCapacity = 3;
+/** Capacity for a one-byte bogus payload storage the oversize case pairs with a huge declared length. */
+constexpr std::size_t SingleByteStorageCapacity = 1;
+/** Capacity for a one-byte payload the single-byte round-trip case delivers. */
+constexpr std::size_t SingleBytePayloadCapacity = 1;
+/** Capacity for a two-byte payload the Full-buffer case pairs with an undersized buffer. */
+constexpr std::size_t TwoBytePayloadCapacity = 2;
+/** Capacity for a four-byte payload the multi-byte round-trip case delivers. */
+constexpr std::size_t FourBytePayloadCapacity = 4;
+/** Capacity for a three-byte bogus payload the overlong-Hello case appends to the type byte. */
+constexpr std::size_t OverlongHelloPayloadCapacity = 3;
+/** Capacity for an eight-byte buffer the oversize-payload case rejects before any write. */
+constexpr std::size_t OversizeRejectBufferCapacity = 8;
+/** Capacity for the maximum-size control message buffer the unknown-type case writes into. */
+constexpr std::size_t ControlMessageBufferCapacity = MessageHeaderBytes + MaxControlPayloadBytes;
+/** Declared length that exceeds the u16 length field so the oversize case rejects it before any read. */
+constexpr std::size_t OversizeDeclaredLength = 0x10000;
+
+/** Sentinel channel byte pre-loaded into the header so an unchanged failed read is observable. */
+constexpr std::uint8_t UntouchedChannelByte = 0xEE;
+/** Sentinel payload bytes value pre-loaded into the header so an unchanged failed read is observable. */
+constexpr std::uint16_t UntouchedPayloadBytes = 0xEEEE;
+/** Payload byte value the single-byte round-trip case delivers. */
+constexpr std::uint8_t SingleBytePayloadValue = 0xAB;
+/** Trailing version byte the overlong-Hello case appends to force a rejection. */
+constexpr std::uint8_t OverlongHelloTrailingByteA = 0x01;
+/** Trailing second byte the overlong-Hello case appends to force a rejection. */
+constexpr std::uint8_t OverlongHelloTrailingByteB = 0x02;
+/** Two payload bytes the truncated-header case hands to ReadMessage, shorter than a header. */
+constexpr std::uint8_t TruncatedHeaderMessage[TruncatedHeaderBufferCapacity] = {0x07, 0x00, 0x01};
+/** Four payload bytes the nonzero-flags case hands to ReadMessage, with the flags byte at offset one. */
+constexpr std::uint8_t NonzeroFlagsMessage[HeaderOnlyBufferCapacity] = {0x07, 0x01, 0x00, 0x00};
+/** Six bytes declaring PayloadBytes=5 but supplying only two payload bytes (size mismatch). */
+constexpr std::uint8_t SizeMismatchMessage[HeaderPlusTwoByteCapacity] = {0x07, 0x00, 0x05, 0x00, 0xAA, 0xBB};
+/** Single-byte payload the unknown-control-type case hands to ReadControlMessage. */
+constexpr std::uint8_t UnknownControlTypePayload[SingleBytePayloadCapacity] = {0x07};
+/** Three bytes: Hello type byte, version, and an unexpected trailing byte (overlong). */
+constexpr std::uint8_t OverlongHelloPayload[OverlongHelloPayloadCapacity] = {
+	static_cast<std::uint8_t>(EControlMessageType::Hello), OverlongHelloTrailingByteA, OverlongHelloTrailingByteB};
+/** Three bytes: Welcome type byte plus two of the three fields (truncated Welcome). */
+constexpr std::uint8_t TruncatedWelcomePayload[3] = {static_cast<std::uint8_t>(EControlMessageType::Welcome), 0x01, 0x02};
+/** Single-byte payload: Hello type byte with no version byte (truncated Hello). */
+constexpr std::uint8_t TruncatedHelloPayload[SingleBytePayloadCapacity] = {static_cast<std::uint8_t>(EControlMessageType::Hello)};
+/** Single-byte payload value the single-byte round-trip case writes. */
+constexpr std::uint8_t SingleBytePayloadBytes[SingleBytePayloadCapacity] = {SingleBytePayloadValue};
+/** Two payload bytes the Full-buffer case pairs with an undersized destination buffer. */
+constexpr std::uint8_t FullBufferPayloadBytes[TwoBytePayloadCapacity] = {0xAA, 0xBB};
+/** Four payload bytes the multi-byte round-trip case delivers in order. */
+constexpr std::uint8_t MultiBytePayloadBytes[FourBytePayloadCapacity] = {0x01, 0x02, 0x03, 0x04};
+/** Single-byte bogus payload storage the oversize case pairs with a huge declared length. */
+constexpr std::uint8_t SmallPayloadStorage[SingleByteStorageCapacity] = {0x00};
+/** Unknown control type byte (no defined message) the unknown-type case writes. */
+constexpr std::uint8_t UnknownControlTypeByte = 0x09;
+/** Hello protocol version the Hello round-trip case encodes and decodes. */
+constexpr std::uint8_t HelloProtocolVersion = 5;
+/** Welcome protocol version the Welcome round-trip case encodes and decodes. */
+constexpr std::uint8_t WelcomeProtocolVersion = 9;
+/** Welcome peer index the Welcome round-trip case encodes and decodes. */
+constexpr std::uint8_t WelcomePeerIndex = 3;
+/** Welcome peer generation the Welcome round-trip case encodes and decodes. */
+constexpr std::uint8_t WelcomePeerGeneration = 7;
+
 /** Proves WriteMessage and ReadMessage round-trip an application message with an empty payload. */
 MW_TEST_CASE(NetProtocolRoundTripsApplicationMessageWithEmptyPayload)
 {
-	std::array<std::uint8_t, MessageHeaderBytes> Buffer{};
-	FByteWriter Writer(TSpan<std::uint8_t>(Buffer.data(), Buffer.size()));
+	std::uint8_t Buffer[HeaderOnlyBufferCapacity] = {};
+	FByteWriter Writer(TSpan<std::uint8_t>(Buffer, sizeof(Buffer)));
 
 	MW_EXPECT_EQ(
-		Test, ENetResult::Success, WriteMessage(Writer, std::uint8_t{7}, TSpan<const std::uint8_t>(nullptr, 0)), "Empty-payload write must succeed");
+		Test,
+		ENetResult::Success,
+		WriteMessage(Writer, ApplicationChannel, TSpan<const std::uint8_t>(nullptr, 0)),
+		"Empty-payload write must succeed");
 	MW_EXPECT_EQ(Test, MessageHeaderBytes, Writer.Position(), "Empty payload must write only the four-byte header");
 
 	FMessageHeader Header{};
 	TSpan<const std::uint8_t> Payload{};
 	MW_EXPECT_EQ(Test, ENetResult::Success, ReadMessage(Writer.WrittenBytes(), Header, Payload), "Empty-payload read must succeed");
-	MW_EXPECT_EQ(Test, static_cast<std::uint8_t>(7), Header.Channel, "Round trip must preserve the channel byte");
-	MW_EXPECT_EQ(Test, static_cast<std::uint8_t>(0), Header.Flags, "Round trip must report zero flags");
-	MW_EXPECT_EQ(Test, static_cast<std::uint16_t>(0), Header.PayloadBytes, "Empty-payload round trip must report zero payload bytes");
-	MW_EXPECT_EQ(Test, static_cast<std::size_t>(0), Payload.Size(), "Empty-payload round trip must expose an empty payload view");
+	MW_EXPECT_EQ(Test, ApplicationChannel, Header.Channel, "Round trip must preserve the channel byte");
+	MW_EXPECT_EQ(Test, std::uint8_t{0}, Header.Flags, "Round trip must report zero flags");
+	MW_EXPECT_EQ(Test, std::uint16_t{0}, Header.PayloadBytes, "Empty-payload round trip must report zero payload bytes");
+	MW_EXPECT_EQ(Test, std::size_t{0}, Payload.Size(), "Empty-payload round trip must expose an empty payload view");
 }
 
 /** Proves WriteMessage and ReadMessage round-trip a single-byte application payload. */
 MW_TEST_CASE(NetProtocolRoundTripsApplicationMessageWithOneBytePayload)
 {
-	std::array<std::uint8_t, MessageHeaderBytes + 1> Buffer{};
-	FByteWriter Writer(TSpan<std::uint8_t>(Buffer.data(), Buffer.size()));
+	std::uint8_t Buffer[HeaderPlusOneByteCapacity] = {};
+	FByteWriter Writer(TSpan<std::uint8_t>(Buffer, sizeof(Buffer)));
 
-	const std::array<std::uint8_t, 1> PayloadBytes{0xAB};
 	MW_EXPECT_EQ(
 		Test,
 		ENetResult::Success,
-		WriteMessage(Writer, std::uint8_t{7}, TSpan<const std::uint8_t>(PayloadBytes.data(), PayloadBytes.size())),
+		WriteMessage(Writer, ApplicationChannel, TSpan<const std::uint8_t>(SingleBytePayloadBytes, sizeof(SingleBytePayloadBytes))),
 		"One-byte payload write must succeed");
 
 	FMessageHeader Header{};
 	TSpan<const std::uint8_t> Payload{};
 	MW_EXPECT_EQ(Test, ENetResult::Success, ReadMessage(Writer.WrittenBytes(), Header, Payload), "One-byte payload read must succeed");
-	MW_EXPECT_EQ(Test, static_cast<std::uint8_t>(7), Header.Channel, "Round trip must preserve the channel byte");
-	MW_EXPECT_EQ(Test, static_cast<std::uint16_t>(1), Header.PayloadBytes, "Round trip must report one payload byte");
-	MW_EXPECT_EQ(Test, static_cast<std::size_t>(1), Payload.Size(), "Round trip must expose one payload byte");
-	MW_EXPECT_EQ(Test, static_cast<std::uint8_t>(0xAB), Payload[0], "Round trip must preserve the payload byte");
+	MW_EXPECT_EQ(Test, ApplicationChannel, Header.Channel, "Round trip must preserve the channel byte");
+	MW_EXPECT_EQ(Test, std::uint16_t{1}, Header.PayloadBytes, "Round trip must report one payload byte");
+	MW_EXPECT_EQ(Test, SingleBytePayloadCapacity, Payload.Size(), "Round trip must expose one payload byte");
+	MW_EXPECT_EQ(Test, SingleBytePayloadValue, Payload[0], "Round trip must preserve the payload byte");
 }
 
 /** Proves WriteMessage and ReadMessage round-trip a multi-byte application payload. */
 MW_TEST_CASE(NetProtocolRoundTripsApplicationMessageWithMultiBytePayload)
 {
-	std::array<std::uint8_t, MessageHeaderBytes + 4> Buffer{};
-	FByteWriter Writer(TSpan<std::uint8_t>(Buffer.data(), Buffer.size()));
+	std::uint8_t Buffer[HeaderPlusFourByteCapacity] = {};
+	FByteWriter Writer(TSpan<std::uint8_t>(Buffer, sizeof(Buffer)));
 
-	const std::array<std::uint8_t, 4> PayloadBytes{0x01, 0x02, 0x03, 0x04};
 	MW_EXPECT_EQ(
 		Test,
 		ENetResult::Success,
-		WriteMessage(Writer, std::uint8_t{42}, TSpan<const std::uint8_t>(PayloadBytes.data(), PayloadBytes.size())),
+		WriteMessage(Writer, DistinctChannel, TSpan<const std::uint8_t>(MultiBytePayloadBytes, sizeof(MultiBytePayloadBytes))),
 		"Multi-byte payload write must succeed");
 
 	FMessageHeader Header{};
 	TSpan<const std::uint8_t> Payload{};
 	MW_EXPECT_EQ(Test, ENetResult::Success, ReadMessage(Writer.WrittenBytes(), Header, Payload), "Multi-byte payload read must succeed");
-	MW_EXPECT_EQ(Test, static_cast<std::uint8_t>(42), Header.Channel, "Round trip must preserve the channel byte");
-	MW_EXPECT_EQ(Test, static_cast<std::uint16_t>(4), Header.PayloadBytes, "Round trip must report four payload bytes");
-	MW_EXPECT_EQ(Test, PayloadBytes.size(), Payload.Size(), "Round trip must expose the full payload size");
-	for (std::size_t Index = 0; Index < PayloadBytes.size(); ++Index)
+	MW_EXPECT_EQ(Test, DistinctChannel, Header.Channel, "Round trip must preserve the channel byte");
+	MW_EXPECT_EQ(Test, std::uint16_t{4}, Header.PayloadBytes, "Round trip must report four payload bytes");
+	MW_EXPECT_EQ(Test, sizeof(MultiBytePayloadBytes), Payload.Size(), "Round trip must expose the full payload size");
+	for (std::size_t Index = 0; Index < sizeof(MultiBytePayloadBytes); ++Index)
 	{
-		MW_EXPECT_EQ(Test, PayloadBytes[Index], Payload[Index], "Round trip must preserve every payload byte in order");
+		MW_EXPECT_EQ(Test, MultiBytePayloadBytes[Index], Payload[Index], "Round trip must preserve every payload byte in order");
 	}
 }
 
 /** Proves WriteMessage returns Full and writes nothing when the buffer cannot hold the header plus payload. */
 MW_TEST_CASE(NetProtocolWriteMessageFullLeavesWriterUntouched)
 {
-	std::array<std::uint8_t, 4> Buffer{};
-	FByteWriter Writer(TSpan<std::uint8_t>(Buffer.data(), Buffer.size()));
+	std::uint8_t Buffer[UndersizedBufferCapacity] = {};
+	FByteWriter Writer(TSpan<std::uint8_t>(Buffer, sizeof(Buffer)));
 
-	const std::array<std::uint8_t, 2> PayloadBytes{0xAA, 0xBB};
 	// A 4-byte buffer cannot hold a 4-byte header plus a 2-byte payload.
 	MW_EXPECT_EQ(
 		Test,
 		ENetResult::Full,
-		WriteMessage(Writer, std::uint8_t{7}, TSpan<const std::uint8_t>(PayloadBytes.data(), PayloadBytes.size())),
+		WriteMessage(Writer, ApplicationChannel, TSpan<const std::uint8_t>(FullBufferPayloadBytes, sizeof(FullBufferPayloadBytes))),
 		"Write into an undersized buffer must return Full");
-	MW_EXPECT_EQ(Test, static_cast<std::size_t>(0), Writer.Position(), "Full write must not advance the cursor");
+	MW_EXPECT_EQ(Test, std::size_t{0}, Writer.Position(), "Full write must not advance the cursor");
 }
 
 /** Proves WriteMessage rejects an oversized payload before any write and leaves the writer untouched. */
 MW_TEST_CASE(NetProtocolWriteMessageRejectsOversizedPayload)
 {
-	std::array<std::uint8_t, 8> Buffer{};
-	FByteWriter Writer(TSpan<std::uint8_t>(Buffer.data(), Buffer.size()));
+	std::uint8_t Buffer[OversizeRejectBufferCapacity] = {};
+	FByteWriter Writer(TSpan<std::uint8_t>(Buffer, sizeof(Buffer)));
 
 	// A bogus 0x10000-byte payload exceeds the u16 length field; it must be rejected before any read.
-	std::array<std::uint8_t, 1> SmallStorage{0x00};
-	const ENetResult Result = WriteMessage(Writer, std::uint8_t{7}, TSpan<const std::uint8_t>(SmallStorage.data(), 0x10000));
+	const ENetResult Result = WriteMessage(Writer, ApplicationChannel, TSpan<const std::uint8_t>(SmallPayloadStorage, OversizeDeclaredLength));
 	MW_EXPECT_EQ(Test, ENetResult::Invalid, Result, "A payload larger than 0xFFFF must return Invalid");
-	MW_EXPECT_EQ(Test, static_cast<std::size_t>(0), Writer.Position(), "Oversized write must not advance the cursor");
+	MW_EXPECT_EQ(Test, std::size_t{0}, Writer.Position(), "Oversized write must not advance the cursor");
 }
 
 /** Proves ReadMessage rejects a too-short header without touching its outputs. */
 MW_TEST_CASE(NetProtocolReadMessageRejectsTruncatedHeader)
 {
-	const std::array<std::uint8_t, 3> TooShort{0x07, 0x00, 0x01};
-	FMessageHeader Header{std::uint8_t{0xEE}, std::uint8_t{0xEE}, std::uint16_t{0xEEEE}};
+	FMessageHeader Header{UntouchedChannelByte, UntouchedChannelByte, UntouchedPayloadBytes};
 	TSpan<const std::uint8_t> Payload{};
-	const TSpan<const std::uint8_t> Message(TooShort.data(), TooShort.size());
+	const TSpan<const std::uint8_t> Message(TruncatedHeaderMessage, sizeof(TruncatedHeaderMessage));
 	MW_EXPECT_EQ(Test, ENetResult::Invalid, ReadMessage(Message, Header, Payload), "A sub-header-length message must return Invalid");
-	MW_EXPECT_EQ(Test, static_cast<std::uint8_t>(0xEE), Header.Channel, "Invalid read must leave OutHeader.Channel unchanged");
-	MW_EXPECT_EQ(Test, static_cast<std::uint16_t>(0xEEEE), Header.PayloadBytes, "Invalid read must leave OutHeader.PayloadBytes unchanged");
-	MW_EXPECT_EQ(Test, static_cast<std::size_t>(0), Payload.Size(), "Invalid read must leave OutPayload unchanged");
+	MW_EXPECT_EQ(Test, UntouchedChannelByte, Header.Channel, "Invalid read must leave OutHeader.Channel unchanged");
+	MW_EXPECT_EQ(Test, UntouchedPayloadBytes, Header.PayloadBytes, "Invalid read must leave OutHeader.PayloadBytes unchanged");
+	MW_EXPECT_EQ(Test, std::size_t{0}, Payload.Size(), "Invalid read must leave OutPayload unchanged");
 }
 
 /** Proves ReadMessage rejects a message whose declared length disagrees with the actual payload. */
 MW_TEST_CASE(NetProtocolReadMessageRejectsPayloadSizeMismatch)
 {
 	// Header declares PayloadBytes=5 but only 2 payload bytes follow.
-	const std::array<std::uint8_t, MessageHeaderBytes + 2> Message{0x07, 0x00, 0x05, 0x00, 0xAA, 0xBB};
 	FMessageHeader Header{};
 	TSpan<const std::uint8_t> Payload{};
 	MW_EXPECT_EQ(
 		Test,
 		ENetResult::Invalid,
-		ReadMessage(TSpan<const std::uint8_t>(Message.data(), Message.size()), Header, Payload),
+		ReadMessage(TSpan<const std::uint8_t>(SizeMismatchMessage, sizeof(SizeMismatchMessage)), Header, Payload),
 		"A payload size mismatch must return Invalid");
 }
 
@@ -152,25 +226,24 @@ MW_TEST_CASE(NetProtocolReadMessageRejectsPayloadSizeMismatch)
 MW_TEST_CASE(NetProtocolReadMessageRejectsNonzeroFlags)
 {
 	// Flags byte (offset 1) is 0x01; the rest is a valid empty-payload header.
-	const std::array<std::uint8_t, MessageHeaderBytes> Message{0x07, 0x01, 0x00, 0x00};
 	FMessageHeader Header{};
 	TSpan<const std::uint8_t> Payload{};
 	MW_EXPECT_EQ(
 		Test,
 		ENetResult::Invalid,
-		ReadMessage(TSpan<const std::uint8_t>(Message.data(), Message.size()), Header, Payload),
+		ReadMessage(TSpan<const std::uint8_t>(NonzeroFlagsMessage, sizeof(NonzeroFlagsMessage)), Header, Payload),
 		"A nonzero flags byte must return Invalid");
 }
 
 /** Proves a Hello control message round-trips through WriteControlMessage, ReadMessage, and ReadControlMessage. */
 MW_TEST_CASE(NetProtocolRoundTripsHelloControlMessage)
 {
-	std::array<std::uint8_t, MessageHeaderBytes + 2> Buffer{};
-	FByteWriter Writer(TSpan<std::uint8_t>(Buffer.data(), Buffer.size()));
+	std::uint8_t Buffer[HeaderPlusTwoByteCapacity] = {};
+	FByteWriter Writer(TSpan<std::uint8_t>(Buffer, sizeof(Buffer)));
 
 	FControlMessage Outgoing{};
 	Outgoing.Type = EControlMessageType::Hello;
-	Outgoing.ProtocolVersion = 5;
+	Outgoing.ProtocolVersion = HelloProtocolVersion;
 	MW_EXPECT_EQ(Test, ENetResult::Success, WriteControlMessage(Writer, Outgoing), "Hello write must succeed");
 
 	FMessageHeader Header{};
@@ -181,20 +254,20 @@ MW_TEST_CASE(NetProtocolRoundTripsHelloControlMessage)
 	FControlMessage Decoded{};
 	MW_EXPECT_EQ(Test, ENetResult::Success, ReadControlMessage(Payload, Decoded), "Hello payload decode must succeed");
 	MW_EXPECT_EQ(Test, EControlMessageType::Hello, Decoded.Type, "Decoded type must be Hello");
-	MW_EXPECT_EQ(Test, static_cast<std::uint8_t>(5), Decoded.ProtocolVersion, "Decoded protocol version must match");
+	MW_EXPECT_EQ(Test, HelloProtocolVersion, Decoded.ProtocolVersion, "Decoded protocol version must match");
 }
 
 /** Proves a Welcome control message round-trips with all three fields preserved. */
 MW_TEST_CASE(NetProtocolRoundTripsWelcomeControlMessage)
 {
-	std::array<std::uint8_t, MessageHeaderBytes + 4> Buffer{};
-	FByteWriter Writer(TSpan<std::uint8_t>(Buffer.data(), Buffer.size()));
+	std::uint8_t Buffer[HeaderPlusFourByteCapacity] = {};
+	FByteWriter Writer(TSpan<std::uint8_t>(Buffer, sizeof(Buffer)));
 
 	FControlMessage Outgoing{};
 	Outgoing.Type = EControlMessageType::Welcome;
-	Outgoing.ProtocolVersion = 9;
-	Outgoing.PeerIndex = 3;
-	Outgoing.PeerGeneration = 7;
+	Outgoing.ProtocolVersion = WelcomeProtocolVersion;
+	Outgoing.PeerIndex = WelcomePeerIndex;
+	Outgoing.PeerGeneration = WelcomePeerGeneration;
 	MW_EXPECT_EQ(Test, ENetResult::Success, WriteControlMessage(Writer, Outgoing), "Welcome write must succeed");
 
 	FMessageHeader Header{};
@@ -205,16 +278,16 @@ MW_TEST_CASE(NetProtocolRoundTripsWelcomeControlMessage)
 	FControlMessage Decoded{};
 	MW_EXPECT_EQ(Test, ENetResult::Success, ReadControlMessage(Payload, Decoded), "Welcome payload decode must succeed");
 	MW_EXPECT_EQ(Test, EControlMessageType::Welcome, Decoded.Type, "Decoded type must be Welcome");
-	MW_EXPECT_EQ(Test, static_cast<std::uint8_t>(9), Decoded.ProtocolVersion, "Decoded protocol version must match");
-	MW_EXPECT_EQ(Test, static_cast<std::uint8_t>(3), Decoded.PeerIndex, "Decoded peer index must match");
-	MW_EXPECT_EQ(Test, static_cast<std::uint8_t>(7), Decoded.PeerGeneration, "Decoded peer generation must match");
+	MW_EXPECT_EQ(Test, WelcomeProtocolVersion, Decoded.ProtocolVersion, "Decoded protocol version must match");
+	MW_EXPECT_EQ(Test, WelcomePeerIndex, Decoded.PeerIndex, "Decoded peer index must match");
+	MW_EXPECT_EQ(Test, WelcomePeerGeneration, Decoded.PeerGeneration, "Decoded peer generation must match");
 }
 
 /** Proves a Heartbeat control message round-trips with no payload fields. */
 MW_TEST_CASE(NetProtocolRoundTripsHeartbeatControlMessage)
 {
-	std::array<std::uint8_t, MessageHeaderBytes + 1> Buffer{};
-	FByteWriter Writer(TSpan<std::uint8_t>(Buffer.data(), Buffer.size()));
+	std::uint8_t Buffer[HeaderPlusOneByteCapacity] = {};
+	FByteWriter Writer(TSpan<std::uint8_t>(Buffer, sizeof(Buffer)));
 
 	FControlMessage Outgoing{};
 	Outgoing.Type = EControlMessageType::Heartbeat;
@@ -233,8 +306,8 @@ MW_TEST_CASE(NetProtocolRoundTripsHeartbeatControlMessage)
 /** Proves a Bye control message round-trips with no payload fields. */
 MW_TEST_CASE(NetProtocolRoundTripsByeControlMessage)
 {
-	std::array<std::uint8_t, MessageHeaderBytes + 1> Buffer{};
-	FByteWriter Writer(TSpan<std::uint8_t>(Buffer.data(), Buffer.size()));
+	std::uint8_t Buffer[HeaderPlusOneByteCapacity] = {};
+	FByteWriter Writer(TSpan<std::uint8_t>(Buffer, sizeof(Buffer)));
 
 	FControlMessage Outgoing{};
 	Outgoing.Type = EControlMessageType::Bye;
@@ -254,13 +327,12 @@ MW_TEST_CASE(NetProtocolRoundTripsByeControlMessage)
 MW_TEST_CASE(NetProtocolReadControlMessageRejectsUnknownType)
 {
 	// Type byte 0x07 names no defined control message; the single-byte payload is otherwise well-formed.
-	const std::array<std::uint8_t, 1> PayloadBytes{0x07};
 	FControlMessage Decoded{};
 	Decoded.Type = EControlMessageType::Bye;
 	MW_EXPECT_EQ(
 		Test,
 		ENetResult::Invalid,
-		ReadControlMessage(TSpan<const std::uint8_t>(PayloadBytes.data(), PayloadBytes.size()), Decoded),
+		ReadControlMessage(TSpan<const std::uint8_t>(UnknownControlTypePayload, sizeof(UnknownControlTypePayload)), Decoded),
 		"An unknown control type byte must return Invalid");
 	MW_EXPECT_EQ(Test, EControlMessageType::Bye, Decoded.Type, "Invalid decode must leave OutMessage unchanged");
 }
@@ -269,12 +341,11 @@ MW_TEST_CASE(NetProtocolReadControlMessageRejectsUnknownType)
 MW_TEST_CASE(NetProtocolReadControlMessageRejectsTruncatedHello)
 {
 	// Hello declared by the type byte but the version byte is missing.
-	const std::array<std::uint8_t, 1> PayloadBytes{static_cast<std::uint8_t>(EControlMessageType::Hello)};
 	FControlMessage Decoded{};
 	MW_EXPECT_EQ(
 		Test,
 		ENetResult::Invalid,
-		ReadControlMessage(TSpan<const std::uint8_t>(PayloadBytes.data(), PayloadBytes.size()), Decoded),
+		ReadControlMessage(TSpan<const std::uint8_t>(TruncatedHelloPayload, sizeof(TruncatedHelloPayload)), Decoded),
 		"A Hello payload missing its version byte must return Invalid");
 }
 
@@ -282,12 +353,11 @@ MW_TEST_CASE(NetProtocolReadControlMessageRejectsTruncatedHello)
 MW_TEST_CASE(NetProtocolReadControlMessageRejectsOverlongHello)
 {
 	// Hello type byte plus version plus an unexpected third byte.
-	const std::array<std::uint8_t, 3> PayloadBytes{static_cast<std::uint8_t>(EControlMessageType::Hello), 0x01, 0x02};
 	FControlMessage Decoded{};
 	MW_EXPECT_EQ(
 		Test,
 		ENetResult::Invalid,
-		ReadControlMessage(TSpan<const std::uint8_t>(PayloadBytes.data(), PayloadBytes.size()), Decoded),
+		ReadControlMessage(TSpan<const std::uint8_t>(OverlongHelloPayload, sizeof(OverlongHelloPayload)), Decoded),
 		"An overlong Hello payload must return Invalid");
 }
 
@@ -295,12 +365,11 @@ MW_TEST_CASE(NetProtocolReadControlMessageRejectsOverlongHello)
 MW_TEST_CASE(NetProtocolReadControlMessageRejectsTruncatedWelcome)
 {
 	// Welcome declared by the type byte but only two of the three fields follow.
-	const std::array<std::uint8_t, 3> PayloadBytes{static_cast<std::uint8_t>(EControlMessageType::Welcome), 0x01, 0x02};
 	FControlMessage Decoded{};
 	MW_EXPECT_EQ(
 		Test,
 		ENetResult::Invalid,
-		ReadControlMessage(TSpan<const std::uint8_t>(PayloadBytes.data(), PayloadBytes.size()), Decoded),
+		ReadControlMessage(TSpan<const std::uint8_t>(TruncatedWelcomePayload, sizeof(TruncatedWelcomePayload)), Decoded),
 		"A truncated Welcome payload must return Invalid");
 }
 
@@ -320,13 +389,13 @@ MW_TEST_CASE(NetProtocolReadControlMessageRejectsEmptyPayload)
 /** Proves WriteControlMessage rejects an unknown type before touching the writer. */
 MW_TEST_CASE(NetProtocolWriteControlMessageRejectsUnknownType)
 {
-	std::array<std::uint8_t, MessageHeaderBytes + MaxControlPayloadBytes> Buffer{};
-	FByteWriter Writer(TSpan<std::uint8_t>(Buffer.data(), Buffer.size()));
+	std::uint8_t Buffer[ControlMessageBufferCapacity] = {};
+	FByteWriter Writer(TSpan<std::uint8_t>(Buffer, sizeof(Buffer)));
 
 	FControlMessage Outgoing{};
-	Outgoing.Type = static_cast<EControlMessageType>(0x09);
+	Outgoing.Type = static_cast<EControlMessageType>(UnknownControlTypeByte);
 	MW_EXPECT_EQ(Test, ENetResult::Invalid, WriteControlMessage(Writer, Outgoing), "An unknown control type must return Invalid");
-	MW_EXPECT_EQ(Test, static_cast<std::size_t>(0), Writer.Position(), "An unknown-type write must not advance the cursor");
+	MW_EXPECT_EQ(Test, std::size_t{0}, Writer.Position(), "An unknown-type write must not advance the cursor");
 }
 
 } // namespace

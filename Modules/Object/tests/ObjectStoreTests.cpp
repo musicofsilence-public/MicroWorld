@@ -32,6 +32,7 @@ using MicroWorld::ObjectGeneration;
 using MicroWorld::TClassRegistry;
 using MicroWorld::TObjectCreationResult;
 using MicroWorld::TObjectPtr;
+using MicroWorld::TStrongObjectPointerResult;
 using MicroWorld::TStrongObjectPtr;
 using MicroWorld::TWeakObjectPtr;
 using MicroWorld::UObject;
@@ -361,8 +362,8 @@ MW_TEST_CASE(ObjectStoreUsesImmutableRegistryOwnedDescriptorCopy)
 	TObjectStoreFixture<128, 16, 1, 0> Fixture(MakeClassRegistryView(Registry));
 	FObjectStore& Store = Fixture.GetStore();
 
-	const auto OwnedCreation = Store.NewObject<FTrackedObject>(*RegisteredDescriptor, Lifetime);
-	const auto RejectedSourceCreation = Store.NewObject<FTrackedObject>(SourceDescriptor, Lifetime);
+	const TObjectCreationResult<FTrackedObject> OwnedCreation = Store.NewObject<FTrackedObject>(*RegisteredDescriptor, Lifetime);
+	const TObjectCreationResult<FTrackedObject> RejectedSourceCreation = Store.NewObject<FTrackedObject>(SourceDescriptor, Lifetime);
 	const EObjectResult PendingResult = Store.MarkPendingDestroy(OwnedCreation.Object.Handle());
 	const MicroWorld::FObjectMutationResult Barrier = Store.ApplyPendingDestroy(1);
 
@@ -486,10 +487,10 @@ MW_TEST_CASE(ObjectStoreStrongRootsAreIndependentAndMoveOnly)
 	TObjectStoreFixture<128, 16, 1, 2> Fixture(MakeClassRegistryView(Registry));
 	FObjectStore& Store = Fixture.GetStore();
 	const TObjectCreationResult<FTrackedObject> Creation = Store.NewObject<FTrackedObject>(*Descriptor, Lifetime);
-	auto FirstRoot = Store.MakeStrongObjectPtr(Creation.Object);
-	auto SecondRoot = Store.MakeStrongObjectPtr(Creation.Object);
+	TStrongObjectPointerResult<FTrackedObject> FirstRoot = Store.MakeStrongObjectPtr(Creation.Object);
+	TStrongObjectPointerResult<FTrackedObject> SecondRoot = Store.MakeStrongObjectPtr(Creation.Object);
 
-	auto RejectedRoot = Store.MakeStrongObjectPtr(Creation.Object);
+	const TStrongObjectPointerResult<FTrackedObject> RejectedRoot = Store.MakeStrongObjectPtr(Creation.Object);
 	TStrongObjectPtr<FTrackedObject> MovedRoot(std::move(FirstRoot.Pointer));
 	SecondRoot.Pointer = std::move(MovedRoot);
 
@@ -522,11 +523,11 @@ MW_TEST_CASE(ObjectStorePendingObjectCannotBeResolvedOrResurrected)
 	FObjectStore& Store = Fixture.GetStore();
 	const TObjectCreationResult<FTrackedObject> Creation = Store.NewObject<FTrackedObject>(*Descriptor, Lifetime);
 	TWeakObjectPtr<FTrackedObject> WeakObject(Creation.Object);
-	auto StrongObject = Store.MakeStrongObjectPtr(Creation.Object);
+	TStrongObjectPointerResult<FTrackedObject> StrongObject = Store.MakeStrongObjectPtr(Creation.Object);
 	const FObjectHandle ObjectHandle = Creation.Object.Handle();
 
 	const EObjectResult PendingResult = Store.MarkPendingDestroy(ObjectHandle);
-	auto RejectedRoot = Store.MakeStrongObjectPtr(Creation.Object);
+	const TStrongObjectPointerResult<FTrackedObject> RejectedRoot = Store.MakeStrongObjectPtr(Creation.Object);
 	StrongObject.Pointer.Reset();
 	const EObjectResult StaleReleaseResult = Store.RemoveRoot(ObjectHandle);
 
@@ -578,7 +579,7 @@ MW_TEST_CASE(ObjectStoreLocksMutationUntilPlacementConstructionPublishes)
 	std::array<FObjectHandle, 2> Worklist{};
 	FGarbageCollector Collector(Store, FGarbageCollectorStorage{Worklist.data(), static_cast<std::uint32_t>(Worklist.size())});
 
-	const auto Creation = Store.NewObject<FConstructorReentryObject>(
+	const TObjectCreationResult<FConstructorReentryObject> Creation = Store.NewObject<FConstructorReentryObject>(
 		*RegisteredOuterDescriptor, Store, *RegisteredNestedDescriptor, NestedLifetime, Collector, Reentry);
 	const EObjectResult PendingResult = Store.MarkPendingDestroy(Creation.Object.Handle());
 	const MicroWorld::FObjectMutationResult Barrier = Store.ApplyPendingDestroy(2);
@@ -615,9 +616,9 @@ MW_TEST_CASE(ObjectStoreRejectsDestructionCallbackReentryWithoutLeakingRoots)
 	FObjectStore& Store = Fixture.GetStore();
 	std::array<FObjectHandle, 2> Worklist{};
 	FGarbageCollector Collector(Store, FGarbageCollectorStorage{Worklist.data(), static_cast<std::uint32_t>(Worklist.size())});
-	const auto Creation =
+	const TObjectCreationResult<FDestroyReentryObject> Creation =
 		Store.NewObject<FDestroyReentryObject>(*RegisteredOuterDescriptor, Store, *RegisteredNestedDescriptor, NestedLifetime, Collector, Reentry);
-	auto Root = Store.MakeStrongObjectPtr(Creation.Object);
+	TStrongObjectPointerResult<FDestroyReentryObject> Root = Store.MakeStrongObjectPtr(Creation.Object);
 
 	const EObjectResult PendingResult = Store.MarkPendingDestroy(Creation.Object.Handle());
 	const MicroWorld::FObjectMutationResult Barrier = Store.ApplyPendingDestroy(2);

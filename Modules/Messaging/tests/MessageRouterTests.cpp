@@ -6,7 +6,6 @@
 #include <MicroWorld/Messaging/MessageRouter.h>
 #include <MicroWorld/Time.h>
 
-#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <utility>
@@ -48,6 +47,20 @@ constexpr FMessageActorId ListenerA = 10;
 constexpr FMessageActorId ListenerB = 20;
 constexpr FMessageActorId SenderId = 99;
 constexpr FMessageChannelId StubChannelId = 1;
+
+/** Distinct single-byte payload values each delivery and flush test threads through the router. */
+constexpr std::uint8_t PayloadByteAA = 0xAA;
+constexpr std::uint8_t PayloadByte01 = 0x01;
+constexpr std::uint8_t PayloadByte02 = 0x02;
+constexpr std::uint8_t PayloadByte03 = 0x03;
+constexpr std::uint8_t PayloadByte04 = 0x04;
+constexpr std::uint8_t PayloadByte05 = 0x05;
+constexpr std::uint8_t PayloadByte11 = 0x11;
+constexpr std::uint8_t PayloadByte22 = 0x22;
+constexpr std::uint8_t PayloadByte7F = 0x7F;
+
+/** Single-byte payload count shared by every one-byte payload in this suite. */
+constexpr std::size_t OneBytePayloadCount = 1;
 
 /** A valid-looking handle value used to prove failed registrations clear their output. */
 constexpr FMessageHandlerHandle CanaryHandle{0u, 1u};
@@ -189,14 +202,13 @@ private:
 };
 
 /** Encodes one zero-payload message of MessageTypeId Type into a caller-owned fixed buffer for direct ReceiveEncodedMessage tests. */
-template<std::size_t BufferBytes>
-std::size_t EncodeZeroPayloadMessage(const FMessageTypeId InType, std::array<std::uint8_t, BufferBytes>& InBuffer) noexcept
+std::size_t EncodeZeroPayloadMessage(const FMessageTypeId InType, std::uint8_t* const InBuffer, const std::size_t InBufferBytes) noexcept
 {
 	std::size_t WrittenBytes = 0;
 	(void)EncodeActorMessage(
 		FActorMessageHeader{InType, BroadcastActorId, SenderId},
 		TSpan<const std::uint8_t>(nullptr, 0),
-		TSpan<std::uint8_t>(InBuffer.data(), InBuffer.size()),
+		TSpan<std::uint8_t>(InBuffer, InBufferBytes),
 		WrittenBytes);
 	return WrittenBytes;
 }
@@ -218,10 +230,10 @@ MW_TEST_CASE(EngineMessageRouter_BroadcastReachesAllSubscribersInRegistrationOrd
 	MW_EXPECT_SUCCESS(Test, Router.AddMessageHandler(TypeAlpha, BroadcastActorId, MakeRecordingHandler(Recorder, 2), HandleB), "B should register");
 	MW_EXPECT_SUCCESS(Test, Router.AddMessageHandler(TypeAlpha, BroadcastActorId, MakeRecordingHandler(Recorder, 3), HandleC), "C should register");
 
-	const std::array<std::uint8_t, 1> Payload{0xAA};
+	const std::uint8_t Payload[OneBytePayloadCount] = {PayloadByteAA};
 	MW_EXPECT_SUCCESS(
 		Test,
-		Router.BroadcastMessage(LocalChannelId, TypeAlpha, SenderId, TSpan<const std::uint8_t>(Payload.data(), Payload.size())),
+		Router.BroadcastMessage(LocalChannelId, TypeAlpha, SenderId, TSpan<const std::uint8_t>(Payload, OneBytePayloadCount)),
 		"Broadcast enqueue should succeed");
 
 	Router.PostAdvance(1);
@@ -246,10 +258,10 @@ MW_TEST_CASE(EngineMessageRouter_TargetedMessageReachesOnlyMatchingListener)
 	MW_EXPECT_SUCCESS(
 		Test, Router.AddMessageHandler(TypeAlpha, ListenerB, MakeRecordingHandler(Recorder, 2), HandleForB), "Listener B should register");
 
-	const std::array<std::uint8_t, 1> Payload{0x01};
+	const std::uint8_t Payload[OneBytePayloadCount] = {PayloadByte01};
 	MW_EXPECT_SUCCESS(
 		Test,
-		Router.SendMessageToActor(LocalChannelId, TypeAlpha, ListenerA, SenderId, TSpan<const std::uint8_t>(Payload.data(), Payload.size())),
+		Router.SendMessageToActor(LocalChannelId, TypeAlpha, ListenerA, SenderId, TSpan<const std::uint8_t>(Payload, OneBytePayloadCount)),
 		"Targeted send should succeed");
 
 	Router.PostAdvance(1);
@@ -274,9 +286,9 @@ MW_TEST_CASE(EngineMessageRouter_LocalSendIsDeliveredOnlyAtNextPreAdvanceNeverIn
 	MW_EXPECT_SUCCESS(
 		Test, Router.AddMessageHandler(TypeAlpha, BroadcastActorId, MakeRecordingHandler(Recorder, 1), Handle), "Registration should succeed");
 
-	const std::array<std::uint8_t, 1> Payload{0x02};
+	const std::uint8_t Payload[OneBytePayloadCount] = {PayloadByte02};
 	const EMessageResult SendResult =
-		Router.BroadcastMessage(LocalChannelId, TypeAlpha, SenderId, TSpan<const std::uint8_t>(Payload.data(), Payload.size()));
+		Router.BroadcastMessage(LocalChannelId, TypeAlpha, SenderId, TSpan<const std::uint8_t>(Payload, OneBytePayloadCount));
 	MW_EXPECT_SUCCESS(Test, SendResult, "Broadcast enqueue should succeed");
 	MW_EXPECT_EQ(Test, std::size_t{0}, Recorder.Count, "A queued send must never invoke a handler inline");
 
@@ -303,8 +315,8 @@ MW_TEST_CASE(EngineMessageRouter_SendFromInsideHandlerArrivesOneFrameLater)
 	(void)EchoingHandler.Bind(
 		[&Router](const FMessageView&) noexcept
 		{
-			const std::array<std::uint8_t, 1> EchoPayload{0x03};
-			(void)Router.BroadcastMessage(LocalChannelId, TypeBeta, SenderId, TSpan<const std::uint8_t>(EchoPayload.data(), EchoPayload.size()));
+			const std::uint8_t EchoPayload[OneBytePayloadCount] = {PayloadByte03};
+			(void)Router.BroadcastMessage(LocalChannelId, TypeBeta, SenderId, TSpan<const std::uint8_t>(EchoPayload, OneBytePayloadCount));
 		});
 
 	MW_EXPECT_SUCCESS(
@@ -312,10 +324,10 @@ MW_TEST_CASE(EngineMessageRouter_SendFromInsideHandlerArrivesOneFrameLater)
 	MW_EXPECT_SUCCESS(
 		Test, Router.AddMessageHandler(TypeBeta, BroadcastActorId, MakeRecordingHandler(Recorder, 1), ObserverHandle), "Observer should register");
 
-	const std::array<std::uint8_t, 1> Payload{0x04};
+	const std::uint8_t Payload[OneBytePayloadCount] = {PayloadByte04};
 	MW_EXPECT_SUCCESS(
 		Test,
-		Router.BroadcastMessage(LocalChannelId, TypeAlpha, SenderId, TSpan<const std::uint8_t>(Payload.data(), Payload.size())),
+		Router.BroadcastMessage(LocalChannelId, TypeAlpha, SenderId, TSpan<const std::uint8_t>(Payload, OneBytePayloadCount)),
 		"The triggering broadcast should enqueue");
 
 	// Frame 1 (engine order: dispatch, then flush): inbound is still empty, so nothing fires yet;
@@ -445,8 +457,8 @@ MW_TEST_CASE(EngineMessageRouter_HandlerCapacityExceededPreservesCallerHandler)
 MW_TEST_CASE(EngineMessageRouter_OutboundQueueFullReturnsCapacityExceededTransactionally)
 {
 	FTestRouter Router;
-	const std::array<std::uint8_t, 1> Payload{0x05};
-	const TSpan<const std::uint8_t> PayloadView(Payload.data(), Payload.size());
+	const std::uint8_t Payload[OneBytePayloadCount] = {PayloadByte05};
+	const TSpan<const std::uint8_t> PayloadView(Payload, OneBytePayloadCount);
 
 	MW_EXPECT_SUCCESS(Test, Router.BroadcastMessage(LocalChannelId, TypeAlpha, SenderId, PayloadView), "First send should fill slot one");
 	MW_EXPECT_SUCCESS(Test, Router.BroadcastMessage(LocalChannelId, TypeAlpha, SenderId, PayloadView), "Second send should fill slot two");
@@ -461,9 +473,9 @@ MW_TEST_CASE(EngineMessageRouter_OutboundQueueFullReturnsCapacityExceededTransac
 MW_TEST_CASE(EngineMessageRouter_InboundOverflowIncrementsDroppedInboundCount)
 {
 	FTestRouter Router;
-	std::array<std::uint8_t, MessageByteCapacity> Encoded{};
-	const std::size_t EncodedLength = EncodeZeroPayloadMessage(TypeAlpha, Encoded);
-	const TSpan<const std::uint8_t> EncodedView(Encoded.data(), EncodedLength);
+	std::uint8_t Encoded[MessageByteCapacity] = {};
+	const std::size_t EncodedLength = EncodeZeroPayloadMessage(TypeAlpha, Encoded, MessageByteCapacity);
+	const TSpan<const std::uint8_t> EncodedView(Encoded, EncodedLength);
 
 	MW_EXPECT_SUCCESS(Test, Router.ReceiveEncodedMessage(StubChannelId, EncodedView), "First receive should fill slot one");
 	MW_EXPECT_SUCCESS(Test, Router.ReceiveEncodedMessage(StubChannelId, EncodedView), "Second receive should fill slot two");
@@ -504,15 +516,16 @@ MW_TEST_CASE(EngineMessageRouter_FlushRetainsHeadOnChannelFailureAndResumesNextF
 	MW_EXPECT_SUCCESS(Test, Router.AddChannel(Channel), "Channel registration should succeed");
 	Channel.ScriptResult(EMessageResult::Unavailable);
 
-	const std::array<std::uint8_t, 1> FirstPayload{0x11};
-	const std::array<std::uint8_t, 1> SecondPayload{0x22};
+	const std::uint8_t FirstPayload[OneBytePayloadCount] = {PayloadByte11};
+	const std::uint8_t SecondPayload[OneBytePayloadCount] = {PayloadByte22};
 	MW_EXPECT_SUCCESS(
 		Test,
-		Router.SendMessageToActor(StubChannelId, TypeAlpha, BroadcastActorId, SenderId, TSpan<const std::uint8_t>(FirstPayload.data(), 1)),
+		Router.SendMessageToActor(StubChannelId, TypeAlpha, BroadcastActorId, SenderId, TSpan<const std::uint8_t>(FirstPayload, OneBytePayloadCount)),
 		"First send should enqueue");
 	MW_EXPECT_SUCCESS(
 		Test,
-		Router.SendMessageToActor(StubChannelId, TypeAlpha, BroadcastActorId, SenderId, TSpan<const std::uint8_t>(SecondPayload.data(), 1)),
+		Router.SendMessageToActor(
+			StubChannelId, TypeAlpha, BroadcastActorId, SenderId, TSpan<const std::uint8_t>(SecondPayload, OneBytePayloadCount)),
 		"Second send should enqueue");
 
 	Router.PostAdvance(1);
@@ -525,12 +538,9 @@ MW_TEST_CASE(EngineMessageRouter_FlushRetainsHeadOnChannelFailureAndResumesNextF
 	MW_EXPECT_EQ(Test, std::size_t{2}, Channel.ReceivedCount(), "Both retained entries must be accepted on the resumed flush");
 	MW_EXPECT_EQ(Test, ActorMessageHeaderBytes + 1, Channel.ReceivedLength(0), "The first accepted entry must retain its original encoded length");
 	MW_EXPECT_EQ(
-		Test, std::uint8_t{0x11}, Channel.ReceivedByte(0, ActorMessageHeaderBytes), "The first accepted entry must retain its original payload byte");
+		Test, PayloadByte11, Channel.ReceivedByte(0, ActorMessageHeaderBytes), "The first accepted entry must retain its original payload byte");
 	MW_EXPECT_EQ(
-		Test,
-		std::uint8_t{0x22},
-		Channel.ReceivedByte(1, ActorMessageHeaderBytes),
-		"The second accepted entry must retain its original payload byte");
+		Test, PayloadByte22, Channel.ReceivedByte(1, ActorMessageHeaderBytes), "The second accepted entry must retain its original payload byte");
 }
 
 // ---------------------------------------------------------------------------
@@ -546,8 +556,8 @@ MW_TEST_CASE(EngineMessageRouter_SteadyStateOperationPerformsNoAllocation)
 	MW_EXPECT_SUCCESS(
 		Test, Router.AddMessageHandler(TypeAlpha, BroadcastActorId, MakeRecordingHandler(Recorder, 1), Handle), "Setup registration should succeed");
 
-	const std::array<std::uint8_t, 1> Payload{0x7F};
-	const TSpan<const std::uint8_t> PayloadView(Payload.data(), Payload.size());
+	const std::uint8_t Payload[OneBytePayloadCount] = {PayloadByte7F};
+	const TSpan<const std::uint8_t> PayloadView(Payload, OneBytePayloadCount);
 
 	// Warm up once so any one-time lazy allocation is excluded from the steady-state measurement.
 	(void)Router.BroadcastMessage(LocalChannelId, TypeAlpha, SenderId, PayloadView);

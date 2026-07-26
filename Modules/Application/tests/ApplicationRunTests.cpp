@@ -3,7 +3,6 @@
 #include <MicroWorld/Application/Application.h>
 #include <MicroWorld/Object/ObjectStore.h>
 
-#include <array>
 #include <cstddef>
 #include <initializer_list>
 #include <utility>
@@ -16,6 +15,12 @@ namespace
 
 	/** File-static counter for the free noexcept pacing function, since FSleepFunction cannot bind a member. */
 	int GPacingCallCount{0};
+
+	/** Maximum scripted clock/timestamp entries one test drives, bounding both fixtures without dynamic storage. */
+	constexpr std::size_t MaximumScriptedEntries = 16;
+
+	/** Capacity of the recorded observed-tick array, sized to the most frames any runner test drives. */
+	constexpr std::size_t MaximumObservedTickTimestamps = 16;
 
 	/**
 	 * Free noexcept pacing function that counts calls without sleeping.
@@ -75,10 +80,10 @@ namespace
 
 	private:
 		/** Caps the scripted sequence so one test drives many frames without unbounded storage. */
-		static constexpr std::size_t MaximumScriptedValues = 16;
+		static constexpr std::size_t MaximumScriptedValues = MaximumScriptedEntries;
 
 		/** Holds the scripted monotonic values the test selected. */
-		std::array<MicroWorld::TimePointMilliseconds, MaximumScriptedValues> Sequence{};
+		MicroWorld::TimePointMilliseconds Sequence[MaximumScriptedValues]{};
 
 		/** Counts how many scripted values are populated, so unused tail slots are never read. */
 		std::size_t ValueCount{0};
@@ -104,7 +109,7 @@ namespace
 		void ConfigureBeginPlayResult(MicroWorld::ERuntimeResult InResult) noexcept { ConfiguredBeginPlayResult = InResult; }
 
 		/** Holds the Now timestamps Tick observed, so a test can assert the scripted clock reached frames. */
-		std::array<MicroWorld::TimePointMilliseconds, 16> ObservedTickTimestamps{};
+		MicroWorld::TimePointMilliseconds ObservedTickTimestamps[MaximumObservedTickTimestamps]{};
 
 		/** Counts how many frames Tick accepted, so a test can size observed timestamps and pacing calls. */
 		int TickCount{0};
@@ -123,9 +128,9 @@ namespace
 
 		MicroWorld::ERuntimeResult Tick(MicroWorld::TimePointMilliseconds InNowMilliseconds) noexcept override
 		{
-			if (static_cast<std::size_t>(TickCount) < ObservedTickTimestamps.size())
+			if (std::size_t{TickCount} < MaximumObservedTickTimestamps)
 			{
-				ObservedTickTimestamps[static_cast<std::size_t>(TickCount)] = InNowMilliseconds;
+				ObservedTickTimestamps[std::size_t{TickCount}] = InNowMilliseconds;
 			}
 			if (TickCount == StopOnFrameIndex)
 			{

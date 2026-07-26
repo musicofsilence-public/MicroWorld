@@ -35,6 +35,15 @@ using MicroWorld::Tests::TEngineEnvironment;
 /** Tick configuration that lets ordering types tick every advance by default. */
 constexpr FTickConfiguration OrderingTickConfiguration{true, true, DurationMilliseconds{0}};
 
+/** Canonical monotonic baseline every BeginPlay call uses as its starting world time. */
+constexpr MicroWorld::TimePointMilliseconds BaselineTimeMilliseconds{0};
+
+/** First advance time the ordering and interval tests use after the baseline begin. */
+constexpr MicroWorld::TimePointMilliseconds FirstTickTimeMilliseconds{100};
+
+/** Fixed capacity of the GC worklist used by the lifecycle-mutation guard test. */
+constexpr std::uint32_t CollectorWorklistCapacity = 8;
+
 /** A component that records begin/tick/end ordering into per-instance state. */
 class FOrderingComponent final : public UActorComponent
 {
@@ -201,7 +210,7 @@ MW_TEST_CASE(EngineBeginPlayOrderIsActorsThenComponentsPerActor)
 	const EEngineResult WorldActorA = World.Get()->RegisterActor(TObjectPtr<AActor>{ActorA});
 	const EEngineResult WorldActorB = World.Get()->RegisterActor(TObjectPtr<AActor>{ActorB});
 
-	const ERuntimeResult BeginResult = World.Get()->BeginPlay(0);
+	const ERuntimeResult BeginResult = World.Get()->BeginPlay(BaselineTimeMilliseconds);
 
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ActorAComp1, "ActorA should accept its first component");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ActorAComp2, "ActorA should accept its second component");
@@ -248,9 +257,9 @@ MW_TEST_CASE(EngineTickOrderIsActorsThenComponentsPerActor)
 	const EEngineResult ActorAResult = World.Get()->RegisterActor(TObjectPtr<AActor>{ActorA});
 	const EEngineResult ActorBResult = World.Get()->RegisterActor(TObjectPtr<AActor>{ActorB});
 
-	const ERuntimeResult BeginResult = World.Get()->BeginPlay(100);
+	const ERuntimeResult BeginResult = World.Get()->BeginPlay(FirstTickTimeMilliseconds);
 	Sequence.Next(); // Delimits BeginPlay events from the exact tick sequence.
-	const ERuntimeResult TickResult = World.Get()->Advance(100);
+	const ERuntimeResult TickResult = World.Get()->Advance(FirstTickTimeMilliseconds);
 
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, BeginResult, "BeginPlay should succeed");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, TickResult, "Advance should succeed");
@@ -295,7 +304,7 @@ MW_TEST_CASE(EngineEndPlayIsReverseRegistrationAndActorBeforeComponents)
 	const EEngineResult ActorAResult = World.Get()->RegisterActor(TObjectPtr<AActor>{ActorA});
 	const EEngineResult ActorBResult = World.Get()->RegisterActor(TObjectPtr<AActor>{ActorB});
 
-	const ERuntimeResult BeginResult = World.Get()->BeginPlay(0);
+	const ERuntimeResult BeginResult = World.Get()->BeginPlay(BaselineTimeMilliseconds);
 	Sequence.Next(); // Delimits BeginPlay events from the exact EndPlay sequence.
 	const ERuntimeResult EndResult = World.Get()->EndPlay();
 	const ERuntimeResult RepeatedEndResult = World.Get()->EndPlay();
@@ -336,9 +345,9 @@ MW_TEST_CASE(EngineTickIntervalAndNoCatchUpBehavior)
 		Env.CreateDerivedObject<FOrderingActor>(OrderingActorTypeId, "OrderingActor", IntervalConfiguration, Sequence, ActorEvents);
 	(void)World.Get()->RegisterActor(TObjectPtr<AActor>{Actor});
 
-	(void)World.Get()->BeginPlay(100);
+	(void)World.Get()->BeginPlay(FirstTickTimeMilliseconds);
 
-	const ERuntimeResult FirstAdvance = World.Get()->Advance(100); // due immediately after begin
+	const ERuntimeResult FirstAdvance = World.Get()->Advance(FirstTickTimeMilliseconds); // due immediately after begin
 	const std::uint32_t TicksAfterFirst = ActorEvents.TickCount;
 	const ERuntimeResult JumpAdvance = World.Get()->Advance(300); // four intervals later, still one tick
 	const std::uint32_t TicksAfterJump = ActorEvents.TickCount;
@@ -363,8 +372,8 @@ MW_TEST_CASE(EngineLifecycleHooksCannotMutateManagedGraph)
 {
 	FLifecycleEnvironment Env{};
 	FObjectStore& Store = Env.GetStore();
-	std::array<MicroWorld::FObjectHandle, 8> Worklist{};
-	FGarbageCollector Collector{Store, MicroWorld::FGarbageCollectorStorage{Worklist.data(), static_cast<std::uint32_t>(Worklist.size())}};
+	MicroWorld::FObjectHandle Worklist[CollectorWorklistCapacity]{};
+	FGarbageCollector Collector{Store, MicroWorld::FGarbageCollectorStorage{Worklist, CollectorWorklistCapacity}};
 	FLifecycleMutationState MutationState{};
 	FWorldActorRegistry<1> WorldActors;
 
@@ -373,7 +382,7 @@ MW_TEST_CASE(EngineLifecycleHooksCannotMutateManagedGraph)
 	const TObjectPtr<FMutationAttemptActor> Actor = Env.CreateDerivedObject<FMutationAttemptActor>(
 		MutationAttemptActorTypeId, "MutationAttemptActor", Store, Collector, *ComponentDescriptor, MutationState);
 	const EEngineResult ActorRegistration = World.Get()->RegisterActor(Actor);
-	const ERuntimeResult BeginResult = World.Get()->BeginPlay(0);
+	const ERuntimeResult BeginResult = World.Get()->BeginPlay(BaselineTimeMilliseconds);
 	const ERuntimeResult AdvanceResult = World.Get()->Advance(1);
 	const ERuntimeResult EndResult = World.Get()->EndPlay();
 	const MicroWorld::FObjectStoreStats FinalStats = Store.Stats();
