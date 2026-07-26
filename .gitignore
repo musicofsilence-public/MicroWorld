@@ -30,3 +30,6 @@ examples/*/src/NetworkConfig.h
 /build-integration-messaging
 /build-messaging
 /build-engine-consumer
+/build-core
+/build-net
+/build-ph
