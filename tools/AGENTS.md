@@ -46,7 +46,9 @@ Every Python function and module-level policy constant needs a purpose-focused
 docstring or comment. Keep scans deterministic and side-effect free. Verify with
 `python tools/CheckClassDocumentation.py --root Modules/Core --exclude build --exclude .pio --exclude __pycache__ --require-doxygen --max-sentences 3`
 and
-`python tools/CheckFolderAgents.py --root Modules/Core --require-file AGENTS.md --exclude build --exclude .pio --exclude __pycache__`.
+`python tools/CheckFolderAgents.py --root Modules/Core --require-file AGENTS.md --exclude build --exclude cmake-build-debug --exclude cmake-build-release --exclude .pio --exclude __pycache__`.
+`--exclude` matches whole directory names, not globs, so every build-tree name an
+IDE might create has to be listed.
 Verify module boundaries with
 `python tools/CheckDependencyBoundaries.py --package Core=Modules/Core`
 and verify a built Core map with

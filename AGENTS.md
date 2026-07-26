@@ -11,11 +11,10 @@ pointers, a simple `TNetManager`/`INetDriver` networking layer, and explicit
 hardware boundaries. Platform support is verified one target at a time, not
 claimed for every board.
 
-`PROGRESS.md` is the sole live implementation status and next-milestone record
-(`docs/ROADMAP.md` is the completed implementation plan, kept as a frozen
-historical record). `docs/MESSAGING_ROADMAP.md` is the active plan for actor
-messaging and engine-first examples, and `docs/RADIO_TRANSPORTS_ROADMAP.md` is
-the active plan for the E32 LoRa and Bluetooth LE radio transports. Any change
+`PROGRESS.md` is the sole live implementation status and next-milestone record,
+and `docs/RADIO_TRANSPORTS_ROADMAP.md` is the one still-active plan (E32 LoRa and
+Bluetooth LE radio transports). Every other `docs/*_ROADMAP.md` is a finished
+plan kept only as a historical record — do not read one as guidance. Any change
 to implementation, gate, evidence, decision, blocker, or next milestone must
 update `PROGRESS.md` in the same commit.
 
@@ -115,7 +114,7 @@ Checkers (run per their documented args; see `tools/AGENTS.md`):
 ```sh
 python tools/CheckDependencyBoundaries.py --self-test
 python tools/CheckProfileMap.py --self-test
-python tools/CheckFolderAgents.py --root Modules --exclude build --exclude .pio --exclude __pycache__
+python tools/CheckFolderAgents.py --root Modules --exclude build --exclude cmake-build-debug --exclude cmake-build-release --exclude .pio --exclude __pycache__
 python tools/CheckClassDocumentation.py --root Modules --require-doxygen
 python tools/CheckFormatting.py
 ```

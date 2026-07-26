@@ -11,11 +11,12 @@ depend on Object or Engine; the Integration package is the only one permitted
 to see both.
 
 The package owns a bounded byte reader/writer, one non-blocking `INetDriver`
-contract, one caller-storage-backed fixed-capacity `TNetManager`, explicit
-`ENetResult` outcomes, and a deterministic host loopback driver. It does not
-own wire framing, sessions, sequence numbers, retries, reliability,
-authentication, replication, real transports, threads, platform adapters, or
-vendor SDK code.
+contract, one caller-storage-backed fixed-capacity `TNetManager`, the `TNetHost`
+session layer above it, wire framing, explicit `ENetResult` outcomes, and a
+deterministic host loopback driver. It does not own sequence numbers, retries,
+reliability, message routing, authentication, replication, real transports,
+threads, platform adapters, or vendor SDK code: reliability and routing belong
+to Messaging, and real transports to the platform packages.
 
 ## Concepts and boundaries
 
@@ -58,6 +59,12 @@ vendor SDK code.
   on queue, attempts at most the FIFO head per send advance, and performs at
   most one direct driver receive. Rejected operations leave state unchanged
   and preserve ordering.
+- `TNetHost<MaxPeers, MaxPacketBytes>` is the session layer above `TNetManager`.
+  One `ENetMode` role — Standalone, Client, ListenServer, or DedicatedServer —
+  selects which traffic the host originates and accepts; a fixed peer table
+  carries `Hello`/`Welcome` admission, heartbeats, and timeout eviction; and
+  channel 0 is reserved for control. The host owns no reliability and no
+  ordering across messages.
 - `THostLoopback<CapacityPackets, PacketBytes>` is a deterministic fixed-
   capacity `INetDriver` for host tests: a full send never overwrites accepted
   packets, an empty receive returns `Unavailable`, a too-small receive

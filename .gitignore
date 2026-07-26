@@ -2,6 +2,8 @@
 **/build/
 # Throwaway from-scratch acceptance tree (roadmap task 9.3)
 **/build-final/
+# JetBrains/CLion CMake trees (cmake-build-debug, cmake-build-release, ...)
+**/cmake-build-*/
 
 # Python bytecode caches
 __pycache__/
