@@ -7,8 +7,8 @@ explicit `ENetResult` outcomes, a deterministic host loopback driver, a
 header-only wire framing codec, and a session/role host for embedded
 applications.
 
-Current status and recorded evidence live in
-[PROGRESS.md](../../PROGRESS.md).
+Net's headers and tests define current behavior; measured margins are indexed by
+[ResourceBudgets.md](../../docs/ResourceBudgets.md).
 
 ## What Net provides
 

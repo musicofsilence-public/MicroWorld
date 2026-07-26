@@ -12,9 +12,9 @@ retired its own World/Actor/Component model in the Phase 1 consolidation; the
 managed Engine package is the sole Actor model.
 
 Object, Messaging, Net, Engine, Application, and Integration are the packages
-above Core; Memory is folded into Core and is no longer one. Their current
-acceptance state and next milestone live only in `PROGRESS.md`; this guide owns
-durable Core boundaries rather than volatile roadmap sequencing.
+above Core; Memory is folded into Core and is no longer one. This guide owns
+durable Core boundaries rather than volatile roadmap sequencing — next work
+lives in `../../docs/RADIO_TRANSPORTS_ROADMAP.md`.
 
 ## Concepts
 
@@ -25,7 +25,7 @@ durable Core boundaries rather than volatile roadmap sequencing.
 - Keep vendor SDK, RTOS, radio, valve, and tutorial dependencies out.
 - Preserve C++17, explicit ownership/failure, public API documentation,
   formatting, and behavior tests.
-- `PROGRESS.md` is the sole live MicroWorld status record.
+- Core's headers and tests are the sole record of its current behavior.
 
 ## Verification
 

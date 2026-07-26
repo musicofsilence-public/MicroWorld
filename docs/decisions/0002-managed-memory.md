@@ -48,8 +48,8 @@ candidate now does so.
 On 2026-07-19, the Object candidate at `e1e7b75` recorded evidence for handles,
 descriptors, roots, object storage, and bounded incremental GC. That evidence
 did not establish the Engine behavior implemented later. See
-[ModulePackaging.md](../ModulePackaging.md); current implementation state and
-Engine evidence belong in [PROGRESS.md](../../PROGRESS.md).
+[ModulePackaging.md](../ModulePackaging.md); current implementation state is
+defined by the Engine package's headers and tests.
 
 ## Consequences
 

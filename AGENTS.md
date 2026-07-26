@@ -11,12 +11,18 @@ pointers, a simple `TNetManager`/`INetDriver` networking layer, and explicit
 hardware boundaries. Platform support is verified one target at a time, not
 claimed for every board.
 
-`PROGRESS.md` is the sole live implementation status and next-milestone record,
-and `docs/RADIO_TRANSPORTS_ROADMAP.md` is the one still-active plan (E32 LoRa and
-Bluetooth LE radio transports). Every other `docs/*_ROADMAP.md` is a finished
-plan kept only as a historical record — do not read one as guidance. Any change
-to implementation, gate, evidence, decision, blocker, or next milestone must
-update `PROGRESS.md` in the same commit.
+`docs/RADIO_TRANSPORTS_ROADMAP.md` is the one still-active plan (E32 LoRa and
+Bluetooth LE radio transports) and the only place next work is tracked. Every
+other `docs/*_ROADMAP.md` is a finished plan kept only as a historical record —
+do not read one as guidance.
+
+Status has four owners, and no file summarizes them. What changed lives in git
+history; headers and tests define current behavior; hardware evidence lives in
+each example's `README.md`; measured margins live in
+`Modules/*/benchmarks/Results/` and are indexed by `docs/ResourceBudgets.md`.
+`PROGRESS.md` and `CHANGELOG.md` were deleted on 2026-07-26 — they had become a
+third and fourth record of those same facts, and both had drifted out of date.
+Do not reintroduce either; put the fact where its owner already is.
 
 ## Repository structure
 
@@ -37,11 +43,12 @@ MicroWorld/
 ├── tools/              CheckDependencyBoundaries, CheckProfileMap,
 │                       CheckFolderAgents, CheckClassDocumentation
 ├── CMakeLists.txt      root superbuild (adds every portable/host module)
-├── clang-format        repo style file (invoke as --style=file:clang-format)
-├── PROGRESS.md         sole live status + evidence record
-├── CHANGELOG.md        released changes
-└── VERSION             released version string
+└── clang-format        repo style file (invoke as --style=file:clang-format)
 ```
+
+Each package's version is its `library.json` plus its CMake `project()` line —
+both currently 0.3.0. There is no root version file; one more copy of a number
+is one more copy to leave stale.
 
 Dependencies point inward:
 

@@ -6,8 +6,8 @@ The runtime is built and host-tested, and its tick / GC-slice / net-pump
 margins were measured on physical ESP32-S3 hardware in roadmap Phase 6.2 (see
 [../PlatformEsp32/benchmarks/Results/Esp32S3N16R8.md](../PlatformEsp32/benchmarks/Results/Esp32S3N16R8.md)).
 
-Current status and recorded evidence live in
-[PROGRESS.md](../../PROGRESS.md).
+Engine's headers and tests define current behavior; measured margins are indexed
+by [ResourceBudgets.md](../../docs/ResourceBudgets.md).
 
 ## What Engine provides
 

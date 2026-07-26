@@ -85,5 +85,5 @@ headers under C++17 with strict warnings, exceptions disabled, and RTTI
 disabled, run the Core dependency-boundary checker with explicit Core and Net
 package roots, run the profile-map checker on a Core+Net consumer
 link map, and run the package tests required by the current package scope.
-Keep Net absent from Object-only and Engine-only profiles. Live status and
-evidence belong only in `../../PROGRESS.md`.
+Keep Net absent from Object-only and Engine-only profiles. This guide owns
+durable boundaries; Net's headers and tests define its current behavior.

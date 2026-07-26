@@ -20,10 +20,17 @@ way the wired links were proven:
 This document is the active plan and progress tracker for that work, written
 so that any LLM (including a weak one) can pick it up, find the next task,
 complete it, and record progress without extra context. Companions:
-`docs/MESSAGING_ROADMAP.md` (active, independent except the Phase 5 gate),
+`docs/MESSAGING_ROADMAP.md` (finished; the Phase 5 gate it owned is open),
 `docs/WIRED_TRANSPORTS_ROADMAP.md` (frozen precedent this plan imitates),
-`docs/EXAMPLES_ROADMAP.md` (owns the example scaffold + hardware checkpoint),
-`PROGRESS.md` (live evidence record).
+`docs/EXAMPLES_ROADMAP.md` (owns the example scaffold + hardware checkpoint).
+
+Completed tasks below still cite `PROGRESS.md` and `CHANGELOG.md`. Both files
+were deleted on 2026-07-26 because they had become a third and fourth record of
+facts that already had owners, and both had drifted out of date. What changed
+now lives in git history, what is next in this document, hardware evidence in
+each example's `README.md`, and measured margins in
+`Modules/*/benchmarks/Results/`. Read those citations as history, not as
+instructions.
 
 ---
 
@@ -52,7 +59,8 @@ Follow these rules exactly:
    and stop. Do not skip ahead.
 8. Never delete or rewrite this document's structure. Only update statuses,
    checkboxes, evidence lines, and BLOCKED/WAITING notes.
-9. When a phase reaches ✅: add one short evidence entry to `PROGRESS.md`.
+9. A phase's evidence is the per-task `Done YYYY-MM-DD` lines from rule 5 plus
+   the commit that carried them. There is no separate status file to update.
 
 Status legend: ⬜ not started · 🟨 in progress · ✅ done · ⛔ blocked/gated
 
@@ -102,11 +110,11 @@ quoted symbol (`rg -n "SymbolName" Modules`), never by remembered offsets.
 
 ### 1.5 Files you must never edit
 
-- `docs/ROADMAP.md`, `docs/WIRED_TRANSPORTS_ROADMAP.md` — frozen history.
+- `docs/WIRED_TRANSPORTS_ROADMAP.md` — frozen history.
 - The task/catalog sections of `docs/EXAMPLES_ROADMAP.md` and
   `docs/MESSAGING_ROADMAP.md` (each plan tracks its own tasks; shared example
   registration happens **only** in `examples/README.md`).
-- Existing `CHANGELOG.md` entries; `Modules/*/benchmarks/Results/*.md`;
+- `Modules/*/benchmarks/Results/*.md`;
   `examples/esp32-common/sdkconfig.defaults` and `partitions.csv` (frozen
   board profile — D11 shows how BLE builds extend it without editing it);
   `LICENSE`; anything under `build/`, `.pio/`, `.git/`.
@@ -679,15 +687,15 @@ evidence line.
   without BLE/LoRa.
   **Verify:** Standard Verify + folder-agents checker.
 
-- [ ] **6.2 Release bookkeeping.** `CHANGELOG.md` entry (added: BLE driver
-  pair, BleAddress, sdkconfig.ble.defaults, ADR 0004, examples 17, 26–29;
-  proven: E32 LoRa on hardware). `examples/README.md` final statuses.
-  `PROGRESS.md` phase evidence lines. Final full run: Standard Verify +
-  folder-agents + `pio run` for every example this plan touched.
+- [ ] **6.2 Close the plan.** `examples/README.md` final statuses. Final full
+  run: Standard Verify + folder-agents + `pio run` for every example this plan
+  touched. The commit that closes the plan is its release record — it names the
+  BLE driver pair, BleAddress, sdkconfig.ble.defaults, ADR 0004, examples 17 and
+  26–29, and E32 LoRa proven on hardware.
 
   **Done when:** everything green; tracker rows all ✅ (Phase 5 may read
-  ⛔ gated if the gate never opened — then say so in PROGRESS.md and close
-  the plan without it; reopening later is a checkbox, not a new plan).
+  ⛔ gated if the gate never opened — then say so in this document's tracker and
+  close the plan without it; reopening later is a checkbox, not a new plan).
 
 ---
 

@@ -22,8 +22,8 @@ OS/SDK headers and both are excluded from `CheckDependencyBoundaries.py`.
 - One package per engine layer; no package compiles another layer's sources.
 - Each package owns its identity (CMake target, `MicroWorld::*` alias,
   PlatformIO package name, header namespace) — these are frozen.
-- Per-package `AGENTS.md` files own durable boundaries; `../../PROGRESS.md`
-  owns live status and evidence.
+- Per-package `AGENTS.md` files own durable boundaries; each package's headers
+  and tests own its current behavior.
 
 ## Verification
 

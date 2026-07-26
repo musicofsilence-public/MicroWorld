@@ -47,4 +47,5 @@ map check. Exact recorded package, map, and ESP32-S3 compile facts are in the
 [Object](../Modules/Object/benchmarks/Results/Esp32S3N16R8.md) evidence
 records.
 
-Engine status and evidence are tracked in [PROGRESS.md](../PROGRESS.md).
+Engine behavior is defined by its headers and tests; measured margins are
+indexed by [ResourceBudgets.md](ResourceBudgets.md).

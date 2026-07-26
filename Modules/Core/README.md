@@ -4,7 +4,7 @@ MicroWorld Core is a standalone C++17 lifecycle and tick runtime for bounded
 embedded applications. It has no ESP32, RTOS, transport, or product-policy
 dependency.
 
-Current development status is in [PROGRESS.md](../../PROGRESS.md).
+The headers and tests below define current behavior.
 
 ## What Core provides
 
@@ -102,15 +102,14 @@ As of 0.3.0, the runtime that sits on Core includes:
   file.
 
 Core itself still provides only primitives — spawn/destroy, timers, and
-networking live in Engine and Net, not Core. Live state and exact evidence are
-recorded in [PROGRESS.md](../../PROGRESS.md).
+networking live in Engine and Net, not Core.
 
 Core does not provide runtime spawn/destroy, timers, networking policy,
 reflection, hardware abstraction, or a real-time guarantee.
 
 ## Evidence and details
 
-- [Current status and evidence](../../PROGRESS.md)
+- [Resource budgets and measured margins](../../docs/ResourceBudgets.md)
 - [Package architecture](../../docs/ModulePackaging.md)
 - [Concept map](../../docs/UE5ConceptMap.md)
 - [Resource rules](../../docs/ResourceBudgets.md)

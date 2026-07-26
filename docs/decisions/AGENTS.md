@@ -10,6 +10,5 @@ later decision may supersede it without rewriting measured evidence.
 
 ## Concepts
 
-`PROGRESS.md` owns live status, headers/tests own implemented behavior, and
-benchmark records own measurements. Verify dates, links, and claims against
-those sources.
+Headers and tests own implemented behavior, and benchmark records own
+measurements. Verify dates, links, and claims against those sources.

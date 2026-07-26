@@ -8,39 +8,50 @@ UE5 developers can build small applications and games for these devices without
 first learning every hardware detail. Platform support is verified one target at
 a time, not claimed for every board.
 
-Current development status is in [PROGRESS.md](PROGRESS.md); the completed
-implementation plan remains in [docs/ROADMAP.md](docs/ROADMAP.md) as a
-historical record. The style contract every module follows is in
-[docs/Style.md](docs/Style.md). The active examples plan is in
-[docs/EXAMPLES_ROADMAP.md](docs/EXAMPLES_ROADMAP.md), building one runnable
-ESP32-S3 example per engine feature under [examples/](examples/README.md). The
-active plan for actor messaging and engine-first examples is in
-[docs/MESSAGING_ROADMAP.md](docs/MESSAGING_ROADMAP.md); the active plan for the
-E32 LoRa and Bluetooth LE radio transports is in
-[docs/RADIO_TRANSPORTS_ROADMAP.md](docs/RADIO_TRANSPORTS_ROADMAP.md).
+The one active plan is
+[docs/RADIO_TRANSPORTS_ROADMAP.md](docs/RADIO_TRANSPORTS_ROADMAP.md) (E32 LoRa
+and Bluetooth LE radio transports); every other `docs/*_ROADMAP.md` is a
+finished plan kept as a historical record. Current behavior is defined by the
+headers and tests, hardware evidence by each example's `README.md`, and measured
+margins by [docs/ResourceBudgets.md](docs/ResourceBudgets.md). The style
+contract every module follows is in [docs/Style.md](docs/Style.md), and one
+runnable ESP32-S3 example per engine feature lives under
+[examples/](examples/README.md).
+
+![MicroWorld implementation journey](docs/diagrams/microworld-implementation-roadmap.svg)
+
+[Open the high-resolution PNG](docs/diagrams/microworld-implementation-roadmap.png)
+or inspect the
+[editable Mermaid source](docs/diagrams/microworld-implementation-roadmap.mmd).
 
 ## Modules
 
 | Module | CMake target | PlatformIO package | Role |
 | --- | --- | --- | --- |
-| Core | `MicroWorld::Core` | `MicroWorld` | Lifecycle, tick, application primitives |
-| Memory | `MicroWorld::Memory` | `MicroWorldMemory` | Memory resource, arena, smart pointers |
-| Object | `MicroWorld::Object` | `MicroWorldObject` | Object store, garbage collector |
-| Engine | `MicroWorld::Engine` | `MicroWorldEngine` | `UWorld` / `AActor` / `UActorComponent`, timers |
-| Net | `MicroWorld::Net` | `MicroWorldNet` | Byte I/O, frame codec, `TNetManager` |
+| Core | `MicroWorld::Core` | `MicroWorld` | Lifecycle, tick, containers, delegates, smart pointers, timers, `IEngineSystem` |
+| Object | `MicroWorld::Object` | `MicroWorldObject` | Object store, garbage collector, handles |
+| Engine | `MicroWorld::Engine` | `MicroWorldEngine` | `UWorld` / `AActor` / `UActorComponent`, `TEngine`, `IEngine` |
+| Messaging | `MicroWorld::Messaging` | `MicroWorldMessaging` | Message router, channel bindings (header-only) |
+| Net | `MicroWorld::Net` | `MicroWorldNet` | Byte I/O, frame codec, `TNetHost` |
+| Application | `MicroWorld::Application` | `MicroWorldApplication` | `FApplication` — owns one engine and its frame loop |
+| Integration | `MicroWorld::Integration` | `MicroWorldIntegration` | `TNetSystem` — the only Engine + Net joiner |
 | PlatformHost | `MicroWorld::PlatformHost` | — | Host UDP transport (non-portable) |
 | PlatformEsp32 | — | `MicroWorldPlatformEsp32` | ESP32 UDP + E32 LoRa + wired UART/I2C/SPI transports (PlatformIO/ESP-IDF only) |
 
-Dependencies point inward:
+Memory is folded into Core; no Memory package remains. Dependencies point
+inward:
 
 ```text
-Core <- Memory <- Object <- Engine
-Core <- Memory <- Net
+Core <- Object <- Engine <- Application
+Core <- Messaging
+Core <- Net
+Core, Object, Messaging, Engine, Net <- Integration
 ```
 
-Net is an independent overlay above Memory: it never pulls Object or Engine, so
-an application can use byte I/O without the managed runtime. PlatformHost and
-PlatformEsp32 are the non-portable edges that supply real transports. See
+Net is an independent overlay above Core: it never pulls Object or Engine, so an
+application can use byte I/O without the managed runtime, and Integration is the
+only package permitted to see both. PlatformHost and PlatformEsp32 are the
+non-portable edges that supply real transports. See
 [docs/ModulePackaging.md](docs/ModulePackaging.md) for the full layout.
 
 ## Verify gate

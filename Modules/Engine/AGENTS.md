@@ -48,5 +48,5 @@ adapters, or hardware APIs.
 Build the package and standalone consumer with C++17, strict warnings,
 exceptions disabled, and RTTI disabled. Run Engine behavior tests and the
 dependency/profile checks after changes. Keep Engine absent from lower-package
-profiles. Live status and evidence belong only in
-`../../PROGRESS.md`.
+profiles. This guide owns durable boundaries; Engine's headers and tests define
+its current behavior.

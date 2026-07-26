@@ -108,8 +108,7 @@ under the dependency checker.
 Compile success is never a runtime, timing, heap, stack, or radio claim. A
 newly ported adapter that opens sockets, drives a radio, or holds large fixed
 storage must be smoke-run on the real target before any runtime-readiness
-claim — the Phase 6.2 measurement found two defects that were invisible to the
-compile-only proof (lwIP stack uninitialized before socket use; large
-composition overflowing the main task stack). See the Phase 6.2 decision row
-in `docs/ROADMAP.md` §6 and the measured margins in
+claim — the first ESP32-S3 measurement run found two defects that were invisible
+to the compile-only proof (lwIP stack uninitialized before socket use; large
+composition overflowing the main task stack). The measured margins are in
 [`benchmarks/Results/Esp32S3N16R8.md`](../Modules/PlatformEsp32/benchmarks/Results/Esp32S3N16R8.md).

@@ -45,5 +45,6 @@ a sleep implementation — the clock and sleep arrive from the caller.
 Configure and build this package independently with CMake, compile its public
 headers under C++17 with strict warnings, exceptions disabled, and RTTI
 disabled, run the dependency-boundary checker with an Application package
-root, and run the package tests required by the current package scope. Live
-status and evidence belong only in `../../PROGRESS.md`.
+root, and run the package tests required by the current package scope. This
+guide owns durable boundaries; the package's headers and tests define its
+current behavior.

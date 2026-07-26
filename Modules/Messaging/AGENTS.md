@@ -37,5 +37,5 @@ introduce no hidden transport, engine, clock, heap, or SDK coupling.
 Configure this package independently with CMake, compile public headers under
 C++17 with strict warnings, exceptions disabled, and RTTI disabled, run the
 dependency-boundary checker with a Messaging package root, and run the package
-tests required by the current package scope. Live status and evidence belong
-only in `../../PROGRESS.md`.
+tests required by the current package scope. This guide owns durable boundaries;
+the package's headers and tests define its current behavior.
