@@ -51,7 +51,9 @@ and
 `DEFAULT_EXCLUDED_DIRECTORY_NAMES`, so no `--exclude` chain belongs in a normal
 invocation. Matching is by exact directory name, so a build tree the defaults do
 not anticipate fails the scan loudly; add the name to that constant, or pass
-`--exclude` for a one-off.
+`--exclude` for a one-off. `--self-test` covers a covered tree, a directory with
+no guide, a guide missing its required sections, and the case where an excluded
+name sits in an ancestor of the scan root — which once reported an empty pass.
 Verify module boundaries with
 `python tools/CheckDependencyBoundaries.py --package Core=Modules/Core`
 and verify a built Core map with

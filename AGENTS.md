@@ -114,10 +114,15 @@ Checkers (run per their documented args; see `tools/AGENTS.md`):
 ```sh
 python tools/CheckDependencyBoundaries.py --self-test
 python tools/CheckProfileMap.py --self-test
+python tools/CheckFolderAgents.py --self-test
 python tools/CheckFolderAgents.py --root Modules
 python tools/CheckClassDocumentation.py --root Modules --require-doxygen
 python tools/CheckFormatting.py
 ```
+
+Only `CheckClassDocumentation.py` needs running by hand: `ctest --test-dir build`
+already runs formatting, the dependency boundaries, the profile map, and the
+folder guides, each with its self-test where the checker has one.
 
 Formatting gate (mandatory — not covered by any other gate). `CheckFormatting.py`
 is also wired into ctest as `microworld_format_check`, so it runs with every

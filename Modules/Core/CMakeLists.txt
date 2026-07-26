@@ -127,6 +127,20 @@ if(MICROWORLD_BUILD_TESTS)
             --map ${MICROWORLD_CORE_PROFILE_MAP}
             --profile Core
     )
+    add_test(
+        NAME microworld_folder_guides_self_test
+        COMMAND
+            ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/../../tools/CheckFolderAgents.py
+            --self-test
+    )
+    add_test(
+        NAME microworld_folder_guides
+        COMMAND
+            ${Python3_EXECUTABLE}
+            ${CMAKE_CURRENT_SOURCE_DIR}/../../tools/CheckFolderAgents.py
+            --root ${CMAKE_CURRENT_SOURCE_DIR}/../../Modules
+    )
 endif()
 
 # The dispatch benchmark and HostLifecycle example were retired with the Core
