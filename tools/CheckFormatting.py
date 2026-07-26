@@ -73,7 +73,9 @@ def discover_sources(root: Path) -> list[Path]:
         for path in modules.rglob("*")
         if path.is_file()
         and path.suffix.lower() in SOURCE_SUFFIXES
-        and "build" not in path.parts
+        # Relative to Modules, so a checkout living under a directory named
+        # "build" cannot empty this list and report a silent pass.
+        and "build" not in path.relative_to(modules).parts
     ]
     return sorted(sources)
 

@@ -32,9 +32,14 @@ def parse_arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def is_excluded(path: Path, excluded_names: set[str]) -> bool:
-    """Keep caller-selected build/cache directory names out of maintained-source results."""
-    return any(part in excluded_names for part in path.parts)
+def is_excluded(path: Path, root: Path, excluded_names: set[str]) -> bool:
+    """
+    Keep caller-selected build/cache directory names out of maintained-source results.
+
+    Only names below the scan root count: matching the whole path would let a
+    checkout living under an excluded name scan nothing and still report success.
+    """
+    return any(part in excluded_names for part in path.relative_to(root).parts)
 
 
 def find_contract(text: str, declaration_offset: int) -> str | None:
@@ -139,7 +144,7 @@ def main() -> int:
             errors.append(f"{root}: scan root is not a directory")
             continue
         for path in sorted(root.rglob("*")):
-            if not path.is_file() or is_excluded(path, excluded_names):
+            if not path.is_file() or is_excluded(path, root, excluded_names):
                 continue
             suffix = path.suffix.lower()
             if suffix not in {".h", ".hpp", ".cpp", ".cc", ".cxx", ".md"}:

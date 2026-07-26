@@ -161,9 +161,14 @@ def parse_package_specification(specification: str) -> tuple[str, Path] | None:
     return module, path
 
 
-def is_excluded(path: Path, excluded_names: set[str]) -> bool:
-    """Keep generated directory names outside the maintained dependency graph."""
-    return any(part in excluded_names for part in path.parts)
+def is_excluded(path: Path, root: Path, excluded_names: set[str]) -> bool:
+    """
+    Keep generated directory names outside the maintained dependency graph.
+
+    Only names below the scan root count: matching the whole path would let a
+    checkout living under an excluded name scan nothing and still report success.
+    """
+    return any(part in excluded_names for part in path.relative_to(root).parts)
 
 
 def discover_sources(
@@ -181,7 +186,7 @@ def discover_sources(
             for path in source_root.rglob("*")
             if path.is_file()
             and path.suffix.lower() in SOURCE_SUFFIXES
-            and not is_excluded(path, excluded_names)
+            and not is_excluded(path, source_root, excluded_names)
         )
     return sorted(sources)
 
