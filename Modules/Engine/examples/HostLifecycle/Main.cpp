@@ -2,7 +2,6 @@
 #include <MicroWorld/Engine/ActorComponent.h>
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Engine/EngineResult.h>
-#include <MicroWorld/Engine/InlineTypes.h>
 #include <MicroWorld/Object/ClassDescriptor.h>
 #include <MicroWorld/Object/ObjectPtr.h>
 
