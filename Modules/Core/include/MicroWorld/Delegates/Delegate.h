@@ -252,8 +252,13 @@ private:
 	/** Clears erased operations only after the associated callable lifetime has ended or moved. */
 	void ClearFunctions() noexcept { Operations = {}; }
 
-	/** Retains one callable inline without beginning any concrete object lifetime by default. */
-	typename std::aligned_storage<InlineCallableBytes, InlineStorageAlignment>::type InlineStorage;
+	/**
+	 * Retains one callable inline without beginning any concrete object lifetime by default.
+	 *
+	 * Spelled with alignas rather than std::aligned_storage, which C++23 deprecates and
+	 * the ESP32 toolchain's libstdc++ diagnoses.
+	 */
+	alignas(InlineStorageAlignment) unsigned char InlineStorage[InlineCallableBytes];
 
 	/** Selects the concrete invoke/move/destroy operations for the currently bound callable. */
 	FErasedCallableOperations Operations;

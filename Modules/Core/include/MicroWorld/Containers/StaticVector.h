@@ -127,8 +127,17 @@ public:
 	const ElementType* cend() const noexcept { return end(); }
 
 private:
-	/** Gives every slot enough size and alignment without starting an element lifetime. */
-	using FStorageSlot = typename std::aligned_storage<sizeof(ElementType), alignof(ElementType)>::type;
+	/**
+	 * Gives every slot enough size and alignment without starting an element lifetime.
+	 *
+	 * Spelled with alignas rather than std::aligned_storage, which C++23 deprecates and
+	 * the ESP32 toolchain's libstdc++ diagnoses.
+	 */
+	struct alignas(ElementType) FStorageSlot
+	{
+		/** Raw bytes for exactly one element; no ElementType lifetime begins here. */
+		unsigned char Bytes[sizeof(ElementType)];
+	};
 
 	static_assert(sizeof(FStorageSlot) == sizeof(ElementType), "TStaticVector requires storage slots with no inter-element padding");
 

@@ -38,10 +38,9 @@ if(
 )
     # PlatformIO forwards project build flags to ESP-IDF C sources as well as
     # this C++ component. Keep C++-only portability gates on the target that
-    # instantiates Memory's representative public templates. GCC 15.2's
-    # libstdc++ diagnoses std::aligned_storage in the C++17 StaticVector and
-    # Delegate headers as deprecated; suppress only that declaration warning
-    # until the separately owned production headers adopt replacement storage.
+    # instantiates Core's representative public templates. No deprecation
+    # suppression: StaticVector and Delegate spell their raw storage with
+    # alignas, so this target proves the public headers are clean under GCC 15.2.
     target_compile_options(
         ${COMPONENT_LIB}
         PRIVATE
@@ -50,7 +49,6 @@ if(
             -Wextra
             -Wpedantic
             -Werror
-            -Wno-deprecated-declarations
             -fno-exceptions
             -fno-rtti
     )
