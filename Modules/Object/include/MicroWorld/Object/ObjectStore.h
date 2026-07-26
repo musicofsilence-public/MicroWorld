@@ -154,6 +154,72 @@ private:
 	FFindClass FindClass{nullptr};
 };
 
+/**
+ * Provides World with the only two mutable-registry operations it needs for
+ * deferred actor construction without exposing registry capacity or
+ * storage.
+ */
+class FClassRegistryRegistrationView final
+{
+public:
+	/** Defines bounded find, type-token lookup, and automatic registration operations. */
+	using FFindClass = const FClassDescriptor* (*)(const void*, FTypeId) noexcept;
+	using FFindByTypeToken = const FClassDescriptor* (*)(const void*, const void*) noexcept;
+	using FRegisterAutomatic = EObjectResult (*)(void*, FClassDescriptor, const FClassDescriptor*&) noexcept;
+
+	/** Creates an empty view that rejects registration without mutation. */
+	FClassRegistryRegistrationView() noexcept = default;
+
+	/** Binds one application-owned registry for the world lifetime. */
+	FClassRegistryRegistrationView(
+		void* const InContext,
+		const FFindClass InFindClass,
+		const FFindByTypeToken InFindByTypeToken,
+		const FRegisterAutomatic InRegisterAutomatic) noexcept
+		: Context(InContext), FindClass(InFindClass), FindTypeToken(InFindByTypeToken), RegisterAutomaticFunction(InRegisterAutomatic)
+	{
+	}
+
+	/** Finds a canonical descriptor by local class ID without mutation. */
+	const FClassDescriptor* Find(const FTypeId InTypeId) const noexcept
+	{
+		return Context != nullptr && FindClass != nullptr ? FindClass(Context, InTypeId) : nullptr;
+	}
+
+	/** Finds a canonical descriptor by exact no-RTTI type token without mutation. */
+	const FClassDescriptor* FindByTypeToken(const void* const InTypeToken) const noexcept
+	{
+		return Context != nullptr && FindTypeToken != nullptr ? FindTypeToken(Context, InTypeToken) : nullptr;
+	}
+
+	/** Registers a candidate or returns its existing canonical descriptor. */
+	EObjectResult RegisterAutomatic(const FClassDescriptor InCandidate, const FClassDescriptor*& OutDescriptor) const noexcept
+	{
+		OutDescriptor = nullptr;
+		return Context != nullptr && RegisterAutomaticFunction != nullptr ? RegisterAutomaticFunction(Context, InCandidate, OutDescriptor)
+																		  : EObjectResult::UnknownClass;
+	}
+
+	/** Reports whether all required registry operations are available. */
+	bool IsValid() const noexcept
+	{
+		return Context != nullptr && FindClass != nullptr && FindTypeToken != nullptr && RegisterAutomaticFunction != nullptr;
+	}
+
+private:
+	/** Identifies the registry whose lifetime encloses this view. */
+	void* Context{nullptr};
+
+	/** Performs canonical descriptor lookup by local ID. */
+	FFindClass FindClass{nullptr};
+
+	/** Reuses an explicitly registered descriptor by exact C++ type token. */
+	FFindByTypeToken FindTypeToken{nullptr};
+
+	/** Adds only a validated descriptor to caller-owned fixed registry storage. */
+	FRegisterAutomatic RegisterAutomaticFunction{nullptr};
+};
+
 /** Creates a type-erased non-owning view over one fixed-capacity class registry. */
 template<std::size_t MaxClasses>
 FClassRegistryView MakeClassRegistryView(const TClassRegistry<MaxClasses>& Registry) noexcept
@@ -162,6 +228,20 @@ FClassRegistryView MakeClassRegistryView(const TClassRegistry<MaxClasses>& Regis
 		&Registry,
 		[](const void* InContext, const FTypeId InTypeId) noexcept -> const FClassDescriptor*
 		{ return static_cast<const TClassRegistry<MaxClasses>*>(InContext)->Find(InTypeId); });
+}
+
+/** Creates World's narrow mutable capability over an application-owned class registry. */
+template<std::size_t MaxClasses>
+FClassRegistryRegistrationView MakeClassRegistryRegistrationView(TClassRegistry<MaxClasses>& Registry) noexcept
+{
+	return FClassRegistryRegistrationView(
+		&Registry,
+		[](const void* const InContext, const FTypeId InTypeId) noexcept -> const FClassDescriptor*
+		{ return static_cast<const TClassRegistry<MaxClasses>*>(InContext)->Find(InTypeId); },
+		[](const void* const InContext, const void* const InTypeToken) noexcept -> const FClassDescriptor*
+		{ return static_cast<const TClassRegistry<MaxClasses>*>(InContext)->FindByTypeToken(InTypeToken); },
+		[](void* const InContext, const FClassDescriptor InCandidate, const FClassDescriptor*& OutDescriptor) noexcept -> EObjectResult
+		{ return static_cast<TClassRegistry<MaxClasses>*>(InContext)->RegisterAutomatic(InCandidate, OutDescriptor); });
 }
 
 /** Invokes the exact public nothrow destructor bound to one managed C++ type. */
@@ -388,6 +468,9 @@ public:
 
 	/** Reports whether publication, destruction, root acquisition, or collection is currently blocked. */
 	bool IsMutationLocked() const noexcept { return bMutationLocked || bDispatchLocked || ActiveCollector != nullptr; }
+
+	/** Reports only active incremental collection so callbacks may still queue deferred construction safely. */
+	bool IsCollectionActive() const noexcept { return ActiveCollector != nullptr; }
 
 private:
 	friend class FGarbageCollector;

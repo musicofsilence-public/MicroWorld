@@ -16,6 +16,14 @@ namespace MicroWorld
 
 UWorld::UWorld(FWorldActorRegistryReference InActorStorage) noexcept : UObject(), Actors(std::move(InActorStorage)) {}
 
+UWorld::UWorld(
+	FWorldActorRegistryReference InActorStorage,
+	FDeferredActorSpawnStorageReference InSpawnStorage,
+	const FClassRegistryRegistrationView InClasses) noexcept
+	: UObject(), Actors(std::move(InActorStorage)), DeferredSpawns(std::move(InSpawnStorage)), Classes(InClasses)
+{
+}
+
 UWorld::~UWorld() noexcept = default;
 
 const FClassDescriptor& UWorld::StaticClassDescriptor() noexcept
@@ -273,6 +281,42 @@ EEngineResult UWorld::SpawnActor(const TObjectPtr<AActor> InActor) noexcept
 	return EEngineResult::Success;
 }
 
+FActorSpawnStatus UWorld::GetSpawnStatus(const FActorSpawnHandle InHandle) const noexcept
+{
+	return DeferredSpawns.GetStatus(InHandle);
+}
+
+EActorSpawnRequestResult UWorld::CheckDeferredSpawnRequest() const noexcept
+{
+	if (Lifecycle.GetState() != ELifecycleState::Playing)
+	{
+		return EActorSpawnRequestResult::LifecycleLocked;
+	}
+	if (!DeferredSpawns.IsValid() || !Classes.IsValid())
+	{
+		return EActorSpawnRequestResult::Unconfigured;
+	}
+	FObjectStore* const ObjectStore = GetObjectStore();
+	if (ObjectStore == nullptr || ObjectStore->IsCollectionActive())
+	{
+		return EActorSpawnRequestResult::LifecycleLocked;
+	}
+	if (!Actors.IsValid())
+	{
+		return EActorSpawnRequestResult::CapacityExceeded;
+	}
+	if (Actors.GetCount() + Actors.GetPendingSpawnCount() + DeferredSpawns.PendingCount() >= Actors.GetCapacity())
+	{
+		return EActorSpawnRequestResult::CapacityExceeded;
+	}
+	return EActorSpawnRequestResult::Queued;
+}
+
+std::size_t UWorld::DeferredActorSpawnInlineBytes() const noexcept
+{
+	return DeferredSpawns.InlineBytes();
+}
+
 EEngineResult UWorld::CheckSpawnable(const TObjectPtr<AActor> InActor) const noexcept
 {
 	// Deferred spawn is a play-time structural request; it only queues here and
@@ -314,9 +358,9 @@ EEngineResult UWorld::CheckSpawnable(const TObjectPtr<AActor> InActor) const noe
 			return EEngineResult::Duplicate;
 		}
 	}
-	// Capacity counts live and pending-spawn actors together so a queued spawn can
-	// never exceed the world's fixed registry once the barrier applies it.
-	if (Actors.GetCount() + Actors.GetPendingSpawnCount() >= Actors.GetCapacity())
+	// Capacity counts every actor that can enter the live registry at the next
+	// barrier so manual and typed requests cannot overfill the fixed world limit.
+	if (Actors.GetCount() + Actors.GetPendingSpawnCount() + DeferredSpawns.PendingCount() >= Actors.GetCapacity())
 	{
 		return EEngineResult::CapacityExceeded;
 	}
@@ -395,7 +439,12 @@ ERuntimeResult UWorld::ApplyPending(const TimePointMilliseconds InNowMillisecond
 	{
 		return ERuntimeResult::InvalidLifecycle;
 	}
-	if (Actors.GetPendingDestroyCount() == 0 && Actors.GetPendingSpawnCount() == 0)
+	// Freeze typed work before destroy or BeginPlay callbacks can queue new requests.
+	if (DeferredSpawns.IsValid())
+	{
+		DeferredSpawns.SealBarrier();
+	}
+	if (Actors.GetPendingDestroyCount() == 0 && Actors.GetPendingSpawnCount() == 0 && DeferredSpawns.PendingCount() == 0)
 	{
 		return ERuntimeResult::Success;
 	}
@@ -408,6 +457,8 @@ ERuntimeResult UWorld::ApplyPending(const TimePointMilliseconds InNowMillisecond
 	const ERuntimeResult EndGuardResult = EndDoomedActorsUnderGuard(*ObjectStore, FirstError);
 	if (EndGuardResult != ERuntimeResult::Success)
 	{
+		DeferredSpawns.RestoreUnconstructedFrom(0);
+		DeferredSpawns.RestoreUnpublishedFrom(0);
 		return EndGuardResult;
 	}
 
@@ -416,7 +467,25 @@ ERuntimeResult UWorld::ApplyPending(const TimePointMilliseconds InNowMillisecond
 	const ERuntimeResult BeginGuardResult = BeginPendingSpawnsUnderGuard(*ObjectStore, InNowMilliseconds, FirstError);
 	if (BeginGuardResult != ERuntimeResult::Success)
 	{
+		DeferredSpawns.RestoreUnconstructedFrom(0);
+		DeferredSpawns.RestoreUnpublishedFrom(0);
 		return BeginGuardResult;
+	}
+
+	if (DeferredSpawns.IsValid())
+	{
+		if (ObjectStore->IsCollectionActive())
+		{
+			DeferredSpawns.RestoreUnconstructedFrom(0);
+			DeferredSpawns.RestoreUnpublishedFrom(0);
+			return ERuntimeResult::LifecycleLocked;
+		}
+		ConstructDeferredSpawns(*ObjectStore);
+		const ERuntimeResult DeferredBeginResult = BeginDeferredSpawnsUnderGuard(*ObjectStore, InNowMilliseconds, FirstError);
+		if (DeferredBeginResult != ERuntimeResult::Success)
+		{
+			return DeferredBeginResult;
+		}
 	}
 
 	return FirstError;
@@ -465,12 +534,57 @@ void UWorld::MarkAndUnregisterDoomedActors(FObjectStore& InObjectStore) noexcept
 			if (Actors.At(LiveIndex).Handle() == DoomedActor.Handle())
 			{
 				Actors.RemoveAt(LiveIndex);
+				DeferredSpawns.ReleaseActor(DoomedActor.Handle());
 				break;
 			}
 		}
 		(void)InObjectStore.MarkPendingDestroy(DoomedActor.Handle());
 	}
 	Actors.ClearPendingDestroy();
+}
+
+void UWorld::ConstructDeferredSpawns(FObjectStore& InObjectStore) noexcept
+{
+	for (std::size_t Index = 0; Index < DeferredSpawns.SealedFactoryCount(); ++Index)
+	{
+		DeferredSpawns.Construct(DeferredSpawns.SealedFactoryAt(Index), InObjectStore, Classes);
+	}
+}
+
+ERuntimeResult UWorld::BeginDeferredSpawnsUnderGuard(
+	FObjectStore& InObjectStore, const TimePointMilliseconds InNowMilliseconds, ERuntimeResult& InOutFirstError) noexcept
+{
+	if (DeferredSpawns.SealedPublishCount() == 0)
+	{
+		return ERuntimeResult::Success;
+	}
+
+	FObjectStoreDispatchGuard DispatchGuard(InObjectStore);
+	if (!DispatchGuard.IsAcquired())
+	{
+		DeferredSpawns.RestoreUnpublishedFrom(0);
+		return ERuntimeResult::LifecycleLocked;
+	}
+
+	for (std::size_t Index = 0; Index < DeferredSpawns.SealedPublishCount(); ++Index)
+	{
+		const FActorSpawnHandle SpawnHandle = DeferredSpawns.SealedPublishAt(Index);
+		const TObjectPtr<AActor> SpawnedActor = DeferredSpawns.GetConstructedActor(SpawnHandle);
+		AActor* const Actor = SpawnedActor.Get();
+		if (Actor == nullptr)
+		{
+			continue;
+		}
+		Actor->AssignWorld(GetObjectHandle());
+		Actors.Add(SpawnedActor);
+		const ERuntimeResult BeginResult = DispatchActorBegin(*Actor, InNowMilliseconds);
+		if (InOutFirstError == ERuntimeResult::Success && BeginResult != ERuntimeResult::Success)
+		{
+			InOutFirstError = BeginResult;
+		}
+		DeferredSpawns.CompletePublish(SpawnHandle);
+	}
+	return ERuntimeResult::Success;
 }
 
 ERuntimeResult UWorld::BeginPendingSpawnsUnderGuard(
@@ -522,6 +636,7 @@ void UWorld::VisitReferences(FReferenceCollector& InCollector) noexcept
 	// also reachable so they survive collection until the barrier begins them;
 	// pending-destroy actors are still in the live set until the barrier removes
 	// them, so they need no separate edge here.
+	VisitDeferredSpawnReferences(InCollector);
 	for (std::size_t Index = 0; Index < Actors.GetCount(); ++Index)
 	{
 		InCollector.AddReferencedObject(Actors.At(Index));
@@ -530,6 +645,11 @@ void UWorld::VisitReferences(FReferenceCollector& InCollector) noexcept
 	{
 		InCollector.AddReferencedObject(Actors.PendingSpawnAt(Index));
 	}
+}
+
+void UWorld::VisitDeferredSpawnReferences(FReferenceCollector& InCollector) noexcept
+{
+	DeferredSpawns.VisitReferences(InCollector);
 }
 
 } // namespace MicroWorld

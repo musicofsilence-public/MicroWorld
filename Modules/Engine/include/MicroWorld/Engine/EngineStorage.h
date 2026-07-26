@@ -2,6 +2,7 @@
 
 #include <MicroWorld/Engine/Actor.h>
 #include <MicroWorld/Engine/ActorComponent.h>
+#include <MicroWorld/Engine/DeferredActorSpawn.h>
 #include <MicroWorld/Engine/EngineRegistryView.h>
 
 #include <array>
@@ -135,6 +136,36 @@ private:
 
 	/** Ensures this storage cannot be shared or rebound to a second world. */
 	bool bReferenceMade{false};
+};
+
+/**
+ * Owns one world's bounded deferred actor factories and completion history.
+ *
+ * The wrapped storage remains separate from the actor registry so terminal
+ * request history cannot alter established preconstructed spawn ownership.
+ */
+template<std::size_t MaxActors, std::size_t InlineFactoryBytes>
+class TDeferredActorSpawnRegistry final
+{
+public:
+	/** Preserves the fixed factory bytes and request generations retained by World. */
+	TDeferredActorSpawnRegistry() noexcept = default;
+
+	/** Prevents duplicate ownership of one World's request queue. */
+	TDeferredActorSpawnRegistry(const TDeferredActorSpawnRegistry&) = delete;
+	TDeferredActorSpawnRegistry& operator=(const TDeferredActorSpawnRegistry&) = delete;
+	TDeferredActorSpawnRegistry(TDeferredActorSpawnRegistry&&) = delete;
+	TDeferredActorSpawnRegistry& operator=(TDeferredActorSpawnRegistry&&) = delete;
+
+	/** Transfers the wrapped storage's single mutable capability to one World. */
+	FDeferredActorSpawnStorageReference MakeReference() & noexcept { return Storage.MakeReference(); }
+
+	/** Prevents a temporary registry from outliving its World reference. */
+	FDeferredActorSpawnStorageReference MakeReference() && = delete;
+
+private:
+	/** Owns every factory capture, ticket lane, and completion slot for one World. */
+	TDeferredActorSpawnStorage<MaxActors, InlineFactoryBytes> Storage{};
 };
 
 } // namespace MicroWorld

@@ -38,6 +38,8 @@ the roadmap tracker is fully green — all 10 simplicity phases (0-9) are done.
 | platform-host (host UDP) | 0.3.0 — non-portable adapter; ships the two-node demo |
 | platform-esp32 (UDP + E32 LoRa + output device + time source) | 0.3.0 — non-portable adapter; compile-only except for the Phase 6.2 benchmark run |
 
+| Deferred World SpawnActor | `UWorld::SpawnActor<T>` now queues bounded inline factories, auto-registers canonical direct-actor descriptors, and publishes at a safe barrier; the root MSVC Release build and `ctest --test-dir build -C Release --output-on-failure` passed 10/10 on 2026-07-25, with direct Engine 96/96 and Object 27/27 suites green. The planned BeginPlay-runtime-failure row is not a valid current contract because `AActor::BeginPlay` returns `void`; it becomes testable only if lifecycle hooks gain typed runtime results. `CheckDependencyBoundaries --self-test`, `CheckProfileMap --self-test`, class documentation (165 files), and formatting (189 files) passed. `CheckFolderAgents.py --root Modules --exclude build --exclude .pio --exclude __pycache__` remains blocked by pre-existing `Modules/Net/cmake-build-debug` and `Modules/Object/cmake-build-debug` artifact trees lacking `AGENTS.md`; no artifact deletion was performed. |
+
 ## Visual roadmap
 
 ![MicroWorld implementation journey](docs/diagrams/microworld-implementation-roadmap.svg)

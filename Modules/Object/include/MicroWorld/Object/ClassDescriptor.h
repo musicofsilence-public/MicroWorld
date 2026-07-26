@@ -114,6 +114,8 @@ template<std::size_t MaxClasses>
 class TClassRegistry final
 {
 public:
+	/** Reserves low IDs for application-authored explicit descriptors. */
+	static constexpr FTypeId FirstAutomaticTypeId = 0x80000000U;
 	/** Creates an empty registry whose owned descriptor addresses remain stable. */
 	TClassRegistry() noexcept = default;
 
@@ -167,10 +169,79 @@ public:
 		return nullptr;
 	}
 
+	/** Finds a canonical descriptor by exact no-RTTI C++ type identity. */
+	const FClassDescriptor* FindByTypeToken(const void* const InTypeToken) const noexcept
+	{
+		if (InTypeToken == nullptr)
+		{
+			return nullptr;
+		}
+		for (std::size_t Index = 0; Index < RegisteredClassCount; ++Index)
+		{
+			if (RegisteredClasses[Index].TypeToken == InTypeToken)
+			{
+				return &RegisteredClasses[Index];
+			}
+		}
+		return nullptr;
+	}
+
+	/** Registers a direct descriptor with a bounded local ID and returns its stable owned address. */
+	EObjectResult RegisterAutomatic(FClassDescriptor InCandidate, const FClassDescriptor*& OutDescriptor) noexcept
+	{
+		OutDescriptor = nullptr;
+		if (const FClassDescriptor* const Existing = FindByTypeToken(InCandidate.TypeToken))
+		{
+			OutDescriptor = Existing;
+			return EObjectResult::Success;
+		}
+		if (InCandidate.TypeId != 0 || !HasValidLayout(InCandidate) || InCandidate.Destroy == nullptr || InCandidate.TypeToken == nullptr)
+		{
+			return EObjectResult::InvalidClassDescriptor;
+		}
+		if (!HasValidParentChain(InCandidate))
+		{
+			return EObjectResult::UnknownClass;
+		}
+		if (RegisteredClassCount >= MaxClasses)
+		{
+			return EObjectResult::CapacityExceeded;
+		}
+
+		const FTypeId AutomaticTypeId = AllocateAutomaticTypeId();
+		if (AutomaticTypeId == 0)
+		{
+			return EObjectResult::CapacityExceeded;
+		}
+		InCandidate.TypeId = AutomaticTypeId;
+		RegisteredClasses[RegisteredClassCount] = InCandidate;
+		OutDescriptor = &RegisteredClasses[RegisteredClassCount];
+		++RegisteredClassCount;
+		return EObjectResult::Success;
+	}
+
 	/** Reports fixed registry occupancy for capacity planning and tests. */
 	std::size_t ClassCount() const noexcept { return RegisteredClassCount; }
 
 private:
+	/** Finds an unused non-zero local automatic ID with at most MaxClasses probes. */
+	FTypeId AllocateAutomaticTypeId() noexcept
+	{
+		for (std::size_t Probe = 0; Probe < MaxClasses; ++Probe)
+		{
+			const FTypeId Candidate = NextAutomaticTypeId;
+			++NextAutomaticTypeId;
+			if (NextAutomaticTypeId == 0)
+			{
+				NextAutomaticTypeId = FirstAutomaticTypeId;
+			}
+			if (Candidate != 0 && Find(Candidate) == nullptr)
+			{
+				return Candidate;
+			}
+		}
+		return 0;
+	}
 	/** Rejects zero and non-power-of-two layout requirements before registration. */
 	static bool HasValidLayout(const FClassDescriptor& InDescriptor) noexcept
 	{
@@ -212,6 +283,9 @@ private:
 
 	/** Bounds registry scans to descriptors accepted by successful registration. */
 	std::size_t RegisteredClassCount{0};
+
+	/** Starts automatic IDs in a named range while collision probes preserve local uniqueness. */
+	FTypeId NextAutomaticTypeId{FirstAutomaticTypeId};
 };
 
 } // namespace MicroWorld

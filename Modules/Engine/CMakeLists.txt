@@ -98,6 +98,7 @@ if(MICROWORLD_ENGINE_BUILD_TESTS)
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/EngineLifecycleTests.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/EngineRegistrationTests.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/EngineSpawnDestroyTests.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/EngineDeferredSpawnTests.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/EngineInlineTypesTests.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/EngineHostTests.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/EngineNetHostTests.cpp"

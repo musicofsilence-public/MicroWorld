@@ -86,6 +86,9 @@ struct FDefaultEngineTraits
 
 	/** Inline bytes one timer callback's delegate storage may use. */
 	static constexpr std::size_t InlineTimerCallbackBytes = 64;
+
+	/** Inline bytes one deferred actor factory may capture until the next world barrier. */
+	static constexpr std::size_t InlineDeferredSpawnFactoryBytes = 64;
 };
 
 #if defined(_MSC_VER)
@@ -121,9 +124,13 @@ public:
 	static constexpr std::size_t MaxActors = TTraits::MaxActors;
 	static constexpr std::size_t MaxTimers = TTraits::MaxTimers;
 	static constexpr std::size_t InlineTimerCallbackBytes = TTraits::InlineTimerCallbackBytes;
+	static constexpr std::size_t InlineDeferredSpawnFactoryBytes = TTraits::InlineDeferredSpawnFactoryBytes;
 
 	/** Alias for the timer manager this engine owns, so callers name one concrete type. */
 	using FTimerManager = TTimerManager<MaxTimers, InlineTimerCallbackBytes>;
+
+	/** Alias for caller-owned deferred factory storage supplied to the single World. */
+	using FDeferredSpawnStorage = TDeferredActorSpawnRegistry<MaxActors, InlineDeferredSpawnFactoryBytes>;
 
 	/**
 	 * Builds every subsystem over this host's storage and registers the three
@@ -238,7 +245,8 @@ public:
 			return {};
 		}
 
-		const TObjectCreationResult<UWorld> Creation = Store.NewObject<UWorld>(*Descriptor, ActorRegistry.MakeReference());
+		const TObjectCreationResult<UWorld> Creation = Store.NewObject<UWorld>(
+			*Descriptor, ActorRegistry.MakeReference(), DeferredSpawns.MakeReference(), MakeClassRegistryRegistrationView(Registry));
 		if (Creation.Result != EObjectResult::Success)
 		{
 			return {};
@@ -417,6 +425,9 @@ private:
 
 	/** Owns the class registry that validates every managed construction. */
 	TClassRegistry<MaxClasses> Registry;
+
+	/** Owns typed factory captures and completion slots that must outlive Store and World destruction. */
+	FDeferredSpawnStorage DeferredSpawns;
 
 	/** Provides the first byte of equal-size, non-moving object slots. */
 	alignas(SlotAlign) std::array<std::byte, SlotSizeBytes * MaxObjects> SlotStorage{};

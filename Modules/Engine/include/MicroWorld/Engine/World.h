@@ -1,6 +1,7 @@
 #pragma once
 
 #include <MicroWorld/Engine/Actor.h>
+#include <MicroWorld/Engine/DeferredActorSpawn.h>
 #include <MicroWorld/Engine/EngineRegistryView.h>
 #include <MicroWorld/Engine/EngineResult.h>
 #include <MicroWorld/Lifecycle.h>
@@ -9,6 +10,9 @@
 #include <MicroWorld/Time.h>
 
 #include <cstddef>
+#include <new>
+#include <type_traits>
+#include <utility>
 
 namespace MicroWorld
 {
@@ -48,6 +52,12 @@ public:
 	 */
 	explicit UWorld(FWorldActorRegistryReference InActorStorage) noexcept;
 
+	/** Binds optional caller-owned typed spawn storage and a narrow canonical descriptor capability. */
+	UWorld(
+		FWorldActorRegistryReference InActorStorage,
+		FDeferredActorSpawnStorageReference InSpawnStorage,
+		FClassRegistryRegistrationView InClasses) noexcept;
+
 	/** Keeps exact derived destruction behind the descriptor/store boundary. */
 	~UWorld() noexcept override;
 
@@ -79,6 +89,56 @@ public:
 	 * and exhausted live-plus-pending capacity, all transactionally.
 	 */
 	EEngineResult SpawnActor(TObjectPtr<AActor> InActor) noexcept;
+
+	/**
+	 * Captures a typed actor factory for safe construction at the next world barrier.
+	 *
+	 * No actor or argument capture is created until
+	 * lifecycle, collection, capacity,
+	 * and inline-layout preflight succeeds, so calls from actor callbacks are safe.
+	 */
+	template<typename TActor, typename... TArguments>
+	[[nodiscard]] FActorSpawnRequest SpawnActor(TArguments&&... InArguments) noexcept
+	{
+		static_assert(std::is_base_of<AActor, TActor>::value, "Deferred SpawnActor requires an AActor-derived type.");
+		using TFactory = DeferredActorSpawnDetail::TActorFactory<TActor, std::decay_t<TArguments>...>;
+		static_assert(std::is_nothrow_constructible<TActor, std::decay_t<TArguments>...>::value, "Deferred actor construction must be noexcept.");
+		static_assert(std::is_nothrow_constructible<TFactory, TArguments...>::value, "Deferred actor factory capture must be noexcept.");
+
+		const EActorSpawnRequestResult PreflightResult = CheckDeferredSpawnRequest();
+		if (PreflightResult != EActorSpawnRequestResult::Queued)
+		{
+			return FActorSpawnRequest{PreflightResult, {}};
+		}
+		if (sizeof(TFactory) > DeferredActorSpawnInlineBytes())
+		{
+			return FActorSpawnRequest{EActorSpawnRequestResult::FactoryTooLarge, {}};
+		}
+		if constexpr (alignof(TFactory) > alignof(std::max_align_t))
+		{
+			return FActorSpawnRequest{EActorSpawnRequestResult::FactoryAlignmentUnsupported, {}};
+		}
+
+		const FActorSpawnHandle SpawnHandle = DeferredSpawns.Reserve();
+		void* const FactoryStorage = DeferredSpawns.GetFactoryStorage(SpawnHandle);
+		if (FactoryStorage == nullptr)
+		{
+			return FActorSpawnRequest{EActorSpawnRequestResult::CapacityExceeded, {}};
+		}
+		::new (FactoryStorage) TFactory(std::forward<TArguments>(InArguments)...);
+		DeferredSpawns.Activate(
+			SpawnHandle,
+			DeferredActorSpawnDetail::FFactoryOperations{
+				&TFactory::Invoke,
+				&TFactory::Destroy,
+				&TFactory::VisitReferences,
+				&TFactory::ResolveDescriptor,
+			});
+		return FActorSpawnRequest{EActorSpawnRequestResult::Queued, SpawnHandle};
+	}
+
+	/** Returns deferred typed-spawn completion state without exposing storage internals. */
+	[[nodiscard]] FActorSpawnStatus GetSpawnStatus(FActorSpawnHandle InHandle) const noexcept;
 
 	/**
 	 * Queues one actor registered with this world to end and release at the next
@@ -147,11 +207,33 @@ private:
 	ERuntimeResult BeginPendingSpawnsUnderGuard(
 		FObjectStore& InObjectStore, TimePointMilliseconds InNowMilliseconds, ERuntimeResult& InOutFirstError) noexcept;
 
+	/** Reports typed factory admission failure without moving caller constructor arguments. */
+	EActorSpawnRequestResult CheckDeferredSpawnRequest() const noexcept;
+
+	/** Returns this World's caller-selected inline factory extent for template layout preflight. */
+	std::size_t DeferredActorSpawnInlineBytes() const noexcept;
+
+	/** Constructs the immutable factory snapshot only while no collection owns store traversal. */
+	void ConstructDeferredSpawns(FObjectStore& InObjectStore) noexcept;
+
+	/** Publishes retained deferred actors under one fresh dispatch guard in FIFO order. */
+	ERuntimeResult BeginDeferredSpawnsUnderGuard(
+		FObjectStore& InObjectStore, TimePointMilliseconds InNowMilliseconds, ERuntimeResult& InOutFirstError) noexcept;
+
+	/** Traces queued captures and temporarily unpublished constructed actors before world registry edges. */
+	void VisitDeferredSpawnReferences(FReferenceCollector& InCollector) noexcept;
+
 	/** Presents every registered actor to the active iterative collector. */
 	void VisitReferences(FReferenceCollector& InCollector) noexcept override;
 
 	/** Holds the unique caller-owned actor registry reference for this world's lifetime. */
 	FWorldActorRegistryReference Actors;
+
+	/** Holds optional caller-owned factory storage; an empty capability preserves direct World contracts. */
+	FDeferredActorSpawnStorageReference DeferredSpawns;
+
+	/** Supplies canonical actor descriptors without exposing the application registry to World. */
+	FClassRegistryRegistrationView Classes;
 
 	/** Guards the forward-only world lifecycle without scattering boolean flags. */
 	FLifecycleGuard Lifecycle;

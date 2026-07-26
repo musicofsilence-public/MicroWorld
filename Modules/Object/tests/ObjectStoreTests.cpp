@@ -695,4 +695,32 @@ MW_TEST_CASE(TObjectPtrDerivedToBaseConversionPreservesStoreAndGeneration)
 	MW_EXPECT_TRUE(Test, bSameTypeSharesStore, "Same-type conversion must preserve store membership");
 }
 
+/** Proves automatic registration returns a stable canonical descriptor and leaves full storage unchanged. */
+MW_TEST_CASE(ObjectRegistryAutomaticRegistrationIsCanonicalAndBounded)
+{
+	TClassRegistry<2> Registry;
+	const FClassDescriptor ManualDescriptor = MakeClassDescriptor<FWrongDestructorObject>(TClassRegistry<2>::FirstAutomaticTypeId, "ManualObject");
+	const EObjectResult ManualResult = Registry.Register(ManualDescriptor);
+	const FClassDescriptor Candidate = MakeClassDescriptor<FTrackedObject>(0, "TrackedObject");
+	const FClassDescriptor* FirstDescriptor = nullptr;
+	const FClassDescriptor* ReusedDescriptor = nullptr;
+	const EObjectResult FirstResult = Registry.RegisterAutomatic(Candidate, FirstDescriptor);
+	const EObjectResult ReusedResult = Registry.RegisterAutomatic(Candidate, ReusedDescriptor);
+
+	const std::size_t CountBeforeFullRegistration = Registry.ClassCount();
+	const FClassDescriptor AnotherCandidate = MakeClassDescriptor<FConstructorReentryObject>(0, "AnotherObject");
+	const FClassDescriptor* FullDescriptor = nullptr;
+	const EObjectResult FullResult = Registry.RegisterAutomatic(AnotherCandidate, FullDescriptor);
+
+	MW_EXPECT_EQ(Test, EObjectResult::Success, ManualResult, "A manual descriptor occupies the preferred automatic ID");
+	MW_EXPECT_EQ(Test, EObjectResult::Success, FirstResult, "Automatic registration probes past the occupied preferred ID");
+	MW_EXPECT_TRUE(Test, FirstDescriptor != nullptr, "Automatic registration returns the registry-owned descriptor");
+	MW_EXPECT_EQ(Test, EObjectResult::Success, ReusedResult, "The same type token reuses its canonical descriptor");
+	MW_EXPECT_EQ(Test, FirstDescriptor, ReusedDescriptor, "Repeated automatic registration preserves canonical pointer identity");
+	MW_EXPECT_EQ(Test, std::size_t{1}, Registry.ClassCount() - 1, "Reusing a type token does not consume another class slot");
+	MW_EXPECT_EQ(Test, EObjectResult::CapacityExceeded, FullResult, "A full registry rejects automatic registration transactionally");
+	MW_EXPECT_EQ(Test, static_cast<const FClassDescriptor*>(nullptr), FullDescriptor, "A rejected automatic registration exposes no descriptor");
+	MW_EXPECT_EQ(Test, CountBeforeFullRegistration, Registry.ClassCount(), "A full registration leaves class occupancy unchanged");
+}
+
 } // namespace
