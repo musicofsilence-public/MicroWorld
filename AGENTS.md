@@ -24,11 +24,14 @@ update `PROGRESS.md` in the same commit.
 ```text
 MicroWorld/
 ├── Modules/            One CMake/PlatformIO package per engine layer
-│   ├── Core/           lifecycle, tick, application primitives
-│   ├── Memory/         memory resource, arena, smart pointers
-│   ├── Object/         object store, garbage collector
-│   ├── Engine/         UWorld / AActor / UActorComponent, timers
-│   ├── Net/            byte I/O, frame codec, TNetManager
+│   ├── Core/           lifecycle, tick, containers, delegates, smart
+│   │                   pointers, timers, IEngineSystem
+│   ├── Object/         object store, garbage collector, handles
+│   ├── Engine/         UWorld / AActor / UActorComponent, TEngine, IEngine
+│   ├── Messaging/      message router, channel bindings (header-only)
+│   ├── Net/            byte I/O, frame codec, TNetHost
+│   ├── Application/    FApplication, TApplicationRunner
+│   ├── Integration/    TNetSystem — the only Engine + Net joiner
 │   ├── PlatformHost/   host UDP transport (non-portable)
 │   └── PlatformEsp32/  ESP32 UDP + E32 LoRa UART (PlatformIO/ESP-IDF only)
 ├── docs/               engine-wide design docs, ADRs, diagrams, ROADMAP
@@ -44,12 +47,19 @@ MicroWorld/
 Dependencies point inward:
 
 ```text
-Core <- Memory <- Object <- Engine
-Core <- Memory <- Net
+Core <- Object <- Engine <- Application
+Core <- Messaging
+Core <- Net
+Core, Object, Messaging, Engine, Net <- Integration
 ```
 
-Net never pulls Object or Engine. PlatformHost and PlatformEsp32 are the
-non-portable edges; only they may reach OS/SDK headers.
+Memory is folded into Core; no Memory package edge remains. Net never pulls
+Object or Engine, and Integration is the only package permitted to see both
+Engine and Net. PlatformHost and PlatformEsp32 are the non-portable edges; only
+they may reach OS/SDK headers.
+
+`CLAUDE.md` at this level carries the architecture overview and each module's
+responsibility in one place.
 
 ## Architecture and concepts
 
