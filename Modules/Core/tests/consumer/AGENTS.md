@@ -9,7 +9,9 @@ library. Standalone CMake adds selected adjacent packages as subdirectories and
 links `MicroWorld::Core`, `MicroWorld::Object`, or `MicroWorld::Engine`.
 PlatformIO resolves local packages through `symlink://`, then builds mutually
 exclusive native, Core ESP32-S3, Memory ESP32-S3, Object ESP32-S3, Engine
-ESP32-S3, and executable benchmark applications.
+ESP32-S3, and executable benchmark applications. The sibling
+`pico-freertos/` folder is the separate native RP2040 CMake consumer: it links
+Core with the Pico C/C++ SDK and static-allocation FreeRTOS, never Arduino.
 MicroWorld never depends on these fixtures.
 
 ## Concepts
@@ -34,6 +36,9 @@ MicroWorld never depends on these fixtures.
   hardware I/O.
 - The benchmark environment adds target-only measurement code around the same
   public scheduling API.
+- The native Pico consumer pins and verifies the Pico SDK plus FreeRTOS-Kernel
+  at configure time, then emits ELF, BIN, UF2, and linker-map evidence for its
+  Core probe, portable CoreTick example, and compile/link-only Core test image.
 - PlatformIO source filtering selects the native entry point; the ESP-IDF
   component CMake file selects exactly one `app_main` from the environment's
   isolated build directory.
@@ -51,3 +56,6 @@ probe on Windows requires GNU `g++` on `PATH` and currently uses WinLibs GCC
 `-DMICROWORLD_STANDALONE_MEMORY_CONSUMER=ON`.
 Use `-DMICROWORLD_STANDALONE_OBJECT_CONSUMER=ON` for the Object profile.
 Use `-DMICROWORLD_STANDALONE_ENGINE_CONSUMER=ON` for the Engine profile.
+For native Pico commands, use `pico-freertos\\pico.bat build [probe|example|tests]`;
+the default builds all three. `pico-freertos\\pico.bat upload probe|example`
+is human-gated and validates the RPI-RP2 BOOTSEL volume before copying a UF2.

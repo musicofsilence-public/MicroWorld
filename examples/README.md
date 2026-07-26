@@ -1,8 +1,9 @@
-# MicroWorld ESP32 Examples
+# MicroWorld Examples
 
-One small standalone project per engine feature, each runnable on a real
-ESP32-S3 and readable in one sitting. This file is the living catalog students
-read to find an example; [`AGENTS.md`](AGENTS.md) owns the build and
+One small standalone project per engine feature, each readable in one sitting.
+All current examples target ESP32-S3; `01-CoreTick` also has a native Pico
+C++ SDK + FreeRTOS compile path. This file is the living catalog students read
+to find an example; [`AGENTS.md`](AGENTS.md) owns the build and
 hardware-verification procedure. Examples climb the dependency ladder
 (`Core → Object → Engine → Net`) and end with two boards talking over WiFi UDP,
 E32 LoRa, and plain wires.
@@ -42,13 +43,24 @@ the console is routed and how to write your own `MW_LOG` lines.
 human-gated ([`AGENTS.md`](AGENTS.md)); until an example's real trace is
 captured, its README says so.
 
+`01-CoreTick` additionally has a native Pico build:
+
+```bat
+Modules\Core\tests\consumer\pico-freertos\pico.bat build example
+```
+
+It resolves the Pico SDK and FreeRTOS through CMake, uses PlatformIO's cached
+host tools when available, and produces a UF2 without using Arduino. Pico
+upload is separately human-gated; see
+[`Modules/Core/tests/consumer/pico-freertos/README.md`](../Modules/Core/tests/consumer/pico-freertos/README.md).
+
 ## Catalog
 
 Status: ⬜ planned · 🟨 built (compiles) · ✅ hardware-verified
 
 | # | Example | The one feature | Extra hardware | Status |
 | --- | --- | --- | --- | --- |
-| 01 | `01-CoreTick` | `FTickFunction` cadence from caller-supplied real time | — | 🟨 |
+| 01 | `01-CoreTick` | `FTickFunction` cadence from caller-supplied real time | — | 🟨 ESP32 + Pico compile |
 | 02 | `02-CoreLifecycle` | forward-only lifecycle: `FApplication` + `FLifecycleGuard` | — | ⬜ |
 | 03 | `03-CoreLog` | `FOutputDeviceFunction` seam: `MW_LOG` through `WriteEsp32LogRecord` | — | ⬜ |
 | 04 | `04-MemoryArena` | `TFixedArena` / `IMemoryResource` explicit allocation | — | ⬜ |

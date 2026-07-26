@@ -4,15 +4,17 @@ Inherits `../AGENTS.md`.
 
 ## Architecture
 
-Each `examples/<NN-Name>/` is a self-contained PlatformIO consumer project that
-demonstrates exactly one MicroWorld feature on a real ESP32-S3. Dependencies
-point inward: an example consumes the `Modules/` packages through `symlink://`
-exactly like the verified consumer project, and MicroWorld never depends on an
-example. Duplication *across* examples (the `platformio.ini` boilerplate, the
-role-dispatch `Main.cpp`) is deliberate so each folder copies out standalone;
-DRY applies only *within* one example. WiFi, sleep, logging, and time come
-from the shared `PlatformEsp32` facades (`FEsp32WifiLink`, `SleepMilliseconds`,
-`WriteEsp32LogRecord`, `FEsp32TimeSource`), not per-example glue.
+Each `examples/<NN-Name>/` is a self-contained consumer project that
+demonstrates exactly one MicroWorld feature. All current examples build for an
+ESP32-S3 through PlatformIO; `01-CoreTick` additionally shares its portable
+behavior with the native Pico C++ SDK + FreeRTOS consumer. Dependencies point
+inward: an example consumes `Modules/` packages, and MicroWorld never depends
+on an example. Duplication *across* examples (the `platformio.ini` boilerplate,
+the role-dispatch `Main.cpp`) is deliberate so each folder copies out
+standalone; DRY applies only *within* one example. WiFi, sleep, logging, and
+time come from the shared `PlatformEsp32` facades (`FEsp32WifiLink`,
+`SleepMilliseconds`, `WriteEsp32LogRecord`, `FEsp32TimeSource`), not
+per-example glue.
 
 ## Concepts
 
@@ -22,10 +24,12 @@ from the shared `PlatformEsp32` facades (`FEsp32WifiLink`, `SleepMilliseconds`,
   `WriteEsp32LogRecord`/`MW_LOG`, so every line carries the example's `exNN` category
   tag in the ESP-IDF shape `I (nnnn) exNN: …` (or `W`/`E` for warnings/errors),
   and examples without radio/network I/O print a deterministic trace.
-- After Phase 1, an example's `src/` includes only `<MicroWorld/...>` headers
-  plus `<cstdint>`/`<cstddef>`/`<utility>` — no ESP-IDF/lwIP/FreeRTOS/`printf`/
-  `std::array`/`<cstdio>` in example `src/` (a grep gate enforces zero hits);
-  only `Main.cpp` has `extern "C" app_main`.
+- ESP32 example `src/` includes only `<MicroWorld/...>` headers plus
+  `<cstdint>`/`<cstddef>`/`<utility>` — no ESP-IDF/lwIP/FreeRTOS/`printf`/
+  `std::array`/`<cstdio>` in shared behavior (a grep gate enforces zero hits);
+  only `Main.cpp` has `extern "C" app_main`. `01-CoreTick/src/PicoMain.cpp` is
+  the one explicit Pico composition root and may include Pico SDK + FreeRTOS;
+  `CoreTickExample.*` remains platform-neutral.
 - Every MicroWorld composition object is declared `static` at file scope (or in
   a `static` function-local), never on the `app_main` stack — the default main
   task stack overflows otherwise (the hardware lesson recorded in
@@ -59,6 +63,18 @@ Expected:
 
 The first `pio run` of a fresh checkout downloads the Espressif toolchain and
 takes several minutes; later runs are incremental.
+
+For `01-CoreTick`, also verify the portable behavior and native Pico image:
+
+```bat
+cmake -S examples/01-CoreTick/tests -B examples/01-CoreTick/tests/build
+cmake --build examples/01-CoreTick/tests/build --config Release
+ctest --test-dir examples/01-CoreTick/tests/build -C Release --output-on-failure
+Modules\Core\tests\consumer\pico-freertos\pico.bat build example
+```
+
+The final command is compile/link evidence only. Pico upload stays human-gated
+through `Modules\\Core\\tests\\consumer\\pico-freertos\\pico.bat upload example`.
 
 ### Hardware checkpoint (human-gated — never self-serve)
 

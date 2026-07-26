@@ -1,4 +1,4 @@
-idf_component_register(SRCS "Main.cpp")
+idf_component_register(SRCS "Main.cpp" "CoreTickExample.cpp")
 
 # Why: keep the engine's strict portable contract on example code. ESP-IDF's
 # bundled C library headers use the GCC #include_next extension (pedantic warning) and
