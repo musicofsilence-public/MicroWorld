@@ -114,7 +114,7 @@ Checkers (run per their documented args; see `tools/AGENTS.md`):
 ```sh
 python tools/CheckDependencyBoundaries.py --self-test
 python tools/CheckProfileMap.py --self-test
-python tools/CheckFolderAgents.py --root Modules --exclude build --exclude cmake-build-debug --exclude cmake-build-release --exclude .pio --exclude __pycache__
+python tools/CheckFolderAgents.py --root Modules
 python tools/CheckClassDocumentation.py --root Modules --require-doxygen
 python tools/CheckFormatting.py
 ```
