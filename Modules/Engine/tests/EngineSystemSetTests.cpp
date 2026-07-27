@@ -121,9 +121,13 @@ private:
 
 } // namespace
 
-/** Proves lifecycle turns preserve add-order at begin and reverse add-order at end. */
+/**
+ * Scenario: Add three recording frames to a system set, then run BeginPlay and EndPlay.
+ * Expected: Lifecycle turns preserve add-order at begin and reverse add-order at end.
+ */
 MW_TEST_CASE(EngineSystemSet_BeginPlayRunsAddOrderAndEndPlayRunsReverseOrder)
 {
+	// Arrange
 	FSharedFrameSequence Sequence;
 	FFrameCallRecord RecordA{};
 	FFrameCallRecord RecordB{};
@@ -133,6 +137,7 @@ MW_TEST_CASE(EngineSystemSet_BeginPlayRunsAddOrderAndEndPlayRunsReverseOrder)
 	FRecordingEngineSystem FrameC{RecordC, Sequence};
 	TEngineSystemSet<3> SystemSet;
 
+	// Act
 	const EEngineResult AddAResult = SystemSet.Add(FrameA);
 	const EEngineResult AddBResult = SystemSet.Add(FrameB);
 	const EEngineResult AddCResult = SystemSet.Add(FrameC);
@@ -140,6 +145,7 @@ MW_TEST_CASE(EngineSystemSet_BeginPlayRunsAddOrderAndEndPlayRunsReverseOrder)
 	SystemSet.BeginPlay(10);
 	SystemSet.EndPlay();
 
+	// Assert
 	MW_EXPECT_EQ(Test, EEngineResult::Success, AddAResult, "Adding the first lifecycle system must succeed");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, AddBResult, "Adding the second lifecycle system must succeed");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, AddCResult, "Adding the third lifecycle system must succeed");
@@ -155,9 +161,13 @@ MW_TEST_CASE(EngineSystemSet_BeginPlayRunsAddOrderAndEndPlayRunsReverseOrder)
 	MW_EXPECT_TRUE(Test, RecordB.EndOrder < RecordA.EndOrder, "EndPlay must run the second-added system before the first");
 }
 
-/** Proves TEngineSystemSet's PreAdvance runs its frames in add-order and PostAdvance runs them in reverse add-order, called directly. */
+/**
+ * Scenario: Add three recording frames to a system set, then call PreAdvance and PostAdvance directly.
+ * Expected: TEngineSystemSet's PreAdvance runs its frames in add-order and PostAdvance runs them in reverse add-order, called directly.
+ */
 MW_TEST_CASE(EngineSystemSet_PreAdvanceRunsAddOrderPostAdvanceRunsReverseOrder)
 {
+	// Arrange
 	FSharedFrameSequence Sequence;
 	FFrameCallRecord RecordA{};
 	FFrameCallRecord RecordB{};
@@ -165,15 +175,18 @@ MW_TEST_CASE(EngineSystemSet_PreAdvanceRunsAddOrderPostAdvanceRunsReverseOrder)
 	FRecordingEngineSystem FrameA{RecordA, Sequence};
 	FRecordingEngineSystem FrameB{RecordB, Sequence};
 	FRecordingEngineSystem FrameC{RecordC, Sequence};
-
 	TEngineSystemSet<3> SystemSet;
+
+	// Act - add three frames under capacity
 	MW_EXPECT_EQ(Test, EEngineResult::Success, SystemSet.Add(FrameA), "Adding the first frame under capacity must succeed");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, SystemSet.Add(FrameB), "Adding the second frame under capacity must succeed");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, SystemSet.Add(FrameC), "Adding the third frame under capacity must succeed");
 
+	// Act - run the dispatch and flush slots directly
 	SystemSet.PreAdvance(10);
 	SystemSet.PostAdvance(10);
 
+	// Assert
 	MW_EXPECT_TRUE(Test, RecordA.DispatchOrder < RecordB.DispatchOrder, "PreAdvance must run the first-added frame before the second");
 	MW_EXPECT_TRUE(Test, RecordB.DispatchOrder < RecordC.DispatchOrder, "PreAdvance must run the second-added frame before the third");
 	MW_EXPECT_TRUE(Test, RecordC.FlushOrder < RecordB.FlushOrder, "PostAdvance must run the third-added frame before the second (reverse add-order)");
@@ -182,9 +195,13 @@ MW_TEST_CASE(EngineSystemSet_PreAdvanceRunsAddOrderPostAdvanceRunsReverseOrder)
 		Test, RecordC.DispatchOrder < RecordC.FlushOrder, "Every added frame's dispatch must complete before any added frame's flush begins");
 }
 
-/** Proves TEngine::Tick pumps a bound TEngineSystemSet at its step 1 (dispatch, add-order) and step 7 (flush, reverse add-order). */
+/**
+ * Scenario: Add two recording frames to a system set, bind it to a host, create the world, begin play, and run a single tick.
+ * Expected: TEngine::Tick pumps a bound TEngineSystemSet at its step 1 (dispatch, add-order) and step 7 (flush, reverse add-order).
+ */
 MW_TEST_CASE(EngineSystemSet_TEngineTickPumpsBoundSetAtPreAdvanceAndPostAdvanceSteps)
 {
+	// Arrange
 	FSharedFrameSequence Sequence;
 	FFrameCallRecord NetRecord{};
 	FFrameCallRecord RouterRecord{};
@@ -192,14 +209,18 @@ MW_TEST_CASE(EngineSystemSet_TEngineTickPumpsBoundSetAtPreAdvanceAndPostAdvanceS
 	FRecordingEngineSystem RouterFrame{RouterRecord, Sequence};
 
 	TEngineSystemSet<2> SystemSet;
+
+	// Act - add the net-like frame first and the router-like frame last
 	MW_EXPECT_EQ(Test, EEngineResult::Success, SystemSet.Add(NetFrame), "The net-like frame must be added first (D3 order: net before router)");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, SystemSet.Add(RouterFrame), "The router-like frame must be added last (D3 order: net before router)");
 
+	// Act - build the host, then run a single tick
 	FHost Host{FGarbageCollectionBudget{1, 4, 8}, SystemSet};
 	MW_EXPECT_TRUE(Test, Host.CreateWorld().Get() != nullptr, "CreateWorld roots the world before the frame-driven tick");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, Host.BeginPlay(0), "BeginPlay reports success at the canonical baseline");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, Host.Tick(10), "The tick reports success");
 
+	// Assert
 	MW_EXPECT_EQ(Test, 1, NetRecord.DispatchCount, "The engine's step 1 must dispatch the net-like frame exactly once");
 	MW_EXPECT_EQ(Test, 1, RouterRecord.DispatchCount, "The engine's step 1 must dispatch the router-like frame exactly once");
 	MW_EXPECT_EQ(Test, 1, NetRecord.FlushCount, "The engine's step 7 must flush the net-like frame exactly once");
@@ -210,9 +231,13 @@ MW_TEST_CASE(EngineSystemSet_TEngineTickPumpsBoundSetAtPreAdvanceAndPostAdvanceS
 	MW_EXPECT_TRUE(Test, RouterRecord.DispatchOrder < RouterRecord.FlushOrder, "Every dispatch this tick must complete before any flush begins");
 }
 
-/** An Add past a set's fixed capacity must report CapacityExceeded and leave FrameCount unchanged. */
+/**
+ * Scenario: Add two frames under a capacity-two set, then attempt a third Add past capacity.
+ * Expected: An Add past a set's fixed capacity must report CapacityExceeded and leave FrameCount unchanged.
+ */
 MW_TEST_CASE(EngineSystemSet_AddPastCapacityReportsCapacityExceededAndLeavesFrameCountUnchanged)
 {
+	// Arrange
 	FSharedFrameSequence Sequence;
 	FFrameCallRecord RecordA{};
 	FFrameCallRecord RecordB{};
@@ -222,33 +247,53 @@ MW_TEST_CASE(EngineSystemSet_AddPastCapacityReportsCapacityExceededAndLeavesFram
 	FRecordingEngineSystem FrameC{RecordC, Sequence};
 
 	TEngineSystemSet<2> SystemSet;
+
+	// Act - add two frames under capacity, then attempt a third past capacity
 	MW_EXPECT_EQ(Test, EEngineResult::Success, SystemSet.Add(FrameA), "The first Add under capacity must succeed");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, SystemSet.Add(FrameB), "The second Add under capacity must succeed");
 	MW_EXPECT_EQ(Test, EEngineResult::CapacityExceeded, SystemSet.Add(FrameC), "A third Add on a set already at capacity must be rejected");
+
+	// Assert
 	MW_EXPECT_EQ(Test, std::size_t{2}, SystemSet.FrameCount(), "A rejected Add must leave FrameCount unchanged");
 }
 
-/** Adding the same frame pointer twice must report Duplicate on the second call and count the frame only once. */
+/**
+ * Scenario: Add one frame to a set, then add the same frame pointer again.
+ * Expected: Adding the same frame pointer twice must report Duplicate on the second call and count the frame only once.
+ */
 MW_TEST_CASE(EngineSystemSet_AddSameFramePointerTwiceReportsDuplicateAndCountsItOnce)
 {
+	// Arrange
 	FSharedFrameSequence Sequence;
 	FFrameCallRecord Record{};
 	FRecordingEngineSystem Frame{Record, Sequence};
 
 	TEngineSystemSet<2> SystemSet;
+
+	// Act - add the frame, then add the same pointer again
 	MW_EXPECT_EQ(Test, EEngineResult::Success, SystemSet.Add(Frame), "The first Add of a frame must succeed");
 	MW_EXPECT_EQ(Test, EEngineResult::Duplicate, SystemSet.Add(Frame), "Adding the same frame pointer again must be rejected as Duplicate");
+
+	// Assert
 	MW_EXPECT_EQ(Test, std::size_t{1}, SystemSet.FrameCount(), "A duplicate Add must not grow FrameCount");
 }
 
-/** An empty set's PreAdvance and PostAdvance must both be inert: no crash, and FrameCount stays zero. */
+/**
+ * Scenario: Construct an empty system set, then call PreAdvance and PostAdvance on it.
+ * Expected: An empty set's PreAdvance and PostAdvance must both be inert: no crash, and FrameCount stays zero.
+ */
 MW_TEST_CASE(EngineSystemSet_EmptySetTicksInertly)
 {
+	// Arrange
 	TEngineSystemSet<2> SystemSet;
+
+	// Assert - a freshly constructed set starts empty
 	MW_EXPECT_EQ(Test, std::size_t{0}, SystemSet.FrameCount(), "A freshly constructed set must start empty");
 
+	// Act
 	SystemSet.PreAdvance(10);
 	SystemSet.PostAdvance(10);
 
+	// Assert
 	MW_EXPECT_EQ(Test, std::size_t{0}, SystemSet.FrameCount(), "Ticking an empty set must not change FrameCount");
 }

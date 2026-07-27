@@ -287,9 +287,13 @@ FCollectionObservation ObserveEquivalentCollection(const bool bIncremental) noex
 	};
 }
 
-/** Proves a root keeps its complete descriptor-visible object graph reachable. */
+/**
+ * Scenario: Build a three-node chain rooted at one strong pointer and run a full collection.
+ * Expected: The cycle completes and reclaims nothing; every rooted and transitively-traced node remains resolvable and occupied.
+ */
 MW_TEST_CASE(GarbageCollectorPreservesRootedGraph)
 {
+	// Arrange
 	FGraphLifetimeState Lifetime{};
 	TClassRegistry<2> Registry;
 	const FClassDescriptor* Descriptor = nullptr;
@@ -305,8 +309,10 @@ MW_TEST_CASE(GarbageCollectorPreservesRootedGraph)
 	std::array<FObjectHandle, 3> Worklist{};
 	FGarbageCollector Collector(Store, FGarbageCollectorStorage{Worklist.data(), static_cast<std::uint32_t>(Worklist.size())});
 
+	// Act
 	const FGarbageCollectionResult CollectionResult = Collector.CollectFull();
 
+	// Assert
 	const EObjectResult ExpectedObjectSuccess = EObjectResult::Success;
 	const ERuntimeResult ExpectedCollectionSuccess = ERuntimeResult::Success;
 	const std::uint32_t ExpectedOccupiedSlots = 3;
@@ -325,9 +331,13 @@ MW_TEST_CASE(GarbageCollectorPreservesRootedGraph)
 	MW_EXPECT_TRUE(Test, bThirdResolves, "The transitive traced child should remain resolvable");
 }
 
-/** Proves an unreachable reference cycle is reclaimed without recursive ownership. */
+/**
+ * Scenario: Build two objects that reference each other with no root and run a full collection.
+ * Expected: The unreachable cycle is reclaimed; both members begin destruction and are destroyed exactly once and both weak observers expire.
+ */
 MW_TEST_CASE(GarbageCollectorReclaimsUnrootedCycle)
 {
+	// Arrange
 	FGraphLifetimeState Lifetime{};
 	TClassRegistry<2> Registry;
 	const FClassDescriptor* Descriptor = nullptr;
@@ -343,8 +353,10 @@ MW_TEST_CASE(GarbageCollectorReclaimsUnrootedCycle)
 	std::array<FObjectHandle, 2> Worklist{};
 	FGarbageCollector Collector(Store, FGarbageCollectorStorage{Worklist.data(), static_cast<std::uint32_t>(Worklist.size())});
 
+	// Act
 	const FGarbageCollectionResult CollectionResult = Collector.CollectFull();
 
+	// Assert
 	const EObjectResult ExpectedObjectSuccess = EObjectResult::Success;
 	const std::uint32_t ExpectedReclaimedObjects = 2;
 	const std::uint32_t ExpectedDestructionCount = 2;
@@ -359,9 +371,13 @@ MW_TEST_CASE(GarbageCollectorReclaimsUnrootedCycle)
 	MW_EXPECT_TRUE(Test, bSecondWeakExpired, "The second weak observer should expire after cycle collection");
 }
 
-/** Proves weak observation expires when an otherwise isolated object is collected. */
+/**
+ * Scenario: Create one unrooted object with a weak observer and run a full collection.
+ * Expected: The isolated object is reclaimed; weak observation alone does not keep the object reachable and expires after collection.
+ */
 MW_TEST_CASE(GarbageCollectorExpiresWeakReferenceWithoutRooting)
 {
+	// Arrange
 	FGraphLifetimeState Lifetime{};
 	TClassRegistry<2> Registry;
 	const FClassDescriptor* Descriptor = nullptr;
@@ -373,8 +389,10 @@ MW_TEST_CASE(GarbageCollectorExpiresWeakReferenceWithoutRooting)
 	std::array<FObjectHandle, 1> Worklist{};
 	FGarbageCollector Collector(Store, FGarbageCollectorStorage{Worklist.data(), static_cast<std::uint32_t>(Worklist.size())});
 
+	// Act
 	const FGarbageCollectionResult CollectionResult = Collector.CollectFull();
 
+	// Assert
 	const EObjectResult ExpectedObjectSuccess = EObjectResult::Success;
 	const std::uint32_t ExpectedReclaimedObjects = 1;
 	const bool bWeakExpired = WeakObject.IsExpired();
@@ -383,13 +401,18 @@ MW_TEST_CASE(GarbageCollectorExpiresWeakReferenceWithoutRooting)
 	MW_EXPECT_TRUE(Test, bWeakExpired, "Weak observation must not keep the object reachable");
 }
 
-/** Proves one-operation slices produce the same graph result as full collection. */
+/**
+ * Scenario: Run the same rooted-chain graph once with a full collection and once with one-operation slices.
+ * Expected: Both modes complete the cycle, reclaim the same objects, preserve the same graph, and run the same destructors.
+ */
 MW_TEST_CASE(GarbageCollectorIncrementalAndFullCyclesHaveEquivalentOutcomes)
 {
+	// Act
 	const FCollectionObservation FullObservation = ObserveEquivalentCollection(false);
 
 	const FCollectionObservation IncrementalObservation = ObserveEquivalentCollection(true);
 
+	// Assert
 	MW_EXPECT_TRUE(Test, FullObservation.bCycleComplete, "Full collection should complete the comparison cycle");
 	MW_EXPECT_TRUE(Test, IncrementalObservation.bCycleComplete, "Incremental collection should complete the comparison cycle");
 	MW_EXPECT_EQ(
@@ -399,9 +422,14 @@ MW_TEST_CASE(GarbageCollectorIncrementalAndFullCyclesHaveEquivalentOutcomes)
 		Test, FullObservation.DestructionCount, IncrementalObservation.DestructionCount, "Both collection modes should run the same destructors");
 }
 
-/** Proves zero budgets do no work and one-operation phase budgets are respected. */
+/**
+ * Scenario: Start a cycle, advance once with a zero budget, then drive repeated one-operation slices to completion.
+ * Expected: The zero budget performs no work and keeps the waiting phase; every bounded slice respects its one-operation phase budget and the cycle
+ * eventually completes.
+ */
 MW_TEST_CASE(GarbageCollectorHonorsZeroAndOneOperationBudgets)
 {
+	// Arrange
 	FGraphLifetimeState Lifetime{};
 	TClassRegistry<2> Registry;
 	const FClassDescriptor* Descriptor = nullptr;
@@ -417,6 +445,7 @@ MW_TEST_CASE(GarbageCollectorHonorsZeroAndOneOperationBudgets)
 	FGarbageCollector Collector(Store, FGarbageCollectorStorage{Worklist.data(), static_cast<std::uint32_t>(Worklist.size())});
 	const ERuntimeResult RequestResult = Collector.RequestCollection();
 
+	// Act
 	const FGarbageCollectionResult ZeroBudgetResult = Collector.Advance(ZeroSliceBudget);
 	bool bEverySliceBounded = true;
 	FGarbageCollectionResult FinalResult{};
@@ -434,6 +463,7 @@ MW_TEST_CASE(GarbageCollectorHonorsZeroAndOneOperationBudgets)
 		FinalResult = SliceResult;
 	}
 
+	// Assert
 	const EObjectResult ExpectedObjectSuccess = EObjectResult::Success;
 	const ERuntimeResult ExpectedCollectionSuccess = ERuntimeResult::Success;
 	const std::uint32_t ExpectedZeroOperations = 0;
@@ -448,9 +478,13 @@ MW_TEST_CASE(GarbageCollectorHonorsZeroAndOneOperationBudgets)
 	MW_EXPECT_EQ(Test, ExpectedReclaimedObjects, CollectionStats.ReclaimedObjects, "The one unreachable object should be reclaimed");
 }
 
-/** Proves one visitor may discover multiple references while charging one mark operation. */
+/**
+ * Scenario: Build a parent with two discovered children under one root and run bounded mark slices capped at one mark operation.
+ * Expected: The multi-reference visitor consumes only one mark per slice; the cycle completes and the complete two-edge graph survives.
+ */
 MW_TEST_CASE(GarbageCollectorMultiReferenceVisitorCountsOneMarkAndPreservesGraph)
 {
+	// Arrange
 	FGraphLifetimeState Lifetime{};
 	TClassRegistry<2> Registry;
 	const FClassDescriptor* Descriptor = nullptr;
@@ -468,6 +502,7 @@ MW_TEST_CASE(GarbageCollectorMultiReferenceVisitorCountsOneMarkAndPreservesGraph
 	FGarbageCollector Collector(Store, FGarbageCollectorStorage{Worklist.data(), static_cast<std::uint32_t>(Worklist.size())});
 	const ERuntimeResult RequestResult = Collector.RequestCollection();
 
+	// Act
 	bool bMarkBudgetRespected = true;
 	FGarbageCollectionResult FinalResult{};
 	for (std::uint32_t Slice = 0; Slice < 16 && Collector.Phase() != EGarbageCollectionPhase::Idle; ++Slice)
@@ -480,6 +515,7 @@ MW_TEST_CASE(GarbageCollectorMultiReferenceVisitorCountsOneMarkAndPreservesGraph
 		FinalResult = SliceResult;
 	}
 
+	// Assert
 	const EObjectResult ExpectedObjectSuccess = EObjectResult::Success;
 	const ERuntimeResult ExpectedCollectionSuccess = ERuntimeResult::Success;
 	const std::uint32_t ExpectedOccupiedSlots = 3;
@@ -494,9 +530,13 @@ MW_TEST_CASE(GarbageCollectorMultiReferenceVisitorCountsOneMarkAndPreservesGraph
 	MW_EXPECT_EQ(Test, ExpectedOccupiedSlots, StoreStats.OccupiedSlots, "The complete two-edge graph should survive");
 }
 
-/** Proves a deep reachable chain is traversed iteratively without call-stack recursion. */
+/**
+ * Scenario: Build a deep rooted chain, run one collection with the root held, then remove the root and collect again.
+ * Expected: The rooted deep graph survives the first cycle; removing the root reclaims the entire chain iteratively with no node remaining.
+ */
 MW_TEST_CASE(GarbageCollectorTraversesDeepGraphWithoutRecursion)
 {
+	// Arrange
 	constexpr std::uint32_t NodeCount = 48;
 	FGraphLifetimeState Lifetime{};
 	TClassRegistry<2> Registry;
@@ -523,10 +563,12 @@ MW_TEST_CASE(GarbageCollectorTraversesDeepGraphWithoutRecursion)
 	std::array<FObjectHandle, NodeCount> Worklist{};
 	FGarbageCollector Collector(Store, FGarbageCollectorStorage{Worklist.data(), static_cast<std::uint32_t>(Worklist.size())});
 
+	// Act
 	const FGarbageCollectionResult RootedCollection = Collector.CollectFull();
 	Root.Pointer.Reset();
 	const FGarbageCollectionResult UnrootedCollection = Collector.CollectFull();
 
+	// Assert
 	const EObjectResult ExpectedObjectSuccess = EObjectResult::Success;
 	const std::uint32_t ExpectedRootedReclaims = 0;
 	const std::uint32_t ExpectedUnrootedReclaims = NodeCount;
@@ -539,9 +581,14 @@ MW_TEST_CASE(GarbageCollectorTraversesDeepGraphWithoutRecursion)
 	MW_EXPECT_EQ(Test, ExpectedRemainingObjects, StoreStats.OccupiedSlots, "No deep-graph node should remain after reclamation");
 }
 
-/** Proves an incremental cycle exclusively owns all reachability-changing store mutation. */
+/**
+ * Scenario: Start one cycle, advance one root slice, then attempt construction, pending destruction, a new root, a barrier, and a second collector
+ * while the cycle owns the store. Expected: Every reachability-changing mutation and the second collector are rejected as lifecycle-locked; removing
+ * an existing root stays safe; cancellation releases ownership so mutation and a later collection resume.
+ */
 MW_TEST_CASE(GarbageCollectorLocksMutationAndSecondCollectorBetweenSlices)
 {
+	// Arrange
 	FGraphLifetimeState Lifetime{};
 	TClassRegistry<2> Registry;
 	const FClassDescriptor* Descriptor = nullptr;
@@ -561,6 +608,7 @@ MW_TEST_CASE(GarbageCollectorLocksMutationAndSecondCollectorBetweenSlices)
 	FGarbageCollector FirstCollector(Store, FGarbageCollectorStorage{FirstWorklist.data(), static_cast<std::uint32_t>(FirstWorklist.size())});
 	FGarbageCollector SecondCollector(Store, FGarbageCollectorStorage{SecondWorklist.data(), static_cast<std::uint32_t>(SecondWorklist.size())});
 
+	// Act
 	const ERuntimeResult RequestResult = FirstCollector.RequestCollection();
 	const FGarbageCollectionResult RootSlice = FirstCollector.Advance(FGarbageCollectionBudget{1, 0, 0});
 	const TObjectCreationResult<FGraphObject> RejectedCreation = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
@@ -574,6 +622,7 @@ MW_TEST_CASE(GarbageCollectorLocksMutationAndSecondCollectorBetweenSlices)
 	const TObjectCreationResult<FGraphObject> CreationAfterCancel = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
 	const FGarbageCollectionResult Cleanup = SecondCollector.CollectFull();
 
+	// Assert
 	MW_EXPECT_EQ(Test, EObjectResult::Success, RegistrationResult, "The graph class should register");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, RequestResult, "The first collector should acquire the store");
 	MW_EXPECT_EQ(Test, EGarbageCollectionPhase::SeedRoots, RootSlice.Phase, "The first slice should pause after one root entry");
@@ -589,9 +638,14 @@ MW_TEST_CASE(GarbageCollectorLocksMutationAndSecondCollectorBetweenSlices)
 	MW_EXPECT_EQ(Test, 2U, Cleanup.ObjectsReclaimed, "The later cycle should reclaim both now-unrooted objects");
 }
 
-/** Proves collector destruction clears partial marks before releasing store ownership. */
+/**
+ * Scenario: Let one collector acquire the store and pause mid-mark, destroy it, then start a fresh collector and run a full collection.
+ * Expected: The abandoned cycle's partial mark is cleared on destruction; a later collector acquires the released store and reclaims the formerly
+ * marked object exactly once.
+ */
 MW_TEST_CASE(GarbageCollectorDestructorReleasesActiveCycleAndPartialMarks)
 {
+	// Arrange
 	FGraphLifetimeState Lifetime{};
 	TClassRegistry<2> Registry;
 	const FClassDescriptor* Descriptor = nullptr;
@@ -616,11 +670,13 @@ MW_TEST_CASE(GarbageCollectorDestructorReleasesActiveCycleAndPartialMarks)
 		PausedPhase = AbandonedCollector.Advance(FGarbageCollectionBudget{1, 0, 0}).Phase;
 	}
 
+	// Act
 	Root.Pointer.Reset();
 	std::array<FObjectHandle, 1> FinalWorklist{};
 	FGarbageCollector FinalCollector(Store, FGarbageCollectorStorage{FinalWorklist.data(), static_cast<std::uint32_t>(FinalWorklist.size())});
 	const FGarbageCollectionResult FinalCollection = FinalCollector.CollectFull();
 
+	// Assert
 	MW_EXPECT_EQ(Test, EObjectResult::Success, RegistrationResult, "The graph class should register");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, RequestResult, "The abandoned collector should first acquire the store");
 	MW_EXPECT_EQ(Test, EGarbageCollectionPhase::Mark, PausedPhase, "The abandoned cycle should retain one partial mark");
@@ -629,9 +685,13 @@ MW_TEST_CASE(GarbageCollectorDestructorReleasesActiveCycleAndPartialMarks)
 	MW_EXPECT_EQ(Test, 1U, Lifetime.DestructionCount, "The formerly marked object should be destroyed exactly once");
 }
 
-/** Proves a reference visitor cannot recursively advance its active collector. */
+/**
+ * Scenario: Arm a rooted node's reference visitor to recursively advance the active collector, then start the cycle and advance it.
+ * Expected: The recursive advance is rejected as lifecycle-locked; the outer cycle still completes and the rooted object remains live.
+ */
 MW_TEST_CASE(GarbageCollectorRejectsRecursiveAdvanceFromReferenceVisitor)
 {
+	// Arrange
 	FGraphLifetimeState Lifetime{};
 	TClassRegistry<2> Registry;
 	const FClassDescriptor* Descriptor = nullptr;
@@ -652,9 +712,11 @@ MW_TEST_CASE(GarbageCollectorRejectsRecursiveAdvanceFromReferenceVisitor)
 	ERuntimeResult ReentrantResult = ERuntimeResult::InvalidLifecycle;
 	Creation.Object.Get()->SetReentrantAdvance(Collector, ReentrantResult);
 
+	// Act
 	const ERuntimeResult RequestResult = Collector.RequestCollection();
 	const FGarbageCollectionResult CollectionResult = Collector.Advance(FGarbageCollectionBudget{1, 1, 1});
 
+	// Assert
 	MW_EXPECT_EQ(Test, EObjectResult::Success, RegistrationResult, "The graph class should register");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, RequestResult, "The outer collection should start");
 	MW_EXPECT_EQ(Test, ERuntimeResult::LifecycleLocked, ReentrantResult, "A managed visitor cannot recursively advance the active collector");
@@ -662,9 +724,14 @@ MW_TEST_CASE(GarbageCollectorRejectsRecursiveAdvanceFromReferenceVisitor)
 	MW_EXPECT_TRUE(Test, Creation.Object.Get() != nullptr, "The rooted object must remain live after rejected recursive advance");
 }
 
-/** Proves insufficient iterative storage rejects a cycle before changing reachability. */
+/**
+ * Scenario: Build a collector whose worklist is smaller than the store's slot capacity and request a collection.
+ * Expected: The request is rejected atomically with capacity exhaustion; the collector stays idle and observable, the object is not reclaimed and
+ * remains live.
+ */
 MW_TEST_CASE(GarbageCollectorRejectsInsufficientWorklistAtomically)
 {
+	// Arrange
 	FGraphLifetimeState Lifetime{};
 	TClassRegistry<2> Registry;
 	const FClassDescriptor* Descriptor = nullptr;
@@ -675,8 +742,10 @@ MW_TEST_CASE(GarbageCollectorRejectsInsufficientWorklistAtomically)
 	std::array<FObjectHandle, 2> TooSmallWorklist{};
 	FGarbageCollector Collector(Store, FGarbageCollectorStorage{TooSmallWorklist.data(), static_cast<std::uint32_t>(TooSmallWorklist.size())});
 
+	// Act
 	const ERuntimeResult RequestResult = Collector.RequestCollection();
 
+	// Assert
 	const EObjectResult ExpectedObjectSuccess = EObjectResult::Success;
 	const ERuntimeResult ExpectedCapacityFailure = ERuntimeResult::CapacityExceeded;
 	const std::uint32_t ExpectedRejectedRequests = 1;
@@ -692,9 +761,14 @@ MW_TEST_CASE(GarbageCollectorRejectsInsufficientWorklistAtomically)
 	MW_EXPECT_TRUE(Test, bObjectStillResolves, "The object should remain live after atomic request rejection");
 }
 
-/** Proves a same-valued handle from another store cannot retain this store's object. */
+/**
+ * Scenario: Give a Store A holder a foreign reference to a Store B object whose handle matches a distinct unrelated Store A object, then run a full
+ * collection on Store A. Expected: The unrelated same-valued local object is reclaimed; the rooted holder survives and the foreign Store B object is
+ * unaffected.
+ */
 MW_TEST_CASE(GarbageCollectorIgnoresCrossStoreSameValuedReference)
 {
+	// Arrange
 	FGraphLifetimeState StoreALifetime{};
 	FGraphLifetimeState StoreBLifetime{};
 	TClassRegistry<4> Registry;
@@ -740,8 +814,10 @@ MW_TEST_CASE(GarbageCollectorIgnoresCrossStoreSameValuedReference)
 	FGarbageCollector Collector(StoreA, FGarbageCollectorStorage{Worklist.data(), static_cast<std::uint32_t>(Worklist.size())});
 	const bool bHandlesHaveSameValue = StoreAUnrelated.Object.Handle() == StoreBReferenced.Object.Handle();
 
+	// Act
 	const FGarbageCollectionResult CollectionResult = Collector.CollectFull();
 
+	// Assert
 	const EObjectResult ExpectedObjectSuccess = EObjectResult::Success;
 	const std::uint32_t ExpectedReclaimedObjects = 1;
 	const bool bHolderSurvives = StoreAHolder.Object.Get() != nullptr;

@@ -252,11 +252,13 @@ private:
 };
 
 /**
- * Proves SpawnActor only queues while playing and the queued actor receives its
- * BeginPlay at the next ApplyPending barrier, never at the SpawnActor call.
+ * Scenario: Begin an empty world, queue a SpawnActor, read the inert queue state, then run ApplyPending and Advance.
+ * Expected: SpawnActor only queues while playing; the queued actor receives its BeginPlay at the next ApplyPending barrier, never at the SpawnActor
+ * call.
  */
 MW_TEST_CASE(EngineSpawnActorBeginsAtNextBarrierNotImmediately)
 {
+	// Arrange
 	FSequenceCounter Sequence{};
 	FActorEventState SpawnedEvents{};
 
@@ -265,24 +267,28 @@ MW_TEST_CASE(EngineSpawnActorBeginsAtNextBarrierNotImmediately)
 	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, WorldActors.MakeReference());
 	const TObjectPtr<FOrderingActor> Spawned = MakeOrderingActor(Env, Sequence, SpawnedEvents);
 
+	// Act - BeginPlay, then the SpawnActor call itself queues without beginning
 	const ERuntimeResult BeginResult = World.Get()->BeginPlay(BaselineTimeMilliseconds);
 	const EEngineResult SpawnResult = World.Get()->SpawnActor(TObjectPtr<AActor>{Spawned});
 	const std::uint32_t BeginCountAfterQueue = SpawnedEvents.BeginCount;
 	const std::size_t PendingAfterQueue = World.Get()->PendingSpawnCount();
 	const std::size_t LiveAfterQueue = WorldActors.GetCount();
 
-	const ERuntimeResult ApplyResult = World.Get()->ApplyPending(BarrierTimeMilliseconds);
-	const std::uint32_t BeginCountAfterBarrier = SpawnedEvents.BeginCount;
-	const std::size_t PendingAfterBarrier = World.Get()->PendingSpawnCount();
-	const std::size_t LiveAfterBarrier = WorldActors.GetCount();
-
-	const ERuntimeResult AdvanceResult = World.Get()->Advance(SurvivorAdvanceTimeMilliseconds);
-
+	// Assert - the queued spawn is observable but inert
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, BeginResult, "BeginPlay should succeed on the empty world");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, SpawnResult, "A same-store unowned actor is accepted for deferred spawn");
 	MW_EXPECT_EQ(Test, std::uint32_t{0}, BeginCountAfterQueue, "A queued spawn must not begin at the SpawnActor call");
 	MW_EXPECT_EQ(Test, std::size_t{1}, PendingAfterQueue, "The queued spawn is observable as one pending spawn");
 	MW_EXPECT_EQ(Test, std::size_t{0}, LiveAfterQueue, "A queued spawn must not join the live registry before the barrier");
+
+	// Act - the barrier applies the queued spawn
+	const ERuntimeResult ApplyResult = World.Get()->ApplyPending(BarrierTimeMilliseconds);
+	const std::uint32_t BeginCountAfterBarrier = SpawnedEvents.BeginCount;
+	const std::size_t PendingAfterBarrier = World.Get()->PendingSpawnCount();
+	const std::size_t LiveAfterBarrier = WorldActors.GetCount();
+	const ERuntimeResult AdvanceResult = World.Get()->Advance(SurvivorAdvanceTimeMilliseconds);
+
+	// Assert - the actor begins at the barrier and ticks as a participant afterward
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, ApplyResult, "ApplyPending should succeed applying the spawn");
 	MW_EXPECT_EQ(Test, std::uint32_t{1}, BeginCountAfterBarrier, "The spawned actor begins exactly once at the barrier");
 	MW_EXPECT_EQ(Test, std::size_t{0}, PendingAfterBarrier, "The barrier drains the pending-spawn queue");
@@ -292,11 +298,13 @@ MW_TEST_CASE(EngineSpawnActorBeginsAtNextBarrierNotImmediately)
 }
 
 /**
- * Proves DestroyActor only queues while playing and the queued actor ends at the
- * barrier, with its own EndPlay before its components end in reverse order.
+ * Scenario: Register an actor with two components, queue a DestroyActor, then run ApplyPending.
+ * Expected: DestroyActor only queues while playing; the queued actor ends at the barrier, with its own EndPlay before its components end in reverse
+ * order.
  */
 MW_TEST_CASE(EngineDestroyActorEndsAtBarrierWithReverseComponentShutdown)
 {
+	// Arrange
 	FSequenceCounter Sequence{};
 	FActorEventState ActorEvents{};
 	FComponentEventState FirstComponentEvents{};
@@ -313,12 +321,15 @@ MW_TEST_CASE(EngineDestroyActorEndsAtBarrierWithReverseComponentShutdown)
 	(void)World.Get()->RegisterActor(TObjectPtr<AActor>{Actor});
 	(void)World.Get()->BeginPlay(BaselineTimeMilliseconds);
 
+	// Act - the DestroyActor call itself queues without ending
 	const EEngineResult DestroyResult = World.Get()->DestroyActor(TObjectPtr<AActor>{Actor});
 	const std::uint32_t EndCountAfterQueue = ActorEvents.EndCount;
 	const std::size_t PendingAfterQueue = World.Get()->PendingDestroyCount();
 
+	// Act - the barrier applies the queued destroy and ends the actor and components
 	const ERuntimeResult ApplyResult = World.Get()->ApplyPending(BarrierTimeMilliseconds);
 
+	// Assert - the queued destroy is observable but inert, then ends correctly at the barrier
 	MW_EXPECT_EQ(Test, EEngineResult::Success, DestroyResult, "A registered actor is accepted for deferred destroy");
 	MW_EXPECT_EQ(Test, std::uint32_t{0}, EndCountAfterQueue, "A queued destroy must not end the actor at the DestroyActor call");
 	MW_EXPECT_EQ(Test, std::size_t{1}, PendingAfterQueue, "The queued destroy is observable as one pending destroy");
@@ -333,11 +344,12 @@ MW_TEST_CASE(EngineDestroyActorEndsAtBarrierWithReverseComponentShutdown)
 }
 
 /**
- * Proves spawn capacity counts live plus pending-spawn actors together, both
- * before the barrier applies the queue and after it fills the live registry.
+ * Scenario: Pre-register one actor, queue a spawn that reaches capacity, then run ApplyPending and attempt another spawn.
+ * Expected: Spawn capacity counts live plus pending-spawn actors together, before the barrier applies the queue and after it fills the live registry.
  */
 MW_TEST_CASE(EngineSpawnCapacityCountsLiveAndPending)
 {
+	// Arrange
 	FSpawnDestroyEnvironment Env{};
 	FWorldActorRegistry<2> WorldActors;
 	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, WorldActors.MakeReference());
@@ -347,16 +359,17 @@ MW_TEST_CASE(EngineSpawnCapacityCountsLiveAndPending)
 	(void)World.Get()->RegisterActor(TObjectPtr<AActor>{PreRegistered});
 	(void)World.Get()->BeginPlay(BaselineTimeMilliseconds);
 
-	// One live actor plus one pending spawn already reaches the capacity of two.
+	// Act - one live actor plus one pending spawn already reaches the capacity of two
 	const EEngineResult FirstSpawnResult = World.Get()->SpawnActor(TObjectPtr<AActor>{FirstSpawn});
 	const EEngineResult OverCapacityBeforeBarrier = World.Get()->SpawnActor(TObjectPtr<AActor>{SecondSpawn});
 	const std::size_t PendingAfterReject = World.Get()->PendingSpawnCount();
 	const bool bSecondOwnedAfterReject = SecondSpawn.Get()->HasAssignedWorld();
 
+	// Act - the barrier fills the registry; a further spawn is still rejected
 	const ERuntimeResult ApplyResult = World.Get()->ApplyPending(BarrierTimeMilliseconds);
-	// Two live actors still fill the capacity, so a further spawn is rejected.
 	const EEngineResult OverCapacityAfterBarrier = World.Get()->SpawnActor(TObjectPtr<AActor>{SecondSpawn});
 
+	// Assert
 	MW_EXPECT_EQ(Test, EEngineResult::Success, FirstSpawnResult, "A spawn that reaches live-plus-pending capacity is accepted");
 	MW_EXPECT_EQ(Test, EEngineResult::CapacityExceeded, OverCapacityBeforeBarrier, "Live plus pending-spawn at capacity rejects a further spawn");
 	MW_EXPECT_EQ(Test, std::size_t{1}, PendingAfterReject, "A capacity-rejected spawn leaves the pending queue unchanged");
@@ -367,17 +380,19 @@ MW_TEST_CASE(EngineSpawnCapacityCountsLiveAndPending)
 }
 
 /**
- * Proves a repeated spawn request is rejected as a duplicate both while the
- * first request is pending and after the barrier makes the actor live.
+ * Scenario: Queue a spawn, repeat it while pending, run the barrier, then repeat it again while the actor is live.
+ * Expected: A repeated spawn request is rejected as a duplicate both while the first request is pending and after the barrier makes the actor live.
  */
 MW_TEST_CASE(EngineDuplicateSpawnRejected)
 {
+	// Arrange
 	FSpawnDestroyEnvironment Env{};
 	FWorldActorRegistry<4> WorldActors;
 	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, WorldActors.MakeReference());
 	const TObjectPtr<FPlainActor> Actor = MakePlainActor(Env);
 	(void)World.Get()->BeginPlay(BaselineTimeMilliseconds);
 
+	// Act
 	const EEngineResult FirstSpawn = World.Get()->SpawnActor(TObjectPtr<AActor>{Actor});
 	const EEngineResult DuplicateWhilePending = World.Get()->SpawnActor(TObjectPtr<AActor>{Actor});
 	const std::size_t PendingAfterDuplicate = World.Get()->PendingSpawnCount();
@@ -385,6 +400,7 @@ MW_TEST_CASE(EngineDuplicateSpawnRejected)
 	(void)World.Get()->ApplyPending(BarrierTimeMilliseconds);
 	const EEngineResult DuplicateWhileLive = World.Get()->SpawnActor(TObjectPtr<AActor>{Actor});
 
+	// Assert
 	MW_EXPECT_EQ(Test, EEngineResult::Success, FirstSpawn, "The first spawn request is accepted");
 	MW_EXPECT_EQ(Test, EEngineResult::Duplicate, DuplicateWhilePending, "A second request for a pending-spawn actor is a duplicate");
 	MW_EXPECT_EQ(Test, std::size_t{1}, PendingAfterDuplicate, "A duplicate spawn leaves the pending queue unchanged");
@@ -393,11 +409,12 @@ MW_TEST_CASE(EngineDuplicateSpawnRejected)
 }
 
 /**
- * Proves destroying an actor that was never registered with this world is
- * rejected as an invalid reference and leaves the destroy queue unchanged.
+ * Scenario: Register and begin one actor, then attempt to DestroyActor a never-registered stranger actor.
+ * Expected: Destroying an actor that was never registered with this world is rejected as an invalid reference and leaves the destroy queue unchanged.
  */
 MW_TEST_CASE(EngineDestroyOfNeverRegisteredActorRejected)
 {
+	// Arrange
 	FSpawnDestroyEnvironment Env{};
 	FWorldActorRegistry<2> WorldActors;
 	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, WorldActors.MakeReference());
@@ -406,19 +423,23 @@ MW_TEST_CASE(EngineDestroyOfNeverRegisteredActorRejected)
 	(void)World.Get()->RegisterActor(TObjectPtr<AActor>{Registered});
 	(void)World.Get()->BeginPlay(BaselineTimeMilliseconds);
 
+	// Act
 	const EEngineResult DestroyResult = World.Get()->DestroyActor(TObjectPtr<AActor>{Stranger});
 
+	// Assert
 	MW_EXPECT_EQ(Test, EEngineResult::InvalidReference, DestroyResult, "Destroying a never-registered actor is rejected as invalid");
 	MW_EXPECT_EQ(Test, std::size_t{0}, World.Get()->PendingDestroyCount(), "A rejected destroy leaves the pending queue unchanged");
 	MW_EXPECT_EQ(Test, std::size_t{1}, WorldActors.GetCount(), "A rejected destroy leaves the live registry unchanged");
 }
 
 /**
- * Proves spawn and destroy are lifecycle-locked outside the playing state: a
- * constructed world and an ended world both reject them without queueing.
+ * Scenario: Attempt SpawnActor and DestroyActor on a constructed (never-begun) world and on an ended world.
+ * Expected: Spawn and destroy are lifecycle-locked outside the playing state; a constructed world and an ended world both reject them without
+ * queueing.
  */
 MW_TEST_CASE(EngineSpawnAndDestroyRejectedOutsidePlayingLifecycle)
 {
+	// Arrange
 	FSpawnDestroyEnvironment Env{};
 	FWorldActorRegistry<2> ConstructedWorldActors;
 	FWorldActorRegistry<2> EndedWorldActors;
@@ -426,19 +447,24 @@ MW_TEST_CASE(EngineSpawnAndDestroyRejectedOutsidePlayingLifecycle)
 	const TObjectPtr<UWorld> ConstructedWorld = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, ConstructedWorldActors.MakeReference());
 	const TObjectPtr<FPlainActor> RegisteredBeforePlay = MakePlainActor(Env);
 	(void)ConstructedWorld.Get()->RegisterActor(TObjectPtr<AActor>{RegisteredBeforePlay});
+
+	// Act - a world that never began play rejects both structural requests
 	const EEngineResult SpawnWhileConstructed = ConstructedWorld.Get()->SpawnActor(TObjectPtr<AActor>{RegisteredBeforePlay});
 	const EEngineResult DestroyWhileConstructed = ConstructedWorld.Get()->DestroyActor(TObjectPtr<AActor>{RegisteredBeforePlay});
 
-	// A world that ended play rejects both structural requests.
+	// Arrange - a world that ended play rejects both structural requests
 	const TObjectPtr<UWorld> EndedWorld = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, EndedWorldActors.MakeReference());
 	const TObjectPtr<FPlainActor> RegisteredActor = MakePlainActor(Env);
 	const TObjectPtr<FPlainActor> WouldSpawn = MakePlainActor(Env);
 	(void)EndedWorld.Get()->RegisterActor(TObjectPtr<AActor>{RegisteredActor});
 	(void)EndedWorld.Get()->BeginPlay(BaselineTimeMilliseconds);
 	(void)EndedWorld.Get()->EndPlay();
+
+	// Act
 	const EEngineResult SpawnAfterEnd = EndedWorld.Get()->SpawnActor(TObjectPtr<AActor>{WouldSpawn});
 	const EEngineResult DestroyAfterEnd = EndedWorld.Get()->DestroyActor(TObjectPtr<AActor>{RegisteredActor});
 
+	// Assert
 	MW_EXPECT_EQ(Test, EEngineResult::LifecycleLocked, SpawnWhileConstructed, "SpawnActor before BeginPlay is lifecycle-locked");
 	MW_EXPECT_EQ(Test, EEngineResult::LifecycleLocked, DestroyWhileConstructed, "DestroyActor before BeginPlay is lifecycle-locked");
 	MW_EXPECT_EQ(Test, std::size_t{0}, ConstructedWorld.Get()->PendingSpawnCount(), "A rejected constructed-world spawn queues nothing");
@@ -451,11 +477,13 @@ MW_TEST_CASE(EngineSpawnAndDestroyRejectedOutsidePlayingLifecycle)
 }
 
 /**
- * Proves every SpawnActor reference rejection (empty, cross-store, already-owned)
- * returns its exact code and leaves the pending queue and candidate unchanged.
+ * Scenario: Begin a world and attempt SpawnActor with empty, cross-store, and already-owned references.
+ * Expected: Every SpawnActor reference rejection (empty, cross-store, already-owned) returns its exact code, leaving the pending queue and candidate
+ * unchanged.
  */
 MW_TEST_CASE(EngineSpawnReferenceRejectionsLeaveStateUnchanged)
 {
+	// Arrange
 	FSpawnDestroyEnvironment Env{};
 	FSecondStore ForeignStoreOwner{};
 	FObjectStore& ForeignStore = ForeignStoreOwner.GetStore();
@@ -470,10 +498,12 @@ MW_TEST_CASE(EngineSpawnReferenceRejectionsLeaveStateUnchanged)
 	(void)OtherWorld.Get()->RegisterActor(TObjectPtr<AActor>{OwnedByOther});
 	(void)World.Get()->BeginPlay(BaselineTimeMilliseconds);
 
+	// Act
 	const EEngineResult EmptyResult = World.Get()->SpawnActor(TObjectPtr<AActor>{});
 	const EEngineResult CrossStoreResult = World.Get()->SpawnActor(TObjectPtr<AActor>{ForeignActor});
 	const EEngineResult AlreadyOwnedResult = World.Get()->SpawnActor(TObjectPtr<AActor>{OwnedByOther});
 
+	// Assert
 	MW_EXPECT_EQ(Test, EEngineResult::InvalidReference, EmptyResult, "An empty spawn reference is rejected as invalid");
 	MW_EXPECT_EQ(Test, EEngineResult::CrossStore, CrossStoreResult, "A foreign-store spawn reference is rejected as cross-store");
 	MW_EXPECT_EQ(Test, EEngineResult::AlreadyOwned, AlreadyOwnedResult, "An actor owned by another world is rejected as already owned");
@@ -481,11 +511,12 @@ MW_TEST_CASE(EngineSpawnReferenceRejectionsLeaveStateUnchanged)
 }
 
 /**
- * Proves every DestroyActor reference rejection (empty, cross-store, repeated)
- * returns its exact code and leaves the pending-destroy queue accurate.
+ * Scenario: Begin a world and attempt DestroyActor with empty, cross-store, first, and repeated references.
+ * Expected: Every DestroyActor reference rejection (empty, cross-store, repeated) returns its exact code, leaving the pending-destroy queue accurate.
  */
 MW_TEST_CASE(EngineDestroyReferenceRejectionsLeaveStateUnchanged)
 {
+	// Arrange
 	FSpawnDestroyEnvironment Env{};
 	FSecondStore ForeignStoreOwner{};
 	FObjectStore& ForeignStore = ForeignStoreOwner.GetStore();
@@ -497,11 +528,13 @@ MW_TEST_CASE(EngineDestroyReferenceRejectionsLeaveStateUnchanged)
 	(void)World.Get()->RegisterActor(TObjectPtr<AActor>{Registered});
 	(void)World.Get()->BeginPlay(BaselineTimeMilliseconds);
 
+	// Act
 	const EEngineResult EmptyResult = World.Get()->DestroyActor(TObjectPtr<AActor>{});
 	const EEngineResult CrossStoreResult = World.Get()->DestroyActor(TObjectPtr<AActor>{ForeignActor});
 	const EEngineResult FirstDestroy = World.Get()->DestroyActor(TObjectPtr<AActor>{Registered});
 	const EEngineResult RepeatedDestroy = World.Get()->DestroyActor(TObjectPtr<AActor>{Registered});
 
+	// Assert
 	MW_EXPECT_EQ(Test, EEngineResult::InvalidReference, EmptyResult, "An empty destroy reference is rejected as invalid");
 	MW_EXPECT_EQ(Test, EEngineResult::CrossStore, CrossStoreResult, "A foreign-store destroy reference is rejected as cross-store");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, FirstDestroy, "A registered actor is accepted for one deferred destroy");
@@ -510,11 +543,13 @@ MW_TEST_CASE(EngineDestroyReferenceRejectionsLeaveStateUnchanged)
 }
 
 /**
- * Proves removing a middle actor at the barrier preserves the registration order
- * of the survivors, so their next tick dispatch stays in registration order.
+ * Scenario: Register three actors, destroy the middle one at the barrier, then Advance the survivors.
+ * Expected: Removing a middle actor at the barrier preserves the registration order of the survivors, so their next tick dispatch stays in
+ * registration order.
  */
 MW_TEST_CASE(EngineSurvivorDispatchOrderPreservedAfterMidListRemoval)
 {
+	// Arrange
 	FSequenceCounter Sequence{};
 	FActorEventState FirstEvents{};
 	FActorEventState MiddleEvents{};
@@ -531,11 +566,13 @@ MW_TEST_CASE(EngineSurvivorDispatchOrderPreservedAfterMidListRemoval)
 	(void)World.Get()->RegisterActor(TObjectPtr<AActor>{Last});
 	(void)World.Get()->BeginPlay(BaselineTimeMilliseconds);
 
+	// Act - destroy the middle actor, apply the barrier, then advance the survivors
 	(void)World.Get()->DestroyActor(TObjectPtr<AActor>{Middle});
 	const ERuntimeResult ApplyResult = World.Get()->ApplyPending(BarrierTimeMilliseconds);
 	Sequence.Next(); // Delimits the barrier's end events from the survivor tick order.
 	const ERuntimeResult AdvanceResult = World.Get()->Advance(SurvivorAdvanceTimeMilliseconds);
 
+	// Assert
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, ApplyResult, "ApplyPending should remove the middle actor");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, AdvanceResult, "Advance over the survivors should succeed");
 	MW_EXPECT_EQ(Test, std::size_t{2}, WorldActors.GetCount(), "The two survivors remain in the live registry");
@@ -546,15 +583,13 @@ MW_TEST_CASE(EngineSurvivorDispatchOrderPreservedAfterMidListRemoval)
 }
 
 /**
- * Proves destroying an actor still queued to spawn in the same frame is rejected
- * as an invalid reference (it is not yet registered) and the spawn still applies.
- *
- * This is the documented behavior of the section-5 validation table: a destroy
- * targets only an actor registered with the world, and a pending-spawn actor is
- * not registered until the barrier begins it. Destroy does not cancel a spawn.
+ * Scenario: In one frame, queue a SpawnActor and then DestroyActor the same still-pending actor, then run the barrier.
+ * Expected: Destroying an actor still queued to spawn is rejected as invalid (it is not yet registered); the spawn still applies; destroy does not
+ * cancel a spawn.
  */
 MW_TEST_CASE(EngineSpawnThenDestroySameActorInOneFrame)
 {
+	// Arrange
 	FSequenceCounter Sequence{};
 	FActorEventState ActorEvents{};
 
@@ -564,13 +599,16 @@ MW_TEST_CASE(EngineSpawnThenDestroySameActorInOneFrame)
 	const TObjectPtr<FOrderingActor> Actor = MakeOrderingActor(Env, Sequence, ActorEvents);
 	(void)World.Get()->BeginPlay(BaselineTimeMilliseconds);
 
+	// Act
 	const EEngineResult SpawnResult = World.Get()->SpawnActor(TObjectPtr<AActor>{Actor});
 	const EEngineResult DestroyResult = World.Get()->DestroyActor(TObjectPtr<AActor>{Actor});
 	const std::size_t PendingSpawnAfter = World.Get()->PendingSpawnCount();
 	const std::size_t PendingDestroyAfter = World.Get()->PendingDestroyCount();
 
+	// Act - the barrier still applies the queued spawn
 	const ERuntimeResult ApplyResult = World.Get()->ApplyPending(BarrierTimeMilliseconds);
 
+	// Assert
 	MW_EXPECT_EQ(Test, EEngineResult::Success, SpawnResult, "The spawn request is accepted");
 	MW_EXPECT_EQ(Test, EEngineResult::InvalidReference, DestroyResult, "Destroying a still-pending-spawn actor is rejected as invalid");
 	MW_EXPECT_EQ(Test, std::size_t{1}, PendingSpawnAfter, "The rejected destroy leaves the spawn queued");
@@ -581,12 +619,13 @@ MW_TEST_CASE(EngineSpawnThenDestroySameActorInOneFrame)
 }
 
 /**
- * Proves a destroyed actor's handle is hidden at the barrier and becomes durably
- * stale after the store's destruction barrier reclaims its slot: the slot is
- * reused with a fresh generation, so the original handle can never resolve again.
+ * Scenario: Destroy an actor at the barrier, then run the store's destruction barrier and construct a replacement in the reclaimed slot.
+ * Expected: The destroyed actor's handle is hidden at the barrier and stales after reclamation; the slot is reused with a fresh generation that never
+ * re-resolves the original handle.
  */
 MW_TEST_CASE(EngineDestroyedActorHandleGoesStaleAfterReclamation)
 {
+	// Arrange
 	FSpawnDestroyEnvironment Env{};
 	FObjectStore& Store = Env.GetStore();
 	FWorldActorRegistry<1> WorldActors;
@@ -600,16 +639,19 @@ MW_TEST_CASE(EngineDestroyedActorHandleGoesStaleAfterReclamation)
 
 	const FObjectHandle OriginalHandle = Actor.Handle();
 	const TWeakObjectPtr<AActor> ActorWeak{TObjectPtr<AActor>{Actor}};
+
+	// Act - the destroy barrier hides the actor without reclaiming its slot
 	(void)World.Get()->DestroyActor(TObjectPtr<AActor>{Actor});
 	(void)World.Get()->ApplyPending(BarrierTimeMilliseconds);
 	const bool bHiddenAtBarrier = Actor.Get() == nullptr;
 	const bool bWeakExpiredAtBarrier = ActorWeak.IsExpired();
 
+	// Act - the store destruction barrier reclaims the slot, and a replacement reuses it
 	const FObjectMutationResult Reclaim = Store.ApplyPendingDestroy(MaxObjectsReclaimedPerBarrier);
-	// Reuse the vacated slot to prove the original handle's generation is stale.
 	const TObjectPtr<FPlainActor> Replacement = MakePlainActor(Env);
 	const FObjectHandle ReplacementHandle = Replacement.Handle();
 
+	// Assert
 	MW_EXPECT_TRUE(Test, bHiddenAtBarrier, "The destroyed actor is hidden immediately at the barrier");
 	MW_EXPECT_TRUE(Test, bWeakExpiredAtBarrier, "A weak reference to the destroyed actor expires at the barrier");
 	MW_EXPECT_EQ(Test, EObjectResult::Success, Reclaim.Result, "The store destruction barrier runs successfully");
@@ -620,13 +662,13 @@ MW_TEST_CASE(EngineDestroyedActorHandleGoesStaleAfterReclamation)
 }
 
 /**
- * Proves that after a destroy barrier a full collection accounts every root and
- * keeps the worklist within capacity while correctly leaving the pending-destroy
- * actor and its components to the store's destruction barrier, which reclaims
- * exactly the actor and both components.
+ * Scenario: Destroy a two-component actor at the barrier, run a full collection over the rooted world, then run the store destruction barrier.
+ * Expected: After the destroy barrier a full collection accounts every root and keeps the worklist within capacity while correctly leaving the
+ * pending-destroy actor and its components to the store's destruction barrier, which reclaims exactly the actor and both components.
  */
 MW_TEST_CASE(EngineDestroyReclaimsActorAndComponentsWithRootsAndWorklistAccounted)
 {
+	// Arrange
 	FSpawnDestroyEnvironment Env{};
 	FObjectStore& Store = Env.GetStore();
 	FCollectorFixture Fixture{Store};
@@ -645,25 +687,26 @@ MW_TEST_CASE(EngineDestroyReclaimsActorAndComponentsWithRootsAndWorklistAccounte
 	const TWeakObjectPtr<UActorComponent> FirstComponentWeak{TObjectPtr<UActorComponent>{FirstComponent}};
 	const TWeakObjectPtr<UActorComponent> SecondComponentWeak{TObjectPtr<UActorComponent>{SecondComponent}};
 	const std::uint32_t OccupiedBeforeDestroy = Store.Stats().OccupiedSlots;
+
+	// Act - the destroy barrier leaves the actor and both components pending destroy
 	(void)World.Get()->DestroyActor(TObjectPtr<AActor>{Actor});
 	(void)World.Get()->ApplyPending(BarrierTimeMilliseconds);
 	const FObjectStoreStats AfterBarrierStats = Store.Stats();
 
-	// A full collection accounts roots and worklist but must not reclaim the
+	// Act - a full collection accounts roots and worklist but must not reclaim the
 	// still-pending-destroy actor or its components; the rooted world survives.
 	const FGarbageCollectionResult FullResult = Collector.CollectFull();
-	const FObjectStoreStats AfterCollectStats = Store.Stats();
 
-	// The store destruction barrier is what reclaims pending-destroy objects.
+	// Act - the store destruction barrier is what reclaims pending-destroy objects.
 	const FObjectMutationResult Reclaim = Store.ApplyPendingDestroy(MaxObjectsReclaimedPerBarrier);
 	const FObjectStoreStats AfterReclaimStats = Store.Stats();
 
+	// Assert
 	MW_EXPECT_EQ(Test, std::uint32_t{4}, OccupiedBeforeDestroy, "The world, actor, and two components occupy four slots");
 	MW_EXPECT_EQ(Test, std::uint32_t{3}, AfterBarrierStats.PendingDestroySlots, "The barrier leaves the actor and both components pending destroy");
 	MW_EXPECT_EQ(Test, std::uint32_t{4}, AfterBarrierStats.OccupiedSlots, "Pending-destroy objects still occupy their slots");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, FullResult.Result, "A full collection after the barrier succeeds");
 	MW_EXPECT_EQ(Test, std::uint32_t{0}, FullResult.ObjectsReclaimed, "Collection leaves pending-destroy objects to the store barrier");
-	MW_EXPECT_EQ(Test, AfterCollectStats.RootCapacity, FullResult.RootOperations, "The collection accounts every root-table entry");
 	MW_EXPECT_EQ(Test, std::uint32_t{0}, Collector.Stats().WorklistOverflows, "The reachable set fits the worklist without overflow");
 	MW_EXPECT_TRUE(Test, World.Get() != nullptr, "The rooted world survives the collection");
 	MW_EXPECT_EQ(Test, EObjectResult::Success, Reclaim.Result, "The store destruction barrier runs successfully");

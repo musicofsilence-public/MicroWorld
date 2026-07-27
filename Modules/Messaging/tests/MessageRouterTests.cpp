@@ -217,9 +217,13 @@ std::size_t EncodeZeroPayloadMessage(const FMessageTypeId InType, std::uint8_t* 
 // Category 1: Delivery matching and ordering
 // ---------------------------------------------------------------------------
 
-/** Proves a broadcast reaches every subscriber of its type in registration order. */
+/**
+ * Scenario: Register three handlers for the same type and broadcast a one-byte payload, then flush one frame.
+ * Expected: The broadcast enqueues successfully and reaches all three subscribers in registration order.
+ */
 MW_TEST_CASE(EngineMessageRouter_BroadcastReachesAllSubscribersInRegistrationOrder)
 {
+	// Arrange
 	FTestRouter Router;
 	FHandlerCallRecord Recorder;
 	FMessageHandlerHandle HandleA{};
@@ -231,23 +235,32 @@ MW_TEST_CASE(EngineMessageRouter_BroadcastReachesAllSubscribersInRegistrationOrd
 	MW_EXPECT_SUCCESS(Test, Router.AddMessageHandler(TypeAlpha, BroadcastActorId, MakeRecordingHandler(Recorder, 3), HandleC), "C should register");
 
 	const std::uint8_t Payload[OneBytePayloadCount] = {PayloadByteAA};
-	MW_EXPECT_SUCCESS(
-		Test,
-		Router.BroadcastMessage(LocalChannelId, TypeAlpha, SenderId, TSpan<const std::uint8_t>(Payload, OneBytePayloadCount)),
-		"Broadcast enqueue should succeed");
 
+	// Act
+	const EMessageResult EnqueueResult =
+		Router.BroadcastMessage(LocalChannelId, TypeAlpha, SenderId, TSpan<const std::uint8_t>(Payload, OneBytePayloadCount));
+
+	// Assert
+	MW_EXPECT_SUCCESS(Test, EnqueueResult, "Broadcast enqueue should succeed");
+
+	// Act
 	Router.PostAdvance(1);
 	Router.PreAdvance(1);
 
+	// Assert
 	MW_EXPECT_EQ(Test, std::size_t{3}, Recorder.Count, "All three broadcast subscribers should be invoked");
 	MW_EXPECT_EQ(Test, 1, Recorder.Identities[0], "The first-registered handler should fire first");
 	MW_EXPECT_EQ(Test, 2, Recorder.Identities[1], "The second-registered handler should fire second");
 	MW_EXPECT_EQ(Test, 3, Recorder.Identities[2], "The third-registered handler should fire third");
 }
 
-/** Proves a targeted message reaches only the handler whose ListenerActorId matches, not a same-type handler for another actor. */
+/**
+ * Scenario: Register same-type handlers for two distinct actor ids and send a message targeted at one, then flush one frame.
+ * Expected: The send enqueues successfully and reaches only the matching listener, carrying the original TargetActorId.
+ */
 MW_TEST_CASE(EngineMessageRouter_TargetedMessageReachesOnlyMatchingListener)
 {
+	// Arrange
 	FTestRouter Router;
 	FHandlerCallRecord Recorder;
 	FMessageHandlerHandle HandleForA{};
@@ -259,14 +272,19 @@ MW_TEST_CASE(EngineMessageRouter_TargetedMessageReachesOnlyMatchingListener)
 		Test, Router.AddMessageHandler(TypeAlpha, ListenerB, MakeRecordingHandler(Recorder, 2), HandleForB), "Listener B should register");
 
 	const std::uint8_t Payload[OneBytePayloadCount] = {PayloadByte01};
-	MW_EXPECT_SUCCESS(
-		Test,
-		Router.SendMessageToActor(LocalChannelId, TypeAlpha, ListenerA, SenderId, TSpan<const std::uint8_t>(Payload, OneBytePayloadCount)),
-		"Targeted send should succeed");
 
+	// Act
+	const EMessageResult EnqueueResult =
+		Router.SendMessageToActor(LocalChannelId, TypeAlpha, ListenerA, SenderId, TSpan<const std::uint8_t>(Payload, OneBytePayloadCount));
+
+	// Assert
+	MW_EXPECT_SUCCESS(Test, EnqueueResult, "Targeted send should succeed");
+
+	// Act
 	Router.PostAdvance(1);
 	Router.PreAdvance(1);
 
+	// Assert
 	MW_EXPECT_EQ(Test, std::size_t{1}, Recorder.Count, "Only the matching listener should be invoked");
 	MW_EXPECT_EQ(Test, 1, Recorder.Identities[0], "Listener A's handler must be the one invoked");
 	MW_EXPECT_EQ(Test, ListenerA, Recorder.TargetActorIds[0], "The delivered view must carry the original TargetActorId");
@@ -276,9 +294,14 @@ MW_TEST_CASE(EngineMessageRouter_TargetedMessageReachesOnlyMatchingListener)
 // Category 2: One-frame local latency (D5)
 // ---------------------------------------------------------------------------
 
-/** Proves a local send is never delivered inline and only reaches its handler on the PreAdvance after a PostAdvance. */
+/**
+ * Scenario: Register a handler, broadcast a message, then drive separate PreAdvance and PostAdvance steps.
+ * Expected: The send enqueues but never invokes a handler inline; the message reaches inbound only on PostAdvance and delivers only on the next
+ * PreAdvance.
+ */
 MW_TEST_CASE(EngineMessageRouter_LocalSendIsDeliveredOnlyAtNextPreAdvanceNeverInline)
 {
+	// Arrange
 	FTestRouter Router;
 	FHandlerCallRecord Recorder;
 	FMessageHandlerHandle Handle{};
@@ -287,25 +310,40 @@ MW_TEST_CASE(EngineMessageRouter_LocalSendIsDeliveredOnlyAtNextPreAdvanceNeverIn
 		Test, Router.AddMessageHandler(TypeAlpha, BroadcastActorId, MakeRecordingHandler(Recorder, 1), Handle), "Registration should succeed");
 
 	const std::uint8_t Payload[OneBytePayloadCount] = {PayloadByte02};
+
+	// Act
 	const EMessageResult SendResult =
 		Router.BroadcastMessage(LocalChannelId, TypeAlpha, SenderId, TSpan<const std::uint8_t>(Payload, OneBytePayloadCount));
+
+	// Assert
 	MW_EXPECT_SUCCESS(Test, SendResult, "Broadcast enqueue should succeed");
 	MW_EXPECT_EQ(Test, std::size_t{0}, Recorder.Count, "A queued send must never invoke a handler inline");
 
+	// Act
 	Router.PreAdvance(1);
+	// Assert
 	MW_EXPECT_EQ(Test, std::size_t{0}, Recorder.Count, "PreAdvance before the message reaches inbound must not deliver it");
 
+	// Act
 	Router.PostAdvance(1);
+	// Assert
 	MW_EXPECT_EQ(Test, std::size_t{0}, Recorder.Count, "PostAdvance by itself must not invoke any handler");
 	MW_EXPECT_EQ(Test, std::size_t{1}, Router.QueuedInboundCount(), "PostAdvance must move the local entry into the inbound queue");
 
+	// Act
 	Router.PreAdvance(2);
+	// Assert
 	MW_EXPECT_EQ(Test, std::size_t{1}, Recorder.Count, "The next PreAdvance must deliver the flushed local message");
 }
 
-/** Proves a send issued from inside a handler is legal and its message arrives one full frame later, not in the same pass. */
+/**
+ * Scenario: Register an echoing handler that broadcasts a second type, plus an observer, then drive the triggering broadcast across three frames.
+ * Expected: The triggering broadcast enqueues successfully; the echoed message is not visible within the same dispatch pass and arrives exactly one
+ * frame after the handler queued it.
+ */
 MW_TEST_CASE(EngineMessageRouter_SendFromInsideHandlerArrivesOneFrameLater)
 {
+	// Arrange
 	FTestRouter Router;
 	FHandlerCallRecord Recorder;
 	FMessageHandlerHandle EchoHandle{};
@@ -325,25 +363,33 @@ MW_TEST_CASE(EngineMessageRouter_SendFromInsideHandlerArrivesOneFrameLater)
 		Test, Router.AddMessageHandler(TypeBeta, BroadcastActorId, MakeRecordingHandler(Recorder, 1), ObserverHandle), "Observer should register");
 
 	const std::uint8_t Payload[OneBytePayloadCount] = {PayloadByte04};
-	MW_EXPECT_SUCCESS(
-		Test,
-		Router.BroadcastMessage(LocalChannelId, TypeAlpha, SenderId, TSpan<const std::uint8_t>(Payload, OneBytePayloadCount)),
-		"The triggering broadcast should enqueue");
 
-	// Frame 1 (engine order: dispatch, then flush): inbound is still empty, so nothing fires yet;
+	// Act
+	const EMessageResult EnqueueResult =
+		Router.BroadcastMessage(LocalChannelId, TypeAlpha, SenderId, TSpan<const std::uint8_t>(Payload, OneBytePayloadCount));
+
+	// Assert
+	MW_EXPECT_SUCCESS(Test, EnqueueResult, "The triggering broadcast should enqueue");
+
+	// Act: Frame 1 (engine order: dispatch, then flush): inbound is still empty, so nothing fires yet;
 	// flush moves the TypeAlpha entry into inbound.
 	Router.PreAdvance(1);
 	Router.PostAdvance(1);
+	// Assert
 	MW_EXPECT_EQ(Test, std::size_t{0}, Recorder.Count, "The observer must not fire before its message is dispatched");
 
-	// Frame 2: dispatch delivers TypeAlpha, whose handler enqueues the TypeBeta echo; that echo is
+	// Act: Frame 2: dispatch delivers TypeAlpha, whose handler enqueues the TypeBeta echo; that echo is
 	// only outbound so far, so the observer still has not fired. Flush then moves it into inbound.
 	Router.PreAdvance(2);
+	// Assert
 	MW_EXPECT_EQ(Test, std::size_t{0}, Recorder.Count, "The in-handler send must not be visible to the observer within the same dispatch pass");
+
+	// Act
 	Router.PostAdvance(2);
 
-	// Frame 3: dispatch finally delivers the echoed TypeBeta message.
+	// Act: Frame 3: dispatch finally delivers the echoed TypeBeta message.
 	Router.PreAdvance(3);
+	// Assert
 	MW_EXPECT_EQ(Test, std::size_t{1}, Recorder.Count, "The echoed message must arrive exactly one frame after the handler queued it");
 	MW_EXPECT_EQ(Test, 1, Recorder.Identities[0], "The observer's handler must be the one invoked");
 }
@@ -371,9 +417,13 @@ struct FSelfMutationAttempt final
 	bool bObserved{false};
 };
 
-/** Proves AddMessageHandler and RemoveMessageHandler both return DispatchLocked when called from inside a handler. */
+/**
+ * Scenario: Register a self-mutating handler that attempts an add and a remove from inside dispatch, then trigger and flush it.
+ * Expected: The in-dispatch add and remove both return DispatchLocked; the rejected add clears its output handle and occupancy is unchanged.
+ */
 MW_TEST_CASE(EngineMessageRouter_AddOrRemoveDuringDispatchReturnsDispatchLocked)
 {
+	// Arrange
 	FTestRouter Router;
 	FSelfMutationAttempt Attempt;
 
@@ -393,13 +443,13 @@ MW_TEST_CASE(EngineMessageRouter_AddOrRemoveDuringDispatchReturnsDispatchLocked)
 		Router.AddMessageHandler(TypeAlpha, BroadcastActorId, std::move(SelfMutatingHandler), Attempt.SelfHandle),
 		"The self-mutating handler should register");
 
-	MW_EXPECT_SUCCESS(
-		Test,
-		Router.BroadcastMessage(LocalChannelId, TypeAlpha, SenderId, TSpan<const std::uint8_t>(nullptr, 0)),
-		"Triggering broadcast should enqueue");
+	// Act
+	const EMessageResult EnqueueResult = Router.BroadcastMessage(LocalChannelId, TypeAlpha, SenderId, TSpan<const std::uint8_t>(nullptr, 0));
+	MW_EXPECT_SUCCESS(Test, EnqueueResult, "Triggering broadcast should enqueue");
 	Router.PostAdvance(1);
 	Router.PreAdvance(1);
 
+	// Assert
 	MW_EXPECT_TRUE(Test, Attempt.bObserved, "The self-mutating handler should have executed");
 	MW_EXPECT_EQ(Test, EMessageResult::DispatchLocked, Attempt.AddResult, "In-dispatch AddMessageHandler must return DispatchLocked");
 	MW_EXPECT_EQ(Test, EMessageResult::DispatchLocked, Attempt.RemoveResult, "In-dispatch RemoveMessageHandler must return DispatchLocked");
@@ -407,9 +457,13 @@ MW_TEST_CASE(EngineMessageRouter_AddOrRemoveDuringDispatchReturnsDispatchLocked)
 	MW_EXPECT_EQ(Test, std::size_t{1}, Router.HandlerCount(), "Rejected in-dispatch mutations must not change handler occupancy");
 }
 
-/** Proves removing an already-removed handle returns StaleHandle. */
+/**
+ * Scenario: Register a handler, remove it once successfully, then remove the same handle a second time.
+ * Expected: The repeated removal returns StaleHandle.
+ */
 MW_TEST_CASE(EngineMessageRouter_RemovingAlreadyRemovedHandleReturnsStaleHandle)
 {
+	// Arrange
 	FTestRouter Router;
 	FHandlerCallRecord Recorder;
 	FMessageHandlerHandle Handle{};
@@ -418,13 +472,20 @@ MW_TEST_CASE(EngineMessageRouter_RemovingAlreadyRemovedHandleReturnsStaleHandle)
 		Test, Router.AddMessageHandler(TypeAlpha, BroadcastActorId, MakeRecordingHandler(Recorder, 1), Handle), "Registration should succeed");
 	MW_EXPECT_SUCCESS(Test, Router.RemoveMessageHandler(Handle), "The first removal should succeed");
 
+	// Act
 	const EMessageResult SecondRemoveResult = Router.RemoveMessageHandler(Handle);
+	// Assert
 	MW_EXPECT_EQ(Test, EMessageResult::StaleHandle, SecondRemoveResult, "A repeated removal must return StaleHandle");
 }
 
-/** Proves a full handler table rejects one more registration and leaves the caller's delegate and output handle untouched. */
+/**
+ * Scenario: Fill every handler slot, then attempt one more registration with a bound delegate and a canary output handle.
+ * Expected: The fourth registration returns CapacityExceeded; the output handle is cleared, the input delegate stays bound, and occupancy is
+ * unchanged.
+ */
 MW_TEST_CASE(EngineMessageRouter_HandlerCapacityExceededPreservesCallerHandler)
 {
+	// Arrange
 	FTestRouter Router;
 	FHandlerCallRecord Recorder;
 	FMessageHandlerHandle FirstHandle{};
@@ -441,8 +502,11 @@ MW_TEST_CASE(EngineMessageRouter_HandlerCapacityExceededPreservesCallerHandler)
 
 	FMessageHandlerBinding FourthHandler = MakeRecordingHandler(Recorder, 4);
 	FMessageHandlerHandle FourthHandle{CanaryHandle};
+
+	// Act
 	const EMessageResult Result = Router.AddMessageHandler(TypeAlpha, BroadcastActorId, std::move(FourthHandler), FourthHandle);
 
+	// Assert
 	MW_EXPECT_EQ(Test, EMessageResult::CapacityExceeded, Result, "A full handler table must reject the fourth registration");
 	MW_EXPECT_TRUE(Test, !FourthHandle.IsValid(), "The failed registration must clear the canary output handle");
 	MW_EXPECT_TRUE(Test, FourthHandler.IsBound(), "The failed registration must leave its input delegate bound to the caller");
@@ -453,9 +517,13 @@ MW_TEST_CASE(EngineMessageRouter_HandlerCapacityExceededPreservesCallerHandler)
 // Category 4: Queue capacity and transactional rejection
 // ---------------------------------------------------------------------------
 
-/** Proves a full outbound queue rejects one more send with CapacityExceeded and leaves the queue's occupancy unchanged. */
+/**
+ * Scenario: Fill the outbound queue with two sends, then attempt one more broadcast.
+ * Expected: The third send returns CapacityExceeded and outbound occupancy stays unchanged.
+ */
 MW_TEST_CASE(EngineMessageRouter_OutboundQueueFullReturnsCapacityExceededTransactionally)
 {
+	// Arrange
 	FTestRouter Router;
 	const std::uint8_t Payload[OneBytePayloadCount] = {PayloadByte05};
 	const TSpan<const std::uint8_t> PayloadView(Payload, OneBytePayloadCount);
@@ -464,14 +532,20 @@ MW_TEST_CASE(EngineMessageRouter_OutboundQueueFullReturnsCapacityExceededTransac
 	MW_EXPECT_SUCCESS(Test, Router.BroadcastMessage(LocalChannelId, TypeAlpha, SenderId, PayloadView), "Second send should fill slot two");
 	MW_EXPECT_EQ(Test, QueueCapacity, Router.QueuedOutboundCount(), "Two sends should fill the two-entry outbound queue");
 
+	// Act
 	const EMessageResult ThirdResult = Router.BroadcastMessage(LocalChannelId, TypeAlpha, SenderId, PayloadView);
+	// Assert
 	MW_EXPECT_EQ(Test, EMessageResult::CapacityExceeded, ThirdResult, "A full outbound queue must reject a further send");
 	MW_EXPECT_EQ(Test, QueueCapacity, Router.QueuedOutboundCount(), "A rejected send must not change outbound occupancy");
 }
 
-/** Proves inbound overflow increments DroppedInboundCount and rejects the message without changing prior queue contents. */
+/**
+ * Scenario: Fill the inbound queue with two receives, then receive one more encoded message.
+ * Expected: The third receive returns CapacityExceeded, increments DroppedInboundCount, and leaves inbound occupancy unchanged.
+ */
 MW_TEST_CASE(EngineMessageRouter_InboundOverflowIncrementsDroppedInboundCount)
 {
+	// Arrange
 	FTestRouter Router;
 	std::uint8_t Encoded[MessageByteCapacity] = {};
 	const std::size_t EncodedLength = EncodeZeroPayloadMessage(TypeAlpha, Encoded, MessageByteCapacity);
@@ -482,7 +556,9 @@ MW_TEST_CASE(EngineMessageRouter_InboundOverflowIncrementsDroppedInboundCount)
 	MW_EXPECT_EQ(Test, QueueCapacity, Router.QueuedInboundCount(), "Two receives should fill the two-entry inbound queue");
 	MW_EXPECT_EQ(Test, std::uint32_t{0}, Router.DroppedInboundCount(), "No message should be dropped yet");
 
+	// Act
 	const EMessageResult ThirdResult = Router.ReceiveEncodedMessage(StubChannelId, EncodedView);
+	// Assert
 	MW_EXPECT_EQ(Test, EMessageResult::CapacityExceeded, ThirdResult, "A full inbound queue must reject a further receive");
 	MW_EXPECT_EQ(Test, std::uint32_t{1}, Router.DroppedInboundCount(), "The rejected receive must increment DroppedInboundCount");
 	MW_EXPECT_EQ(Test, QueueCapacity, Router.QueuedInboundCount(), "The rejected receive must not change inbound occupancy");
@@ -492,25 +568,40 @@ MW_TEST_CASE(EngineMessageRouter_InboundOverflowIncrementsDroppedInboundCount)
 // Category 5: Channel registration and flush discipline
 // ---------------------------------------------------------------------------
 
-/** Proves AddChannel rejects LocalChannelId as InvalidChannel and rejects a duplicate id as Duplicate. */
+/**
+ * Scenario: Attempt to register a channel under LocalChannelId, then register a fresh id and attempt to register a duplicate of it.
+ * Expected: The LocalChannelId registration returns InvalidChannel; the duplicate registration returns Duplicate.
+ */
 MW_TEST_CASE(EngineMessageRouter_AddChannelRejectsLocalIdAndDuplicateIds)
 {
+	// Arrange
 	FTestRouter Router;
+
+	// Act
 	FStubChannel LocalIdChannel(LocalChannelId, MessageByteCapacity);
 	const EMessageResult LocalIdResult = Router.AddChannel(LocalIdChannel);
+	// Assert
 	MW_EXPECT_EQ(Test, EMessageResult::InvalidChannel, LocalIdResult, "Registering LocalChannelId (0) must be rejected as InvalidChannel");
 
+	// Arrange
 	FStubChannel FirstChannel(StubChannelId, MessageByteCapacity);
 	MW_EXPECT_SUCCESS(Test, Router.AddChannel(FirstChannel), "The first registration of a fresh id should succeed");
 
+	// Act
 	FStubChannel DuplicateChannel(StubChannelId, MessageByteCapacity);
 	const EMessageResult DuplicateResult = Router.AddChannel(DuplicateChannel);
+	// Assert
 	MW_EXPECT_EQ(Test, EMessageResult::Duplicate, DuplicateResult, "Registering an already-configured id must be rejected as Duplicate");
 }
 
-/** Proves PostAdvance retains the head entry when a channel returns a non-Success result once, then resumes on the next flush. */
+/**
+ * Scenario: Register a stub channel scripted to fail once, queue two sends, then flush twice.
+ * Expected: The failed flush attempts only the head entry and retains both queued entries; the next flush drains both once the channel accepts them,
+ * preserving their order and payload bytes.
+ */
 MW_TEST_CASE(EngineMessageRouter_FlushRetainsHeadOnChannelFailureAndResumesNextFlush)
 {
+	// Arrange
 	FTestRouter Router;
 	FStubChannel Channel(StubChannelId, MessageByteCapacity);
 	MW_EXPECT_SUCCESS(Test, Router.AddChannel(Channel), "Channel registration should succeed");
@@ -528,12 +619,16 @@ MW_TEST_CASE(EngineMessageRouter_FlushRetainsHeadOnChannelFailureAndResumesNextF
 			StubChannelId, TypeAlpha, BroadcastActorId, SenderId, TSpan<const std::uint8_t>(SecondPayload, OneBytePayloadCount)),
 		"Second send should enqueue");
 
+	// Act: the first flush hits the scripted Unavailable.
 	Router.PostAdvance(1);
+	// Assert
 	MW_EXPECT_EQ(Test, std::size_t{1}, Channel.SendAttempts(), "The first flush must attempt exactly the retained head entry");
 	MW_EXPECT_EQ(Test, std::size_t{0}, Channel.ReceivedCount(), "A failed send must not be recorded as accepted");
 	MW_EXPECT_EQ(Test, QueueCapacity, Router.QueuedOutboundCount(), "A failed send must retain both queued entries, head first");
 
+	// Act: the second flush (script now exhausted, returns Success) resumes and drains both.
 	Router.PostAdvance(2);
+	// Assert
 	MW_EXPECT_EQ(Test, std::size_t{0}, Router.QueuedOutboundCount(), "The second flush must drain both entries once the channel accepts them");
 	MW_EXPECT_EQ(Test, std::size_t{2}, Channel.ReceivedCount(), "Both retained entries must be accepted on the resumed flush");
 	MW_EXPECT_EQ(Test, ActorMessageHeaderBytes + 1, Channel.ReceivedLength(0), "The first accepted entry must retain its original encoded length");
@@ -547,9 +642,13 @@ MW_TEST_CASE(EngineMessageRouter_FlushRetainsHeadOnChannelFailureAndResumesNextF
 // Category 6: Allocation-free steady-state operation
 // ---------------------------------------------------------------------------
 
-/** Proves registration, send, flush, dispatch, removal, and re-registration perform no observable allocation. */
+/**
+ * Scenario: Warm up the router once, then perform a steady-state cycle of send, flush, dispatch, removal, and re-registration.
+ * Expected: The steady-state cycle performs no observable allocation.
+ */
 MW_TEST_CASE(EngineMessageRouter_SteadyStateOperationPerformsNoAllocation)
 {
+	// Arrange
 	FTestRouter Router;
 	FHandlerCallRecord Recorder;
 	FMessageHandlerHandle Handle{};
@@ -559,13 +658,14 @@ MW_TEST_CASE(EngineMessageRouter_SteadyStateOperationPerformsNoAllocation)
 	const std::uint8_t Payload[OneBytePayloadCount] = {PayloadByte7F};
 	const TSpan<const std::uint8_t> PayloadView(Payload, OneBytePayloadCount);
 
-	// Warm up once so any one-time lazy allocation is excluded from the steady-state measurement.
+	// Arrange: warm up once so any one-time lazy allocation is excluded from the steady-state measurement.
 	(void)Router.BroadcastMessage(LocalChannelId, TypeAlpha, SenderId, PayloadView);
 	Router.PostAdvance(1);
 	Router.PreAdvance(1);
 
 	const std::uint32_t AllocationsBefore = GlobalAllocationCount;
 
+	// Act
 	(void)Router.BroadcastMessage(LocalChannelId, TypeAlpha, SenderId, PayloadView);
 	Router.PostAdvance(2);
 	Router.PreAdvance(2);
@@ -575,6 +675,7 @@ MW_TEST_CASE(EngineMessageRouter_SteadyStateOperationPerformsNoAllocation)
 	(void)Router.AddMessageHandler(TypeAlpha, BroadcastActorId, MakeRecordingHandler(Recorder, 2), ReplacementHandle);
 
 	const std::uint32_t AllocationsAfter = GlobalAllocationCount;
+	// Assert
 	MW_EXPECT_EQ(Test, AllocationsBefore, AllocationsAfter, "Send, flush, dispatch, remove, and re-add must not allocate in steady state");
 }
 

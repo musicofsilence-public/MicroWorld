@@ -151,17 +151,27 @@ bool PayloadMatches(const FDecoder& InDecoder, const std::uint8_t* const InExpec
 	return true;
 }
 
-/** Proves the CRC primitive matches the canonical CRC-16/CCITT-FALSE check value. */
+/**
+ * Scenario: Compute the CRC-16/CCITT-FALSE primitive over the canonical ASCII "123456789" check vector.
+ * Expected: The result equals the canonical check value 0x29B1.
+ */
 MW_TEST_CASE(FrameCodec_Crc16CcittFalseCheckValueIs29B1)
 {
+	// Act
 	const std::uint16_t Check = ComputeCrc16Ccitt(TSpan<const std::uint8_t>(CrcCheckInput, sizeof(CrcCheckInput)));
 
+	// Assert
 	MW_EXPECT_EQ(Test, Crc16CcittFalseCheckValue, Check, "CRC-16/CCITT-FALSE of ASCII 123456789 must be 0x29B1");
 }
 
-/** Proves encode then byte-by-byte decode round-trips payloads of size zero, one, and the maximum, including a 0xA5 payload byte. */
+/**
+ * Scenario: Encode payloads of size zero, one, and the decoder maximum, then feed each frame byte-by-byte into a decoder and clear the held frame.
+ * Expected: Each frame completes with the encoded source node id and a byte-for-byte matching payload, including a 0xA5 magic-valued payload byte;
+ * ClearFrame releases the held frame.
+ */
 MW_TEST_CASE(FrameCodec_RoundTripsPayloadSizesZeroOneAndMax)
 {
+	// Arrange
 	const std::size_t Sizes[RoundTripSizeCount] = {EmptyPayloadSize, SingleBytePayloadSize, DecoderMaxPayload};
 
 	for (std::size_t SizeIndex = 0; SizeIndex < RoundTripSizeCount; ++SizeIndex)
@@ -177,8 +187,10 @@ MW_TEST_CASE(FrameCodec_RoundTripsPayloadSizesZeroOneAndMax)
 
 		std::uint8_t Frame[FrameBufferCapacity] = {};
 		std::size_t Written = 0;
+		// Act
 		const ENetResult EncodeResult =
 			EncodeFrame(NodeId07, TSpan<const std::uint8_t>(Payload, PayloadSize), TSpan<std::uint8_t>(Frame, sizeof(Frame)), Written);
+		// Assert
 		MW_EXPECT_EQ(Test, ENetResult::Success, EncodeResult, "Encode must succeed for every in-capacity payload size");
 		MW_EXPECT_EQ(Test, PayloadSize + FrameOverheadBytes, Written, "Written must equal payload plus overhead");
 
@@ -189,40 +201,53 @@ MW_TEST_CASE(FrameCodec_RoundTripsPayloadSizesZeroOneAndMax)
 		MW_EXPECT_EQ(Test, NodeId07, Decoder.FrameNodeId(), "The held frame must carry the encoded source node id");
 		MW_EXPECT_EQ(Test, true, PayloadMatches(Decoder, Payload, PayloadSize), "The held payload must match the encoded bytes byte-for-byte");
 
+		// Act
 		Decoder.ClearFrame();
+		// Assert
 		MW_EXPECT_EQ(Test, false, Decoder.HasFrame(), "ClearFrame must release the held frame");
 	}
 }
 
-/** Proves EncodeFrame rejects invalid inputs, oversize payloads, and oversize destinations while leaving OutWritten unchanged. */
+/**
+ * Scenario: Attempt EncodeFrame with a null nonzero payload, a too-small destination, a null nonzero destination, and a payload larger than the
+ * 16-bit length field. Expected: Each rejection returns Invalid or Full as appropriate and leaves OutWritten unchanged.
+ */
 MW_TEST_CASE(FrameCodec_EncodeRejectsInvalidAndFullCases)
 {
-	// Null payload with nonzero length must return Invalid without touching outputs.
+	// Arrange
 	std::uint8_t Frame[FrameBufferCapacity] = {};
+
+	// Null payload with nonzero length must return Invalid without touching outputs.
 	std::size_t Written = UntouchedWrittenSentinel;
+	// Act
 	ENetResult Result =
 		EncodeFrame(NodeId01, TSpan<const std::uint8_t>(nullptr, sizeof(EncodeRejectsPayload)), TSpan<std::uint8_t>(Frame, sizeof(Frame)), Written);
+	// Assert
 	MW_EXPECT_EQ(Test, ENetResult::Invalid, Result, "A null payload with nonzero length must return Invalid");
 	MW_EXPECT_EQ(Test, UntouchedWrittenSentinel, Written, "Invalid must leave OutWritten unchanged");
 
 	// A destination too small for the framed payload must return Full without touching outputs.
 	std::uint8_t TooSmall[2] = {};
 	Written = UntouchedWrittenSentinel;
+	// Act
 	Result = EncodeFrame(
 		NodeId01,
 		TSpan<const std::uint8_t>(EncodeRejectsPayload, sizeof(EncodeRejectsPayload)),
 		TSpan<std::uint8_t>(TooSmall, sizeof(TooSmall)),
 		Written);
+	// Assert
 	MW_EXPECT_EQ(Test, ENetResult::Full, Result, "A destination smaller than payload plus overhead must return Full");
 	MW_EXPECT_EQ(Test, UntouchedWrittenSentinel, Written, "Full must leave OutWritten unchanged");
 
 	// A null destination with nonzero length must return Invalid without touching outputs.
 	Written = UntouchedWrittenSentinel;
+	// Act
 	Result = EncodeFrame(
 		NodeId01,
 		TSpan<const std::uint8_t>(EncodeRejectsPayload, sizeof(EncodeRejectsPayload)),
 		TSpan<std::uint8_t>(nullptr, NullDestinationLength),
 		Written);
+	// Assert
 	MW_EXPECT_EQ(Test, ENetResult::Invalid, Result, "A null destination with nonzero length must return Invalid");
 	MW_EXPECT_EQ(Test, UntouchedWrittenSentinel, Written, "Invalid must leave OutWritten unchanged");
 
@@ -230,15 +255,22 @@ MW_TEST_CASE(FrameCodec_EncodeRejectsInvalidAndFullCases)
 	// The size guard returns before any payload byte is read, so a size-only span needs no real backing.
 	std::uint8_t OversizePayloadByte{};
 	Written = UntouchedWrittenSentinel;
+	// Act
 	Result = EncodeFrame(
 		NodeId01, TSpan<const std::uint8_t>(&OversizePayloadByte, OversizePayloadLength), TSpan<std::uint8_t>(Frame, sizeof(Frame)), Written);
+	// Assert
 	MW_EXPECT_EQ(Test, ENetResult::Invalid, Result, "A payload larger than the 16-bit length field must return Invalid");
 	MW_EXPECT_EQ(Test, UntouchedWrittenSentinel, Written, "Invalid must leave OutWritten unchanged");
 }
 
-/** Proves leading non-magic garbage is dropped and the following valid frame still decodes with the correct node. */
+/**
+ * Scenario: Prepend three non-magic garbage bytes to a valid frame and feed the stream into a decoder.
+ * Expected: The garbage is dropped while the decoder waits for a frame start, and the following frame still completes with the correct source node id
+ * and payload.
+ */
 MW_TEST_CASE(FrameCodec_LeadingGarbageThenValidFrameDecodes)
 {
+	// Arrange
 	std::uint8_t Frame[FrameBufferCapacity] = {};
 	std::size_t Written = 0;
 	EncodeFrame(
@@ -259,7 +291,9 @@ MW_TEST_CASE(FrameCodec_LeadingGarbageThenValidFrameDecodes)
 	}
 
 	FDecoder Decoder;
+	// Act
 	const EFrameEvent Last = FeedBytes(Decoder, Stream, GarbageByteCount + Written);
+	// Assert
 	MW_EXPECT_EQ(Test, EFrameEvent::FrameReady, Last, "The valid frame following garbage must complete");
 	MW_EXPECT_EQ(Test, NodeId09, Decoder.FrameNodeId(), "The decoded frame must carry the encoded source node id");
 	MW_EXPECT_EQ(
@@ -269,9 +303,13 @@ MW_TEST_CASE(FrameCodec_LeadingGarbageThenValidFrameDecodes)
 		"The decoded payload must match the encoded bytes");
 }
 
-/** Proves two valid frames sent back-to-back both decode in order when the held frame is cleared between them. */
+/**
+ * Scenario: Feed two valid frames back-to-back into a decoder, clearing the held frame between them.
+ * Expected: Both frames complete in order, each carrying its encoded source node id and payload.
+ */
 MW_TEST_CASE(FrameCodec_TwoBackToBackFramesDecodeInOrder)
 {
+	// Arrange
 	std::uint8_t FirstFrame[FrameBufferCapacity] = {};
 	std::uint8_t SecondFrame[FrameBufferCapacity] = {};
 	std::size_t FirstWritten = 0;
@@ -300,28 +338,36 @@ MW_TEST_CASE(FrameCodec_TwoBackToBackFramesDecodeInOrder)
 	FDecoder Decoder;
 	// Feed the first frame, drain it, then feed the second so each held frame is observed before the next begins.
 	EFrameEvent Last = EFrameEvent::None;
+	// Act - first frame
 	for (std::size_t Index = 0; Index < FirstWritten; ++Index)
 	{
 		Last = Decoder.PushByte(Stream[Index]);
 	}
+	// Assert
 	MW_EXPECT_EQ(Test, EFrameEvent::FrameReady, Last, "The first back-to-back frame must complete");
 	MW_EXPECT_EQ(Test, NodeId01, Decoder.FrameNodeId(), "The first decoded frame must carry node id one");
 	MW_EXPECT_EQ(Test, true, PayloadMatches(Decoder, FirstBackToBackPayload, sizeof(FirstBackToBackPayload)), "The first decoded payload must match");
 	Decoder.ClearFrame();
 
+	// Act - second frame
 	for (std::size_t Index = 0; Index < SecondWritten; ++Index)
 	{
 		Last = Decoder.PushByte(Stream[FirstWritten + Index]);
 	}
+	// Assert
 	MW_EXPECT_EQ(Test, EFrameEvent::FrameReady, Last, "The second back-to-back frame must complete");
 	MW_EXPECT_EQ(Test, NodeId02, Decoder.FrameNodeId(), "The second decoded frame must carry node id two");
 	MW_EXPECT_EQ(
 		Test, true, PayloadMatches(Decoder, SecondBackToBackPayload, sizeof(SecondBackToBackPayload)), "The second decoded payload must match");
 }
 
-/** Proves a corrupted CRC byte discards the candidate and a following valid frame still decodes. */
+/**
+ * Scenario: Feed a frame whose final CRC byte is corrupted followed by a valid frame into a decoder.
+ * Expected: The corrupted candidate is discarded, and the valid frame completes afterward with the correct source node id and payload.
+ */
 MW_TEST_CASE(FrameCodec_CorruptedCrcDiscardsThenNextFrameDecodes)
 {
+	// Arrange
 	std::uint8_t BadFrame[FrameBufferCapacity] = {};
 	std::size_t BadWritten = 0;
 	EncodeFrame(
@@ -354,6 +400,7 @@ MW_TEST_CASE(FrameCodec_CorruptedCrcDiscardsThenNextFrameDecodes)
 	bool bSawDiscarded = false;
 	bool bSawFrameReady = false;
 	std::size_t FrameReadyOffset = 0;
+	// Act
 	for (std::size_t Index = 0; Index < BadWritten + GoodWritten; ++Index)
 	{
 		const EFrameEvent Event = Decoder.PushByte(Stream[Index]);
@@ -367,6 +414,7 @@ MW_TEST_CASE(FrameCodec_CorruptedCrcDiscardsThenNextFrameDecodes)
 			FrameReadyOffset = Index;
 		}
 	}
+	// Assert
 	MW_EXPECT_EQ(Test, true, bSawDiscarded, "The corrupted-CRC candidate must be discarded");
 	MW_EXPECT_EQ(Test, true, bSawFrameReady, "A valid frame after the discard must complete");
 	// The surviving frame must be the good one, decoded after the bad candidate was rejected.
@@ -379,9 +427,13 @@ MW_TEST_CASE(FrameCodec_CorruptedCrcDiscardsThenNextFrameDecodes)
 		"The surviving payload must match the good bytes");
 }
 
-/** Proves a declared length above the decoder capacity is discarded and a following valid frame still decodes. */
+/**
+ * Scenario: Feed a hand-assembled candidate whose declared length exceeds the decoder capacity followed by a valid frame into a decoder.
+ * Expected: The oversize-declared candidate is discarded, and the valid frame completes afterward with the correct source node id and payload.
+ */
 MW_TEST_CASE(FrameCodec_BadLengthDiscardsThenNextFrameDecodes)
 {
+	// Arrange
 	std::uint8_t GoodFrame[FrameBufferCapacity] = {};
 	std::size_t GoodWritten = 0;
 	EncodeFrame(
@@ -403,6 +455,7 @@ MW_TEST_CASE(FrameCodec_BadLengthDiscardsThenNextFrameDecodes)
 	FDecoder Decoder;
 	bool bSawDiscarded = false;
 	EFrameEvent Last = EFrameEvent::None;
+	// Act
 	for (std::size_t Index = 0; Index < BadLengthCandidateCount + GoodWritten; ++Index)
 	{
 		Last = Decoder.PushByte(Stream[Index]);
@@ -411,6 +464,7 @@ MW_TEST_CASE(FrameCodec_BadLengthDiscardsThenNextFrameDecodes)
 			bSawDiscarded = true;
 		}
 	}
+	// Assert
 	MW_EXPECT_EQ(Test, true, bSawDiscarded, "An oversize declared length must be discarded");
 	MW_EXPECT_EQ(Test, EFrameEvent::FrameReady, Last, "A valid frame after the discard must complete");
 	MW_EXPECT_EQ(Test, NodeId06, Decoder.FrameNodeId(), "The surviving frame must carry the good source node id");
@@ -418,10 +472,14 @@ MW_TEST_CASE(FrameCodec_BadLengthDiscardsThenNextFrameDecodes)
 		Test, true, PayloadMatches(Decoder, BadLengthGoodPayload, sizeof(BadLengthGoodPayload)), "The surviving payload must match the good bytes");
 }
 
-/** Proves the documented resync guarantee after a truncated frame: a later valid frame decodes once the machine resyncs. */
+/**
+ * Scenario: Feed a truncated candidate, a first valid frame, and a second valid frame into a decoder and capture the last completed frame.
+ * Expected: The decoder resyncs after the truncated frame and decodes a later well-formed frame, with the surviving frame carrying the later frame's
+ * node id and payload.
+ */
 MW_TEST_CASE(FrameCodec_TruncatedFrameResyncsOnSubsequentValidFrame)
 {
-	// Keep all payload bytes clear of the magic so no stray resync interferes with the documented behavior.
+	// Arrange - keep all payload bytes clear of the magic so no stray resync interferes with the documented behavior.
 	std::uint8_t FrameA[FrameBufferCapacity] = {};
 	std::uint8_t FrameB[FrameBufferCapacity] = {};
 	std::size_t WrittenA = 0;
@@ -452,6 +510,7 @@ MW_TEST_CASE(FrameCodec_TruncatedFrameResyncsOnSubsequentValidFrame)
 	std::uint8_t FinalNode = 0;
 	std::uint8_t FinalPayload[DecoderMaxPayload] = {};
 	std::size_t FinalLength = 0;
+	// Act
 	for (std::size_t Index = 0; Index < StreamLength; ++Index)
 	{
 		const EFrameEvent Event = Decoder.PushByte(Stream[Index]);
@@ -467,7 +526,7 @@ MW_TEST_CASE(FrameCodec_TruncatedFrameResyncsOnSubsequentValidFrame)
 			}
 		}
 	}
-	// Per the documented contract, the frame immediately after a truncated frame may be consumed and lost,
+	// Assert - per the documented contract, the frame immediately after a truncated frame may be consumed and lost,
 	// but the decoder must resync and decode a later well-formed frame (here, frame B).
 	MW_EXPECT_EQ(Test, true, bSawFrameReady, "A subsequent valid frame must decode after a truncated frame resyncs");
 	MW_EXPECT_EQ(Test, NodeId02, FinalNode, "The last decoded frame must be the later valid frame B");
@@ -475,9 +534,13 @@ MW_TEST_CASE(FrameCodec_TruncatedFrameResyncsOnSubsequentValidFrame)
 	MW_EXPECT_EQ(Test, TruncatedPayloadB[0], FinalPayload[0], "The last decoded frame must carry frame B's payload byte");
 }
 
-/** Proves a steady-state encode plus decode round trip performs no heap allocation. */
+/**
+ * Scenario: Warm up the codec once, capture the allocation counter, then run one steady-state encode and decode round trip.
+ * Expected: The steady-state round trip performs no heap allocation.
+ */
 MW_TEST_CASE(FrameCodec_RoundTripDoesNotAllocate)
 {
+	// Arrange
 	FDecoder Decoder;
 	std::uint8_t Frame[FrameBufferCapacity] = {};
 	std::size_t Written = 0;
@@ -490,12 +553,14 @@ MW_TEST_CASE(FrameCodec_RoundTripDoesNotAllocate)
 
 	const std::uint32_t AllocationsBefore = MicroWorld::Tests::GlobalAllocationCount;
 
+	// Act
 	EncodeFrame(
 		NodeId01, TSpan<const std::uint8_t>(SteadyStatePayload, sizeof(SteadyStatePayload)), TSpan<std::uint8_t>(Frame, sizeof(Frame)), Written);
 	FeedBytes(Decoder, Frame, Written);
 	Decoder.ClearFrame();
 
 	const std::uint32_t AllocationsAfter = MicroWorld::Tests::GlobalAllocationCount;
+	// Assert
 	MW_EXPECT_EQ(Test, AllocationsBefore, AllocationsAfter, "A steady-state encode plus decode round trip must not allocate");
 }
 

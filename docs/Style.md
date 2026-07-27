@@ -107,6 +107,17 @@ Write a comment only when the reason, safety constraint, or edge case is not
 already visible in the code. Never narrate syntax (`// increment the
 counter`); state the invariant a line protects or the boundary it honors.
 
+### Test phase markers
+
+Behavior tests carry `// Arrange`, `// Act`, and `// Assert` section comments.
+They label test *structure* — the three phases every behavior test runs
+through — not the syntax of the line below them, so they do not narrate code.
+A reader scanning a multi-step test sees at a glance which lines set up, which
+act, and which verify, so a long scenario keeps its single concept legible.
+Each phase that appears gets one marker on the line that opens it; a test with
+several Act/Assert cycles labels each cycle. These markers are test-only and
+do not appear in production code.
+
 ### Reference files — already at the target bar; imitate them, cite them
 
 When a review argues about style, cite one of these rather than re-deriving the

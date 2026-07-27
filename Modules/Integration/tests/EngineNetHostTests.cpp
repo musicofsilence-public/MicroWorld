@@ -186,9 +186,13 @@ FNetHostConfig MakeConfig() noexcept
 
 } // namespace
 
-/** Proves TEngine starts its bound host before world BeginPlay and stops it only after world EndPlay. */
+/**
+ * Scenario: Configure a host, root a world with a lifecycle observer, and drive one full BeginPlay/EndPlay turn.
+ * Expected: The host starts before world BeginPlay and stops only after world EndPlay.
+ */
 MW_TEST_CASE(EngineNetHost_BeginPlayStartsHostBeforeWorldAndEndPlayStopsHostAfterWorld)
 {
+	// Arrange
 	THostLoopback<2, 8, 64> Network;
 	TNetHost<1, 64> NetHost(Network.Port(0));
 	TNetHostSystem<TNetHost<1, 64>> NetSystem{NetHost};
@@ -197,6 +201,7 @@ MW_TEST_CASE(EngineNetHost_BeginPlayStartsHostBeforeWorldAndEndPlayStopsHostAfte
 	ENetHostState StateDuringEndPlay = ENetHostState::Idle;
 	const FNetHostConfig Config = MakeConfig();
 
+	// Act: configure the host, root a world with a lifecycle observer, then drive one full BeginPlay/EndPlay turn.
 	const ENetResult ConfigureResult = NetHost.Configure(ENetMode::DedicatedServer, Config);
 	const EObjectResult RegisterResult = Host.RegisterClass<FNetHostLifecycleActor>(NetHostLifecycleActorTypeId, "NetHostLifecycleActor");
 	const TObjectPtr<UWorld> World = Host.CreateWorld();
@@ -211,6 +216,7 @@ MW_TEST_CASE(EngineNetHost_BeginPlayStartsHostBeforeWorldAndEndPlayStopsHostAfte
 	const ERuntimeResult EndResult = Host.EndPlay();
 	const ENetHostState StateAfterEndPlay = NetHost.GetState();
 
+	// Assert
 	MW_EXPECT_EQ(Test, ENetResult::Success, ConfigureResult, "The server host must accept its configuration before engine BeginPlay");
 	MW_EXPECT_EQ(Test, EObjectResult::Success, RegisterResult, "The engine must register the lifecycle observer actor type");
 	MW_EXPECT_TRUE(Test, WorldInstance != nullptr, "The engine must root a world before registering the observer actor");
@@ -225,35 +231,43 @@ MW_TEST_CASE(EngineNetHost_BeginPlayStartsHostBeforeWorldAndEndPlayStopsHostAfte
 	MW_EXPECT_EQ(Test, ENetHostState::Idle, StateAfterEndPlay, "The engine must stop the host after world EndPlay completes");
 }
 
-/** Proves a bound network frame's inbound slot runs before its outbound slot on every accepted tick, and neither runs on a rejected one. */
+/**
+ * Scenario: Root a world, drive two monotonically advancing ticks, then a rolled-back tick that is rejected.
+ * Expected: Each accepted tick runs the inbound slot before the outbound slot; the rejected tick runs neither.
+ */
 MW_TEST_CASE(EngineHostTickDrivesBoundSystemPreAdvanceThenPostAdvance)
 {
+	// Arrange
 	FFrameCallRecord Record{};
 	FRecordingEngineSystem Frame{Record};
 	FHost Host{FGarbageCollectionBudget{1, 4, 8}, Frame};
 
+	// Act: root a world and drive two monotonically advancing ticks.
 	MW_EXPECT_TRUE(Test, Host.CreateWorld().Get() != nullptr, "CreateWorld roots the world before the frame-driven ticks");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, Host.BeginPlay(0), "BeginPlay reports success at the canonical baseline");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, Host.Tick(10), "The first tick reports success");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, Host.Tick(20), "The second tick reports success");
 
+	// Assert: each accepted tick drives one dispatch and one flush, in that order.
 	MW_EXPECT_EQ(Test, 2, Record.DispatchCount, "Each accepted tick drives exactly one inbound dispatch");
 	MW_EXPECT_EQ(Test, 2, Record.FlushCount, "Each accepted tick drives exactly one outbound flush");
 	MW_EXPECT_TRUE(Test, Record.DispatchOrder < Record.FlushOrder, "The inbound dispatch runs before the outbound flush within a tick");
 
+	// Act: a rolled-back tick must be rejected before any frame slot runs.
 	MW_EXPECT_EQ(Test, ERuntimeResult::NonMonotonicTime, Host.Tick(15), "A rolled-back tick is rejected before any frame slot runs");
+	// Assert: the rejected tick drives no additional dispatch or flush.
 	MW_EXPECT_EQ(Test, 2, Record.DispatchCount, "A rejected tick drives no inbound dispatch");
 	MW_EXPECT_EQ(Test, 2, Record.FlushCount, "A rejected tick drives no outbound flush");
 }
 
 /**
- * The concept proof that net and engine compose: two TEngine instances over one
- * loopback exchange a message that spawns an actor on the server world, driven only
- * through the canonical Tick frame order (never by calling the pumps directly).
+ * Scenario: Two TEngine instances over one loopback register a spawn handler, configure both hosts, root worlds, and exchange a client message driven
+ * only through the canonical Tick frame order. Expected: The message spawns exactly one actor on the server world without ever calling the pumps
+ * directly.
  */
 MW_TEST_CASE(EngineNetHostClientMessageSpawnsActorOnServerWorld)
 {
-	// One loopback network with two ports; the server drives port 0, the client port 1.
+	// Arrange: one loopback network with two ports; the server drives port 0, the client port 1.
 	THostLoopback<2, 8, 64> Network;
 	TNetHost<2, 64> ServerNet(Network.Port(0));
 	TNetHost<1, 64> ClientNet(Network.Port(1));
@@ -267,7 +281,7 @@ MW_TEST_CASE(EngineNetHostClientMessageSpawnsActorOnServerWorld)
 	FHost ClientHost{FGarbageCollectionBudget{1, 4, 8}, ClientFrame};
 	FServerSpawnContext Context{ServerHost, HandlerInvocationCount, SpawnedBeginCount};
 
-	// The server can construct the actor its handler spawns; both hosts root a world.
+	// Act: the server registers the actor it will spawn and both hosts root a world.
 	MW_EXPECT_EQ(
 		Test,
 		EObjectResult::Success,
@@ -276,7 +290,7 @@ MW_TEST_CASE(EngineNetHostClientMessageSpawnsActorOnServerWorld)
 	MW_EXPECT_TRUE(Test, ServerHost.CreateWorld().Get() != nullptr, "The server roots its world");
 	MW_EXPECT_TRUE(Test, ClientHost.CreateWorld().Get() != nullptr, "The client roots its world");
 
-	// On any application message the server spawns one actor into its own world.
+	// Act: install the spawn handler and configure both hosts before any lifecycle turn.
 	TNetHost<2, 64>::FMessageHandlerBinding Binding;
 	Binding.Bind(
 		[&Context](const FPeerId, const std::uint8_t, TSpan<const std::uint8_t>) noexcept
@@ -297,10 +311,11 @@ MW_TEST_CASE(EngineNetHostClientMessageSpawnsActorOnServerWorld)
 	(void)ServerNet.Configure(ENetMode::DedicatedServer, MakeConfig());
 	(void)ClientNet.Configure(ENetMode::Client, ClientConfig);
 
+	// Act: begin both worlds so the engine drives the bound hosts through their live frame slots.
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, ServerHost.BeginPlay(0), "The server world begins play at the baseline");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, ClientHost.BeginPlay(0), "The client world begins play at the baseline");
 
-	// Drive both hosts frame by frame; the handshake rides the live frame slots, not direct pumps.
+	// Act: drive both hosts frame by frame; the handshake rides the live frame slots, not direct pumps.
 	TimePointMilliseconds Now = 0;
 	for (int Frame = 0; Frame < 4 && ClientNet.GetState() != ENetHostState::Connected; ++Frame)
 	{
@@ -308,20 +323,23 @@ MW_TEST_CASE(EngineNetHostClientMessageSpawnsActorOnServerWorld)
 		(void)ClientHost.Tick(Now);
 		(void)ServerHost.Tick(Now);
 	}
+	// Assert: the client connected through the engine's live frame slots.
 	MW_EXPECT_EQ(Test, ENetHostState::Connected, ClientNet.GetState(), "The client connects through the engine's live frame slots");
 
 	const int BeginCountBeforeMessage = SpawnedBeginCount;
 	const std::uint32_t ServerObjectsBeforeMessage = ServerHost.GetObjectStore().Stats().OccupiedSlots;
 
+	// Act: the client queues a one-byte application message over the established connection.
 	const std::uint8_t Payload[1] = {0x42};
 	const ENetResult SendResult = ClientNet.SendTo(ClientNet.GetServerPeer(), AppChannel, TSpan<const std::uint8_t>(Payload, 1));
 
-	// One client tick flushes the message; one server tick dispatches it and applies the spawn.
+	// Act: one client tick flushes the message; one server tick dispatches it and applies the spawn.
 	Now += 10;
 	(void)ClientHost.Tick(Now);
 	Now += 10;
 	(void)ServerHost.Tick(Now);
 
+	// Assert
 	MW_EXPECT_EQ(Test, ENetResult::Success, SendResult, "The connected client queues the application message");
 	MW_EXPECT_EQ(Test, 0, BeginCountBeforeMessage, "No actor spawned before the message crossed the network");
 	MW_EXPECT_EQ(Test, 1, HandlerInvocationCount, "The server handler runs exactly once for the client message");

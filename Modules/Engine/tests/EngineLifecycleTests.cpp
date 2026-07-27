@@ -181,11 +181,12 @@ TObjectPtr<FOrderingComponent> MakeOrderingComponent(
 using FLifecycleEnvironment = TEngineEnvironment<256, 16, 8, 4>;
 
 /**
- * Proves BeginPlay visits actors in registration order and, for each actor,
- * begins its components in registration order before the actor's own hook.
+ * Scenario: Register two actors (one with two components, one with one) and run BeginPlay on the world.
+ * Expected: BeginPlay visits actors in registration order, beginning each actor's components in registration order before its own hook.
  */
 MW_TEST_CASE(EngineBeginPlayOrderIsActorsThenComponentsPerActor)
 {
+	// Arrange
 	FSequenceCounter Sequence{};
 	FActorEventState ActorAEvents{};
 	FActorEventState ActorBEvents{};
@@ -204,6 +205,7 @@ MW_TEST_CASE(EngineBeginPlayOrderIsActorsThenComponentsPerActor)
 	const TObjectPtr<FOrderingComponent> CompA2 = MakeOrderingComponent(Env, Sequence, CompA2Events);
 	const TObjectPtr<FOrderingComponent> CompB1 = MakeOrderingComponent(Env, Sequence, CompB1Events);
 
+	// Act
 	const EEngineResult ActorAComp1 = ActorA.Get()->RegisterComponent(CompA1);
 	const EEngineResult ActorAComp2 = ActorA.Get()->RegisterComponent(CompA2);
 	const EEngineResult ActorBComp1 = ActorB.Get()->RegisterComponent(CompB1);
@@ -212,6 +214,7 @@ MW_TEST_CASE(EngineBeginPlayOrderIsActorsThenComponentsPerActor)
 
 	const ERuntimeResult BeginResult = World.Get()->BeginPlay(BaselineTimeMilliseconds);
 
+	// Assert
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ActorAComp1, "ActorA should accept its first component");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ActorAComp2, "ActorA should accept its second component");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ActorBComp1, "ActorB should accept its component");
@@ -231,11 +234,12 @@ MW_TEST_CASE(EngineBeginPlayOrderIsActorsThenComponentsPerActor)
 }
 
 /**
- * Proves Advance ticks actors in registration order and, for each actor, ticks
- * its components before the actor's own Tick hook.
+ * Scenario: Begin a world with two actors (each with one component) and Advance it by one frame.
+ * Expected: Advance ticks actors in registration order and, for each actor, ticks its components before the actor's own Tick hook.
  */
 MW_TEST_CASE(EngineTickOrderIsActorsThenComponentsPerActor)
 {
+	// Arrange
 	FSequenceCounter Sequence{};
 	FActorEventState ActorAEvents{};
 	FActorEventState ActorBEvents{};
@@ -252,6 +256,7 @@ MW_TEST_CASE(EngineTickOrderIsActorsThenComponentsPerActor)
 	const TObjectPtr<FOrderingComponent> CompA = MakeOrderingComponent(Env, Sequence, CompAEvents);
 	const TObjectPtr<FOrderingComponent> CompB = MakeOrderingComponent(Env, Sequence, CompBEvents);
 
+	// Act
 	const EEngineResult ActorAComponentResult = ActorA.Get()->RegisterComponent(CompA);
 	const EEngineResult ActorBComponentResult = ActorB.Get()->RegisterComponent(CompB);
 	const EEngineResult ActorAResult = World.Get()->RegisterActor(TObjectPtr<AActor>{ActorA});
@@ -261,6 +266,7 @@ MW_TEST_CASE(EngineTickOrderIsActorsThenComponentsPerActor)
 	Sequence.Next(); // Delimits BeginPlay events from the exact tick sequence.
 	const ERuntimeResult TickResult = World.Get()->Advance(FirstTickTimeMilliseconds);
 
+	// Assert
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, BeginResult, "BeginPlay should succeed");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, TickResult, "Advance should succeed");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ActorAComponentResult, "ActorA component setup succeeds");
@@ -278,11 +284,12 @@ MW_TEST_CASE(EngineTickOrderIsActorsThenComponentsPerActor)
 }
 
 /**
- * Proves EndPlay ends actors in reverse registration order and, for each actor,
- * runs the actor's EndPlay before its components' EndPlay in reverse order.
+ * Scenario: Begin a world with two actors and run EndPlay (twice) after BeginPlay.
+ * Expected: EndPlay ends actors in reverse registration order, each actor's EndPlay running before its components' EndPlay in reverse order.
  */
 MW_TEST_CASE(EngineEndPlayIsReverseRegistrationAndActorBeforeComponents)
 {
+	// Arrange
 	FSequenceCounter Sequence{};
 	FActorEventState ActorAEvents{};
 	FActorEventState ActorBEvents{};
@@ -299,6 +306,7 @@ MW_TEST_CASE(EngineEndPlayIsReverseRegistrationAndActorBeforeComponents)
 	const TObjectPtr<FOrderingComponent> CompA1 = MakeOrderingComponent(Env, Sequence, CompA1Events);
 	const TObjectPtr<FOrderingComponent> CompA2 = MakeOrderingComponent(Env, Sequence, CompA2Events);
 
+	// Act
 	const EEngineResult ComponentA1Result = ActorA.Get()->RegisterComponent(CompA1);
 	const EEngineResult ComponentA2Result = ActorA.Get()->RegisterComponent(CompA2);
 	const EEngineResult ActorAResult = World.Get()->RegisterActor(TObjectPtr<AActor>{ActorA});
@@ -309,6 +317,7 @@ MW_TEST_CASE(EngineEndPlayIsReverseRegistrationAndActorBeforeComponents)
 	const ERuntimeResult EndResult = World.Get()->EndPlay();
 	const ERuntimeResult RepeatedEndResult = World.Get()->EndPlay();
 
+	// Assert
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ComponentA1Result, "First component setup succeeds");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ComponentA2Result, "Second component setup succeeds");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ActorAResult, "ActorA setup succeeds");
@@ -327,11 +336,12 @@ MW_TEST_CASE(EngineEndPlayIsReverseRegistrationAndActorBeforeComponents)
 }
 
 /**
- * Proves an interval actor ticks at most once per Advance even when the caller
- * jumps multiple intervals forward, and that time rollback is rejected.
+ * Scenario: Advance an interval actor through an immediate due, a multi-interval forward jump, an early poll, and a rollback.
+ * Expected: The interval actor ticks at most once per Advance even when the caller jumps multiple intervals forward, and time rollback is rejected.
  */
 MW_TEST_CASE(EngineTickIntervalAndNoCatchUpBehavior)
 {
+	// Arrange
 	FSequenceCounter Sequence{};
 	FActorEventState ActorEvents{};
 
@@ -347,6 +357,7 @@ MW_TEST_CASE(EngineTickIntervalAndNoCatchUpBehavior)
 
 	(void)World.Get()->BeginPlay(FirstTickTimeMilliseconds);
 
+	// Act
 	const ERuntimeResult FirstAdvance = World.Get()->Advance(FirstTickTimeMilliseconds); // due immediately after begin
 	const std::uint32_t TicksAfterFirst = ActorEvents.TickCount;
 	const ERuntimeResult JumpAdvance = World.Get()->Advance(300); // four intervals later, still one tick
@@ -355,6 +366,7 @@ MW_TEST_CASE(EngineTickIntervalAndNoCatchUpBehavior)
 	const std::uint32_t TicksAfterEarly = ActorEvents.TickCount;
 	const ERuntimeResult RollbackAdvance = World.Get()->Advance(200); // before last observed time
 
+	// Assert
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, FirstAdvance, "The first advance after begin should tick");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, JumpAdvance, "A forward jump should still succeed");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, EarlyAdvance, "An advance before the next deadline should succeed");
@@ -365,11 +377,13 @@ MW_TEST_CASE(EngineTickIntervalAndNoCatchUpBehavior)
 }
 
 /**
- * Proves the world dispatch guard rejects structural store/collector reentry
- * from every consumer lifecycle hook and preserves the live world graph.
+ * Scenario: Register an adversarial actor that attempts store/collector reentry from every lifecycle hook and drive it through BeginPlay, Advance,
+ * and EndPlay. Expected: The world dispatch guard rejects structural store/collector reentry from every consumer lifecycle hook and preserves the
+ * live world graph.
  */
 MW_TEST_CASE(EngineLifecycleHooksCannotMutateManagedGraph)
 {
+	// Arrange
 	FLifecycleEnvironment Env{};
 	FObjectStore& Store = Env.GetStore();
 	MicroWorld::FObjectHandle Worklist[CollectorWorklistCapacity]{};
@@ -381,12 +395,15 @@ MW_TEST_CASE(EngineLifecycleHooksCannotMutateManagedGraph)
 	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, WorldActors.MakeReference());
 	const TObjectPtr<FMutationAttemptActor> Actor = Env.CreateDerivedObject<FMutationAttemptActor>(
 		MutationAttemptActorTypeId, "MutationAttemptActor", Store, Collector, *ComponentDescriptor, MutationState);
+
+	// Act - drive the actor through every lifecycle hook, then read the store state
 	const EEngineResult ActorRegistration = World.Get()->RegisterActor(Actor);
 	const ERuntimeResult BeginResult = World.Get()->BeginPlay(BaselineTimeMilliseconds);
 	const ERuntimeResult AdvanceResult = World.Get()->Advance(1);
 	const ERuntimeResult EndResult = World.Get()->EndPlay();
 	const MicroWorld::FObjectStoreStats FinalStats = Store.Stats();
 
+	// Assert
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ActorRegistration, "Adversarial actor setup succeeds");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, BeginResult, "BeginPlay completes despite rejected hook reentry");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, AdvanceResult, "Advance completes despite rejected hook reentry");

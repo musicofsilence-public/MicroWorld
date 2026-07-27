@@ -254,9 +254,13 @@ EObjectResult RegisterTrackedDescriptor(
 	return Result;
 }
 
-/** Proves malformed caller storage rejects construction without changing any lifetime state. */
+/**
+ * Scenario: Register a valid tracked descriptor, bind the store to zeroed-out caller storage, and attempt one construction.
+ * Expected: The store reports an unsupported layout before construction; no object lifetime begins.
+ */
 MW_TEST_CASE(ObjectStoreRejectsInvalidStorageBeforeConstruction)
 {
+	// Arrange
 	FObjectLifetimeState Lifetime{};
 	TClassRegistry<2> Registry;
 	const FClassDescriptor* Descriptor = nullptr;
@@ -264,8 +268,10 @@ MW_TEST_CASE(ObjectStoreRejectsInvalidStorageBeforeConstruction)
 	FObjectStoreStorage InvalidStorage{};
 	FObjectStore Store(InvalidStorage, MakeClassRegistryView(Registry));
 
+	// Act
 	const TObjectCreationResult<FTrackedObject> Creation = Store.NewObject<FTrackedObject>(*Descriptor, Lifetime);
 
+	// Assert
 	const EObjectResult ExpectedRegistrationResult = EObjectResult::Success;
 	const EObjectResult ExpectedConfigurationResult = EObjectResult::UnsupportedObjectLayout;
 	const std::uint32_t ExpectedConstructionCount = 0;
@@ -276,9 +282,13 @@ MW_TEST_CASE(ObjectStoreRejectsInvalidStorageBeforeConstruction)
 	MW_EXPECT_EQ(Test, ExpectedConstructionCount, Lifetime.ConstructionCount, "Invalid storage must reject before placement construction");
 }
 
-/** Proves an object larger than the configured slots is rejected atomically. */
+/**
+ * Scenario: Register a valid tracked descriptor into a structurally valid store whose single slot is too small, then attempt construction.
+ * Expected: Construction is rejected atomically with an unsupported-layout result; no lifetime starts and no slot is consumed.
+ */
 MW_TEST_CASE(ObjectStoreRejectsUnsupportedObjectLayoutBeforeConstruction)
 {
+	// Arrange
 	FObjectLifetimeState Lifetime{};
 	TClassRegistry<2> Registry;
 	const FClassDescriptor* Descriptor = nullptr;
@@ -286,8 +296,10 @@ MW_TEST_CASE(ObjectStoreRejectsUnsupportedObjectLayoutBeforeConstruction)
 	TObjectStoreFixture<8, 8, 1, 0> Fixture(MakeClassRegistryView(Registry));
 	FObjectStore& Store = Fixture.GetStore();
 
+	// Act
 	const TObjectCreationResult<FTrackedObject> Creation = Store.NewObject<FTrackedObject>(*Descriptor, Lifetime);
 
+	// Assert
 	const EObjectResult ExpectedSuccess = EObjectResult::Success;
 	const EObjectResult ExpectedFailure = EObjectResult::UnsupportedObjectLayout;
 	const std::uint32_t ExpectedConstructionCount = 0;
@@ -301,9 +313,13 @@ MW_TEST_CASE(ObjectStoreRejectsUnsupportedObjectLayoutBeforeConstruction)
 	MW_EXPECT_EQ(Test, ExpectedOccupiedSlots, StoreStats.OccupiedSlots, "Layout failure must not consume a slot");
 }
 
-/** Proves a descriptor outside the store registry cannot begin construction. */
+/**
+ * Scenario: Build a store with one registered descriptor and attempt construction through a descriptor that was never registered.
+ * Expected: The store rejects the unknown class; construction does not start and slot capacity is preserved.
+ */
 MW_TEST_CASE(ObjectStoreRejectsUnknownClassWithoutConsumingCapacity)
 {
+	// Arrange
 	FObjectLifetimeState Lifetime{};
 	TClassRegistry<2> Registry;
 	const FClassDescriptor* RegisteredDescriptor = nullptr;
@@ -312,8 +328,10 @@ MW_TEST_CASE(ObjectStoreRejectsUnknownClassWithoutConsumingCapacity)
 	TObjectStoreFixture<128, 16, 1, 0> Fixture(MakeClassRegistryView(Registry));
 	FObjectStore& Store = Fixture.GetStore();
 
+	// Act
 	const TObjectCreationResult<FTrackedObject> Creation = Store.NewObject<FTrackedObject>(UnknownDescriptor, Lifetime);
 
+	// Assert
 	const EObjectResult ExpectedSuccess = EObjectResult::Success;
 	const EObjectResult ExpectedFailure = EObjectResult::UnknownClass;
 	const std::uint32_t ExpectedConstructionCount = 0;
@@ -325,9 +343,13 @@ MW_TEST_CASE(ObjectStoreRejectsUnknownClassWithoutConsumingCapacity)
 	MW_EXPECT_EQ(Test, ExpectedOccupiedSlots, StoreStats.OccupiedSlots, "Unknown-class rejection must preserve slot capacity");
 }
 
-/** Proves descriptor identity includes the exact destructor even for equal layouts. */
+/**
+ * Scenario: Register a layout-equivalent descriptor carrying the wrong exact destructor and attempt typed construction through it.
+ * Expected: Construction is rejected by the destructor-token check; no lifetime starts and no slot is consumed.
+ */
 MW_TEST_CASE(ObjectStoreRejectsSameLayoutDescriptorWithWrongExactDestructor)
 {
+	// Arrange
 	FObjectLifetimeState Lifetime{};
 	TClassRegistry<2> Registry;
 	FClassDescriptor WrongDescriptor = MakeClassDescriptor<FWrongDestructorObject>(1, "WrongDestructor");
@@ -336,8 +358,10 @@ MW_TEST_CASE(ObjectStoreRejectsSameLayoutDescriptorWithWrongExactDestructor)
 	TObjectStoreFixture<128, 16, 1, 0> Fixture(MakeClassRegistryView(Registry));
 	FObjectStore& Store = Fixture.GetStore();
 
+	// Act
 	const TObjectCreationResult<FTrackedObject> Creation = Store.NewObject<FTrackedObject>(*RegisteredWrongDescriptor, Lifetime);
 
+	// Assert
 	const EObjectResult ExpectedSuccess = EObjectResult::Success;
 	const EObjectResult ExpectedFailure = EObjectResult::UnsupportedObjectLayout;
 	const std::uint32_t ExpectedConstructionCount = 0;
@@ -348,9 +372,13 @@ MW_TEST_CASE(ObjectStoreRejectsSameLayoutDescriptorWithWrongExactDestructor)
 	MW_EXPECT_EQ(Test, ExpectedConstructionCount, StoreStats.OccupiedSlots, "Destructor mismatch must not consume capacity");
 }
 
-/** Proves registry-owned descriptor state cannot be invalidated through its source copy. */
+/**
+ * Scenario: Register a descriptor, mutate its source copy's destructor, token, and size, then construct through both the registry-owned copy and the
+ * mutated source. Expected: The owned copy constructs and destroys exactly once; the mutated source is rejected as unknown.
+ */
 MW_TEST_CASE(ObjectStoreUsesImmutableRegistryOwnedDescriptorCopy)
 {
+	// Arrange
 	FObjectLifetimeState Lifetime{};
 	TClassRegistry<2> Registry;
 	FClassDescriptor SourceDescriptor = MakeClassDescriptor<FTrackedObject>(1, "TrackedSource");
@@ -362,11 +390,13 @@ MW_TEST_CASE(ObjectStoreUsesImmutableRegistryOwnedDescriptorCopy)
 	TObjectStoreFixture<128, 16, 1, 0> Fixture(MakeClassRegistryView(Registry));
 	FObjectStore& Store = Fixture.GetStore();
 
+	// Act
 	const TObjectCreationResult<FTrackedObject> OwnedCreation = Store.NewObject<FTrackedObject>(*RegisteredDescriptor, Lifetime);
 	const TObjectCreationResult<FTrackedObject> RejectedSourceCreation = Store.NewObject<FTrackedObject>(SourceDescriptor, Lifetime);
 	const EObjectResult PendingResult = Store.MarkPendingDestroy(OwnedCreation.Object.Handle());
 	const MicroWorld::FObjectMutationResult Barrier = Store.ApplyPendingDestroy(1);
 
+	// Assert
 	const EObjectResult ExpectedSuccess = EObjectResult::Success;
 	const EObjectResult ExpectedUnknown = EObjectResult::UnknownClass;
 	MW_EXPECT_EQ(Test, ExpectedSuccess, RegistrationResult, "The valid source descriptor should register");
@@ -378,9 +408,13 @@ MW_TEST_CASE(ObjectStoreUsesImmutableRegistryOwnedDescriptorCopy)
 	MW_EXPECT_EQ(Test, 1U, Lifetime.DestructionCount, "The owned descriptor copy must retain exact destruction");
 }
 
-/** Proves full capacity rejects a second object without disturbing the first. */
+/**
+ * Scenario: Fill the store's single slot with one object and attempt to construct a second object.
+ * Expected: The second construction fails atomically with capacity exhaustion; the first object is not disturbed and no collection runs.
+ */
 MW_TEST_CASE(ObjectStoreCapacityFailureIsAtomicAndDoesNotCollect)
 {
+	// Arrange
 	FObjectLifetimeState Lifetime{};
 	TClassRegistry<2> Registry;
 	const FClassDescriptor* Descriptor = nullptr;
@@ -389,8 +423,10 @@ MW_TEST_CASE(ObjectStoreCapacityFailureIsAtomicAndDoesNotCollect)
 	FObjectStore& Store = Fixture.GetStore();
 	const TObjectCreationResult<FTrackedObject> FirstCreation = Store.NewObject<FTrackedObject>(*Descriptor, Lifetime);
 
+	// Act
 	const TObjectCreationResult<FTrackedObject> SecondCreation = Store.NewObject<FTrackedObject>(*Descriptor, Lifetime);
 
+	// Assert
 	const EObjectResult ExpectedSuccess = EObjectResult::Success;
 	const EObjectResult ExpectedFailure = EObjectResult::CapacityExceeded;
 	const std::uint32_t ExpectedConstructionCount = 1;
@@ -407,9 +443,13 @@ MW_TEST_CASE(ObjectStoreCapacityFailureIsAtomicAndDoesNotCollect)
 	MW_EXPECT_TRUE(Test, bFirstStillResolves, "The original unrooted object should remain live until explicit collection");
 }
 
-/** Proves deferred destruction hides immediately and runs both hooks exactly once. */
+/**
+ * Scenario: Create one object, request pending destruction twice, and run the destruction barrier twice.
+ * Expected: The handle is hidden immediately and the repeated request is idempotent; BeginDestroy and the exact destructor each run exactly once.
+ */
 MW_TEST_CASE(ObjectStoreDeferredDestructionRunsLifecycleHooksOnce)
 {
+	// Arrange
 	FObjectLifetimeState Lifetime{};
 	TClassRegistry<2> Registry;
 	const FClassDescriptor* Descriptor = nullptr;
@@ -419,11 +459,13 @@ MW_TEST_CASE(ObjectStoreDeferredDestructionRunsLifecycleHooksOnce)
 	const TObjectCreationResult<FTrackedObject> Creation = Store.NewObject<FTrackedObject>(*Descriptor, Lifetime);
 	FTrackedObject* const RawObject = Creation.Object.Get();
 
+	// Act
 	const EObjectResult FirstPendingResult = Store.MarkPendingDestroy(Creation.Object.Handle());
 	const EObjectResult SecondPendingResult = Store.MarkPendingDestroy(Creation.Object.Handle());
 	const MicroWorld::FObjectMutationResult FirstBarrier = Store.ApplyPendingDestroy(1);
 	const MicroWorld::FObjectMutationResult SecondBarrier = Store.ApplyPendingDestroy(1);
 
+	// Assert
 	const EObjectResult ExpectedSuccess = EObjectResult::Success;
 	const EObjectResult ExpectedRepeatedResult = EObjectResult::AlreadyPendingDestroy;
 	const std::uint32_t ExpectedOne = 1;
@@ -442,9 +484,13 @@ MW_TEST_CASE(ObjectStoreDeferredDestructionRunsLifecycleHooksOnce)
 	MW_EXPECT_EQ(Test, ExpectedOne, Lifetime.DestructionCount, "The exact derived destructor should run exactly once");
 }
 
-/** Proves slot reuse advances generation and never revives the stale identity. */
+/**
+ * Scenario: Destroy one generation, then construct a second object in the same one-slot store, and attempt to use the old handle.
+ * Expected: The reclaimed slot publishes a new generation; the old handle cannot resolve or release a current root.
+ */
 MW_TEST_CASE(ObjectStoreSlotReuseInvalidatesEveryOldHandle)
 {
+	// Arrange
 	FObjectLifetimeState Lifetime{};
 	TClassRegistry<2> Registry;
 	const FClassDescriptor* Descriptor = nullptr;
@@ -456,8 +502,10 @@ MW_TEST_CASE(ObjectStoreSlotReuseInvalidatesEveryOldHandle)
 	const EObjectResult PendingResult = Store.MarkPendingDestroy(FirstHandle);
 	const MicroWorld::FObjectMutationResult BarrierResult = Store.ApplyPendingDestroy(1);
 
+	// Act
 	const TObjectCreationResult<FTrackedObject> SecondCreation = Store.NewObject<FTrackedObject>(*Descriptor, Lifetime);
 
+	// Assert
 	const EObjectResult ExpectedSuccess = EObjectResult::Success;
 	const EObjectResult ExpectedStale = EObjectResult::StaleHandle;
 	const std::uint32_t ExpectedOne = 1;
@@ -477,9 +525,14 @@ MW_TEST_CASE(ObjectStoreSlotReuseInvalidatesEveryOldHandle)
 	MW_EXPECT_EQ(Test, ExpectedStale, StaleRootRemoval, "A stale generation cannot release a current lifetime root");
 }
 
-/** Proves duplicate strong pointers own independent capacity and moves transfer one token. */
+/**
+ * Scenario: Create two independent strong roots, attempt a third, then move the first root through construction and assignment.
+ * Expected: The third root fails with root capacity exhaustion; move construction and assignment each empty their source and transfer exactly one
+ * token.
+ */
 MW_TEST_CASE(ObjectStoreStrongRootsAreIndependentAndMoveOnly)
 {
+	// Arrange
 	FObjectLifetimeState Lifetime{};
 	TClassRegistry<2> Registry;
 	const FClassDescriptor* Descriptor = nullptr;
@@ -490,10 +543,12 @@ MW_TEST_CASE(ObjectStoreStrongRootsAreIndependentAndMoveOnly)
 	TStrongObjectPointerResult<FTrackedObject> FirstRoot = Store.MakeStrongObjectPtr(Creation.Object);
 	TStrongObjectPointerResult<FTrackedObject> SecondRoot = Store.MakeStrongObjectPtr(Creation.Object);
 
+	// Act
 	const TStrongObjectPointerResult<FTrackedObject> RejectedRoot = Store.MakeStrongObjectPtr(Creation.Object);
 	TStrongObjectPtr<FTrackedObject> MovedRoot(std::move(FirstRoot.Pointer));
 	SecondRoot.Pointer = std::move(MovedRoot);
 
+	// Assert
 	const EObjectResult ExpectedSuccess = EObjectResult::Success;
 	const EObjectResult ExpectedCapacityFailure = EObjectResult::RootCapacityExceeded;
 	const std::uint32_t ExpectedActiveRoots = 1;
@@ -512,9 +567,14 @@ MW_TEST_CASE(ObjectStoreStrongRootsAreIndependentAndMoveOnly)
 	MW_EXPECT_EQ(Test, ExpectedActiveRoots, StoreStats.ActiveRoots, "Move assignment should release the replaced token exactly once");
 }
 
-/** Proves pending objects cannot resolve, gain roots, or be resurrected by stale releases. */
+/**
+ * Scenario: Create a rooted object, mark it pending destruction, then attempt resolution, a new root, reset, and a stale root release.
+ * Expected: The pending object cannot resolve or gain a new root; the weak pointer expires; the stale release remains stale and no root token
+ * remains.
+ */
 MW_TEST_CASE(ObjectStorePendingObjectCannotBeResolvedOrResurrected)
 {
+	// Arrange
 	FObjectLifetimeState Lifetime{};
 	TClassRegistry<2> Registry;
 	const FClassDescriptor* Descriptor = nullptr;
@@ -526,11 +586,13 @@ MW_TEST_CASE(ObjectStorePendingObjectCannotBeResolvedOrResurrected)
 	TStrongObjectPointerResult<FTrackedObject> StrongObject = Store.MakeStrongObjectPtr(Creation.Object);
 	const FObjectHandle ObjectHandle = Creation.Object.Handle();
 
+	// Act
 	const EObjectResult PendingResult = Store.MarkPendingDestroy(ObjectHandle);
 	const TStrongObjectPointerResult<FTrackedObject> RejectedRoot = Store.MakeStrongObjectPtr(Creation.Object);
 	StrongObject.Pointer.Reset();
 	const EObjectResult StaleReleaseResult = Store.RemoveRoot(ObjectHandle);
 
+	// Assert
 	const EObjectResult ExpectedSuccess = EObjectResult::Success;
 	const EObjectResult ExpectedPending = EObjectResult::AlreadyPendingDestroy;
 	const EObjectResult ExpectedStale = EObjectResult::StaleHandle;
@@ -549,22 +611,33 @@ MW_TEST_CASE(ObjectStorePendingObjectCannotBeResolvedOrResurrected)
 	MW_EXPECT_EQ(Test, ExpectedActiveRoots, StoreStats.ActiveRoots, "Pending cleanup and reset must leave no root token");
 }
 
-/** Proves the final generation is retired rather than wrapped into old identity. */
+/**
+ * Scenario: Query generation advancement against the last reusable generation and the fully exhausted generation.
+ * Expected: The final distinct generation may advance once; an exhausted slot must retire before any wrap could revive an old identity.
+ */
 MW_TEST_CASE(ObjectHandleGenerationBoundaryRequiresRetirementBeforeWrap)
 {
+	// Arrange
 	const ObjectGeneration LastReusableGeneration = std::numeric_limits<ObjectGeneration>::max() - 1U;
 	const ObjectGeneration ExhaustedGeneration = std::numeric_limits<ObjectGeneration>::max();
 
+	// Act
 	const bool bLastGenerationCanAdvance = CanAdvanceObjectGeneration(LastReusableGeneration);
 	const bool bExhaustedGenerationCanAdvance = CanAdvanceObjectGeneration(ExhaustedGeneration);
 
+	// Assert
 	MW_EXPECT_TRUE(Test, bLastGenerationCanAdvance, "The final distinct generation may be published once");
 	MW_EXPECT_TRUE(Test, !bExhaustedGenerationCanAdvance, "An exhausted slot must retire before generation wrap");
 }
 
-/** Proves a noexcept constructor cannot recursively publish or collect through its store. */
+/**
+ * Scenario: Construct an object whose placement constructor attempts nested construction, the destruction barrier, and a collection request, then run
+ * the outer barrier. Expected: Every recursive mutation returns lifecycle-locked; the outer object publishes once and is destroyed once with no
+ * nested lifetime escaping.
+ */
 MW_TEST_CASE(ObjectStoreLocksMutationUntilPlacementConstructionPublishes)
 {
+	// Arrange
 	FObjectLifetimeState NestedLifetime{};
 	FReentryState Reentry{};
 	TClassRegistry<3> Registry;
@@ -579,11 +652,13 @@ MW_TEST_CASE(ObjectStoreLocksMutationUntilPlacementConstructionPublishes)
 	std::array<FObjectHandle, 2> Worklist{};
 	FGarbageCollector Collector(Store, FGarbageCollectorStorage{Worklist.data(), static_cast<std::uint32_t>(Worklist.size())});
 
+	// Act
 	const TObjectCreationResult<FConstructorReentryObject> Creation = Store.NewObject<FConstructorReentryObject>(
 		*RegisteredOuterDescriptor, Store, *RegisteredNestedDescriptor, NestedLifetime, Collector, Reentry);
 	const EObjectResult PendingResult = Store.MarkPendingDestroy(Creation.Object.Handle());
 	const MicroWorld::FObjectMutationResult Barrier = Store.ApplyPendingDestroy(2);
 
+	// Assert
 	const EObjectResult ExpectedSuccess = EObjectResult::Success;
 	const EObjectResult ExpectedLocked = EObjectResult::LifecycleLocked;
 	const ERuntimeResult ExpectedCollectionLocked = ERuntimeResult::LifecycleLocked;
@@ -600,54 +675,101 @@ MW_TEST_CASE(ObjectStoreLocksMutationUntilPlacementConstructionPublishes)
 	MW_EXPECT_EQ(Test, 1U, Reentry.DestructionCount, "The outer object should be destroyed once");
 }
 
-/** Proves BeginDestroy cannot recursively mutate, collect, or destroy its slot. */
-MW_TEST_CASE(ObjectStoreRejectsDestructionCallbackReentryWithoutLeakingRoots)
+/**
+ * Observation bundle captured after the adversarial destruction-reentry world runs its barrier.
+ * Every field is a copyable value so the store, collector, and fixture can be destroyed before
+ * the split tests assert on it — keeping each test isolated without duplicating the build sequence.
+ */
+struct FDestructionReentryOutcome final
+{
+	/** The publication result of the adversarial object before its barrier ran. */
+	EObjectResult CreationResult{EObjectResult::Success};
+
+	/** One recorded result per mutation path BeginDestroy attempted during the barrier. */
+	FReentryState Reentry{};
+
+	/** Detects any nested lifetime that escaped the mutation lock. */
+	FObjectLifetimeState NestedLifetime{};
+
+	/** Final occupancy after the barrier reclaimed the destroyed slot. */
+	FObjectStoreStats StoreStats{};
+};
+
+/**
+ * Builds the adversarial destruction-reentry world, drives it through its owning barrier, and
+ * returns the captured observations. Centralizing the build keeps both split tests isolated
+ * (each gets a fresh world) without duplicating the registry, fixture, collector, and barrier.
+ */
+FDestructionReentryOutcome RunDestructionReentryBarrierOnce() noexcept
 {
 	FObjectLifetimeState NestedLifetime{};
 	FReentryState Reentry{};
 	TClassRegistry<3> Registry;
-	FClassDescriptor NestedDescriptor = MakeClassDescriptor<FTrackedObject>(1, "NestedTracked");
-	FClassDescriptor OuterDescriptor = MakeClassDescriptor<FDestroyReentryObject>(2, "DestroyReentry");
-	const EObjectResult NestedRegistration = Registry.Register(NestedDescriptor);
-	const EObjectResult OuterRegistration = Registry.Register(OuterDescriptor);
+	const FClassDescriptor NestedDescriptor = MakeClassDescriptor<FTrackedObject>(1, "NestedTracked");
+	const FClassDescriptor OuterDescriptor = MakeClassDescriptor<FDestroyReentryObject>(2, "DestroyReentry");
+	(void)Registry.Register(NestedDescriptor);
+	(void)Registry.Register(OuterDescriptor);
 	const FClassDescriptor* const RegisteredNestedDescriptor = Registry.Find(NestedDescriptor.TypeId);
 	const FClassDescriptor* const RegisteredOuterDescriptor = Registry.Find(OuterDescriptor.TypeId);
 	TObjectStoreFixture<256, 16, 2, 1> Fixture(MakeClassRegistryView(Registry));
 	FObjectStore& Store = Fixture.GetStore();
 	std::array<FObjectHandle, 2> Worklist{};
 	FGarbageCollector Collector(Store, FGarbageCollectorStorage{Worklist.data(), static_cast<std::uint32_t>(Worklist.size())});
+
 	const TObjectCreationResult<FDestroyReentryObject> Creation =
 		Store.NewObject<FDestroyReentryObject>(*RegisteredOuterDescriptor, Store, *RegisteredNestedDescriptor, NestedLifetime, Collector, Reentry);
 	TStrongObjectPointerResult<FDestroyReentryObject> Root = Store.MakeStrongObjectPtr(Creation.Object);
-
-	const EObjectResult PendingResult = Store.MarkPendingDestroy(Creation.Object.Handle());
-	const MicroWorld::FObjectMutationResult Barrier = Store.ApplyPendingDestroy(2);
+	(void)Store.MarkPendingDestroy(Creation.Object.Handle());
+	(void)Store.ApplyPendingDestroy(2);
 	Root.Pointer.Reset();
 
-	const EObjectResult ExpectedSuccess = EObjectResult::Success;
+	return FDestructionReentryOutcome{Creation.Result, Reentry, NestedLifetime, Store.Stats()};
+}
+
+/**
+ * Scenario: Drive an adversarial object whose BeginDestroy attempts every mutation path, and observe the captured results after the barrier.
+ * Expected: Barrier reentry, publication, rooting, pending mutation, collection requests, and collection advance are each rejected; the object still
+ * publishes before its barrier.
+ */
+MW_TEST_CASE(BeginDestroyRejectsEveryRecursiveMutationPath)
+{
+	// Arrange
 	const EObjectResult ExpectedLocked = EObjectResult::LifecycleLocked;
 	const ERuntimeResult ExpectedCollectionLocked = ERuntimeResult::LifecycleLocked;
 	const ERuntimeResult ExpectedInactiveCollection = ERuntimeResult::InvalidLifecycle;
-	const FObjectStoreStats StoreStats = Store.Stats();
-	MW_EXPECT_EQ(Test, ExpectedSuccess, NestedRegistration, "The nested tracked class should register");
-	MW_EXPECT_EQ(Test, ExpectedSuccess, OuterRegistration, "The destruction-reentry class should register");
-	MW_EXPECT_EQ(Test, ExpectedSuccess, Creation.Result, "The adversarial object should first publish");
-	MW_EXPECT_EQ(Test, ExpectedSuccess, Root.Result, "One root token should exist before destruction");
-	MW_EXPECT_EQ(Test, ExpectedSuccess, PendingResult, "The adversarial object should enter pending state");
-	MW_EXPECT_EQ(Test, ExpectedSuccess, Barrier.Result, "The owning destruction barrier should complete");
-	MW_EXPECT_EQ(Test, ExpectedLocked, Reentry.BarrierResult, "BeginDestroy cannot recursively enter its barrier");
-	MW_EXPECT_EQ(Test, ExpectedLocked, Reentry.ConstructionResult, "BeginDestroy cannot publish another object");
-	MW_EXPECT_EQ(Test, ExpectedLocked, Reentry.AddRootResult, "BeginDestroy cannot add a root");
-	MW_EXPECT_EQ(Test, ExpectedLocked, Reentry.MarkPendingResult, "BeginDestroy cannot repeat pending mutation");
-	MW_EXPECT_EQ(Test, ExpectedCollectionLocked, Reentry.CollectionRequestResult, "BeginDestroy cannot start collection");
+
+	// Act — the adversarial BeginDestroy already ran during the destruction barrier,
+	// recording one result per mutation path it attempted.
+	const FDestructionReentryOutcome Outcome = RunDestructionReentryBarrierOnce();
+
+	// Assert
+	MW_EXPECT_EQ(Test, EObjectResult::Success, Outcome.CreationResult, "The adversarial object must publish before its barrier runs");
+	MW_EXPECT_EQ(Test, ExpectedLocked, Outcome.Reentry.BarrierResult, "BeginDestroy cannot recursively enter its barrier");
+	MW_EXPECT_EQ(Test, ExpectedLocked, Outcome.Reentry.ConstructionResult, "BeginDestroy cannot publish another object");
+	MW_EXPECT_EQ(Test, ExpectedLocked, Outcome.Reentry.AddRootResult, "BeginDestroy cannot add a root");
+	MW_EXPECT_EQ(Test, ExpectedLocked, Outcome.Reentry.MarkPendingResult, "BeginDestroy cannot repeat pending mutation");
+	MW_EXPECT_EQ(Test, ExpectedCollectionLocked, Outcome.Reentry.CollectionRequestResult, "BeginDestroy cannot start collection");
 	MW_EXPECT_EQ(
-		Test, ExpectedInactiveCollection, Reentry.CollectionAdvanceResult, "BeginDestroy cannot advance a collector without an active cycle");
-	MW_EXPECT_EQ(Test, ExpectedSuccess, Reentry.RemoveRootResult, "Exact destruction may release an existing root safely");
-	MW_EXPECT_EQ(Test, 1U, Reentry.BeginDestroyCount, "Recursive attempts must not repeat BeginDestroy");
-	MW_EXPECT_EQ(Test, 1U, Reentry.DestructionCount, "Recursive attempts must not repeat exact destruction");
-	MW_EXPECT_EQ(Test, 0U, NestedLifetime.ConstructionCount, "No nested object may escape destruction reentry");
-	MW_EXPECT_EQ(Test, 0U, StoreStats.OccupiedSlots, "The destroyed slot must not leak an object");
-	MW_EXPECT_EQ(Test, 0U, StoreStats.ActiveRoots, "Destruction and stale reset must leave no root token");
+		Test, ExpectedInactiveCollection, Outcome.Reentry.CollectionAdvanceResult, "BeginDestroy cannot advance a collector without an active cycle");
+}
+
+/**
+ * Scenario: Drive an adversarial object through its destruction barrier with an active root and observe the captured occupancy and counts.
+ * Expected: BeginDestroy and exact destruction run exactly once; the root is released safely; no nested lifetime escapes and no slot or root leaks.
+ */
+MW_TEST_CASE(DestructionReentryLeavesNoLeakedSlotsOrRoots)
+{
+	// Arrange — Act happens inside the barrier; observations are captured by value on return.
+	const FDestructionReentryOutcome Outcome = RunDestructionReentryBarrierOnce();
+
+	// Assert
+	MW_EXPECT_EQ(Test, EObjectResult::Success, Outcome.CreationResult, "The adversarial object must publish before its barrier runs");
+	MW_EXPECT_EQ(Test, 1U, Outcome.Reentry.BeginDestroyCount, "Recursive attempts must not repeat BeginDestroy");
+	MW_EXPECT_EQ(Test, 1U, Outcome.Reentry.DestructionCount, "Recursive attempts must not repeat exact destruction");
+	MW_EXPECT_EQ(Test, 0U, Outcome.NestedLifetime.ConstructionCount, "No nested object may escape destruction reentry");
+	MW_EXPECT_EQ(Test, EObjectResult::Success, Outcome.Reentry.RemoveRootResult, "Exact destruction may release an existing root safely");
+	MW_EXPECT_EQ(Test, 0U, Outcome.StoreStats.OccupiedSlots, "The destroyed slot must not leak an object");
+	MW_EXPECT_EQ(Test, 0U, Outcome.StoreStats.ActiveRoots, "Destruction and stale reset must leave no root token");
 }
 
 // A derived-to-base conversion preserves store and generation; a base-to-derived
@@ -659,7 +781,10 @@ static_assert(
 	!std::is_constructible<TObjectPtr<FTrackedObject>, const TObjectPtr<UObject>&>::value,
 	"A base traced reference must not widen to an arbitrary derived type.");
 
-/** Proves the derived-to-base conversion preserves store, generation, and resolution. */
+/**
+ * Scenario: Create one tracked object and convert its derived reference to base, then to the same derived type.
+ * Expected: Each conversion preserves the handle identity, resolves the same object, and retains store membership.
+ */
 MW_TEST_CASE(TObjectPtrDerivedToBaseConversionPreservesStoreAndGeneration)
 {
 	// Base-to-derived conversion remains a compile-time error for any caller.
@@ -667,6 +792,7 @@ MW_TEST_CASE(TObjectPtrDerivedToBaseConversionPreservesStoreAndGeneration)
 		!std::is_convertible<const TObjectPtr<UObject>&, TObjectPtr<FTrackedObject>>::value,
 		"Implicit base-to-derived conversion must stay disabled.");
 
+	// Arrange
 	FObjectLifetimeState Lifetime{};
 	TClassRegistry<2> Registry;
 	const FClassDescriptor* Descriptor = nullptr;
@@ -674,11 +800,13 @@ MW_TEST_CASE(TObjectPtrDerivedToBaseConversionPreservesStoreAndGeneration)
 	TObjectStoreFixture<128, 16, 2, 0> Fixture(MakeClassRegistryView(Registry));
 	FObjectStore& Store = Fixture.GetStore();
 
+	// Act
 	const TObjectCreationResult<FTrackedObject> Creation = Store.NewObject<FTrackedObject>(*Descriptor, Lifetime);
 	const TObjectPtr<FTrackedObject> Derived = Creation.Object;
 	const TObjectPtr<UObject> Base = TObjectPtr<UObject>(Derived);
 	const TObjectPtr<FTrackedObject> SameType = TObjectPtr<FTrackedObject>(Derived);
 
+	// Assert
 	const EObjectResult ExpectedSuccess = EObjectResult::Success;
 	const FObjectHandle ExpectedHandle = Derived.Handle();
 	const FTrackedObject* const DerivedResolved = Derived.Get();
@@ -696,10 +824,17 @@ MW_TEST_CASE(TObjectPtrDerivedToBaseConversionPreservesStoreAndGeneration)
 	MW_EXPECT_TRUE(Test, bSameTypeSharesStore, "Same-type conversion must preserve store membership");
 }
 
-/** Proves automatic registration returns a stable canonical descriptor and leaves full storage unchanged. */
+/**
+ * Scenario: Manually occupy the preferred automatic ID, then automatically register the same candidate twice and attempt one registration into a full
+ * registry. Expected: Automatic registration probes past the occupied ID, returns a stable canonical descriptor on repeat, and leaves occupancy
+ * unchanged when the registry is full.
+ */
 MW_TEST_CASE(ObjectRegistryAutomaticRegistrationIsCanonicalAndBounded)
 {
+	// Arrange
 	TClassRegistry<2> Registry;
+
+	// Act
 	const FClassDescriptor ManualDescriptor = MakeClassDescriptor<FWrongDestructorObject>(TClassRegistry<2>::FirstAutomaticTypeId, "ManualObject");
 	const EObjectResult ManualResult = Registry.Register(ManualDescriptor);
 	const FClassDescriptor Candidate = MakeClassDescriptor<FTrackedObject>(0, "TrackedObject");
@@ -713,6 +848,7 @@ MW_TEST_CASE(ObjectRegistryAutomaticRegistrationIsCanonicalAndBounded)
 	const FClassDescriptor* FullDescriptor = nullptr;
 	const EObjectResult FullResult = Registry.RegisterAutomatic(AnotherCandidate, FullDescriptor);
 
+	// Assert
 	MW_EXPECT_EQ(Test, EObjectResult::Success, ManualResult, "A manual descriptor occupies the preferred automatic ID");
 	MW_EXPECT_EQ(Test, EObjectResult::Success, FirstResult, "Automatic registration probes past the occupied preferred ID");
 	MW_EXPECT_TRUE(Test, FirstDescriptor != nullptr, "Automatic registration returns the registry-owned descriptor");

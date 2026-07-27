@@ -63,6 +63,12 @@ constexpr std::uint32_t CollectorWorklistCapacity = 16;
 /** Canonical monotonic baseline every BeginPlay call uses as its starting world time. */
 constexpr MicroWorld::TimePointMilliseconds BaselineTimeMilliseconds{0};
 
+/** Steady-state iterations the allocation probe runs to prove Advance never calls global new. */
+constexpr std::uint32_t SteadyStateAdvanceIterations = 64;
+
+/** Monotonic ms-per-step the allocation probe advances so each Advance lands on a later time. */
+constexpr std::uint32_t SteadyStateAdvanceStepMilliseconds = 10;
+
 /** Builds a tracked actor through its own derived descriptor. */
 TObjectPtr<FTrackedActor> MakeTrackedActor(FGarbageCollectionEnvironment& InEnv) noexcept
 {
@@ -91,11 +97,12 @@ private:
 };
 
 /**
- * Proves a single TStrongObjectPtr<UWorld> root retains the entire world graph
- * (world, actors, components) through one full collection.
+ * Scenario: Root a world with one actor and component via a single strong pointer and run one full collection.
+ * Expected: A single TStrongObjectPtr<UWorld> root retains the entire world graph (world, actors, components) through one full collection.
  */
 MW_TEST_CASE(EngineRootedWorldRetainsActorsAndComponentsThroughFullGC)
 {
+	// Arrange
 	FGarbageCollectionEnvironment Env{};
 	FObjectStore& Store = Env.GetStore();
 	FCollectorFixture Fixture{Store};
@@ -111,10 +118,13 @@ MW_TEST_CASE(EngineRootedWorldRetainsActorsAndComponentsThroughFullGC)
 	(void)World.Get()->RegisterActor(TObjectPtr<AActor>{Actor});
 
 	TStrongObjectPtr<UWorld> WorldRoot = Env.MakeRoot(World);
+
+	// Act
 	const ERuntimeResult CollectResult = Collector.RequestCollection();
 	const MicroWorld::FGarbageCollectionResult FullResult = Collector.CollectFull();
-
 	const FObjectStoreStats Stats = Store.Stats();
+
+	// Assert
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, CollectResult, "A rooted graph should accept a collection request");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, FullResult.Result, "A full collection on a rooted graph should succeed");
 	MW_EXPECT_TRUE(Test, static_cast<bool>(WorldRoot), "The world root remains live");
@@ -126,11 +136,12 @@ MW_TEST_CASE(EngineRootedWorldRetainsActorsAndComponentsThroughFullGC)
 }
 
 /**
- * Proves releasing the world root allows the collector to reclaim the complete
- * graph, and that weak parent links expire once the parent is reclaimed.
+ * Scenario: Root a world graph with weak links observed, release the world root, then run a full collection.
+ * Expected: Releasing the world root allows the collector to reclaim the complete graph, and weak parent links expire once the parent is reclaimed.
  */
 MW_TEST_CASE(EngineReleasingWorldRootReclaimsEntireGraph)
 {
+	// Arrange
 	FGarbageCollectionEnvironment Env{};
 	FObjectStore& Store = Env.GetStore();
 	FCollectorFixture Fixture{Store};
@@ -151,10 +162,12 @@ MW_TEST_CASE(EngineReleasingWorldRootReclaimsEntireGraph)
 	const TWeakObjectPtr<UActorComponent> ComponentWeak{TObjectPtr<UActorComponent>{Component}};
 	WorldRoot.Reset();
 
+	// Act
 	const ERuntimeResult CollectResult = Collector.RequestCollection();
 	const MicroWorld::FGarbageCollectionResult FullResult = Collector.CollectFull();
 	const FObjectStoreStats Stats = Store.Stats();
 
+	// Assert
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, CollectResult, "An unrooted graph should accept a collection request");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, FullResult.Result, "A full collection should succeed");
 	MW_EXPECT_EQ(Test, std::uint32_t{3}, FullResult.ObjectsReclaimed, "The world, actor, and component are all reclaimed");
@@ -165,14 +178,14 @@ MW_TEST_CASE(EngineReleasingWorldRootReclaimsEntireGraph)
 }
 
 /**
- * Proves the weak world parent link resolves to null after the world is
- * reclaimed while the actor survives under its own root, and that the weak
- * actor parent link resolves to null after the actor is reclaimed while the
- * component survives under its own root, so a child never observes a dangling
- * parent pointer.
+ * Scenario: Independently root the world, actor, and component; reclaim the world while the actor survives, then reclaim the actor while the
+ * component survives. Expected: The weak world parent link resolves to null after the world is reclaimed while the actor survives under its own root,
+ * and the weak actor parent link resolves to null after the actor is reclaimed while the component survives under its own root, so a child never
+ * observes a dangling parent pointer.
  */
 MW_TEST_CASE(EngineWeakParentReferencesExpireCorrectly)
 {
+	// Arrange
 	FGarbageCollectionEnvironment Env{};
 	FObjectStore& Store = Env.GetStore();
 	FCollectorFixture Fixture{Store};
@@ -194,11 +207,14 @@ MW_TEST_CASE(EngineWeakParentReferencesExpireCorrectly)
 	TStrongObjectPtr<UWorld> WorldRoot = Env.MakeRoot(World);
 	TStrongObjectPtr<AActor> ActorRoot = Env.MakeRoot(TObjectPtr<AActor>{Actor});
 	TStrongObjectPtr<UActorComponent> ComponentRoot = Env.MakeRoot(TObjectPtr<UActorComponent>{Component});
+
+	// Assert - rooted parents are still observable
 	MW_EXPECT_TRUE(Test, Actor.Get()->GetOwnerWorld() != nullptr, "The actor observes its world while rooted");
 	MW_EXPECT_TRUE(Test, Component.Get()->GetOwnerActor() != nullptr, "The component observes its actor while rooted");
 
 	// Release only the world: the world is reclaimed, the actor survives, and
 	// its weak world link now resolves to null.
+	// Act - reclaim the world only
 	WorldRoot.Reset();
 	const ERuntimeResult WorldCollectionRequest = Collector.RequestCollection();
 	const MicroWorld::FGarbageCollectionResult WorldCollection = Collector.CollectFull();
@@ -218,6 +234,7 @@ MW_TEST_CASE(EngineWeakParentReferencesExpireCorrectly)
 
 	// Release only the actor: the actor is reclaimed, the component survives,
 	// and its weak actor link now resolves to null.
+	// Act - reclaim the actor only
 	ActorRoot.Reset();
 	const ERuntimeResult ActorCollectionRequest = Collector.RequestCollection();
 	const MicroWorld::FGarbageCollectionResult ActorCollection = Collector.CollectFull();
@@ -233,11 +250,13 @@ MW_TEST_CASE(EngineWeakParentReferencesExpireCorrectly)
 }
 
 /**
- * Proves repeated Advance calls in steady state invoke no scalar, array, or
- * C++17 aligned global allocation and leave fixed object/root occupancy unchanged.
+ * Scenario: Begin a rooted world and run a bounded loop of repeated Advance calls in steady state.
+ * Expected: Repeated Advance calls in steady state invoke no scalar, array, or C++17 aligned global allocation and leave fixed object/root occupancy
+ * unchanged.
  */
 MW_TEST_CASE(EngineAdvancePerformsNoObservableAllocation)
 {
+	// Arrange
 	FGarbageCollectionEnvironment Env{};
 	FObjectStore& Store = Env.GetStore();
 
@@ -253,11 +272,12 @@ MW_TEST_CASE(EngineAdvancePerformsNoObservableAllocation)
 	TStrongObjectPtr<UWorld> WorldRoot = Env.MakeRoot(World);
 	(void)World.Get()->BeginPlay(BaselineTimeMilliseconds);
 
+	// Act - capture the steady-state baseline, then run the bounded advance loop
 	const FObjectStoreStats BeforeStats = Store.Stats();
 	const std::uint32_t AllocationsBeforeAdvance = GlobalAllocationCount;
-	for (std::uint32_t Step = 0; Step < 64; ++Step)
+	for (std::uint32_t Step = 0; Step < SteadyStateAdvanceIterations; ++Step)
 	{
-		const ERuntimeResult AdvanceResult = World.Get()->Advance(Step * 10);
+		const ERuntimeResult AdvanceResult = World.Get()->Advance(Step * SteadyStateAdvanceStepMilliseconds);
 		if (AdvanceResult != ERuntimeResult::Success)
 		{
 			MW_EXPECT_EQ(Test, ERuntimeResult::Success, AdvanceResult, "Each steady-state advance should succeed");
@@ -267,17 +287,20 @@ MW_TEST_CASE(EngineAdvancePerformsNoObservableAllocation)
 	const FObjectStoreStats AfterStats = Store.Stats();
 	const std::uint32_t AllocationsAfterAdvance = GlobalAllocationCount;
 
+	// Assert
+
 	MW_EXPECT_EQ(Test, AllocationsBeforeAdvance, AllocationsAfterAdvance, "Steady-state Advance must not call scalar, array, or aligned global new");
 	MW_EXPECT_EQ(Test, BeforeStats.OccupiedSlots, AfterStats.OccupiedSlots, "Steady-state advance must not allocate object slots");
 	MW_EXPECT_EQ(Test, BeforeStats.ActiveRoots, AfterStats.ActiveRoots, "Steady-state advance must not change root occupancy");
 }
 
 /**
- * Proves EndPlay is idempotent and that repeated BeginPlay/Advance/EndPlay calls
- * outside the legal lifecycle match Core's InvalidLifecycle semantics.
+ * Scenario: Begin, re-begin, advance, end, re-end, and advance-after-end a world in sequence.
+ * Expected: EndPlay is idempotent and repeated BeginPlay/Advance/EndPlay calls outside the legal lifecycle match Core's InvalidLifecycle semantics.
  */
 MW_TEST_CASE(EngineEndPlayIsIdempotentAndRepeatedLifecycleCallsMatchCore)
 {
+	// Arrange
 	FGarbageCollectionEnvironment Env{};
 
 	FWorldActorRegistry<2> WorldActors;
@@ -287,6 +310,7 @@ MW_TEST_CASE(EngineEndPlayIsIdempotentAndRepeatedLifecycleCallsMatchCore)
 	const TObjectPtr<FTrackedActor> Actor = MakeTrackedActor(Env);
 	(void)World.Get()->RegisterActor(TObjectPtr<AActor>{Actor});
 
+	// Act
 	const ERuntimeResult FirstBegin = World.Get()->BeginPlay(BaselineTimeMilliseconds);
 	const ERuntimeResult SecondBegin = World.Get()->BeginPlay(BaselineTimeMilliseconds);
 	const ERuntimeResult AdvanceWhilePlaying = World.Get()->Advance(1);
@@ -294,6 +318,7 @@ MW_TEST_CASE(EngineEndPlayIsIdempotentAndRepeatedLifecycleCallsMatchCore)
 	const ERuntimeResult SecondEnd = World.Get()->EndPlay();
 	const ERuntimeResult AdvanceAfterEnd = World.Get()->Advance(2);
 
+	// Assert
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, FirstBegin, "The first BeginPlay should succeed");
 	MW_EXPECT_EQ(Test, ERuntimeResult::InvalidLifecycle, SecondBegin, "A second BeginPlay is rejected as out-of-lifecycle");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, AdvanceWhilePlaying, "Advance while playing should succeed");

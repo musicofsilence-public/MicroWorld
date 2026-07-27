@@ -40,6 +40,21 @@ namespace
 		static constexpr std::size_t MaxChannels = 1;
 	};
 
+	/** Message type id both router tests register and broadcast so the handler and payload stay paired. */
+	constexpr MicroWorld::FMessageTypeId SampleMessageTypeId{1};
+
+	/** Routed actor id the cross-system broadcast targets so sender and receiver address one logical actor. */
+	constexpr MicroWorld::FMessageActorId SampleActorId{1};
+
+	/** Channel id the cross-system test composes and broadcasts on so the routed message stays on one channel. */
+	constexpr MicroWorld::FMessageChannelId SampleChannelId{1};
+
+	/** Single-byte payload the local-router test broadcasts so a delivery is observable without transport framing. */
+	constexpr std::uint8_t LocalRouterMessagePayloadByte{0x31};
+
+	/** Single-byte payload the cross-system test sends so a routed delivery is observable on the remote router. */
+	constexpr std::uint8_t CrossSystemPayloadByte{0x7A};
+
 	/** Builds a host configuration accepted by both loopback roles. */
 	MicroWorld::FNetHostConfig MakeConfig() noexcept
 	{
@@ -141,32 +156,43 @@ namespace
 
 } // namespace
 
-/** Proves two configured drivers receive distinct usable identities from one system. */
+/**
+ * Scenario: Configure two drivers on one system over a loopback with two ports.
+ * Expected: Each driver receives a valid handle with a distinct slot identity.
+ */
 MW_TEST_CASE(NetSystem_AddNetDriverAcceptsTwoDrivers)
 {
+	// Arrange
 	FLoopback Loopback;
 	FSystem System;
 	const MicroWorld::FNetHostConfig Config = MakeConfig();
 
+	// Act
 	const MicroWorld::FNetDriverHandle FirstDriver = System.AddNetDriver(Loopback.Port(0), MicroWorld::ENetMode::Standalone, Config);
 	const MicroWorld::FNetDriverHandle SecondDriver = System.AddNetDriver(Loopback.Port(1), MicroWorld::ENetMode::Standalone, Config);
 	const bool bFirstDriverValid = FirstDriver.IsValid();
 	const bool bSecondDriverValid = SecondDriver.IsValid();
 	const bool bDistinctSlots = FirstDriver.Index != SecondDriver.Index;
 
+	// Assert
 	MW_EXPECT_TRUE(Test, bFirstDriverValid, "The first configured driver must receive a valid handle");
 	MW_EXPECT_TRUE(Test, bSecondDriverValid, "The second configured driver must receive a valid handle");
 	MW_EXPECT_TRUE(Test, bDistinctSlots, "Two configured drivers must receive distinct slot identities");
 }
 
-/** Proves both reliability modes compose on one driver without exposing their internal wrappers. */
+/**
+ * Scenario: Add a best-effort and a guaranteed channel on one configured driver.
+ * Expected: Each reliability mode receives a valid channel handle without exposing internal wrappers.
+ */
 MW_TEST_CASE(NetSystem_AddChannelAcceptsBestEffortAndGuaranteedOnOneDriver)
 {
+	// Arrange
 	FLoopback Loopback;
 	FSystem System;
 	const MicroWorld::FNetHostConfig Config = MakeConfig();
 	const MicroWorld::FNetDriverHandle Driver = System.AddNetDriver(Loopback.Port(0), MicroWorld::ENetMode::Standalone, Config);
 
+	// Act
 	const MicroWorld::FChannelHandle BestEffort =
 		System.AddChannel(Driver, MicroWorld::FMessageChannelId{1}, MicroWorld::EChannelReliability::BestEffort);
 	const MicroWorld::FChannelHandle Guaranteed =
@@ -175,20 +201,26 @@ MW_TEST_CASE(NetSystem_AddChannelAcceptsBestEffortAndGuaranteedOnOneDriver)
 	const bool bBestEffortValid = BestEffort.IsValid();
 	const bool bGuaranteedValid = Guaranteed.IsValid();
 
+	// Assert
 	MW_EXPECT_TRUE(Test, bDriverValid, "Channel setup requires a valid configured driver handle");
 	MW_EXPECT_TRUE(Test, bBestEffortValid, "A best-effort channel must receive a valid handle");
 	MW_EXPECT_TRUE(Test, bGuaranteedValid, "A guaranteed channel must receive a valid handle");
 }
 
-/** Proves a forged driver generation cannot add a channel and cannot affect the current driver slot. */
+/**
+ * Scenario: Forge a driver handle with a mismatched generation and attempt to add a channel, then add a channel on the current driver.
+ * Expected: The forged-generation request is rejected and leaves the current driver slot usable.
+ */
 MW_TEST_CASE(NetSystem_AddChannelRejectsForgedDriverGeneration)
 {
+	// Arrange
 	FLoopback Loopback;
 	FSystem System;
 	const MicroWorld::FNetHostConfig Config = MakeConfig();
 	const MicroWorld::FNetDriverHandle Driver = System.AddNetDriver(Loopback.Port(0), MicroWorld::ENetMode::Standalone, Config);
 	const MicroWorld::FNetDriverHandle StaleDriver{Driver.Index, static_cast<std::uint8_t>(Driver.Generation + 1)};
 
+	// Act
 	const MicroWorld::FChannelHandle RejectedChannel =
 		System.AddChannel(StaleDriver, MicroWorld::FMessageChannelId{1}, MicroWorld::EChannelReliability::BestEffort);
 	const MicroWorld::FChannelHandle CurrentChannel =
@@ -197,35 +229,47 @@ MW_TEST_CASE(NetSystem_AddChannelRejectsForgedDriverGeneration)
 	const bool bRejectedChannelValid = RejectedChannel.IsValid();
 	const bool bCurrentChannelValid = CurrentChannel.IsValid();
 
+	// Assert
 	MW_EXPECT_TRUE(Test, bDriverValid, "The original driver handle must be valid before forging a stale one");
 	MW_EXPECT_TRUE(Test, !bRejectedChannelValid, "A mismatched driver generation must reject channel creation");
 	MW_EXPECT_TRUE(Test, bCurrentChannelValid, "A stale-handle rejection must leave the current driver usable");
 }
 
-/** Proves a full fixed driver table rejects the next composition request. */
+/**
+ * Scenario: Fill a one-driver system and attempt to add a second driver.
+ * Expected: The driver beyond fixed capacity is rejected with an invalid handle.
+ */
 MW_TEST_CASE(NetSystem_AddNetDriverRejectsCapacityExhaustion)
 {
+	// Arrange
 	FLoopback Loopback;
 	MicroWorld::TNetSystem<FOneDriverTraits> System;
 	const MicroWorld::FNetHostConfig Config = MakeConfig();
 
+	// Act
 	const MicroWorld::FNetDriverHandle AcceptedDriver = System.AddNetDriver(Loopback.Port(0), MicroWorld::ENetMode::Standalone, Config);
 	const MicroWorld::FNetDriverHandle RejectedDriver = System.AddNetDriver(Loopback.Port(1), MicroWorld::ENetMode::Standalone, Config);
 	const bool bAcceptedDriverValid = AcceptedDriver.IsValid();
 	const bool bRejectedDriverValid = RejectedDriver.IsValid();
 
+	// Assert
 	MW_EXPECT_TRUE(Test, bAcceptedDriverValid, "The only available driver slot must accept its first driver");
 	MW_EXPECT_TRUE(Test, !bRejectedDriverValid, "A driver beyond fixed capacity must return an invalid handle");
 }
 
-/** Proves a full fixed channel table rejects the next channel without disturbing its accepted predecessor. */
+/**
+ * Scenario: Fill a one-channel driver and attempt to add a second channel.
+ * Expected: The channel beyond fixed capacity is rejected with an invalid handle and does not disturb the accepted predecessor.
+ */
 MW_TEST_CASE(NetSystem_AddChannelRejectsCapacityExhaustion)
 {
+	// Arrange
 	FLoopback Loopback;
 	MicroWorld::TNetSystem<FOneChannelTraits> System;
 	const MicroWorld::FNetHostConfig Config = MakeConfig();
 	const MicroWorld::FNetDriverHandle Driver = System.AddNetDriver(Loopback.Port(0), MicroWorld::ENetMode::Standalone, Config);
 
+	// Act
 	const MicroWorld::FChannelHandle AcceptedChannel =
 		System.AddChannel(Driver, MicroWorld::FMessageChannelId{1}, MicroWorld::EChannelReliability::BestEffort);
 	const MicroWorld::FChannelHandle RejectedChannel =
@@ -234,14 +278,19 @@ MW_TEST_CASE(NetSystem_AddChannelRejectsCapacityExhaustion)
 	const bool bAcceptedChannelValid = AcceptedChannel.IsValid();
 	const bool bRejectedChannelValid = RejectedChannel.IsValid();
 
+	// Assert
 	MW_EXPECT_TRUE(Test, bDriverValid, "Channel capacity setup requires one valid driver");
 	MW_EXPECT_TRUE(Test, bAcceptedChannelValid, "The only available channel slot must accept its first channel");
 	MW_EXPECT_TRUE(Test, !bRejectedChannelValid, "A channel beyond fixed capacity must return an invalid handle");
 }
 
-/** Proves BeginPlay freezes composition, starts configured hosts, and leaves no eager packet before that lifecycle turn. */
+/**
+ * Scenario: Configure a client driver and channel, pump before BeginPlay, then close composition with BeginPlay, attempt late composition, and pump
+ * once more. Expected: No packet crosses the transport before BeginPlay; afterward composition is frozen and the host starts to emit packets.
+ */
 MW_TEST_CASE(NetSystem_BeginPlayFinalizesCompositionAndDefersHostStart)
 {
+	// Arrange
 	FLoopback Loopback;
 	FSystem System;
 	MicroWorld::FNetHostConfig ClientConfig = MakeConfig();
@@ -250,10 +299,12 @@ MW_TEST_CASE(NetSystem_BeginPlayFinalizesCompositionAndDefersHostStart)
 	const MicroWorld::FChannelHandle InitialChannel =
 		System.AddChannel(Driver, MicroWorld::FMessageChannelId{1}, MicroWorld::EChannelReliability::BestEffort);
 
+	// Act: pump before BeginPlay and confirm no packet has crossed the transport yet.
 	System.PreAdvance(10);
 	System.PostAdvance(10);
 	const bool bNoPacketBeforeBeginPlay = Loopback.IsEmpty(1);
 
+	// Act: close composition with BeginPlay, attempt late composition, and pump once more.
 	System.BeginPlay(20);
 	const MicroWorld::FChannelHandle LateChannel =
 		System.AddChannel(Driver, MicroWorld::FMessageChannelId{2}, MicroWorld::EChannelReliability::BestEffort);
@@ -265,6 +316,7 @@ MW_TEST_CASE(NetSystem_BeginPlayFinalizesCompositionAndDefersHostStart)
 	const bool bLateChannelValid = LateChannel.IsValid();
 	const bool bLateDriverValid = LateDriver.IsValid();
 
+	// Assert
 	MW_EXPECT_TRUE(Test, bDriverValid, "The client driver must configure before the lifecycle starts");
 	MW_EXPECT_TRUE(Test, bInitialChannelValid, "The initial channel must configure before composition freezes");
 	MW_EXPECT_TRUE(Test, bNoPacketBeforeBeginPlay, "A configured host must not emit packets before BeginPlay starts it");
@@ -273,9 +325,13 @@ MW_TEST_CASE(NetSystem_BeginPlayFinalizesCompositionAndDefersHostStart)
 	MW_EXPECT_TRUE(Test, bPacketQueuedAfterBeginPlay, "BeginPlay must start the client host before its next outbound pump");
 }
 
-/** Proves the Core lifecycle interface pumps owned drivers in the published forward and reverse orders. */
+/**
+ * Scenario: Compose two recording drivers and run one BeginPlay plus one PreAdvance/PostAdvance cycle.
+ * Expected: Inbound pumps run in forward add order, and outbound and physical-progress pumps run in reverse add order.
+ */
 MW_TEST_CASE(NetSystem_CoreLifecyclePumpsDriversInForwardAndReverseOrder)
 {
+	// Arrange
 	FDriverPumpSequence Sequence;
 	FDriverPumpRecord FirstRecord{};
 	FDriverPumpRecord SecondRecord{};
@@ -289,6 +345,7 @@ MW_TEST_CASE(NetSystem_CoreLifecyclePumpsDriversInForwardAndReverseOrder)
 	const MicroWorld::FNetDriverHandle SecondHandle = System.AddNetDriver(SecondDriver, MicroWorld::ENetMode::Client, Config);
 	MicroWorld::IEngineSystem& Lifecycle = System;
 
+	// Act: one BeginPlay plus one PreAdvance/PostAdvance cycle pumps every recording driver.
 	Lifecycle.BeginPlay(0);
 	Lifecycle.PreAdvance(10);
 	Lifecycle.PostAdvance(10);
@@ -307,6 +364,7 @@ MW_TEST_CASE(NetSystem_CoreLifecyclePumpsDriversInForwardAndReverseOrder)
 	const bool bSecondAdvanceFollowsSend = SecondRecord.FirstSendOrder < SecondRecord.FirstAdvanceOrder;
 	const bool bFirstAdvanceFollowsSend = FirstRecord.FirstSendOrder < FirstRecord.FirstAdvanceOrder;
 
+	// Assert
 	MW_EXPECT_TRUE(Test, bFirstHandleValid, "The first recording driver must compose before lifecycle pumping");
 	MW_EXPECT_TRUE(Test, bSecondHandleValid, "The second recording driver must compose before lifecycle pumping");
 	MW_EXPECT_TRUE(Test, bFirstDriverReceived, "PreAdvance must pump the first live driver");
@@ -322,9 +380,13 @@ MW_TEST_CASE(NetSystem_CoreLifecyclePumpsDriversInForwardAndReverseOrder)
 	MW_EXPECT_TRUE(Test, bFirstAdvanceFollowsSend, "The first driver's physical progress must follow its logical send attempt");
 }
 
-/** Proves every non-standalone host advances transport even when it has no packet or its driver is full. */
+/**
+ * Scenario: Compose an idle dedicated server driver and a full client driver, then run one BeginPlay plus one PostAdvance.
+ * Expected: Each non-standalone driver advances transport even when it has no packet or its driver is full.
+ */
 MW_TEST_CASE(NetSystem_PostAdvanceAdvancesIdleAndFullDrivers)
 {
+	// Arrange
 	FDriverPumpSequence Sequence;
 	FDriverPumpRecord IdleRecord{};
 	FDriverPumpRecord FullRecord{};
@@ -337,6 +399,7 @@ MW_TEST_CASE(NetSystem_PostAdvanceAdvancesIdleAndFullDrivers)
 	const MicroWorld::FNetDriverHandle IdleHandle = System.AddNetDriver(IdleDriver, MicroWorld::ENetMode::DedicatedServer, MakeConfig());
 	const MicroWorld::FNetDriverHandle FullHandle = System.AddNetDriver(FullDriver, MicroWorld::ENetMode::Client, ClientConfig);
 
+	// Act: one BeginPlay plus one PostAdvance exposes both the idle and full-driver pump paths.
 	System.BeginPlay(0);
 	System.PostAdvance(10);
 
@@ -347,6 +410,7 @@ MW_TEST_CASE(NetSystem_PostAdvanceAdvancesIdleAndFullDrivers)
 	const bool bFullDriverAttemptedSend = FullRecord.SendCount == 1;
 	const bool bFullDriverAdvanced = FullRecord.AdvanceCount == 1;
 
+	// Assert
 	MW_EXPECT_TRUE(Test, bIdleHandleValid, "The idle server driver must compose before lifecycle pumping");
 	MW_EXPECT_TRUE(Test, bFullHandleValid, "The full client driver must compose before lifecycle pumping");
 	MW_EXPECT_TRUE(Test, bIdleDriverWasNotSent, "An idle dedicated server must have no logical packet to send");
@@ -355,9 +419,13 @@ MW_TEST_CASE(NetSystem_PostAdvanceAdvancesIdleAndFullDrivers)
 	MW_EXPECT_TRUE(Test, bFullDriverAdvanced, "A full driver must still advance any previously staged physical transmission");
 }
 
-/** Proves pre-play frame turns leave the router inert until BeginPlay closes and opens the composition. */
+/**
+ * Scenario: Register a router handler, queue a local broadcast, pump before BeginPlay, then open composition with BeginPlay and pump again.
+ * Expected: Pre-BeginPlay pumps leave the queued message undelivered; the first post-BeginPlay pump delivers it without emitting transport packets.
+ */
 MW_TEST_CASE(NetSystem_PreBeginPlayPumpsLeaveQueuedLocalRouterMessageUndelivered)
 {
+	// Arrange
 	FLoopback Loopback;
 	FSystem System;
 	int DeliveryCount = 0;
@@ -365,15 +433,17 @@ MW_TEST_CASE(NetSystem_PreBeginPlayPumpsLeaveQueuedLocalRouterMessageUndelivered
 	Handler.Bind([&DeliveryCount](const MicroWorld::FMessageView&) noexcept { ++DeliveryCount; });
 	MicroWorld::FMessageHandlerHandle HandlerHandle{};
 	const MicroWorld::EMessageResult HandlerResult =
-		System.GetRouter().AddMessageHandler(MicroWorld::FMessageTypeId{1}, MicroWorld::BroadcastActorId, std::move(Handler), HandlerHandle);
-	const std::uint8_t Payload[1] = {0x31};
+		System.GetRouter().AddMessageHandler(SampleMessageTypeId, MicroWorld::BroadcastActorId, std::move(Handler), HandlerHandle);
+	const std::uint8_t Payload[1] = {LocalRouterMessagePayloadByte};
 	const MicroWorld::EMessageResult QueueResult = System.GetRouter().BroadcastMessage(
-		MicroWorld::LocalChannelId, MicroWorld::FMessageTypeId{1}, MicroWorld::BroadcastActorId, MicroWorld::TSpan<const std::uint8_t>(Payload, 1));
+		MicroWorld::LocalChannelId, SampleMessageTypeId, MicroWorld::BroadcastActorId, MicroWorld::TSpan<const std::uint8_t>(Payload, 1));
 
+	// Act: pump before BeginPlay and confirm the queued local message has still not been dispatched.
 	System.PreAdvance(10);
 	System.PostAdvance(10);
 	const int DeliveriesBeforeBeginPlay = DeliveryCount;
 
+	// Act: open composition with BeginPlay and pump once so the queued message becomes eligible.
 	System.BeginPlay(20);
 	System.PostAdvance(20);
 	System.PreAdvance(30);
@@ -381,6 +451,7 @@ MW_TEST_CASE(NetSystem_PreBeginPlayPumpsLeaveQueuedLocalRouterMessageUndelivered
 	const bool bHandlerHandleValid = HandlerHandle.IsValid();
 	const bool bLoopbackStayedUnused = Loopback.IsEmpty(0) && Loopback.IsEmpty(1);
 
+	// Assert
 	MW_EXPECT_EQ(
 		Test, MicroWorld::EMessageResult::Success, HandlerResult, "The router must register the local delivery handler before lifecycle pumping");
 	MW_EXPECT_TRUE(Test, bHandlerHandleValid, "Successful local handler registration must publish a valid handle");
@@ -390,9 +461,13 @@ MW_TEST_CASE(NetSystem_PreBeginPlayPumpsLeaveQueuedLocalRouterMessageUndelivered
 	MW_EXPECT_TRUE(Test, bLoopbackStayedUnused, "A router-only lifecycle test must not emit transport packets");
 }
 
-/** Proves EndPlay stops a started client so later frame turns cannot emit another connection hello. */
+/**
+ * Scenario: BeginPlay and one PostAdvance flush a client's initial hello, then EndPlay runs before a later PostAdvance.
+ * Expected: The later PostAdvance cannot emit another connection hello after EndPlay stops the client.
+ */
 MW_TEST_CASE(NetSystem_EndPlayStopsClientBeforeFuturePostAdvance)
 {
+	// Arrange
 	FDriverPumpSequence Sequence;
 	FDriverPumpRecord Record{};
 	FRecordingDriver Driver{Record, Sequence};
@@ -402,22 +477,29 @@ MW_TEST_CASE(NetSystem_EndPlayStopsClientBeforeFuturePostAdvance)
 	const MicroWorld::FNetDriverHandle DriverHandle = System.AddNetDriver(Driver, MicroWorld::ENetMode::Client, Config);
 	MicroWorld::IEngineSystem& Lifecycle = System;
 
+	// Act: BeginPlay and one PostAdvance flush the initial connection hello.
 	Lifecycle.BeginPlay(0);
 	Lifecycle.PostAdvance(10);
 	const std::size_t SendsAfterBeginPlay = Record.SendCount;
+	// Act: EndPlay stops the host before a later PostAdvance could flush another hello.
 	Lifecycle.EndPlay();
 	Lifecycle.PostAdvance(20);
 	const std::size_t SendsAfterEndPlay = Record.SendCount;
 	const bool bDriverHandleValid = DriverHandle.IsValid();
 
+	// Assert
 	MW_EXPECT_TRUE(Test, bDriverHandleValid, "The client driver must compose before its lifecycle turns");
 	MW_EXPECT_EQ(Test, std::size_t{1}, SendsAfterBeginPlay, "A started client must emit its initial hello during PostAdvance");
 	MW_EXPECT_EQ(Test, SendsAfterBeginPlay, SendsAfterEndPlay, "EndPlay must stop the client before a later PostAdvance can emit another hello");
 }
 
-/** Proves PostAdvance sends routed output before the remote system's PreAdvance delivers it to a router handler. */
+/**
+ * Scenario: Connect a client and server system, register a server router handler, broadcast from the client, and alternate PreAdvance/PostAdvance
+ * turns. Expected: The client's PostAdvance sends the routed message before the remote server's PreAdvance delivers it exactly once.
+ */
 MW_TEST_CASE(NetSystem_PreAdvanceAndPostAdvancePumpRoutedMessageInOrder)
 {
+	// Arrange
 	FLoopback Loopback;
 	FSystem ServerSystem;
 	FSystem ClientSystem;
@@ -436,8 +518,9 @@ MW_TEST_CASE(NetSystem_PreAdvanceAndPostAdvancePumpRoutedMessageInOrder)
 	Handler.Bind([&DeliveryCount](const MicroWorld::FMessageView&) noexcept { ++DeliveryCount; });
 	MicroWorld::FMessageHandlerHandle HandlerHandle{};
 	const MicroWorld::EMessageResult HandlerResult =
-		ServerSystem.GetRouter().AddMessageHandler(MicroWorld::FMessageTypeId{1}, MicroWorld::BroadcastActorId, std::move(Handler), HandlerHandle);
+		ServerSystem.GetRouter().AddMessageHandler(SampleMessageTypeId, MicroWorld::BroadcastActorId, std::move(Handler), HandlerHandle);
 
+	// Act: BeginPlay plus alternating PreAdvance/PostAdvance turns connect the client to the server.
 	ServerSystem.BeginPlay(0);
 	ClientSystem.BeginPlay(0);
 	ClientSystem.PreAdvance(10);
@@ -447,12 +530,10 @@ MW_TEST_CASE(NetSystem_PreAdvanceAndPostAdvancePumpRoutedMessageInOrder)
 	ClientSystem.PreAdvance(20);
 	ClientSystem.PostAdvance(20);
 
-	const std::uint8_t Payload[1] = {0x7A};
+	// Act: broadcast from the client, then advance to observe send-before-delivery ordering.
+	const std::uint8_t Payload[1] = {CrossSystemPayloadByte};
 	const MicroWorld::EMessageResult SendResult = ClientSystem.GetRouter().BroadcastMessage(
-		MicroWorld::FMessageChannelId{1},
-		MicroWorld::FMessageTypeId{1},
-		MicroWorld::FMessageActorId{1},
-		MicroWorld::TSpan<const std::uint8_t>(Payload, 1));
+		SampleChannelId, SampleMessageTypeId, SampleActorId, MicroWorld::TSpan<const std::uint8_t>(Payload, 1));
 	ClientSystem.PreAdvance(30);
 	ClientSystem.PostAdvance(30);
 	const int DeliveriesAfterClientPostAdvance = DeliveryCount;
@@ -464,6 +545,7 @@ MW_TEST_CASE(NetSystem_PreAdvanceAndPostAdvancePumpRoutedMessageInOrder)
 	const bool bClientChannelValid = ClientChannel.IsValid();
 	const bool bHandlerHandleValid = HandlerHandle.IsValid();
 
+	// Assert
 	MW_EXPECT_TRUE(Test, bServerDriverValid, "The server driver must configure for the pump-order scenario");
 	MW_EXPECT_TRUE(Test, bClientDriverValid, "The client driver must configure for the pump-order scenario");
 	MW_EXPECT_TRUE(Test, bServerChannelValid, "The server message channel must configure before BeginPlay");

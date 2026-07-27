@@ -26,6 +26,24 @@ constexpr std::uint8_t OctetD = 1;
 /** One ready byte sequence that proves the full datagram round trips unchanged. */
 const std::array<std::uint8_t, 8> SamplePayload = {0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF};
 
+/** Sentinel sender-address length proving a no-receive path leaves the caller output untouched. */
+constexpr std::uint8_t SentinelAddressSize = 0x42;
+
+/** Sentinel byte count proving a no-receive path leaves the receive-result struct untouched. */
+constexpr std::size_t SentinelByteCount = 0xEE;
+
+/** Pre-fill pattern proving a Full receive leaves every caller-owned destination byte untouched. */
+constexpr std::uint8_t FullReceiveFillByte = 0xAB;
+
+/** Documented per-datagram byte bound reported by the host UDP driver. */
+constexpr std::size_t HostUdpMaxPacketBytes = 1200;
+
+/** One byte beyond the documented UDP bound, proving oversize sends are rejected. */
+constexpr std::size_t OversizePacketBytes = HostUdpMaxPacketBytes + 1;
+
+/** Distinct port that does not collide with any driver's ephemeral binding, proving address validation. */
+constexpr std::uint16_t UnusedFixedPort = 9;
+
 /** Waits up to ~1s for a datagram to be readable, then asserts success of that wait. */
 void ExpectReadable(MicroWorld::Tests::FTestContext& Test, const FHostUdpDriver& Driver, const char* const Message) noexcept
 {
@@ -43,25 +61,38 @@ void ExpectReadable(MicroWorld::Tests::FTestContext& Test, const FHostUdpDriver&
 
 } // namespace
 
-/** Two ephemeral-port drivers open, are distinct, and both report a nonzero bound port. */
+/**
+ * Scenario: Open two UDP drivers each requesting an ephemeral port.
+ * Expected: Both drivers open usable sockets; their bound ports are distinct and nonzero; MaxPacketBytes reports the documented UDP bound.
+ */
 MW_TEST_CASE(HostUdpDriverOpensTwoDistinctEphemeralSockets)
 {
+	// Arrange
 	FHostUdpDriver DriverA(0);
 	FHostUdpDriver DriverB(0);
+
+	// Assert
 	MW_EXPECT_TRUE(Test, DriverA.IsOpen(), "DriverA opened a usable socket");
 	MW_EXPECT_TRUE(Test, DriverB.IsOpen(), "DriverB opened a usable socket");
 	MW_EXPECT_TRUE(Test, DriverA.BoundPort() != 0, "DriverA reports a nonzero bound port");
 	MW_EXPECT_TRUE(Test, DriverB.BoundPort() != 0, "DriverB reports a nonzero bound port");
 	MW_EXPECT_TRUE(Test, DriverA.BoundPort() != DriverB.BoundPort(), "Two drivers bind distinct ports");
-	MW_EXPECT_EQ(Test, std::size_t{1200}, DriverA.MaxPacketBytes(), "MaxPacketBytes reports the documented UDP bound");
+	MW_EXPECT_EQ(Test, HostUdpMaxPacketBytes, DriverA.MaxPacketBytes(), "MaxPacketBytes reports the documented UDP bound");
 }
 
-/** A one-packet send from A to B round trips the bytes and the sender address. */
+/**
+ * Scenario: Send one datagram from one bound socket to another's bound port, then receive on the second.
+ * Expected: The received bytes match the sent payload; the reported byte count matches the payload length; the sender address encodes the first
+ * socket's bound port.
+ */
 MW_TEST_CASE(HostUdpDriverDeliversOnePacketBetweenTwoSockets)
 {
+	// Arrange
 	FHostUdpDriver DriverA(0);
 	FHostUdpDriver DriverB(0);
 	const FNetAddress ToB = MakeUdpAddress(OctetA, OctetB, OctetC, OctetD, DriverB.BoundPort());
+
+	// Act
 	MW_EXPECT_EQ(
 		Test,
 		ENetResult::Success,
@@ -74,8 +105,10 @@ MW_TEST_CASE(HostUdpDriverDeliversOnePacketBetweenTwoSockets)
 	{
 		Destination[Index] = static_cast<std::uint8_t>(0xFF - Index);
 	}
-	FNetAddress OutFrom{0x42};
-	FNetReceiveResult OutResult{0xEE};
+	FNetAddress OutFrom{SentinelAddressSize};
+	FNetReceiveResult OutResult{SentinelByteCount};
+
+	// Assert
 	MW_EXPECT_EQ(
 		Test,
 		ENetResult::Success,
@@ -94,30 +127,44 @@ MW_TEST_CASE(HostUdpDriverDeliversOnePacketBetweenTwoSockets)
 	MW_EXPECT_EQ(Test, MakeUdpAddress(OctetA, OctetB, OctetC, OctetD, DriverA.BoundPort()), OutFrom, "The sender address encodes A's bound port");
 }
 
-/** A receive on an empty queue reports Unavailable without waiting. */
+/**
+ * Scenario: Call TryReceive on a driver whose queue is empty, with caller outputs pre-set to sentinel values.
+ * Expected: TryReceive returns Unavailable immediately without blocking; both caller-owned sentinels are left unchanged.
+ */
 MW_TEST_CASE(HostUdpDriverReceiveOnEmptyQueueIsUnavailable)
 {
+	// Arrange
 	FHostUdpDriver Driver(0);
 	std::array<std::uint8_t, 32> Destination{};
 	FNetAddress OutFrom{};
-	OutFrom.Size = 0x42;
-	FNetReceiveResult OutResult{0xEE};
+	OutFrom.Size = SentinelAddressSize;
+	FNetReceiveResult OutResult{SentinelByteCount};
+
+	// Act
 	MW_EXPECT_EQ(
 		Test,
 		ENetResult::Unavailable,
 		Driver.TryReceive(OutFrom, TSpan<std::uint8_t>(Destination.data(), Destination.size()), OutResult),
 		"An empty queue reports Unavailable immediately");
-	MW_EXPECT_EQ(Test, std::uint8_t{0x42}, OutFrom.Size, "Unavailable leaves the sender sentinel unchanged");
-	MW_EXPECT_EQ(Test, std::size_t{0xEE}, OutResult.BytesReceived, "Unavailable leaves the byte-count sentinel unchanged");
+
+	// Assert
+	MW_EXPECT_EQ(Test, SentinelAddressSize, OutFrom.Size, "Unavailable leaves the sender sentinel unchanged");
+	MW_EXPECT_EQ(Test, SentinelByteCount, OutResult.BytesReceived, "Unavailable leaves the byte-count sentinel unchanged");
 }
 
-/** TrySend rejects a null span with nonzero length, an oversize packet, and a non-UDP address. */
+/**
+ * Scenario: Call TrySend with a null span of nonzero length, an oversize packet, and a non-UDP destination address.
+ * Expected: Each invalid argument is rejected as Invalid without sending.
+ */
 MW_TEST_CASE(HostUdpDriverTrySendRejectsInvalidArguments)
 {
+	// Arrange
 	FHostUdpDriver Driver(0);
-	const FNetAddress ToB = MakeUdpAddress(OctetA, OctetB, OctetC, OctetD, 9);
+	const FNetAddress ToB = MakeUdpAddress(OctetA, OctetB, OctetC, OctetD, UnusedFixedPort);
+	std::array<std::uint8_t, OversizePacketBytes> Oversize{};
+
+	// Act and Assert
 	MW_EXPECT_EQ(Test, ENetResult::Invalid, Driver.TrySend(ToB, TSpan<const std::uint8_t>(nullptr, 4)), "A null span with nonzero length is Invalid");
-	std::array<std::uint8_t, 1201> Oversize{};
 	MW_EXPECT_EQ(
 		Test,
 		ENetResult::Invalid,
@@ -130,9 +177,13 @@ MW_TEST_CASE(HostUdpDriverTrySendRejectsInvalidArguments)
 		"A non-UDP address is Invalid");
 }
 
-/** A receive into a too-small destination reports Full and leaves the datagram queued for a larger read. */
+/**
+ * Scenario: Send a datagram larger than a too-small receive destination, then retry with a larger destination.
+ * Expected: The small receive reports Full with every caller output untouched; the larger retry then delivers the queued datagram intact.
+ */
 MW_TEST_CASE(HostUdpDriverFullReceiveStaysTransactional)
 {
+	// Arrange
 	FHostUdpDriver DriverA(0);
 	FHostUdpDriver DriverB(0);
 	const FNetAddress ToB = MakeUdpAddress(OctetA, OctetB, OctetC, OctetD, DriverB.BoundPort());
@@ -141,6 +192,8 @@ MW_TEST_CASE(HostUdpDriverFullReceiveStaysTransactional)
 	{
 		LargePayload[Index] = static_cast<std::uint8_t>(Index + 1);
 	}
+
+	// Act
 	MW_EXPECT_EQ(
 		Test,
 		ENetResult::Success,
@@ -153,31 +206,34 @@ MW_TEST_CASE(HostUdpDriverFullReceiveStaysTransactional)
 	std::array<std::uint8_t, 4> SmallDestination{};
 	for (std::size_t Index = 0; Index < SmallDestination.size(); ++Index)
 	{
-		SmallDestination[Index] = 0xAB;
+		SmallDestination[Index] = FullReceiveFillByte;
 	}
 	FNetAddress OutFrom{};
-	OutFrom.Size = 0x42;
-	FNetReceiveResult OutResult{0xEE};
+	OutFrom.Size = SentinelAddressSize;
+	FNetReceiveResult OutResult{SentinelByteCount};
+
+	// Assert the Full path leaves caller outputs untouched.
 	MW_EXPECT_EQ(
 		Test,
 		ENetResult::Full,
 		DriverB.TryReceive(OutFrom, TSpan<std::uint8_t>(SmallDestination.data(), SmallDestination.size()), OutResult),
 		"A too-small destination reports Full");
-	MW_EXPECT_EQ(Test, std::uint8_t{0x42}, OutFrom.Size, "Full leaves the sender sentinel unchanged");
-	MW_EXPECT_EQ(Test, std::size_t{0xEE}, OutResult.BytesReceived, "Full leaves the byte-count sentinel unchanged");
+	MW_EXPECT_EQ(Test, SentinelAddressSize, OutFrom.Size, "Full leaves the sender sentinel unchanged");
+	MW_EXPECT_EQ(Test, SentinelByteCount, OutResult.BytesReceived, "Full leaves the byte-count sentinel unchanged");
 	bool DestinationUntouched = true;
 	for (std::size_t Index = 0; Index < SmallDestination.size(); ++Index)
 	{
-		if (SmallDestination[Index] != 0xAB)
+		if (SmallDestination[Index] != FullReceiveFillByte)
 		{
 			DestinationUntouched = false;
 		}
 	}
 	MW_EXPECT_TRUE(Test, DestinationUntouched, "Full leaves every caller-owned destination byte unchanged");
 
+	// Assert the queued datagram survives Full for a larger retry.
 	std::array<std::uint8_t, 256> LargeDestination{};
 	FNetAddress OutFromSecond{};
-	FNetReceiveResult OutResultSecond{0xEE};
+	FNetReceiveResult OutResultSecond{SentinelByteCount};
 	MW_EXPECT_EQ(
 		Test,
 		ENetResult::Success,

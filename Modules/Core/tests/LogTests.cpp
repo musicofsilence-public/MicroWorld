@@ -74,104 +74,146 @@ namespace
 
 } // namespace
 
-/** Proves a message-only record forwards its level, category, and text verbatim. */
+/**
+ * Scenario: Route a message-only Warning record through the installed output device.
+ * Expected: The device receives the call once, with the matching level, category, and unchanged text.
+ */
 MW_TEST_CASE(Log_MessageOnlyOutputDeviceReceivesLevelCategoryAndText)
 {
+	// Arrange
 	ResetCapture();
 	SetOutputDevice(&CaptureLogRecord);
 
+	// Act
 	MW_LOG_MSG(Warning, "Boot", "ready");
-
 	const bool bCategoryMatches = GCapture.Category != nullptr && std::strcmp(GCapture.Category, "Boot") == 0;
 	const bool bMessageMatches = std::strcmp(GCapture.Message, "ready") == 0;
+
+	// Assert
 	MW_EXPECT_EQ(Test, 1, GCapture.CallCount, "One message-only call should route once");
 	MW_EXPECT_EQ(Test, ELogLevel::Warning, GCapture.Level, "Output device should receive the call-site level");
 	MW_EXPECT_TRUE(Test, bCategoryMatches, "Output device should receive the call-site category");
 	MW_EXPECT_TRUE(Test, bMessageMatches, "Output device should receive the message unchanged");
 }
 
-/** Proves the printf-style macro expands its arguments into the routed message. */
+/**
+ * Scenario: Route a printf-style Warning call carrying one unsigned argument through the output device.
+ * Expected: The device receives one record with the argument expanded into the formatted message.
+ */
 MW_TEST_CASE(Log_FormattedRecordExpandsPrintfArguments)
 {
+	// Arrange
 	ResetCapture();
 	SetOutputDevice(&CaptureLogRecord);
 
+	// Act
 	MW_LOG(Warning, "Net", "peer %u timed out", 7u);
-
 	const bool bMessageMatches = std::strcmp(GCapture.Message, "peer 7 timed out") == 0;
+
+	// Assert
 	MW_EXPECT_EQ(Test, 1, GCapture.CallCount, "One formatted call should route once");
 	MW_EXPECT_TRUE(Test, bMessageMatches, "Formatted message should expand printf arguments");
 }
 
-/** Proves a null output device drops records without crashing and can be reinstalled. */
+/**
+ * Scenario: Log under a null output device, then reinstall a capturing device and log again.
+ * Expected: The null device drops both records without crashing; the reinstalled device routes the kept record once.
+ */
 MW_TEST_CASE(Log_NullOutputDeviceDropsRecordsThenReinstallRoutes)
 {
+	// Arrange
 	ResetCapture();
 	SetOutputDevice(nullptr);
 
+	// Act
 	MW_LOG_MSG(Error, "Boot", "dropped");
 	MW_LOG(Error, "Boot", "dropped %d", 1);
 
+	// Assert
 	MW_EXPECT_EQ(Test, 0, GCapture.CallCount, "Null output device should route nothing");
 
+	// Act
 	SetOutputDevice(&CaptureLogRecord);
 	MW_LOG_MSG(Error, "Boot", "kept");
-
 	const bool bMessageMatches = std::strcmp(GCapture.Message, "kept") == 0;
+
+	// Assert
 	MW_EXPECT_EQ(Test, 1, GCapture.CallCount, "Reinstalled output device should route again");
 	MW_EXPECT_TRUE(Test, bMessageMatches, "Reinstalled output device should receive the record");
 }
 
-/** Proves a below-floor printf call is stripped and never evaluates its arguments. */
+/**
+ * Scenario: Issue a below-floor formatted call and then an at-floor formatted call, both using a side-effecting argument.
+ * Expected: The below-floor call is stripped and evaluates nothing; the at-floor call evaluates its argument once and routes the formatted record.
+ */
 MW_TEST_CASE(Log_BelowFloorFormattedCallStripsArgumentEvaluation)
 {
+	// Arrange
 	ResetCapture();
 	SetOutputDevice(&CaptureLogRecord);
 
+	// Act
 	MW_LOG(Verbose, "Detail", "value=%d", EvaluatedInteger());
 
+	// Assert
 	MW_EXPECT_EQ(Test, 0, GArgumentEvaluations, "Below-floor call must not evaluate its arguments");
 	MW_EXPECT_EQ(Test, 0, GCapture.CallCount, "Below-floor call must not reach the output device");
 
+	// Act
 	MW_LOG(Log, "Detail", "value=%d", EvaluatedInteger());
-
 	const bool bMessageMatches = std::strcmp(GCapture.Message, "value=42") == 0;
+
+	// Assert
 	MW_EXPECT_EQ(Test, 1, GArgumentEvaluations, "At-floor call should evaluate its arguments once");
 	MW_EXPECT_EQ(Test, 1, GCapture.CallCount, "At-floor call should reach the output device");
 	MW_EXPECT_TRUE(Test, bMessageMatches, "At-floor call should format the evaluated argument");
 }
 
-/** Proves a below-floor message call is stripped and never evaluates its argument. */
+/**
+ * Scenario: Issue a below-floor message call and then an at-floor message call, both using a side-effecting argument.
+ * Expected: The below-floor call is stripped and evaluates nothing; the at-floor call evaluates its argument once and routes the evaluated string.
+ */
 MW_TEST_CASE(Log_BelowFloorMessageCallStripsArgumentEvaluation)
 {
+	// Arrange
 	ResetCapture();
 	SetOutputDevice(&CaptureLogRecord);
 
+	// Act
 	MW_LOG_MSG(Verbose, "Detail", EvaluatedMessage());
 
+	// Assert
 	MW_EXPECT_EQ(Test, 0, GArgumentEvaluations, "Below-floor message call must not evaluate its argument");
 	MW_EXPECT_EQ(Test, 0, GCapture.CallCount, "Below-floor message call must not reach the output device");
 
+	// Act
 	MW_LOG_MSG(Log, "Detail", EvaluatedMessage());
-
 	const bool bMessageMatches = std::strcmp(GCapture.Message, "probe") == 0;
+
+	// Assert
 	MW_EXPECT_EQ(Test, 1, GArgumentEvaluations, "At-floor message call should evaluate its argument once");
 	MW_EXPECT_EQ(Test, 1, GCapture.CallCount, "At-floor message call should reach the output device");
 	MW_EXPECT_TRUE(Test, bMessageMatches, "At-floor message call should route the evaluated string");
 }
 
-/** Proves every at-or-above-floor level routes while the below-floor level is stripped. */
+/**
+ * Scenario: Log at Error, Warning, Log, and Verbose levels in sequence under the compile-time floor.
+ * Expected: The at-or-above-floor levels route once each and the below-floor Verbose level is stripped.
+ */
 MW_TEST_CASE(Log_FloorRoutesImportantLevelsAndStripsVerbose)
 {
+	// Arrange
 	ResetCapture();
 	SetOutputDevice(&CaptureLogRecord);
 
+	// Act
 	MW_LOG_MSG(Error, "Level", "error");
 	MW_LOG_MSG(Warning, "Level", "warning");
 	MW_LOG_MSG(Log, "Level", "log");
 	MW_LOG_MSG(Verbose, "Level", "verbose");
-
 	const bool bLastMessageMatches = std::strcmp(GCapture.Message, "log") == 0;
+
+	// Assert
 	MW_EXPECT_EQ(Test, 3, GCapture.CallCount, "Error, Warning, and Log route; Verbose is stripped");
 	MW_EXPECT_EQ(Test, ELogLevel::Log, GCapture.Level, "Last routed record should be the Log-level call");
 	MW_EXPECT_TRUE(Test, bLastMessageMatches, "Stripped Verbose call should not overwrite the last record");

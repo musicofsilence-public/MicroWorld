@@ -188,13 +188,19 @@ public:
 	FNetAddress RecordedSendDestinations[MaxRecordedSends]{};
 };
 
-/** Proves the manager reports its fixed configuration and an empty FIFO at construction. */
+/**
+ * Scenario: Construct a manager over a recording driver and fixed-capacity packet storage.
+ * Expected: The manager reports an empty non-full FIFO with queue capacity and max packet bytes matching the template parameters and zero queued
+ * packets.
+ */
 MW_TEST_CASE(NetManagerStartsEmptyWithFixedConfiguration)
 {
+	// Arrange
 	FRecordingDriver Driver;
 	TNetPacketStorage<2, 4> Storage;
 	TNetManager<2, 4> Manager(Driver, Storage);
 
+	// Assert
 	MW_EXPECT_EQ(Test, true, Manager.IsEmpty(), "A fresh manager must report an empty FIFO");
 	MW_EXPECT_EQ(Test, false, Manager.IsFull(), "A fresh manager must not report a full FIFO");
 	MW_EXPECT_EQ(Test, TwoBytePacketLength, Manager.QueueCapacity(), "Queue capacity must match the template parameter");
@@ -202,38 +208,56 @@ MW_TEST_CASE(NetManagerStartsEmptyWithFixedConfiguration)
 	MW_EXPECT_EQ(Test, std::size_t{0}, Manager.QueuedCount(), "A fresh manager must report zero queued packets");
 }
 
-/** Proves an oversized packet is rejected as Invalid without partial queueing. */
+/**
+ * Scenario: Attempt to queue a packet larger than MaximumPacketBytes.
+ * Expected: The queue returns Invalid and no packet is enqueued.
+ */
 MW_TEST_CASE(NetManagerRejectsOversizedPacketTransactionally)
 {
+	// Arrange
 	FRecordingDriver Driver;
 	TNetPacketStorage<2, 2> Storage;
 	TNetManager<2, 2> Manager(Driver, Storage);
 
+	// Act
 	const ENetResult OversizedResult =
 		Manager.QueueSend(MakeDest(DefaultDestIndex), TSpan<const std::uint8_t>(OversizedPacketData, sizeof(OversizedPacketData)));
+	// Assert
 	MW_EXPECT_EQ(Test, ENetResult::Invalid, OversizedResult, "A packet larger than MaximumPacketBytes must return Invalid");
 	MW_EXPECT_EQ(Test, true, Manager.IsEmpty(), "Oversized queue must not enqueue a packet");
 }
 
-/** Proves a null packet with nonzero length is rejected as Invalid without queueing. */
+/**
+ * Scenario: Attempt to queue a null packet with a nonzero length.
+ * Expected: The queue returns Invalid and no packet is enqueued.
+ */
 MW_TEST_CASE(NetManagerRejectsNullPacketWithNonzeroLength)
 {
+	// Arrange
 	FRecordingDriver Driver;
 	TNetPacketStorage<2, 4> Storage;
 	TNetManager<2, 4> Manager(Driver, Storage);
 
+	// Act
 	const ENetResult NullResult = Manager.QueueSend(MakeDest(DefaultDestIndex), TSpan<const std::uint8_t>(nullptr, TwoBytePacketLength));
+	// Assert
 	MW_EXPECT_EQ(Test, ENetResult::Invalid, NullResult, "Null data with nonzero length must return Invalid");
 	MW_EXPECT_EQ(Test, true, Manager.IsEmpty(), "Invalid queue must not enqueue a packet");
 }
 
-/** Proves QueueSend preserves FIFO order and AdvanceSend sends differently sized and valued packets in that order. */
+/**
+ * Scenario: Queue three differently sized and valued packets, then advance each to the driver.
+ * Expected: Three advances call the driver exactly three times and deliver the packets in FIFO order with byte-for-byte matching contents, leaving
+ * the FIFO empty.
+ */
 MW_TEST_CASE(NetManagerAdvanceSendsDifferentlySizedPacketsInFifoOrder)
 {
+	// Arrange
 	FRecordingDriver Driver;
 	TNetPacketStorage<3, 4> Storage;
 	TNetManager<3, 4> Manager(Driver, Storage);
 
+	// Act - queue three packets
 	MW_EXPECT_EQ(
 		Test,
 		ENetResult::Success,
@@ -250,10 +274,12 @@ MW_TEST_CASE(NetManagerAdvanceSendsDifferentlySizedPacketsInFifoOrder)
 		Manager.QueueSend(MakeDest(DefaultDestIndex), TSpan<const std::uint8_t>(FifoThirdPacket, sizeof(FifoThirdPacket))),
 		"Third queue must succeed");
 
+	// Act - advance each queued packet to the driver
 	Manager.AdvanceSend();
 	Manager.AdvanceSend();
 	Manager.AdvanceSend();
 
+	// Assert
 	MW_EXPECT_EQ(Test, ThreeBytePacketLength, Driver.SendCount, "Three advances must call the driver exactly three times");
 
 	// First send: 2 bytes {0x10, 0x20}
@@ -273,60 +299,84 @@ MW_TEST_CASE(NetManagerAdvanceSendsDifferentlySizedPacketsInFifoOrder)
 	MW_EXPECT_EQ(Test, true, Manager.IsEmpty(), "Three successful advances must drain a three-packet FIFO");
 }
 
-/** Proves a full FIFO rejects a further queue without losing the accepted packets. */
+/**
+ * Scenario: Fill a one-slot FIFO, attempt to queue an overflow packet, then advance the driver.
+ * Expected: The overflow queue returns Full without changing the queued count, and the accepted head packet survives to be advanced intact.
+ */
 MW_TEST_CASE(NetManagerFullFifoRejectsFurtherQueue)
 {
+	// Arrange
 	FRecordingDriver Driver;
 	TNetPacketStorage<1, 4> Storage;
 	TNetManager<1, 4> Manager(Driver, Storage);
 
+	// Act
 	MW_EXPECT_EQ(
 		Test,
 		ENetResult::Success,
 		Manager.QueueSend(MakeDest(DefaultDestIndex), TSpan<const std::uint8_t>(FullFifoAcceptedPacket, sizeof(FullFifoAcceptedPacket))),
 		"First queue into an empty FIFO must succeed");
+	// Act
 	const ENetResult OverflowResult =
 		Manager.QueueSend(MakeDest(DefaultDestIndex), TSpan<const std::uint8_t>(FullFifoRejectedPacket, sizeof(FullFifoRejectedPacket)));
+	// Assert
 	MW_EXPECT_EQ(Test, ENetResult::Full, OverflowResult, "Queue into a full FIFO must return Full");
 	MW_EXPECT_EQ(Test, OneBytePacketLength, Manager.QueuedCount(), "Overflow must not change the queued count");
 
-	// Prove the accepted head survives the rejected queue.
+	// Act / Assert - prove the accepted head survives the rejected queue.
 	Manager.AdvanceSend();
 	MW_EXPECT_EQ(Test, TwoBytePacketLength, Driver.RecordedSendLengths[0], "Retained head must carry the accepted packet length");
 	MW_EXPECT_EQ(Test, FullFifoAcceptedPacket[0], Driver.RecordedSendBytes[0][0], "Retained head must carry the accepted first byte");
 }
 
-/** Proves an empty AdvanceSend returns Unavailable without calling the driver. */
+/**
+ * Scenario: Advance an empty FIFO and observe the recording driver's send count.
+ * Expected: The advance returns Unavailable and never calls the driver.
+ */
 MW_TEST_CASE(NetManagerAdvanceEmptyReturnsUnavailableWithoutDriverCall)
 {
+	// Arrange
 	FRecordingDriver Driver;
 	TNetPacketStorage<2, 4> Storage;
 	TNetManager<2, 4> Manager(Driver, Storage);
 
+	// Act
 	const ENetResult EmptyAdvanceResult = Manager.AdvanceSend();
+	// Assert
 	MW_EXPECT_EQ(Test, ENetResult::Unavailable, EmptyAdvanceResult, "Advance on an empty FIFO must return Unavailable");
 	MW_EXPECT_EQ(Test, std::size_t{0}, Driver.SendCount, "Empty advance must not call the driver");
 }
 
-/** Proves one AdvanceSend attempts exactly one driver send and removes the head on success. */
+/**
+ * Scenario: Queue one head packet, then advance once against a successful driver.
+ * Expected: The advance succeeds, calls the driver exactly once with the head packet length, and removes the head from the FIFO.
+ */
 MW_TEST_CASE(NetManagerAdvanceAttemptsOneSendAndRemovesHeadOnSuccess)
 {
+	// Arrange
 	FRecordingDriver Driver;
 	TNetPacketStorage<2, 4> Storage;
 	TNetManager<2, 4> Manager(Driver, Storage);
 
 	Manager.QueueSend(MakeDest(DefaultDestIndex), TSpan<const std::uint8_t>(SingleAdvanceHeadPacket, sizeof(SingleAdvanceHeadPacket)));
 
+	// Act
 	const ENetResult AdvanceResult = Manager.AdvanceSend();
+	// Assert
 	MW_EXPECT_EQ(Test, ENetResult::Success, AdvanceResult, "Advance with a successful driver must succeed");
 	MW_EXPECT_EQ(Test, OneBytePacketLength, Driver.SendCount, "Advance must call the driver exactly once");
 	MW_EXPECT_EQ(Test, TwoBytePacketLength, Driver.RecordedSendLengths[0], "Advance must send the head packet length");
 	MW_EXPECT_EQ(Test, true, Manager.IsEmpty(), "Successful advance must remove the head packet");
 }
 
-/** Proves driver Full retains the exact head packet contents for the next advance. */
+/**
+ * Scenario: Queue two packets, advance against a driver that returns Full, then clear backpressure and advance twice more.
+ * Expected: Driver Full propagates as Full and retains all queued packets; once backpressure clears, advances send the retained first packet ahead of
+ * the second in FIFO order with byte-for-byte matching contents.
+ */
 MW_TEST_CASE(NetManagerDriverFullRetainsExactHeadContents)
 {
+	// Arrange
 	FRecordingDriver Driver;
 	Driver.ForcedSendResult = ENetResult::Full;
 	TNetPacketStorage<2, 4> Storage;
@@ -335,27 +385,36 @@ MW_TEST_CASE(NetManagerDriverFullRetainsExactHeadContents)
 	Manager.QueueSend(MakeDest(DefaultDestIndex), TSpan<const std::uint8_t>(DriverFullFirstPacket, sizeof(DriverFullFirstPacket)));
 	Manager.QueueSend(MakeDest(DefaultDestIndex), TSpan<const std::uint8_t>(DriverFullSecondPacket, sizeof(DriverFullSecondPacket)));
 
+	// Act
 	const ENetResult AdvanceResult = Manager.AdvanceSend();
+	// Assert
 	MW_EXPECT_EQ(Test, ENetResult::Full, AdvanceResult, "Driver Full must propagate as Full");
 	MW_EXPECT_EQ(Test, TwoBytePacketLength, Manager.QueuedCount(), "Driver Full must retain all queued packets");
 
 	// Clear backpressure: the next advance must send the retained first packet, not the second.
 	Driver.ForcedSendResult = ENetResult::Success;
+	// Act
 	const ENetResult RecoveryAdvanceResult = Manager.AdvanceSend();
+	// Assert
 	MW_EXPECT_EQ(Test, ENetResult::Success, RecoveryAdvanceResult, "Recovery advance must succeed after backpressure clears");
 	MW_EXPECT_EQ(Test, ThreeBytePacketLength, Driver.RecordedSendLengths[0], "Retained head must be the first packet length");
 	MW_EXPECT_EQ(Test, DriverFullFirstPacket[0], Driver.RecordedSendBytes[0][0], "Retained head must carry the first packet first byte");
 	MW_EXPECT_EQ(Test, DriverFullFirstPacket[2], Driver.RecordedSendBytes[0][2], "Retained head must carry the first packet third byte");
 
-	// The next advance must send the second packet in FIFO order.
+	// Act / Assert - the next advance must send the second packet in FIFO order.
 	Manager.AdvanceSend();
 	MW_EXPECT_EQ(Test, TwoBytePacketLength, Driver.RecordedSendLengths[1], "Second advance must send the second packet length");
 	MW_EXPECT_EQ(Test, DriverFullSecondPacket[0], Driver.RecordedSendBytes[1][0], "Second advance must send the second packet first byte");
 }
 
-/** Proves driver Unavailable retains the exact head packet for a later retry. */
+/**
+ * Scenario: Queue one packet, advance against a driver that returns Unavailable, then switch the driver to success and advance again.
+ * Expected: Driver Unavailable propagates as Unavailable and retains the head packet; the retry advance sends the retained head with its original
+ * length and bytes.
+ */
 MW_TEST_CASE(NetManagerDriverUnavailableRetainsExactHead)
 {
+	// Arrange
 	FRecordingDriver Driver;
 	Driver.ForcedSendResult = ENetResult::Unavailable;
 	TNetPacketStorage<1, 4> Storage;
@@ -363,19 +422,28 @@ MW_TEST_CASE(NetManagerDriverUnavailableRetainsExactHead)
 
 	Manager.QueueSend(MakeDest(DefaultDestIndex), TSpan<const std::uint8_t>(DriverUnavailablePacket, sizeof(DriverUnavailablePacket)));
 
+	// Act
 	const ENetResult AdvanceResult = Manager.AdvanceSend();
+	// Assert
 	MW_EXPECT_EQ(Test, ENetResult::Unavailable, AdvanceResult, "Driver Unavailable must propagate as Unavailable");
 	MW_EXPECT_EQ(Test, OneBytePacketLength, Manager.QueuedCount(), "Driver Unavailable must retain the head packet");
 
 	Driver.ForcedSendResult = ENetResult::Success;
+	// Act
 	Manager.AdvanceSend();
+	// Assert
 	MW_EXPECT_EQ(Test, TwoBytePacketLength, Driver.RecordedSendLengths[0], "Retained head must carry its original length");
 	MW_EXPECT_EQ(Test, DriverUnavailablePacket[0], Driver.RecordedSendBytes[0][0], "Retained head must carry its original first byte");
 }
 
-/** Proves driver Invalid retains the exact head packet without consuming it. */
+/**
+ * Scenario: Queue one packet, advance against a driver that returns Invalid, then switch the driver to success and advance again.
+ * Expected: Driver Invalid propagates as Invalid and retains the head packet; the retry advance sends the retained head with its original length and
+ * bytes.
+ */
 MW_TEST_CASE(NetManagerDriverInvalidRetainsExactHead)
 {
+	// Arrange
 	FRecordingDriver Driver;
 	Driver.ForcedSendResult = ENetResult::Invalid;
 	TNetPacketStorage<1, 4> Storage;
@@ -383,19 +451,28 @@ MW_TEST_CASE(NetManagerDriverInvalidRetainsExactHead)
 
 	Manager.QueueSend(MakeDest(DefaultDestIndex), TSpan<const std::uint8_t>(DriverInvalidPacket, sizeof(DriverInvalidPacket)));
 
+	// Act
 	const ENetResult AdvanceResult = Manager.AdvanceSend();
+	// Assert
 	MW_EXPECT_EQ(Test, ENetResult::Invalid, AdvanceResult, "Driver Invalid must propagate as Invalid");
 	MW_EXPECT_EQ(Test, OneBytePacketLength, Manager.QueuedCount(), "Driver Invalid must retain the head packet");
 
 	Driver.ForcedSendResult = ENetResult::Success;
+	// Act
 	Manager.AdvanceSend();
+	// Assert
 	MW_EXPECT_EQ(Test, TwoBytePacketLength, Driver.RecordedSendLengths[0], "Retained head must carry its original length");
 	MW_EXPECT_EQ(Test, DriverInvalidPacket[1], Driver.RecordedSendBytes[0][1], "Retained head must carry its original second byte");
 }
 
-/** Proves a queued head survives backpressure and is sent once the driver clears, before later packets. */
+/**
+ * Scenario: Queue a head and a later packet, advance into a full driver, clear backpressure, then advance twice.
+ * Expected: Backpressure retains both packets; recovery sends the retained head first, before the later packet, removing only the head on the first
+ * advance.
+ */
 MW_TEST_CASE(NetManagerRecoverySendsRetainedHeadBeforeLaterPackets)
 {
+	// Arrange
 	FRecordingDriver Driver;
 	Driver.ForcedSendResult = ENetResult::Full;
 	TNetPacketStorage<2, 4> Storage;
@@ -404,29 +481,38 @@ MW_TEST_CASE(NetManagerRecoverySendsRetainedHeadBeforeLaterPackets)
 	Manager.QueueSend(MakeDest(DefaultDestIndex), TSpan<const std::uint8_t>(RecoveryHeadPacket, sizeof(RecoveryHeadPacket)));
 	Manager.QueueSend(MakeDest(DefaultDestIndex), TSpan<const std::uint8_t>(RecoveryLaterPacket, sizeof(RecoveryLaterPacket)));
 
+	// Act / Assert
 	MW_EXPECT_EQ(Test, ENetResult::Full, Manager.AdvanceSend(), "First advance into a full driver must return Full");
 	MW_EXPECT_EQ(Test, TwoBytePacketLength, Manager.QueuedCount(), "Backpressure must retain both packets");
 
 	Driver.ForcedSendResult = ENetResult::Success;
+	// Act
 	const ENetResult FirstRecovery = Manager.AdvanceSend();
+	// Assert
 	MW_EXPECT_EQ(Test, ENetResult::Success, FirstRecovery, "Recovery advance must succeed");
 	MW_EXPECT_EQ(Test, TwoBytePacketLength, Driver.RecordedSendLengths[0], "Recovery must send the retained head, not the later packet");
 	MW_EXPECT_EQ(Test, RecoveryHeadPacket[0], Driver.RecordedSendBytes[0][0], "Recovery must send the retained head first byte");
 	MW_EXPECT_EQ(Test, OneBytePacketLength, Manager.QueuedCount(), "Recovery must remove only the head");
 
+	// Act / Assert
 	Manager.AdvanceSend();
 	MW_EXPECT_EQ(Test, OneBytePacketLength, Driver.RecordedSendLengths[1], "Second advance must send the later packet");
 	MW_EXPECT_EQ(Test, RecoveryLaterPacket[0], Driver.RecordedSendBytes[1][0], "Second advance must send the later packet byte");
 }
 
-/** Proves caller-owned packet storage can be reused after wraparound and draining across many cycles. */
+/**
+ * Scenario: Cycle a two-slot FIFO through queue-fill-advance-drain more times than its capacity, recording each send.
+ * Expected: Caller-owned storage is reused across many wraparound cycles, each cycle queues and delivers both packets in order, and the driver is
+ * called exactly twice per cycle.
+ */
 MW_TEST_CASE(NetManagerCallerStorageReusedAfterWraparoundAndDraining)
 {
+	// Arrange
 	FRecordingDriver Driver;
 	TNetPacketStorage<2, 2> Storage;
 	TNetManager<2, 2> Manager(Driver, Storage);
 
-	// Cycle the FIFO more times than its capacity so head/tail indices wrap around repeatedly.
+	// Act / Assert - cycle the FIFO more times than its capacity so head/tail indices wrap around repeatedly.
 	for (std::size_t Cycle = 0; Cycle < WraparoundCycleCount; ++Cycle)
 	{
 		MW_EXPECT_EQ(
@@ -452,15 +538,18 @@ MW_TEST_CASE(NetManagerCallerStorageReusedAfterWraparoundAndDraining)
 		MW_EXPECT_EQ(Test, WraparoundCycleBPacket[1], Driver.RecordedSendBytes[SendIndex + 1][1], "Cycle B send must carry the B packet second byte");
 	}
 
+	// Assert
 	MW_EXPECT_EQ(Test, WraparoundCycleCount * 2, Driver.SendCount, "Six cycles of two sends must call the driver exactly twelve times");
 }
 
 /**
- * Proves AdvanceSend delivers each queued packet to the destination address stored with it, in FIFO order,
- * so the addressed queue routes every head independently of the others.
+ * Scenario: Queue one packet to each of three distinct destinations, then advance each to the driver.
+ * Expected: Three advances call the driver exactly three times and route each head to its stored destination address in FIFO order with its original
+ * bytes, leaving the FIFO empty.
  */
 MW_TEST_CASE(NetManagerAdvanceSendsEachHeadToItsStoredDestination)
 {
+	// Arrange
 	FRecordingDriver Driver;
 	TNetPacketStorage<3, 4> Storage;
 	TNetManager<3, 4> Manager(Driver, Storage);
@@ -468,6 +557,7 @@ MW_TEST_CASE(NetManagerAdvanceSendsEachHeadToItsStoredDestination)
 	const FNetAddress DestA = MakeDest(DestIndexA);
 	const FNetAddress DestB = MakeDest(DestIndexB);
 	const FNetAddress DestC = MakeDest(DestIndexC);
+	// Act - queue one packet to each distinct destination
 	MW_EXPECT_EQ(
 		Test,
 		ENetResult::Success,
@@ -484,11 +574,12 @@ MW_TEST_CASE(NetManagerAdvanceSendsEachHeadToItsStoredDestination)
 		Manager.QueueSend(DestC, TSpan<const std::uint8_t>(RoutedPacketC, sizeof(RoutedPacketC))),
 		"Queue to DestC must succeed");
 
+	// Act - advance each queued packet to the driver
 	Manager.AdvanceSend();
 	Manager.AdvanceSend();
 	Manager.AdvanceSend();
 
-	// Each recorded send must carry the exact destination stored with that packet, in FIFO order.
+	// Assert - each recorded send must carry the exact destination stored with that packet, in FIFO order.
 	MW_EXPECT_EQ(Test, ThreeBytePacketLength, Driver.SendCount, "Three advances must call the driver exactly three times");
 	MW_EXPECT_EQ(Test, true, Driver.RecordedSendDestinations[0] == DestA, "First advance must send to the first queued destination");
 	MW_EXPECT_EQ(Test, true, Driver.RecordedSendDestinations[1] == DestB, "Second advance must send to the second queued destination");
@@ -498,9 +589,14 @@ MW_TEST_CASE(NetManagerAdvanceSendsEachHeadToItsStoredDestination)
 	MW_EXPECT_EQ(Test, true, Manager.IsEmpty(), "Three successful advances must drain a three-packet FIFO");
 }
 
-/** Proves Receive performs at most one direct driver receive and propagates its transactional result, leaving OutFrom unchanged on failure. */
+/**
+ * Scenario: Receive against a driver that returns Unavailable with pre-filled destination, byte count, and sender outputs.
+ * Expected: Receive performs exactly one direct driver receive, propagates Unavailable, and leaves BytesReceived, the destination, and OutFrom
+ * unchanged on failure.
+ */
 MW_TEST_CASE(NetManagerReceivePerformsOneDirectDriverReceive)
 {
+	// Arrange
 	FRecordingDriver Driver;
 	Driver.ForcedReceiveResult = ENetResult::Unavailable;
 	TNetPacketStorage<2, 4> Storage;
@@ -509,7 +605,9 @@ MW_TEST_CASE(NetManagerReceivePerformsOneDirectDriverReceive)
 	std::uint8_t Destination[FourBytePacketLength] = {DestinationPrefillByte, DestinationPrefillByte, DestinationPrefillByte, DestinationPrefillByte};
 	FNetReceiveResult ReceiveResult{UntouchedBytesReceivedSentinel};
 	FNetAddress ReceiveFrom{UntouchedAddressByte};
+	// Act
 	const ENetResult UnavailableResult = Manager.Receive(ReceiveFrom, TSpan<std::uint8_t>(Destination, sizeof(Destination)), ReceiveResult);
+	// Assert
 	MW_EXPECT_EQ(Test, ENetResult::Unavailable, UnavailableResult, "Receive must propagate the driver result");
 	MW_EXPECT_EQ(Test, OneBytePacketLength, Driver.ReceiveAttemptCount, "Receive must call the driver exactly once");
 	MW_EXPECT_EQ(Test, UntouchedBytesReceivedSentinel, ReceiveResult.BytesReceived, "Unavailable receive must leave BytesReceived unchanged");
@@ -517,9 +615,14 @@ MW_TEST_CASE(NetManagerReceivePerformsOneDirectDriverReceive)
 	MW_EXPECT_EQ(Test, UntouchedAddressByte, ReceiveFrom.Bytes[0], "Unavailable receive must leave OutFrom unchanged");
 }
 
-/** Proves Receive propagates Success, the driver-reported byte count, destination bytes, and sender address. */
+/**
+ * Scenario: Receive against a driver that succeeds with a chosen byte count, fill byte, and sender address.
+ * Expected: Receive propagates Success with the driver-reported byte count, fills exactly that many destination bytes without writing past it, and
+ * propagates the driver-reported sender address.
+ */
 MW_TEST_CASE(NetManagerReceivePropagatesSuccessAndByteCount)
 {
+	// Arrange
 	FRecordingDriver Driver;
 	Driver.ForcedReceiveResult = ENetResult::Success;
 	Driver.ReceiveByteCount = ReceiveFillByteCount;
@@ -531,7 +634,9 @@ MW_TEST_CASE(NetManagerReceivePropagatesSuccessAndByteCount)
 	std::uint8_t Destination[FourBytePacketLength] = {0};
 	FNetReceiveResult ReceiveResult{UntouchedBytesReceivedSentinel};
 	FNetAddress ReceiveFrom{UntouchedAddressByte};
+	// Act
 	const ENetResult SuccessResult = Manager.Receive(ReceiveFrom, TSpan<std::uint8_t>(Destination, sizeof(Destination)), ReceiveResult);
+	// Assert
 	MW_EXPECT_EQ(Test, ENetResult::Success, SuccessResult, "Receive must propagate a successful driver result");
 	MW_EXPECT_EQ(Test, ReceiveFillByteCount, ReceiveResult.BytesReceived, "Receive must propagate the driver byte count");
 	MW_EXPECT_EQ(Test, ReceiveFillerByteValue, Destination[0], "Receive must propagate the driver destination bytes");

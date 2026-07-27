@@ -208,14 +208,19 @@ static_assert(std::is_move_assignable<TWeakPtr<FTrackedValue>>::value);
 static_assert(std::is_constructible<TSpan<const int>, TSpan<int>>::value);
 static_assert(!std::is_constructible<TSpan<int>, TSpan<const int>>::value);
 
-/** Proves aligned in-capacity allocation returns exact usage and capacity diagnostics. */
+/**
+ * Scenario: Allocate a small aligned block from a fresh arena, then deallocate it.
+ * Expected: The aligned in-capacity allocation returns an exact block with diagnostics, and deallocation restores zero usage.
+ */
 MW_TEST_CASE(FixedArenaAcceptsAlignedAllocationAndReportsExactUsage)
 {
+	// Arrange
 	TFixedArena<64, 16> Arena;
 	FMemoryBlock Block{};
 	const std::size_t ExpectedCapacityBytes = 64;
 	const std::size_t ExpectedUsedBytes = 7;
 
+	// Act
 	const EMemoryResult AllocationResult = Arena.TryAllocate(ExpectedUsedBytes, 16, Block);
 
 	const bool bAddressReturned = Block.Address != nullptr;
@@ -224,6 +229,8 @@ MW_TEST_CASE(FixedArenaAcceptsAlignedAllocationAndReportsExactUsage)
 	const std::size_t ActualBlockSizeBytes = Block.SizeBytes;
 	const std::size_t ActualCapacityBytes = Arena.CapacityBytes();
 	const std::size_t ActualUsedBytes = Arena.UsedBytes();
+
+	// Assert
 	MW_EXPECT_EQ(Test, EMemoryResult::Success, AllocationResult, "Aligned in-capacity allocation should succeed");
 	MW_EXPECT_TRUE(Test, bAddressReturned, "Successful allocation should return a non-null address");
 	MW_EXPECT_TRUE(Test, bAddressAligned, "Returned allocation should satisfy requested alignment");
@@ -231,20 +238,28 @@ MW_TEST_CASE(FixedArenaAcceptsAlignedAllocationAndReportsExactUsage)
 	MW_EXPECT_EQ(Test, ExpectedCapacityBytes, ActualCapacityBytes, "Arena should report exact caller-usable capacity");
 	MW_EXPECT_EQ(Test, ExpectedUsedBytes, ActualUsedBytes, "Arena should report exact active payload bytes");
 
+	// Act
 	const EMemoryResult DeallocationResult = Arena.Deallocate(Block);
 	const std::size_t UsedBytesAfterDeallocation = Arena.UsedBytes();
+
+	// Assert
 	MW_EXPECT_EQ(Test, EMemoryResult::Success, DeallocationResult, "Exact active block should deallocate successfully");
 	MW_EXPECT_EQ(Test, std::size_t{0}, UsedBytesAfterDeallocation, "Successful deallocation should restore zero usage");
 }
 
-/** Proves every invalid alignment clears output and leaves resource usage unchanged. */
+/**
+ * Scenario: Attempt allocation with zero, non-power-of-two, and excess alignments.
+ * Expected: Each invalid alignment is rejected atomically, clears the output block, and leaves usage unchanged.
+ */
 MW_TEST_CASE(FixedArenaRejectsZeroNonPowerAndExcessAlignmentAtomically)
 {
+	// Arrange
 	TFixedArena<64, 16> Arena;
 	FMemoryBlock ZeroAlignmentBlock{reinterpret_cast<void*>(std::uintptr_t{1}), 9};
 	FMemoryBlock NonPowerAlignmentBlock{reinterpret_cast<void*>(std::uintptr_t{1}), 9};
 	FMemoryBlock ExcessAlignmentBlock{reinterpret_cast<void*>(std::uintptr_t{1}), 9};
 
+	// Act
 	const EMemoryResult ZeroAlignmentResult = Arena.TryAllocate(8, 0, ZeroAlignmentBlock);
 	const std::size_t UsedAfterZeroAlignment = Arena.UsedBytes();
 	const EMemoryResult NonPowerAlignmentResult = Arena.TryAllocate(8, 3, NonPowerAlignmentBlock);
@@ -255,6 +270,8 @@ MW_TEST_CASE(FixedArenaRejectsZeroNonPowerAndExcessAlignmentAtomically)
 	const bool bZeroAlignmentBlockCleared = ZeroAlignmentBlock.Address == nullptr && ZeroAlignmentBlock.SizeBytes == 0;
 	const bool bNonPowerAlignmentBlockCleared = NonPowerAlignmentBlock.Address == nullptr && NonPowerAlignmentBlock.SizeBytes == 0;
 	const bool bExcessAlignmentBlockCleared = ExcessAlignmentBlock.Address == nullptr && ExcessAlignmentBlock.SizeBytes == 0;
+
+	// Assert
 	MW_EXPECT_EQ(Test, EMemoryResult::UnsupportedAlignment, ZeroAlignmentResult, "Zero alignment should be rejected explicitly");
 	MW_EXPECT_EQ(Test, std::size_t{0}, UsedAfterZeroAlignment, "Zero-alignment rejection should not change usage");
 	MW_EXPECT_TRUE(Test, bZeroAlignmentBlockCleared, "Zero-alignment rejection should clear the output block");
@@ -266,9 +283,13 @@ MW_TEST_CASE(FixedArenaRejectsZeroNonPowerAndExcessAlignmentAtomically)
 	MW_EXPECT_TRUE(Test, bExcessAlignmentBlockCleared, "Excess-alignment rejection should clear the output block");
 }
 
-/** Proves zero, oversized, exhausted, and maximum-size requests fail without corrupting usage. */
+/**
+ * Scenario: Allocate at exact capacity, then attempt zero, oversized, exhausted, and maximum-size requests.
+ * Expected: Each failing request is rejected, clears the output block, and leaves usage unchanged.
+ */
 MW_TEST_CASE(FixedArenaRejectsZeroOversizeExhaustedAndMaximumRequests)
 {
+	// Arrange
 	TFixedArena<16, 8> Arena;
 	FMemoryBlock ZeroBlock{};
 	FMemoryBlock OversizeBlock{};
@@ -276,6 +297,7 @@ MW_TEST_CASE(FixedArenaRejectsZeroOversizeExhaustedAndMaximumRequests)
 	FMemoryBlock ExhaustedBlock{};
 	FMemoryBlock MaximumBlock{};
 
+	// Act
 	const EMemoryResult ZeroResult = Arena.TryAllocate(0, 1, ZeroBlock);
 	const EMemoryResult OversizeResult = Arena.TryAllocate(17, 1, OversizeBlock);
 	const EMemoryResult FullResult = Arena.TryAllocate(16, 8, FullBlock);
@@ -288,6 +310,8 @@ MW_TEST_CASE(FixedArenaRejectsZeroOversizeExhaustedAndMaximumRequests)
 	const bool bOversizeBlockCleared = OversizeBlock.Address == nullptr && OversizeBlock.SizeBytes == 0;
 	const bool bExhaustedBlockCleared = ExhaustedBlock.Address == nullptr && ExhaustedBlock.SizeBytes == 0;
 	const bool bMaximumBlockCleared = MaximumBlock.Address == nullptr && MaximumBlock.SizeBytes == 0;
+
+	// Assert
 	MW_EXPECT_EQ(Test, EMemoryResult::OutOfMemory, ZeroResult, "Zero-size allocation should fail as out of memory");
 	MW_EXPECT_TRUE(Test, bZeroBlockCleared, "Zero-size failure should clear the output block");
 	MW_EXPECT_EQ(Test, EMemoryResult::OutOfMemory, OversizeResult, "Capacity-plus-one allocation should fail");
@@ -301,9 +325,13 @@ MW_TEST_CASE(FixedArenaRejectsZeroOversizeExhaustedAndMaximumRequests)
 	MW_EXPECT_EQ(Test, std::size_t{16}, UsedAfterFailures, "Failed requests should preserve exact full usage");
 }
 
-/** Proves malformed and repeated deallocations are rejected before usage changes. */
+/**
+ * Scenario: Deallocation foreign, interior, wrong-size, and double-freed blocks after one valid allocation.
+ * Expected: Each malformed deallocation is rejected and preserves usage; only the exact original block releases.
+ */
 MW_TEST_CASE(FixedArenaRejectsForeignInteriorWrongSizeAndDoubleFreeAtomically)
 {
+	// Arrange
 	TFixedArena<32, 8> Arena;
 	TFixedArena<32, 8> ForeignArena;
 	FMemoryBlock Block{};
@@ -311,6 +339,7 @@ MW_TEST_CASE(FixedArenaRejectsForeignInteriorWrongSizeAndDoubleFreeAtomically)
 	const EMemoryResult AllocationResult = Arena.TryAllocate(8, 8, Block);
 	const EMemoryResult ForeignAllocationResult = ForeignArena.TryAllocate(8, 8, ForeignBlock);
 
+	// Act
 	const EMemoryResult ForeignResult = Arena.Deallocate(ForeignBlock);
 	const std::size_t UsedAfterForeign = Arena.UsedBytes();
 	FMemoryBlock InteriorBlock{static_cast<std::byte*>(Block.Address) + 1, Block.SizeBytes - 1U};
@@ -327,6 +356,7 @@ MW_TEST_CASE(FixedArenaRejectsForeignInteriorWrongSizeAndDoubleFreeAtomically)
 	const EMemoryResult DoubleFreeResult = Arena.Deallocate(Block);
 	const std::size_t UsedAfterDoubleFree = Arena.UsedBytes();
 
+	// Assert
 	MW_EXPECT_EQ(Test, EMemoryResult::Success, AllocationResult, "Test allocation should succeed before malformed deallocations");
 	MW_EXPECT_EQ(Test, EMemoryResult::Success, ForeignAllocationResult, "Foreign arena should produce a valid foreign block");
 	MW_EXPECT_EQ(Test, EMemoryResult::InvalidBlock, ForeignResult, "Foreign block should be rejected");
@@ -343,9 +373,13 @@ MW_TEST_CASE(FixedArenaRejectsForeignInteriorWrongSizeAndDoubleFreeAtomically)
 	MW_EXPECT_EQ(Test, std::size_t{0}, UsedAfterDoubleFree, "Double-free rejection should preserve zero usage");
 }
 
-/** Proves freed ranges can be reused regardless of the order neighboring blocks release. */
+/**
+ * Scenario: Allocate three blocks, free the middle and reuse it, then free the remaining blocks in arbitrary order.
+ * Expected: The freed range is reused regardless of release order, and final usage returns to zero.
+ */
 MW_TEST_CASE(FixedArenaReusesBlocksAfterArbitraryOrderDeallocation)
 {
+	// Arrange
 	TFixedArena<24, 8> Arena;
 	FMemoryBlock FirstBlock{};
 	FMemoryBlock MiddleBlock{};
@@ -355,6 +389,7 @@ MW_TEST_CASE(FixedArenaReusesBlocksAfterArbitraryOrderDeallocation)
 	const EMemoryResult MiddleResult = Arena.TryAllocate(8, 8, MiddleBlock);
 	const EMemoryResult LastResult = Arena.TryAllocate(8, 8, LastBlock);
 
+	// Act
 	const EMemoryResult MiddleFreeResult = Arena.Deallocate(MiddleBlock);
 	const EMemoryResult ReuseResult = Arena.TryAllocate(8, 8, ReusedBlock);
 	const bool bMiddleAddressReused = ReusedBlock.Address == MiddleBlock.Address;
@@ -363,6 +398,7 @@ MW_TEST_CASE(FixedArenaReusesBlocksAfterArbitraryOrderDeallocation)
 	const EMemoryResult ReusedFreeResult = Arena.Deallocate(ReusedBlock);
 	const std::size_t FinalUsedBytes = Arena.UsedBytes();
 
+	// Assert
 	MW_EXPECT_EQ(Test, EMemoryResult::Success, FirstResult, "First bounded allocation should succeed");
 	MW_EXPECT_EQ(Test, EMemoryResult::Success, MiddleResult, "Middle bounded allocation should succeed");
 	MW_EXPECT_EQ(Test, EMemoryResult::Success, LastResult, "Last bounded allocation should succeed at capacity");
@@ -375,14 +411,19 @@ MW_TEST_CASE(FixedArenaReusesBlocksAfterArbitraryOrderDeallocation)
 	MW_EXPECT_EQ(Test, std::size_t{0}, FinalUsedBytes, "Arbitrary-order releases should restore zero usage");
 }
 
-/** Proves unique factory exhaustion reports OOM without constructing a value. */
+/**
+ * Scenario: Fill the arena to capacity, then attempt a unique factory construction.
+ * Expected: The factory reports out of memory, returns an empty owner, constructs no value, and leaves usage unchanged.
+ */
 MW_TEST_CASE(UniqueFactoryOutOfMemoryNeverConstructsValue)
 {
+	// Arrange
 	TFixedArena<64, 16> Arena;
 	FMemoryBlock CapacityBlock{};
 	FLifetimeState Lifetime;
 	const EMemoryResult FillResult = Arena.TryAllocate(Arena.CapacityBytes(), 1, CapacityBlock);
 
+	// Act
 	constexpr std::uint32_t ConstructedValue = 7;
 	const TUniquePointerResult<FTrackedValue> UniqueResult = MakeUnique<FTrackedValue>(Arena, Lifetime, ConstructedValue);
 
@@ -391,6 +432,8 @@ MW_TEST_CASE(UniqueFactoryOutOfMemoryNeverConstructsValue)
 	const std::size_t ConstructionCount = Lifetime.ConstructionCount;
 	const std::size_t DestructionCount = Lifetime.DestructionCount;
 	const std::size_t UsedBytes = Arena.UsedBytes();
+
+	// Assert
 	MW_EXPECT_EQ(Test, EMemoryResult::Success, FillResult, "Arena should be full before unique factory attempt");
 	MW_EXPECT_EQ(Test, EMemoryResult::OutOfMemory, FactoryResult, "Unique factory should report exact exhaustion");
 	MW_EXPECT_TRUE(Test, bPointerInvalid, "Failed unique factory should return an empty owner");
@@ -399,14 +442,19 @@ MW_TEST_CASE(UniqueFactoryOutOfMemoryNeverConstructsValue)
 	MW_EXPECT_EQ(Test, std::size_t{64}, UsedBytes, "Failed unique factory should not change existing usage");
 }
 
-/** Proves moving and resetting a unique owner destroys and returns its original block once. */
+/**
+ * Scenario: Construct a unique owner, move it, then reset the destination twice.
+ * Expected: The move empties the source and transfers the live value; repeated reset destroys the value once and returns the original block once.
+ */
 MW_TEST_CASE(UniquePtrMoveAndResetReturnExactOriginalBlockOnce)
 {
+	// Arrange
 	TTrackingMemoryResource<128, 16> Resource;
 	FLifetimeState Lifetime;
 	TUniquePointerResult<FTrackedValue> UniqueResult = MakeUnique<FTrackedValue>(Resource, Lifetime, 19);
 	const FMemoryBlock OriginalBlock = Resource.LastAllocatedBlock;
 
+	// Act
 	TUniquePtr<FTrackedValue> MovedPointer(std::move(UniqueResult.Pointer));
 	const EMemoryResult FactoryResult = UniqueResult.Result;
 	const bool bSourceInvalidAfterMove = !UniqueResult.Pointer.IsValid();
@@ -422,6 +470,8 @@ MW_TEST_CASE(UniquePtrMoveAndResetReturnExactOriginalBlockOnce)
 	const bool bSameAddressReturned = Resource.LastDeallocatedBlock.Address == OriginalBlock.Address;
 	const bool bSameSizeReturned = Resource.LastDeallocatedBlock.SizeBytes == OriginalBlock.SizeBytes;
 	const std::size_t UsedBytes = Resource.UsedBytes();
+
+	// Assert
 	MW_EXPECT_EQ(Test, EMemoryResult::Success, FactoryResult, "Unique factory should construct in available storage");
 	MW_EXPECT_TRUE(Test, bSourceInvalidAfterMove, "Move should leave the source unique owner empty");
 	MW_EXPECT_TRUE(Test, bDestinationValidAfterMove, "Move should transfer the live unique value");
@@ -434,36 +484,52 @@ MW_TEST_CASE(UniquePtrMoveAndResetReturnExactOriginalBlockOnce)
 	MW_EXPECT_EQ(Test, std::size_t{0}, UsedBytes, "Unique reset should restore resource usage");
 }
 
-/** Proves unique scope exit destroys a live value when no explicit reset occurs. */
+/**
+ * Scenario: Construct a unique owner inside a scope and let it exit scope with no explicit reset.
+ * Expected: Scope exit destroys the value exactly once and deallocates once, restoring resource usage.
+ */
 MW_TEST_CASE(UniquePtrScopeExitDestroysAndDeallocatesExactlyOnce)
 {
+	// Arrange
 	TTrackingMemoryResource<128, 16> Resource;
 	FLifetimeState Lifetime;
 
+	// Act
 	{
 		const TUniquePointerResult<FTrackedValue> UniqueResult = MakeUnique<FTrackedValue>(Resource, Lifetime, 3);
 		const EMemoryResult FactoryResult = UniqueResult.Result;
 		const bool bPointerValid = UniqueResult.Pointer.IsValid();
+
+		// Assert
 		MW_EXPECT_EQ(Test, EMemoryResult::Success, FactoryResult, "Unique factory should succeed before scope-exit test");
 		MW_EXPECT_TRUE(Test, bPointerValid, "Successful unique factory should return a live owner");
 	}
 
+	// Act
 	const std::size_t DestructionCount = Lifetime.DestructionCount;
 	const std::size_t DeallocationCount = Resource.DeallocationRequestCount;
 	const std::size_t UsedBytes = Resource.UsedBytes();
+
+	// Assert
 	MW_EXPECT_EQ(Test, std::size_t{1}, DestructionCount, "Unique owner scope exit should destroy the value exactly once");
 	MW_EXPECT_EQ(Test, std::size_t{1}, DeallocationCount, "Unique owner scope exit should deallocate exactly once");
 	MW_EXPECT_EQ(Test, std::size_t{0}, UsedBytes, "Unique owner scope exit should restore resource usage");
 }
 
-/** Proves explicit strong and weak acquisition preserve value lifetime and one combined allocation. */
+/**
+ * Scenario: Construct a shared value and acquire explicit strong, weak, and pinned owners, then release all strong owners and finally the weak owner.
+ * Expected: One combined allocation backs all owners; the value lives until the final strong release and the allocation returns only after the final
+ * weak release.
+ */
 MW_TEST_CASE(SharedAndWeakOwnersPreserveValueUntilFinalStrongAndWeakRelease)
 {
+	// Arrange
 	TTrackingMemoryResource<256, 64> Resource;
 	FLifetimeState Lifetime;
 	TSharedPointerResult<FTrackedValue, ESharedPointerMode::SingleThreaded> SharedFactoryResult = MakeShared<FTrackedValue>(Resource, Lifetime, 41);
 	TSharedPtr<FTrackedValue> Owner = std::move(SharedFactoryResult.Pointer);
 
+	// Act
 	TSharedPointerResult<FTrackedValue, ESharedPointerMode::SingleThreaded> ShareResult = Owner.TryShare();
 	TSharedPtr<FTrackedValue> SecondOwner = std::move(ShareResult.Pointer);
 	TWeakPointerResult<FTrackedValue, ESharedPointerMode::SingleThreaded> WeakResult = Owner.TryAcquireWeak();
@@ -481,6 +547,8 @@ MW_TEST_CASE(SharedAndWeakOwnersPreserveValueUntilFinalStrongAndWeakRelease)
 	const std::size_t WeakCountAfterAcquisitions = Owner.WeakReferenceCount();
 	FTrackedValue* const PinnedValue = PinnedOwner.Get();
 	const int PinnedValueNumber = PinnedValue == nullptr ? -1 : PinnedValue->Value;
+
+	// Assert
 	MW_EXPECT_EQ(Test, ESharedPointerResult::Success, FactoryResult, "Shared factory should create the first strong owner");
 	MW_EXPECT_EQ(Test, ESharedPointerResult::Success, ShareOperationResult, "TryShare should acquire an explicit strong owner");
 	MW_EXPECT_EQ(Test, ESharedPointerResult::Success, WeakOperationResult, "TryAcquireWeak should acquire an explicit observer");
@@ -491,6 +559,7 @@ MW_TEST_CASE(SharedAndWeakOwnersPreserveValueUntilFinalStrongAndWeakRelease)
 	MW_EXPECT_EQ(Test, std::size_t{1}, WeakCountAfterAcquisitions, "Explicit observer acquisition should report one weak owner");
 	MW_EXPECT_EQ(Test, 41, PinnedValueNumber, "Pinned owner should resolve the live shared value");
 
+	// Act
 	Owner.Reset();
 	SecondOwner.Reset();
 	const std::size_t DestructionBeforeFinalStrong = Lifetime.DestructionCount;
@@ -501,6 +570,8 @@ MW_TEST_CASE(SharedAndWeakOwnersPreserveValueUntilFinalStrongAndWeakRelease)
 	const TSharedPointerResult<FTrackedValue, ESharedPointerMode::SingleThreaded> ExpiredPinResult = Observer.Pin();
 	const ESharedPointerResult ExpiredPinOperationResult = ExpiredPinResult.Result;
 	const bool bExpiredPinInvalid = !ExpiredPinResult.Pointer.IsValid();
+
+	// Assert
 	MW_EXPECT_EQ(Test, std::size_t{0}, DestructionBeforeFinalStrong, "Value should remain live while one strong owner remains");
 	MW_EXPECT_EQ(Test, std::size_t{1}, DestructionAfterFinalStrong, "Final strong release should destroy the value exactly once");
 	MW_EXPECT_TRUE(Test, bObserverExpired, "Weak observer should report expiry after final strong release");
@@ -508,23 +579,31 @@ MW_TEST_CASE(SharedAndWeakOwnersPreserveValueUntilFinalStrongAndWeakRelease)
 	MW_EXPECT_EQ(Test, ESharedPointerResult::Expired, ExpiredPinOperationResult, "Expired observer should reject Pin");
 	MW_EXPECT_TRUE(Test, bExpiredPinInvalid, "Expired Pin should return an empty strong owner");
 
+	// Act
 	Observer.Reset();
 	const std::size_t DeallocationAfterFinalWeak = Resource.DeallocationRequestCount;
 	const bool bSameAddressReturned = Resource.LastDeallocatedBlock.Address == Resource.LastAllocatedBlock.Address;
 	const bool bSameSizeReturned = Resource.LastDeallocatedBlock.SizeBytes == Resource.LastAllocatedBlock.SizeBytes;
 	const std::size_t UsedBytes = Resource.UsedBytes();
+
+	// Assert
 	MW_EXPECT_EQ(Test, std::size_t{1}, DeallocationAfterFinalWeak, "Final weak release should deallocate the combined block once");
 	MW_EXPECT_TRUE(Test, bSameAddressReturned, "Shared ownership should return the original combined address");
 	MW_EXPECT_TRUE(Test, bSameSizeReturned, "Shared ownership should return the original combined size");
 	MW_EXPECT_EQ(Test, std::size_t{0}, UsedBytes, "Final weak release should restore resource usage");
 }
 
-/** Proves shared factory OOM is reported before construction or deallocation is needed. */
+/**
+ * Scenario: Attempt a shared factory construction against an under-capacity resource.
+ * Expected: The factory reports combined-allocation exhaustion, returns an empty owner, constructs no value, and requires no deallocation.
+ */
 MW_TEST_CASE(SharedFactoryOutOfMemoryNeverConstructsValue)
 {
+	// Arrange
 	TTrackingMemoryResource<1, 64> Resource;
 	FLifetimeState Lifetime;
 
+	// Act
 	const TSharedPointerResult<FTrackedValue, ESharedPointerMode::SingleThreaded> SharedResult = MakeShared<FTrackedValue>(Resource, Lifetime, 5);
 
 	const ESharedPointerResult FactoryResult = SharedResult.Result;
@@ -532,6 +611,8 @@ MW_TEST_CASE(SharedFactoryOutOfMemoryNeverConstructsValue)
 	const std::size_t ConstructionCount = Lifetime.ConstructionCount;
 	const std::size_t DeallocationCount = Resource.DeallocationRequestCount;
 	const std::size_t UsedBytes = Resource.UsedBytes();
+
+	// Assert
 	MW_EXPECT_EQ(Test, ESharedPointerResult::OutOfMemory, FactoryResult, "Shared factory should report combined-allocation exhaustion");
 	MW_EXPECT_TRUE(Test, bPointerInvalid, "OOM shared factory should return an empty owner");
 	MW_EXPECT_EQ(Test, std::size_t{0}, ConstructionCount, "Shared OOM should occur before value construction");
@@ -539,12 +620,17 @@ MW_TEST_CASE(SharedFactoryOutOfMemoryNeverConstructsValue)
 	MW_EXPECT_EQ(Test, std::size_t{0}, UsedBytes, "Failed shared allocation should preserve zero usage");
 }
 
-/** Proves unsupported shared layout alignment is rejected before value construction. */
+/**
+ * Scenario: Attempt a shared factory construction for an over-aligned type against a lower-alignment resource.
+ * Expected: The unsupported alignment is rejected before construction, returns an empty owner, allocates no block, and requires no deallocation.
+ */
 MW_TEST_CASE(SharedFactoryRejectsUnsupportedAlignmentBeforeConstruction)
 {
+	// Arrange
 	TTrackingMemoryResource<256, 16> Resource;
 	FLifetimeState Lifetime;
 
+	// Act
 	const TSharedPointerResult<FOverAlignedTrackedValue, ESharedPointerMode::SingleThreaded> SharedResult =
 		MakeShared<FOverAlignedTrackedValue>(Resource, Lifetime);
 
@@ -553,6 +639,8 @@ MW_TEST_CASE(SharedFactoryRejectsUnsupportedAlignmentBeforeConstruction)
 	const std::size_t ConstructionCount = Lifetime.ConstructionCount;
 	const std::size_t SuccessfulAllocationCount = Resource.SuccessfulAllocationCount;
 	const std::size_t DeallocationCount = Resource.DeallocationRequestCount;
+
+	// Assert
 	MW_EXPECT_EQ(Test, ESharedPointerResult::UnsupportedAlignment, FactoryResult, "Shared factory should preserve unsupported-alignment failure");
 	MW_EXPECT_TRUE(Test, bPointerInvalid, "Alignment failure should return an empty shared owner");
 	MW_EXPECT_EQ(Test, std::size_t{0}, ConstructionCount, "Alignment failure should occur before value construction");
@@ -560,9 +648,13 @@ MW_TEST_CASE(SharedFactoryRejectsUnsupportedAlignmentBeforeConstruction)
 	MW_EXPECT_EQ(Test, std::size_t{0}, DeallocationCount, "Unsupported alignment should not require deallocation");
 }
 
-/** Proves a self-owned final weak observer cannot deallocate during containing value destruction. */
+/**
+ * Scenario: Construct a self-observing shared value that adopts its own weak observer, then release the only strong owner during value destruction.
+ * Expected: The self-owned final weak deallocation is deferred until value destruction completes, deallocating once and restoring usage.
+ */
 MW_TEST_CASE(SharedPtrDefersSelfOwnedFinalWeakDeallocationUntilValueDestructionCompletes)
 {
+	// Arrange
 	TTrackingMemoryResource<256, 64> Resource;
 	FLifetimeState Lifetime;
 	TSharedPointerResult<FSelfObservingValue, ESharedPointerMode::SingleThreaded> SharedResult = MakeShared<FSelfObservingValue>(Resource, Lifetime);
@@ -578,12 +670,15 @@ MW_TEST_CASE(SharedPtrDefersSelfOwnedFinalWeakDeallocationUntilValueDestructionC
 	const ESharedPointerResult WeakOperationResult = WeakResult.Result;
 	const std::size_t WeakCountBeforeRelease = Owner.WeakReferenceCount();
 
+	// Act
 	Owner.Reset();
 
 	const std::size_t ConstructionCount = Lifetime.ConstructionCount;
 	const std::size_t DestructionCount = Lifetime.DestructionCount;
 	const std::size_t DeallocationCount = Resource.DeallocationRequestCount;
 	const std::size_t UsedBytes = Resource.UsedBytes();
+
+	// Assert
 	MW_EXPECT_EQ(Test, ESharedPointerResult::Success, FactoryResult, "Self-observing shared value should construct successfully");
 	MW_EXPECT_EQ(Test, ESharedPointerResult::Success, WeakOperationResult, "Self observer should be acquired explicitly");
 	MW_EXPECT_EQ(Test, std::size_t{1}, WeakCountBeforeRelease, "Value should own the only weak observer before final release");
@@ -593,9 +688,13 @@ MW_TEST_CASE(SharedPtrDefersSelfOwnedFinalWeakDeallocationUntilValueDestructionC
 	MW_EXPECT_EQ(Test, std::size_t{0}, UsedBytes, "Self-observer teardown should restore resource usage");
 }
 
-/** Proves the maximum strong count succeeds and one more TryShare fails without wrapping. */
+/**
+ * Scenario: Acquire strong owners up to the maximum reference count, then attempt one more TryShare.
+ * Expected: The maximum count succeeds; one more acquisition fails as overflow without wrapping or returning another owner.
+ */
 MW_TEST_CASE(SharedPtrRejectsStrongReferenceCountOverflowWithoutWrap)
 {
+	// Arrange
 	using FSharedPointer = TSharedPtr<FTrackedValue>;
 	constexpr std::size_t MaximumCount = FSharedPointer::MaximumReferenceCount();
 	TTrackingMemoryResource<256, 64> Resource;
@@ -606,6 +705,7 @@ MW_TEST_CASE(SharedPtrRejectsStrongReferenceCountOverflowWithoutWrap)
 	std::array<FSharedPointer, MaximumCount - 1U> AdditionalOwners{};
 	bool bAllBoundaryAcquisitionsSucceeded = true;
 
+	// Act
 	for (std::size_t OwnerIndex = 0; OwnerIndex < AdditionalOwners.size(); ++OwnerIndex)
 	{
 		TSharedPointerResult<FTrackedValue, ESharedPointerMode::SingleThreaded> ShareResult = Owner.TryShare();
@@ -622,6 +722,8 @@ MW_TEST_CASE(SharedPtrRejectsStrongReferenceCountOverflowWithoutWrap)
 	const ESharedPointerResult OverflowOperationResult = OverflowResult.Result;
 	const std::size_t CountAfterOverflow = Owner.StrongReferenceCount();
 	const bool bOverflowPointerInvalid = !OverflowResult.Pointer.IsValid();
+
+	// Assert
 	MW_EXPECT_EQ(Test, ESharedPointerResult::Success, FactoryResult, "Strong boundary value should construct successfully");
 	MW_EXPECT_TRUE(Test, bAllBoundaryAcquisitionsSucceeded, "Every strong acquisition through the maximum should succeed");
 	MW_EXPECT_EQ(Test, MaximumCount, CountAtBoundary, "Strong diagnostics should reach the exact 65,535 boundary");
@@ -630,6 +732,7 @@ MW_TEST_CASE(SharedPtrRejectsStrongReferenceCountOverflowWithoutWrap)
 	MW_EXPECT_TRUE(Test, bOverflowPointerInvalid, "Strong overflow should not return another owner");
 	MW_EXPECT_EQ(Test, MaximumCount, CountAfterOverflow, "Strong overflow should leave the boundary count unchanged");
 
+	// Act
 	for (FSharedPointer& AdditionalOwner : AdditionalOwners)
 	{
 		AdditionalOwner.Reset();
@@ -638,14 +741,20 @@ MW_TEST_CASE(SharedPtrRejectsStrongReferenceCountOverflowWithoutWrap)
 	Owner.Reset();
 	const std::size_t DestructionCount = Lifetime.DestructionCount;
 	const std::size_t DeallocationCount = Resource.DeallocationRequestCount;
+
+	// Assert
 	MW_EXPECT_EQ(Test, std::size_t{1}, CountAfterAdditionalRelease, "Releasing acquired owners should leave the original owner");
 	MW_EXPECT_EQ(Test, std::size_t{1}, DestructionCount, "Final boundary-test strong release should destroy exactly once");
 	MW_EXPECT_EQ(Test, std::size_t{1}, DeallocationCount, "Boundary-test allocation should deallocate exactly once");
 }
 
-/** Proves the maximum weak count succeeds and one more acquisition fails without wrapping. */
+/**
+ * Scenario: Acquire weak observers up to the maximum reference count, then attempt one more acquisition.
+ * Expected: The maximum count succeeds; one more acquisition fails as overflow without wrapping or returning another observer.
+ */
 MW_TEST_CASE(SharedPtrRejectsWeakReferenceCountOverflowWithoutWrap)
 {
+	// Arrange
 	using FSharedPointer = TSharedPtr<FTrackedValue>;
 	using FWeakPointer = TWeakPtr<FTrackedValue>;
 	constexpr std::size_t MaximumCount = FWeakPointer::MaximumReferenceCount();
@@ -657,6 +766,7 @@ MW_TEST_CASE(SharedPtrRejectsWeakReferenceCountOverflowWithoutWrap)
 	std::array<FWeakPointer, MaximumCount> Observers{};
 	bool bAllBoundaryAcquisitionsSucceeded = true;
 
+	// Act
 	for (std::size_t ObserverIndex = 0; ObserverIndex < Observers.size(); ++ObserverIndex)
 	{
 		TWeakPointerResult<FTrackedValue, ESharedPointerMode::SingleThreaded> WeakResult = Owner.TryAcquireWeak();
@@ -673,6 +783,8 @@ MW_TEST_CASE(SharedPtrRejectsWeakReferenceCountOverflowWithoutWrap)
 	const ESharedPointerResult OverflowOperationResult = OverflowResult.Result;
 	const std::size_t CountAfterOverflow = Owner.WeakReferenceCount();
 	const bool bOverflowPointerExpired = OverflowResult.Pointer.IsExpired();
+
+	// Assert
 	MW_EXPECT_EQ(Test, ESharedPointerResult::Success, FactoryResult, "Weak boundary value should construct successfully");
 	MW_EXPECT_TRUE(Test, bAllBoundaryAcquisitionsSucceeded, "Every weak acquisition through the maximum should succeed");
 	MW_EXPECT_EQ(Test, MaximumCount, CountAtBoundary, "Weak diagnostics should reach the exact 65,535 boundary");
@@ -680,6 +792,7 @@ MW_TEST_CASE(SharedPtrRejectsWeakReferenceCountOverflowWithoutWrap)
 	MW_EXPECT_TRUE(Test, bOverflowPointerExpired, "Weak overflow should not return another observer");
 	MW_EXPECT_EQ(Test, MaximumCount, CountAfterOverflow, "Weak overflow should leave the boundary count unchanged");
 
+	// Act
 	for (FWeakPointer& Observer : Observers)
 	{
 		Observer.Reset();
@@ -688,14 +801,20 @@ MW_TEST_CASE(SharedPtrRejectsWeakReferenceCountOverflowWithoutWrap)
 	Owner.Reset();
 	const std::size_t DestructionCount = Lifetime.DestructionCount;
 	const std::size_t DeallocationCount = Resource.DeallocationRequestCount;
+
+	// Assert
 	MW_EXPECT_EQ(Test, std::size_t{0}, WeakCountAfterRelease, "Releasing all observers should restore zero weak count");
 	MW_EXPECT_EQ(Test, std::size_t{1}, DestructionCount, "Final strong release should destroy the boundary-test value once");
 	MW_EXPECT_EQ(Test, std::size_t{1}, DeallocationCount, "Boundary-test combined allocation should deallocate once");
 }
 
-/** Proves empty and zero-capacity vectors expose safe boundary state and atomic rejection. */
+/**
+ * Scenario: Inspect a fresh positive-capacity vector and attempt to add to a zero-capacity vector.
+ * Expected: The empty vector exposes safe boundary state; the zero-capacity vector atomically rejects its first element and preserves zero size.
+ */
 MW_TEST_CASE(StaticVectorHandlesEmptyAndZeroCapacityBoundaries)
 {
+	// Arrange
 	TStaticVector<int, 3> EmptyVector;
 	TStaticVector<int, 0> ZeroCapacityVector;
 	const bool bEmptyVectorIsEmpty = EmptyVector.IsEmpty();
@@ -706,6 +825,7 @@ MW_TEST_CASE(StaticVectorHandlesEmptyAndZeroCapacityBoundaries)
 	int* const EmptyEnd = EmptyVector.end();
 	const std::size_t EmptyCapacity = EmptyVector.Capacity();
 
+	// Act
 	const ERuntimeResult AddResult = ZeroCapacityVector.Emplace(7);
 	const bool bZeroVectorIsEmpty = ZeroCapacityVector.IsEmpty();
 	const bool bZeroVectorIsFull = ZeroCapacityVector.IsFull();
@@ -714,6 +834,7 @@ MW_TEST_CASE(StaticVectorHandlesEmptyAndZeroCapacityBoundaries)
 	int* const ZeroData = ZeroCapacityVector.Data();
 	int* const NullIntPointer = nullptr;
 
+	// Assert
 	MW_EXPECT_TRUE(Test, bEmptyVectorIsEmpty, "Fresh positive-capacity vector should be empty");
 	MW_EXPECT_TRUE(Test, bEmptyVectorHasSpace, "Fresh positive-capacity vector should not be full");
 	MW_EXPECT_EQ(Test, NullIntPointer, EmptyData, "Empty vector should expose null data");
@@ -728,11 +849,17 @@ MW_TEST_CASE(StaticVectorHandlesEmptyAndZeroCapacityBoundaries)
 	MW_EXPECT_EQ(Test, NullIntPointer, ZeroData, "Zero-capacity vector should expose null data");
 }
 
-/** Proves capacity-plus-one rejection preserves insertion order and reverse clear destruction. */
+/**
+ * Scenario: Emplace three tracked elements to capacity, attempt a capacity-plus-one element, iterate, then clear.
+ * Expected: The rejected element never constructs; iteration preserves insertion order; clear destroys elements in reverse order.
+ */
 MW_TEST_CASE(StaticVectorPreservesIterationAndRejectsCapacityPlusOneBeforeConstruction)
 {
+	// Arrange
 	FVectorLifetimeState Lifetime;
 	TStaticVector<FVectorTrackedValue, 3> Vector;
+
+	// Act
 	const ERuntimeResult FirstResult = Vector.Emplace(Lifetime, 1);
 	const ERuntimeResult SecondResult = Vector.Emplace(Lifetime, 2);
 	const ERuntimeResult ThirdResult = Vector.Emplace(Lifetime, 3);
@@ -751,6 +878,8 @@ MW_TEST_CASE(StaticVectorPreservesIterationAndRejectsCapacityPlusOneBeforeConstr
 	const int FirstIterationIdentity = IterationOrder[0];
 	const int SecondIterationIdentity = IterationOrder[1];
 	const int ThirdIterationIdentity = IterationOrder[2];
+
+	// Assert
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, FirstResult, "First vector element should construct");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, SecondResult, "Second vector element should construct");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, ThirdResult, "Element at exact capacity should construct");
@@ -763,12 +892,15 @@ MW_TEST_CASE(StaticVectorPreservesIterationAndRejectsCapacityPlusOneBeforeConstr
 	MW_EXPECT_EQ(Test, 2, SecondIterationIdentity, "Iteration should preserve the second insertion position");
 	MW_EXPECT_EQ(Test, 3, ThirdIterationIdentity, "Iteration should visit the capacity element last");
 
+	// Act
 	Vector.Clear();
 	const std::size_t SizeAfterClear = Vector.Size();
 	const std::size_t DestructionCount = Lifetime.DestructionCount;
 	const int FirstDestroyedIdentity = Lifetime.DestructionOrder[0];
 	const int SecondDestroyedIdentity = Lifetime.DestructionOrder[1];
 	const int ThirdDestroyedIdentity = Lifetime.DestructionOrder[2];
+
+	// Assert
 	MW_EXPECT_EQ(Test, std::size_t{0}, SizeAfterClear, "Clear should restore vector size zero");
 	MW_EXPECT_EQ(Test, std::size_t{3}, DestructionCount, "Clear should destroy every live element exactly once");
 	MW_EXPECT_EQ(Test, 3, FirstDestroyedIdentity, "Clear should destroy the latest element first");
@@ -776,33 +908,50 @@ MW_TEST_CASE(StaticVectorPreservesIterationAndRejectsCapacityPlusOneBeforeConstr
 	MW_EXPECT_EQ(Test, 1, ThirdDestroyedIdentity, "Clear should destroy the earliest element last");
 }
 
-/** Proves vector scope exit destroys exactly the elements whose construction succeeded. */
+/**
+ * Scenario: Emplace two tracked elements into a scoped vector and let it exit scope.
+ * Expected: Scope exit destroys exactly the two live elements in reverse insertion order.
+ */
 MW_TEST_CASE(StaticVectorScopeExitDestroysOnlyLiveElements)
 {
+	// Arrange
 	FVectorLifetimeState Lifetime;
+
+	// Act
 	{
 		TStaticVector<FVectorTrackedValue, 3> Vector;
 		const ERuntimeResult FirstResult = Vector.Emplace(Lifetime, 5);
 		const ERuntimeResult SecondResult = Vector.Emplace(Lifetime, 6);
+
+		// Assert
 		MW_EXPECT_EQ(Test, ERuntimeResult::Success, FirstResult, "First scoped vector element should construct");
 		MW_EXPECT_EQ(Test, ERuntimeResult::Success, SecondResult, "Second scoped vector element should construct");
 	}
 
+	// Act
 	const std::size_t ConstructionCount = Lifetime.ConstructionCount;
 	const std::size_t DestructionCount = Lifetime.DestructionCount;
 	const int FirstDestroyedIdentity = Lifetime.DestructionOrder[0];
 	const int SecondDestroyedIdentity = Lifetime.DestructionOrder[1];
+
+	// Assert
 	MW_EXPECT_EQ(Test, std::size_t{2}, ConstructionCount, "Scoped vector should construct only added elements");
 	MW_EXPECT_EQ(Test, std::size_t{2}, DestructionCount, "Scoped vector should destroy every live element exactly once");
 	MW_EXPECT_EQ(Test, 6, FirstDestroyedIdentity, "Scope exit should destroy latest live element first");
 	MW_EXPECT_EQ(Test, 5, SecondDestroyedIdentity, "Scope exit should destroy earliest live element last");
 }
 
-/** Proves null spans are valid only at the empty boundary. */
+/**
+ * Scenario: Construct default and explicit null-zero-count spans, plus a non-empty null span.
+ * Expected: Null spans are valid only at the empty boundary; the non-empty null span is invalid but retains its caller-provided count.
+ */
 MW_TEST_CASE(SpanDistinguishesValidEmptyNullFromInvalidNonEmptyNull)
 {
+	// Arrange
 	TSpan<int> DefaultSpan;
 	TSpan<int> ExplicitEmptySpan(nullptr, 0);
+
+	// Act
 	TSpan<int> InvalidSpan(nullptr, 1);
 
 	const bool bDefaultValid = DefaultSpan.IsValid();
@@ -819,6 +968,7 @@ MW_TEST_CASE(SpanDistinguishesValidEmptyNullFromInvalidNonEmptyNull)
 	const std::size_t InvalidSpanSize = InvalidSpan.Size();
 	int* const NullIntPointer = nullptr;
 
+	// Assert
 	MW_EXPECT_TRUE(Test, bDefaultValid, "Default null span should be a valid empty view");
 	MW_EXPECT_TRUE(Test, bDefaultEmpty, "Default span should report empty");
 	MW_EXPECT_EQ(Test, NullIntPointer, DefaultData, "Default span should expose null data");
@@ -831,11 +981,18 @@ MW_TEST_CASE(SpanDistinguishesValidEmptyNullFromInvalidNonEmptyNull)
 	MW_EXPECT_EQ(Test, std::size_t{1}, InvalidSpanSize, "Invalid span should retain the caller-provided count");
 }
 
-/** Proves mutable and const array spans preserve views, mutation, and iteration order. */
+/**
+ * Scenario: Build mutable and const array spans including a const view converted from the mutable span, mutate through it, and iterate each.
+ * Expected: The spans preserve array extent, the mutable write updates the caller array, and iteration visits each element in order including the
+ * converted view.
+ */
 MW_TEST_CASE(SpanProvidesMutableAndConstArrayViewsInOrder)
 {
+	// Arrange
 	int MutableElements[]{2, 4, 6};
 	const int ConstElements[]{1, 3, 5};
+
+	// Act
 	TSpan<int> MutableSpan(MutableElements);
 	TSpan<const int> ConstFromMutable(MutableSpan);
 	TSpan<const int> ConstSpan(ConstElements);
@@ -864,6 +1021,8 @@ MW_TEST_CASE(SpanProvidesMutableAndConstArrayViewsInOrder)
 	const std::size_t ConstSize = ConstSpan.Size();
 	const int MutatedArrayValue = MutableElements[1];
 	const bool bConstConversionSharesData = ConstFromMutable.Data() == MutableSpan.Data();
+
+	// Assert
 	MW_EXPECT_TRUE(Test, bMutableValid, "Mutable array span should be valid");
 	MW_EXPECT_TRUE(Test, bConstFromMutableValid, "Const view converted from mutable span should be valid");
 	MW_EXPECT_TRUE(Test, bConstValid, "Const array span should be valid");

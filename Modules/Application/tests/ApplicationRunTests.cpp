@@ -128,9 +128,9 @@ namespace
 
 		MicroWorld::ERuntimeResult Tick(MicroWorld::TimePointMilliseconds InNowMilliseconds) noexcept override
 		{
-			if (std::size_t{TickCount} < MaximumObservedTickTimestamps)
+			if (static_cast<std::size_t>(TickCount) < MaximumObservedTickTimestamps)
 			{
-				ObservedTickTimestamps[std::size_t{TickCount}] = InNowMilliseconds;
+				ObservedTickTimestamps[static_cast<std::size_t>(TickCount)] = InNowMilliseconds;
 			}
 			if (TickCount == StopOnFrameIndex)
 			{
@@ -185,70 +185,100 @@ namespace
 
 } // namespace
 
-/** Proves the runner returns the frame's non-Success result as soon as one engine Tick stops the run. */
+/**
+ * Scenario: Run the application against a scripted engine whose Tick returns non-Success on the first frame.
+ * Expected: Run returns that frame's non-Success result as soon as the run stops.
+ */
 MW_TEST_CASE(RunnerStopsOnFirstNonSuccessFrameAndReturnsIt)
 {
+	// Arrange
 	FScriptedClock Clock{10, 20, 30};
 	FScriptedEngine Engine;
 	Engine.ConfigureStopOnFrame(1);
 	FRunnerApplication Application{Engine};
 
+	// Act
 	const MicroWorld::ERuntimeResult StopResult = Application.Run(Clock, &CountingSleepFunction, 1);
 
+	// Assert
 	MW_EXPECT_EQ(Test, MicroWorld::ERuntimeResult::CapacityExceeded, StopResult, "Runner should return the stopping frame's result");
 }
 
-/** Proves the runner ends play exactly once after a frame stops the run. */
+/**
+ * Scenario: Run the application against a scripted engine that stops on the first frame.
+ * Expected: The engine EndPlay is invoked exactly once after the stopping frame.
+ */
 MW_TEST_CASE(RunnerEndsPlayAfterAStoppingFrame)
 {
+	// Arrange
 	FScriptedClock Clock{10, 20, 30};
 	FScriptedEngine Engine;
 	Engine.ConfigureStopOnFrame(0);
 	FRunnerApplication Application{Engine};
 
+	// Act
 	(void)Application.Run(Clock, &CountingSleepFunction, 1);
 
+	// Assert
 	MW_EXPECT_EQ(Test, 1, Engine.EndPlayCount, "Runner should invoke EndPlay once after a stopping frame");
 }
 
-/** Proves a failed begin returns the begin result without ever invoking EndPlay. */
+/**
+ * Scenario: Run the application against a scripted engine whose BeginPlay fails.
+ * Expected: Run returns the begin failure result without ever invoking EndPlay.
+ */
 MW_TEST_CASE(RunnerDoesNotEndPlayAfterFailedBeginPlay)
 {
+	// Arrange
 	FScriptedClock Clock{10, 20, 30};
 	FScriptedEngine Engine;
 	Engine.ConfigureBeginPlayResult(MicroWorld::ERuntimeResult::CapacityExceeded);
 	FRunnerApplication Application{Engine};
 
+	// Act
 	const MicroWorld::ERuntimeResult StopResult = Application.Run(Clock, &CountingSleepFunction, 1);
 
+	// Assert
 	MW_EXPECT_EQ(Test, MicroWorld::ERuntimeResult::CapacityExceeded, StopResult, "Runner should return the begin failure result");
 	MW_EXPECT_EQ(Test, 0, Engine.EndPlayCount, "Runner must not invoke EndPlay after a failed begin");
 }
 
-/** Proves pacing fires once per successful frame only, never for the stopping frame. */
+/**
+ * Scenario: Run the application across several successful frames until a configured frame stops the run.
+ * Expected: Pacing fires exactly once per successful frame and never for the stopping frame.
+ */
 MW_TEST_CASE(RunnerSleepsOncePerSuccessfulFrameOnly)
 {
+	// Arrange
 	ResetPacingCounter();
 	FScriptedClock Clock{10, 20, 30, 40};
 	FScriptedEngine Engine;
 	Engine.ConfigureStopOnFrame(2);
 	FRunnerApplication Application{Engine};
 
+	// Act
 	(void)Application.Run(Clock, &CountingSleepFunction, 1);
 
+	// Assert
 	MW_EXPECT_EQ(Test, 2, GPacingCallCount, "Pacing should fire once per successful frame only");
 }
 
-/** Proves the runner feeds the scripted clock values into each engine Tick, with begin consuming the first reading. */
+/**
+ * Scenario: Run the application with a scripted clock and a scripted engine that stops on the first frame.
+ * Expected: Each engine Tick sees the next scripted clock value; begin consumes the first reading before the first Tick.
+ */
 MW_TEST_CASE(RunnerFeedsClockValuesIntoTick)
 {
+	// Arrange
 	FScriptedClock Clock{10, 20, 30};
 	FScriptedEngine Engine;
 	Engine.ConfigureStopOnFrame(1);
 	FRunnerApplication Application{Engine};
 
+	// Act
 	(void)Application.Run(Clock, &CountingSleepFunction, 1);
 
+	// Assert
 	const bool bFirstFrameSawSecondClockValue = Engine.ObservedTickTimestamps[0] == MicroWorld::TimePointMilliseconds{20};
 	const bool bSecondFrameSawThirdClockValue = Engine.ObservedTickTimestamps[1] == MicroWorld::TimePointMilliseconds{30};
 	MW_EXPECT_TRUE(Test, bFirstFrameSawSecondClockValue, "First Tick should see the second clock value (begin consumed the first)");

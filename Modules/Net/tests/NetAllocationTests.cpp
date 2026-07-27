@@ -79,15 +79,13 @@ constexpr std::uint8_t SecondManagerPacket[4] = {0x05, 0x06, 0x07, 0x08};
 constexpr std::uint8_t FullFifoPacket[2] = {0xAA, 0xBB};
 
 /**
- * Exercises every steady-state Net path and proves none of them allocate.
- *
- * The test captures the allocation counter after construction, then drives byte
- * writer/reader operations, manager queue/send-advance/receive, and loopback
- * delivery, full, unavailable, drain, and reuse paths. A steady-state delta of
- * zero proves the bounded fixed-storage contract holds across the public API.
+ * Scenario: Capture the allocation counter after construction, then drive byte writer/reader operations, manager queue/send-advance/receive, loopback
+ * delivery, full, unavailable, drain, and reuse paths, and message-framing control round trips. Expected: Every steady-state Net path performs no
+ * observable heap allocation, proving the bounded fixed-storage contract holds across the public API.
  */
 MW_TEST_CASE(NetOperationsPerformNoObservableAllocation)
 {
+	// Arrange
 	std::uint8_t WriterStorage[BufferByteCount] = {};
 
 	FByteWriter Writer(TSpan<std::uint8_t>(WriterStorage, sizeof(WriterStorage)));
@@ -103,6 +101,7 @@ MW_TEST_CASE(NetOperationsPerformNoObservableAllocation)
 	// Capture the counter only after every fixed-storage object is constructed.
 	const std::uint32_t AllocationsBefore = GlobalAllocationCount;
 
+	// Act - exercise the steady-state writer/reader path.
 	for (std::size_t Index = 0; Index < sizeof(WriterStorage); ++Index)
 	{
 		Writer.WriteByte(static_cast<std::uint8_t>(WrittenByteBase + Index));
@@ -114,6 +113,7 @@ MW_TEST_CASE(NetOperationsPerformNoObservableAllocation)
 		Reader.ReadByte(Byte);
 	}
 
+	// Act - exercise the manager queue/send-advance/receive path.
 	(void)Manager.QueueSend(Port0, TSpan<const std::uint8_t>(FirstManagerPacket, sizeof(FirstManagerPacket)));
 	(void)Manager.QueueSend(Port0, TSpan<const std::uint8_t>(SecondManagerPacket, sizeof(SecondManagerPacket)));
 
@@ -128,24 +128,24 @@ MW_TEST_CASE(NetOperationsPerformNoObservableAllocation)
 	FNetAddress SecondFrom{};
 	(void)Manager.Receive(SecondFrom, TSpan<std::uint8_t>(ReceiveDestination, sizeof(ReceiveDestination)), SecondReceive);
 
-	// Exercise the empty and full paths: advance an empty FIFO and queue into a full one.
+	// Act - exercise the empty and full paths: advance an empty FIFO and queue into a full one.
 	(void)Manager.AdvanceSend();
 	TNetPacketStorage<FullQueueSlotCount, FourBytePacketCapacity> FullManagerStorage;
 	TNetManager<FullQueueSlotCount, FourBytePacketCapacity> FullManager(Loopback.Port(SourcePort), FullManagerStorage);
 	(void)FullManager.QueueSend(Port0, TSpan<const std::uint8_t>(FullFifoPacket, sizeof(FullFifoPacket)));
 	(void)FullManager.QueueSend(Port0, TSpan<const std::uint8_t>(FullFifoPacket, sizeof(FullFifoPacket)));
 
-	// Exercise drain and capacity reuse on the loopback.
+	// Act - exercise drain and capacity reuse on the loopback.
 	Loopback.Drain(SourcePort);
 	(void)Loopback.Port(SourcePort).TrySend(Port0, TSpan<const std::uint8_t>(FullFifoPacket, sizeof(FullFifoPacket)));
 
-	// Exercise the unavailable receive path on a drained loopback.
+	// Act - exercise the unavailable receive path on a drained loopback.
 	FNetReceiveResult EmptyReceive{UntouchedBytesReceivedSentinel};
 	std::uint8_t EmptyDestination[FourBytePacketCapacity] = {};
 	FNetAddress EmptyFrom{};
 	(void)Loopback.Port(SourcePort).TryReceive(EmptyFrom, TSpan<std::uint8_t>(EmptyDestination, sizeof(EmptyDestination)), EmptyReceive);
 
-	// Exercise the message-framing path: write/read an application message and a control message.
+	// Act - exercise the message-framing path: write/read an application message and a control message.
 	FByteWriter FrameWriter(TSpan<std::uint8_t>(FramingBuffer, sizeof(FramingBuffer)));
 	(void)WriteMessage(FrameWriter, ApplicationChannel, TSpan<const std::uint8_t>(FramingPayloadBytes, sizeof(FramingPayloadBytes)));
 	FMessageHeader FrameHeader{};
@@ -166,6 +166,7 @@ MW_TEST_CASE(NetOperationsPerformNoObservableAllocation)
 	(void)ReadControlMessage(ControlPayload, DecodedControl);
 
 	const std::uint32_t AllocationsAfter = GlobalAllocationCount;
+	// Assert
 	MW_EXPECT_EQ(Test, AllocationsBefore, AllocationsAfter, "Steady-state Net operations must not allocate");
 }
 

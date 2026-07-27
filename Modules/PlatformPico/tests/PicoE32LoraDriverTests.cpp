@@ -176,7 +176,10 @@ FPicoE32LoraConfig MakeValidConfig() noexcept
 	return Config;
 }
 
-/** Proves invalid hardware configuration is rejected without acquiring the fake UART resource. */
+/**
+ * Scenario: Initialize the driver with an unsupported UART pin configuration.
+ * Expected: Initialization is rejected as Invalid; the driver is left closed; the fake UART is neither acquired nor released.
+ */
 MW_TEST_CASE(PicoE32DriverRejectsInvalidConfigBeforePlatformOpen)
 {
 	// Arrange
@@ -199,7 +202,10 @@ MW_TEST_CASE(PicoE32DriverRejectsInvalidConfigBeforePlatformOpen)
 	MW_EXPECT_EQ(Test, std::size_t{0}, CloseCalls, "Invalid configuration must not release an unopened UART");
 }
 
-/** Proves an inexact platform baud attempt releases its acquired UART and leaves the driver closed. */
+/**
+ * Scenario: Initialize the driver with valid pins but a platform that achieves a baud rate below the requested rate.
+ * Expected: Initialization is rejected as Invalid after one UART open; the acquired UART is released once; the driver is left closed.
+ */
 MW_TEST_CASE(PicoE32DriverClosesMismatchedBaudAttempt)
 {
 	// Arrange
@@ -225,7 +231,11 @@ MW_TEST_CASE(PicoE32DriverClosesMismatchedBaudAttempt)
 	MW_EXPECT_EQ(Test, RequestedUartIndex, ClosedUartIndex, "Failed initialization must release the requested UART identity");
 }
 
-/** Proves one accepted frame remains full until writable polls advance every encoded byte. */
+/**
+ * Scenario: Queue one frame, attempt a second, drive an AdvanceTransmit while the UART is blocked, then advance through every encoded byte.
+ * Expected: The second send stays Full while the slot is occupied and while the UART is blocked; writable polls transmit every encoded byte in order;
+ * only the final byte releases the slot for a new send.
+ */
 MW_TEST_CASE(PicoE32DriverAppliesTransmitBackpressureUntilAllBytesAdvance)
 {
 	// Arrange
@@ -274,7 +284,11 @@ MW_TEST_CASE(PicoE32DriverAppliesTransmitBackpressureUntilAllBytesAdvance)
 	MW_EXPECT_EQ(Test, ENetResult::Success, SendAfterFinalByteResult, "The final transmitted byte must release the transmit slot");
 }
 
-/** Proves a bounded receive poll defers an over-budget frame and later delivers it intact. */
+/**
+ * Scenario: Queue a full frame beyond the receive byte budget, then poll receive twice.
+ * Expected: The first poll defers the frame as Unavailable after consuming only the fixed byte budget and preserves caller outputs; the second poll
+ * delivers the complete valid frame with the correct sender, size, and bytes.
+ */
 MW_TEST_CASE(PicoE32DriverCapsReceiveWorkThenDeliversValidFrame)
 {
 	// Arrange
@@ -329,7 +343,10 @@ MW_TEST_CASE(PicoE32DriverCapsReceiveWorkThenDeliversValidFrame)
 	}
 }
 
-/** Proves a successfully opened UART is released once when its driver reaches the ownership boundary. */
+/**
+ * Scenario: Initialize a driver that successfully opens its UART, then destroy the driver.
+ * Expected: The UART is acquired exactly once during initialization and released exactly once on destruction.
+ */
 MW_TEST_CASE(PicoE32DriverClosesOpenedUartOnDestruction)
 {
 	// Arrange

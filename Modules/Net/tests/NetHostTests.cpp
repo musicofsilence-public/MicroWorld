@@ -184,9 +184,13 @@ void RunHandshake(ServerType& InServer, ClientType& InClient, const TimePointMil
 	InClient.PumpReceive(InNowMilliseconds);
 }
 
-/** Proves a server admits one client and issues a Welcome that connects it. */
+/**
+ * Scenario: Drive one Hello from the client to a started server, then have the server send Welcome back.
+ * Expected: The server admits one peer on the Hello and the client reaches Connected once it receives the Welcome.
+ */
 MW_TEST_CASE(NetHostServerAdmitsClientOnHello)
 {
+	// Arrange
 	THostLoopback<2, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
 	TNetHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
 	TNetHost<1, HostPacketBytes> Client(Loopback.Port(FirstClientPortIndex));
@@ -195,18 +199,26 @@ MW_TEST_CASE(NetHostServerAdmitsClientOnHello)
 	(void)Server.Start(0);
 	(void)Client.Start(0);
 
+	// Act - client sends Hello, server receives and admits it
 	Client.PumpSend(0);
 	Server.PumpReceive(0);
+	// Assert
 	MW_EXPECT_EQ(Test, AdmittedPeerCount, Server.ActivePeerCount(), "Server admits one peer on a valid Hello");
 
+	// Act - server sends Welcome, client receives and connects
 	Server.PumpSend(0);
 	Client.PumpReceive(0);
+	// Assert
 	MW_EXPECT_EQ(Test, ENetHostState::Connected, Client.GetState(), "Client connects once it receives the Welcome");
 }
 
-/** Proves the client state machine advances Idle -> Connecting -> Connected. */
+/**
+ * Scenario: Configure a client but leave it unstarted, then start it, then run the handshake.
+ * Expected: The client state advances Idle to Connecting on Start and reaches Connected after the handshake.
+ */
 MW_TEST_CASE(NetHostClientAdvancesThroughConnectingToConnected)
 {
+	// Arrange
 	THostLoopback<2, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
 	TNetHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
 	TNetHost<1, HostPacketBytes> Client(Loopback.Port(FirstClientPortIndex));
@@ -214,16 +226,25 @@ MW_TEST_CASE(NetHostClientAdvancesThroughConnectingToConnected)
 	(void)Client.Configure(ENetMode::Client, MakeClientConfig(MatchedProtocolVersion, ServerPortIndex));
 	(void)Server.Start(0);
 
+	// Assert - a configured but unstarted client is Idle
 	MW_EXPECT_EQ(Test, ENetHostState::Idle, Client.GetState(), "A configured but unstarted client is Idle");
+	// Act
 	(void)Client.Start(0);
+	// Assert - a started client is Connecting
 	MW_EXPECT_EQ(Test, ENetHostState::Connecting, Client.GetState(), "A started client is Connecting");
+	// Act
 	RunHandshake(Server, Client, 0);
+	// Assert
 	MW_EXPECT_EQ(Test, ENetHostState::Connected, Client.GetState(), "The client reaches Connected after the handshake");
 }
 
-/** Proves a server admits only up to its peer capacity and rejects the overflow Hello. */
+/**
+ * Scenario: Start three clients against a two-peer-capacity server and have each client send Hello.
+ * Expected: The server admits exactly its peer capacity and rejects the overflow Hello.
+ */
 MW_TEST_CASE(NetHostRejectsHelloWhenPeerTableFull)
 {
+	// Arrange
 	THostLoopback<4, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
 	TNetHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
 	TNetHost<1, HostPacketBytes> FirstClient(Loopback.Port(FirstClientPortIndex));
@@ -238,17 +259,23 @@ MW_TEST_CASE(NetHostRejectsHelloWhenPeerTableFull)
 	(void)SecondClient.Start(0);
 	(void)ThirdClient.Start(0);
 
+	// Act
 	FirstClient.PumpSend(0);
 	SecondClient.PumpSend(0);
 	ThirdClient.PumpSend(0);
 	Server.PumpReceive(0);
 
+	// Assert
 	MW_EXPECT_EQ(Test, FullPeerCount, Server.ActivePeerCount(), "Server admits exactly MaxPeers clients and rejects the rest");
 }
 
-/** Proves heartbeats received within the window keep a peer alive past the timeout. */
+/**
+ * Scenario: Complete a handshake, then drive client heartbeats every interval well past the timeout window.
+ * Expected: Heartbeats received within the window keep the peer alive beyond the timeout.
+ */
 MW_TEST_CASE(NetHostHeartbeatKeepsPeerAlive)
 {
+	// Arrange
 	THostLoopback<2, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
 	TNetHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
 	TNetHost<1, HostPacketBytes> Client(Loopback.Port(FirstClientPortIndex));
@@ -258,19 +285,24 @@ MW_TEST_CASE(NetHostHeartbeatKeepsPeerAlive)
 	(void)Client.Start(0);
 	RunHandshake(Server, Client, 0);
 
-	// Drive client heartbeats every interval well past the 500 ms timeout window.
+	// Act - drive client heartbeats every interval well past the 500 ms timeout window.
 	for (TimePointMilliseconds Now = HeartbeatIntervalMs; Now <= KeepAliveWindowEndMs; Now += HeartbeatIntervalMs)
 	{
 		Client.PumpSend(Now);
 		Server.PumpReceive(Now);
 	}
 
+	// Assert
 	MW_EXPECT_EQ(Test, AdmittedPeerCount, Server.ActivePeerCount(), "Heartbeats keep the peer alive beyond the timeout window");
 }
 
-/** Proves a peer that misses heartbeats past the timeout is evicted. */
+/**
+ * Scenario: Complete a handshake, then send no further client traffic while advancing the server past the timeout window.
+ * Expected: The peer is evicted after missing heartbeats past the timeout.
+ */
 MW_TEST_CASE(NetHostEvictsPeerAfterTimeout)
 {
+	// Arrange
 	THostLoopback<2, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
 	TNetHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
 	TNetHost<1, HostPacketBytes> Client(Loopback.Port(FirstClientPortIndex));
@@ -281,14 +313,19 @@ MW_TEST_CASE(NetHostEvictsPeerAfterTimeout)
 	RunHandshake(Server, Client, 0);
 	MW_EXPECT_EQ(Test, AdmittedPeerCount, Server.ActivePeerCount(), "Peer is active right after the handshake");
 
-	// No further client traffic; advance the server past the timeout window.
+	// Act - no further client traffic; advance the server past the timeout window.
 	Server.PumpReceive(EvictionTimeoutMs);
+	// Assert
 	MW_EXPECT_EQ(Test, EmptyPeerCount, Server.ActivePeerCount(), "Peer is evicted after missing heartbeats past the timeout");
 }
 
-/** Proves eviction bumps the slot generation so a stale peer id fails after re-admission. */
+/**
+ * Scenario: Admit a first client, evict it by timeout, then admit a second client into the freed slot and send to both the stale and fresh peer ids.
+ * Expected: Eviction bumps the slot generation; the stale id fails to send while the freshly assigned id resolves the reused slot.
+ */
 MW_TEST_CASE(NetHostBumpsGenerationSoStaleIdFailsAfterReadmission)
 {
+	// Arrange
 	THostLoopback<3, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
 	TNetHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
 	TNetHost<1, HostPacketBytes> FirstClient(Loopback.Port(FirstClientPortIndex));
@@ -302,16 +339,18 @@ MW_TEST_CASE(NetHostBumpsGenerationSoStaleIdFailsAfterReadmission)
 	RunHandshake(Server, FirstClient, 0);
 	const FPeerId StaleId = FirstClient.GetAssignedPeer();
 
-	// First client goes silent and times out, freeing and bumping its slot.
+	// Act - first client goes silent and times out, freeing and bumping its slot.
 	Server.PumpReceive(GenerationBumpEvictMs);
+	// Assert
 	MW_EXPECT_EQ(Test, EmptyPeerCount, Server.ActivePeerCount(), "First client is evicted after timeout");
 
-	// Second client is admitted into the same freed slot with a bumped generation.
+	// Act - second client is admitted into the same freed slot with a bumped generation.
 	(void)SecondClient.Start(GenerationBumpEvictMs);
 	RunHandshake(Server, SecondClient, GenerationBumpEvictMs);
 	const FPeerId FreshId = SecondClient.GetAssignedPeer();
 
 	const std::uint8_t Payload[1] = {GenerationBumpPayloadByte};
+	// Act / Assert - the stale id must fail and the fresh id must succeed on the reused slot.
 	MW_EXPECT_EQ(
 		Test,
 		ENetResult::Invalid,
@@ -324,9 +363,13 @@ MW_TEST_CASE(NetHostBumpsGenerationSoStaleIdFailsAfterReadmission)
 		"The freshly assigned peer id resolves the reused slot");
 }
 
-/** Proves a broadcast reaches every connected remote peer. */
+/**
+ * Scenario: Connect two clients, broadcast a payload from the server, and pump delivery to both.
+ * Expected: Each connected client receives the broadcast exactly once with the broadcast payload byte.
+ */
 MW_TEST_CASE(NetHostBroadcastReachesEveryConnectedPeer)
 {
+	// Arrange
 	THostLoopback<3, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
 	TNetHost<3, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
 	TNetHost<1, HostPacketBytes> FirstClient(Loopback.Port(FirstClientPortIndex));
@@ -348,6 +391,7 @@ MW_TEST_CASE(NetHostBroadcastReachesEveryConnectedPeer)
 	MW_EXPECT_EQ(Test, BroadcastPeerCount, Server.ActivePeerCount(), "Both clients are connected before the broadcast");
 
 	const std::uint8_t Payload[1] = {BroadcastPayloadByte};
+	// Act
 	MW_EXPECT_EQ(
 		Test,
 		ENetResult::Success,
@@ -357,15 +401,20 @@ MW_TEST_CASE(NetHostBroadcastReachesEveryConnectedPeer)
 	FirstClient.PumpReceive(0);
 	SecondClient.PumpReceive(0);
 
+	// Assert
 	MW_EXPECT_EQ(Test, AdmittedPeerCount, FirstCapture.Count, "First client receives the broadcast exactly once");
 	MW_EXPECT_EQ(Test, BroadcastPayloadByte, FirstCapture.FirstByte, "First client sees the broadcast payload");
 	MW_EXPECT_EQ(Test, AdmittedPeerCount, SecondCapture.Count, "Second client receives the broadcast exactly once");
 	MW_EXPECT_EQ(Test, BroadcastPayloadByte, SecondCapture.FirstByte, "Second client sees the broadcast payload");
 }
 
-/** Proves SendTo delivers only to the addressed peer on the given channel. */
+/**
+ * Scenario: Connect a client, send a payload to its peer id on a chosen channel, and pump delivery.
+ * Expected: The addressed peer receives exactly one message on the requested channel carrying the sent payload.
+ */
 MW_TEST_CASE(NetHostSendToDeliversToTheAddressedPeer)
 {
+	// Arrange
 	THostLoopback<2, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
 	TNetHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
 	TNetHost<1, HostPacketBytes> Client(Loopback.Port(FirstClientPortIndex));
@@ -380,6 +429,7 @@ MW_TEST_CASE(NetHostSendToDeliversToTheAddressedPeer)
 
 	const FPeerId ClientId = Client.GetAssignedPeer();
 	const std::uint8_t Payload[1] = {SendToPayloadByte};
+	// Act
 	MW_EXPECT_EQ(
 		Test,
 		ENetResult::Success,
@@ -388,14 +438,20 @@ MW_TEST_CASE(NetHostSendToDeliversToTheAddressedPeer)
 	Server.PumpSend(0);
 	Client.PumpReceive(0);
 
+	// Assert
 	MW_EXPECT_EQ(Test, AdmittedPeerCount, ClientCapture.Count, "The addressed peer receives exactly one message");
 	MW_EXPECT_EQ(Test, SendToChannel, ClientCapture.Channel, "The message arrives on the requested channel");
 	MW_EXPECT_EQ(Test, SendToPayloadByte, ClientCapture.FirstByte, "The message carries the sent payload");
 }
 
-/** Proves a listen server dispatches a local-peer message straight to the handler with no driver. */
+/**
+ * Scenario: Configure and start a listen server, then SendTo the local peer.
+ * Expected: The local-peer message dispatches synchronously to the handler with no driver pump, attributed to the local peer id with its channel and
+ * payload.
+ */
 MW_TEST_CASE(NetHostListenServerDispatchesToLocalPeerWithoutDriver)
 {
+	// Arrange
 	THostLoopback<1, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
 	TNetHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
 	(void)Server.Configure(ENetMode::ListenServer, MakeHostConfig(MatchedProtocolVersion));
@@ -405,6 +461,7 @@ MW_TEST_CASE(NetHostListenServerDispatchesToLocalPeerWithoutDriver)
 	(void)InstallCapture(Server, LocalCapture);
 
 	const std::uint8_t Payload[1] = {LocalDispatchPayloadByte};
+	// Act / Assert
 	MW_EXPECT_EQ(
 		Test,
 		ENetResult::Success,
@@ -416,9 +473,13 @@ MW_TEST_CASE(NetHostListenServerDispatchesToLocalPeerWithoutDriver)
 	MW_EXPECT_EQ(Test, LocalDispatchPayloadByte, LocalCapture.FirstByte, "The local message keeps its payload");
 }
 
-/** Proves a client returns to Connecting when its server stops answering. */
+/**
+ * Scenario: Complete a handshake, then leave the server silent while advancing the client past its timeout window.
+ * Expected: The client returns to Connecting when the server times out.
+ */
 MW_TEST_CASE(NetHostClientReturnsToConnectingOnServerTimeout)
 {
+	// Arrange
 	THostLoopback<2, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
 	TNetHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
 	TNetHost<1, HostPacketBytes> Client(Loopback.Port(FirstClientPortIndex));
@@ -429,14 +490,19 @@ MW_TEST_CASE(NetHostClientReturnsToConnectingOnServerTimeout)
 	RunHandshake(Server, Client, 0);
 	MW_EXPECT_EQ(Test, ENetHostState::Connected, Client.GetState(), "Client is connected after the handshake");
 
-	// The server goes silent; advance the client past its timeout window.
+	// Act - the server goes silent; advance the client past its timeout window.
 	Client.PumpReceive(ClientServerTimeoutMs);
+	// Assert
 	MW_EXPECT_EQ(Test, ENetHostState::Connecting, Client.GetState(), "Client re-enters Connecting when the server times out");
 }
 
-/** Proves a repeated Hello from an admitted address re-welcomes without allocating a second slot. */
+/**
+ * Scenario: Admit a client with a first Hello, then send a second Hello from the same address without consuming the Welcome.
+ * Expected: The repeated Hello re-welcomes the client and reuses the same slot instead of allocating another.
+ */
 MW_TEST_CASE(NetHostRepeatedHelloReusesTheSameSlot)
 {
+	// Arrange
 	THostLoopback<2, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
 	TNetHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
 	TNetHost<1, HostPacketBytes> Client(Loopback.Port(FirstClientPortIndex));
@@ -445,19 +511,26 @@ MW_TEST_CASE(NetHostRepeatedHelloReusesTheSameSlot)
 	(void)Server.Start(0);
 	(void)Client.Start(0);
 
-	// First Hello admits the client; the client never consumes the Welcome, so it re-greets.
+	// Act - first Hello admits the client; the client never consumes the Welcome, so it re-greets.
 	Client.PumpSend(0);
 	Server.PumpReceive(0);
+	// Assert
 	MW_EXPECT_EQ(Test, AdmittedPeerCount, Server.ActivePeerCount(), "First Hello admits the client");
 
+	// Act
 	Client.PumpSend(RepeatedHelloResendMs);
 	Server.PumpReceive(RepeatedHelloResendMs);
+	// Assert
 	MW_EXPECT_EQ(Test, AdmittedPeerCount, Server.ActivePeerCount(), "A repeated Hello reuses the slot instead of allocating another");
 }
 
-/** Proves a Bye received from a peer frees its slot. */
+/**
+ * Scenario: Complete a handshake, stop the client to send a Bye, then have the server process it.
+ * Expected: The Bye frees the peer's slot.
+ */
 MW_TEST_CASE(NetHostByeEvictsPeer)
 {
+	// Arrange
 	THostLoopback<2, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
 	TNetHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
 	TNetHost<1, HostPacketBytes> Client(Loopback.Port(FirstClientPortIndex));
@@ -468,15 +541,20 @@ MW_TEST_CASE(NetHostByeEvictsPeer)
 	RunHandshake(Server, Client, 0);
 	MW_EXPECT_EQ(Test, AdmittedPeerCount, Server.ActivePeerCount(), "Peer is active before the Bye");
 
-	// Stop sends a best-effort Bye to the server, then the server processes it.
+	// Act - Stop sends a best-effort Bye to the server, then the server processes it.
 	Client.Stop();
 	Server.PumpReceive(0);
+	// Assert
 	MW_EXPECT_EQ(Test, EmptyPeerCount, Server.ActivePeerCount(), "Server frees the peer on Bye");
 }
 
-/** Proves a server ignores a Hello whose protocol version does not match. */
+/**
+ * Scenario: Have a client with a mismatched protocol version send Hello to the server, then pump both directions.
+ * Expected: The server ignores the version-mismatched Hello and the rejected client never leaves Connecting.
+ */
 MW_TEST_CASE(NetHostIgnoresHelloWithWrongProtocolVersion)
 {
+	// Arrange
 	THostLoopback<2, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
 	TNetHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
 	TNetHost<1, HostPacketBytes> Client(Loopback.Port(FirstClientPortIndex));
@@ -485,40 +563,52 @@ MW_TEST_CASE(NetHostIgnoresHelloWithWrongProtocolVersion)
 	(void)Server.Start(0);
 	(void)Client.Start(0);
 
+	// Act / Assert
 	Client.PumpSend(0);
 	Server.PumpReceive(0);
 	MW_EXPECT_EQ(Test, EmptyPeerCount, Server.ActivePeerCount(), "Server ignores a version-mismatched Hello");
 
+	// Act / Assert
 	Server.PumpSend(0);
 	Client.PumpReceive(0);
 	MW_EXPECT_EQ(Test, ENetHostState::Connecting, Client.GetState(), "The rejected client never leaves Connecting");
 }
 
-/** Proves an unknown control type is dropped without admitting a peer. */
+/**
+ * Scenario: Deliver a control frame whose payload byte names an undefined control type to a started server.
+ * Expected: The unknown control message is dropped and no peer is admitted.
+ */
 MW_TEST_CASE(NetHostDropsUnknownControlMessage)
 {
+	// Arrange
 	THostLoopback<2, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
 	TNetHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
 	(void)Server.Configure(ENetMode::DedicatedServer, MakeHostConfig(MatchedProtocolVersion));
 	(void)Server.Start(0);
 
-	// A payload byte whose control type (0x09) names no defined control message.
+	// Act - a payload byte whose control type (0x09) names no defined control message.
 	(void)Loopback.Port(FirstClientPortIndex)
 		.TrySend(MakeLoopbackAddress(ServerPortIndex), TSpan<const std::uint8_t>(UnknownControlTypeFrame, sizeof(UnknownControlTypeFrame)));
 	Server.PumpReceive(0);
 
+	// Assert
 	MW_EXPECT_EQ(Test, EmptyPeerCount, Server.ActivePeerCount(), "An unknown control message admits nobody");
 }
 
-/** Proves a standalone host originates no traffic and reports Unavailable on send. */
+/**
+ * Scenario: Configure and start a standalone host, then attempt SendTo and Broadcast.
+ * Expected: Both sends return Unavailable and the host stays Idle after Start.
+ */
 MW_TEST_CASE(NetHostStandaloneReportsUnavailableOnSend)
 {
+	// Arrange
 	THostLoopback<1, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
 	TNetHost<2, HostPacketBytes> Host(Loopback.Port(ServerPortIndex));
 	(void)Host.Configure(ENetMode::Standalone, MakeHostConfig(MatchedProtocolVersion));
 	(void)Host.Start(0);
 
 	const std::uint8_t Payload[1] = {StandalonePayloadByte};
+	// Act / Assert
 	MW_EXPECT_EQ(
 		Test,
 		ENetResult::Unavailable,
@@ -532,9 +622,13 @@ MW_TEST_CASE(NetHostStandaloneReportsUnavailableOnSend)
 	MW_EXPECT_EQ(Test, ENetHostState::Idle, Host.GetState(), "Standalone stays Idle after Start");
 }
 
-/** Proves a full client/server session performs no observable heap allocation. */
+/**
+ * Scenario: Capture the allocation counter after construction, then run a full handshake plus unicast and broadcast round trips.
+ * Expected: The full client/server session performs no observable heap allocation.
+ */
 MW_TEST_CASE(NetHostSessionPerformsNoObservableAllocation)
 {
+	// Arrange
 	THostLoopback<2, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
 	TNetHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
 	TNetHost<1, HostPacketBytes> Client(Loopback.Port(FirstClientPortIndex));
@@ -549,6 +643,7 @@ MW_TEST_CASE(NetHostSessionPerformsNoObservableAllocation)
 	// Capture the counter only after every fixed-storage object and handler exists.
 	const std::uint32_t AllocationsBefore = GlobalAllocationCount;
 
+	// Act
 	RunHandshake(Server, Client, 0);
 	const std::uint8_t Payload[3] = {SessionPayloadFirstByte, SessionPayloadSecondByte, SessionPayloadThirdByte};
 	(void)Client.SendTo(Client.GetServerPeer(), SendChannel, TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
@@ -559,12 +654,17 @@ MW_TEST_CASE(NetHostSessionPerformsNoObservableAllocation)
 	Client.PumpReceive(SessionPumpMs);
 
 	const std::uint32_t AllocationsAfter = GlobalAllocationCount;
+	// Assert
 	MW_EXPECT_EQ(Test, AllocationsBefore, AllocationsAfter, "A full TNetHost session must not allocate");
 }
 
-/** Proves a dedicated server has no local peer: a local send is rejected and dispatches nothing. */
+/**
+ * Scenario: Configure and start a dedicated server, then attempt a local SendTo and a Broadcast with no peers.
+ * Expected: A dedicated server rejects a send to the local peer as Invalid, succeeds with Broadcast, and dispatches nothing locally.
+ */
 MW_TEST_CASE(NetHostDedicatedServerHasNoLocalDispatch)
 {
+	// Arrange
 	THostLoopback<1, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
 	TNetHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
 	(void)Server.Configure(ENetMode::DedicatedServer, MakeHostConfig(MatchedProtocolVersion));
@@ -574,6 +674,7 @@ MW_TEST_CASE(NetHostDedicatedServerHasNoLocalDispatch)
 	(void)InstallCapture(Server, Capture);
 
 	const std::uint8_t Payload[1] = {DedicatedServerLocalPayloadByte};
+	// Act / Assert
 	MW_EXPECT_EQ(
 		Test,
 		ENetResult::Invalid,
@@ -623,17 +724,22 @@ public:
 	std::size_t ReceiveCallCount{0};
 };
 
-/** Proves one PumpReceive processes at most MaxPeers + 4 receives, so a flood cannot starve the frame. */
+/**
+ * Scenario: Pump a started server whose driver never runs dry of empty control frames.
+ * Expected: One pump is bounded to MaxPeers plus four receives, so a flood cannot starve the frame.
+ */
 MW_TEST_CASE(NetHostPumpReceiveIsBoundedUnderFlood)
 {
+	// Arrange
 	FFloodDriver Driver;
 	TNetHost<3, HostPacketBytes> Server(Driver);
 	(void)Server.Configure(ENetMode::DedicatedServer, MakeHostConfig(MatchedProtocolVersion));
 	(void)Server.Start(0);
 
+	// Act
 	Server.PumpReceive(0);
 
-	// MaxPeers (3) + 4 = 7 receives is the per-pump bound, even though the driver never runs dry.
+	// Assert - MaxPeers (3) + 4 = 7 receives is the per-pump bound, even though the driver never runs dry.
 	MW_EXPECT_EQ(Test, BoundedPumpReceiveCount, Driver.ReceiveCallCount, "One pump is bounded to MaxPeers + 4 receives");
 }
 

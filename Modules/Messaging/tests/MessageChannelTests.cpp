@@ -108,6 +108,11 @@ constexpr std::size_t OutboundQueueCapacity = 4;
 constexpr std::size_t MessageByteCapacity = 32;
 constexpr std::size_t ChannelCapacity = 1;
 
+/** GC budget every host world is rooted with; generous headroom since these cases never spawn actors, so the values are not under test. */
+constexpr std::uint32_t TestRootOperations = 1;
+constexpr std::uint32_t TestMarkOperations = 4;
+constexpr std::uint32_t TestSweepOperations = 8;
+
 /** The network host type every case wires a channel binding to. */
 using FNet = TNetHost<2, 64>;
 
@@ -344,9 +349,13 @@ TimePointMilliseconds ConnectClientToServerOverTwoWires(
 	return InNowMilliseconds;
 }
 
-/** Client-to-server targeted delivery: SendMessageToActor on the bound channel reaches only the server's matching handler. */
+/**
+ * Scenario: Connect a client and server through a bound channel, then issue a targeted send from the client.
+ * Expected: The send enqueues successfully and reaches only the server's matching handler, carrying the original header fields and payload byte.
+ */
 MW_TEST_CASE(EngineMessageChannel_ClientToServerTargetedSendReachesServerHandler)
 {
+	// Arrange
 	THostLoopback<2, 8, 64> Network;
 	FNet ServerNet(Network.Port(0));
 	FNet ClientNet(Network.Port(1));
@@ -360,8 +369,8 @@ MW_TEST_CASE(EngineMessageChannel_ClientToServerTargetedSendReachesServerHandler
 	FFrameSet ClientSet;
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ClientSet.Add(ClientFrame), "The client's frame set must accept its net frame first (D3 order)");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ClientSet.Add(ClientRouter), "The client's frame set must accept its router last (D3 order)");
-	FHost ServerHost{FGarbageCollectionBudget{1, 4, 8}, ServerSet};
-	FHost ClientHost{FGarbageCollectionBudget{1, 4, 8}, ClientSet};
+	FHost ServerHost{FGarbageCollectionBudget{TestRootOperations, TestMarkOperations, TestSweepOperations}, ServerSet};
+	FHost ClientHost{FGarbageCollectionBudget{TestRootOperations, TestMarkOperations, TestSweepOperations}, ClientSet};
 	FBinding ClientBinding(ClientNet, AppWireChannelByte, AppChannelId, EChannelSendTarget::Server, ClientRouter);
 	FBinding ServerBinding(ServerNet, AppWireChannelByte, AppChannelId, EChannelSendTarget::AllPeers, ServerRouter);
 
@@ -392,17 +401,17 @@ MW_TEST_CASE(EngineMessageChannel_ClientToServerTargetedSendReachesServerHandler
 	const TimePointMilliseconds ConnectedAt = ConnectClientToServer(ClientHost, ClientNet, ServerHost, 0);
 	MW_EXPECT_EQ(Test, ENetHostState::Connected, ClientNet.GetState(), "The client must connect through the frame-set-driven pump order");
 
+	// Act
 	const std::array<std::uint8_t, 1> Payload{0x11};
-	MW_EXPECT_SUCCESS(
-		Test,
-		ClientRouter.SendMessageToActor(
-			AppChannelId, TestMessageType, TestListenerActorId, TestSenderActorId, TSpan<const std::uint8_t>(Payload.data(), 1)),
-		"A connected client must queue a targeted send on its wired channel");
+	const EMessageResult SendResult = ClientRouter.SendMessageToActor(
+		AppChannelId, TestMessageType, TestListenerActorId, TestSenderActorId, TSpan<const std::uint8_t>(Payload.data(), 1));
 
 	const TimePointMilliseconds DeliveredAt = ConnectedAt + FrameStepMilliseconds;
 	PumpSide(ClientHost, DeliveredAt);
 	PumpSide(ServerHost, DeliveredAt);
 
+	// Assert
+	MW_EXPECT_SUCCESS(Test, SendResult, "A connected client must queue a targeted send on its wired channel");
 	MW_EXPECT_TRUE(Test, ServerRecord.bWasCalled, "The server handler must receive the client's targeted message");
 	MW_EXPECT_EQ(Test, TestMessageType, ServerRecord.MessageTypeId, "The delivered view must carry the original message type");
 	MW_EXPECT_EQ(Test, TestListenerActorId, ServerRecord.TargetActorId, "The delivered view must carry the original target actor");
@@ -412,9 +421,14 @@ MW_TEST_CASE(EngineMessageChannel_ClientToServerTargetedSendReachesServerHandler
 	MW_EXPECT_EQ(Test, std::uint8_t{0x11}, ServerRecord.PayloadBytes[0], "The delivered view must carry the original payload byte");
 }
 
-/** Server-to-client broadcast delivery: BroadcastMessage on the bound channel reaches the client's handler. */
+/**
+ * Scenario: Connect a client and server through a bound channel with a client broadcast listener, then issue a broadcast from the server.
+ * Expected: The broadcast enqueues successfully and reaches the client handler, targeting every subscriber and carrying the original header fields
+ * and payload byte.
+ */
 MW_TEST_CASE(EngineMessageChannel_ServerBroadcastReachesClientHandler)
 {
+	// Arrange
 	THostLoopback<2, 8, 64> Network;
 	FNet ServerNet(Network.Port(0));
 	FNet ClientNet(Network.Port(1));
@@ -428,8 +442,8 @@ MW_TEST_CASE(EngineMessageChannel_ServerBroadcastReachesClientHandler)
 	FFrameSet ClientSet;
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ClientSet.Add(ClientFrame), "The client's frame set must accept its net frame first (D3 order)");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ClientSet.Add(ClientRouter), "The client's frame set must accept its router last (D3 order)");
-	FHost ServerHost{FGarbageCollectionBudget{1, 4, 8}, ServerSet};
-	FHost ClientHost{FGarbageCollectionBudget{1, 4, 8}, ClientSet};
+	FHost ServerHost{FGarbageCollectionBudget{TestRootOperations, TestMarkOperations, TestSweepOperations}, ServerSet};
+	FHost ClientHost{FGarbageCollectionBudget{TestRootOperations, TestMarkOperations, TestSweepOperations}, ClientSet};
 	FBinding ClientBinding(ClientNet, AppWireChannelByte, AppChannelId, EChannelSendTarget::Server, ClientRouter);
 	FBinding ServerBinding(ServerNet, AppWireChannelByte, AppChannelId, EChannelSendTarget::AllPeers, ServerRouter);
 
@@ -460,16 +474,17 @@ MW_TEST_CASE(EngineMessageChannel_ServerBroadcastReachesClientHandler)
 	const TimePointMilliseconds ConnectedAt = ConnectClientToServer(ClientHost, ClientNet, ServerHost, 0);
 	MW_EXPECT_EQ(Test, ENetHostState::Connected, ClientNet.GetState(), "The client must connect through the frame-set-driven pump order");
 
+	// Act
 	const std::array<std::uint8_t, 1> Payload{0x22};
-	MW_EXPECT_SUCCESS(
-		Test,
-		ServerRouter.BroadcastMessage(AppChannelId, TestMessageType, TestSenderActorId, TSpan<const std::uint8_t>(Payload.data(), 1)),
-		"A server with one active peer must queue a broadcast on its wired channel");
+	const EMessageResult SendResult =
+		ServerRouter.BroadcastMessage(AppChannelId, TestMessageType, TestSenderActorId, TSpan<const std::uint8_t>(Payload.data(), 1));
 
 	const TimePointMilliseconds DeliveredAt = ConnectedAt + FrameStepMilliseconds;
 	PumpSide(ServerHost, DeliveredAt);
 	PumpSide(ClientHost, DeliveredAt);
 
+	// Assert
+	MW_EXPECT_SUCCESS(Test, SendResult, "A server with one active peer must queue a broadcast on its wired channel");
 	MW_EXPECT_TRUE(Test, ClientRecord.bWasCalled, "The client handler must receive the server's broadcast message");
 	MW_EXPECT_EQ(Test, TestMessageType, ClientRecord.MessageTypeId, "The delivered view must carry the original message type");
 	MW_EXPECT_EQ(Test, BroadcastActorId, ClientRecord.TargetActorId, "A broadcast's delivered view must target every subscriber");
@@ -478,9 +493,13 @@ MW_TEST_CASE(EngineMessageChannel_ServerBroadcastReachesClientHandler)
 	MW_EXPECT_EQ(Test, std::uint8_t{0x22}, ClientRecord.PayloadBytes[0], "The delivered view must carry the original payload byte");
 }
 
-/** A message sent on a different wire-channel byte than the binding's own must never reach that binding's sink. */
+/**
+ * Scenario: Connect a client and server through one bound channel, then send raw bytes on a different wire-channel byte.
+ * Expected: The foreign-channel message never reaches the binding's sink; the router's inbound queue stays empty and DroppedInboundCount stays zero.
+ */
 MW_TEST_CASE(EngineMessageChannel_ForeignWireChannelNeverReachesBoundSink)
 {
+	// Arrange
 	THostLoopback<2, 8, 64> Network;
 	FNet ServerNet(Network.Port(0));
 	FNet ClientNet(Network.Port(1));
@@ -490,10 +509,10 @@ MW_TEST_CASE(EngineMessageChannel_ForeignWireChannelNeverReachesBoundSink)
 	FFrameSet ServerSet;
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ServerSet.Add(ServerFrame), "The server's frame set must accept its net frame first (D3 order)");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ServerSet.Add(ServerRouter), "The server's frame set must accept its router last (D3 order)");
-	FHost ServerHost{FGarbageCollectionBudget{1, 4, 8}, ServerSet};
+	FHost ServerHost{FGarbageCollectionBudget{TestRootOperations, TestMarkOperations, TestSweepOperations}, ServerSet};
 	// The client in this case has no router at all (it sends raw wire bytes directly below), so it
 	// keeps the bare net frame instead of a frame set.
-	FHost ClientHost{FGarbageCollectionBudget{1, 4, 8}, ClientFrame};
+	FHost ClientHost{FGarbageCollectionBudget{TestRootOperations, TestMarkOperations, TestSweepOperations}, ClientFrame};
 	FBinding ServerBinding(ServerNet, AppWireChannelByte, AppChannelId, EChannelSendTarget::AllPeers, ServerRouter);
 
 	MW_EXPECT_TRUE(Test, ServerBinding.IsAttached(), "The server binding must register its inbound handler");
@@ -531,6 +550,7 @@ MW_TEST_CASE(EngineMessageChannel_ForeignWireChannelNeverReachesBoundSink)
 	}
 	MW_EXPECT_EQ(Test, ENetHostState::Connected, ClientNet.GetState(), "The client must connect before sending the foreign-channel message");
 
+	// Act
 	const std::array<std::uint8_t, 1> Payload{0x33};
 	const ENetResult SendResult = ClientNet.SendTo(ClientNet.GetServerPeer(), ForeignWireChannelByte, TSpan<const std::uint8_t>(Payload.data(), 1));
 	MW_EXPECT_EQ(Test, ENetResult::Success, SendResult, "A connected client can queue raw bytes on any non-zero wire channel");
@@ -539,6 +559,7 @@ MW_TEST_CASE(EngineMessageChannel_ForeignWireChannelNeverReachesBoundSink)
 	(void)ClientHost.Tick(Now);
 	PumpSide(ServerHost, Now);
 
+	// Assert
 	MW_EXPECT_TRUE(Test, !ServerRecord.bWasCalled, "A message on a foreign wire channel must never reach this binding's sink");
 	MW_EXPECT_EQ(Test, std::size_t{0}, ServerRouter.QueuedInboundCount(), "The router's inbound queue must stay empty for a filtered message");
 	MW_EXPECT_EQ(
@@ -548,9 +569,14 @@ MW_TEST_CASE(EngineMessageChannel_ForeignWireChannelNeverReachesBoundSink)
 		"The channel filter runs before the sink is consulted, so a foreign-channel message is never counted as dropped");
 }
 
-/** Sending before any server peer is connected reports Unavailable and the router retains the message; it flows once the client connects. */
+/**
+ * Scenario: Queue a broadcast before the client connects and pump once, then connect through the frame-set-driven handshake.
+ * Expected: Queuing succeeds and the unavailable transport retains the queued message; the retained message is sent and delivered within the same
+ * connecting frame once the peer flips to Connected.
+ */
 MW_TEST_CASE(EngineMessageChannel_SendBeforeConnectReportsUnavailableThenDeliversAfterConnect)
 {
+	// Arrange
 	THostLoopback<2, 8, 64> Network;
 	FNet ServerNet(Network.Port(0));
 	FNet ClientNet(Network.Port(1));
@@ -564,8 +590,8 @@ MW_TEST_CASE(EngineMessageChannel_SendBeforeConnectReportsUnavailableThenDeliver
 	FFrameSet ClientSet;
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ClientSet.Add(ClientFrame), "The client's frame set must accept its net frame first (D3 order)");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ClientSet.Add(ClientRouter), "The client's frame set must accept its router last (D3 order)");
-	FHost ServerHost{FGarbageCollectionBudget{1, 4, 8}, ServerSet};
-	FHost ClientHost{FGarbageCollectionBudget{1, 4, 8}, ClientSet};
+	FHost ServerHost{FGarbageCollectionBudget{TestRootOperations, TestMarkOperations, TestSweepOperations}, ServerSet};
+	FHost ClientHost{FGarbageCollectionBudget{TestRootOperations, TestMarkOperations, TestSweepOperations}, ClientSet};
 	FBinding ClientBinding(ClientNet, AppWireChannelByte, AppChannelId, EChannelSendTarget::Server, ClientRouter);
 	FBinding ServerBinding(ServerNet, AppWireChannelByte, AppChannelId, EChannelSendTarget::AllPeers, ServerRouter);
 
@@ -593,14 +619,16 @@ MW_TEST_CASE(EngineMessageChannel_SendBeforeConnectReportsUnavailableThenDeliver
 	(void)ServerNet.Start(0);
 	(void)ClientNet.Start(0);
 
+	// Act: queue the message while no peer is connected, then pump once.
 	const std::array<std::uint8_t, 1> Payload{0x44};
-	MW_EXPECT_SUCCESS(
-		Test,
-		ClientRouter.BroadcastMessage(AppChannelId, TestMessageType, TestSenderActorId, TSpan<const std::uint8_t>(Payload.data(), 1)),
-		"Queuing succeeds before connect: the router's own outbound queue is independent of the transport");
+	const EMessageResult SendResult =
+		ClientRouter.BroadcastMessage(AppChannelId, TestMessageType, TestSenderActorId, TSpan<const std::uint8_t>(Payload.data(), 1));
 
 	TimePointMilliseconds Now = FrameStepMilliseconds;
 	PumpSide(ClientHost, Now);
+
+	// Assert: queuing succeeds (the router's own outbound queue is transport-independent) and the unavailable transport retains the message.
+	MW_EXPECT_SUCCESS(Test, SendResult, "Queuing succeeds before connect: the router's own outbound queue is independent of the transport");
 	MW_EXPECT_EQ(
 		Test,
 		std::size_t{1},
@@ -608,6 +636,7 @@ MW_TEST_CASE(EngineMessageChannel_SendBeforeConnectReportsUnavailableThenDeliver
 		"Unavailable (no server peer yet) must retain the queued message instead of dropping it");
 	MW_EXPECT_TRUE(Test, !ServerRecord.bWasCalled, "Nothing can have arrived before the client even connects");
 
+	// Act: connect (the frame set flushes within the connecting frame's own tick).
 	// Under the old manual pump order the router flushed before that same frame's engine tick, so the
 	// connecting frame that flipped the peer to Connected still saw the pre-flip state; a further pump
 	// was needed after ConnectClientToServer returned. The frame set instead flushes the router right
@@ -615,6 +644,8 @@ MW_TEST_CASE(EngineMessageChannel_SendBeforeConnectReportsUnavailableThenDeliver
 	// dispatch admits the client also flushes and delivers the retained message within that same
 	// ConnectClientToServer iteration - one frame earlier than before.
 	Now = ConnectClientToServer(ClientHost, ClientNet, ServerHost, Now);
+
+	// Assert
 	MW_EXPECT_EQ(Test, ENetHostState::Connected, ClientNet.GetState(), "The client must connect through the frame-set-driven pump order");
 	MW_EXPECT_EQ(
 		Test,
@@ -631,10 +662,14 @@ MW_TEST_CASE(EngineMessageChannel_SendBeforeConnectReportsUnavailableThenDeliver
 	MW_EXPECT_EQ(Test, std::uint8_t{0x44}, ServerRecord.PayloadBytes[0], "The delivered view must carry the original payload byte");
 }
 
-/** A rejecting sink increments TMessageChannelBinding::DroppedInboundCount while leaving the binding otherwise usable. */
+/**
+ * Scenario: Wire a binding to a toggleable sink on a listen server, then broadcast with the sink accepting and then rejecting twice.
+ * Expected: An accepted sink call does not count as dropped; each rejected broadcast still succeeds at the transport and increments
+ * DroppedInboundCount; every broadcast reaches the sink after passing the channel filter.
+ */
 MW_TEST_CASE(EngineMessageChannel_RejectingSinkIncrementsDroppedInboundCount)
 {
-	// A listen server's Broadcast dispatches to its own local peer synchronously (TNetHost::SendToLocalPeer),
+	// Arrange: a listen server's Broadcast dispatches to its own local peer synchronously (TNetHost::SendToLocalPeer),
 	// so this case never crosses the loopback network and needs no engine tick or pumping at all.
 	THostLoopback<1, 4, 64> Network;
 	FNet ListenServerHost(Network.Port(0));
@@ -649,39 +684,35 @@ MW_TEST_CASE(EngineMessageChannel_RejectingSinkIncrementsDroppedInboundCount)
 	const std::array<std::uint8_t, 1> Payload{0x5A};
 	const TSpan<const std::uint8_t> PayloadView(Payload.data(), Payload.size());
 
+	// Act
 	Sink.SetRejectInbound(false);
-	MW_EXPECT_EQ(
-		Test,
-		ENetResult::Success,
-		ListenServerHost.Broadcast(AppWireChannelByte, PayloadView),
-		"A listen server always accepts its own local-peer broadcast");
+	(void)ListenServerHost.Broadcast(AppWireChannelByte, PayloadView);
+	// Assert
 	MW_EXPECT_EQ(Test, std::uint32_t{0}, Binding.DroppedInboundCount(), "An accepted sink call must not count as dropped");
 
+	// Act
 	Sink.SetRejectInbound(true);
-	MW_EXPECT_EQ(
-		Test,
-		ENetResult::Success,
-		ListenServerHost.Broadcast(AppWireChannelByte, PayloadView),
-		"The transport still succeeds; only the sink rejects");
+	const ENetResult FirstRejectResult = ListenServerHost.Broadcast(AppWireChannelByte, PayloadView);
+	// Assert
+	MW_EXPECT_EQ(Test, ENetResult::Success, FirstRejectResult, "The transport still succeeds; only the sink rejects");
 	MW_EXPECT_EQ(Test, std::uint32_t{1}, Binding.DroppedInboundCount(), "A rejecting sink must increment DroppedInboundCount");
 
-	MW_EXPECT_EQ(
-		Test,
-		ENetResult::Success,
-		ListenServerHost.Broadcast(AppWireChannelByte, PayloadView),
-		"A second rejected broadcast must still be accepted by the transport");
+	// Act
+	const ENetResult SecondRejectResult = ListenServerHost.Broadcast(AppWireChannelByte, PayloadView);
+	// Assert
+	MW_EXPECT_EQ(Test, ENetResult::Success, SecondRejectResult, "A second rejected broadcast must still be accepted by the transport");
 	MW_EXPECT_EQ(Test, std::uint32_t{2}, Binding.DroppedInboundCount(), "A second rejection must climb the counter again, staying consistent");
 	MW_EXPECT_EQ(Test, std::size_t{3}, Sink.ReceivedCallCount(), "All three broadcasts must reach the sink after passing the channel filter");
 }
 
 /**
- * Roadmap 4.2: one router per side drives two independent wires (telemetry + command) behind one
- * TEngineSystemSet<3>. A message sent on each channel must arrive tagged with that channel's own id
- * and never bleed into the other's record (proven below by each record only ever holding its own
- * distinct payload byte), and both must arrive within one post-send frame per side.
+ * Scenario: Connect two wires (telemetry and command) behind one router per side, then broadcast a distinct payload on each channel and pump one
+ * frame per side. Expected: Both sends enqueue successfully; each message arrives tagged with its own channel id within one post-send frame and never
+ * bleeds into the other channel's record.
  */
 MW_TEST_CASE(EngineMessageChannel_MultiChannelIsolationDeliversBothInOneFrame)
 {
+	// Arrange
 	THostLoopback<2, 8, 64> TelemetryNetwork;
 	THostLoopback<2, 8, 64> CommandNetwork;
 	FNet TelemetryServerNet(TelemetryNetwork.Port(0));
@@ -719,8 +750,8 @@ MW_TEST_CASE(EngineMessageChannel_MultiChannelIsolationDeliversBothInOneFrame)
 		ClientSet.Add(CommandClientFrame),
 		"The client's frame set must accept the command net frame second (D3 order)");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ClientSet.Add(ClientRouter), "The client's frame set must accept its router last (D3 order)");
-	FHost ServerHost{FGarbageCollectionBudget{1, 4, 8}, ServerSet};
-	FHost ClientHost{FGarbageCollectionBudget{1, 4, 8}, ClientSet};
+	FHost ServerHost{FGarbageCollectionBudget{TestRootOperations, TestMarkOperations, TestSweepOperations}, ServerSet};
+	FHost ClientHost{FGarbageCollectionBudget{TestRootOperations, TestMarkOperations, TestSweepOperations}, ClientSet};
 
 	FBinding TelemetryClientBinding(TelemetryClientNet, TelemetryWireChannelByte, TelemetryChannelId, EChannelSendTarget::Server, ClientRouter);
 	FBinding TelemetryServerBinding(TelemetryServerNet, TelemetryWireChannelByte, TelemetryChannelId, EChannelSendTarget::AllPeers, ServerRouter);
@@ -769,21 +800,21 @@ MW_TEST_CASE(EngineMessageChannel_MultiChannelIsolationDeliversBothInOneFrame)
 	MW_EXPECT_EQ(
 		Test, ENetHostState::Connected, CommandClientNet.GetState(), "The command wire must connect through the frame-set-driven pump order");
 
+	// Act
 	const std::array<std::uint8_t, 1> TelemetryPayload{0xAA};
 	const std::array<std::uint8_t, 1> CommandPayload{0xBB};
-	MW_EXPECT_SUCCESS(
-		Test,
-		ClientRouter.BroadcastMessage(TelemetryChannelId, TestMessageType, TestSenderActorId, TSpan<const std::uint8_t>(TelemetryPayload.data(), 1)),
-		"A connected client must queue a broadcast on its telemetry channel");
-	MW_EXPECT_SUCCESS(
-		Test,
-		ClientRouter.BroadcastMessage(CommandChannelId, TestMessageType, TestSenderActorId, TSpan<const std::uint8_t>(CommandPayload.data(), 1)),
-		"A connected client must queue a broadcast on its command channel");
+	const EMessageResult TelemetrySendResult =
+		ClientRouter.BroadcastMessage(TelemetryChannelId, TestMessageType, TestSenderActorId, TSpan<const std::uint8_t>(TelemetryPayload.data(), 1));
+	const EMessageResult CommandSendResult =
+		ClientRouter.BroadcastMessage(CommandChannelId, TestMessageType, TestSenderActorId, TSpan<const std::uint8_t>(CommandPayload.data(), 1));
 
 	const TimePointMilliseconds DeliveredAt = ConnectedAt + FrameStepMilliseconds;
 	PumpSide(ClientHost, DeliveredAt);
 	PumpSide(ServerHost, DeliveredAt);
 
+	// Assert
+	MW_EXPECT_SUCCESS(Test, TelemetrySendResult, "A connected client must queue a broadcast on its telemetry channel");
+	MW_EXPECT_SUCCESS(Test, CommandSendResult, "A connected client must queue a broadcast on its command channel");
 	MW_EXPECT_TRUE(Test, ServerRecords.Telemetry.bWasCalled, "One post-send frame per side must deliver the telemetry message");
 	MW_EXPECT_TRUE(Test, ServerRecords.Command.bWasCalled, "That same one post-send frame per side must also deliver the command message");
 	MW_EXPECT_EQ(
@@ -802,20 +833,13 @@ MW_TEST_CASE(EngineMessageChannel_MultiChannelIsolationDeliversBothInOneFrame)
 }
 
 /**
- * Roadmap 4.2's accepted v1 caveat: TMessageRouter has ONE shared outbound queue (see its PostAdvance),
- * so a stalled channel at the head retains that head and blocks every later entry for the whole tick,
- * even one queued for an otherwise healthy channel - matching TNetManager::AdvanceSend's retained-head
- * discipline from Task 2.2. To drive the stall deterministically in one flush: TNetHost::SendTo only
- * queues into its own fixed-size outbound FIFO (TNetManager) and never touches the driver at queue
- * time (see NetHost.h/NetManager.h), so filling the loopback mailbox alone cannot make a single SendTo
- * call observe Full. This case therefore (1) fills the client's own command-wire TNetHost FIFO to
- * capacity via direct SendTo calls bypassing the router, so the very next SendTo the router's flush
- * issues is guaranteed to see Full, and (2) additionally fills the server's command mailbox directly
- * via THostLoopback (per MailboxCapacityValue()), so the stall also reflects a genuinely unreachable
- * peer rather than only a local queue.
+ * Scenario: Connect telemetry and command wires, prime the client's command FIFO and the server's command mailbox to saturation, then queue a
+ * stalled-channel message followed by a healthy-channel message and pump the client once. Expected: Both sends enqueue successfully; the stalled
+ * channel at the head of the router's shared outbound queue retains both itself and the healthy message queued behind it.
  */
 MW_TEST_CASE(EngineMessageChannel_StalledChannelRetainsRouterHead)
 {
+	// Arrange
 	THostLoopback<2, 8, 64> TelemetryNetwork;
 	THostLoopback<2, 8, 64> CommandNetwork;
 	FNet TelemetryServerNet(TelemetryNetwork.Port(0));
@@ -853,8 +877,8 @@ MW_TEST_CASE(EngineMessageChannel_StalledChannelRetainsRouterHead)
 		ClientSet.Add(CommandClientFrame),
 		"The client's frame set must accept the command net frame second (D3 order)");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ClientSet.Add(ClientRouter), "The client's frame set must accept its router last (D3 order)");
-	FHost ServerHost{FGarbageCollectionBudget{1, 4, 8}, ServerSet};
-	FHost ClientHost{FGarbageCollectionBudget{1, 4, 8}, ClientSet};
+	FHost ServerHost{FGarbageCollectionBudget{TestRootOperations, TestMarkOperations, TestSweepOperations}, ServerSet};
+	FHost ClientHost{FGarbageCollectionBudget{TestRootOperations, TestMarkOperations, TestSweepOperations}, ClientSet};
 
 	FBinding TelemetryClientBinding(TelemetryClientNet, TelemetryWireChannelByte, TelemetryChannelId, EChannelSendTarget::Server, ClientRouter);
 	FBinding TelemetryServerBinding(TelemetryServerNet, TelemetryWireChannelByte, TelemetryChannelId, EChannelSendTarget::AllPeers, ServerRouter);
@@ -927,27 +951,27 @@ MW_TEST_CASE(EngineMessageChannel_StalledChannelRetainsRouterHead)
 		CommandNetwork.Port(1).TrySend(MakeLoopbackAddress(0), TSpan<const std::uint8_t>(MailboxFillerPayload.data(), 1)),
 		"One packet beyond MailboxCapacityValue() must report Full: the server's command mailbox is now saturated");
 
-	// Queue the stalled channel's message first (the router's next head), then a healthy channel's
+	// Act: queue the stalled channel's message first (the router's next head), then a healthy channel's
 	// message right behind it.
 	const std::array<std::uint8_t, 1> StalledPayload{0xC0};
 	const std::array<std::uint8_t, 1> HealthyPayload{0xC1};
+	const EMessageResult StalledEnqueueResult = ClientRouter.SendMessageToActor(
+		CommandChannelId, TestMessageType, BroadcastActorId, TestSenderActorId, TSpan<const std::uint8_t>(StalledPayload.data(), 1));
+	const EMessageResult HealthyEnqueueResult = ClientRouter.SendMessageToActor(
+		TelemetryChannelId, TestMessageType, BroadcastActorId, TestSenderActorId, TSpan<const std::uint8_t>(HealthyPayload.data(), 1));
+
+	// Assert: queuing succeeds regardless of transport state (both are buffered before the flush under test).
 	MW_EXPECT_SUCCESS(
-		Test,
-		ClientRouter.SendMessageToActor(
-			CommandChannelId, TestMessageType, BroadcastActorId, TestSenderActorId, TSpan<const std::uint8_t>(StalledPayload.data(), 1)),
-		"Queuing succeeds regardless of transport state: the router's own outbound queue is independent of the driver");
-	MW_EXPECT_SUCCESS(
-		Test,
-		ClientRouter.SendMessageToActor(
-			TelemetryChannelId, TestMessageType, BroadcastActorId, TestSenderActorId, TSpan<const std::uint8_t>(HealthyPayload.data(), 1)),
-		"Queuing the healthy channel's message behind the stalled one must also succeed");
+		Test, StalledEnqueueResult, "Queuing succeeds regardless of transport state: the router's own outbound queue is independent of the driver");
+	MW_EXPECT_SUCCESS(Test, HealthyEnqueueResult, "Queuing the healthy channel's message behind the stalled one must also succeed");
 	MW_EXPECT_EQ(Test, std::size_t{2}, ClientRouter.QueuedOutboundCount(), "Both messages must be queued before the flush under test");
 
-	// Only the client is pumped: the server side is irrelevant to what the client's own router head
+	// Act: only the client is pumped; the server side is irrelevant to what the client's own router head
 	// does, and never receiving anything is exactly the point of a stalled wire.
 	const TimePointMilliseconds FlushAt = ConnectedAt + FrameStepMilliseconds;
 	PumpSide(ClientHost, FlushAt);
 
+	// Assert
 	MW_EXPECT_EQ(
 		Test,
 		std::size_t{2},
@@ -958,16 +982,13 @@ MW_TEST_CASE(EngineMessageChannel_StalledChannelRetainsRouterHead)
 }
 
 /**
- * Roadmap 5.2 integration case: the client wraps its wire binding in a TReliableChannel and its own
- * driver in FPacketDropDriver{3} (Task 5.1's loss injector); the server also wraps its binding in a
- * TReliableChannel (so acks and inbound both flow through the reliable wire format) whose forward
- * sink is a plain recording stub rather than a full router+handler - the simpler wiring the brief
- * allows, since counting deliveries needs no message-type dispatch. Every message the client sends
- * must still reach the server exactly once despite the injected drops, and at least one resend must
- * have fired, proving the retry/ack/dedup logic recovers from real loss end to end.
+ * Scenario: Wrap each side's wire binding in a TReliableChannel behind an every-third-send packet-drop driver, then send several guaranteed messages
+ * and pump until each is acknowledged. Expected: Every message is delivered to the server exactly once despite the injected drops; at least one
+ * resend fires because a send was actually dropped.
  */
 MW_TEST_CASE(EngineMessageChannel_ReliableChannelSurvivesPacketDropsDeliveringExactlyOnce)
 {
+	// Arrange
 	constexpr std::uint32_t DropEveryNthSend = 3;
 	constexpr std::size_t MessagesToSend = 6;
 	constexpr DurationMilliseconds ReliableRetryIntervalMilliseconds = 50;
@@ -1016,8 +1037,8 @@ MW_TEST_CASE(EngineMessageChannel_ReliableChannelSurvivesPacketDropsDeliveringEx
 		ServerSet.Add(ServerReliable),
 		"The server's frame set must accept its reliable channel second; this side needs no router");
 
-	FHost ServerHost{FGarbageCollectionBudget{1, 4, 8}, ServerSet};
-	FHost ClientHost{FGarbageCollectionBudget{1, 4, 8}, ClientSet};
+	FHost ServerHost{FGarbageCollectionBudget{TestRootOperations, TestMarkOperations, TestSweepOperations}, ServerSet};
+	FHost ClientHost{FGarbageCollectionBudget{TestRootOperations, TestMarkOperations, TestSweepOperations}, ClientSet};
 	MW_EXPECT_TRUE(Test, ServerHost.CreateWorld().Get() != nullptr, "The server roots its world before ticking");
 	MW_EXPECT_TRUE(Test, ClientHost.CreateWorld().Get() != nullptr, "The client roots its world before ticking");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, ServerHost.BeginPlay(0), "The server world begins play at the baseline");
@@ -1039,6 +1060,7 @@ MW_TEST_CASE(EngineMessageChannel_ReliableChannelSurvivesPacketDropsDeliveringEx
 	TimePointMilliseconds Now = ConnectClientToServer(ClientHost, ClientNet, ServerHost, 0);
 	MW_EXPECT_EQ(Test, ENetHostState::Connected, ClientNet.GetState(), "The client must connect before the drop-injected sends begin");
 
+	// Act: send each guaranteed message and pump until it is fully acknowledged, recovering from every injected drop.
 	for (std::size_t MessageIndex = 0; MessageIndex < MessagesToSend; ++MessageIndex)
 	{
 		const std::array<std::uint8_t, 1> Payload{static_cast<std::uint8_t>(MessageIndex)};
@@ -1061,6 +1083,7 @@ MW_TEST_CASE(EngineMessageChannel_ReliableChannelSurvivesPacketDropsDeliveringEx
 		MW_EXPECT_EQ(Test, std::size_t{0}, ClientReliable.PendingCount(), "Every message must be fully acknowledged before the next one is queued");
 	}
 
+	// Assert
 	MW_EXPECT_EQ(
 		Test,
 		MessagesToSend,

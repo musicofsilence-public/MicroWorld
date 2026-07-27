@@ -97,22 +97,32 @@ void FillWithSentinel(std::uint8_t* const InBytes, const std::size_t InCount, co
 	}
 }
 
-/** Proves encode then decode round-trips a nonempty payload and reports the correct written byte count. */
+/**
+ * Scenario: Encode a header and three-byte payload, then decode the result back through the codec.
+ * Expected: Both calls succeed; the decoded header fields and payload bytes match the inputs; the written byte count equals header plus payload size.
+ */
 MW_TEST_CASE(EngineMessageCodec_RoundTripsHeaderAndPayload)
 {
+	// Arrange
 	const FActorMessageHeader Header{MessageTypeId1234, ActorId0042, ActorId0007};
 	const std::uint8_t Payload[ThreeBytePayloadCount] = {PayloadByteAA, PayloadByteBB, PayloadByteCC};
 	std::uint8_t Encoded[HeaderPlusThreeBytes] = {};
 	std::size_t WrittenBytes = 0;
 
+	// Act
 	const EMessageResult EncodeResult = EncodeActorMessage(
 		Header, TSpan<const std::uint8_t>(Payload, ThreeBytePayloadCount), TSpan<std::uint8_t>(Encoded, HeaderPlusThreeBytes), WrittenBytes);
+
+	// Assert
 	MW_EXPECT_EQ(Test, EMessageResult::Success, EncodeResult, "Encoding a valid header and payload must succeed");
 	MW_EXPECT_EQ(Test, HeaderPlusThreeBytes, WrittenBytes, "Written bytes must equal header plus payload size");
 
+	// Act
 	FActorMessageHeader DecodedHeader{};
 	TSpan<const std::uint8_t> DecodedPayload;
 	const EMessageResult DecodeResult = DecodeActorMessage(TSpan<const std::uint8_t>(Encoded, WrittenBytes), DecodedHeader, DecodedPayload);
+
+	// Assert
 	MW_EXPECT_EQ(Test, EMessageResult::Success, DecodeResult, "Decoding a freshly encoded message must succeed");
 	MW_EXPECT_EQ(Test, Header.MessageTypeId, DecodedHeader.MessageTypeId, "Decoded MessageTypeId must match the encoded value");
 	MW_EXPECT_EQ(Test, Header.TargetActorId, DecodedHeader.TargetActorId, "Decoded TargetActorId must match the encoded value");
@@ -124,17 +134,17 @@ MW_TEST_CASE(EngineMessageCodec_RoundTripsHeaderAndPayload)
 	}
 }
 
-/** Proves encode produces the exact little-endian byte layout for a known header and payload. */
+/**
+ * Scenario: Encode a known header and two-byte payload into a destination buffer.
+ * Expected: Encoding succeeds; each written byte matches the expected little-endian header-then-payload layout.
+ */
 MW_TEST_CASE(EngineMessageCodec_EncodeProducesExactLittleEndianByteLayout)
 {
+	// Arrange
 	const FActorMessageHeader Header{MessageTypeId0102, ActorId0304, ActorId0506};
 	const std::uint8_t Payload[TwoBytePayloadCount] = {PayloadByteDE, PayloadByteAD};
 	std::uint8_t Encoded[HeaderPlusTwoBytes] = {};
 	std::size_t WrittenBytes = 0;
-
-	const EMessageResult EncodeResult = EncodeActorMessage(
-		Header, TSpan<const std::uint8_t>(Payload, TwoBytePayloadCount), TSpan<std::uint8_t>(Encoded, HeaderPlusTwoBytes), WrittenBytes);
-	MW_EXPECT_EQ(Test, EMessageResult::Success, EncodeResult, "Encoding a valid header and payload must succeed");
 
 	// [u16 MessageTypeId=0x0102][u16 TargetActorId=0x0304][u16 SenderActorId=0x0506][Payload], all little-endian.
 	const std::uint8_t Expected[HeaderPlusTwoBytes] = {
@@ -146,6 +156,13 @@ MW_TEST_CASE(EngineMessageCodec_EncodeProducesExactLittleEndianByteLayout)
 		HeaderHighByte0506,
 		PayloadByteDE,
 		PayloadByteAD};
+
+	// Act
+	const EMessageResult EncodeResult = EncodeActorMessage(
+		Header, TSpan<const std::uint8_t>(Payload, TwoBytePayloadCount), TSpan<std::uint8_t>(Encoded, HeaderPlusTwoBytes), WrittenBytes);
+
+	// Assert
+	MW_EXPECT_EQ(Test, EMessageResult::Success, EncodeResult, "Encoding a valid header and payload must succeed");
 	MW_EXPECT_EQ(Test, HeaderPlusTwoBytes, WrittenBytes, "Written bytes must equal the expected encoded length");
 	for (std::size_t Index = 0; Index < HeaderPlusTwoBytes; ++Index)
 	{
@@ -153,38 +170,55 @@ MW_TEST_CASE(EngineMessageCodec_EncodeProducesExactLittleEndianByteLayout)
 	}
 }
 
-/** Proves a zero-length payload round-trips as a valid six-byte encoded message. */
+/**
+ * Scenario: Encode a header with a zero-length payload, then decode the result back through the codec.
+ * Expected: Both calls succeed; the decoded header fields match the inputs and the decoded payload is empty; the written byte count equals exactly
+ * the header size.
+ */
 MW_TEST_CASE(EngineMessageCodec_ZeroLengthPayloadRoundTrips)
 {
+	// Arrange
 	const FActorMessageHeader Header{MessageTypeId0001, MicroWorld::BroadcastActorId, MicroWorld::BroadcastActorId};
 	std::uint8_t Encoded[ActorMessageHeaderBytes] = {};
 	std::size_t WrittenBytes = 0;
 
+	// Act
 	const EMessageResult EncodeResult =
 		EncodeActorMessage(Header, TSpan<const std::uint8_t>(nullptr, 0), TSpan<std::uint8_t>(Encoded, ActorMessageHeaderBytes), WrittenBytes);
+
+	// Assert
 	MW_EXPECT_EQ(Test, EMessageResult::Success, EncodeResult, "Encoding a zero-length payload must succeed");
 	MW_EXPECT_EQ(Test, ActorMessageHeaderBytes, WrittenBytes, "A zero-length payload must write exactly the header size");
 
+	// Act
 	FActorMessageHeader DecodedHeader{};
 	TSpan<const std::uint8_t> DecodedPayload;
 	const EMessageResult DecodeResult = DecodeActorMessage(TSpan<const std::uint8_t>(Encoded, WrittenBytes), DecodedHeader, DecodedPayload);
+
+	// Assert
 	MW_EXPECT_EQ(Test, EMessageResult::Success, DecodeResult, "Decoding a zero-length-payload message must succeed");
 	MW_EXPECT_EQ(Test, Header.MessageTypeId, DecodedHeader.MessageTypeId, "Decoded MessageTypeId must match the encoded value");
 	MW_EXPECT_EQ(Test, std::size_t{0}, DecodedPayload.Size(), "Decoded payload must be empty");
 }
 
-/** Proves encode rejects a zero MessageTypeId as InvalidType and leaves the destination and OutWrittenBytes untouched. */
+/**
+ * Scenario: Encode a header whose MessageTypeId is zero into a sentinel-filled destination.
+ * Expected: The call returns InvalidType; OutWrittenBytes and every destination byte remain untouched.
+ */
 MW_TEST_CASE(EngineMessageCodec_EncodeRejectsZeroMessageTypeIdTransactionally)
 {
+	// Arrange
 	const FActorMessageHeader InvalidHeader{0, MessageTypeId0001, ActorId0002};
 	const std::uint8_t Payload[TwoBytePayloadCount] = {PayloadByte11, PayloadByte22};
 	std::uint8_t Encoded[HeaderPlusTwoBytes] = {};
 	FillWithSentinel(Encoded, HeaderPlusTwoBytes, UntouchedDestinationByte);
 	std::size_t WrittenBytes = UntouchedWrittenByteCount;
 
+	// Act
 	const EMessageResult Result = EncodeActorMessage(
 		InvalidHeader, TSpan<const std::uint8_t>(Payload, TwoBytePayloadCount), TSpan<std::uint8_t>(Encoded, HeaderPlusTwoBytes), WrittenBytes);
 
+	// Assert
 	MW_EXPECT_EQ(Test, EMessageResult::InvalidType, Result, "A zero MessageTypeId must be rejected as InvalidType");
 	MW_EXPECT_EQ(Test, UntouchedWrittenByteCount, WrittenBytes, "InvalidType must leave OutWrittenBytes unchanged");
 	for (std::size_t Index = 0; Index < HeaderPlusTwoBytes; ++Index)
@@ -193,18 +227,24 @@ MW_TEST_CASE(EngineMessageCodec_EncodeRejectsZeroMessageTypeIdTransactionally)
 	}
 }
 
-/** Proves encode rejects a destination too small for the header plus payload as PayloadTooLarge, transactionally. */
+/**
+ * Scenario: Encode a header and three-byte payload into a destination too small to hold them both.
+ * Expected: The call returns PayloadTooLarge; OutWrittenBytes and every destination byte remain untouched.
+ */
 MW_TEST_CASE(EngineMessageCodec_EncodeRejectsTooSmallDestinationTransactionally)
 {
+	// Arrange
 	const FActorMessageHeader Header{MessageTypeId0001, ActorId0002, ActorId0003};
 	const std::uint8_t Payload[ThreeBytePayloadCount] = {PayloadByte11, PayloadByte22, PayloadByte33};
 	std::uint8_t TooSmall[HeaderPlusTwoBytes] = {};
 	FillWithSentinel(TooSmall, HeaderPlusTwoBytes, UntouchedDestinationByte);
 	std::size_t WrittenBytes = UntouchedWrittenByteCount;
 
+	// Act
 	const EMessageResult Result = EncodeActorMessage(
 		Header, TSpan<const std::uint8_t>(Payload, ThreeBytePayloadCount), TSpan<std::uint8_t>(TooSmall, HeaderPlusTwoBytes), WrittenBytes);
 
+	// Assert
 	MW_EXPECT_EQ(Test, EMessageResult::PayloadTooLarge, Result, "A destination too small for header plus payload must return PayloadTooLarge");
 	MW_EXPECT_EQ(Test, UntouchedWrittenByteCount, WrittenBytes, "PayloadTooLarge must leave OutWrittenBytes unchanged");
 	for (std::size_t Index = 0; Index < HeaderPlusTwoBytes; ++Index)
@@ -213,17 +253,23 @@ MW_TEST_CASE(EngineMessageCodec_EncodeRejectsTooSmallDestinationTransactionally)
 	}
 }
 
-/** Proves decode rejects an Encoded span shorter than the header as PayloadTooLarge, leaving both outputs untouched. */
+/**
+ * Scenario: Decode a sentinel-populated header and payload from an Encoded span shorter than the header.
+ * Expected: The call returns PayloadTooLarge; OutHeader and OutPayload remain untouched.
+ */
 MW_TEST_CASE(EngineMessageCodec_DecodeRejectsShortInputTransactionally)
 {
+	// Arrange
 	const std::uint8_t ShortInput[ShortInputByteCount] = {PayloadByte01, PayloadByte02, PayloadByte03, PayloadByte04, HeaderLowByte0506};
 	const FActorMessageHeader SentinelHeader{UntouchedHeaderField, UntouchedHeaderField, UntouchedHeaderField};
 	FActorMessageHeader OutHeader = SentinelHeader;
 	const std::uint8_t SentinelPayloadStorage[OneBytePayloadCount] = {0};
 	TSpan<const std::uint8_t> OutPayload(SentinelPayloadStorage, OneBytePayloadCount);
 
+	// Act
 	const EMessageResult Result = DecodeActorMessage(TSpan<const std::uint8_t>(ShortInput, ShortInputByteCount), OutHeader, OutPayload);
 
+	// Assert
 	MW_EXPECT_EQ(Test, EMessageResult::PayloadTooLarge, Result, "An Encoded span shorter than the header must return PayloadTooLarge");
 	MW_EXPECT_EQ(Test, SentinelHeader.MessageTypeId, OutHeader.MessageTypeId, "PayloadTooLarge must leave OutHeader.MessageTypeId unchanged");
 	MW_EXPECT_EQ(Test, SentinelHeader.TargetActorId, OutHeader.TargetActorId, "PayloadTooLarge must leave OutHeader.TargetActorId unchanged");
@@ -232,9 +278,13 @@ MW_TEST_CASE(EngineMessageCodec_DecodeRejectsShortInputTransactionally)
 	MW_EXPECT_EQ(Test, OneBytePayloadCount, OutPayload.Size(), "PayloadTooLarge must leave OutPayload's size unchanged");
 }
 
-/** Proves decode rejects an encoded message whose header type id is zero as InvalidType, leaving both outputs untouched. */
+/**
+ * Scenario: Decode a sentinel-populated header and payload from a header-sized message whose type id is zero.
+ * Expected: The call returns InvalidType; OutHeader and OutPayload remain untouched.
+ */
 MW_TEST_CASE(EngineMessageCodec_DecodeRejectsZeroMessageTypeIdTransactionally)
 {
+	// Arrange
 	// [u16 MessageTypeId=0x0000][u16 TargetActorId=0x0102][u16 SenderActorId=0x0304], little-endian, no payload.
 	const std::uint8_t ZeroTypeEncoded[ActorMessageHeaderBytes] = {
 		0, 0, HeaderLowByte0102, HeaderHighByte0102, HeaderLowByte0304, HeaderHighByte0304};
@@ -243,8 +293,10 @@ MW_TEST_CASE(EngineMessageCodec_DecodeRejectsZeroMessageTypeIdTransactionally)
 	const std::uint8_t SentinelPayloadStorage[OneBytePayloadCount] = {0};
 	TSpan<const std::uint8_t> OutPayload(SentinelPayloadStorage, OneBytePayloadCount);
 
+	// Act
 	const EMessageResult Result = DecodeActorMessage(TSpan<const std::uint8_t>(ZeroTypeEncoded, ActorMessageHeaderBytes), OutHeader, OutPayload);
 
+	// Assert
 	MW_EXPECT_EQ(Test, EMessageResult::InvalidType, Result, "A decoded MessageTypeId of zero must return InvalidType");
 	MW_EXPECT_EQ(Test, SentinelHeader.MessageTypeId, OutHeader.MessageTypeId, "InvalidType must leave OutHeader.MessageTypeId unchanged");
 	MW_EXPECT_EQ(Test, SentinelHeader.TargetActorId, OutHeader.TargetActorId, "InvalidType must leave OutHeader.TargetActorId unchanged");
@@ -253,9 +305,13 @@ MW_TEST_CASE(EngineMessageCodec_DecodeRejectsZeroMessageTypeIdTransactionally)
 	MW_EXPECT_EQ(Test, OneBytePayloadCount, OutPayload.Size(), "InvalidType must leave OutPayload's size unchanged");
 }
 
-/** Proves a steady-state encode plus decode round trip performs no heap allocation. */
+/**
+ * Scenario: Warm up the codec once, then perform a steady-state encode plus decode round trip.
+ * Expected: The steady-state round trip performs no heap allocation.
+ */
 MW_TEST_CASE(EngineMessageCodec_RoundTripDoesNotAllocate)
 {
+	// Arrange
 	const FActorMessageHeader Header{MessageTypeId0010, ActorId0020, ActorId0030};
 	const std::uint8_t Payload[FourBytePayloadCount] = {PayloadByte01, PayloadByte02, PayloadByte03, PayloadByte04};
 	std::uint8_t Encoded[HeaderPlusFourBytes] = {};
@@ -263,18 +319,20 @@ MW_TEST_CASE(EngineMessageCodec_RoundTripDoesNotAllocate)
 	FActorMessageHeader DecodedHeader{};
 	TSpan<const std::uint8_t> DecodedPayload;
 
-	// Warm up once so any one-time lazy allocation is excluded from the steady-state measurement.
+	// Arrange: warm up once so any one-time lazy allocation is excluded from the steady-state measurement.
 	EncodeActorMessage(
 		Header, TSpan<const std::uint8_t>(Payload, FourBytePayloadCount), TSpan<std::uint8_t>(Encoded, HeaderPlusFourBytes), WrittenBytes);
 	DecodeActorMessage(TSpan<const std::uint8_t>(Encoded, WrittenBytes), DecodedHeader, DecodedPayload);
 
 	const std::uint32_t AllocationsBefore = GlobalAllocationCount;
 
+	// Act
 	EncodeActorMessage(
 		Header, TSpan<const std::uint8_t>(Payload, FourBytePayloadCount), TSpan<std::uint8_t>(Encoded, HeaderPlusFourBytes), WrittenBytes);
 	DecodeActorMessage(TSpan<const std::uint8_t>(Encoded, WrittenBytes), DecodedHeader, DecodedPayload);
 
 	const std::uint32_t AllocationsAfter = GlobalAllocationCount;
+	// Assert
 	MW_EXPECT_EQ(Test, AllocationsBefore, AllocationsAfter, "A steady-state encode plus decode round trip must not allocate");
 }
 

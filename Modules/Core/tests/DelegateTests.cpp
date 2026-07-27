@@ -246,12 +246,18 @@ static_assert(
 	!std::is_nothrow_copy_constructible<FPotentiallyThrowingCopyValue>::value,
 	"A potentially throwing copy must remain distinguishable from supported multicast values.");
 
-/** Proves bind, execute, move, reset, and destruction transfer one callable lifetime exactly once. */
+/**
+ * Scenario: Bind a tracked callable, move the delegate, execute it, then reset the destination twice.
+ * Expected: Bind, move, execute, and reset transfer one callable lifetime exactly once, delivering the caller value once.
+ */
 MW_TEST_CASE(DelegateBindExecuteMoveAndResetOwnCallableExactlyOnce)
 {
+	// Arrange
 	FCallableState State;
 	FTrackedCallable Callable(State);
 	TDelegate<void(int), StandardInlineBytes> SourceDelegate;
+
+	// Act
 	const EDelegateResult BindResult = SourceDelegate.Bind(std::move(Callable));
 	const bool bSourceBoundAfterBind = SourceDelegate.IsBound();
 
@@ -268,6 +274,8 @@ MW_TEST_CASE(DelegateBindExecuteMoveAndResetOwnCallableExactlyOnce)
 	const bool bDestinationBoundAfterReset = MovedDelegate.IsBound();
 	const bool bDestinationUnboundAfterReset = !bDestinationBoundAfterReset;
 	const std::size_t OwnedDestructionCount = State.OwnedDestructionCount;
+
+	// Assert
 	MW_EXPECT_EQ(Test, EDelegateResult::Success, BindResult, "Supported callable should bind successfully");
 	MW_EXPECT_TRUE(Test, bSourceBoundAfterBind, "Successful Bind should make the source delegate bound");
 	MW_EXPECT_TRUE(Test, bSourceUnboundAfterMove, "Delegate move should leave the source unbound");
@@ -279,38 +287,52 @@ MW_TEST_CASE(DelegateBindExecuteMoveAndResetOwnCallableExactlyOnce)
 	MW_EXPECT_EQ(Test, std::size_t{1}, OwnedDestructionCount, "Repeated reset should destroy the stored callable exactly once");
 }
 
-/** Proves unbound delegates reject execution without beginning callable behavior. */
+/**
+ * Scenario: Execute a freshly constructed unbound delegate.
+ * Expected: Execute returns InvalidHandle without beginning callable behavior and leaves the delegate unbound.
+ */
 MW_TEST_CASE(UnboundDelegateExecuteReturnsInvalidHandle)
 {
+	// Arrange
 	TDelegate<void(), SmallInlineBytes> Delegate;
 
+	// Act
 	const EDelegateResult ExecuteResult = Delegate.Execute();
-
 	const bool bDelegateBound = Delegate.IsBound();
 	const bool bDelegateUnbound = !bDelegateBound;
+
+	// Assert
 	MW_EXPECT_EQ(Test, EDelegateResult::InvalidHandle, ExecuteResult, "Unbound Execute should report invalid handle");
 	MW_EXPECT_TRUE(Test, bDelegateUnbound, "Rejected unbound Execute should preserve unbound state");
 }
 
-/** Proves oversized and over-aligned callables are rejected before stored construction. */
+/**
+ * Scenario: Bind an oversized callable to a small delegate and an over-aligned callable to a large delegate.
+ * Expected: Both unsupported layouts are rejected before stored construction, leaving the delegates unbound and recording no stored move.
+ */
 MW_TEST_CASE(DelegateRejectsUnsupportedCallableLayoutsBeforeConstruction)
 {
+	// Arrange
 	FCallableState OversizedState;
 	FOversizedCallable OversizedCallable(OversizedState);
 	TDelegate<void(), SmallInlineBytes> SmallDelegate;
+
+	FCallableState OverAlignedState;
+	FOverAlignedCallable OverAlignedCallable(OverAlignedState);
+	TDelegate<void(), LargeInlineBytes> AlignedDelegate;
+
+	// Act
 	const EDelegateResult OversizedResult = SmallDelegate.Bind(std::move(OversizedCallable));
 	const bool bSmallDelegateBound = SmallDelegate.IsBound();
 	const bool bSmallDelegateUnbound = !bSmallDelegateBound;
 	const std::size_t OversizedMoveCount = OversizedState.MoveCount;
 
-	FCallableState OverAlignedState;
-	FOverAlignedCallable OverAlignedCallable(OverAlignedState);
-	TDelegate<void(), LargeInlineBytes> AlignedDelegate;
 	const EDelegateResult OverAlignedResult = AlignedDelegate.Bind(std::move(OverAlignedCallable));
 	const bool bAlignedDelegateBound = AlignedDelegate.IsBound();
 	const bool bAlignedDelegateUnbound = !bAlignedDelegateBound;
 	const std::size_t OverAlignedMoveCount = OverAlignedState.MoveCount;
 
+	// Assert
 	MW_EXPECT_EQ(Test, EDelegateResult::CallableTooLarge, OversizedResult, "Oversized callable should report inline-capacity failure");
 	MW_EXPECT_TRUE(Test, bSmallDelegateUnbound, "Oversized rejection should preserve unbound state");
 	MW_EXPECT_EQ(Test, std::size_t{0}, OversizedMoveCount, "Oversized rejection should occur before stored callable construction");
@@ -320,9 +342,14 @@ MW_TEST_CASE(DelegateRejectsUnsupportedCallableLayoutsBeforeConstruction)
 	MW_EXPECT_EQ(Test, std::size_t{0}, OverAlignedMoveCount, "Over-aligned rejection should occur before stored callable construction");
 }
 
-/** Proves multicast exact capacity preserves insertion order and rejects capacity plus one atomically. */
+/**
+ * Scenario: Add two bindings to a multicast at capacity, attempt a capacity-plus-one add, then broadcast.
+ * Expected: The excess add is rejected atomically, clears its handle and retains caller ownership; broadcast invokes the accepted bindings in
+ * insertion order.
+ */
 MW_TEST_CASE(MulticastPreservesInsertionOrderAndRejectsCapacityPlusOne)
 {
+	// Arrange
 	using FMulticast = TMulticastDelegate<void(), SmallMulticastCapacity, StandardInlineBytes>;
 	FMulticast Multicast;
 	TIntEventLog<4> Events;
@@ -336,6 +363,7 @@ MW_TEST_CASE(MulticastPreservesInsertionOrderAndRejectsCapacityPlusOne)
 	FDelegateHandle SecondHandle{};
 	FDelegateHandle ExcessHandle{};
 
+	// Act
 	const EDelegateResult FirstAddResult = Multicast.Add(std::move(FirstBinding), FirstHandle);
 	const EDelegateResult SecondAddResult = Multicast.Add(std::move(SecondBinding), SecondHandle);
 	const std::size_t CountAtCapacity = Multicast.BindingCount();
@@ -348,6 +376,7 @@ MW_TEST_CASE(MulticastPreservesInsertionOrderAndRejectsCapacityPlusOne)
 	const int FirstEvent = Events.At(0);
 	const int SecondEvent = Events.At(1);
 
+	// Assert
 	MW_EXPECT_EQ(Test, EDelegateResult::Success, FirstBindResult, "First multicast callable should bind");
 	MW_EXPECT_EQ(Test, EDelegateResult::Success, SecondBindResult, "Second multicast callable should bind");
 	MW_EXPECT_EQ(Test, EDelegateResult::Success, ExcessBindResult, "Excess callable should bind before multicast capacity check");
@@ -364,9 +393,14 @@ MW_TEST_CASE(MulticastPreservesInsertionOrderAndRejectsCapacityPlusOne)
 	MW_EXPECT_EQ(Test, 2, SecondEvent, "Broadcast should invoke second insertion second");
 }
 
-/** Proves slot reuse changes generation so stale removal cannot affect the new binding. */
+/**
+ * Scenario: Remove a binding, add a replacement that reuses the freed slot, attempt a stale removal of the retired handle, then broadcast.
+ * Expected: The reused slot publishes a new generation so the stale handle is rejected; the new binding stays and broadcasts at its later insertion
+ * position.
+ */
 MW_TEST_CASE(MulticastReusedSlotRejectsStaleHandleAndKeepsNewBinding)
 {
+	// Arrange
 	using FMulticast = TMulticastDelegate<void(), SmallMulticastCapacity, StandardInlineBytes>;
 	FMulticast Multicast;
 	TIntEventLog<4> Events;
@@ -382,6 +416,7 @@ MW_TEST_CASE(MulticastReusedSlotRejectsStaleHandleAndKeepsNewBinding)
 	const EDelegateResult FirstAddResult = Multicast.Add(std::move(FirstBinding), FirstHandle);
 	const EDelegateResult SecondAddResult = Multicast.Add(std::move(SecondBinding), SecondHandle);
 
+	// Act
 	const EDelegateResult RemoveFirstResult = Multicast.Remove(FirstHandle);
 	const std::size_t CountAfterRemove = Multicast.BindingCount();
 	const EDelegateResult ReusedAddResult = Multicast.Add(std::move(ReusedBinding), ReusedHandle);
@@ -394,6 +429,7 @@ MW_TEST_CASE(MulticastReusedSlotRejectsStaleHandleAndKeepsNewBinding)
 	const int FirstEvent = Events.At(0);
 	const int SecondEvent = Events.At(1);
 
+	// Assert
 	MW_EXPECT_EQ(Test, EDelegateResult::Success, FirstBindResult, "First stale-handle callable should bind");
 	MW_EXPECT_EQ(Test, EDelegateResult::Success, SecondBindResult, "Second stale-handle callable should bind");
 	MW_EXPECT_EQ(Test, EDelegateResult::Success, ReusedBindResult, "Replacement stale-handle callable should bind");
@@ -412,9 +448,14 @@ MW_TEST_CASE(MulticastReusedSlotRejectsStaleHandleAndKeepsNewBinding)
 	MW_EXPECT_EQ(Test, 3, SecondEvent, "Reused-slot binding should execute at its later insertion position");
 }
 
-/** Proves callback mutation and reentry are locked without changing active order or count. */
+/**
+ * Scenario: During an active broadcast, have a callback attempt Add, Remove, and nested Broadcast, then add, remove, and broadcast again afterward.
+ * Expected: Callback mutation and reentry are reported as broadcast-locked and leave the active order and count unchanged; the same operations
+ * succeed after the broadcast ends.
+ */
 MW_TEST_CASE(MulticastRejectsMutationAndNestedBroadcastDuringActiveBroadcast)
 {
+	// Arrange
 	using FMulticast = TMulticastDelegate<void(), LargeMulticastCapacity, LargeInlineBytes>;
 	FMulticast Multicast;
 	TIntEventLog<8> Events;
@@ -446,6 +487,7 @@ MW_TEST_CASE(MulticastRejectsMutationAndNestedBroadcastDuringActiveBroadcast)
 	const EDelegateResult TargetAddResult = Multicast.Add(std::move(RemovalTargetBinding), RemovalTargetHandle);
 	MutationState.HandleToRemove = RemovalTargetHandle;
 
+	// Act
 	const EDelegateResult BroadcastResult = Multicast.Broadcast();
 	const std::size_t CountAfterBroadcast = Multicast.BindingCount();
 	const bool bPendingBindingRetained = PendingBinding.IsBound();
@@ -457,6 +499,8 @@ MW_TEST_CASE(MulticastRejectsMutationAndNestedBroadcastDuringActiveBroadcast)
 	const EDelegateResult CallbackRemoveResult = MutationState.RemoveResult;
 	const EDelegateResult CallbackNestedBroadcastResult = MutationState.NestedBroadcastResult;
 	const std::size_t CallbackBindingCount = MutationState.BindingCountDuringCallback;
+
+	// Assert
 	MW_EXPECT_EQ(Test, EDelegateResult::Success, PendingBindResult, "Pending callback-time Add binding should bind");
 	MW_EXPECT_EQ(Test, EDelegateResult::Success, MutatingBindResult, "Mutation callback should bind");
 	MW_EXPECT_EQ(Test, EDelegateResult::Success, MiddleBindResult, "Middle callback should bind");
@@ -476,6 +520,7 @@ MW_TEST_CASE(MulticastRejectsMutationAndNestedBroadcastDuringActiveBroadcast)
 	MW_EXPECT_EQ(Test, 2, FirstBroadcastSecondEvent, "Rejected mutation should not change middle callback order");
 	MW_EXPECT_EQ(Test, 3, FirstBroadcastThirdEvent, "Rejected removal should not skip its active callback");
 
+	// Act
 	FDelegateHandle AddedAfterBroadcastHandle{};
 	const EDelegateResult AddAfterBroadcastResult = Multicast.Add(std::move(PendingBinding), AddedAfterBroadcastHandle);
 	const EDelegateResult RemoveAfterBroadcastResult = Multicast.Remove(RemovalTargetHandle);
@@ -486,6 +531,8 @@ MW_TEST_CASE(MulticastRejectsMutationAndNestedBroadcastDuringActiveBroadcast)
 	const int SecondBroadcastFirstEvent = Events.At(0);
 	const int SecondBroadcastSecondEvent = Events.At(1);
 	const int SecondBroadcastThirdEvent = Events.At(2);
+
+	// Assert
 	MW_EXPECT_EQ(Test, EDelegateResult::Success, AddAfterBroadcastResult, "Add should succeed after active broadcast ends");
 	MW_EXPECT_EQ(Test, EDelegateResult::Success, RemoveAfterBroadcastResult, "Remove should succeed after active broadcast ends");
 	MW_EXPECT_EQ(Test, std::size_t{3}, CountAfterUnlockedChanges, "Post-broadcast Add and Remove should preserve expected count");
@@ -496,9 +543,13 @@ MW_TEST_CASE(MulticastRejectsMutationAndNestedBroadcastDuringActiveBroadcast)
 	MW_EXPECT_EQ(Test, 4, SecondBroadcastThirdEvent, "Post-broadcast Add should execute at the end");
 }
 
-/** Proves each multicast value binding receives an independent copy of the argument. */
+/**
+ * Scenario: Broadcast a value argument to two bindings where the first mutates its received copy.
+ * Expected: Each binding receives an independent copy of the argument and the caller's original value is not mutated.
+ */
 MW_TEST_CASE(MulticastCopiesValueArgumentForEveryBinding)
 {
+	// Arrange
 	TMulticastDelegate<void(FMutableValue), SmallMulticastCapacity, StandardInlineBytes> Multicast;
 	int FirstObservedValue = 0;
 	int SecondObservedValue = 0;
@@ -518,9 +569,11 @@ MW_TEST_CASE(MulticastCopiesValueArgumentForEveryBinding)
 	const EDelegateResult SecondAddResult = Multicast.Add(std::move(SecondBinding), SecondHandle);
 	const FMutableValue OriginalValue{42};
 
+	// Act
 	const EDelegateResult BroadcastResult = Multicast.Broadcast(OriginalValue);
-
 	const int OriginalValueAfterBroadcast = OriginalValue.Value;
+
+	// Assert
 	MW_EXPECT_EQ(Test, EDelegateResult::Success, FirstBindResult, "First value callback should bind");
 	MW_EXPECT_EQ(Test, EDelegateResult::Success, SecondBindResult, "Second value callback should bind");
 	MW_EXPECT_EQ(Test, EDelegateResult::Success, FirstAddResult, "First value callback should add");
@@ -531,15 +584,21 @@ MW_TEST_CASE(MulticastCopiesValueArgumentForEveryBinding)
 	MW_EXPECT_EQ(Test, 42, OriginalValueAfterBroadcast, "Broadcast should not mutate the caller's value argument");
 }
 
-/** Proves zero-capacity multicast rejects Add while empty Broadcast remains valid. */
+/**
+ * Scenario: Attempt Add on a zero-capacity multicast with a bound callback, then Broadcast and attempt Remove.
+ * Expected: Add is rejected while retaining caller ownership and clearing the handle; empty Broadcast succeeds with no invocation, and Remove returns
+ * InvalidHandle.
+ */
 MW_TEST_CASE(ZeroCapacityMulticastRejectsAddAndBroadcastsEmptySet)
 {
+	// Arrange
 	TMulticastDelegate<void(), ZeroMulticastCapacity, SmallInlineBytes> Multicast;
 	std::size_t InvocationCount = 0;
 	TDelegate<void(), SmallInlineBytes> Binding;
 	const EDelegateResult BindResult = Binding.Bind([&InvocationCount]() noexcept { ++InvocationCount; });
 	FDelegateHandle Handle{};
 
+	// Act
 	const EDelegateResult AddResult = Multicast.Add(std::move(Binding), Handle);
 	const std::size_t BindingCountAfterAdd = Multicast.BindingCount();
 	const bool bHandleInvalid = !Handle.IsValid();
@@ -548,6 +607,7 @@ MW_TEST_CASE(ZeroCapacityMulticastRejectsAddAndBroadcastsEmptySet)
 	const std::size_t InvocationCountAfterBroadcast = InvocationCount;
 	const EDelegateResult RemoveResult = Multicast.Remove(Handle);
 
+	// Assert
 	MW_EXPECT_EQ(Test, EDelegateResult::Success, BindResult, "Zero-capacity source callable should bind");
 	MW_EXPECT_EQ(Test, EDelegateResult::CapacityExceeded, AddResult, "Zero-capacity multicast should reject its first Add");
 	MW_EXPECT_EQ(Test, std::size_t{0}, BindingCountAfterAdd, "Rejected zero-capacity Add should preserve count zero");
