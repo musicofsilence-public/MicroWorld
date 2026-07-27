@@ -30,6 +30,9 @@ by platform drivers.
   one non-blocking send or receive and returns an explicit result. Every
   receive is transactional: on `Full`, `Invalid`, or `Unavailable` the
   destination and `FNetReceiveResult::BytesReceived` are unchanged.
+- `INetDriver::AdvanceTransmit` is an optional bounded physical-progress hook.
+  Autonomous drivers keep its no-op default; staged drivers override it, and
+  `TNetHost` calls it once after every outbound FIFO drain.
 - `E32Lora.h` keeps the one-byte node identity and 58-byte payload contract
   platform-neutral. Address validation checks only the encoded shape; radio
   routing policy remains the platform driver's responsibility.

@@ -1,8 +1,8 @@
 # Native Pico H + FreeRTOS build
 
-Status: all four native Pico images compile and link. Pico-to-ESP32 LoRa
-hardware evidence is recorded with its ESP32 peer in example 17's README.
-uploaded or verified on hardware.
+Status: all four native Pico images compile and link. The Pico-to-ESP32 LoRa
+path was hardware-verified on 2026-07-27; evidence is recorded with its ESP32
+peer in example 17's README.
 
 This is MicroWorld's native RP2040 path. It uses the Raspberry Pi Pico C/C++
 SDK and FreeRTOS directly, not Arduino. The scripts keep third-party SDK
@@ -86,8 +86,8 @@ has no upload command.
 The `lora` image consumes the reusable `FPicoE32LoraDriver` from
 `Modules/PlatformPico`. It is Pico node 1 and sends the same five-byte counter
 payload and MicroWorld frame format as ESP32 example 17. The driver uses UART1
-at 9600 baud, 8N1; the task advances one queued byte every 10 ms so Net calls
-remain non-blocking.
+at 9600 baud, 8N1; its direct FreeRTOS task invokes the generic driver hook
+once each iteration, so UART progress remains non-blocking.
 
 | Pico H | E32-433T20D | Purpose |
 | --- | --- | --- |
@@ -103,4 +103,5 @@ Attach both antennas before power. Flash `examples/17-TwoBoardLora` environment
 `esp32-s3-node-b`, begin `mw log COMx`, then BOOTSEL-upload `lora`. A successful
 Pico exchange is proved by a fresh ESP32 trace containing `node=2 open=1`,
 `rx n=1 from=1`, `tx n=2 result=Success`, `rx n=3 from=1`, and
-`tx n=4 result=Success`.
+`tx n=4 result=Success`. Repeat this volley after any rebuild that changes the
+Pico SDK binding because host tests do not exercise physical UART behavior.

@@ -37,6 +37,12 @@ constexpr std::size_t SentinelByteCount = 123;
 /** Three-byte payload used to exercise exact framing and held-frame delivery. */
 constexpr std::uint8_t Payload[] = {0x10, 0x20, 0x30};
 
+/** Different payload that exposes an accidental overwrite of a queued frame. */
+constexpr std::uint8_t ReplacementPayload[] = {0x91, 0x82};
+
+/** Largest permitted payload used to verify the E32 acceptance boundary. */
+constexpr std::uint8_t MaximumPayload[E32MaxPayloadBytes]{};
+
 /** Encodes one valid peer frame into caller-owned fixed storage. */
 std::size_t EncodePeerFrame(std::uint8_t (&OutFrame)[E32MaxPayloadBytes + FrameOverheadBytes]) noexcept
 {
@@ -101,21 +107,45 @@ MW_TEST_CASE(PicoE32StateAppliesBackpressureUntilFinalTransmitByte)
 	MW_EXPECT_EQ(Test, ENetResult::Success, EncodeResult, "The test fixture frame must encode");
 
 	const ENetResult FirstQueueResult = State.TryQueueFrame(LocalNodeId, Destination, TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
-	const ENetResult FullResult = State.TryQueueFrame(LocalNodeId, Destination, TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
+	const ENetResult FullResult =
+		State.TryQueueFrame(LocalNodeId, Destination, TSpan<const std::uint8_t>(ReplacementPayload, sizeof(ReplacementPayload)));
 
 	MW_EXPECT_EQ(Test, ENetResult::Success, FirstQueueResult, "An empty slot must accept one complete frame");
 	MW_EXPECT_EQ(Test, ENetResult::Full, FullResult, "An occupied slot must reject a second frame with Full");
 	for (std::size_t Index = 0; Index < ExpectedFrameBytes; ++Index)
 	{
-		std::uint8_t NextByte = 0;
-		MW_EXPECT_TRUE(Test, State.TryPeekTransmitByte(NextByte), "Every queued frame byte must be readable before commit");
-		MW_EXPECT_EQ(Test, ExpectedFrame[Index], NextByte, "Transmit progress must preserve exact frame byte order");
+		std::uint8_t FirstPeekedByte = 0;
+		std::uint8_t SecondPeekedByte = 0;
+		MW_EXPECT_TRUE(Test, State.TryPeekTransmitByte(FirstPeekedByte), "Every queued frame byte must be readable before commit");
+		MW_EXPECT_TRUE(Test, State.TryPeekTransmitByte(SecondPeekedByte), "Peeking without commit must retain the current byte");
+		MW_EXPECT_EQ(Test, ExpectedFrame[Index], FirstPeekedByte, "Transmit progress must preserve exact frame byte order");
+		MW_EXPECT_EQ(Test, FirstPeekedByte, SecondPeekedByte, "Repeated peeks must not advance queued frame progress");
 		State.CommitTransmitByte();
 		MW_EXPECT_EQ(Test, Index + 1 < ExpectedFrameBytes, State.HasPendingTransmit(), "Only the final committed byte may release the transmit slot");
 	}
 
 	const ENetResult ReuseResult = State.TryQueueFrame(LocalNodeId, Destination, TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
 	MW_EXPECT_EQ(Test, ENetResult::Success, ReuseResult, "The slot must accept a new frame after final-byte release");
+}
+
+/** Proves empty and maximum-sized payloads occupy and release the one fixed transmit slot. */
+MW_TEST_CASE(PicoE32StateAcceptsEmptyAndMaximumPayloads)
+{
+	FE32LoraTransportState State;
+	const FNetAddress Destination = MakeLoraAddress(PeerNodeId);
+
+	const ENetResult EmptyResult = State.TryQueueFrame(LocalNodeId, Destination, TSpan<const std::uint8_t>(nullptr, 0));
+	MW_EXPECT_EQ(Test, ENetResult::Success, EmptyResult, "An empty payload must be accepted by the E32 framing contract");
+	for (std::size_t FrameByteIndex = 0; FrameByteIndex < FrameOverheadBytes; ++FrameByteIndex)
+	{
+		MW_EXPECT_TRUE(Test, State.HasPendingTransmit(), "Each empty-frame overhead byte must remain pending before commit");
+		State.CommitTransmitByte();
+	}
+	MW_EXPECT_TRUE(Test, !State.HasPendingTransmit(), "Committing the empty-frame overhead must release the transmit slot");
+
+	const ENetResult MaximumResult = State.TryQueueFrame(LocalNodeId, Destination, TSpan<const std::uint8_t>(MaximumPayload, sizeof(MaximumPayload)));
+	MW_EXPECT_EQ(Test, ENetResult::Success, MaximumResult, "The documented maximum E32 payload must be accepted");
+	MW_EXPECT_TRUE(Test, State.HasPendingTransmit(), "An accepted maximum payload must occupy the transmit slot");
 }
 
 /** Proves an unavailable receive preserves every caller-owned output. */
@@ -170,6 +200,27 @@ MW_TEST_CASE(PicoE32StateRetainsReceivedFrameForLargerRetry)
 	{
 		MW_EXPECT_EQ(Test, Payload[Index], Destination[Index], "Successful delivery must preserve every payload byte");
 	}
+}
+
+/** Proves an invalid null receive destination leaves an already decoded frame available for a valid retry. */
+MW_TEST_CASE(PicoE32StateRetainsReceivedFrameAfterInvalidNullDestination)
+{
+	FE32LoraTransportState State;
+	std::uint8_t Frame[E32MaxPayloadBytes + FrameOverheadBytes]{};
+	const std::size_t FrameBytes = EncodePeerFrame(Frame);
+	for (std::size_t Index = 0; Index < FrameBytes; ++Index)
+	{
+		State.PushReceivedByte(Frame[Index]);
+	}
+
+	FNetAddress From = MakeLoraAddress(SentinelByte);
+	FNetReceiveResult ReceiveResult{SentinelByteCount};
+	const ENetResult InvalidResult = State.TryDeliverReceivedFrame(From, TSpan<std::uint8_t>(nullptr, 1), ReceiveResult);
+
+	MW_EXPECT_EQ(Test, ENetResult::Invalid, InvalidResult, "A null non-empty destination must be rejected");
+	MW_EXPECT_TRUE(Test, State.HasReceivedFrame(), "Invalid destination input must retain the decoded frame");
+	MW_EXPECT_EQ(Test, SentinelByte, From.Bytes[0], "Invalid input must preserve the sender output");
+	MW_EXPECT_EQ(Test, SentinelByteCount, ReceiveResult.BytesReceived, "Invalid input must preserve the byte count");
 }
 
 /** Proves a discarded corrupt frame does not prevent the next valid frame from completing. */

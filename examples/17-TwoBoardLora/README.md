@@ -214,6 +214,22 @@ I (36445336) ex17: rx n=39 from=1
 I (36446336) ex17: tx n=40 result=Success
 ```
 
+The same hardware was rechecked after moving UART SDK calls behind the
+SDK-free driver seam and wiring transmit progress into `INetDriver`. The rebuilt
+UF2 SHA-256 was
+`9d85c3cc2ce14cd099730779d0323f1bfd135b4cc61fdbf6aa50a717bf91e288`.
+After upload through `D:\`, COM5 showed an uninterrupted node-1/node-2 volley:
+
+```text
+I (57350126) ex17: tx n=10 result=Success
+I (57351896) ex17: rx n=11 from=1
+I (57352896) ex17: tx n=12 result=Success
+I (57354666) ex17: rx n=13 from=1
+...
+I (57376826) ex17: rx n=29 from=1
+I (57377826) ex17: tx n=30 result=Success
+```
+
 ## Image size
 
 From `pio run` (release build, ESP32-S3-DevKitC-1). Both role environments

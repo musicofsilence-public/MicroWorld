@@ -5,7 +5,8 @@ Inherits `../AGENTS.md`.
 ## Architecture
 
 Source files split deterministic E32 state from the thin Pico SDK UART wrapper.
-Only `PicoE32LoraDriver.cpp` may include Pico hardware headers.
+Only `PicoE32LoraPlatform.cpp` may include Pico hardware headers; driver policy
+remains SDK-free in `PicoE32LoraDriver.cpp`.
 
 ## Concepts
 

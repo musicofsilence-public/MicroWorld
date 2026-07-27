@@ -161,7 +161,7 @@ public:
 	using FMessageHandlerBinding = TDelegate<void(FPeerId, std::uint8_t, TSpan<const std::uint8_t>), MessageHandlerInlineBytes>;
 
 	/** Binds the host to one externally owned driver; mode and config follow via `Configure`. */
-	explicit TNetHost(INetDriver& InDriver) noexcept : OutboundManager(InDriver, OutboundStorage) {}
+	explicit TNetHost(INetDriver& InDriver) noexcept : Driver(InDriver), OutboundManager(InDriver, OutboundStorage) {}
 
 	/** Prevents copying so one host value binds one driver, table, and handler. */
 	TNetHost(const TNetHost&) = delete;
@@ -222,8 +222,13 @@ public:
 	}
 
 	/**
-	 * Ends the session: best-effort `Bye` to every active peer, then evicts all and returns to `Idle`.
-	 * The generation of each evicted slot is bumped so any outstanding `FPeerId` goes stale.
+	 * Ends the session: best-effort `Bye` queueing to every active peer, then evicts all and returns to `Idle`.
+	 *
+	 * This operation never waits
+	 * for a physical transport drain; a caller that needs one must keep pumping before
+	 * destroying the externally owned driver.
+	 * The
+	 * generation of each evicted slot is bumped so any outstanding `FPeerId` goes stale.
 	 */
 	void Stop() noexcept
 	{
@@ -262,6 +267,7 @@ public:
 		SendClientHelloIfDue(InNowMilliseconds);
 		SendDueHeartbeats(InNowMilliseconds);
 		DrainOutbound();
+		Driver.AdvanceTransmit();
 		return ENetResult::Success;
 	}
 
@@ -755,7 +761,7 @@ private:
 		}
 	}
 
-	/** Best-effort `Bye` to every active peer, then drains the outbound FIFO; a standalone host does nothing. */
+	/** Best-effort `Bye` to every active peer, then drains the outbound FIFO without waiting for physical transmission. */
 	void SendByeToAllActivePeers() noexcept
 	{
 		if (Mode == ENetMode::Standalone)
@@ -821,6 +827,9 @@ private:
 		}
 		return Index;
 	}
+
+	/** Driver borrowed for one host lifetime; progresses pending physical transmission after each outbound pump. */
+	INetDriver& Driver;
 
 	/** Owns the outbound packet bytes, lengths, and destinations for the FIFO. */
 	TNetPacketStorage<SendQueueDepth, MaxPacketBytes> OutboundStorage{};

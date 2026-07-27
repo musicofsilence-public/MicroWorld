@@ -49,8 +49,10 @@ to Messaging, and real transports to the platform packages.
   non-blocking `TryReceive`. One call performs at most one transport
   operation. Every receive is transactional: on `Full`, `Invalid`, or
   `Unavailable` the destination and `FNetReceiveResult::BytesReceived` are
-  unchanged. The interface owns no clock, thread, retry, peer identity,
-  session, or protocol behavior.
+  unchanged. `AdvanceTransmit` is a no-op by default and lets staged drivers
+  make one bounded physical transmit step after a host FIFO drain. The
+  interface owns no clock, thread, retry, peer identity, session, or protocol
+  behavior.
 - `TNetPacketStorage<MaxPackets, MaxPacketBytes>` is the smallest fixed
   storage type the manager needs; both capacities must be nonzero and are
   rejected at compile time otherwise. The caller constructs one instance and
@@ -67,8 +69,9 @@ to Messaging, and real transports to the platform packages.
   One `ENetMode` role — Standalone, Client, ListenServer, or DedicatedServer —
   selects which traffic the host originates and accepts; a fixed peer table
   carries `Hello`/`Welcome` admission, heartbeats, and timeout eviction; and
-  channel 0 is reserved for control. The host owns no reliability and no
-  ordering across messages.
+  channel 0 is reserved for control. Its `Stop` operation is best-effort and
+  does not wait for physical transmit completion. The host owns no reliability
+  and no ordering across messages.
 - `THostLoopback<CapacityPackets, PacketBytes>` is a deterministic fixed-
   capacity `INetDriver` for host tests: a full send never overwrites accepted
   packets, an empty receive returns `Unavailable`, a too-small receive
@@ -79,8 +82,9 @@ to Messaging, and real transports to the platform packages.
   deterministic lifetimes, and no RTTI, exceptions, logging, threads, clocks,
   heap containers, SDK calls, or global mutable state.
 - `FPacketDropDriver` is a test/demo `INetDriver` decorator that wraps another
-  driver by reference and silently drops every Nth outgoing send; it is a
-  loss injector, not reliability or a real transport.
+  driver by reference, silently drops every Nth outgoing send, and forwards
+  physical transmit progress; it is a loss injector, not reliability or a
+  real transport.
 
 ## Verification
 

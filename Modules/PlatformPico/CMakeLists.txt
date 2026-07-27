@@ -2,15 +2,23 @@ cmake_minimum_required(VERSION 3.20)
 
 project(MicroWorldPlatformPico VERSION 0.3.0 LANGUAGES CXX)
 
+if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
+    set(MICROWORLD_PLATFORM_PICO_DEFAULT_BUILD_DRIVER OFF)
+    set(MICROWORLD_PLATFORM_PICO_DEFAULT_BUILD_TESTS ON)
+else()
+    set(MICROWORLD_PLATFORM_PICO_DEFAULT_BUILD_DRIVER ON)
+    set(MICROWORLD_PLATFORM_PICO_DEFAULT_BUILD_TESTS OFF)
+endif()
+
 option(
     MICROWORLD_PLATFORM_PICO_BUILD_DRIVER
     "Build the native Pico SDK E32 driver"
-    ON
+    ${MICROWORLD_PLATFORM_PICO_DEFAULT_BUILD_DRIVER}
 )
 option(
     MICROWORLD_PLATFORM_PICO_BUILD_TESTS
-    "Build SDK-free PlatformPico state tests"
-    OFF
+    "Build SDK-free PlatformPico driver and state tests"
+    ${MICROWORLD_PLATFORM_PICO_DEFAULT_BUILD_TESTS}
 )
 
 if(NOT TARGET MicroWorld::Net)
@@ -71,6 +79,7 @@ if(MICROWORLD_PLATFORM_PICO_BUILD_DRIVER)
     set(
         MICROWORLD_PLATFORM_PICO_DRIVER_SOURCES
         "${CMAKE_CURRENT_SOURCE_DIR}/src/PicoE32LoraDriver.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/PicoE32LoraPlatform.cpp"
         ${MICROWORLD_PLATFORM_PICO_STATE_SOURCES}
     )
     add_library(
@@ -100,8 +109,10 @@ if(MICROWORLD_PLATFORM_PICO_BUILD_TESTS)
         set(
             MICROWORLD_PLATFORM_PICO_TEST_SOURCES
             "${CMAKE_CURRENT_SOURCE_DIR}/../Core/tests/TestMain.cpp"
+            "${CMAKE_CURRENT_SOURCE_DIR}/src/PicoE32LoraDriver.cpp"
             ${MICROWORLD_PLATFORM_PICO_STATE_SOURCES}
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/E32LoraTransportStateTests.cpp"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/PicoE32LoraDriverTests.cpp"
         )
         add_executable(
             microworld_platform_pico_state_tests

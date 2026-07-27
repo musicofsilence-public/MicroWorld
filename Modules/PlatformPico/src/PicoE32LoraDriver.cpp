@@ -3,9 +3,6 @@
 #include <MicroWorld/Net/E32Lora.h>
 #include <MicroWorld/Net/FrameCodec.h>
 
-#include <hardware/gpio.h>
-#include <hardware/uart.h>
-
 #include <cstddef>
 #include <cstdint>
 
@@ -17,20 +14,6 @@ namespace
 
 	/** Limits receive work so a UART flood cannot monopolize one caller iteration. */
 	constexpr std::size_t ReceivePumpByteCap = 2u * (E32MaxPayloadBytes + FrameOverheadBytes);
-
-	/** Resolves the only two RP2040 UART instances without leaking SDK types into the public header. */
-	uart_inst_t* ResolveUart(const std::uint8_t InIndex) noexcept
-	{
-		switch (InIndex)
-		{
-			case 0:
-				return uart0;
-			case 1:
-				return uart1;
-			default:
-				return nullptr;
-		}
-	}
 
 	/** Reports whether a GPIO can carry TX for the selected RP2040 UART. */
 	bool IsValidTransmitPin(const std::uint8_t InUartIndex, const unsigned int InPin) noexcept
@@ -62,11 +45,13 @@ namespace
 
 } // namespace
 
+FPicoE32LoraDriver::FPicoE32LoraDriver(Detail::IPicoE32LoraPlatform& InPlatform) noexcept : Platform(InPlatform) {}
+
 FPicoE32LoraDriver::~FPicoE32LoraDriver() noexcept
 {
 	if (bOpen)
 	{
-		uart_deinit(ResolveUart(UartIndexValue));
+		Platform.CloseUart(UartIndexValue);
 	}
 }
 
@@ -77,25 +62,17 @@ ENetResult FPicoE32LoraDriver::Initialize(const FPicoE32LoraConfig& InConfig) no
 		return ENetResult::Unavailable;
 	}
 
-	uart_inst_t* const Uart = ResolveUart(InConfig.UartIndex);
-	if (Uart == nullptr || InConfig.BaudRate == 0 || !IsValidTransmitPin(InConfig.UartIndex, InConfig.TxGpio)
-		|| !IsValidReceivePin(InConfig.UartIndex, InConfig.RxGpio))
+	if (InConfig.BaudRate == 0 || !IsValidTransmitPin(InConfig.UartIndex, InConfig.TxGpio) || !IsValidReceivePin(InConfig.UartIndex, InConfig.RxGpio))
 	{
 		return ENetResult::Invalid;
 	}
 
-	const std::uint32_t AchievedBaudRate = uart_init(Uart, InConfig.BaudRate);
+	const std::uint32_t AchievedBaudRate = Platform.OpenUart(InConfig.UartIndex, InConfig.TxGpio, InConfig.RxGpio, InConfig.BaudRate);
 	if (AchievedBaudRate != InConfig.BaudRate)
 	{
-		uart_deinit(Uart);
+		Platform.CloseUart(InConfig.UartIndex);
 		return ENetResult::Invalid;
 	}
-
-	gpio_set_function(InConfig.TxGpio, GPIO_FUNC_UART);
-	gpio_set_function(InConfig.RxGpio, GPIO_FUNC_UART);
-	uart_set_format(Uart, 8, 1, UART_PARITY_NONE);
-	uart_set_hw_flow(Uart, false, false);
-	uart_set_fifo_enabled(Uart, true);
 
 	UartIndexValue = InConfig.UartIndex;
 	LocalNodeIdValue = InConfig.LocalNodeId;
@@ -147,12 +124,11 @@ void FPicoE32LoraDriver::AdvanceTransmit() noexcept
 		return;
 	}
 
-	uart_inst_t* const Uart = ResolveUart(UartIndexValue);
-	if (!uart_is_writable(Uart))
+	if (!Platform.IsUartWritable(UartIndexValue))
 	{
 		return;
 	}
-	uart_putc_raw(Uart, NextByte);
+	Platform.WriteUartByte(UartIndexValue, NextByte);
 	TransportState.CommitTransmitByte();
 }
 
@@ -163,10 +139,15 @@ bool FPicoE32LoraDriver::IsOpen() const noexcept
 
 ENetResult FPicoE32LoraDriver::PumpReceive(FNetAddress& OutFrom, const TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept
 {
-	uart_inst_t* const Uart = ResolveUart(UartIndexValue);
-	for (std::size_t PumpedBytes = 0; PumpedBytes < ReceivePumpByteCap && uart_is_readable(Uart); ++PumpedBytes)
+	for (std::size_t PumpedBytes = 0; PumpedBytes < ReceivePumpByteCap; ++PumpedBytes)
 	{
-		const EFrameEvent Event = TransportState.PushReceivedByte(uart_getc(Uart));
+		std::uint8_t ReceivedByte = 0;
+		if (!Platform.TryReadUartByte(UartIndexValue, ReceivedByte))
+		{
+			break;
+		}
+
+		const EFrameEvent Event = TransportState.PushReceivedByte(ReceivedByte);
 		if (Event == EFrameEvent::FrameReady)
 		{
 			return TransportState.TryDeliverReceivedFrame(OutFrom, InDestination, OutResult);

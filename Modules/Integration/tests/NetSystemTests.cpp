@@ -58,7 +58,7 @@ namespace
 		std::uint32_t Counter{0};
 	};
 
-	/** Records the first inbound and outbound pump each fake driver receives. */
+	/** Records the first inbound, outbound, and physical-progress pump each fake driver receives. */
 	struct FDriverPumpRecord
 	{
 		/** Counts transport receive calls so the first call identifies driver pump order. */
@@ -67,19 +67,31 @@ namespace
 		/** Counts transport send calls so the first call identifies driver pump order. */
 		std::size_t SendCount{0};
 
+		/** Counts bounded transmit-progress calls independently of logical packet acceptance. */
+		std::size_t AdvanceCount{0};
+
 		/** Holds the first receive stamp from the shared test sequence. */
 		std::uint32_t FirstReceiveOrder{0};
 
 		/** Holds the first send stamp from the shared test sequence. */
 		std::uint32_t FirstSendOrder{0};
+
+		/** Holds the first transmit-progress stamp from the shared test sequence. */
+		std::uint32_t FirstAdvanceOrder{0};
 	};
 
 	/** Provides a deterministic client transport whose observable operations reveal TNetSystem's driver pump order. */
 	class FRecordingDriver final : public MicroWorld::INetDriver
 	{
 	public:
-		/** Binds the driver to caller-owned operation observability for this isolated test. */
-		FRecordingDriver(FDriverPumpRecord& InRecord, FDriverPumpSequence& InSequence) noexcept : Record(InRecord), Sequence(InSequence) {}
+		/** Binds the driver to caller-owned observability and a deterministic logical-send outcome. */
+		FRecordingDriver(
+			FDriverPumpRecord& InRecord,
+			FDriverPumpSequence& InSequence,
+			const MicroWorld::ENetResult InSendResult = MicroWorld::ENetResult::Success) noexcept
+			: Record(InRecord), Sequence(InSequence), SendResult(InSendResult)
+		{
+		}
 
 		/** Records each outbound transport attempt and accepts it without a real network. */
 		MicroWorld::ENetResult TrySend(const MicroWorld::FNetAddress&, MicroWorld::TSpan<const std::uint8_t>) noexcept override
@@ -89,7 +101,7 @@ namespace
 			{
 				Record.FirstSendOrder = Sequence.Next();
 			}
-			return MicroWorld::ENetResult::Success;
+			return SendResult;
 		}
 
 		/** Records each inbound transport attempt and reports the deterministic empty state. */
@@ -103,6 +115,16 @@ namespace
 			return MicroWorld::ENetResult::Unavailable;
 		}
 
+		/** Records one bounded physical-transmit advancement after the host's logical outbound drain. */
+		void AdvanceTransmit() noexcept override
+		{
+			++Record.AdvanceCount;
+			if (Record.FirstAdvanceOrder == 0)
+			{
+				Record.FirstAdvanceOrder = Sequence.Next();
+			}
+		}
+
 		/** Matches the integration profile's packet budget so host configuration remains valid. */
 		std::size_t MaxPacketBytes() const noexcept override { return 256; }
 
@@ -112,6 +134,9 @@ namespace
 
 		/** Orders operations across the two fake drivers; never owned here. */
 		FDriverPumpSequence& Sequence;
+
+		/** Makes full-driver lifecycle progress observable without a real transport. */
+		MicroWorld::ENetResult SendResult;
 	};
 
 } // namespace
@@ -274,8 +299,13 @@ MW_TEST_CASE(NetSystem_CoreLifecyclePumpsDriversInForwardAndReverseOrder)
 	const bool bSecondDriverReceived = SecondRecord.ReceiveCount > 0;
 	const bool bFirstDriverSent = FirstRecord.SendCount > 0;
 	const bool bSecondDriverSent = SecondRecord.SendCount > 0;
+	const bool bFirstDriverAdvanced = FirstRecord.AdvanceCount == 1;
+	const bool bSecondDriverAdvanced = SecondRecord.AdvanceCount == 1;
 	const bool bReceiveOrderIsForward = FirstRecord.FirstReceiveOrder < SecondRecord.FirstReceiveOrder;
 	const bool bSendOrderIsReverse = SecondRecord.FirstSendOrder < FirstRecord.FirstSendOrder;
+	const bool bAdvanceOrderIsReverse = SecondRecord.FirstAdvanceOrder < FirstRecord.FirstAdvanceOrder;
+	const bool bSecondAdvanceFollowsSend = SecondRecord.FirstSendOrder < SecondRecord.FirstAdvanceOrder;
+	const bool bFirstAdvanceFollowsSend = FirstRecord.FirstSendOrder < FirstRecord.FirstAdvanceOrder;
 
 	MW_EXPECT_TRUE(Test, bFirstHandleValid, "The first recording driver must compose before lifecycle pumping");
 	MW_EXPECT_TRUE(Test, bSecondHandleValid, "The second recording driver must compose before lifecycle pumping");
@@ -283,8 +313,46 @@ MW_TEST_CASE(NetSystem_CoreLifecyclePumpsDriversInForwardAndReverseOrder)
 	MW_EXPECT_TRUE(Test, bSecondDriverReceived, "PreAdvance must pump the second live driver");
 	MW_EXPECT_TRUE(Test, bFirstDriverSent, "PostAdvance must pump the first live driver");
 	MW_EXPECT_TRUE(Test, bSecondDriverSent, "PostAdvance must pump the second live driver");
+	MW_EXPECT_TRUE(Test, bFirstDriverAdvanced, "PostAdvance must advance the first driver exactly once after logical sends");
+	MW_EXPECT_TRUE(Test, bSecondDriverAdvanced, "PostAdvance must advance the second driver exactly once after logical sends");
 	MW_EXPECT_TRUE(Test, bReceiveOrderIsForward, "PreAdvance must pump the first-added driver before the second");
 	MW_EXPECT_TRUE(Test, bSendOrderIsReverse, "PostAdvance must pump the second-added driver before the first");
+	MW_EXPECT_TRUE(Test, bAdvanceOrderIsReverse, "PostAdvance must advance the second-added driver before the first");
+	MW_EXPECT_TRUE(Test, bSecondAdvanceFollowsSend, "The second driver's physical progress must follow its logical send attempt");
+	MW_EXPECT_TRUE(Test, bFirstAdvanceFollowsSend, "The first driver's physical progress must follow its logical send attempt");
+}
+
+/** Proves every non-standalone host advances transport even when it has no packet or its driver is full. */
+MW_TEST_CASE(NetSystem_PostAdvanceAdvancesIdleAndFullDrivers)
+{
+	FDriverPumpSequence Sequence;
+	FDriverPumpRecord IdleRecord{};
+	FDriverPumpRecord FullRecord{};
+	FRecordingDriver IdleDriver{IdleRecord, Sequence};
+	FRecordingDriver FullDriver{FullRecord, Sequence, MicroWorld::ENetResult::Full};
+	FSystem System;
+	MicroWorld::FNetHostConfig ClientConfig = MakeConfig();
+	ClientConfig.ServerAddress = MicroWorld::MakeLoopbackAddress(0);
+
+	const MicroWorld::FNetDriverHandle IdleHandle = System.AddNetDriver(IdleDriver, MicroWorld::ENetMode::DedicatedServer, MakeConfig());
+	const MicroWorld::FNetDriverHandle FullHandle = System.AddNetDriver(FullDriver, MicroWorld::ENetMode::Client, ClientConfig);
+
+	System.BeginPlay(0);
+	System.PostAdvance(10);
+
+	const bool bIdleHandleValid = IdleHandle.IsValid();
+	const bool bFullHandleValid = FullHandle.IsValid();
+	const bool bIdleDriverWasNotSent = IdleRecord.SendCount == 0;
+	const bool bIdleDriverAdvanced = IdleRecord.AdvanceCount == 1;
+	const bool bFullDriverAttemptedSend = FullRecord.SendCount == 1;
+	const bool bFullDriverAdvanced = FullRecord.AdvanceCount == 1;
+
+	MW_EXPECT_TRUE(Test, bIdleHandleValid, "The idle server driver must compose before lifecycle pumping");
+	MW_EXPECT_TRUE(Test, bFullHandleValid, "The full client driver must compose before lifecycle pumping");
+	MW_EXPECT_TRUE(Test, bIdleDriverWasNotSent, "An idle dedicated server must have no logical packet to send");
+	MW_EXPECT_TRUE(Test, bIdleDriverAdvanced, "An idle non-standalone driver must still advance pending physical transmission");
+	MW_EXPECT_TRUE(Test, bFullDriverAttemptedSend, "A connecting client must attempt its queued hello even when the driver is full");
+	MW_EXPECT_TRUE(Test, bFullDriverAdvanced, "A full driver must still advance any previously staged physical transmission");
 }
 
 /** Proves pre-play frame turns leave the router inert until BeginPlay closes and opens the composition. */

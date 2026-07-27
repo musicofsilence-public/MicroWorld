@@ -4,6 +4,7 @@
 #include <MicroWorld/Net/NetAddress.h>
 #include <MicroWorld/Net/NetDriver.h>
 #include <MicroWorld/Net/NetResult.h>
+#include <MicroWorld/PlatformPico/Detail/PicoE32LoraPlatform.h>
 #include <MicroWorld/PlatformPico/Detail/E32LoraTransportState.h>
 
 #include <cstddef>
@@ -46,8 +47,11 @@ struct FPicoE32LoraConfig
 class FPicoE32LoraDriver final : public INetDriver
 {
 public:
-	/** Creates a closed driver without touching Pico SDK state. */
-	FPicoE32LoraDriver() noexcept = default;
+	/** Creates a closed driver that borrows the production Pico SDK UART binding. */
+	FPicoE32LoraDriver() noexcept;
+
+	/** Creates a closed driver that borrows the supplied binding for host policy tests or alternate Pico wiring. */
+	explicit FPicoE32LoraDriver(Detail::IPicoE32LoraPlatform& InPlatform) noexcept;
 
 	/** Deinitializes the exclusively owned UART when initialization succeeded. */
 	~FPicoE32LoraDriver() noexcept override;
@@ -104,7 +108,7 @@ public:
 	std::size_t MaxPacketBytes() const noexcept override;
 
 	/** Advances at most one queued byte when the UART is writable; otherwise performs no work. */
-	void AdvanceTransmit() noexcept;
+	void AdvanceTransmit() noexcept override;
 
 	/** Reports whether `Initialize` opened a usable UART. */
 	bool IsOpen() const noexcept;
@@ -116,7 +120,10 @@ private:
 	/** Owns the SDK-free transmit slot and receive decoder exercised by host tests. */
 	Detail::FE32LoraTransportState TransportState{};
 
-	/** Stores the initialized UART index so private source code can resolve the SDK instance. */
+	/** Borrowed UART binding that must outlive this driver and confines Pico SDK calls to the platform edge. */
+	Detail::IPicoE32LoraPlatform& Platform;
+
+	/** Stores the initialized UART identity for each bounded platform operation. */
 	std::uint8_t UartIndexValue{0};
 
 	/** Stamps each queued frame with this Pico's source node id. */

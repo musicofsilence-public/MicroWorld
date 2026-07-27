@@ -22,6 +22,41 @@ using MicroWorld::MakeLoopbackAddress;
 using MicroWorld::THostLoopback;
 using MicroWorld::TSpan;
 
+/** Records transport progress without requiring a real transport, isolating the decorator forwarding contract. */
+class FAdvanceRecordingDriver final : public MicroWorld::INetDriver
+{
+public:
+	/** Records the bounded progress command that a wrapping decorator must preserve. */
+	void AdvanceTransmit() noexcept override { ++AdvanceCount; }
+
+	/** Remains inert because this fake only observes transport progress. */
+	ENetResult TrySend(const FNetAddress&, TSpan<const std::uint8_t>) noexcept override { return ENetResult::Unavailable; }
+
+	/** Remains inert because this fake only observes transport progress. */
+	ENetResult TryReceive(FNetAddress&, TSpan<std::uint8_t>, FNetReceiveResult&) noexcept override { return ENetResult::Unavailable; }
+
+	/** Supplies a valid fixed capacity for the complete driver contract. */
+	std::size_t MaxPacketBytes() const noexcept override { return 1; }
+
+	/** Makes forwarded progress directly observable to this focused test. */
+	std::size_t AdvanceCount{0};
+};
+
+/** Proves loss injection preserves pending physical transmit progress in the wrapped driver. */
+MW_TEST_CASE(PacketDropDriver_ForwardsPendingTransmitProgress)
+{
+	FAdvanceRecordingDriver InnerDriver;
+	FPacketDropDriver Dropper(InnerDriver, 1);
+
+	Dropper.AdvanceTransmit();
+
+	MW_EXPECT_EQ(
+		Test,
+		static_cast<std::size_t>(1),
+		InnerDriver.AdvanceCount,
+		"Transport progress must reach the wrapped driver even when every logical send drops");
+}
+
 /** Proves N=3 drops exactly the 3rd, 6th, and 9th sends while every TrySend call still reports Success. */
 MW_TEST_CASE(PacketDropDriver_DropsEveryThirdSendDeliveringTheRest)
 {

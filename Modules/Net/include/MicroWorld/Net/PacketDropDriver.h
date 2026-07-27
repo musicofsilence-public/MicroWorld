@@ -46,6 +46,9 @@ public:
 	/** Forwards verbatim to the inner driver; receives are never counted or dropped. */
 	ENetResult TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept override;
 
+	/** Forwards bounded physical transmit progress so wrapped staged drivers cannot stall behind loss injection. */
+	void AdvanceTransmit() noexcept override { InnerDriver.AdvanceTransmit(); }
+
 	/** Forwards verbatim to the inner driver. */
 	std::size_t MaxPacketBytes() const noexcept override;
 

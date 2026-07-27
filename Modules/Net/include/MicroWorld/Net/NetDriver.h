@@ -61,6 +61,16 @@ public:
 	 */
 	virtual ENetResult TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept = 0;
 
+	/**
+	 * Advances one bounded unit of pending outbound transport work.
+	 *
+	 * Drivers that accept a packet before physical transmission
+	 * completes override this command to make bounded
+	 * progress. Autonomous drivers inherit the no-op implementation, preserving the
+	 * send/receive-only contract.
+	 */
+	virtual void AdvanceTransmit() noexcept {}
+
 	/** Reports the largest packet, in bytes, the transport accepts on a single send. */
 	virtual std::size_t MaxPacketBytes() const noexcept = 0;
 

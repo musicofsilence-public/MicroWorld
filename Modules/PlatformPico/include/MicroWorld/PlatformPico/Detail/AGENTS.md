@@ -4,12 +4,14 @@ Inherits `../AGENTS.md`.
 
 ## Architecture
 
-`E32LoraTransportState.h` is an unsupported implementation seam included by the
-public driver for fixed-capacity value ownership and by host tests for
-deterministic behavior. It contains no Pico SDK access.
+`E32LoraTransportState.h` and `PicoE32LoraPlatform.h` are unsupported
+implementation seams. The former owns fixed-capacity framing state; the latter
+is the narrow SDK-free UART binding used by the public driver and host policy
+tests. Neither contains Pico SDK access.
 
 ## Concepts
 
 - One transmit frame and one held receive frame make backpressure explicit.
 - Tests observe accepted/rejected operations, byte progress, and transactional
-  delivery without introducing a generic hardware abstraction.
+  delivery through a per-instance fake binding without creating a generic
+  hardware abstraction.
