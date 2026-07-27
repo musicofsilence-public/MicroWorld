@@ -24,12 +24,4 @@ Modules/Core/tests/consumer/sdkconfig.*
 # Per-site WiFi credentials (committed template: NetworkConfig.example.h)
 examples/*/src/NetworkConfig.h
 .idea/
-/build-engine
-/build-object
-/build-integration
-/build-integration-messaging
-/build-messaging
-/build-engine-consumer
-/build-core
-/build-net
-/build-ph
+/build-*
