@@ -41,8 +41,8 @@ An engine that knows about radios cannot be tested without one, and a transport
 that knows about actors cannot be reused. `Integration` is the single package
 permitted to join them.
 
-`PlatformHost` and `PlatformEsp32` sit outside this graph as the non-portable
-edges. Only they may include OS or SDK headers.
+`PlatformHost`, `PlatformEsp32`, and `PlatformPico` sit outside this graph as
+the non-portable edges. Only they may include OS or SDK headers.
 
 ---
 
@@ -59,6 +59,7 @@ edges. Only they may include OS or SDK headers.
 | **Integration** | Core, Object, Messaging, Engine, Net | `TNetSystem` — the one place Engine and Net meet |
 | **PlatformHost** | non-portable | Host UDP over OS sockets, `steady_clock` time source |
 | **PlatformEsp32** | non-portable | ESP32-S3 transports (lwIP UDP, E32 LoRa UART, wired UART/I2C/SPI), ESP timer and log |
+| **PlatformPico** | Net, non-portable | RP2040 E32 LoRa UART over the native Pico SDK |
 
 ---
 

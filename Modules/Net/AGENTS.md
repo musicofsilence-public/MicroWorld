@@ -41,6 +41,10 @@ to Messaging, and real transports to the platform packages.
   `MakeUdpAddressFromPackedHostOrder`) as pure `constexpr` arithmetic with no OS
   includes, so both UDP platform adapters and their drivers share one definition
   without breaching the `Core <- Net` boundary.
+- `Net/E32Lora.h` owns the one-byte E32 node-address shape and the 58-byte
+  payload limit shared by Pico and ESP32 platform drivers. It describes
+  MicroWorld routing identity; transparent-mode E32 modules still broadcast
+  the serialized frame over the air.
 - `INetDriver` exposes one bounded non-blocking `TrySend` and one bounded
   non-blocking `TryReceive`. One call performs at most one transport
   operation. Every receive is transactional: on `Full`, `Invalid`, or

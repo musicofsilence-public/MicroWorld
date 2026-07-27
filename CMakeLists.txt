@@ -24,6 +24,12 @@ endif()
 if(NOT TARGET MicroWorld::Net)
     add_subdirectory(Modules/Net)
 endif()
+# PlatformPico's production target requires an initialized Pico SDK and remains
+# outside this host superbuild. Its SDK-free E32 state is still host-tested here
+# so bounded backpressure and transactional delivery run with every root ctest.
+set(MICROWORLD_PLATFORM_PICO_BUILD_DRIVER OFF)
+set(MICROWORLD_PLATFORM_PICO_BUILD_TESTS ON)
+add_subdirectory(Modules/PlatformPico)
 if(NOT TARGET MicroWorld::Engine)
     add_subdirectory(Modules/Engine)
 endif()

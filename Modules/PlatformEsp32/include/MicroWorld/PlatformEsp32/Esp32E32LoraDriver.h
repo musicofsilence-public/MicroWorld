@@ -12,9 +12,6 @@
 namespace MicroWorld
 {
 
-/** Largest single-transmission payload the configured E32 module is assumed to accept; tunable per module. */
-constexpr std::size_t E32MaxPayloadBytes = 58;
-
 /**
  * Construction parameters for one E32 LoRa UART driver.
  *

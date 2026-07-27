@@ -130,12 +130,13 @@ I (12156) ex17: tx n=6 result=Success
 Unlike a wire, an occasional LoRa gap is radio weather (distance,
 interference) rather than necessarily a defect.
 
-## Pico H pairing (hardware-verified 2026-07-26)
+## Pico H pairing (prototype hardware-verified 2026-07-26)
 
-The Pico-native `lora` consumer acts as node 1 and uses a private, static
-`INetDriver` adapter; this ESP32 source remains unchanged as node 2. Wire the
-Pico's E32 as GP4 TX → RXD, GP5 RX ← TXD, 3V3 → VCC, GND → GND/M0/M1, and leave
-AUX open. Attach antennas before power.
+The captured run below used the private prototype that was promoted into
+`Modules/PlatformPico`. The current Pico-native `lora` consumer acts as node 1
+through `FPicoE32LoraDriver`; this ESP32 source remains unchanged as node 2.
+Wire the Pico's E32 as GP4 TX → RXD, GP5 RX ← TXD, 3V3 → VCC, GND → GND/M0/M1,
+and leave AUX open. Attach antennas before power.
 
 ```bat
 mw flash 17 esp32-s3-node-b COMx

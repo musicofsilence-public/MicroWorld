@@ -10,6 +10,8 @@ Memory-owned `TSpan`, `NetDriver.h` defines the non-blocking interface,
 `NetPacketStorage.h` defines the caller-owned fixed packet storage,
 `NetManager.h` composes a driver with that storage as a FIFO, and
 `HostLoopback.h` provides the deterministic host driver implementation.
+`E32Lora.h` defines the portable E32 node-address shape and payload limit used
+by platform drivers.
 
 ## Concepts and boundaries
 
@@ -28,6 +30,9 @@ Memory-owned `TSpan`, `NetDriver.h` defines the non-blocking interface,
   one non-blocking send or receive and returns an explicit result. Every
   receive is transactional: on `Full`, `Invalid`, or `Unavailable` the
   destination and `FNetReceiveResult::BytesReceived` are unchanged.
+- `E32Lora.h` keeps the one-byte node identity and 58-byte payload contract
+  platform-neutral. Address validation checks only the encoded shape; radio
+  routing policy remains the platform driver's responsibility.
 - `TNetPacketStorage<MaxPackets, MaxPacketBytes>` is the smallest fixed
   storage type the manager needs; both capacities must be nonzero. The caller
   constructs one instance and lends it to the manager by reference so the

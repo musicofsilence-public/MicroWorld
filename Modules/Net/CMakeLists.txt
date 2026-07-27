@@ -88,6 +88,7 @@ if(MICROWORLD_NET_BUILD_TESTS)
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/NetAllocationCounters.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/ByteWriterTests.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/ByteReaderTests.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/E32LoraTests.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/FrameCodecTests.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/HostLoopbackTests.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/PacketDropDriverTests.cpp"

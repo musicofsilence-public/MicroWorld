@@ -39,7 +39,8 @@ MicroWorld/
 │   ├── Application/    FApplication (including the Run template)
 │   ├── Integration/    TNetSystem — the only Engine + Net joiner
 │   ├── PlatformHost/   host UDP transport (non-portable)
-│   └── PlatformEsp32/  ESP32 UDP + E32 LoRa UART (PlatformIO/ESP-IDF only)
+│   ├── PlatformEsp32/  ESP32 UDP + E32 LoRa UART (PlatformIO/ESP-IDF only)
+│   └── PlatformPico/   RP2040 E32 LoRa UART (native Pico SDK only)
 ├── docs/               engine-wide design docs, ADRs, diagrams, the one plan
 ├── tools/              CheckDependencyBoundaries, CheckProfileMap,
 │                       CheckFolderAgents, CheckClassDocumentation
@@ -62,8 +63,8 @@ Core, Object, Messaging, Engine, Net <- Integration
 
 Memory is folded into Core; no Memory package edge remains. Net never pulls
 Object or Engine, and Integration is the only package permitted to see both
-Engine and Net. PlatformHost and PlatformEsp32 are the non-portable edges; only
-they may reach OS/SDK headers.
+Engine and Net. PlatformHost, PlatformEsp32, and PlatformPico are the
+non-portable edges; only they may reach OS/SDK headers.
 
 `CLAUDE.md` at this level carries the architecture overview and each module's
 responsibility in one place.
