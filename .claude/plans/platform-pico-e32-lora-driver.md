@@ -3,7 +3,7 @@
 | Field | Value |
 |---|---|
 | **Created** | 2026-07-26 |
-| **Status** | Software Complete — Hardware Checkpoint Pending |
+| **Status** | Complete |
 | **Change Type** | New Feature |
 | **Author** | Codex |
 | **Target Module** | PlatformPico, Net, PlatformEsp32 |
@@ -61,7 +61,7 @@ types into portable modules.
 - [x] The Pico consumer builds through `pico.bat build lora`; its map proves
       Core and Net profile compliance, requires PlatformPico, and explicitly
       forbids every other known platform archive.
-- [ ] A newly authorized hardware run repeats the Pico-to-ESP32 counter volley
+- [x] A newly authorized hardware run repeats the Pico-to-ESP32 counter volley
       after the refactor.
 
 ### 1.3 Out of Scope
@@ -852,7 +852,7 @@ int main()
 | 13 | Package metadata/guides | 8 files | 45m | 6–12 | ✅ |
 | 14–15 | Consumer migration | CMake, source | 1h | 6–12 | ✅ |
 | 16 | Durable docs | 4+ files | 30m | 13–15 | ✅ |
-| 17 | Verification | builds/tests/hardware | 1–2h | all | Software ✅ / Hardware ☐ |
+| 17 | Verification | builds/tests/hardware | 1–2h | all | ✅ |
 
 ### File Change Map
 
@@ -1034,12 +1034,12 @@ Legend: `+` new · `~` modified · `-` deleted
 - [x] Run dependency, folder-guide, class-documentation, and formatting gates.
 - [x] Verify impact radius: PlatformEsp32 consumers compile unchanged; Pico
       consumer is the only new PlatformPico consumer.
-- [ ] Commit the promotion, rebuild from that commit, and record the LoRa UF2
+- [x] Commit the promotion, rebuild from that commit, and record the LoRa UF2
       SHA-256.
-- [ ] After explicit authorization, upload that UF2 and capture a fresh complete
+- [x] After explicit authorization, upload that UF2 and capture a fresh complete
       ESP32 trace proving counters alternate with exact `node`, `from`, and
       `result=Success` fields.
-- [ ] Append the promotion commit, commands, UF2 hash, wiring/configuration, and
+- [x] Append the promotion commit, commands, UF2 hash, wiring/configuration, and
       trace in a separate evidence commit.
 
 ---

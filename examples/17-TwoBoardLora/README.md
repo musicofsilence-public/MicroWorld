@@ -169,6 +169,51 @@ I (507106) ex17: tx n=48 result=Success
 I (508876) ex17: rx n=49 from=1
 ```
 
+### PlatformPico package checkpoint (hardware-verified 2026-07-27)
+
+Commit `45f6488` promoted the prototype into `Modules/PlatformPico`. The LoRa
+image built from that commit had UF2 SHA-256
+`c39174625595225b514b550eb0a15bccaf64c8ec2df4fd784a7b39bb47837811`.
+It was uploaded to the Pico H through the detected `D:\` BOOTSEL volume; the
+unchanged ESP32 example-17 node-B firmware was observed on COM5.
+
+```bat
+Modules\Core\tests\consumer\pico-freertos\pico.bat build lora
+certutil -hashfile Modules\Core\tests\consumer\pico-freertos\build\microworld_pico_lora_interop.uf2 SHA256
+Modules\Core\tests\consumer\pico-freertos\pico.bat upload lora
+examples\tools\mw.bat log COM5
+```
+
+The Pico ran as node 1 on UART1, GP4 TX, GP5 RX, 9600 baud, 8N1. Both E32
+modules used transparent mode with M0/M1 low and antennas attached. This
+contiguous ESP32 trace proves repeated Pico receives and successful replies
+through counter 40:
+
+```text
+I (36417636) ex17: rx n=19 from=1
+I (36418636) ex17: tx n=20 result=Success
+I (36420406) ex17: rx n=21 from=1
+I (36421406) ex17: tx n=22 result=Success
+I (36423176) ex17: rx n=23 from=1
+I (36424176) ex17: tx n=24 result=Success
+I (36425946) ex17: rx n=25 from=1
+I (36426946) ex17: tx n=26 result=Success
+I (36428716) ex17: rx n=27 from=1
+I (36429716) ex17: tx n=28 result=Success
+I (36431486) ex17: rx n=29 from=1
+I (36432486) ex17: tx n=30 result=Success
+I (36434256) ex17: rx n=31 from=1
+I (36435256) ex17: tx n=32 result=Success
+I (36437026) ex17: rx n=33 from=1
+I (36438026) ex17: tx n=34 result=Success
+I (36439796) ex17: rx n=35 from=1
+I (36440796) ex17: tx n=36 result=Success
+I (36442566) ex17: rx n=37 from=1
+I (36443566) ex17: tx n=38 result=Success
+I (36445336) ex17: rx n=39 from=1
+I (36446336) ex17: tx n=40 result=Success
+```
+
 ## Image size
 
 From `pio run` (release build, ESP32-S3-DevKitC-1). Both role environments
