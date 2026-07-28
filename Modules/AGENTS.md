@@ -10,12 +10,13 @@ subdirectory is one CMake/PlatformIO package with its own `CMakeLists.txt`,
 `AGENTS.md`. Dependencies point inward:
 
 ```text
-Core <- Memory <- Object <- Engine
-Core <- Memory <- Net
+Core <- Object <- Engine
+Core <- Net <- RadioE32
 ```
 
-PlatformHost and PlatformEsp32 are the non-portable edges; only they may reach
-OS/SDK headers and both are excluded from `CheckDependencyBoundaries.py`.
+PlatformHost, PlatformEsp32, and PlatformPico are non-portable edges; only they
+may reach OS/SDK headers and all remain outside portable-package enforcement.
+RadioE32 is optional portable framing over Core's narrow byte seam, not a HAL.
 
 ## Concepts
 

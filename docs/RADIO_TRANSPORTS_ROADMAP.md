@@ -218,7 +218,7 @@ join the allowed industry vocabulary alongside `Udp`/`Uart`), format with
 
 | Concern | Imitate |
 | --- | --- |
-| UART-attached radio driver (this is the LoRa driver's own shape) | `Modules/PlatformEsp32/.../Esp32E32LoraDriver.h` + `src/E32UartPlatformImplementation.h` |
+| UART-attached radio transport | `Modules/RadioE32/.../RadioE32Driver.h` + `Modules/PlatformEsp32/.../Esp32E32LoraDriver.h` facade + `src/UartPlatformImplementation.h` |
 | Role-asymmetric driver pair + ISR-side inbox ring | `Modules/PlatformEsp32/.../Esp32I2cDriver.h` (`FI2cReceiveInbox`) |
 | Per-driver 1-byte address codec | `Modules/PlatformEsp32/.../LoraAddress.h`, `UartAddress.h` |
 | Design-spike ADR with header-derived answers | `docs/decisions/0003-wired-transports.md` Appendices A/B |
@@ -230,7 +230,10 @@ join the allowed industry vocabulary alongside `Udp`/`Uart`), format with
 
 ## 3. What exists today (verified at `b4973be` — the map)
 
-**LoRa: driver yes, proof no.** `FEsp32E32LoraDriver`
+**LoRa historical baseline: driver yes, proof no.** The current architecture
+places portable E32 framing/state in optional `RadioE32`, with ESP32 and Pico
+compatibility facades owning UART SDK lifetime. `IUartByteStream` is a narrow
+byte seam, not a universal HAL. `FEsp32E32LoraDriver`
 (`Esp32E32LoraDriver.h:51`): config `{UartPort, TxGpio, RxGpio,
 BaudRate{9600}, LocalNodeId}`, `E32MaxPayloadBytes = 58`, frames via
 `TFrameDecoder<58>`, address codec `LoraAddress.h`
@@ -466,6 +469,15 @@ bench, first as a raw volley, then under the full engine.
   seed is otherwise lost to the air and both boards sit silent (a mid-stream
   `mw log` then shows nothing, which is a start-order artifact, not a link
   fault). Reset/boot node 2 first, then node 1.
+
+  *RadioE32 refactor closure (owner-approved 2026-07-28):* the current ESP32
+  and Pico facades exchanged empty, typical, and maximum payloads in both
+  directions; the detailed observed evidence lives only in
+  [`examples/17-TwoBoardLora/README.md`](../examples/17-TwoBoardLora/README.md#payload-boundary-regression-hardware-verified-2026-07-28).
+  The post-refactor two-ESP32 example-17 volley and example-26 messaging
+  reruns were not performed because the second ESP32 has no E32 LoRa module.
+  The owner accepted those unavailable reruns as waivers, not passes; the
+  2026-07-24 two-ESP32 traces remain historical pre-refactor evidence.
 
 - [x] **1.3 Example `26-MessagingOverLora` (the payoff demo).** Copy example 19's
   shape (`examples/19-UartMessaging` — server board: `TEngineHost` +

@@ -58,7 +58,8 @@ Net's headers and tests define current behavior; measured margins are indexed by
   no reflection, xorout `0x0000`), the transactional `EncodeFrame`, and the
   bounded `TFrameDecoder<MaxPayloadBytes>` state machine that resyncs on bad
   magic / oversize length / CRC mismatch. The E32 LoRa adapter uses it for
-  on-the-wire framing.
+  on-the-wire framing. RadioE32 owns the E32 transport's framing state and
+  driver; Net owns only the reusable codec.
 - **UDP address codec** — `Net/UdpAddressCodec.h` is a portable, OS-free header
   holding the 6-byte IPv4+port `FNetAddress` encoding (`MakeUdpAddress`,
   `IsUdpAddress`, `UdpAddressPort`) plus `MakeUdpAddressFromPackedHostOrder` for
@@ -79,21 +80,21 @@ net host value, and all fixed buffers.
 
 ## Real transports
 
-Real transports live in the **platform adapter packages**, which are
-non-portable (they may include OS/vendor headers) and are excluded from
-`CheckDependencyBoundaries.py`:
+RadioE32 is a **portable optional transport**; real UART/OS transports live in
+the **non-portable platform adapter packages**, which may include vendor headers
+and are excluded from `CheckDependencyBoundaries.py`:
 
 - [`microworld-platform-host`](../PlatformHost) — `FHostUdpDriver`
   over a host UDP socket (`127.0.0.1`), using the shared
   `Net/UdpAddressCodec.h` (`MakeUdpAddress` / `IsUdpAddress` /
   `UdpAddressPort`) for the 6-byte IPv4+port `FNetAddress` encoding.
-- [`microworld-platform-esp32`](../PlatformEsp32) —
-  `FEsp32UdpDriver` over lwIP, `FEsp32E32LoraDriver` over the E32 UART, and
-  `WriteEsp32LogRecord`; it shares the same `Net/UdpAddressCodec.h` encoding (the
-  adapter stays self-contained otherwise; the encoding never crosses the wire).
+- [`microworld-radio-e32`](../RadioE32) — portable E32 framing and driver over
+  Core's byte seam; platform adapters provide UART lifetime and SDK calls.
+- [`microworld-platform-esp32`](../PlatformEsp32) — `FEsp32UdpDriver` over lwIP,
+  an optional `FEsp32E32LoraDriver` compatibility facade, and `WriteEsp32LogRecord`.
 
-Both depend inward on Net (and Core/Memory); the reverse dependency is
-forbidden.
+RadioE32 depends inward on Core and Net. Platform adapters depend inward on the
+portable packages they use; the reverse dependencies are forbidden.
 
 ## Build
 
@@ -108,5 +109,5 @@ does not establish target runtime margins or hardware behavior.
 
 Net does not provide delivery retries, reliability guarantees,
 authentication, replication/RPC, platform abstraction, or hardware APIs.
-(Wire framing via `FrameCodec` and sessions via `TNetHost` are in Net; real
-transports are provided by the platform adapter packages above.)
+(Wire framing via `FrameCodec` and sessions via `TNetHost` are in Net; RadioE32
+owns E32 transport state, and platform packages provide real UART edges.)

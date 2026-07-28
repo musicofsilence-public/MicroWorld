@@ -4,11 +4,12 @@ Inherits `../../AGENTS.md`.
 
 ## Architecture
 
-This directory holds the maintained Mermaid source (`.mmd`) plus rendered
-`.svg` / `.png` exports for two diagrams: the MicroWorld implementation
-roadmap (`microworld-implementation-roadmap.*`) and the C4 container
-architecture view (`microworld-c4-architecture.*`). The `.mmd` source is the
-single editable artifact; the `.svg` and `.png` are generated exports.
+This directory holds maintained diagram sources plus rendered exports. The
+implementation roadmap (`microworld-implementation-roadmap.*`) and main C4
+architecture view (`microworld-c4-architecture.*`) use Mermaid source. The
+planned RadioE32 change view uses a hand-authored 16:9 SVG source
+(`microworld-radioe32-change-c4.svg`) plus a generated 4K PNG export; this keeps
+its dense C4 labels sharp and its layout deterministic.
 
 ## Concepts
 
@@ -19,6 +20,9 @@ single editable artifact; the `.svg` and `.png` are generated exports.
 - The C4 container diagram summarizes the package architecture described in
   `../ModulePackaging.md` and the per-package READMEs — those prose docs own
   the authoritative module/dependency description.
-- Update a diagram's `.mmd` source and re-render the `.svg`/`.png` together
-  when the underlying roadmap or architecture changes; never edit only the
-  rendered exports.
+- Update the editable source (`.mmd`, or the RadioE32 `.svg`) and regenerate
+  every derived export when the underlying architecture changes; never edit
+  only a generated PNG.
+- The RadioE32 C4 container diagram is a review artifact for the optional
+  package plan. It highlights additions and compatibility facades; the plan is
+  authoritative until implementation updates the package documentation.

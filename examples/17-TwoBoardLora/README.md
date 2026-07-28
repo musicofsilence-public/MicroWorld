@@ -15,7 +15,9 @@ and address helpers unchanged. This is the wireless twin of example 18.
 2. Node 1 seeds the volley: one second after boot it sends a 5-byte payload
    (sender node id + a big-endian `std::uint32_t` counter) to the peer and
    logs `tx n=<counter> result=<text>`.
-3. Both boards poll `TryReceive` on a 10 ms pace. On a received frame they log
+3. Both boards poll `TryReceive` on a 10 ms pace and call `AdvanceTransmit` on
+   every loop iteration. `TrySend(Success)` means the frame was queued, not that
+   UART emission completed. On a received frame they log
    `rx n=<counter> from=<node-id>` (the sender id comes from the frame,
    read back through `LoraAddressNodeId`), then reply with `counter + 1` one
    second later. The counter climbs alternately across the two serial
@@ -229,6 +231,34 @@ I (57354666) ex17: rx n=13 from=1
 I (57376826) ex17: rx n=29 from=1
 I (57377826) ex17: tx n=30 result=Success
 ```
+
+### Payload-boundary regression (hardware-verified 2026-07-28)
+
+The observed run paired a Raspberry Pi Pico, mounted as the validated
+`RPI-RP2` BOOTSEL volume `D:`, with the ESP32-S3 on COM5
+(MAC `e0:72:a1:d5:56:9c`). The Pico received
+`microworld_pico_lora_payload_regression.uf2` with SHA-256
+`D8438152FDC6382BE0A116AB196335875104B4882B40D45A74FAA5DE85F19B7E`.
+The ESP32 used environment `esp32-s3-node-b-payload-regression` and this exact
+build-and-upload command:
+
+```bat
+C:\Users\chorn\.platformio\penv\Scripts\platformio.exe run -d examples\17-TwoBoardLora -e esp32-s3-node-b-payload-regression -t upload --upload-port COM5
+```
+
+| Case | Observed result |
+| --- | --- |
+| Empty, 0-byte payload | Passed in both directions |
+| Typical, 5-byte payload | Passed in both directions |
+| Maximum, 58-byte payload | Passed in both directions; `rtt_ms=1970`, `pass=1` |
+| Final result | `reg PASS cases=3` |
+
+This section is the sole detailed record of the current cross-platform
+payload regression. The owner accepted it as the RadioE32 refactor's hardware
+closure evidence. The post-refactor two-ESP32 volley and example-26 messaging
+reruns were not performed because the second ESP32 has no E32 LoRa module;
+those two unavailable reruns are approved waivers, not passed gates. The
+2026-07-24 two-ESP32 traces above remain historical pre-refactor evidence.
 
 ## Image size
 

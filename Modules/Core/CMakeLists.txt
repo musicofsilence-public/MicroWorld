@@ -15,6 +15,7 @@ set(MICROWORLD_CORE_SOURCES
     src/Log.cpp
     src/MemoryResource.cpp
     src/TickFunction.cpp
+    src/UartByteStream.cpp
 )
 
 # The physical target name preserves the released 0.1 CMake contract while the

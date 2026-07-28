@@ -5,7 +5,16 @@ bound to `TNetHost` through the `TNetHostSystem` seam, and a bare `TNetHost`
 client — running over an E32 LoRa radio. **Same application protocol as
 example 19 — only the driver construction and the D8 session profile differ.**
 
+`TNetHost` already advances queued driver transmission after outbound FIFO
+progress, so this example has no direct `AdvanceTransmit` call.
+
 > Status: hardware-verified 2026-07-24 (EBYTE E32-433T20D, 433 MHz).
+
+> Post-refactor status (2026-07-28): this example was not rerun because the
+> second ESP32 has no E32 LoRa module. The owner accepted that unavailable
+> rerun as a waiver, not a pass. Current cross-platform RadioE32 evidence is
+> recorded in [example 17's payload-boundary regression](../17-TwoBoardLora/README.md#payload-boundary-regression-hardware-verified-2026-07-28);
+> the verified output below remains historical pre-refactor evidence.
 
 ## What it does
 

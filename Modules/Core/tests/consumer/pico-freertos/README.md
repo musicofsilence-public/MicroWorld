@@ -1,8 +1,9 @@
 # Native Pico H + FreeRTOS build
 
-Status: all four native Pico images compile and link. The Pico-to-ESP32 LoRa
-path was hardware-verified on 2026-07-27; evidence is recorded with its ESP32
-peer in example 17's README.
+Status: all five native Pico images compile and link. The Pico-to-ESP32 LoRa
+path was hardware-verified on 2026-07-27, and its payload-boundary regression
+was hardware-verified on 2026-07-28; evidence is recorded with the ESP32 peer
+in example 17's README.
 
 This is MicroWorld's native RP2040 path. It uses the Raspberry Pi Pico C/C++
 SDK and FreeRTOS directly, not Arduino. The scripts keep third-party SDK
@@ -29,6 +30,7 @@ Modules\Core\tests\consumer\pico-freertos\pico.bat build probe
 Modules\Core\tests\consumer\pico-freertos\pico.bat build example
 Modules\Core\tests\consumer\pico-freertos\pico.bat build tests
 Modules\Core\tests\consumer\pico-freertos\pico.bat build lora
+Modules\Core\tests\consumer\pico-freertos\pico.bat build lora-regression
 ```
 
 | Selector | Firmware target | Meaning |
@@ -36,7 +38,8 @@ Modules\Core\tests\consumer\pico-freertos\pico.bat build lora
 | `probe` | `microworld_pico_freertos_consumer.uf2` | Links the public Core consumer probe in one static FreeRTOS task. |
 | `example` | `microworld_pico_core_tick_example.uf2` | Runs the portable CoreTick behavior from Pico monotonic time. |
 | `tests` | `microworld_pico_core_tests.uf2` | Compiles and links Core test translation units only; it does not run them on-device. |
-| `lora` | `microworld_pico_lora_interop.uf2` | Pico node 1 E32 interoperability image for ESP32 example 17 node B. |
+| `lora` | `microworld_pico_lora_interop.uf2` | Pico node 1 RadioE32 interoperability image for ESP32 example 17 node B; its direct task advances queued TX. |
+| `lora-regression` | `microworld_pico_lora_payload_regression.uf2` | Exercises empty, typical, and maximum payloads against the ESP32 example-17 regression peer. |
 
 Each target also produces an ELF, BIN, and `<target>.elf.map` in `build/`.
 
@@ -75,6 +78,7 @@ after explicit authorization:
 Modules\Core\tests\consumer\pico-freertos\pico.bat upload probe --drive E:
 Modules\Core\tests\consumer\pico-freertos\pico.bat upload example --drive E:
 Modules\Core\tests\consumer\pico-freertos\pico.bat upload lora --drive E:
+Modules\Core\tests\consumer\pico-freertos\pico.bat upload lora-regression --drive E:
 ```
 
 The optional drive must be its root. The script checks the `RPI-RP2` label and
@@ -105,3 +109,6 @@ Pico exchange is proved by a fresh ESP32 trace containing `node=2 open=1`,
 `rx n=1 from=1`, `tx n=2 result=Success`, `rx n=3 from=1`, and
 `tx n=4 result=Success`. Repeat this volley after any rebuild that changes the
 Pico SDK binding because host tests do not exercise physical UART behavior.
+
+The observed 2026-07-28 `lora-regression` artifact, device, and exchange
+evidence is recorded in example 17's README.

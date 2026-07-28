@@ -66,6 +66,31 @@ class PicoBuildCommandTests(unittest.TestCase):
             list(run_command.call_args.args[0]),
         )
 
+    def test_build_lora_regression_targets_only_the_payload_regression_firmware(self) -> None:
+        """Proves the regression selector cannot build the normal LoRa volley image."""
+
+        (pico.BUILD_DIRECTORY / "microworld_pico_lora_payload_regression.uf2").touch()
+        with mock.patch.object(pico, "discover_build_tools", return_value=self.tools), mock.patch.object(
+            pico, "configure_build", return_value=0
+        ), mock.patch.object(pico, "run_command", return_value=0) as run_command:
+            result = pico.build("lora-regression")
+
+        self.assertEqual(0, result)
+        self.assertEqual(
+            ["cmake", "--build", str(pico.BUILD_DIRECTORY), "--target", "microworld_pico_lora_payload_regression"],
+            list(run_command.call_args.args[0]),
+        )
+
+    def test_build_lora_regression_fails_when_its_uf2_is_missing(self) -> None:
+        """Proves successful build commands cannot mask a missing regression firmware artifact."""
+
+        with mock.patch.object(pico, "discover_build_tools", return_value=self.tools), mock.patch.object(
+            pico, "configure_build", return_value=0
+        ), mock.patch.object(pico, "run_command", return_value=0):
+            result = pico.build("lora-regression")
+
+        self.assertEqual(1, result)
+
     def test_build_all_requires_each_expected_uf2(self) -> None:
         """Proves the default command fails when its new LoRa artifact is absent."""
 
@@ -150,6 +175,21 @@ class PicoUploadSafetyTests(unittest.TestCase):
 
         self.assertEqual(0, result)
         copyfile.assert_called_once_with(lora_uf2, destination_directory / lora_uf2.name)
+
+    def test_upload_copies_only_the_selected_lora_regression_uf2_after_validation(self) -> None:
+        """Proves the regression image uses its dedicated artifact after BOOTSEL validation."""
+
+        regression_uf2 = pico.BUILD_DIRECTORY / "microworld_pico_lora_payload_regression.uf2"
+        regression_uf2.write_bytes(b"UF2")
+        destination_directory = self.temporary_path / "RPI-RP2"
+        destination_directory.mkdir()
+        with mock.patch.object(pico, "build", return_value=0), mock.patch.object(
+            pico, "find_bootsel_drive", return_value=destination_directory
+        ), mock.patch.object(pico.shutil, "copyfile") as copyfile:
+            result = pico.upload("lora-regression", "E:")
+
+        self.assertEqual(0, result)
+        copyfile.assert_called_once_with(regression_uf2, destination_directory / regression_uf2.name)
 
     def test_upload_lora_rejects_an_invalid_drive_without_copying(self) -> None:
         """Proves a rejected BOOTSEL drive cannot receive the LoRa image."""

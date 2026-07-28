@@ -7,12 +7,12 @@ Inherits `../../AGENTS.md`.
 This directory declares the nine ESP32 adapters: `FEsp32TimeSource` (clock
 seam); `FEsp32UdpDriver`, `FEsp32E32LoraDriver`, `FEsp32UartDriver`,
 `FEsp32I2cMasterDriver`, `FEsp32I2cSlaveDriver`, `FEsp32SpiMasterDriver`, and
-`FEsp32SpiSlaveDriver` (`INetDriver` transport seams — the LoRa, wired UART,
-wired I2C, and wired SPI drivers all built on the portable `Net/FrameCodec.h`
-CRC-16/CCITT-FALSE framing, over the 1-byte broadcast `LoraAddress` and the
+`FEsp32SpiSlaveDriver` (`INetDriver` transport seams — the optional LoRa facade
+delegates framing to RadioE32; wired UART, I2C, and SPI drivers use the portable
+`Net/FrameCodec.h` CRC-16/CCITT-FALSE framing, over the 1-byte broadcast `LoraAddress` and the
 1-byte point-to-point `UartAddress`, `I2cAddress`, and `SpiAddress` respectively);
 and `WriteEsp32LogRecord` (the log output device). Their declarations depend only on
-Net/Object/Memory/Core public headers and stay free of ESP-IDF, lwIP, and vendor
+Net/Object/Core and optional RadioE32 public headers and stay free of ESP-IDF, lwIP, and vendor
 headers; those live only in the matching `src/*PlatformImplementation.h`.
 
 ## Concepts

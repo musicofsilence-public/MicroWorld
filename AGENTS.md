@@ -36,11 +36,12 @@ MicroWorld/
 │   ├── Engine/         UWorld / AActor / UActorComponent, TEngine, IEngine
 │   ├── Messaging/      message router, channel bindings (header-only)
 │   ├── Net/            byte I/O, frame codec, TNetHost
+│   ├── RadioE32/       optional portable E32 framing and driver
 │   ├── Application/    FApplication (including the Run template)
 │   ├── Integration/    TNetSystem — the only Engine + Net joiner
 │   ├── PlatformHost/   host UDP transport (non-portable)
-│   ├── PlatformEsp32/  ESP32 UDP + E32 LoRa UART (PlatformIO/ESP-IDF only)
-│   └── PlatformPico/   RP2040 E32 LoRa UART (native Pico SDK only)
+│   ├── PlatformEsp32/  ESP32 UDP + UART SDK bindings + optional E32 facade (PlatformIO/ESP-IDF only)
+│   └── PlatformPico/   RP2040 UART SDK binding + optional E32 facade (native Pico SDK only)
 ├── docs/               engine-wide design docs, ADRs, diagrams, the one plan
 ├── tools/              CheckDependencyBoundaries, CheckProfileMap,
 │                       CheckFolderAgents, CheckClassDocumentation
@@ -58,6 +59,7 @@ Dependencies point inward:
 Core <- Object <- Engine <- Application
 Core <- Messaging
 Core <- Net
+Core <- Net <- RadioE32
 Core, Object, Messaging, Engine, Net <- Integration
 ```
 

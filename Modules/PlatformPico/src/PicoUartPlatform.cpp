@@ -1,5 +1,7 @@
-#include <MicroWorld/PlatformPico/Detail/PicoE32LoraPlatform.h>
 #include <MicroWorld/PlatformPico/PicoE32LoraDriver.h>
+
+#include <MicroWorld/PlatformPico/Detail/PicoUartByteStream.h>
+#include <MicroWorld/PlatformPico/Detail/PicoUartPlatform.h>
 
 #include <hardware/gpio.h>
 #include <hardware/uart.h>
@@ -23,8 +25,8 @@ uart_inst_t* ResolveUart(const std::uint8_t InUartIndex) noexcept
 	return nullptr;
 }
 
-/** Pico SDK implementation whose process-lifetime storage keeps the default driver binding valid. */
-class FPicoE32LoraPlatform final : public MicroWorld::Detail::IPicoE32LoraPlatform
+/** Pico SDK implementation whose process-lifetime storage keeps the default byte-stream binding valid. */
+class FPicoUartPlatform final : public MicroWorld::Detail::IPicoUartPlatform
 {
 public:
 	/** Opens the requested UART and configures its pins after the requested baud rate was accepted. */
@@ -51,7 +53,7 @@ public:
 		return ActualBaudRate;
 	}
 
-	/** Releases an initialized UART when its driver ends or configuration failed after initialization. */
+	/** Releases an initialized UART when its byte stream ends or configuration failed after initialization. */
 	void CloseUart(const std::uint8_t InUartIndex) noexcept override
 	{
 		if (uart_inst_t* const Uart = ResolveUart(InUartIndex); Uart != nullptr)
@@ -71,7 +73,7 @@ public:
 		return false;
 	}
 
-	/** Writes one byte only after the driver observed writable capacity. */
+	/** Writes one byte only after the byte stream observed writable capacity. */
 	void WriteUartByte(const std::uint8_t InUartIndex, const std::uint8_t InByte) noexcept override
 	{
 		if (uart_inst_t* const Uart = ResolveUart(InUartIndex); Uart != nullptr)
@@ -80,7 +82,7 @@ public:
 		}
 	}
 
-	/** Reads one byte only when the SDK UART reports data, preserving bounded driver polling. */
+	/** Reads one byte only when the SDK UART reports data, preserving bounded byte-stream polling. */
 	bool TryReadUartByte(const std::uint8_t InUartIndex, std::uint8_t& OutByte) noexcept override
 	{
 		if (uart_inst_t* const Uart = ResolveUart(InUartIndex); Uart != nullptr && uart_is_readable(Uart))
@@ -98,17 +100,19 @@ public:
 namespace MicroWorld::Detail
 {
 
-IPicoE32LoraPlatform& GetPicoE32LoraPlatform() noexcept
+IPicoUartPlatform& GetPicoUartPlatform() noexcept
 {
-	static FPicoE32LoraPlatform Platform;
+	static FPicoUartPlatform Platform;
 	return Platform;
 }
+
+FPicoUartByteStream::FPicoUartByteStream() noexcept : FPicoUartByteStream(GetPicoUartPlatform()) {}
 
 } // namespace MicroWorld::Detail
 
 namespace MicroWorld
 {
 
-FPicoE32LoraDriver::FPicoE32LoraDriver() noexcept : FPicoE32LoraDriver(Detail::GetPicoE32LoraPlatform()) {}
+FPicoE32LoraDriver::FPicoE32LoraDriver() noexcept : ByteStream(), RadioDriver(ByteStream) {}
 
 } // namespace MicroWorld

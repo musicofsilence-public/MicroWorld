@@ -171,3 +171,19 @@ target_compile_definitions(microworld_pico_lora_interop PRIVATE PICO_CXX_DISABLE
 target_link_libraries(microworld_pico_lora_interop PRIVATE MicroWorld::PlatformPico)
 pico_add_extra_outputs(microworld_pico_lora_interop)
 microworld_pico_add_uf2_output(microworld_pico_lora_interop)
+
+add_executable(microworld_pico_lora_payload_regression PicoLoraInteropMain.cpp)
+microworld_pico_configure_owned_target(microworld_pico_lora_payload_regression)
+target_compile_definitions(
+	microworld_pico_lora_payload_regression
+	PRIVATE
+		PICO_CXX_DISABLE_ALLOCATION_OVERRIDES=1
+		MICROWORLD_LORA_PAYLOAD_REGRESSION
+)
+target_include_directories(
+	microworld_pico_lora_payload_regression
+	PRIVATE "${CMAKE_CURRENT_LIST_DIR}/../../../../../examples/17-TwoBoardLora/src"
+)
+target_link_libraries(microworld_pico_lora_payload_regression PRIVATE MicroWorld::PlatformPico)
+pico_add_extra_outputs(microworld_pico_lora_payload_regression)
+microworld_pico_add_uf2_output(microworld_pico_lora_payload_regression)

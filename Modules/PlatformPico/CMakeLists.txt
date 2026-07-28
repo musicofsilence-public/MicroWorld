@@ -12,12 +12,12 @@ endif()
 
 option(
     MICROWORLD_PLATFORM_PICO_BUILD_DRIVER
-    "Build the native Pico SDK E32 driver"
+    "Build the native Pico SDK E32 compatibility facade"
     ${MICROWORLD_PLATFORM_PICO_DEFAULT_BUILD_DRIVER}
 )
 option(
     MICROWORLD_PLATFORM_PICO_BUILD_TESTS
-    "Build SDK-free PlatformPico driver and state tests"
+    "Build SDK-free PlatformPico compatibility facade tests"
     ${MICROWORLD_PLATFORM_PICO_DEFAULT_BUILD_TESTS}
 )
 
@@ -30,10 +30,13 @@ if(NOT TARGET MicroWorld::Net)
     )
 endif()
 
-set(
-    MICROWORLD_PLATFORM_PICO_STATE_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/src/E32LoraTransportState.cpp"
-)
+if(NOT TARGET MicroWorld::RadioE32)
+    set(MICROWORLD_RADIO_E32_BUILD_TESTS OFF)
+    add_subdirectory(
+        "${CMAKE_CURRENT_SOURCE_DIR}/../RadioE32"
+        "${CMAKE_CURRENT_BINARY_DIR}/RadioE32"
+    )
+endif()
 
 function(microworld_platform_pico_enable_strict_source_options SourceFiles)
     if(MSVC)
@@ -79,8 +82,8 @@ if(MICROWORLD_PLATFORM_PICO_BUILD_DRIVER)
     set(
         MICROWORLD_PLATFORM_PICO_DRIVER_SOURCES
         "${CMAKE_CURRENT_SOURCE_DIR}/src/PicoE32LoraDriver.cpp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/src/PicoE32LoraPlatform.cpp"
-        ${MICROWORLD_PLATFORM_PICO_STATE_SOURCES}
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/PicoUartByteStream.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/PicoUartPlatform.cpp"
     )
     add_library(
         microworld_platform_pico
@@ -95,7 +98,7 @@ if(MICROWORLD_PLATFORM_PICO_BUILD_DRIVER)
     target_compile_features(microworld_platform_pico PUBLIC cxx_std_17)
     target_link_libraries(
         microworld_platform_pico
-        PUBLIC MicroWorld::Net
+        PUBLIC MicroWorld::Net MicroWorld::RadioE32
         PRIVATE hardware_gpio hardware_uart
     )
     microworld_platform_pico_enable_strict_source_options(
@@ -110,34 +113,33 @@ if(MICROWORLD_PLATFORM_PICO_BUILD_TESTS)
             MICROWORLD_PLATFORM_PICO_TEST_SOURCES
             "${CMAKE_CURRENT_SOURCE_DIR}/../Core/tests/TestMain.cpp"
             "${CMAKE_CURRENT_SOURCE_DIR}/src/PicoE32LoraDriver.cpp"
-            ${MICROWORLD_PLATFORM_PICO_STATE_SOURCES}
-            "${CMAKE_CURRENT_SOURCE_DIR}/tests/E32LoraTransportStateTests.cpp"
+            "${CMAKE_CURRENT_SOURCE_DIR}/src/PicoUartByteStream.cpp"
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/PicoE32LoraDriverTests.cpp"
         )
         add_executable(
-            microworld_platform_pico_state_tests
+            microworld_platform_pico_compatibility_tests
             ${MICROWORLD_PLATFORM_PICO_TEST_SOURCES}
         )
         target_include_directories(
-            microworld_platform_pico_state_tests
+            microworld_platform_pico_compatibility_tests
             PRIVATE
                 "${CMAKE_CURRENT_SOURCE_DIR}/include"
                 "${CMAKE_CURRENT_SOURCE_DIR}/../Core/tests"
         )
         target_compile_features(
-            microworld_platform_pico_state_tests
+            microworld_platform_pico_compatibility_tests
             PRIVATE cxx_std_17
         )
         target_link_libraries(
-            microworld_platform_pico_state_tests
-            PRIVATE MicroWorld::Net
+            microworld_platform_pico_compatibility_tests
+            PRIVATE MicroWorld::Net MicroWorld::RadioE32
         )
         microworld_platform_pico_enable_strict_source_options(
             "${MICROWORLD_PLATFORM_PICO_TEST_SOURCES}"
         )
         add_test(
-            NAME microworld_platform_pico_state_tests
-            COMMAND microworld_platform_pico_state_tests
+            NAME microworld_platform_pico_compatibility_tests
+            COMMAND microworld_platform_pico_compatibility_tests
         )
     endif()
 endif()

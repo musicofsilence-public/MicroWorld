@@ -1,17 +1,13 @@
-// PlatformEsp32Main.cpp — Phase 5.2 + 5.3 compile/composition proof.
+// PlatformEsp32Main.cpp — Phase 5.2 compile/composition proof.
 //
 // This translation unit composes the full MicroWorld stack on ESP32-S3:
 // FEsp32TimeSource (esp_timer, the single real clock) + FEsp32UdpDriver (lwIP
 // non-blocking UDP) + TNetHost<4,256> (dedicated server) bound into TEngine
 // via the TNetHostSystem/IEngineSystem seam from Phase 4.4, then ticks it at a
-// fixed 20 ms cadence from app_main. Phase 5.3 additionally constructs one
-// FEsp32E32LoraDriver so its portable FrameCodec + UART platform code compile and link
-// into the image; that driver is never ticked here. It is a COMPOSITION proof:
-// the lwIP stack is initialized so the UDP socket is valid, but no WiFi is
-// associated, so no UDP datagram can flow, the LoRa UART is never opened at
-// runtime in this proof, and no firmware upload or radio transmit is performed
-// in this milestone. A real deployment associates WiFi first and requires
-// explicit hardware authorization to flash.
+// fixed 20 ms cadence from app_main. This is a composition proof: the lwIP
+// stack is initialized so the UDP socket is valid, but no WiFi is associated,
+// so no UDP datagram can flow. A real deployment associates WiFi first and
+// requires explicit hardware authorization to flash.
 
 #include <MicroWorld/Engine/Actor.h>
 #include <MicroWorld/Engine/ActorComponent.h>
@@ -22,15 +18,12 @@
 #include <MicroWorld/Net/NetHost.h>
 #include <MicroWorld/Object/GarbageCollector.h>
 #include <MicroWorld/Object/ObjectStore.h>
-#include <MicroWorld/PlatformEsp32/Esp32E32LoraDriver.h>
 #include <MicroWorld/PlatformEsp32/Esp32OutputDevice.h>
 #include <MicroWorld/PlatformEsp32/Esp32Sleep.h>
 #include <MicroWorld/PlatformEsp32/Esp32TimeSource.h>
 #include <MicroWorld/PlatformEsp32/Esp32UdpDriver.h>
 #include <MicroWorld/PlatformEsp32/Esp32WifiLink.h>
 #include <MicroWorld/Time.h>
-
-#include <driver/uart.h>
 
 #include <esp_event.h>
 #include <esp_netif.h>
@@ -116,12 +109,6 @@ extern "C" void app_main()
 
 	// 3. One non-blocking UDP socket on INADDR_ANY:5000 over the stack brought up above.
 	static FEsp32UdpDriver Driver(5000);
-
-	// 3b. Compile-only E32 LoRa UART driver (Phase 5.3): the object is linked into the image
-	//     so its portable FrameCodec + UART platform code compile, but it is never ticked here. No UART
-	//     traffic, no radio, and no upload is performed in this proof.
-	static FEsp32E32LoraDriver LoraDriver(FEsp32E32LoraConfig{UART_NUM_1, /*TxGpio*/ 17, /*RxGpio*/ 18, /*Baud*/ 9600, /*NodeId*/ 1});
-	(void)LoraDriver;
 
 	// Compile/link proof for the WiFi facade (MESSAGING 1.1): constructed and queried
 	// but never brought up here — this composition proof associates no WiFi.

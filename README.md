@@ -33,10 +33,12 @@ or inspect the
 | Engine | `MicroWorld::Engine` | `MicroWorldEngine` | `UWorld` / `AActor` / `UActorComponent`, `TEngine`, `IEngine` |
 | Messaging | `MicroWorld::Messaging` | `MicroWorldMessaging` | Message router, channel bindings (header-only) |
 | Net | `MicroWorld::Net` | `MicroWorldNet` | Byte I/O, frame codec, `TNetHost` |
+| RadioE32 | `MicroWorld::RadioE32` | `MicroWorldRadioE32` | Optional portable E32 framing and `FRadioE32Driver` over Core's byte seam |
 | Application | `MicroWorld::Application` | `MicroWorldApplication` | `FApplication` — owns one engine and its frame loop |
 | Integration | `MicroWorld::Integration` | `MicroWorldIntegration` | `TNetSystem` — the only Engine + Net joiner |
 | PlatformHost | `MicroWorld::PlatformHost` | — | Host UDP transport (non-portable) |
-| PlatformEsp32 | — | `MicroWorldPlatformEsp32` | ESP32 UDP + E32 LoRa + wired UART/I2C/SPI transports (PlatformIO/ESP-IDF only) |
+| PlatformEsp32 | — | `MicroWorldPlatformEsp32` | ESP32 UDP + wired transports, UART SDK bindings, and optional E32 facade (PlatformIO/ESP-IDF only) |
+| PlatformPico | `MicroWorld::PlatformPico` | — | RP2040 UART SDK binding and optional E32 facade (native Pico SDK only) |
 
 Memory is folded into Core; no Memory package remains. Dependencies point
 inward:
@@ -45,13 +47,16 @@ inward:
 Core <- Object <- Engine <- Application
 Core <- Messaging
 Core <- Net
+Core <- Net <- RadioE32
 Core, Object, Messaging, Engine, Net <- Integration
 ```
 
 Net is an independent overlay above Core: it never pulls Object or Engine, so an
 application can use byte I/O without the managed runtime, and Integration is the
-only package permitted to see both. PlatformHost and PlatformEsp32 are the
-non-portable edges that supply real transports. See
+only package permitted to see both. PlatformHost, PlatformEsp32, and PlatformPico are the
+non-portable edges that supply real transports. `IUartByteStream` is a narrow
+byte seam, not a universal HAL: RadioE32 owns portable E32 state and framing,
+while ESP32 and Pico facades own UART SDK lifetime. See
 [docs/ModulePackaging.md](docs/ModulePackaging.md) for the full layout.
 
 ## Verify gate

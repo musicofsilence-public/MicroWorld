@@ -33,6 +33,9 @@ ARTIFACT_TARGETS: Mapping[str, FArtifactTarget] = {
     "example": FArtifactTarget("microworld_pico_core_tick_example", "microworld_pico_core_tick_example", True),
     "tests": FArtifactTarget("microworld_pico_core_tests", "microworld_pico_core_tests", False),
     "lora": FArtifactTarget("microworld_pico_lora_interop", "microworld_pico_lora_interop", True),
+    "lora-regression": FArtifactTarget(
+        "microworld_pico_lora_payload_regression", "microworld_pico_lora_payload_regression", True
+    ),
 }
 
 
@@ -51,8 +54,8 @@ def print_usage() -> None:
     """Explains the bounded command surface without performing any build or drive I/O."""
 
     print("Usage:")
-    print("  pico.bat build [probe|example|tests|lora|all]")
-    print("  pico.bat upload <probe|example|lora> [--drive X:]")
+    print("  pico.bat build [probe|example|tests|lora|lora-regression|all]")
+    print("  pico.bat upload <probe|example|lora|lora-regression> [--drive X:]")
 
 
 def normalize_selector(selector: str, *, allow_all: bool) -> Optional[str]:
@@ -278,7 +281,7 @@ def upload(selector: str, explicit_drive: Optional[str]) -> int:
 
     validated_selector = normalize_selector(selector, allow_all=False)
     if validated_selector is None or not ARTIFACT_TARGETS[validated_selector].b_uploadable:
-        print("upload accepts only the probe, example, or lora selector", file=sys.stderr)
+        print("upload accepts only the probe, example, lora, or lora-regression selector", file=sys.stderr)
         return 2
 
     build_result = build(validated_selector)

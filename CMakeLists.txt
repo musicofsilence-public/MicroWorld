@@ -24,9 +24,12 @@ endif()
 if(NOT TARGET MicroWorld::Net)
     add_subdirectory(Modules/Net)
 endif()
+if(NOT TARGET MicroWorld::RadioE32)
+    add_subdirectory(Modules/RadioE32)
+endif()
 # PlatformPico's production target requires an initialized Pico SDK and remains
-# outside this host superbuild. Its SDK-free E32 state is still host-tested here
-# so bounded backpressure and transactional delivery run with every root ctest.
+# outside this host superbuild. Its SDK-free compatibility facade is still
+# host-tested here while RadioE32 owns portable framing tests.
 set(MICROWORLD_PLATFORM_PICO_BUILD_DRIVER OFF)
 set(MICROWORLD_PLATFORM_PICO_BUILD_TESTS ON)
 add_subdirectory(Modules/PlatformPico)
@@ -45,6 +48,36 @@ endif()
 if(NOT TARGET MicroWorld::PlatformHost)
     add_subdirectory(Modules/PlatformHost)
 endif()
+
+# Keeps the shared ESP32/Pico regression-payload contract independently
+# verifiable on the host without making an example a module dependency.
+set(MICROWORLD_LORA_PAYLOAD_REGRESSION_TEST_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/Modules/Core/tests/TestMain.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/examples/17-TwoBoardLora/LoraPayloadRegressionTests.cpp"
+)
+add_executable(
+    microworld_lora_payload_regression_tests
+    ${MICROWORLD_LORA_PAYLOAD_REGRESSION_TEST_SOURCES}
+)
+target_include_directories(
+    microworld_lora_payload_regression_tests
+    PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/Modules/Core/tests"
+        "${CMAKE_CURRENT_SOURCE_DIR}/examples/17-TwoBoardLora/src"
+)
+target_link_libraries(
+    microworld_lora_payload_regression_tests
+    PRIVATE MicroWorld::Net
+)
+target_compile_features(microworld_lora_payload_regression_tests PRIVATE cxx_std_17)
+microworld_net_enable_strict_portable_options(microworld_lora_payload_regression_tests)
+microworld_net_disable_exceptions_and_rtti(
+    "${MICROWORLD_LORA_PAYLOAD_REGRESSION_TEST_SOURCES}"
+)
+add_test(
+    NAME microworld_lora_payload_regression_tests
+    COMMAND microworld_lora_payload_regression_tests
+)
 
 # Format gate: the repo clang-format policy is otherwise uncovered by any build
 # or checker, so dry-run it over every tracked C++ source as a ctest step. The

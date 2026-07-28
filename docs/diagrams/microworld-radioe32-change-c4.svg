@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg"
+     width="100%"
+     height="100%"
+     viewBox="0 0 1920 1080"
+     preserveAspectRatio="xMidYMid meet"
+     role="img"
+     aria-labelledby="title description">
+  <title id="title">MicroWorld RadioE32 Refactor — C4 Container View</title>
+  <desc id="description">Planned extraction of portable E32 policy into an optional RadioE32 package with a Core UART byte-stream interface and preserved ESP32 and Pico facades.</desc>
+
+  <defs>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#182234" flood-opacity="0.12"/>
+    </filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
+            markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#52627a"/>
+    </marker>
+    <style>
+      .canvas { fill: #f6f8fb; }
+      .boundary { fill: #ffffff; stroke: #607086; stroke-width: 3; }
+      .portable-boundary { fill: #f7fbff; stroke: #355b88; stroke-width: 3; }
+      .platform-boundary { fill: #fffaf1; stroke: #d99b22; stroke-width: 3; }
+      .preserved { fill: #e7f0ff; stroke: #3b72c4; stroke-width: 3; }
+      .changed { fill: #fff4d6; stroke: #d99b22; stroke-width: 3; }
+      .added { fill: #dff7ea; stroke: #16875b; stroke-width: 3; }
+      .external { fill: #eef1f5; stroke: #66758a; stroke-width: 3; }
+      .person { fill: #152238; stroke: #152238; stroke-width: 3; }
+      .note { fill: #ffffff; stroke: #8a98aa; stroke-width: 2.5; stroke-dasharray: 8 6; }
+      .box { rx: 14; filter: url(#shadow); }
+      .title { font: 700 34px "Segoe UI", Arial, sans-serif; fill: #172033; }
+      .subtitle { font: 500 18px "Segoe UI", Arial, sans-serif; fill: #52627a; }
+      .boundary-title { font: 700 21px "Segoe UI", Arial, sans-serif; fill: #263241; letter-spacing: 0.3px; }
+      .node-title { font: 700 24px "Segoe UI", Arial, sans-serif; fill: #172033; }
+      .node-title-light { font: 700 24px "Segoe UI", Arial, sans-serif; fill: #ffffff; }
+      .tag { font: 700 14px "Segoe UI", Arial, sans-serif; letter-spacing: 0.8px; }
+      .body { font: 500 17px "Segoe UI", Arial, sans-serif; fill: #334155; }
+      .body-light { font: 500 17px "Segoe UI", Arial, sans-serif; fill: #e8eef7; }
+      .edge { fill: none; stroke: #52627a; stroke-width: 2.5; marker-end: url(#arrow); }
+      .edge-dashed { fill: none; stroke: #7a8799; stroke-width: 2.5; stroke-dasharray: 7 6; marker-end: url(#arrow); }
+      .edge-label { font: 600 15px "Segoe UI", Arial, sans-serif; fill: #334155; paint-order: stroke; stroke: #f6f8fb; stroke-width: 6px; stroke-linejoin: round; }
+      .status-new { fill: #16875b; }
+      .status-changed { fill: #b87508; }
+      .status-preserved { fill: #2f66b0; }
+    </style>
+  </defs>
+
+  <rect class="canvas" x="0" y="0" width="1920" height="1080"/>
+
+  <text class="title" x="52" y="55">MicroWorld RadioE32 Refactor</text>
+  <text class="subtitle" x="52" y="84">C4 container view · planned architecture · no implementation yet</text>
+
+  <g transform="translate(1315 30)">
+    <rect x="0" y="0" width="155" height="42" rx="21" fill="#dff7ea" stroke="#16875b" stroke-width="2"/>
+    <circle cx="23" cy="21" r="7" class="status-new"/>
+    <text class="tag" x="42" y="26" fill="#113c2d">NEW</text>
+    <rect x="170" y="0" width="175" height="42" rx="21" fill="#fff4d6" stroke="#d99b22" stroke-width="2"/>
+    <circle cx="193" cy="21" r="7" class="status-changed"/>
+    <text class="tag" x="212" y="26" fill="#38260a">CHANGED</text>
+    <rect x="360" y="0" width="190" height="42" rx="21" fill="#e7f0ff" stroke="#3b72c4" stroke-width="2"/>
+    <circle cx="383" cy="21" r="7" class="status-preserved"/>
+    <text class="tag" x="402" y="26" fill="#17365f">PRESERVED</text>
+  </g>
+
+  <rect class="boundary" x="330" y="125" width="1225" height="860" rx="18"/>
+  <rect x="360" y="108" width="430" height="34" rx="17" fill="#607086"/>
+  <text x="381" y="132" font-family="Segoe UI, Arial, sans-serif" font-size="17" font-weight="700" fill="#ffffff">MCU APPLICATION · SOFTWARE SYSTEM</text>
+
+  <g>
+    <rect class="person box" x="45" y="185" width="240" height="135"/>
+    <text class="node-title-light" x="165" y="228" text-anchor="middle">Embedded Developer</text>
+    <text class="tag" x="165" y="257" text-anchor="middle" fill="#aac3e6">PERSON</text>
+    <text class="body-light" x="165" y="288" text-anchor="middle">Builds the MCU application</text>
+  </g>
+
+  <g>
+    <rect class="preserved box" x="375" y="190" width="250" height="130"/>
+    <text class="node-title" x="500" y="231" text-anchor="middle">Application Root</text>
+    <text class="tag" x="500" y="259" text-anchor="middle" fill="#2f66b0">PRESERVED COMPONENT</text>
+    <text class="body" x="500" y="289" text-anchor="middle">Selects platform + optional E32</text>
+  </g>
+
+  <g>
+    <rect class="note" x="375" y="410" width="250" height="145" rx="14"/>
+    <text class="node-title" x="500" y="449" text-anchor="middle" font-size="21">Compile-time optional</text>
+    <text class="body" x="500" y="480" text-anchor="middle">Non-E32 applications</text>
+    <text class="body" x="500" y="505" text-anchor="middle">do not link RadioE32.</text>
+    <text class="body" x="500" y="530" text-anchor="middle">No loader or registry.</text>
+  </g>
+
+  <rect class="portable-boundary" x="665" y="175" width="415" height="670" rx="18"/>
+  <text class="boundary-title" x="873" y="210" text-anchor="middle">Portable Packages</text>
+
+  <g>
+    <rect class="changed box" x="690" y="245" width="175" height="125"/>
+    <text class="node-title" x="778" y="285" text-anchor="middle">Core</text>
+    <text class="tag" x="778" y="313" text-anchor="middle" fill="#9b6205">CHANGED</text>
+    <text class="body" x="778" y="343" text-anchor="middle">+ IUartByteStream</text>
+  </g>
+
+  <g>
+    <rect class="preserved box" x="880" y="245" width="175" height="125"/>
+    <text class="node-title" x="968" y="285" text-anchor="middle">Net</text>
+    <text class="tag" x="968" y="313" text-anchor="middle" fill="#2f66b0">PRESERVED</text>
+    <text class="body" x="968" y="343" text-anchor="middle">Driver + codec</text>
+  </g>
+
+  <g>
+    <rect class="added box" x="705" y="520" width="335" height="155"/>
+    <text class="node-title" x="873" y="564" text-anchor="middle">RadioE32</text>
+    <text class="tag" x="873" y="593" text-anchor="middle" fill="#16875b">NEW · OPTIONAL CONTAINER</text>
+    <text class="body" x="873" y="624" text-anchor="middle">Shared E32 framing</text>
+    <text class="body" x="873" y="650" text-anchor="middle">Bounded TX queue + RX decoding</text>
+  </g>
+
+  <rect class="platform-boundary" x="1110" y="175" width="390" height="670" rx="18"/>
+  <text class="boundary-title" x="1305" y="210" text-anchor="middle">Platform Edges</text>
+
+  <g>
+    <rect class="changed box" x="1145" y="255" width="320" height="170"/>
+    <text class="node-title" x="1305" y="300" text-anchor="middle">PlatformEsp32</text>
+    <text class="tag" x="1305" y="329" text-anchor="middle" fill="#9b6205">CHANGED CONTAINER</text>
+    <text class="body" x="1305" y="362" text-anchor="middle">FEsp32E32LoraDriver preserved</text>
+    <text class="body" x="1305" y="390" text-anchor="middle">+ ESP-IDF UART adapter</text>
+  </g>
+
+  <g>
+    <rect class="changed box" x="1145" y="530" width="320" height="170"/>
+    <text class="node-title" x="1305" y="575" text-anchor="middle">PlatformPico</text>
+    <text class="tag" x="1305" y="604" text-anchor="middle" fill="#9b6205">CHANGED CONTAINER</text>
+    <text class="body" x="1305" y="637" text-anchor="middle">FPicoE32LoraDriver preserved</text>
+    <text class="body" x="1305" y="665" text-anchor="middle">+ Pico SDK UART adapter</text>
+  </g>
+
+  <g>
+    <rect class="external box" x="1610" y="255" width="255" height="130"/>
+    <text class="node-title" x="1738" y="302" text-anchor="middle">ESP-IDF UART</text>
+    <text class="tag" x="1738" y="331" text-anchor="middle" fill="#52627a">EXTERNAL SYSTEM</text>
+    <text class="body" x="1738" y="360" text-anchor="middle">Pins · baud · buffers</text>
+  </g>
+
+  <g>
+    <rect class="external box" x="1610" y="530" width="255" height="130"/>
+    <text class="node-title" x="1738" y="577" text-anchor="middle">Pico SDK UART</text>
+    <text class="tag" x="1738" y="606" text-anchor="middle" fill="#52627a">EXTERNAL SYSTEM</text>
+    <text class="body" x="1738" y="635" text-anchor="middle">Pins · baud · FIFO</text>
+  </g>
+
+  <g>
+    <rect class="external box" x="1610" y="790" width="255" height="130"/>
+    <text class="node-title" x="1738" y="837" text-anchor="middle">E32 LoRa Radio</text>
+    <text class="tag" x="1738" y="866" text-anchor="middle" fill="#52627a">EXTERNAL DEVICE</text>
+    <text class="body" x="1738" y="895" text-anchor="middle">Transparent UART radio</text>
+  </g>
+
+  <path class="edge" d="M 285 252 H 375"/>
+  <text class="edge-label" x="330" y="238" text-anchor="middle">configures</text>
+
+  <path class="edge" d="M 625 225 H 650 V 150 H 1090 V 340 H 1145"/>
+  <path class="edge" d="M 1090 340 V 615 H 1145"/>
+  <text class="edge-label" x="855" y="143" text-anchor="middle">constructs existing facades</text>
+
+  <path class="edge" d="M 778 370 C 778 430, 810 475, 825 520"/>
+  <text class="edge-label" x="762" y="452" text-anchor="middle">byte stream</text>
+
+  <path class="edge" d="M 968 370 C 968 430, 940 475, 920 520"/>
+  <text class="edge-label" x="980" y="452" text-anchor="middle">network</text>
+
+  <path class="edge-dashed" d="M 625 483 H 675 C 690 483, 690 565, 705 590"/>
+  <text class="edge-label" x="655" y="470" text-anchor="middle">optional</text>
+
+  <path class="edge" d="M 1040 575 H 1090 V 340 H 1145"/>
+  <path class="edge" d="M 1090 575 V 615 H 1145"/>
+  <text class="edge-label" x="1080" y="558" text-anchor="middle">portable policy</text>
+
+  <path class="edge" d="M 1465 340 H 1610"/>
+  <text class="edge-label" x="1538" y="326" text-anchor="middle">byte I/O</text>
+
+  <path class="edge" d="M 1465 615 H 1610"/>
+  <text class="edge-label" x="1538" y="601" text-anchor="middle">byte I/O</text>
+
+  <path class="edge" d="M 1865 320 H 1890 V 760 H 1810 V 790"/>
+  <text class="edge-label" x="1880" y="520" text-anchor="end">UART</text>
+
+  <path class="edge" d="M 1738 660 V 790"/>
+  <text class="edge-label" x="1766" y="730">UART</text>
+
+  <text class="subtitle" x="52" y="1040">Green = new · Amber = changed · Blue = preserved · Grey = external</text>
+</svg>

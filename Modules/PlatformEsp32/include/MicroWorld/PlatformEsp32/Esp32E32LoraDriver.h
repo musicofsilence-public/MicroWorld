@@ -1,10 +1,7 @@
 #pragma once
 
-#include <MicroWorld/Net/FrameCodec.h>
-#include <MicroWorld/Net/NetAddress.h>
-#include <MicroWorld/Net/NetDriver.h>
-#include <MicroWorld/Net/NetResult.h>
-#include <MicroWorld/PlatformEsp32/LoraAddress.h>
+#include <MicroWorld/PlatformEsp32/Detail/Esp32UartByteStream.h>
+#include <MicroWorld/RadioE32/RadioE32Driver.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -13,10 +10,10 @@ namespace MicroWorld
 {
 
 /**
- * Construction parameters for one E32 LoRa UART driver.
+ * Construction parameters for one ESP32 E32 LoRa compatibility facade.
  *
- * Holds the UART port number and TX/RX GPIO numbers as plain integers so the public header stays free of
- * the ESP-IDF `uart_port_t`/`gpio_num_t` enum types; the platform-implementation header reinterprets them on the ESP32 side.
+ * UART port and pin values remain plain integers so this released public config stays free of ESP-IDF enum types;
+ * the internal byte-stream adapter converts them only within PlatformEsp32 private implementation code.
  */
 struct FEsp32E32LoraConfig
 {
@@ -37,100 +34,101 @@ struct FEsp32E32LoraConfig
 };
 
 /**
- * Non-blocking E32 LoRa `INetDriver` that frames traffic over one ESP-IDF UART.
+ * Header-defined ESP32 compatibility facade for the portable E32 LoRa `INetDriver`.
  *
- * Encodes each packet with the portable `FrameCodec` (magic, source node id, big-endian length, payload,
- * CRC-16/CCITT-FALSE) and writes the whole frame to the UART; receives pump one byte at a time through a
- * bounded `TFrameDecoder` that resyncs on bad magic, oversize length, or CRC mismatch. It validates every
- * argument before any syscall and leaves caller-owned outputs unchanged on any non-`Success` result, and no
- * radio traffic is exercised in the compile-only phase.
+ * The facade owns ESP-IDF UART lifetime through its internal byte stream while `FRadioE32Driver` owns portable
+ * framing and bounded progress. Keeping all methods inline means PlatformEsp32 consumers resolve RadioE32 only when
+ * they include this E32 header; non-LoRa PlatformEsp32 consumers remain independent of the optional package.
  */
 class FEsp32E32LoraDriver final : public INetDriver
 {
 public:
 	/**
-	 * Opens and configures one UART for E32 LoRa traffic.
+	 * Opens one exclusive ESP32 UART stream and initializes the portable E32 driver.
 	 *
-	 * Installs the ESP-IDF UART driver at `UartPort`, configures it for 8N1 at `BaudRate`, and routes it to the
-	 * given TX/RX GPIOs. On any configuration failure the constructor uninstalls what it installed and leaves
-	 * the driver with `IsOpen() == false`; it never throws. The local node id is stamped on every outgoing frame.
+	 * Configuration failure leaves the facade closed. If portable initialization fails after opening, the stream closes
+	 * before construction completes so this facade never retains a usable UART without an initialized radio driver.
 	 *
 	 * @param InConfig UART, GPIO, baud, and local node id parameters.
 	 */
-	explicit FEsp32E32LoraDriver(const FEsp32E32LoraConfig& InConfig) noexcept;
+	explicit FEsp32E32LoraDriver(const FEsp32E32LoraConfig& InConfig) noexcept
+	{
+		Detail::FEsp32UartByteStreamConfig StreamConfig{};
+		StreamConfig.UartPort = InConfig.UartPort;
+		StreamConfig.TxGpio = InConfig.TxGpio;
+		StreamConfig.RxGpio = InConfig.RxGpio;
+		StreamConfig.BaudRate = InConfig.BaudRate;
+		if (!ByteStream.Open(StreamConfig))
+		{
+			return;
+		}
 
-	/** Uninstalls the UART driver opened by construction. */
-	~FEsp32E32LoraDriver() noexcept override;
+		const ENetResult InitializeResult = RadioDriver.Initialize(InConfig.LocalNodeId);
+		if (InitializeResult != ENetResult::Success)
+		{
+			ByteStream.Close();
+		}
+	}
 
-	/** Prevents copying so one driver value owns exactly one UART identity. */
+	/** Releases the internally owned UART stream through the byte-stream member destructor. */
+	~FEsp32E32LoraDriver() noexcept override = default;
+
+	/** Prevents copying so one facade value owns exactly one UART stream installation. */
 	FEsp32E32LoraDriver(const FEsp32E32LoraDriver&) = delete;
 
-	/** Prevents copying so one driver value owns exactly one UART identity. */
+	/** Prevents copying so UART lifecycle and queued-frame ownership remain unique. */
 	FEsp32E32LoraDriver& operator=(const FEsp32E32LoraDriver&) = delete;
 
-	/** Prevents moving so the owned UART port and interface identity stay fixed. */
+	/** Prevents moving so the internally referenced byte stream remains stable. */
 	FEsp32E32LoraDriver(FEsp32E32LoraDriver&&) = delete;
 
-	/** Prevents moving so the owned UART port and interface identity stay fixed. */
+	/** Prevents moving so the owned UART close responsibility cannot transfer between facade values. */
 	FEsp32E32LoraDriver& operator=(FEsp32E32LoraDriver&&) = delete;
 
 	/**
-	 * Sends one complete framed message over the UART, transactionally.
+	 * Queues one complete framed packet for later bounded UART progress.
 	 *
-	 * Returns `Invalid` for a destination address that is not a LoRa encoding, an oversize packet, or a null span
-	 * with nonzero length; `Full` when the UART write would block; and `Success` only when the whole frame was
-	 * accepted. A non-success result leaves the UART state unchanged.
+	 * `Success` means the facade accepted the complete encoded frame into its fixed slot, not that the frame was
+	 * physically emitted. Direct callers must invoke `AdvanceTransmit` regularly; `TNetHost` already does so after
+	 * each outbound FIFO drain. Invalid address/span and capacity outcomes follow `FRadioE32Driver` unchanged.
 	 *
-	 * @param InTo Destination whose single byte must be a LoRa node id (validated but broadcast on the wire).
-	 * @param InPacket Caller-owned payload bytes framed and sent as one message.
-	 * @return Normalized outcome of the single send attempt.
+	 * @param InTo Driver-relative one-byte destination metadata; transparent mode does not route it on air.
+	 * @param InPacket Caller-owned payload to frame and queue.
+	 * @return Outcome of the portable frame-acceptance attempt.
 	 */
-	ENetResult TrySend(const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override;
+	ENetResult TrySend(const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override { return RadioDriver.TrySend(InTo, InPacket); }
 
 	/**
-	 * Receives at most one framed message into the caller-owned destination, transactionally.
+	 * Pumps bounded UART input and transactionally delivers at most one decoded frame.
 	 *
-	 * Pumps available UART bytes through the decoder one byte at a time until a frame completes or the bounded pump
-	 * drains; `Unavailable` when no frame is ready, `Full` when the held frame's payload exceeds the destination
-	 * (the frame stays held for a larger retry), `Invalid` for a null destination with nonzero length, and `Success`
-	 * after a complete frame copies its payload, the byte count, and the sender node id into `OutFrom`.
+	 * Every non-success result preserves caller outputs; a `Full` destination retains the decoded frame for a larger
+	 * retry, and a UART failure maps to `Invalid` under the portable driver contract.
 	 *
-	 * @param OutFrom Filled with the sender's LoRa address only on `Success`.
-	 * @param InDestination Caller-owned buffer for the received payload bytes.
-	 * @param OutResult Filled with the received byte count only on `Success`.
-	 * @return Normalized outcome of the single receive attempt.
+	 * @param OutFrom Filled with the sender's E32 address only on `Success`.
+	 * @param InDestination Caller-owned destination for one decoded payload.
+	 * @param OutResult Filled with the delivered byte count only on `Success`.
+	 * @return `Success`, `Unavailable`, `Full`, or `Invalid` under `INetDriver`.
 	 */
-	ENetResult TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept override;
+	ENetResult TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept override
+	{
+		return RadioDriver.TryReceive(OutFrom, InDestination, OutResult);
+	}
 
-	/** Reports the largest payload, in bytes, one send accepts (excludes framing overhead). */
-	std::size_t MaxPacketBytes() const noexcept override;
+	/** Reports the portable E32 payload capacity, excluding framing overhead. */
+	std::size_t MaxPacketBytes() const noexcept override { return RadioDriver.MaxPacketBytes(); }
 
-	/** Reports whether the constructor opened a usable UART. */
-	bool IsOpen() const noexcept;
+	/** Advances the queued frame through bounded physical UART progress. */
+	void AdvanceTransmit() noexcept override { RadioDriver.AdvanceTransmit(); }
+
+	/** Reports whether construction opened the UART stream and completed portable radio initialization. */
+	bool IsOpen() const noexcept { return ByteStream.IsOpen() && RadioDriver.IsInitialized(); }
 
 private:
-	/** Copies the decoder's held frame into the destination and clears it, or returns
-	 * `Full` (leaving the frame held) when the payload exceeds the destination. */
-	ENetResult DeliverFrameToDestination(TSpan<std::uint8_t> InDestination, FNetAddress& OutFrom, FNetReceiveResult& OutResult) noexcept;
+	/** Owns ESP-IDF UART configuration and lifetime while exposing only Core's non-blocking byte seam. */
+	Detail::FEsp32UartByteStream ByteStream{};
 
-	/** Pumps the bounded UART byte budget through the decoder and delivers the first
-	 * completed frame; returns `Unavailable` when the budget drains with no frame ready. */
-	ENetResult PumpDecoderForFrame(TSpan<std::uint8_t> InDestination, FNetAddress& OutFrom, FNetReceiveResult& OutResult) noexcept;
-
-	/** Reports the first reason an outgoing packet cannot be framed and sent, or `Success`. */
-	ENetResult ValidateOutgoingPacket(const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket) const noexcept;
-
-	/** Bounded RX deframer held by value; its capacity matches `E32MaxPayloadBytes`. */
-	TFrameDecoder<E32MaxPayloadBytes> Decoder{};
-
-	/** UART port number reinterpreted to its ESP-IDF type only in the source file. */
-	std::int32_t UartPortNumber{0};
-
-	/** Local node id stamped on every outgoing frame's source node id byte. */
-	std::uint8_t LocalNodeIdValue{0};
-
-	/** Remains false when construction failed, so every op short-circuits safely. */
-	bool bOpen{false};
+	/** Owns portable E32 framing and retains a reference to ByteStream for its full facade lifetime. */
+	FRadioE32Driver RadioDriver{ByteStream};
 };
 
 } // namespace MicroWorld

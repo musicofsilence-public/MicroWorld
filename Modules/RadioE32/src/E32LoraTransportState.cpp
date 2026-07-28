@@ -1,4 +1,4 @@
-#include <MicroWorld/PlatformPico/Detail/E32LoraTransportState.h>
+#include <MicroWorld/RadioE32/Detail/E32LoraTransportState.h>
 
 #include <cstring>
 
@@ -57,6 +57,12 @@ void FE32LoraTransportState::CommitTransmitByte() noexcept
 		TransmitFrameLength = 0;
 		NextTransmitByteIndex = 0;
 	}
+}
+
+void FE32LoraTransportState::DiscardTransmitFrame() noexcept
+{
+	TransmitFrameLength = 0;
+	NextTransmitByteIndex = 0;
 }
 
 bool FE32LoraTransportState::HasPendingTransmit() const noexcept

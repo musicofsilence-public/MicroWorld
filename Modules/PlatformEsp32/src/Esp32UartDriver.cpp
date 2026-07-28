@@ -1,6 +1,6 @@
 #include <MicroWorld/PlatformEsp32/Esp32UartDriver.h>
 
-#include "E32UartPlatformImplementation.h"
+#include "UartPlatformImplementation.h"
 
 #include <MicroWorld/Log.h>
 #include <MicroWorld/Net/FrameCodec.h>

@@ -1,11 +1,8 @@
 #pragma once
 
-#include <MicroWorld/Containers/Span.h>
-#include <MicroWorld/Net/NetAddress.h>
-#include <MicroWorld/Net/NetDriver.h>
-#include <MicroWorld/Net/NetResult.h>
 #include <MicroWorld/PlatformPico/Detail/PicoE32LoraPlatform.h>
-#include <MicroWorld/PlatformPico/Detail/E32LoraTransportState.h>
+#include <MicroWorld/PlatformPico/Detail/PicoUartByteStream.h>
+#include <MicroWorld/RadioE32/RadioE32Driver.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -38,11 +35,11 @@ struct FPicoE32LoraConfig
 };
 
 /**
- * Fixed-capacity, non-blocking E32 LoRa `INetDriver` for the native RP2040 Pico SDK.
+ * Released RP2040 Pico compatibility facade over the portable RadioE32 driver.
  *
- * Construction is inert so static storage is safe before `main`; `Initialize` validates and opens one exclusive UART.
- * `TrySend(Success)` accepts one complete frame into the driver-owned slot for regular `AdvanceTransmit` calls, while
- * transparent-mode destination addresses remain shape-checked metadata rather than on-air routing.
+ * Construction is inert so static storage is safe before `main`; `Initialize` opens one exclusive UART and initializes
+ * portable framing. `TrySend(Success)` queues one complete frame for `AdvanceTransmit`, while transparent-mode
+ * destination addresses remain shape-checked metadata rather than on-air routing.
  */
 class FPicoE32LoraDriver final : public INetDriver
 {
@@ -53,26 +50,26 @@ public:
 	/** Creates a closed driver that borrows the supplied binding for host policy tests or alternate Pico wiring. */
 	explicit FPicoE32LoraDriver(Detail::IPicoE32LoraPlatform& InPlatform) noexcept;
 
-	/** Deinitializes the exclusively owned UART when initialization succeeded. */
+	/** Releases the delegated byte stream, which deinitializes the exclusively owned UART when initialization succeeded. */
 	~FPicoE32LoraDriver() noexcept override;
 
-	/** Prevents copying so one value owns exactly one UART identity and transport state. */
+	/** Prevents copying so one facade owns exactly one UART byte stream and delegated transport state. */
 	FPicoE32LoraDriver(const FPicoE32LoraDriver&) = delete;
 
-	/** Prevents copying so one value owns exactly one UART identity and transport state. */
+	/** Prevents copying so one facade owns exactly one UART byte stream and delegated transport state. */
 	FPicoE32LoraDriver& operator=(const FPicoE32LoraDriver&) = delete;
 
-	/** Prevents moving so the UART identity and fixed transport storage remain stable. */
+	/** Prevents moving so byte-stream ownership and the delegated transport reference remain stable. */
 	FPicoE32LoraDriver(FPicoE32LoraDriver&&) = delete;
 
-	/** Prevents moving so the UART identity and fixed transport storage remain stable. */
+	/** Prevents moving so byte-stream ownership and the delegated transport reference remain stable. */
 	FPicoE32LoraDriver& operator=(FPicoE32LoraDriver&&) = delete;
 
 	/**
-	 * Validates and configures one exclusive RP2040 UART for E32 traffic.
+	 * Validates and configures one exclusive RP2040 UART, then initializes portable E32 framing.
 	 *
 	 * Returns `Unavailable` when already open, `Invalid` for an unsupported index/pin mapping, zero baud, or a baud
-	 * the SDK cannot produce exactly, and `Success` after configuring 8N1 with FIFO enabled and no flow control.
+	 * the SDK cannot produce exactly, and the delegated RadioE32 initialization result after opening the UART.
 	 *
 	 * @param InConfig UART identity, GPIO routing, baud rate, and local node id.
 	 * @return Outcome of the initialization attempt.
@@ -80,10 +77,11 @@ public:
 	ENetResult Initialize(const FPicoE32LoraConfig& InConfig) noexcept;
 
 	/**
-	 * Transactionally accepts one complete packet into the fixed transmit slot.
+	 * Transactionally accepts one complete packet into the delegated fixed transmit slot.
 	 *
 	 * Returns `Unavailable` while closed, `Invalid` for a malformed address/span or oversize packet, `Full` while a
-	 * prior frame remains queued, and `Success` once this driver owns the complete encoded frame.
+	 * prior frame remains queued, and `Success` once the delegated driver queued the complete encoded frame for later
+	 * physical progress.
 	 *
 	 * @param InTo Driver-relative one-byte destination metadata; transparent mode does not route it on air.
 	 * @param InPacket Payload to frame and queue.
@@ -104,33 +102,21 @@ public:
 	 */
 	ENetResult TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept override;
 
-	/** Reports the shared E32 payload capacity, excluding framing overhead. */
+	/** Reports the delegated shared E32 payload capacity, excluding framing overhead. */
 	std::size_t MaxPacketBytes() const noexcept override;
 
-	/** Advances at most one queued byte when the UART is writable; otherwise performs no work. */
+	/** Advances a bounded burst of up to one complete encoded frame's capacity when UART bytes are writable. */
 	void AdvanceTransmit() noexcept override;
 
-	/** Reports whether `Initialize` opened a usable UART. */
+	/** Reports whether both the byte stream is open and the delegated RadioE32 driver is initialized. */
 	bool IsOpen() const noexcept;
 
 private:
-	/** Pumps available UART bytes within one fixed budget and delivers the first completed frame. */
-	ENetResult PumpReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept;
+	/** Owns the configured RP2040 UART lifetime and provides bounded SDK-free byte operations to RadioE32. */
+	Detail::FPicoUartByteStream ByteStream{};
 
-	/** Owns the SDK-free transmit slot and receive decoder exercised by host tests. */
-	Detail::FE32LoraTransportState TransportState{};
-
-	/** Borrowed UART binding that must outlive this driver and confines Pico SDK calls to the platform edge. */
-	Detail::IPicoE32LoraPlatform& Platform;
-
-	/** Stores the initialized UART identity for each bounded platform operation. */
-	std::uint8_t UartIndexValue{0};
-
-	/** Stamps each queued frame with this Pico's source node id. */
-	std::uint8_t LocalNodeIdValue{0};
-
-	/** Prevents SDK access before successful initialization and double initialization. */
-	bool bOpen{false};
+	/** Owns portable E32 framing while borrowing the preceding byte stream for its full facade lifetime. */
+	FRadioE32Driver RadioDriver{ByteStream};
 };
 
 } // namespace MicroWorld

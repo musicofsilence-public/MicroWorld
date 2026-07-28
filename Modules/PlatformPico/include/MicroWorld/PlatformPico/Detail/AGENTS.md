@@ -4,14 +4,16 @@ Inherits `../AGENTS.md`.
 
 ## Architecture
 
-`E32LoraTransportState.h` and `PicoE32LoraPlatform.h` are unsupported
-implementation seams. The former owns fixed-capacity framing state; the latter
-is the narrow SDK-free UART binding used by the public driver and host policy
-tests. Neither contains Pico SDK access.
+`E32LoraTransportState.h` and `PicoE32LoraPlatform.h` are legacy forwarding
+compatibility paths to RadioE32-owned framing and the generic Pico UART binding.
+`PicoUartPlatform.h` and `PicoUartByteStream.h` are the unsupported generic
+platform seams that separate SDK-free UART policy from the Pico SDK backend.
+None contains Pico SDK access.
 
 ## Concepts
 
-- One transmit frame and one held receive frame make backpressure explicit.
-- Tests observe accepted/rejected operations, byte progress, and transactional
-  delivery through a per-instance fake binding without creating a generic
-  hardware abstraction.
+- Fixed framing and the legacy E32 platform spelling remain compatibility paths;
+  RadioE32 owns framing while the generic Pico UART seam owns byte access.
+- The byte stream owns validated UART open/close lifetime and maps one-byte
+  availability; tests use a per-instance fake platform binding without creating
+  a generic hardware abstraction.

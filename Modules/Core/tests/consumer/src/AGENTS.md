@@ -12,6 +12,9 @@ root, weak-reference, and collection APIs. `EngineNativeMain.cpp` and
 `EngineEsp32Main.cpp` exercise the accepted Core+Object+Engine compile profile.
 `NetNativeMain.cpp` and `NetEsp32Main.cpp` exercise the Core+Net compile
 profile through byte writer/reader, loopback, and manager APIs.
+`PlatformEsp32Main.cpp` proves the PlatformEsp32 network/engine composition
+without optional radio dependencies; `PlatformEsp32RadioE32Main.cpp` separately
+compile-links the released ESP32 RadioE32 facade without runtime UART I/O.
 `Esp32BenchmarkMain.cpp` remains the only target runtime harness. The parent
 project guarantees that only one entry point is linked per environment.
 

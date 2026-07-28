@@ -1,18 +1,13 @@
 #pragma once
 
 // =============================================================================
-// src/E32UartPlatformImplementation.h is the SOLE header that pulls ESP-IDF UART headers.
-// It is included by two driver translation units — Esp32E32LoraDriver.cpp (the E32
-// LoRa radio link) and Esp32UartDriver.cpp (the wired point-to-point UART link) —
-// and a public header must never reach it. Every ESP-IDF UART divergence is hidden
-// behind the helpers below so both drivers read one platform-free send/receive path
-// that mirrors the UDP driver. Example 18's two-board ping-pong runtime-verifies the
-// wired-UART path on ESP32-S3 (2026-07-23): uart_write_bytes fully accepts each frame
-// and the one-byte uart_read_bytes drain reassembles it, so the full-accept and
-// empty-drain outcomes below are proven on real hardware. Two branches stay
-// unexercised: the short-write would-block mapping (the ping-pong never saturates the
-// TX FIFO) and E32 radio frame traffic (Phase 6.2 measured only no-traffic pump
-// overhead). See ../AGENTS.md for the rule this comment satisfies.
+// src/UartPlatformImplementation.h is the SOLE header that pulls ESP-IDF UART
+// headers. It hides ESP-IDF UART divergence behind shared open/read/write/close
+// helpers so platform adapters keep public headers free of vendor types. Example
+// 18's two-board ping-pong runtime-verifies the wired-UART full-write and
+// one-byte-drain paths on ESP32-S3 (2026-07-23). The short-write would-block
+// mapping remains unexercised because that checkpoint never saturates the TX
+// FIFO. See ../AGENTS.md for the rule this comment satisfies.
 // =============================================================================
 
 #include <driver/uart.h>
@@ -78,6 +73,32 @@ inline EUartWriteOutcome WriteUart(const FUartPort InPort, const std::uint8_t* c
 	return EUartWriteOutcome::Sent;
 }
 
+/**
+ * Attempts one UART byte write without waiting for TX ring-buffer capacity.
+ *
+ * `uart_write_bytes` may wait for buffered TX space, so this first confirms one free byte through ESP-IDF. Exclusive
+ * UART ownership means no competing writer can consume that confirmed capacity before the one-byte WriteUart call;
+ * hardware transmission can only free more capacity. The existing whole-frame WriteUart behavior remains unchanged.
+ *
+ * @param InPort Open UART port number.
+ * @param InByte One byte to write after confirming ring-buffer capacity.
+ * @return Sent after acceptance, WouldBlock when no byte fits now, or Error after an ESP-IDF failure.
+ */
+inline EUartWriteOutcome TryWriteUartByte(const FUartPort InPort, const std::uint8_t InByte) noexcept
+{
+	std::size_t FreeBytes = 0;
+	if (uart_get_tx_buffer_free_size(InPort, &FreeBytes) != ESP_OK)
+	{
+		return EUartWriteOutcome::Error;
+	}
+	if (FreeBytes == 0)
+	{
+		return EUartWriteOutcome::WouldBlock;
+	}
+
+	return WriteUart(InPort, &InByte, 1);
+}
+
 /** Normalized result of one non-blocking single-byte UART read. */
 enum class EUartReadStatus : std::uint8_t
 {
@@ -114,7 +135,7 @@ inline EUartReadStatus ReadUartByte(const FUartPort InPort, std::uint8_t& OutByt
 	return EUartReadStatus::GotByte;
 }
 
-/** Result of opening and configuring one UART for E32 LoRa traffic. */
+/** Result of opening and configuring one UART for a framed transport. */
 struct FOpenedUart
 {
 	/** True when the UART was parameterized, pinned, and installed; false when construction rolled back. */
@@ -122,19 +143,19 @@ struct FOpenedUart
 };
 
 /**
- * Configures and installs one UART for 8N1 E32 LoRa traffic.
+ * Configures and installs one UART for 8N1 framed transport traffic.
  *
  * Sets the UART to 8N1 at the given baud rate, routes it to the given TX/RX GPIOs with no hardware flow
  * control, and installs the ESP-IDF driver with RX and TX ring buffers of two hardware FIFOs so the install
  * clears the ESP-IDF minimum (both must exceed `UART_HW_FIFO_LEN`). On any configuration failure the partially
  * installed driver is uninstalled and `bOpen` is false, so the constructor can leave the driver inert without
- * throwing. The ring-buffer headroom suits LoRa baud between receive pumps; airtime-tuned sizing is deferred
- * to measured bring-up.
+ * throwing. The ring-buffer headroom suits bounded framing work between receive pumps; airtime-tuned sizing is
+ * deferred to measured bring-up.
  *
  * @param InPort UART port number to open.
- * @param InTxGpio TX GPIO number wired to the E32 module's RX pin.
- * @param InRxGpio RX GPIO number wired to the E32 module's TX pin.
- * @param InBaudRate Baud rate shared with the E32 module's UART configuration.
+ * @param InTxGpio TX GPIO number wired to the attached device RX pin.
+ * @param InRxGpio RX GPIO number wired from the attached device TX pin.
+ * @param InBaudRate Baud rate shared with the attached device UART configuration.
  * @return Opened-UART descriptor reporting whether installation succeeded.
  */
 inline FOpenedUart OpenConfiguredUartPort(
@@ -157,7 +178,7 @@ inline FOpenedUart OpenConfiguredUartPort(
 	}
 	// ESP-IDF requires the RX ring buffer to exceed the hardware FIFO and the TX ring buffer to be zero or
 	// exceed it (esp_driver_uart/src/uart.c); a nonzero TX buffer also keeps uart_write_bytes non-blocking.
-	// Two hardware FIFOs clears that floor with headroom for one E32 frame at LoRa baud between pumps.
+	// Two hardware FIFOs clear that floor with headroom for one framed transport message between pumps.
 	const int RingBufferBytes = 2 * UART_HW_FIFO_LEN(InPort);
 	if (uart_driver_install(InPort, RingBufferBytes, RingBufferBytes, 0, nullptr, 0) != ESP_OK)
 	{

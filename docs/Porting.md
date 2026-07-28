@@ -43,13 +43,13 @@ adapter owns its concrete encoding and provides helpers to build/inspect it.
   over lwIP; same three UDP address helpers duplicated verbatim.
 - ESP32 E32 LoRa reference:
   [`FEsp32E32LoraDriver`](../Modules/PlatformEsp32/include/MicroWorld/PlatformEsp32/Esp32E32LoraDriver.h)
-  over the E32 UART, using the portable
-  [`Net/FrameCodec.h`](../Modules/Net/include/MicroWorld/Net/FrameCodec.h)
-  for CRC-16/CCITT-FALSE framing and a 1-byte broadcast
+  is an ESP32 UART-lifetime compatibility facade over optional
+  [`RadioE32`](../Modules/RadioE32). RadioE32 owns portable E32 framing and
+  bounded progress over Core's narrow byte seam; the facade retains a 1-byte broadcast
   [`LoraAddress`](../Modules/PlatformEsp32/include/MicroWorld/PlatformEsp32/LoraAddress.h).
 - ESP32 wired UART reference:
   [`FEsp32UartDriver`](../Modules/PlatformEsp32/include/MicroWorld/PlatformEsp32/Esp32UartDriver.h)
-  over a plain point-to-point UART — the E32 driver minus the radio — using the
+  over a plain point-to-point UART, using the
   same `Net/FrameCodec.h` framing over a 1-byte point-to-point
   [`UartAddress`](../Modules/PlatformEsp32/include/MicroWorld/PlatformEsp32/UartAddress.h).
 - ESP32 wired I2C reference (master/slave pair):

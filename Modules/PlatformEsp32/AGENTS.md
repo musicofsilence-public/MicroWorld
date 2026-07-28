@@ -5,12 +5,12 @@ Inherits `../AGENTS.md`.
 ## Architecture
 
 `microworld-esp32` is the non-portable ESP32-S3 platform adapter. It supplies
-real transports (lwIP UDP, E32 LoRa over UART, a wired point-to-point UART, a
+real transports (lwIP UDP, an optional E32 compatibility facade over UART, a wired point-to-point UART, a
 wired point-to-point I2C master/slave pair, and a wired point-to-point SPI
 master/slave pair), a time source (`esp_timer`),
 and an output device (`ESP_LOG*`) behind the portable `INetDriver` /
 `TimePointMilliseconds` / `FOutputDeviceFunction` seams described in `docs/Porting.md`. It
-depends inward on Core, Object, Engine, and Net as needed and never
+depends inward on Core, Object, Engine, Net, and optional RadioE32 as needed and never
 the reverse, and it is **excluded from `CheckDependencyBoundaries.py`** — it
 has no module key in that tool's portable table.
 
@@ -19,7 +19,7 @@ has no module key in that tool's portable table.
 - The three adapter seams are `FEsp32TimeSource` (clock), `FEsp32UdpDriver` /
   `FEsp32E32LoraDriver` / `FEsp32UartDriver` / `FEsp32I2cMasterDriver` /
   `FEsp32I2cSlaveDriver` / `FEsp32SpiMasterDriver` / `FEsp32SpiSlaveDriver`
-  (`INetDriver` transports), and `WriteEsp32LogRecord` (the log output device); portable code never
+  (`INetDriver` transports), and `WriteEsp32LogRecord` (the log output device); the E32 facade delegates portable framing to RadioE32 while portable code never
   reaches ESP-IDF, lwIP, or vendor headers directly.
 - All lwIP, ESP-IDF, `<driver/uart.h>`, `<driver/i2c_*.h>`, and `<driver/spi_*.h>`
   headers are confined to private `src/*PlatformImplementation.h` headers; public

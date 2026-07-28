@@ -1,7 +1,7 @@
 {
   "name": "MicroWorldPlatformEsp32",
   "version": "0.3.0",
-  "description": "MicroWorld PlatformEsp32: ESP32-S3 platform adapter (esp_timer clock, lwIP UDP INetDriver, E32 LoRa UART INetDriver, wired UART/I2C/SPI INetDriver transports, ESP_LOG output device)",
+  "description": "MicroWorld PlatformEsp32: ESP32-S3 platform adapter (esp_timer clock, lwIP UDP INetDriver, optional E32 LoRa UART compatibility facade, wired UART/I2C/SPI INetDriver transports, ESP_LOG output device)",
   "keywords": [
     "embedded",
     "esp32",

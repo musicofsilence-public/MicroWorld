@@ -20,10 +20,16 @@ MODULE_DEPENDENCIES = {
     "Object": {"Core"},
     "Engine": {"Core", "Object"},
     "Net": {"Core"},
+    "RadioE32": {"Core", "Net"},
     "Messaging": {"Core"},
     "Application": {"Core", "Object", "Engine"},
     "Integration": {"Core", "Object", "Messaging", "Engine", "Net"},
 }
+
+# Platform packages remain outside portable-package ownership enforcement, but
+# their public include namespaces still identify forbidden outward edges from
+# portable code such as RadioE32.
+PLATFORM_MODULE_NAMES = {"PlatformEsp32", "PlatformHost", "PlatformPico"}
 
 # Platform-facing APIs are intentionally absent: portable packages may use only
 # MicroWorld and the conservative C++17 standard library at compile time.
@@ -204,7 +210,11 @@ def declared_path_module(path: Path, package_root: Path) -> str | None:
         candidate = relative_parts[namespace_index + 1]
         if candidate in CORE_PUBLIC_SEGMENTS:
             return "Core"
-        return candidate if candidate in MODULE_DEPENDENCIES else "Core"
+        return (
+            candidate
+            if candidate in MODULE_DEPENDENCIES or candidate in PLATFORM_MODULE_NAMES
+            else "Core"
+        )
 
     if relative_parts[0] == "src" and len(relative_parts) > 2:
         candidate = relative_parts[1]
@@ -226,6 +236,7 @@ def included_module(header: str) -> str | None:
     return (
         first_segment
         if first_segment in MODULE_DEPENDENCIES
+        or first_segment in PLATFORM_MODULE_NAMES
         else "Core"
     )
 
@@ -308,6 +319,7 @@ def run_self_test() -> int:
         root = Path(temporary_directory)
         core = root / "core"
         net = root / "net"
+        radio_e32 = root / "radio-e32"
         # Core owns its own Net-bucket leak fixture, the folded Memory segment,
         # and the folded Containers segment (both resolve to Core, not a
         # separate Memory package).
@@ -315,6 +327,9 @@ def run_self_test() -> int:
         (core / "include" / "MicroWorld" / "Memory").mkdir(parents=True)
         (core / "include" / "MicroWorld" / "Containers").mkdir(parents=True)
         (net / "include" / "MicroWorld" / "Net").mkdir(parents=True)
+        (radio_e32 / "include" / "MicroWorld" / "RadioE32").mkdir(
+            parents=True
+        )
 
         (core / "include" / "MicroWorld" / "Good.h").write_text(
             "#include <cstdint>\n",
@@ -365,9 +380,32 @@ def run_self_test() -> int:
             "#include <MicroWorld/Engine/World.h>\n",
             encoding="utf-8",
         )
+        # RadioE32 may depend on Core and Net, but never on platform packages.
+        (
+            radio_e32
+            / "include"
+            / "MicroWorld"
+            / "RadioE32"
+            / "Good.h"
+        ).write_text(
+            "#include <MicroWorld/Time.h>\n"
+            "#include <MicroWorld/Net/NetDriver.h>\n",
+            encoding="utf-8",
+        )
+        for platform_module in sorted(PLATFORM_MODULE_NAMES):
+            (
+                radio_e32
+                / "include"
+                / "MicroWorld"
+                / "RadioE32"
+                / f"{platform_module}Leak.h"
+            ).write_text(
+                f"#include <MicroWorld/{platform_module}/Platform.h>\n",
+                encoding="utf-8",
+            )
 
         errors, _ = analyze_packages(
-            [("Core", core), ("Net", net)],
+            [("Core", core), ("Net", net), ("RadioE32", radio_e32)],
             {"build", ".pio", "__pycache__"},
         )
         expected_fragments = (
@@ -376,6 +414,9 @@ def run_self_test() -> int:
             "Core must not depend on Object",
             "Net must not depend on Object",
             "Net must not depend on Engine",
+            "RadioE32 must not depend on PlatformEsp32",
+            "RadioE32 must not depend on PlatformHost",
+            "RadioE32 must not depend on PlatformPico",
         )
         missing_fragments = [
             fragment
@@ -386,6 +427,23 @@ def run_self_test() -> int:
             for fragment in missing_fragments:
                 print(
                     f"Self-test did not detect: {fragment}",
+                    file=sys.stderr,
+                )
+            return 1
+
+        unexpected_valid_edge_fragments = (
+            "RadioE32 must not depend on Core",
+            "RadioE32 must not depend on Net",
+        )
+        rejected_valid_edges = [
+            fragment
+            for fragment in unexpected_valid_edge_fragments
+            if any(fragment in error for error in errors)
+        ]
+        if rejected_valid_edges:
+            for fragment in rejected_valid_edges:
+                print(
+                    f"Self-test rejected valid edge: {fragment}",
                     file=sys.stderr,
                 )
             return 1
