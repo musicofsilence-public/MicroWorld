@@ -1,89 +1,57 @@
 specification {
-    // Human role interacting with the product.
-    // Never represents an Actor or a specific individual.
+    // Human role interacting with the product. Never an Actor, never a named person.
     element person {
         style {
             shape person
         }
     }
 
-    // Complete deliverable and ownership boundary. This is the first level (C1).
-    // Contains only software owned as part of the product.
+    // The deliverable and its ownership boundary - the C1 subject.
     element product {
         style {
             shape rectangle
         }
     }
 
-    // Independently executable or deployable runtime.
-    // Examples: device firmware, dedicated server, editor tool.
-    // A plugin, library or module is not an application.
-    // Ownership is carried by #owned / #external, not by the kind.
+    // Independently executable runtime. A plugin, library or module is not one.
     element application {
         style {
             shape component
         }
     }
 
-    // Major cohesive logical responsibility with a defined public contract.
-    //
-    // The test: does it own a contract other code is written against, or does it
-    // only satisfy someone else's? Owning one makes it a system. Satisfying one
-    // makes it an implementation, and implementations belong at C3 however
-    // separately they happen to be packaged.
-    //
-    // The build graph is NOT the authority. Package structure records where a
-    // responsibility lives today; it never decides where the boundary should be, and
-    // where the two disagree the packaging is the defect. Nothing in this model may
-    // be justified by a target_link_libraries line.
-    //
-    // The test governs the BOUNDARY, not the name. Systems here are titled with the
-    // repository's own module names, because those names are the vocabulary the team
-    // speaks; the subtitle carries the module path, so a merged system shows both.
+    // Major cohesive responsibility owning a contract other code is written against.
     element system {
         style {
             shape rectangle
         }
     }
 
-    // Narrower responsibility owned by a parent system or subsystem.
-    // A subsystem is relative: it may be treated as a system when examined alone.
+    // Narrower responsibility owned by a parent, and relative: examined alone, a
+    // subsystem is a system.
     element subsystem {
         style {
             shape component
         }
     }
 
-    // Stateful domain concept with identity and a meaningful lifecycle.
-    // Not synonymous with a class or a record. One entity may be realised by
-    // several implementation objects.
+    // Stateful domain concept with identity and a lifecycle. Not a class - one entity
+    // may be realised by several objects.
     element entity {
         style {
             shape rectangle
         }
     }
 
-    // Cohesive domain behaviour that does not naturally belong to one entity.
-    // Should not become a generic "manager" for unrelated logic.
+    // Domain behaviour belonging to no single entity. Never a generic manager.
     element domainService {
         style {
             shape component
         }
     }
 
-    // A piece of hardware. Either a family MicroWorld is built to run on, or a
-    // module the firmware talks to.
-    //
-    // The kind only answers "is this hardware?" - the relationship carries which
-    // sort it is: 'runs on' for a target, 'talks to' for a peripheral. Devices
-    // nest, so a module can sit inside the board that carries it.
-    //
-    // A statically linked SDK is NOT a device and never gets its own element: an
-    // arrow to a library compiled into our own binary would assert a boundary that
-    // does not exist at runtime. Name the SDK in the device's technology subtitle.
-    // 'mobile' is the only shape in the set that reads as a physical thing you
-    // hold, which is what separates the hardware row from every software box.
-    // Overridden to 'browser' on the development host - that one has a screen.
+    // Hardware. The relationship says which sort: 'runs on' a target, 'talks to' a
+    // peripheral. Devices nest, so a module sits inside the board carrying it.
     element device {
         style {
             shape mobile
@@ -91,20 +59,10 @@ specification {
         }
     }
 
-    // No ownership tags. Deployability is the element kind, and ownership is
-    // already carried structurally: inside the product boundary is ours, outside
-    // is not. A tag that is never false on non-product elements discriminates
-    // nothing.
-    //
-    // Marks the element others write code against. There is deliberately no
-    // matching 'implementation' tag: the 'realises' edge already shows which side
-    // of the interface an element is on, and a tag that repeats a visible edge is
-    // decoration.
+    // The element others write code against.
     tag contract
 
-    // Chosen at build time rather than always present. It discriminates because the
-    // elements it is absent from - a contract, a host, a codec - are the ones every
-    // configuration gets.
+    // Chosen at build time rather than always present.
     tag optional
 
     // Generic interaction. Use only when no precise relationship applies.
@@ -117,8 +75,7 @@ specification {
         title 'depends on'
     }
 
-    // Requests the target to perform an operation that may change state.
-    // The target owns validation and may reject the command.
+    // Requests an operation that may change state. The target owns validation.
     relationship commands {
         title 'sends commands to'
     }
@@ -128,8 +85,7 @@ specification {
         title 'queries'
     }
 
-    // Announces a fact that has already happened.
-    // The publisher does not require an immediate response.
+    // Announces a fact that has already happened, expecting no reply.
     relationship publishes {
         title 'publishes to'
         line dotted

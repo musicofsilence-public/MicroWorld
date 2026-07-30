@@ -1,35 +1,25 @@
 model {
     developer = person 'Firmware Developer' {
-        technology 'person: engineer'
+        technology '[person: engineer]'
         description 'Composes and ships device firmware.'
     }
 
-    // The one external runtime, and there is deliberately only one: a remote node
-    // runs this same application, so a second 'peer' element would model one fact
-    // twice. Peer messaging is shown device-to-device instead.
-    firmware = application 'Device Firmware' {
-        technology 'application: C++17 firmware'
+    // Only one, deliberately: a remote node runs this same application, so a second
+    // 'peer' element would model one fact twice.
+    deviceFirmware = application 'Device Firmware' {
+        technology '[application: C++17 firmware]'
         description 'Same source, no per-target changes.'
     }
 
-    // The span MicroWorld exists to cover. Three targets fanning out from one
-    // application is the portability claim - the diagram states it by shape, so no
-    // edge label has to.
-    //
-    // Subtitles classify ('what sort of device'), so the two MCUs share one. Which
-    // SDK a target uses is a fact about that target, not a classification, so it
-    // lives in the description.
     esp32Device = device 'ESP32-S3' {
-        technology 'device: microcontroller'
+        technology '[device: microcontroller]'
         description 'Wi-Fi and radio, on ESP-IDF.'
     }
 
-    // The only literally-correct icon available for the hardware: RP2040 is
-    // Raspberry Pi silicon. There is no espressif, esp32 or generic-MCU icon in the
-    // set, so ESP32-S3 stays bare rather than borrowing a glyph that means something
-    // else (a Wi-Fi symbol would label a capability, not the thing).
+    // RP2040 is literally Raspberry Pi silicon. The set has no espressif or
+    // generic-MCU glyph, so ESP32-S3 stays bare rather than borrow a wrong one.
     picoDevice = device 'RP2040' {
-        technology 'device: microcontroller'
+        technology '[device: microcontroller]'
         description 'Radio only, on the Pico SDK.'
         style {
             icon tech:raspberry-pi
@@ -37,7 +27,7 @@ model {
     }
 
     developmentPc = device 'Development PC' {
-        technology 'device: development host'
+        technology '[device: development host]'
         description 'Host tests, on OS sockets.'
         style {
             shape browser
@@ -45,42 +35,27 @@ model {
     }
 
     microworld = product 'MicroWorld' {
-        technology 'product: C++17 static library'
+        technology '[product: C++17 static library]'
         description 'UE5 worlds, actors and lifecycle on microcontrollers.'
-        // Muted on purpose: at C2 this box is the boundary, not a participant, and
-        // the default fill competed with the sky tier inside it.
         style {
             color muted
             icon tech:cplusplus
         }
 
-        // Systems carry the repository's own names, because here the module names
-        // ARE the domain vocabulary - Core, Engine, Net and Messaging are what the
-        // team says out loud, and a diagram that renames them forces a translation
-        // on every reader.
-        //
-        // The architectural content is the BOUNDARY, not the name: Engine holds two
-        // modules, and its subtitle is the only place that merge is visible. That is
-        // what no directory listing can tell you.
-
-        // No colour on the systems. Each one carries a glyph of what it does, and a
-        // hue on top of that signals nothing a reader can decode without a legend.
-        // The role tiers are still visible: TopBottom layout stacks them in
-        // dependency order, composition above runtime above foundation.
-
         core = system 'Core' {
-            technology 'system: Modules/Core'
+            technology '[system: foundation]'
             description 'Sequences work and exposes extension interfaces.'
             style {
                 icon ./icon-core.svg
             }
             metadata {
-                contract 'Time.h, TickFunction.h, Timer.h, Log.h, Lifecycle.h, EngineSystem.h, IO/UartByteStream.h'
+                contract 'time, tick scheduling, timers, logging, lifecycle, result codes, the play-system turn points, byte streams'
+                traceability 'Modules/Core headers: Time.h, TickFunction.h, Timer.h, Log.h, Lifecycle.h, PlaySystem.h, IO/UartByteStream.h'
             }
         }
 
         engine = system 'Engine' {
-            technology 'system: Modules/Engine + Modules/Object'
+            technology '[system: managed runtime]'
             description 'Owns object identity and actor lifetime.'
             style {
                 icon ./icon-engine.svg
@@ -88,11 +63,12 @@ model {
             metadata {
                 contract 'IEngine, UWorld, AActor, UActorComponent, FObjectStore'
                 boundary 'Object owns identity, Engine owns the lifetime built on it. Neither is a responsibility anything wants alone, so they are one system'
+                traceability 'Modules/Engine + Modules/Object'
             }
 
             engineFrontDoor = subsystem 'Engine Front Door' {
                 #contract
-                technology 'subsystem: IEngine / TEngine<TTraits>'
+                technology '[subsystem: IEngine / TEngine<TTraits>]'
                 description 'Narrow interface the application holds.'
                 metadata {
                     traceability 'Modules/Engine/include/MicroWorld/Engine/EngineHost.h'
@@ -100,7 +76,7 @@ model {
             }
 
             world = entity 'World' {
-                technology 'entity: UWorld'
+                technology '[entity: UWorld]'
                 description 'Owns registered and spawned actors.'
                 metadata {
                     traceability 'Modules/Engine/include/MicroWorld/Engine/World.h'
@@ -108,7 +84,7 @@ model {
             }
 
             actor = entity 'Actor' {
-                technology 'entity: AActor'
+                technology '[entity: AActor]'
                 description 'Ticking participant with a lifecycle.'
                 metadata {
                     traceability 'Modules/Engine/include/MicroWorld/Engine/Actor.h'
@@ -116,7 +92,7 @@ model {
             }
 
             actorComponent = entity 'Actor Component' {
-                technology 'entity: UActorComponent'
+                technology '[entity: UActorComponent]'
                 description 'Reusable behaviour attached to an actor.'
                 metadata {
                     traceability 'Modules/Engine/include/MicroWorld/Engine/ActorComponent.h'
@@ -124,7 +100,7 @@ model {
             }
 
             spawnBarrier = domainService 'Deferred Spawn Barrier' {
-                technology 'domainService: queued actor factories'
+                technology '[domainService: queued actor factories]'
                 description 'Constructs actors only at safe points.'
                 metadata {
                     traceability 'Modules/Engine/include/MicroWorld/Engine/DeferredActorSpawn.h'
@@ -132,7 +108,7 @@ model {
             }
 
             objectStore = subsystem 'Object Store' {
-                technology 'subsystem: FObjectStore, generation-checked handles'
+                technology '[subsystem: FObjectStore, generation-checked handles]'
                 description 'Resolves handles and detects stale ones.'
                 style {
                     shape storage
@@ -143,7 +119,7 @@ model {
             }
 
             collector = domainService 'Garbage Collector' {
-                technology 'domainService: FGarbageCollector'
+                technology '[domainService: FGarbageCollector]'
                 description 'Reclaims unreachable managed objects.'
                 metadata {
                     traceability 'Modules/Object/include/MicroWorld/Object/GarbageCollector.h'
@@ -151,55 +127,44 @@ model {
             }
         }
 
-        // The two 'System' boxes are the model's two IEngineSystem implementations:
-        // things a composition root installs into a frame loop. That is the only
-        // thing the suffix means here - it is not a claim that they are alike
-        // otherwise, and Net System needs Engine while this one does not.
         messagingSystem = system 'Messaging System' {
-            technology 'system: Modules/Messaging'
+            technology '[system: play service]'
             description 'Delivers typed messages between actors, with or without a transport.'
             style {
                 shape queue
                 icon ./icon-messaging.svg
             }
             metadata {
-                contract 'TMessageRouter (an IEngineSystem), channel bindings, reliable channel'
-                standalone 'Usable with no networking at all. TMessageRouter includes only Messaging/Message.h, EngineSystem.h and Time.h, so it names neither actors nor transports: Core plus this system is already a working stack, and Core + Engine + this is local actor messaging with no Net, no Net System and no driver. examples/22-ActorMessages is exactly that program'
-                boundary 'That independence is the whole reason it is its own system. Folding it into Net System would assert that a message between two actors on one board travels through networking, which is false'
+                contract 'TMessageRouter (an IPlaySystem), channel bindings, reliable channel'
+                standalone 'Usable with no networking at all. Its contract names neither actors nor transports, so Core plus this system is already a working stack, and Core + Engine + this is local actor messaging with no Transport, no Networking and no driver'
+                boundary 'That independence is the whole reason it is its own system. Folding it into Networking would assert that a message between two actors on one board travels through networking, which is false'
+                traceability 'Modules/Messaging; examples/22-ActorMessages is that program. TMessageRouter includes only Message.h, PlaySystem.h and Time.h - confirmation the code currently honours the decision, never the reason for it'
             }
         }
 
-        // Every transport lives inside Net, because Net owns the contract they all
-        // realise and none of them declares anything outward. A named medium - LoRa,
-        // I2C, Wi-Fi - is an implementation of the transport responsibility, not a
-        // responsibility of its own. That holds however separately a medium happens
-        // to be packaged today.
-        //
-        // Drivers appear by FAMILY, not one element per class. An eighth box saying
-        // 'realises INetDriver' teaches nothing the third did not; the class names
-        // belong in the subtitle.
-        net = system 'Net' {
-            technology 'system: Modules/Net + Modules/RadioE32'
-            description 'Moves framed bytes over any transport.'
+        transport = system 'Transport' {
+            technology '[system: byte I/O]'
+            description 'Moves framed bytes over any medium.'
             style {
-                icon ./icon-net.svg
+                icon ./icon-transport.svg
             }
             metadata {
                 contract 'INetDriver, TNetHost, frame codec, protocol'
-                boundary 'Holds the driver contract plus every family that realises it: IP, wire and radio'
+                boundary 'Transport sits below the engine and takes only time and result codes. Anything that merely satisfies the driver contract belongs inside it - IP, wire and radio alike - and anything needing a world cannot be in here at all'
+                traceability 'Modules/Net + Modules/RadioE32'
             }
 
-            driverContract = subsystem 'Net Driver Contract' {
+            driverContract = subsystem 'Driver Contract' {
                 #contract
-                technology 'subsystem: INetDriver'
+                technology '[subsystem: INetDriver]'
                 description 'Send, receive and advance one transport.'
                 metadata {
                     traceability 'Modules/Net/include/MicroWorld/Net/NetDriver.h'
                 }
             }
 
-            netHost = subsystem 'Net Host' {
-                technology 'subsystem: TNetHost'
+            transportHost = subsystem 'Transport Host' {
+                technology '[subsystem: TNetHost]'
                 description 'Drives one driver every frame.'
                 metadata {
                     traceability 'Modules/Net/include/MicroWorld/Net/NetHost.h'
@@ -207,24 +172,16 @@ model {
             }
 
             frameCodec = domainService 'Frame Codec' {
-                technology 'domainService: magic, length and CRC framing'
+                technology '[domainService: magic, length and CRC framing]'
                 description 'Frames and resynchronises byte streams.'
                 metadata {
                     traceability 'Modules/Net/include/MicroWorld/Net/FrameCodec.h'
                 }
             }
 
-            // The three elements above are always present; these three are chosen
-            // per target and per feature, which is what #optional marks.
-            //
-            // Each carries a hand-drawn icon of its physical medium - a network, a
-            // cable, an antenna. The medium is the only thing these three differ by,
-            // and a glyph states it before the reader gets to the words. Carrying an
-            // icon at all is also what separates a chosen transport from the three
-            // always-present elements, so no legend is needed for either fact.
             ipDrivers = subsystem 'IP Drivers' {
                 #optional
-                technology 'subsystem: FHostUdpDriver, FEsp32UdpDriver'
+                technology '[subsystem: FHostUdpDriver, FEsp32UdpDriver]'
                 description 'Carries frames over desktop sockets and device Wi-Fi.'
                 style {
                     icon ./icon-ip.svg
@@ -236,7 +193,7 @@ model {
 
             wiredDrivers = subsystem 'Wired Drivers' {
                 #optional
-                technology 'subsystem: FEsp32Uart, FEsp32I2cMaster/Slave, FEsp32Spi drivers'
+                technology '[subsystem: FEsp32Uart, FEsp32I2cMaster/Slave, FEsp32Spi drivers]'
                 description 'Carries frames board-to-board over UART, I2C or SPI.'
                 style {
                     icon ./icon-wired.svg
@@ -248,7 +205,7 @@ model {
 
             radioDrivers = subsystem 'Radio Drivers' {
                 #optional
-                technology 'subsystem: FRadioE32Driver over IUartByteStream'
+                technology '[subsystem: FRadioE32Driver over IUartByteStream]'
                 description 'Carries frames over long-range radio. The E32 protocol is portable; only UART ownership is per-platform.'
                 style {
                     icon ./icon-radio.svg
@@ -260,44 +217,42 @@ model {
         }
 
         app = system 'Application' {
-            technology 'system: Modules/Application'
+            technology '[system: composition root]'
             description 'Starts, drives and stops one engine.'
             style {
                 icon ./icon-application.svg
             }
             metadata {
                 contract 'FApplication, Run frame loop'
+                traceability 'Modules/Application'
             }
         }
 
-        netSystem = system 'Net System' {
-            technology 'system: Modules/Integration'
-            description 'The only place Engine and Net meet.'
+        networking = system 'Networking' {
+            technology '[system: play service]'
+            description 'Carries typed messages over a transport.'
             style {
-                icon ./icon-netsystem.svg
+                icon ./icon-networking.svg
             }
             metadata {
-                contract 'TNetSystem, an IEngineSystem that owns net drivers and channels'
-                boundary 'Separate from Net so Net never learns that actors exist: the engine stays testable with no transport, a transport reusable with no world, and adding a transport touches no runtime code. A separation needs two elements to state it'
+                contract 'TNetSystem, an IPlaySystem that owns net drivers and channels'
+                standalone 'Core, Messaging and Transport are its whole closure, so a networked messaging stack needs no world, no actors and no Object. It cannot drive itself though - something must call its turn points each frame'
+                boundary 'Merged with Transport, one element would own both the byte contract and the message types, and nothing would then forbid a driver from knowing a message type. Kept apart, a driver stays reusable with no messaging, messaging stays usable with no driver, and adding a transport touches neither. A separation needs two elements to state it'
+                traceability 'Modules/Integration'
             }
         }
     }
 
-    // ---------------------------------------------------------------------------
-    // Context
-    // ---------------------------------------------------------------------------
 
     developer -[uses]-> microworld 'writes one application with'
 
     // Direction is deliberate: a static library is compiled INTO the executable.
-    // Pointing it this way also keeps the product high in a TopBottom layout
-    // instead of stranding it on the same row as the hardware it runs on.
-    microworld -[uses]-> firmware 'compiles into'
+    // Reversing it lies, and strands the product beside the hardware in TopBottom.
+    microworld -[uses]-> deviceFirmware 'compiles into'
 
-    // The three claims the context view has to make, as edges.
-    firmware -[uses]-> esp32Device 'runs on'
-    firmware -[uses]-> picoDevice 'runs on'
-    firmware -[uses]-> developmentPc 'runs on'
+    deviceFirmware -[uses]-> esp32Device 'runs on'
+    deviceFirmware -[uses]-> picoDevice 'runs on'
+    deviceFirmware -[uses]-> developmentPc 'runs on'
 
     esp32Device -[uses]-> picoDevice 'exchanges messages with' {
         metadata {
@@ -305,32 +260,34 @@ model {
         }
     }
 
-    // ---------------------------------------------------------------------------
-    // Static dependencies. Each label names what actually crosses the edge, because
-    // 'depends on' tells a reader nothing they could not guess from the arrow.
-    //
-    // The metadata is TRACEABILITY, not justification: it says where a dependency is
-    // realised today, never why the boundary is drawn there. Boundaries are decided
-    // by responsibility and recorded in each element's 'boundary' note. Where the
-    // build graph and this model disagree, the build is the defect.
-    // ---------------------------------------------------------------------------
 
-    microworld.engine -[dependsOn]-> microworld.core 'takes Time, Timer, Lifecycle, EngineSystem' {
+    microworld.engine -[dependsOn]-> microworld.core 'takes Time, Timer, Lifecycle, PlaySystem' {
         metadata {
             traceability 'Engine/EngineHost.h, Engine/Actor.h includes'
         }
     }
 
-    microworld.messagingSystem -[dependsOn]-> microworld.core 'takes Span, Delegate, Time, EngineSystem' {
+    microworld.messagingSystem -[dependsOn]-> microworld.core 'takes Span, Delegate, Time, PlaySystem' {
         metadata {
             traceability 'Messaging/MessageRouter.h, Messaging/Message.h includes'
         }
     }
 
-    // UartByteStream is here because the wired and radio families are built on it.
-    microworld.net -[dependsOn]-> microworld.core 'takes Span, Delegate, Log, Time, UartByteStream' {
+    microworld.transport -[dependsOn]-> microworld.core 'takes Span, Delegate, Log, Time, UartByteStream' {
         metadata {
             traceability 'Net/NetHost.h and RadioE32/RadioE32Driver.h includes'
+        }
+    }
+
+    microworld.networking -[dependsOn]-> microworld.core 'takes PlaySystem' {
+        metadata {
+            traceability 'Integration/NetSystem.h; IPlaySystem is Core/PlaySystem.h, still reached today via Engine/EngineSystem.h'
+        }
+    }
+
+    microworld.app -[dependsOn]-> microworld.core 'takes Lifecycle, RuntimeResult, Time' {
+        metadata {
+            traceability 'Application/Application.h includes'
         }
     }
 
@@ -340,37 +297,26 @@ model {
         }
     }
 
-    // The transport-free path, and the reason Messaging is its own system rather than
-    // part of networking. 'uses' not 'dependsOn': the composition root constructs the
-    // router and installs it, so nothing in Modules/Application names Messaging.
+    // 'uses' not 'dependsOn': Application runs whatever engine system it is handed,
+    // so it is not written against this one in particular.
     microworld.app -[uses]-> microworld.messagingSystem 'installs the router in its frame loop, no transport involved' {
         metadata {
-            traceability 'examples/22-ActorMessages/src/Main.cpp composes Engine and Messaging with no Net'
+            traceability 'examples/22-ActorMessages/src/Main.cpp composes Engine and Messaging with no Transport'
         }
     }
 
-    microworld.netSystem -[dependsOn]-> microworld.messagingSystem 'routes typed messages through' {
+    microworld.networking -[dependsOn]-> microworld.messagingSystem 'routes typed messages through' {
         metadata {
             traceability 'Integration/NetSystem.h'
         }
     }
 
-    microworld.netSystem -[uses]-> microworld.engine 'advances the world each frame' {
+    microworld.networking -[uses]-> microworld.transport 'pumps the transport host each frame' {
         metadata {
             traceability 'Integration/NetSystem.h'
         }
     }
 
-    microworld.netSystem -[uses]-> microworld.net 'pumps the net host each frame' {
-        metadata {
-            traceability 'Integration/NetSystem.h'
-        }
-    }
-
-    // ---------------------------------------------------------------------------
-    // C3 detail. Re-derives what the Engine + Object merge collapsed, and shows
-    // which side of the driver interface each implementation sits on.
-    // ---------------------------------------------------------------------------
 
     microworld.engine.engineFrontDoor -[uses]-> microworld.engine.world 'owns and advances'
     microworld.engine.engineFrontDoor -[dependsOn]-> microworld.engine.objectStore 'resolves handles through' {
@@ -388,9 +334,9 @@ model {
     microworld.engine.actor -[uses]-> microworld.engine.actorComponent 'owns'
     microworld.engine.collector -[uses]-> microworld.engine.objectStore 'reclaims through'
 
-    microworld.net.netHost -[uses]-> microworld.net.driverContract 'drives one'
-    microworld.net.netHost -[uses]-> microworld.net.frameCodec 'frames through'
-    microworld.net.ipDrivers -[uses]-> microworld.net.driverContract 'realises'
-    microworld.net.wiredDrivers -[uses]-> microworld.net.driverContract 'realises'
-    microworld.net.radioDrivers -[uses]-> microworld.net.driverContract 'realises'
+    microworld.transport.transportHost -[uses]-> microworld.transport.driverContract 'drives one'
+    microworld.transport.transportHost -[uses]-> microworld.transport.frameCodec 'frames through'
+    microworld.transport.ipDrivers -[uses]-> microworld.transport.driverContract 'realises'
+    microworld.transport.wiredDrivers -[uses]-> microworld.transport.driverContract 'realises'
+    microworld.transport.radioDrivers -[uses]-> microworld.transport.driverContract 'realises'
 }
