@@ -23,7 +23,7 @@ MODULE_DEPENDENCIES = {
     "RadioE32": {"Core", "Net"},
     "Messaging": {"Core"},
     "Application": {"Core", "Object", "Engine"},
-    "Integration": {"Core", "Object", "Messaging", "Engine", "Net"},
+    "Integration": {"Core", "Messaging", "Net"},
 }
 
 # Platform packages remain outside portable-package ownership enforcement, but

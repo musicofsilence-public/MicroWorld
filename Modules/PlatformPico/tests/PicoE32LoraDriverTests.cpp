@@ -164,7 +164,7 @@ MW_TEST_CASE(PicoE32FacadeRejectsInvalidConfigBeforeOpeningUart)
 
 /**
  * Scenario: Initialize the facade with a supported UART1 configuration.
- * Expected: The facade delegates the exact index, pins, and baud rate to the generic byte stream platform seam.
+ * Expected: The facade delegates the exact index, pins, and baud rate to the generic `IPicoUartPlatform` interface.
  */
 MW_TEST_CASE(PicoE32FacadeDelegatesExactUartOpenConfiguration)
 {

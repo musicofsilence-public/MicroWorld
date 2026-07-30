@@ -5,7 +5,7 @@
 #include <MicroWorld/Engine/DeferredActorSpawn.h>
 #include <MicroWorld/Engine/EngineClassIds.h>
 #include <MicroWorld/Engine/EngineStorage.h>
-#include <MicroWorld/EngineSystem.h>
+#include <MicroWorld/PlaySystem.h>
 #include <MicroWorld/Engine/World.h>
 #include <MicroWorld/Object/ClassDescriptor.h>
 #include <MicroWorld/Object/GarbageCollector.h>
@@ -161,7 +161,7 @@ public:
 	 */
 	explicit TEngine(
 		const FGarbageCollectionBudget InCollectionBudget,
-		IEngineSystem& InSystem,
+		IPlaySystem& InSystem,
 		const std::uint32_t InReclamationBudget = static_cast<std::uint32_t>(MaxObjects)) noexcept
 		: TEngine(InCollectionBudget, InReclamationBudget)
 	{
@@ -446,7 +446,7 @@ private:
 	std::uint32_t FrameReclamationBudget;
 
 	/** Optional caller-owned system started before and stopped after the world, then advanced first and last each tick. */
-	IEngineSystem* System{nullptr};
+	IPlaySystem* System{nullptr};
 
 	/** Records the last accepted tick time so a rolled-back clock is rejected. */
 	TimePointMilliseconds LastTickMilliseconds{0};

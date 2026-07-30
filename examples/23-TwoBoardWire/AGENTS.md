@@ -14,8 +14,8 @@ example). Per board: a `TNetHost` over `FEsp32UartDriver`, a `TMessageRouter`,
 and a `TMessageChannelBinding` wiring the two together. The engine holds the
 `TNetHostSystem` as its per-frame network slot; the run loop pumps the router
 manually (`PostAdvance` before `Engine.Tick`, `PreAdvance` after) because
-`TEngineSystemSet` does not exist until Phase 4.1 and `TEngineHost` holds
-exactly one `IEngineSystem`. Every composition object is `static`,
+`TPlaySystemSet` does not exist until Phase 4.1 and `TEngineHost` holds
+exactly one `IPlaySystem`. Every composition object is `static`,
 allocation-free, sized at compile time.
 
 ## Concepts

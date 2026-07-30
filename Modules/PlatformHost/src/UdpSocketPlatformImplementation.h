@@ -7,7 +7,7 @@
 // classification, the MSG_PEEK-vs-MSG_TRUNC size probe) is hidden behind the
 // helpers below so HostUdpDriver.cpp reads one platform-free receive/send path.
 // The POSIX branch is compiled but NOT verified on this Windows-only host; it
-// exists so Phase 5.2 (ESP32 UDP) can reuse the same seams under a POSIX build.
+// exists so Phase 5.2 (ESP32 UDP) can reuse the same interfaces under a POSIX build.
 // =============================================================================
 
 #include <MicroWorld/Time.h>

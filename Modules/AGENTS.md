@@ -16,7 +16,7 @@ Core <- Net <- RadioE32
 
 PlatformHost, PlatformEsp32, and PlatformPico are non-portable edges; only they
 may reach OS/SDK headers and all remain outside portable-package enforcement.
-RadioE32 is optional portable framing over Core's narrow byte seam, not a HAL.
+RadioE32 is optional portable framing over Core's narrow `IUartByteStream` interface, not a HAL.
 
 ## Concepts
 

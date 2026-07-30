@@ -99,7 +99,7 @@ private:
  * Client board: joins the WiFi SoftAP and runs FCounterActor over one TMessageRouter wired to ONE
  * UDP net through TWO TMessageChannelBinding -- best-effort straight to the router, guaranteed
  * wrapped in TReliableChannel -- with the engine holding the net frame, the reliable channel, and
- * the router behind one TEngineSystemSet<3>. The UDP driver is itself wrapped in FPacketDropDriver
+ * the router behind one TPlaySystemSet<3>. The UDP driver is itself wrapped in FPacketDropDriver
  * so every third outgoing packet, of any kind, is silently dropped -- the whole point of the demo.
  */
 void RunClient() noexcept

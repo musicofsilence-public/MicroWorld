@@ -6,7 +6,7 @@ Inherits `../../AGENTS.md`.
 
 This directory declares the host platform adapters: `FHostUdpDriver`
 (`INetDriver` transport, the template both ESP32 UDP and E32 LoRa adapters
-mirror), `FHostTimeSource` (clock seam), `FWinSockScope` (socket-stack
+mirror), `FHostTimeSource` (clock interface), `FWinSockScope` (socket-stack
 lifetime guard), and the `UdpAddress` forwarder onto the shared
 `Net/UdpAddressCodec.h` 6-byte IPv4+port encoding. Their declarations depend
 only on Net/Object/Memory/Core public headers and stay free of WinSock/BSD

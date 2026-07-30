@@ -1,6 +1,6 @@
 # 15-UdpEcho
 
-**Feature:** a real transport behind the same `INetDriver` seam — lwIP UDP via
+**Feature:** a real transport behind the same `INetDriver` interface — lwIP UDP via
 `FEsp32UdpDriver` — hosting its own network with **no router**: one board hosts a SoftAP and
 echoes every UDP datagram back to its sender.
 

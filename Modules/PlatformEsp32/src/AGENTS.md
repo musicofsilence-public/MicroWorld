@@ -9,7 +9,7 @@ and `<driver/spi_*.h>` headers in this package: each is confined to one private
 `*PlatformImplementation.h` (`Esp32SocketPlatformImplementation.h` for the UDP
 driver; `UartPlatformImplementation.h`, the shared UART open/read/write/close
 toolkit for `Esp32UartDriver.cpp` and `Esp32UartByteStream.cpp`; the byte stream
-is the internal Core seam used by the optional E32 compatibility facade;
+implements Core's internal `IUartByteStream` interface used by the optional E32 compatibility facade;
 `I2cPlatformImplementation.h`, the `<driver/i2c_master.h>`/`<driver/i2c_slave.h>`
 toolkit, for `Esp32I2cDriver.cpp`; `SpiPlatformImplementation.h`, the
 `<driver/spi_master.h>`/`<driver/spi_slave.h>` toolkit, for `Esp32SpiDriver.cpp`).

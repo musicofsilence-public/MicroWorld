@@ -36,7 +36,7 @@ by [ResourceBudgets.md](../../docs/ResourceBudgets.md).
 - **`TEngineHost<...>`** is the composition root. It owns the class registry,
   object store, garbage collector, world actor registry, and timer manager, and
   drives one fixed per-frame order:
-  1. `EngineSystem::PreAdvance` — drain inbound traffic, dispatch messages,
+  1. `IPlaySystem::PreAdvance` — drain inbound traffic, dispatch messages,
      age peers (omitted when no network frame is bound);
   2. `Timers.Advance` — fire due timer callbacks;
   3. `World.Advance` — tick every component, then every actor;
@@ -46,7 +46,7 @@ by [ResourceBudgets.md](../../docs/ResourceBudgets.md).
      marked (the GC sweep skips pending-destroy slots, so destroyed actors are
      reclaimed here, not by mark/sweep);
   6. GC slice — start a cycle when idle, then advance one bounded slice;
-  7. `EngineSystem::PostAdvance` — flush outbound traffic and heartbeats (omitted
+  7. `IPlaySystem::PostAdvance` — flush outbound traffic and heartbeats (omitted
      when no network frame is bound).
 - Lifecycle methods return `ERuntimeResult`; registration methods return
   `EEngineResult`; timer methods return `ETimerResult`.
@@ -103,12 +103,12 @@ demonstration of the composition root added in roadmap Phase 3.
   `IEncodedMessageSink`/`IMessageChannel`/`IMessageRouter` interfaces.
 - `TMessageRouter` is the local bus: fixed handler table, broadcast
   (`BroadcastActorId`) + targeted send, one-frame latency via
-  `PreAdvance`/`PostAdvance`; it is also an `IEngineSystem`.
+  `PreAdvance`/`PostAdvance`; it is also an `IPlaySystem`.
 - `TMessageChannelBinding<TNet>` carries one channel over a `TNetHost` and is
   **duck-typed** on the net type, so **Engine keeps zero dependency on Net**
-  — that seam is the whole point.
-- `TEngineSystemSet<MaxFrames>` pumps several frames (nets + router + reliable
-  channels) behind one engine `IEngineSystem` slot, dispatch in add order and
+  — that boundary is the whole point.
+- `TPlaySystemSet<MaxFrames>` pumps several frames (nets + router + reliable
+  channels) behind one engine `IPlaySystem` slot, dispatch in add order and
   flush in reverse (D3).
 - `TReliableChannel<MaxPendingMessages, MaxMessageBytes>` wraps a binding to
   add acknowledged, de-duplicated point-to-point delivery: sequence + ack +
@@ -129,5 +129,5 @@ ActorMessageHeaderBytes = 6   ReliableHeaderBytes = 3
 
 Engine does not provide networking, subsystems, serialization, replication,
 platform abstraction, or hardware APIs. (Networking is reachable through an
-engine-owned `IEngineSystem` seam bound into `TEngineHost`; the net host itself
+engine-owned `IPlaySystem` interface bound into `TEngineHost`; the net host itself
 lives in the Net package so Engine stays net-free.)

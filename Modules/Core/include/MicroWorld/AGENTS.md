@@ -10,8 +10,8 @@ This directory owns the released MicroWorld contract:
   lifecycle validation.
 - `TickFunction` and `Tickable` separate reusable schedule state from consumer
   behavior.
-- `EngineSystem` defines the optional system-pump contract so Core-only modules
-  can participate in an engine frame without depending on Engine.
+- `PlaySystem` defines the optional system-pump contract so Core-only modules
+  can take turns in a host's frame without depending on Engine.
 - `ActorComponent`, `Actor`, and `World` form the bounded non-owning ownership
   and deterministic dispatch hierarchy.
 - `Network` supplies an independent policy-free tick boundary.

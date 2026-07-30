@@ -89,7 +89,7 @@ and are excluded from `CheckDependencyBoundaries.py`:
   `Net/UdpAddressCodec.h` (`MakeUdpAddress` / `IsUdpAddress` /
   `UdpAddressPort`) for the 6-byte IPv4+port `FNetAddress` encoding.
 - [`microworld-radio-e32`](../RadioE32) — portable E32 framing and driver over
-  Core's byte seam; platform adapters provide UART lifetime and SDK calls.
+  Core's `IUartByteStream` interface; platform adapters provide UART lifetime and SDK calls.
 - [`microworld-platform-esp32`](../PlatformEsp32) — `FEsp32UdpDriver` over lwIP,
   an optional `FEsp32E32LoraDriver` compatibility facade, and `WriteEsp32LogRecord`.
 

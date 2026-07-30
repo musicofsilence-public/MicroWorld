@@ -1,7 +1,7 @@
 # 26-MessagingOverLora
 
 **Feature:** the full MicroWorld message design — a dedicated-server `TEngineHost`
-bound to `TNetHost` through the `TNetHostSystem` seam, and a bare `TNetHost`
+bound to `TNetHost` through the `TNetHostSystem` interface, and a bare `TNetHost`
 client — running over an E32 LoRa radio. **Same application protocol as
 example 19 — only the driver construction and the D8 session profile differ.**
 
@@ -49,7 +49,7 @@ broadcast would congest the channel and time peers out over the air.
 - `TNetHost` (`Configure` / `Start` / `PumpReceive` / `PumpSend` / `SendTo` /
   `Broadcast` / `GetState` / `GetServerPeer`, message-handler multicast),
   `ENetMode`, `ENetHostState`, `FNetHostConfig`, `FPeerId`
-- `TNetHostSystem` / `IEngineSystem` and the `TEngineHost` network-frame constructor
+- `TNetHostSystem` / `IPlaySystem` and the `TEngineHost` network-frame constructor
 - `TEngineHost` (`RegisterClass` / `CreateWorld` / `CreateObject` / `BeginPlay` /
   `Tick` / `GetWorld`), `UWorld::SpawnActor`, `AActor`, `FGarbageCollectionBudget`
 - `FEsp32E32LoraDriver`, `FEsp32E32LoraConfig`, `MakeLoraAddress`

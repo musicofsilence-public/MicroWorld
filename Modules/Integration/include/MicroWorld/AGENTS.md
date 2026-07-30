@@ -6,12 +6,13 @@ Inherits `../../AGENTS.md`.
 
 The `MicroWorld/` namespace root holds the `Integration/` subdirectory that
 owns the networked-engine composition public header. Integration joins Core,
-Object, Engine, Net, and Application under the shared `MicroWorld` namespace
-without claiming a nested package namespace.
+Messaging, and Net under the shared `MicroWorld` namespace without claiming a
+nested package namespace.
 
 ## Concepts and boundaries
 
 - All Integration symbols live in the flat `MicroWorld` namespace; the
   `Integration/` directory is a filesystem layout, not a nested namespace.
-- Integration headers may include Core, Object, Engine, and Net public headers
-  only — this is the join point the module shape protects.
+- Integration headers may include Core, Messaging, and Net public headers only.
+  Engine is forbidden here: `TNetSystem` reaches the engine through Core's
+  `IPlaySystem`, which is what keeps Engine and Net apart.

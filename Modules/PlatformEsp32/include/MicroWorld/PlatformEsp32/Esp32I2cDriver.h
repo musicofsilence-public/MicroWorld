@@ -201,7 +201,7 @@ private:
  * Non-blocking wired `INetDriver` for the slave side of a point-to-point I2C link.
  *
  * The master clocks the bus, so `TrySend` stages one framed packet for the master's next read and `TryReceive`
- * drains an ISR-filled inbox through a bounded `TFrameDecoder`; it is the master driver's mirror above the seam.
+ * drains an ISR-filled inbox through a bounded `TFrameDecoder`; it is the master driver's mirror above the `INetDriver` interface.
  * It validates every argument before any syscall, leaves caller outputs unchanged on any non-`Success` result,
  * and exercises no bus traffic until example 20's hardware checkpoint passes (§1.2).
  */

@@ -1,7 +1,7 @@
 # 19-UartMessaging
 
 **Feature:** the full MicroWorld message design — a dedicated-server `TEngineHost`
-bound to `TNetHost` through the `TNetHostSystem` seam, and a bare `TNetHost`
+bound to `TNetHost` through the `TNetHostSystem` interface, and a bare `TNetHost`
 client — running over a plain wire with **zero WiFi**. **Same application
 protocol as example 16 — only the driver construction changed.**
 
@@ -31,7 +31,7 @@ demonstration.
 - `TNetHost` (`Configure` / `Start` / `PumpReceive` / `PumpSend` / `SendTo` /
   `Broadcast` / `GetState` / `GetServerPeer`, message-handler multicast),
   `ENetMode`, `ENetHostState`, `FNetHostConfig`, `FPeerId`
-- `TNetHostSystem` / `IEngineSystem` and the `TEngineHost` network-frame constructor
+- `TNetHostSystem` / `IPlaySystem` and the `TEngineHost` network-frame constructor
 - `TEngineHost` (`RegisterClass` / `CreateWorld` / `CreateObject` / `BeginPlay` /
   `Tick` / `GetWorld`), `UWorld::SpawnActor`, `AActor`, `FGarbageCollectionBudget`
 - `FEsp32UartDriver`, `FEsp32UartConfig`, `MakeUartAddress`

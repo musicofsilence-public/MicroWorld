@@ -6,9 +6,10 @@ Inherits `../AGENTS.md`.
 
 Integration host tests use the shared Core test harness from
 `Modules/Core/tests/TestMain.cpp` and `TestSupport.h`. One test executable
-links Engine and Net and aggregates results through `RunAllTests()`.
-`EngineNetHostTests.cpp` moved here from Engine because it exercises the engine
-and net together — this module's subject. `NetSystemTests.cpp` owns the
+links Engine and Net and aggregates results through `RunAllTests()`. Engine is
+linked by the test target, not by the package: `EngineNetHostTests.cpp` plays the
+composition root that binds a net host to an engine, which is exactly the role
+Integration itself must not take. `NetSystemTests.cpp` owns the
 `TNetSystem` contract: the handle, channel, capacity, and ordering rules.
 
 ## Concepts and boundaries

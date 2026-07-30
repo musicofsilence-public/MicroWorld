@@ -3,7 +3,7 @@
 // This translation unit composes the full MicroWorld stack on ESP32-S3:
 // FEsp32TimeSource (esp_timer, the single real clock) + FEsp32UdpDriver (lwIP
 // non-blocking UDP) + TNetHost<4,256> (dedicated server) bound into TEngine
-// via the TNetHostSystem/IEngineSystem seam from Phase 4.4, then ticks it at a
+// via the TNetHostSystem/IPlaySystem interface from Phase 4.4, then ticks it at a
 // fixed 20 ms cadence from app_main. This is a composition proof: the lwIP
 // stack is initialized so the UDP socket is valid, but no WiFi is associated,
 // so no UDP datagram can flow. A real deployment associates WiFi first and
@@ -70,7 +70,7 @@ volatile int PlatformEsp32CompositionResult = -1;
  * Composes the full ESP32 stack and ticks the engine host at a fixed cadence.
  *
  * This is a compile/composition proof: the dedicated-server network host is
- * wired through the frame seam but no netif/WiFi is brought up, so the loop
+ * wired through the `TNetHostSystem` interface but no netif/WiFi is brought up, so the loop
  * exercises only the host's plumbing. Flashing this image to hardware requires
  * explicit authorization that is out of scope for Phase 5.2.
  */
@@ -120,7 +120,7 @@ extern "C" void app_main()
 	(void)Net.Configure(ENetMode::DedicatedServer, FNetHostConfig{});
 	Net.Start(Clock.Now());
 
-	// 5. Adapt the host to the engine's network frame seam (Phase 4.4).
+	// 5. Adapt the host to the engine's `TNetHostSystem` interface (Phase 4.4).
 	static TNetHostSystem<TNetHost<4, 256>> Frame(Net);
 
 	// 6. The composition root: same capacities as the Engine profile probe + the live frame.

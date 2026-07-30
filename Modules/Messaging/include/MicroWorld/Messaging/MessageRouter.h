@@ -1,7 +1,7 @@
 #pragma once
 
 #include <MicroWorld/Messaging/Message.h>
-#include <MicroWorld/EngineSystem.h>
+#include <MicroWorld/PlaySystem.h>
 #include <MicroWorld/Time.h>
 
 #include <cstddef>
@@ -14,12 +14,12 @@ namespace MicroWorld
 
 /**
  * Routes actor messages between handlers and channels.
- * Implements IEngineSystem so TEngine pumps it like any net frame:
+ * Implements IPlaySystem so TEngine pumps it like any net frame:
  * PreAdvance delivers queued inbound messages to matching handlers;
  * PostAdvance hands queued outbound messages to their channels.
  */
 template<std::size_t MaxHandlers, std::size_t MaxQueuedMessages, std::size_t MaxMessageBytes, std::size_t MaxChannels>
-class TMessageRouter final : public IMessageRouter, public IEngineSystem
+class TMessageRouter final : public IMessageRouter, public IPlaySystem
 {
 	static_assert(MaxHandlers < FMessageHandlerHandle::InvalidIndex, "A message router's handler capacity must fit below the reserved handle index.");
 	static_assert(MaxMessageBytes >= ActorMessageHeaderBytes, "A message router's per-message byte budget must be able to hold at least a header.");
@@ -36,7 +36,7 @@ public:
 
 	/**
 	 * Prevents moving so the router keeps one deliberately simple application-owned lifetime and
-	 * identity. Actors hold it as IMessageRouter& and TEngine pumps it as IEngineSystem*, and
+	 * identity. Actors hold it as IMessageRouter& and TEngine pumps it as IPlaySystem*, and
 	 * relocation would not mechanically rewrite those references; forbidding move keeps the ownership
 	 * boundary explicit, matching TTimerManager.
 	 */

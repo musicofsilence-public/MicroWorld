@@ -2,7 +2,7 @@
 
 #include <MicroWorld/Containers/Span.h>
 #include <MicroWorld/Delegates/Delegate.h>
-#include <MicroWorld/EngineSystem.h>
+#include <MicroWorld/PlaySystem.h>
 #include <MicroWorld/Engine/Actor.h>
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Engine/EngineResult.h>
@@ -37,7 +37,7 @@ using MicroWorld::FDelegateHandle;
 using MicroWorld::FGarbageCollectionBudget;
 using MicroWorld::FNetHostConfig;
 using MicroWorld::FPeerId;
-using MicroWorld::IEngineSystem;
+using MicroWorld::IPlaySystem;
 using MicroWorld::MakeLoopbackAddress;
 using MicroWorld::TEngine;
 using MicroWorld::THostLoopback;
@@ -92,11 +92,11 @@ struct FFrameCallRecord
 };
 
 /** A network frame that only records its two slot calls, isolating the engine-side wiring contract. */
-class FRecordingEngineSystem final : public IEngineSystem
+class FRecordingPlaySystem final : public IPlaySystem
 {
 public:
 	/** Binds this stub to the caller-owned record it stamps on every slot call. */
-	explicit FRecordingEngineSystem(FFrameCallRecord& InRecord) noexcept : Record(InRecord) {}
+	explicit FRecordingPlaySystem(FFrameCallRecord& InRecord) noexcept : Record(InRecord) {}
 
 	/** Stamps the inbound-dispatch slot's count and order. */
 	void PreAdvance(const TimePointMilliseconds) noexcept override
@@ -239,7 +239,7 @@ MW_TEST_CASE(EngineHostTickDrivesBoundSystemPreAdvanceThenPostAdvance)
 {
 	// Arrange
 	FFrameCallRecord Record{};
-	FRecordingEngineSystem Frame{Record};
+	FRecordingPlaySystem Frame{Record};
 	FHost Host{FGarbageCollectionBudget{1, 4, 8}, Frame};
 
 	// Act: root a world and drive two monotonically advancing ticks.

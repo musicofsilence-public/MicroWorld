@@ -7,8 +7,8 @@ Inherits `../AGENTS.md`.
 `microworld-net` is the adjacent portable byte-I/O package above Core.
 Its dependency direction is `Core <- Net`: higher packages may depend on Net,
 while Net may depend only on Core and the C++17 standard library. Net must not
-depend on Object or Engine; the Integration package is the only one permitted
-to see both.
+depend on Object or Engine, and no package may see both Engine and Net — only a
+composition root joins them.
 
 The package owns a bounded byte reader/writer, one non-blocking `INetDriver`
 contract, one caller-storage-backed fixed-capacity `TNetManager`, the `TNetHost`

@@ -2,7 +2,7 @@
 
 #include <MicroWorld/Containers/Span.h>
 #include <MicroWorld/Delegates/Delegate.h>
-#include <MicroWorld/EngineSystem.h>
+#include <MicroWorld/PlaySystem.h>
 #include <MicroWorld/Messaging/Message.h>
 #include <MicroWorld/Integration/NetSystem.h>
 #include <MicroWorld/Net/HostLoopback.h>
@@ -343,7 +343,7 @@ MW_TEST_CASE(NetSystem_CoreLifecyclePumpsDriversInForwardAndReverseOrder)
 
 	const MicroWorld::FNetDriverHandle FirstHandle = System.AddNetDriver(FirstDriver, MicroWorld::ENetMode::Client, Config);
 	const MicroWorld::FNetDriverHandle SecondHandle = System.AddNetDriver(SecondDriver, MicroWorld::ENetMode::Client, Config);
-	MicroWorld::IEngineSystem& Lifecycle = System;
+	MicroWorld::IPlaySystem& Lifecycle = System;
 
 	// Act: one BeginPlay plus one PreAdvance/PostAdvance cycle pumps every recording driver.
 	Lifecycle.BeginPlay(0);
@@ -475,7 +475,7 @@ MW_TEST_CASE(NetSystem_EndPlayStopsClientBeforeFuturePostAdvance)
 	MicroWorld::FNetHostConfig Config = MakeConfig();
 	Config.ServerAddress = MicroWorld::MakeLoopbackAddress(0);
 	const MicroWorld::FNetDriverHandle DriverHandle = System.AddNetDriver(Driver, MicroWorld::ENetMode::Client, Config);
-	MicroWorld::IEngineSystem& Lifecycle = System;
+	MicroWorld::IPlaySystem& Lifecycle = System;
 
 	// Act: BeginPlay and one PostAdvance flush the initial connection hello.
 	Lifecycle.BeginPlay(0);

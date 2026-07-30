@@ -20,7 +20,7 @@ over WiFi.
    `HeartbeatCountMessageId` — logs `heartbeat=<n>`).
 3. Both actors reach messaging only through `IMessageRouter&`, injected at
    construction (D9); neither actor ever sees `TNetHost` or the UART driver
-   directly — that seam is `TMessageChannelBinding`.
+   directly — that boundary is `TMessageChannelBinding`.
 4. The run is **unbounded** (matching 18-TwoBoardUart and 19-UartMessaging's
    server): this is a continuous two-board demo, not a self-terminating trace.
 

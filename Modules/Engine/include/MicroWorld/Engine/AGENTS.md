@@ -8,8 +8,8 @@ Inherits `../../AGENTS.md`.
 `AActor`, `AActor` traces `UActorComponent`, and `TEngineHost` wires the class
 registry, object store, garbage collector, world root, and `TTimerManager`
 behind one canonical per-tick frame order. `EngineSystem.h` provides the
-`TNetHostSystem` and `TEngineSystemSet` helpers, while Core owns the
-`IEngineSystem` seam Engine consumes without depending on `microworld-net`.
+`TNetHostSystem` and `TPlaySystemSet` helpers, while Core owns the
+`IPlaySystem` contract Engine consumes without depending on `microworld-net`.
 
 ## Concepts
 
@@ -23,7 +23,7 @@ behind one canonical per-tick frame order. `EngineSystem.h` provides the
 - `TTimerManager` is a standalone caller-owned value with no reference to
   `UWorld`, `AActor`, or `UActorComponent`; `FTimerHandle` is a
   {slot index, generation} pair local to the issuing manager.
-- `IEngineSystem` keeps the network seam optional: a null frame leaves both
+- `IPlaySystem` keeps networking optional: a null frame leaves both
   Tick steps inert, and `TNetHostSystem<TNet>` adapts a concrete net host
   without naming it in this package.
 

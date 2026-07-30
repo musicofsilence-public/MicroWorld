@@ -112,10 +112,10 @@ inline MicroWorld::FNetHostConfig MakeHostConfig() noexcept
 /**
  * Runs one board's manual per-frame router pump, identical on both roles.
  *
- * Manual frame composition (Phase 4.1 folds this into TEngineSystemSet): flushes Router's outbound
+ * Manual frame composition (Phase 4.1 folds this into TPlaySystemSet): flushes Router's outbound
  * queue to the wire before the engine tick, then dispatches its inbound queue after -- the same order
  * EngineMessageChannelTests.cpp's PumpSide proved correct. TEngine holds exactly one
- * IEngineSystem (the bound TNetHostSystem), so the router itself is pumped here rather than through
+ * IPlaySystem (the bound TNetHostSystem), so the router itself is pumped here rather than through
  * the engine.
  */
 inline void PumpOneFrame(FWireRouter& Router, FWireEngine& Engine, const MicroWorld::TimePointMilliseconds NowMilliseconds) noexcept

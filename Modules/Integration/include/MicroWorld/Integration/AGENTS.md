@@ -7,12 +7,12 @@ Inherits `../../AGENTS.md`.
 The `Integration/` header defines the networked-engine composition:
 `NetSystem.h` owns `TNetSystem<TTraits>`, the one object that composes net
 hosts, a shared message router, per-channel bindings, guaranteed channels, and
-direct lifecycle pumping behind the `IEngineSystem` interface a `TEngine`
+direct lifecycle pumping behind the `IPlaySystem` interface a `TEngine`
 drives.
 
 ## Concepts and boundaries
 
-- `TNetSystem<TTraits>` derives `IEngineSystem` and owns every subsystem in
+- `TNetSystem<TTraits>` derives `IPlaySystem` and owns every subsystem in
   fixed-capacity in-place storage sized by the traits, so it never allocates and
   every owned object's address is stable for its bound relationships.
 - `AddNetDriver`/`AddChannel` return generation-checked handles and enforce the

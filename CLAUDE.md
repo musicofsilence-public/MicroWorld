@@ -21,26 +21,25 @@ machine-enforced by `tools/CheckDependencyBoundaries.py` — a violation fails
                     ┌────────────┐
                     │    Core    │  (no dependencies)
                     └─────┬──────┘
-            ┌─────────────┼─────────────┬──────────────┐
-            │             │             │              │
-        ┌───▼────┐   ┌────▼─────┐  ┌────▼───┐          │
-        │ Object │   │ Messaging│  │  Net   │          │
-        └───┬────┘   └────┬─────┘  └──┬─┬───┘          │
-            │             │           │ │              │
-        ┌───▼────┐        │           │ │ ┌──────────┐ │
-        │ Engine │        │           │ └─►  RadioE32│ │
-        └───┬────┘        │           │   └──────────┘ │
-            ├─────────────┴───────────┘                │
-            │                                          │
-   ┌────────▼──────┐                        ┌──────────▼──────────┐
-   │  Integration  │                        │     Application     │
-   └───────────────┘                        └─────────────────────┘
+            ┌─────────────┼─────────────┐
+            │             │             │
+        ┌───▼────┐   ┌────▼─────┐  ┌────▼───┐
+        │ Object │   │ Messaging│  │  Net   │
+        └───┬────┘   └────┬─────┘  └──┬─┬───┘
+            │             │           │ │ ┌──────────┐
+        ┌───▼────┐        │           │ └─►  RadioE32│
+        │ Engine │        │           │   └──────────┘
+        └───┬────┘        └─────┬─────┘
+ ┌──────────▼──────────┐ ┌──────▼────────┐
+ │     Application     │ │  Integration  │
+ └─────────────────────┘ └───────────────┘
 ```
 
 **The invariant the whole shape protects:** Engine and Net never see each other.
 An engine that knows about radios cannot be tested without one, and a transport
-that knows about actors cannot be reused. `Integration` is the single package
-permitted to join them.
+that knows about actors cannot be reused. No package joins them either:
+`Integration` composes Messaging and Net behind Core's `IPlaySystem`, and a
+composition root is the only thing that hands the result to an engine.
 
 `PlatformHost`, `PlatformEsp32`, and `PlatformPico` sit outside this graph as
 the non-portable edges. Only they may include OS or SDK headers.
@@ -51,14 +50,14 @@ the non-portable edges. Only they may include OS or SDK headers.
 
 | Module | Depends on | Owns |
 | --- | --- | --- |
-| **Core** | — | Result codes, time, logging, `FLifecycleGuard`, tick scheduling, fixed-capacity containers, delegates, smart pointers, timers, `IEngineSystem` |
+| **Core** | — | Result codes, time, logging, `FLifecycleGuard`, tick scheduling, fixed-capacity containers, delegates, smart pointers, timers, `IPlaySystem` |
 | **Object** | Core | Managed identity: class descriptors, object store, garbage collector, generation-checked handles |
 | **Engine** | Core, Object | The managed runtime: `UWorld`, `AActor`, `UActorComponent`, the `TEngine`/`IEngine` front door, timer manager |
 | **Messaging** | Core | Actor messaging: message types, router, channel bindings, reliable channel. Header-only — no archive |
 | **Net** | Core | Byte I/O: `INetDriver`, `TNetHost`, protocol, framing |
 | **RadioE32** | Core, Net | Portable E32 LoRa transport: `FRadioE32Driver`, framing, queueing, bounded pumping over `IUartByteStream`. Optional — link it only for LoRa builds |
 | **Application** | Core, Object, Engine | Program entry: `FApplication` holds one engine for its lifetime and owns the `Run` frame-loop template |
-| **Integration** | Core, Object, Messaging, Engine, Net | `TNetSystem` — the one place Engine and Net meet |
+| **Integration** | Core, Messaging, Net | `TNetSystem` — net hosts, one shared router, and channels composed behind Core's `IPlaySystem` |
 | **PlatformHost** | non-portable | Host UDP over OS sockets, `steady_clock` time source |
 | **PlatformEsp32** | non-portable | ESP32-S3 transports (lwIP UDP, E32 LoRa UART, wired UART/I2C/SPI), ESP timer and log |
 | **PlatformPico** | Net, RadioE32, non-portable | RP2040 E32 LoRa UART over the native Pico SDK |
@@ -84,9 +83,9 @@ typed path: it registers the class on first use, queues a factory, and construct
 at the next safe barrier. It works both before play — draining when `BeginPlay`
 runs — and during play, so composition and gameplay spawn the same way.
 
-**Engine systems.** `IEngineSystem` (in Core, so Messaging and Net can implement
+**Engine systems.** `IPlaySystem` (in Core, so Messaging and Net can implement
 it without depending on Engine) has four turns: `BeginPlay`, `PreAdvance`,
-`PostAdvance`, `EndPlay`. `TEngine` holds one; `TEngineSystemSet` composes several
+`PostAdvance`, `EndPlay`. `TEngine` holds one; `TPlaySystemSet` composes several
 with add-order start and reverse-order shutdown.
 
 **Composition roots own everything.** Objects are constructed by the entry point

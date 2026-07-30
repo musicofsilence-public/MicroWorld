@@ -18,7 +18,7 @@ channel (`TReliableChannel`) recovers every dropped packet.
    plain `TMessageChannelBinding`) and `GuaranteedChannelId` (the same kind of
    binding, wrapped in `TReliableChannel`).
 3. Every third packet the client sends -- of any kind, data or ack or
-   heartbeat -- is silently dropped at the driver seam. As a result the
+   heartbeat -- is silently dropped at the `INetDriver` interface. As a result the
    server's best-effort column has gaps, while the guaranteed column is
    complete: `TReliableChannel` resends any unacknowledged value until the
    server acknowledges it.
@@ -45,7 +45,7 @@ gap positions as illustrative, not fixed.
   `AllPeers` on the server, per channel)
 - `TMessageRouter`, `IMessageRouter` (`AddMessageHandler` /
   `SendMessageToActor`)
-- `TEngineSystemSet` (`Add`, D3 dispatch/flush order over the net frame, the
+- `TPlaySystemSet` (`Add`, D3 dispatch/flush order over the net frame, the
   reliable channel, and the router)
 - `TNetHost` (`Configure` / `Start`), `TNetHostSystem`, `ENetMode`
 - `FEsp32WifiLink` (`StartAccessPoint` / `JoinAccessPoint`), `FEsp32UdpDriver`,

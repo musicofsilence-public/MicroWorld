@@ -19,7 +19,7 @@ enum class EUartByteStreamResult : std::uint8_t
 };
 
 /**
- * Provides the smallest portable non-blocking UART transfer seam.
+ * Provides the smallest portable non-blocking UART transfer interface.
  *
  * Platform adapters own UART configuration and lifetime; this interface only
  * moves individual bytes without allocating, flushing, or exposing buffering.

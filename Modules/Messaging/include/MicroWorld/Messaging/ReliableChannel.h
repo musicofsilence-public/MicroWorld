@@ -2,7 +2,7 @@
 
 #include <MicroWorld/Containers/Span.h>
 #include <MicroWorld/Messaging/Message.h>
-#include <MicroWorld/EngineSystem.h>
+#include <MicroWorld/PlaySystem.h>
 #include <MicroWorld/Time.h>
 
 #include <cstddef>
@@ -51,10 +51,10 @@ struct FReliableChannelConfig
  * Sits between a channel binding and the router in both directions: outbound it prefixes
  * [Kind][Sequence] and keeps a copy until acknowledged; inbound it acknowledges data, drops
  * duplicates via a serial-number window, and forwards fresh payloads to ForwardSink.
- * Implements IEngineSystem so PostAdvance resends due unacknowledged messages; point-to-point only.
+ * Implements IPlaySystem so PostAdvance resends due unacknowledged messages; point-to-point only.
  */
 template<std::size_t MaxPendingMessages, std::size_t MaxMessageBytes>
-class TReliableChannel final : public IMessageChannel, public IEncodedMessageSink, public IEngineSystem
+class TReliableChannel final : public IMessageChannel, public IEncodedMessageSink, public IPlaySystem
 {
 public:
 	/** Stores the forward sink and retry configuration; the inner channel is bound later via SetInnerChannel. */

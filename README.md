@@ -28,12 +28,12 @@ or inspect the
 
 | Module | CMake target | PlatformIO package | Role |
 | --- | --- | --- | --- |
-| Core | `MicroWorld::Core` | `MicroWorld` | Lifecycle, tick, containers, delegates, smart pointers, timers, `IEngineSystem` |
+| Core | `MicroWorld::Core` | `MicroWorld` | Lifecycle, tick, containers, delegates, smart pointers, timers, `IPlaySystem` |
 | Object | `MicroWorld::Object` | `MicroWorldObject` | Object store, garbage collector, handles |
 | Engine | `MicroWorld::Engine` | `MicroWorldEngine` | `UWorld` / `AActor` / `UActorComponent`, `TEngine`, `IEngine` |
 | Messaging | `MicroWorld::Messaging` | `MicroWorldMessaging` | Message router, channel bindings (header-only) |
 | Net | `MicroWorld::Net` | `MicroWorldNet` | Byte I/O, frame codec, `TNetHost` |
-| RadioE32 | `MicroWorld::RadioE32` | `MicroWorldRadioE32` | Optional portable E32 framing and `FRadioE32Driver` over Core's byte seam |
+| RadioE32 | `MicroWorld::RadioE32` | `MicroWorldRadioE32` | Optional portable E32 framing and `FRadioE32Driver` over Core's `IUartByteStream` interface |
 | Application | `MicroWorld::Application` | `MicroWorldApplication` | `FApplication` — owns one engine and its frame loop |
 | Integration | `MicroWorld::Integration` | `MicroWorldIntegration` | `TNetSystem` — the only Engine + Net joiner |
 | PlatformHost | `MicroWorld::PlatformHost` | — | Host UDP transport (non-portable) |
@@ -55,7 +55,7 @@ Net is an independent overlay above Core: it never pulls Object or Engine, so an
 application can use byte I/O without the managed runtime, and Integration is the
 only package permitted to see both. PlatformHost, PlatformEsp32, and PlatformPico are the
 non-portable edges that supply real transports. `IUartByteStream` is a narrow
-byte seam, not a universal HAL: RadioE32 owns portable E32 state and framing,
+byte-transfer interface, not a universal HAL: RadioE32 owns portable E32 state and framing,
 while ESP32 and Pico facades own UART SDK lifetime. See
 [docs/ModulePackaging.md](docs/ModulePackaging.md) for the full layout.
 

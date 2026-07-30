@@ -12,7 +12,7 @@ source file.
 
 ## Concepts
 
-- Makes the `INetDriver` seam observable over a wire: the volley loop is
+- Makes the `INetDriver` interface observable over a wire: the volley loop is
   transport-agnostic, so this is example 17 with only the driver construction
   line changed.
 - The wire is point-to-point, so the destination `MakeUartAddress(PeerNodeId)`

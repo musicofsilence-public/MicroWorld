@@ -62,7 +62,7 @@ Status: ⬜ planned · 🟨 built (compiles) · ✅ hardware-verified
 | --- | --- | --- | --- | --- |
 | 01 | `01-CoreTick` | `FTickFunction` cadence from caller-supplied real time | — | 🟨 ESP32 + Pico compile |
 | 02 | `02-CoreLifecycle` | forward-only lifecycle: `FApplication` + `FLifecycleGuard` | — | ⬜ |
-| 03 | `03-CoreLog` | `FOutputDeviceFunction` seam: `MW_LOG` through `WriteEsp32LogRecord` | — | ⬜ |
+| 03 | `03-CoreLog` | `FOutputDeviceFunction` interface: `MW_LOG` through `WriteEsp32LogRecord` | — | ⬜ |
 | 04 | `04-MemoryArena` | `TFixedArena` / `IMemoryResource` explicit allocation | — | ⬜ |
 | 05 | `05-MemorySmartPointers` | `TUniquePtr` / `TSharedPtr` / `TWeakPtr` ownership | — | ⬜ |
 | 06 | `06-MemoryContainers` | `TStaticVector` + `TSpan` bounded storage and views | — | ⬜ |
@@ -83,7 +83,7 @@ Status: ⬜ planned · 🟨 built (compiles) · ✅ hardware-verified
 | 21 | `21-TwoBoardSpi` | wired SPI master/slave `INetDriver` link — example 20's volley over a clocked full-duplex bus | 2nd board, 5 wires | 🟨 |
 | 22 | `22-ActorMessages` | local actor messaging: `TMessageRouter` broadcast + targeted send, one board | — | 🟨 |
 | 23 | `23-TwoBoardWire` | actor messaging over a UART wire: `TMessageChannelBinding` client/server, switch drives lamp | 2nd board, 3 wires | 🟨 |
-| 24 | `24-TwoChannelWorld` | two channels, one world: telemetry over WiFi UDP + commands over a UART wire on one `TMessageRouter` via `TEngineSystemSet<3>` | 2nd board, 3 wires + WiFi | ✅ |
+| 24 | `24-TwoChannelWorld` | two channels, one world: telemetry over WiFi UDP + commands over a UART wire on one `TMessageRouter` via `TPlaySystemSet<3>` | 2nd board, 3 wires + WiFi | ✅ |
 | 25 | `25-GuaranteedDelivery` | best-effort vs guaranteed delivery on one WiFi-UDP link: `TReliableChannel` recovers packets `FPacketDropDriver` drops | 2nd board + WiFi | ✅ |
 | 26 | `26-MessagingOverLora` | full `TNetHost` client/server message design over E32 LoRa — example 19's protocol at the D8 airtime profile (heartbeat 3 s, state broadcast paced 1 s) | 2nd board, 2 × E32 | ✅ |
 

@@ -73,7 +73,7 @@ public:
 	bool IsInitialized() const noexcept;
 
 private:
-	/** Borrows the platform-owned non-blocking UART byte seam for the driver's full lifetime. */
+	/** Borrows the platform-owned non-blocking `IUartByteStream` for the driver's full lifetime. */
 	IUartByteStream& ByteStream;
 
 	/** Owns fixed transmit framing, receive assembly, and retained decoded-frame state. */

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <MicroWorld/Engine/EngineSystem.h>
+#include <MicroWorld/PlaySystem.h>
 #include <MicroWorld/Messaging/Message.h>
 #include <MicroWorld/Messaging/MessageChannelBinding.h>
 #include <MicroWorld/Messaging/MessageRouter.h>
@@ -113,7 +113,7 @@ struct FChannelHandle
  * frame pumping preserves the net -> reliable -> router ordering without adapter objects.
  */
 template<typename TTraits = FDefaultNetSystemTraits>
-class TNetSystem final : public IEngineSystem
+class TNetSystem final : public IPlaySystem
 {
 	/** Prevents a valid handle index from colliding with the reserved invalid sentinel. */
 	static_assert(

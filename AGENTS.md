@@ -31,14 +31,14 @@ Do not reintroduce either; put the fact where its owner already is.
 MicroWorld/
 ├── Modules/            One CMake/PlatformIO package per engine layer
 │   ├── Core/           lifecycle, tick, containers, delegates, smart
-│   │                   pointers, timers, IEngineSystem
+│   │                   pointers, timers, IPlaySystem
 │   ├── Object/         object store, garbage collector, handles
 │   ├── Engine/         UWorld / AActor / UActorComponent, TEngine, IEngine
 │   ├── Messaging/      message router, channel bindings (header-only)
 │   ├── Net/            byte I/O, frame codec, TNetHost
 │   ├── RadioE32/       optional portable E32 framing and driver
 │   ├── Application/    FApplication (including the Run template)
-│   ├── Integration/    TNetSystem — the only Engine + Net joiner
+│   ├── Integration/    TNetSystem — Messaging + Net behind IPlaySystem
 │   ├── PlatformHost/   host UDP transport (non-portable)
 │   ├── PlatformEsp32/  ESP32 UDP + UART SDK bindings + optional E32 facade (PlatformIO/ESP-IDF only)
 │   └── PlatformPico/   RP2040 UART SDK binding + optional E32 facade (native Pico SDK only)
@@ -60,12 +60,13 @@ Core <- Object <- Engine <- Application
 Core <- Messaging
 Core <- Net
 Core <- Net <- RadioE32
-Core, Object, Messaging, Engine, Net <- Integration
+Core, Messaging, Net <- Integration
 ```
 
 Memory is folded into Core; no Memory package edge remains. Net never pulls
-Object or Engine, and Integration is the only package permitted to see both
-Engine and Net. PlatformHost, PlatformEsp32, and PlatformPico are the
+Object or Engine, and no package sees both Engine and Net — Integration reaches
+the engine only through Core's `IPlaySystem`, so joining the two is a
+composition root's job. PlatformHost, PlatformEsp32, and PlatformPico are the
 non-portable edges; only they may reach OS/SDK headers.
 
 `CLAUDE.md` at this level carries the architecture overview and each module's

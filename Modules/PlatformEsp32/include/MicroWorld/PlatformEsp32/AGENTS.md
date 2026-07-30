@@ -5,9 +5,9 @@ Inherits `../../AGENTS.md`.
 ## Architecture
 
 This directory declares the nine ESP32 adapters: `FEsp32TimeSource` (clock
-seam); `FEsp32UdpDriver`, `FEsp32E32LoraDriver`, `FEsp32UartDriver`,
+interface); `FEsp32UdpDriver`, `FEsp32E32LoraDriver`, `FEsp32UartDriver`,
 `FEsp32I2cMasterDriver`, `FEsp32I2cSlaveDriver`, `FEsp32SpiMasterDriver`, and
-`FEsp32SpiSlaveDriver` (`INetDriver` transport seams — the optional LoRa facade
+`FEsp32SpiSlaveDriver` (`INetDriver` transport adapters — the optional LoRa facade
 delegates framing to RadioE32; wired UART, I2C, and SPI drivers use the portable
 `Net/FrameCodec.h` CRC-16/CCITT-FALSE framing, over the 1-byte broadcast `LoraAddress` and the
 1-byte point-to-point `UartAddress`, `I2cAddress`, and `SpiAddress` respectively);

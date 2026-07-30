@@ -1,12 +1,12 @@
 # Porting MicroWorld
 
-MicroWorld targets a new platform through **four adapter seams**. The runtime
+MicroWorld targets a new platform through **four adapter interfaces**. The runtime
 itself is platform-free: it never reads a clock, never opens a socket, never
 paces a loop, and never logs to hardware. A port fills those four gaps and
-otherwise reuses the shipped portable packages unchanged. Each seam below names
+otherwise reuses the shipped portable packages unchanged. Each interface below names
 the shipped adapter that implements it as a worked reference.
 
-## The four seams
+## The four adapter interfaces
 
 ### 1. Time source
 
@@ -45,7 +45,7 @@ adapter owns its concrete encoding and provides helpers to build/inspect it.
   [`FEsp32E32LoraDriver`](../Modules/PlatformEsp32/include/MicroWorld/PlatformEsp32/Esp32E32LoraDriver.h)
   is an ESP32 UART-lifetime compatibility facade over optional
   [`RadioE32`](../Modules/RadioE32). RadioE32 owns portable E32 framing and
-  bounded progress over Core's narrow byte seam; the facade retains a 1-byte broadcast
+  bounded progress over Core's narrow `IUartByteStream` interface; the facade retains a 1-byte broadcast
   [`LoraAddress`](../Modules/PlatformEsp32/include/MicroWorld/PlatformEsp32/LoraAddress.h).
 - ESP32 wired UART reference:
   [`FEsp32UartDriver`](../Modules/PlatformEsp32/include/MicroWorld/PlatformEsp32/Esp32UartDriver.h)

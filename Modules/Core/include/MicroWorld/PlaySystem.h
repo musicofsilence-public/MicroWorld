@@ -13,22 +13,22 @@ namespace MicroWorld
  * This contract lives in Core so Core-only modules can implement it without
  * depending on Engine.
  */
-class IEngineSystem
+class IPlaySystem
 {
 public:
 	/** Defaulted virtual so a derived system adapter destructs through this interface. */
-	virtual ~IEngineSystem() noexcept = default;
+	virtual ~IPlaySystem() noexcept = default;
 
-	/** Play-start turn: a bound system opens its session at the engine's one canonical time. */
+	/** Play-start turn: a bound system opens its session at the host's one canonical time. */
 	virtual void BeginPlay(TimePointMilliseconds) noexcept {}
 
-	/** Step 1 turn: a bound system does its pre-advance work (for a net host, drain inbound traffic, dispatch messages, age peers). */
+	/** Pre-advance turn: a bound system does its inbound work before the host advances its own state. */
 	virtual void PreAdvance(TimePointMilliseconds InNowMilliseconds) noexcept = 0;
 
-	/** Step 7 turn: a bound system does its post-advance work (for a net host, flush the queue and emit due heartbeats). */
+	/** Post-advance turn: a bound system does its outbound work after the host has advanced. */
 	virtual void PostAdvance(TimePointMilliseconds InNowMilliseconds) noexcept = 0;
 
-	/** Play-end turn: a bound system closes its session after the world has ended. */
+	/** Play-end turn: a bound system closes its session after the host has ended. */
 	virtual void EndPlay() noexcept {}
 };
 

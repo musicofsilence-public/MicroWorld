@@ -11,7 +11,7 @@ namespace MicroWorld::Detail
  * Plain-integer configuration for one ESP-IDF UART byte stream.
  *
  * Platform composition owns the selected UART exclusively and supplies all pin and baud policy before opening the
- * stream; this Detail type stays free of ESP-IDF enum types so RadioE32 can depend only on Core's byte seam.
+ * stream; this Detail type stays free of ESP-IDF enum types so RadioE32 can depend only on Core's `IUartByteStream` interface.
  */
 struct FEsp32UartByteStreamConfig
 {

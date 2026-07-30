@@ -15,7 +15,7 @@ public header must never reach it.
   behind helpers in the platform-implementation header so `HostUdpDriver.cpp`
   reads one platform-free receive/send path.
 - The POSIX branch compiles but is not verified on this Windows-only host; it
-  exists so the ESP32 UDP adapter can reuse the same seams under a POSIX
+  exists so the ESP32 UDP adapter can reuse the same interfaces under a POSIX
   build.
 
 ## Verification

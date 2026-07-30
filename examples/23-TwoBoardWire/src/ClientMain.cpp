@@ -101,7 +101,7 @@ private:
 /**
  * Client board (node 2): FSwitchActor over a TMessageRouter wired to TNetHost (Client, greeting the
  * server's UART address) through TMessageChannelBinding, with the engine holding the net frame and
- * the loop pumping the router manually (Phase 4.1 will fold this into TEngineSystemSet -- see §4).
+ * the loop pumping the router manually (Phase 4.1 will fold this into TPlaySystemSet -- see §4).
  */
 void RunClient() noexcept
 {

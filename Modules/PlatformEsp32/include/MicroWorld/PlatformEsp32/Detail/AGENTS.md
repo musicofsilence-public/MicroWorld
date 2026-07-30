@@ -6,7 +6,7 @@ Inherits `../AGENTS.md`.
 
 This directory holds unsupported implementation details used by PlatformEsp32
 compatibility facades. `FEsp32UartByteStream` implements Core's narrow
-`IUartByteStream` seam while owning ESP-IDF UART installation; dependency flow
+`IUartByteStream` interface while owning ESP-IDF UART installation; dependency flow
 remains inward from PlatformEsp32 to Core and optional RadioE32, never back.
 
 ## Concepts
@@ -17,7 +17,7 @@ remains inward from PlatformEsp32 to Core and optional RadioE32, never back.
   or destruction; configuration, device lifecycle policy, and vendor calls
   remain platform responsibilities.
 - One method attempts one byte and maps temporary unavailability separately
-  from hard UART errors. This is a byte seam, not a universal HAL.
+  from hard UART errors. This is a byte-transfer interface, not a universal HAL.
 
 ## Verification
 

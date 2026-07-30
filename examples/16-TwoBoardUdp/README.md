@@ -1,7 +1,7 @@
 # 16-TwoBoardUdp
 
 **Feature:** the full networked engine across two real boards — a dedicated-server
-`TEngineHost` bound to `TNetHost` through the `TNetHostSystem` seam, and a bare `TNetHost`
+`TEngineHost` bound to `TNetHost` through the `TNetHostSystem` interface, and a bare `TNetHost`
 client, exchanging channel messages over **WiFi UDP with no router**. The server board
 hosts its own SoftAP; the client joins it. This is the host `TwoNodeDemo` split across two
 boards, and the **WiFi twin of example 19** (same protocol, UART swapped for UDP).
@@ -34,7 +34,7 @@ bare wire, or WiFi UDP unchanged.
 - `TNetHost` (`Configure` / `Start` / `PumpReceive` / `PumpSend` / `SendTo` / `Broadcast` /
   `GetState` / `GetServerPeer`, message-handler multicast), `ENetMode`, `ENetHostState`,
   `FNetHostConfig`, `FPeerId`
-- `TNetHostSystem` / `IEngineSystem` and the `TEngineHost` network-frame constructor
+- `TNetHostSystem` / `IPlaySystem` and the `TEngineHost` network-frame constructor
 - `TEngineHost` (`RegisterClass` / `CreateWorld` / `CreateObject` / `BeginPlay` / `Tick`),
   `UWorld::SpawnActor`, `AActor`, `FGarbageCollectionBudget`
 - `FEsp32UdpDriver`, `MakeUdpAddress`, `FEsp32TimeSource::Now`

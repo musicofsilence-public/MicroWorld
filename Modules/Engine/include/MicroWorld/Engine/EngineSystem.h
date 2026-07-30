@@ -1,6 +1,6 @@
 #pragma once
 
-#include <MicroWorld/EngineSystem.h>
+#include <MicroWorld/PlaySystem.h>
 #include <MicroWorld/Engine/EngineResult.h>
 
 #include <cstddef>
@@ -9,7 +9,7 @@ namespace MicroWorld
 {
 
 /**
- * Adapts one caller-owned network host to IEngineSystem by forwarding lifecycle
+ * Adapts one caller-owned network host to IPlaySystem by forwarding lifecycle
  * turns to Start/Stop and frame turns to PumpReceive/PumpSend,
  * discarding each
  * result exactly as the engine already discards timer and collector step results.
@@ -21,7 +21,7 @@ namespace MicroWorld
  * must outlive the TEngine it is bound to.
  */
 template<typename TNet>
-class TNetHostSystem final : public IEngineSystem
+class TNetHostSystem final : public IPlaySystem
 {
 public:
 	/** Binds this adapter to one externally owned network host for its lifetime. */
@@ -45,7 +45,7 @@ private:
 };
 
 /**
- * Pumps several caller-owned systems as one bound IEngineSystem (roadmap D3):
+ * Pumps several caller-owned systems as one bound IPlaySystem (roadmap D3):
  * lifecycle start and inbound dispatch run in add-order, while
  * lifecycle end
  * and outbound flush run in reverse add-order. This lets a net host deliver
@@ -58,22 +58,22 @@ private:
  * and never owns their lifetime; every added system must outlive this set.
  */
 template<std::size_t MaxFrames>
-class TEngineSystemSet final : public IEngineSystem
+class TPlaySystemSet final : public IPlaySystem
 {
 public:
 	/** Creates a set with no frames added. */
-	TEngineSystemSet() noexcept = default;
+	TPlaySystemSet() noexcept = default;
 
 	/** Virtual destructor via the base; the set owns no frame, so there is nothing else to release. */
-	~TEngineSystemSet() noexcept override = default;
+	~TPlaySystemSet() noexcept override = default;
 
-	// TEngine holds this set by IEngineSystem&, and each added frame is captured by raw
+	// TEngine holds this set by IPlaySystem&, and each added frame is captured by raw
 	// pointer; relocating the set would dangle both references, so copy and move are deleted
 	// (the same fixed-identity rule TMessageRouter and TMessageChannelBinding already follow).
-	TEngineSystemSet(const TEngineSystemSet&) = delete;
-	TEngineSystemSet& operator=(const TEngineSystemSet&) = delete;
-	TEngineSystemSet(TEngineSystemSet&&) = delete;
-	TEngineSystemSet& operator=(TEngineSystemSet&&) = delete;
+	TPlaySystemSet(const TPlaySystemSet&) = delete;
+	TPlaySystemSet& operator=(const TPlaySystemSet&) = delete;
+	TPlaySystemSet(TPlaySystemSet&&) = delete;
+	TPlaySystemSet& operator=(TPlaySystemSet&&) = delete;
 
 	/**
 	 * Adds one caller-owned system; the order of Add calls becomes the BeginPlay
@@ -82,7 +82,7 @@ public:
 	 * by pointer identity) and a full
 	 * set as CapacityExceeded, leaving the set unchanged in both cases.
 	 */
-	EEngineResult Add(IEngineSystem& InFrame) noexcept
+	EEngineResult Add(IPlaySystem& InFrame) noexcept
 	{
 		for (std::size_t Index = 0; Index < Count; ++Index)
 		{
@@ -142,7 +142,7 @@ public:
 
 private:
 	/** Caller-owned systems in add-order; never owned here. */
-	IEngineSystem* Frames[MaxFrames == 0 ? 1 : MaxFrames]{};
+	IPlaySystem* Frames[MaxFrames == 0 ? 1 : MaxFrames]{};
 
 	/** Number of occupied entries at the front of Frames. */
 	std::size_t Count{0};

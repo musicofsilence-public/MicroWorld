@@ -5,7 +5,7 @@
 namespace MicroWorld::Detail
 {
 
-/** Legacy E32 platform spelling retained while compatibility callers migrate to the generic Pico UART seam. */
+/** Legacy E32 platform spelling retained while compatibility callers migrate to the generic IPicoUartPlatform interface. */
 using IPicoE32LoraPlatform = IPicoUartPlatform;
 
 /** Returns the generic process-lifetime Pico UART binding through the legacy E32 compatibility spelling. */

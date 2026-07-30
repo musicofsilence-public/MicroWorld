@@ -1,6 +1,6 @@
 #include "TestSupport.h"
 
-#include <MicroWorld/EngineSystem.h>
+#include <MicroWorld/PlaySystem.h>
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Engine/EngineResult.h>
 #include <MicroWorld/Engine/EngineSystem.h>
@@ -17,10 +17,10 @@ using MicroWorld::EEngineResult;
 using MicroWorld::ERuntimeResult;
 using MicroWorld::FDefaultEngineTraits;
 using MicroWorld::FGarbageCollectionBudget;
-using MicroWorld::IEngineSystem;
+using MicroWorld::IPlaySystem;
 using MicroWorld::TEngine;
-using MicroWorld::TEngineSystemSet;
 using MicroWorld::TimePointMilliseconds;
+using MicroWorld::TPlaySystemSet;
 
 /** Carries the exact capacities FHost sized before the traits refactor, so the test store is unchanged. */
 struct FHostTraits : FDefaultEngineTraits
@@ -76,12 +76,12 @@ struct FFrameCallRecord
 	std::uint32_t EndOrder{0};
 };
 
-/** A network frame that only records its two slot calls, isolating TEngineSystemSet's pump order from any real transport. */
-class FRecordingEngineSystem final : public IEngineSystem
+/** A network frame that only records its two slot calls, isolating TPlaySystemSet's pump order from any real transport. */
+class FRecordingPlaySystem final : public IPlaySystem
 {
 public:
 	/** Binds this stub to the caller-owned record it stamps and the sequence every recording frame in the test shares. */
-	FRecordingEngineSystem(FFrameCallRecord& InRecord, FSharedFrameSequence& InSequence) noexcept : Record(InRecord), Sequence(InSequence) {}
+	FRecordingPlaySystem(FFrameCallRecord& InRecord, FSharedFrameSequence& InSequence) noexcept : Record(InRecord), Sequence(InSequence) {}
 
 	/** Stamps the play-start turn so lifecycle add-order is observable. */
 	void BeginPlay(const TimePointMilliseconds) noexcept override
@@ -125,17 +125,17 @@ private:
  * Scenario: Add three recording frames to a system set, then run BeginPlay and EndPlay.
  * Expected: Lifecycle turns preserve add-order at begin and reverse add-order at end.
  */
-MW_TEST_CASE(EngineSystemSet_BeginPlayRunsAddOrderAndEndPlayRunsReverseOrder)
+MW_TEST_CASE(PlaySystemSet_BeginPlayRunsAddOrderAndEndPlayRunsReverseOrder)
 {
 	// Arrange
 	FSharedFrameSequence Sequence;
 	FFrameCallRecord RecordA{};
 	FFrameCallRecord RecordB{};
 	FFrameCallRecord RecordC{};
-	FRecordingEngineSystem FrameA{RecordA, Sequence};
-	FRecordingEngineSystem FrameB{RecordB, Sequence};
-	FRecordingEngineSystem FrameC{RecordC, Sequence};
-	TEngineSystemSet<3> SystemSet;
+	FRecordingPlaySystem FrameA{RecordA, Sequence};
+	FRecordingPlaySystem FrameB{RecordB, Sequence};
+	FRecordingPlaySystem FrameC{RecordC, Sequence};
+	TPlaySystemSet<3> SystemSet;
 
 	// Act
 	const EEngineResult AddAResult = SystemSet.Add(FrameA);
@@ -163,19 +163,19 @@ MW_TEST_CASE(EngineSystemSet_BeginPlayRunsAddOrderAndEndPlayRunsReverseOrder)
 
 /**
  * Scenario: Add three recording frames to a system set, then call PreAdvance and PostAdvance directly.
- * Expected: TEngineSystemSet's PreAdvance runs its frames in add-order and PostAdvance runs them in reverse add-order, called directly.
+ * Expected: TPlaySystemSet's PreAdvance runs its frames in add-order and PostAdvance runs them in reverse add-order, called directly.
  */
-MW_TEST_CASE(EngineSystemSet_PreAdvanceRunsAddOrderPostAdvanceRunsReverseOrder)
+MW_TEST_CASE(PlaySystemSet_PreAdvanceRunsAddOrderPostAdvanceRunsReverseOrder)
 {
 	// Arrange
 	FSharedFrameSequence Sequence;
 	FFrameCallRecord RecordA{};
 	FFrameCallRecord RecordB{};
 	FFrameCallRecord RecordC{};
-	FRecordingEngineSystem FrameA{RecordA, Sequence};
-	FRecordingEngineSystem FrameB{RecordB, Sequence};
-	FRecordingEngineSystem FrameC{RecordC, Sequence};
-	TEngineSystemSet<3> SystemSet;
+	FRecordingPlaySystem FrameA{RecordA, Sequence};
+	FRecordingPlaySystem FrameB{RecordB, Sequence};
+	FRecordingPlaySystem FrameC{RecordC, Sequence};
+	TPlaySystemSet<3> SystemSet;
 
 	// Act - add three frames under capacity
 	MW_EXPECT_EQ(Test, EEngineResult::Success, SystemSet.Add(FrameA), "Adding the first frame under capacity must succeed");
@@ -197,18 +197,18 @@ MW_TEST_CASE(EngineSystemSet_PreAdvanceRunsAddOrderPostAdvanceRunsReverseOrder)
 
 /**
  * Scenario: Add two recording frames to a system set, bind it to a host, create the world, begin play, and run a single tick.
- * Expected: TEngine::Tick pumps a bound TEngineSystemSet at its step 1 (dispatch, add-order) and step 7 (flush, reverse add-order).
+ * Expected: TEngine::Tick pumps a bound TPlaySystemSet at its step 1 (dispatch, add-order) and step 7 (flush, reverse add-order).
  */
-MW_TEST_CASE(EngineSystemSet_TEngineTickPumpsBoundSetAtPreAdvanceAndPostAdvanceSteps)
+MW_TEST_CASE(PlaySystemSet_TEngineTickPumpsBoundSetAtPreAdvanceAndPostAdvanceSteps)
 {
 	// Arrange
 	FSharedFrameSequence Sequence;
 	FFrameCallRecord NetRecord{};
 	FFrameCallRecord RouterRecord{};
-	FRecordingEngineSystem NetFrame{NetRecord, Sequence};
-	FRecordingEngineSystem RouterFrame{RouterRecord, Sequence};
+	FRecordingPlaySystem NetFrame{NetRecord, Sequence};
+	FRecordingPlaySystem RouterFrame{RouterRecord, Sequence};
 
-	TEngineSystemSet<2> SystemSet;
+	TPlaySystemSet<2> SystemSet;
 
 	// Act - add the net-like frame first and the router-like frame last
 	MW_EXPECT_EQ(Test, EEngineResult::Success, SystemSet.Add(NetFrame), "The net-like frame must be added first (D3 order: net before router)");
@@ -235,18 +235,18 @@ MW_TEST_CASE(EngineSystemSet_TEngineTickPumpsBoundSetAtPreAdvanceAndPostAdvanceS
  * Scenario: Add two frames under a capacity-two set, then attempt a third Add past capacity.
  * Expected: An Add past a set's fixed capacity must report CapacityExceeded and leave FrameCount unchanged.
  */
-MW_TEST_CASE(EngineSystemSet_AddPastCapacityReportsCapacityExceededAndLeavesFrameCountUnchanged)
+MW_TEST_CASE(PlaySystemSet_AddPastCapacityReportsCapacityExceededAndLeavesFrameCountUnchanged)
 {
 	// Arrange
 	FSharedFrameSequence Sequence;
 	FFrameCallRecord RecordA{};
 	FFrameCallRecord RecordB{};
 	FFrameCallRecord RecordC{};
-	FRecordingEngineSystem FrameA{RecordA, Sequence};
-	FRecordingEngineSystem FrameB{RecordB, Sequence};
-	FRecordingEngineSystem FrameC{RecordC, Sequence};
+	FRecordingPlaySystem FrameA{RecordA, Sequence};
+	FRecordingPlaySystem FrameB{RecordB, Sequence};
+	FRecordingPlaySystem FrameC{RecordC, Sequence};
 
-	TEngineSystemSet<2> SystemSet;
+	TPlaySystemSet<2> SystemSet;
 
 	// Act - add two frames under capacity, then attempt a third past capacity
 	MW_EXPECT_EQ(Test, EEngineResult::Success, SystemSet.Add(FrameA), "The first Add under capacity must succeed");
@@ -261,14 +261,14 @@ MW_TEST_CASE(EngineSystemSet_AddPastCapacityReportsCapacityExceededAndLeavesFram
  * Scenario: Add one frame to a set, then add the same frame pointer again.
  * Expected: Adding the same frame pointer twice must report Duplicate on the second call and count the frame only once.
  */
-MW_TEST_CASE(EngineSystemSet_AddSameFramePointerTwiceReportsDuplicateAndCountsItOnce)
+MW_TEST_CASE(PlaySystemSet_AddSameFramePointerTwiceReportsDuplicateAndCountsItOnce)
 {
 	// Arrange
 	FSharedFrameSequence Sequence;
 	FFrameCallRecord Record{};
-	FRecordingEngineSystem Frame{Record, Sequence};
+	FRecordingPlaySystem Frame{Record, Sequence};
 
-	TEngineSystemSet<2> SystemSet;
+	TPlaySystemSet<2> SystemSet;
 
 	// Act - add the frame, then add the same pointer again
 	MW_EXPECT_EQ(Test, EEngineResult::Success, SystemSet.Add(Frame), "The first Add of a frame must succeed");
@@ -282,10 +282,10 @@ MW_TEST_CASE(EngineSystemSet_AddSameFramePointerTwiceReportsDuplicateAndCountsIt
  * Scenario: Construct an empty system set, then call PreAdvance and PostAdvance on it.
  * Expected: An empty set's PreAdvance and PostAdvance must both be inert: no crash, and FrameCount stays zero.
  */
-MW_TEST_CASE(EngineSystemSet_EmptySetTicksInertly)
+MW_TEST_CASE(PlaySystemSet_EmptySetTicksInertly)
 {
 	// Arrange
-	TEngineSystemSet<2> SystemSet;
+	TPlaySystemSet<2> SystemSet;
 
 	// Assert - a freshly constructed set starts empty
 	MW_EXPECT_EQ(Test, std::size_t{0}, SystemSet.FrameCount(), "A freshly constructed set must start empty");

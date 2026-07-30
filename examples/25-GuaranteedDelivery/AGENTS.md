@@ -10,12 +10,12 @@ Two role worlds, one source tree. `Main.cpp` is a thin dispatcher whose
 hold the two roles and are both always compiled, and
 `GuaranteedDeliveryShared.h` defines the message/actor/channel ids, WiFi/UDP
 configuration, and the `TNetHost`/`TMessageRouter`/`TReliableChannel`/
-`TEngineHost`/`TEngineSystemSet` type shapes once (DRY within this one
+`TEngineHost`/`TPlaySystemSet` type shapes once (DRY within this one
 example). Per board: ONE `TNetHost` over `FEsp32UdpDriver` -- on the client,
 wrapped in `FPacketDropDriver` -- carrying TWO channels to the same
 `TMessageRouter`: a best-effort binding straight to the router, and a
 guaranteed binding wrapped in `TReliableChannel`. All pumped by one
-`TEngineSystemSet<3>` (net frame, reliable channel, router) the engine holds.
+`TPlaySystemSet<3>` (net frame, reliable channel, router) the engine holds.
 Every composition object is `static` and allocation-free.
 
 ## Concepts

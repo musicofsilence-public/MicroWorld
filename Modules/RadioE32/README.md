@@ -16,5 +16,5 @@ Public consumers will include `MicroWorld/RadioE32/RadioE32Driver.h` and link
 `MicroWorld/RadioE32/Detail/` and are not a supported consumer surface.
 
 Direct callers advance queued frames with `AdvanceTransmit`; `TNetHost` already
-does so after outbound FIFO progress. This narrow byte seam is not a universal
+does so after outbound FIFO progress. This narrow byte-transfer interface is not a universal
 HAL and performs no UART configuration or hardware I/O.

@@ -48,13 +48,13 @@ using MicroWorld::LocalChannelId;
 using MicroWorld::MakeLoopbackAddress;
 using MicroWorld::ReliableHeaderBytes;
 using MicroWorld::TEngine;
-using MicroWorld::TEngineSystemSet;
 using MicroWorld::THostLoopback;
 using MicroWorld::TimePointMilliseconds;
 using MicroWorld::TMessageChannelBinding;
 using MicroWorld::TMessageRouter;
 using MicroWorld::TNetHost;
 using MicroWorld::TNetHostSystem;
+using MicroWorld::TPlaySystemSet;
 using MicroWorld::TReliableChannel;
 using MicroWorld::TSpan;
 
@@ -136,11 +136,11 @@ struct FHostTraits : FDefaultEngineTraits
 /** Engine profile sized for a bare rooted world; these cases never spawn actors. */
 using FHost = TEngine<FHostTraits>;
 
-/** Per-side D3 composition root: holds one side's net frame and message router behind the one IEngineSystem slot TEngine drives. */
-using FFrameSet = TEngineSystemSet<2>;
+/** Per-side D3 composition root: holds one side's net frame and message router behind the one IPlaySystem slot TEngine drives. */
+using FFrameSet = TPlaySystemSet<2>;
 
 /** Per-side D3 composition root for the multi-channel cases: two net frames (telemetry, command) plus the one router that binds both. */
-using FMultiChannelFrameSet = TEngineSystemSet<3>;
+using FMultiChannelFrameSet = TPlaySystemSet<3>;
 
 /** Router profile shared by every case; its capacities are generous headroom, never the behavior under test. */
 using FTestRouter = TMessageRouter<HandlerCapacity, OutboundQueueCapacity, MessageByteCapacity, ChannelCapacity>;
@@ -996,8 +996,8 @@ MW_TEST_CASE(EngineMessageChannel_ReliableChannelSurvivesPacketDropsDeliveringEx
 	constexpr int MaxFramesPerMessage = ReliableMaxSendAttempts + 3;
 	constexpr std::size_t ReliableSlotBytes = MessageByteCapacity + ReliableHeaderBytes;
 	using FReliableChannel = TReliableChannel<4, ReliableSlotBytes>;
-	using FClientFrameSet = TEngineSystemSet<3>;
-	using FServerFrameSet = TEngineSystemSet<2>;
+	using FClientFrameSet = TPlaySystemSet<3>;
+	using FServerFrameSet = TPlaySystemSet<2>;
 
 	THostLoopback<2, 8, 64> Network;
 	FPacketDropDriver ClientDropDriver(Network.Port(1), DropEveryNthSend);

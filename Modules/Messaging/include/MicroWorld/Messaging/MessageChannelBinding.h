@@ -27,7 +27,7 @@ enum class EChannelSendTarget : std::uint8_t
  * Outbound sends go to the host (SendTo for a Server target, Broadcast for AllPeers) with the
  * transport result mapped onto EMessageResult, while inbound payloads on the matching wire-channel
  * byte are handed to the sink and a foreign wire channel on the same host is ignored. Duck-typed on
- * TNet exactly like TNetHostSystem (see EngineSystem.h), so this header names no Net type and
+ * TNet exactly like TNetHostSystem (see Engine/EngineSystem.h), so this header names no Net type and
  * microworld-engine keeps zero dependency on microworld-net; the Net types resolve only where a
  * caller instantiates this template against a concrete TNetHost.
  */

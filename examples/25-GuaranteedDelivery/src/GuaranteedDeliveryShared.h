@@ -15,7 +15,7 @@
  * Shared protocol ids, config, and composition-type aliases for example 25's two roles.
  * Both role translation units include this so the message/actor/channel ids, WiFi/UDP
  * configuration, and the TNetHost/TMessageRouter/TReliableChannel/TEngine/
- * TEngineSystemSet shapes are defined exactly once (DRY within this one example).
+ * TPlaySystemSet shapes are defined exactly once (DRY within this one example).
  */
 namespace Ex25
 {
@@ -93,8 +93,8 @@ using FChannelBinding = MicroWorld::TMessageChannelBinding<FWorldNet>;
 /** Guaranteed-delivery wrapper for channel 2 (8 pending slots, 96-byte wrapped-packet budget). */
 using FGuaranteedChannel = MicroWorld::TReliableChannel<8, 96>;
 
-/** Pumps the net frame, the reliable channel, and the router behind one IEngineSystem slot (D3 order). */
-using FWorldFrameSet = MicroWorld::TEngineSystemSet<3>;
+/** Pumps the net frame, the reliable channel, and the router behind one IPlaySystem slot (D3 order). */
+using FWorldFrameSet = MicroWorld::TPlaySystemSet<3>;
 
 /** The engine both roles compose; sized for one world with a couple of small actors using direct component storage. */
 using FWorldEngine = MicroWorld::TEngine<>;

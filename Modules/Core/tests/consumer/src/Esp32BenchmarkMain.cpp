@@ -405,7 +405,7 @@ extern "C" void app_main()
 	(void)Net.Configure(ENetMode::DedicatedServer, FNetHostConfig{});
 	Net.Start(Clock.Now());
 
-	// 4. Adapt the host to the engine's network frame seam.
+	// 4. Adapt the host to the engine's `TNetHostSystem` interface.
 	static TNetHostSystem<FBenchmarkNet> Frame(Net);
 
 	// 5. Composition root. Budget {1,4,32}: MaxSweepOperations(32) >= MaxObjects(32) so one

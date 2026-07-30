@@ -233,7 +233,7 @@ join the allowed industry vocabulary alongside `Udp`/`Uart`), format with
 **LoRa historical baseline: driver yes, proof no.** The current architecture
 places portable E32 framing/state in optional `RadioE32`, with ESP32 and Pico
 compatibility facades owning UART SDK lifetime. `IUartByteStream` is a narrow
-byte seam, not a universal HAL. `FEsp32E32LoraDriver`
+byte-transfer interface, not a universal HAL. `FEsp32E32LoraDriver`
 (`Esp32E32LoraDriver.h:51`): config `{UartPort, TxGpio, RxGpio,
 BaudRate{9600}, LocalNodeId}`, `E32MaxPayloadBytes = 58`, frames via
 `TFrameDecoder<58>`, address codec `LoraAddress.h`
@@ -246,7 +246,7 @@ only: **no example uses it, it has never been flashed**, and the catalog row
 modules on the rig support BLE 5.0 (and only BLE — D1). No extra hardware is
 needed for BLE.
 
-**Everything above the driver seam is ready and battle-tested** on UDP, UART,
+**Everything above the `INetDriver` interface is ready and battle-tested** on UDP, UART,
 I2C, and SPI: `FrameCodec` (CRC-16, resync), `TNetManager`, `TNetHost`
 (roles/peers/channels/heartbeats), `TNetHostFrame` → `TEngineHost`, and four
 verified two-board examples (18–21) plus two WiFi ones (15–16) to copy from.
@@ -685,7 +685,7 @@ BLE work in Phases 2–4.
 
 - [ ] **6.1 Documentation sweep.** `Modules/PlatformEsp32` README/AGENTS: BLE
   driver pair + BleAddress rows next to the existing transport tables.
-  `docs/Porting.md` (locate the seam-2 driver list): add BLE. `docs/UE5ConceptMap.md`:
+  `docs/Porting.md` (locate the Net-driver section's driver list): add BLE. `docs/UE5ConceptMap.md`:
   one row (BLE/LoRa drivers ≈ more `UNetDriver` transports — reuse the
   existing wording). `examples/AGENTS.md`: note that radio examples carry
   mandatory safety blocks. If MESSAGING Phase 1 has shipped the log/sleep

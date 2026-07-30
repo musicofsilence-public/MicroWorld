@@ -10,21 +10,13 @@ option(
 
 # A standalone Integration configuration composes its inward dependencies. A
 # larger profile may instead provide these targets before adding this directory.
-# Integration is the only package allowed to see both Engine and Net: it owns the
-# one object (TNetSystem) that turns net drivers into a working networked engine.
+# Engine is deliberately absent: TNetSystem reaches the engine only through
+# Core's IPlaySystem, so joining Engine and Net stays a composition root's job.
 if(NOT TARGET MicroWorld::Messaging)
     set(MICROWORLD_MESSAGING_BUILD_TESTS OFF)
     add_subdirectory(
         "${CMAKE_CURRENT_SOURCE_DIR}/../Messaging"
         "${CMAKE_CURRENT_BINARY_DIR}/Messaging"
-    )
-endif()
-if(NOT TARGET MicroWorld::Engine)
-    set(MICROWORLD_ENGINE_BUILD_TESTS OFF)
-    set(MICROWORLD_ENGINE_BUILD_BENCHMARKS OFF)
-    add_subdirectory(
-        "${CMAKE_CURRENT_SOURCE_DIR}/../Engine"
-        "${CMAKE_CURRENT_BINARY_DIR}/Engine"
     )
 endif()
 if(NOT TARGET MicroWorld::Net)
@@ -38,7 +30,7 @@ endif()
 
 # Integration is header-only: TNetSystem is a template instantiated by the
 # caller, so there is no production translation unit. The INTERFACE library
-# carries the include path and the Messaging+Engine+Net link edges for consumers.
+# carries the include path and the Messaging+Net link edges for consumers.
 add_library(microworld_integration INTERFACE)
 target_include_directories(microworld_integration INTERFACE
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
@@ -46,7 +38,6 @@ target_include_directories(microworld_integration INTERFACE
 target_compile_features(microworld_integration INTERFACE cxx_std_17)
 target_link_libraries(microworld_integration INTERFACE
     MicroWorld::Messaging
-    MicroWorld::Engine
     MicroWorld::Net
 )
 add_library(MicroWorld::Integration ALIAS microworld_integration)
@@ -93,6 +84,18 @@ if(MICROWORLD_INTEGRATION_BUILD_TESTS)
         "${CMAKE_CURRENT_SOURCE_DIR}/tests/NetSystemTests.cpp"
     )
 
+    # Only the tests need Engine: EngineNetHostTests plays the composition root
+    # that binds a net host to an engine, which is the role Integration itself
+    # must not take. A larger profile may already provide the target.
+    if(NOT TARGET MicroWorld::Engine)
+        set(MICROWORLD_ENGINE_BUILD_TESTS OFF)
+        set(MICROWORLD_ENGINE_BUILD_BENCHMARKS OFF)
+        add_subdirectory(
+            "${CMAKE_CURRENT_SOURCE_DIR}/../Engine"
+            "${CMAKE_CURRENT_BINARY_DIR}/Engine"
+        )
+    endif()
+
     if(BUILD_TESTING)
         foreach(MICROWORLD_INTEGRATION_TEST_SOURCE IN LISTS MICROWORLD_INTEGRATION_TEST_SOURCES)
             if(NOT EXISTS "${MICROWORLD_INTEGRATION_TEST_SOURCE}")
@@ -107,7 +110,10 @@ if(MICROWORLD_INTEGRATION_BUILD_TESTS)
         target_include_directories(microworld_integration_tests PRIVATE
             "${CMAKE_CURRENT_SOURCE_DIR}/../Core/tests"
         )
-        target_link_libraries(microworld_integration_tests PRIVATE MicroWorld::Integration)
+        target_link_libraries(microworld_integration_tests PRIVATE
+            MicroWorld::Integration
+            MicroWorld::Engine
+        )
         microworld_integration_enable_strict_portable_options(microworld_integration_tests)
         microworld_integration_disable_exceptions_and_rtti(
             "${MICROWORLD_INTEGRATION_TEST_SOURCES}"

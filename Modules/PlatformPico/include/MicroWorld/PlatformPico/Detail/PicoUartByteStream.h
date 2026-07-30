@@ -33,7 +33,7 @@ struct FPicoUartConfig
  * Unsupported Pico implementation of Core's non-blocking UART byte-stream contract.
  *
  * The stream owns one validated UART open/close lifetime while borrowing the SDK binding; it is a platform Detail
- * seam for compatibility facades, not a universal hardware abstraction or supported direct-composition API.
+ * extension interface for compatibility facades, not a universal hardware abstraction or supported direct-composition API.
  */
 class FPicoUartByteStream final : public IUartByteStream
 {

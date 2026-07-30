@@ -124,7 +124,7 @@ public:
 	bool IsOpen() const noexcept { return ByteStream.IsOpen() && RadioDriver.IsInitialized(); }
 
 private:
-	/** Owns ESP-IDF UART configuration and lifetime while exposing only Core's non-blocking byte seam. */
+	/** Owns ESP-IDF UART configuration and lifetime while exposing only Core's non-blocking `IUartByteStream` interface. */
 	Detail::FEsp32UartByteStream ByteStream{};
 
 	/** Owns portable E32 framing and retains a reference to ByteStream for its full facade lifetime. */

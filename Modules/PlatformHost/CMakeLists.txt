@@ -23,7 +23,7 @@ endif()
 
 # The Phase 6.1 two-node demo composes the engine's TEngine (which owns
 # UWorld/AActor/GC) on top of a PlatformHost UDP driver, so the example links
-# MicroWorld::Engine directly. Engine never depends on Net (the frame seam is
+# MicroWorld::Engine directly. Engine never depends on Net (the IPlaySystem interface is
 # caller-bound via TNetHostSystem), so adding it here introduces no cycle.
 if(NOT TARGET MicroWorld::Engine)
     set(MICROWORLD_ENGINE_BUILD_BENCHMARKS OFF)
