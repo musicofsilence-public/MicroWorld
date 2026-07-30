@@ -35,6 +35,14 @@ specification {
         }
     }
 
+    // The declared shape others write code against. It declares rather than does, so
+    // it is neither a responsibility nor a stateful concept. No shape depicts one.
+    element interface {
+        style {
+            shape rectangle
+        }
+    }
+
     // Stateful domain concept with identity and a lifecycle. Not a class - one entity
     // may be realised by several objects.
     element entity {
@@ -43,8 +51,9 @@ specification {
         }
     }
 
-    // Domain behaviour belonging to no single entity. Never a generic manager.
-    element domainService {
+    // Cohesive functions and classes serving one purpose, too small to be a subsystem
+    // of its own. Never a generic manager.
+    element component {
         style {
             shape component
         }
@@ -59,9 +68,6 @@ specification {
         }
     }
 
-    // The element others write code against.
-    tag contract
-
     // Chosen at build time rather than always present.
     tag optional
 
@@ -73,6 +79,14 @@ specification {
     // Static architectural dependency, not a particular runtime call.
     relationship dependsOn {
         title 'depends on'
+    }
+
+    // Points from a declared shape to something that satisfies it. The compile-time
+    // dependency runs the other way; drawn this way so a declaration sits above its
+    // implementations instead of beside whatever they depend on.
+    relationship realisedBy {
+        title 'realised by'
+        line dashed
     }
 
     // Requests an operation that may change state. The target owns validation.

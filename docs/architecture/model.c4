@@ -34,6 +34,32 @@ model {
         }
     }
 
+    // Outside the product boundary, which is the point: position states that we do not
+    // own these, and every medium reaches out to one rather than implementing a radio.
+    espIdf = system 'ESP-IDF' {
+        technology '[system: platform implementation]'
+        description 'Espressif Wi-Fi, Bluetooth and buses.'
+        style {
+            color slate
+        }
+    }
+
+    picoSdk = system 'Pico SDK' {
+        technology '[system: platform implementation]'
+        description 'RP2040 serial ports and timers.'
+        style {
+            color slate
+        }
+    }
+
+    hostOs = system 'Host OS' {
+        technology '[system: platform implementation]'
+        description 'Desktop sockets and a steady clock.'
+        style {
+            color slate
+        }
+    }
+
     microworld = product 'MicroWorld' {
         technology '[product: C++17 static library]'
         description 'UE5 worlds, actors and lifecycle on microcontrollers.'
@@ -50,7 +76,6 @@ model {
             }
             metadata {
                 contract 'time, tick scheduling, timers, logging, lifecycle, result codes, the play-system turn points, byte streams'
-                traceability 'Modules/MicroWorld/Core headers: Time.h, TickFunction.h, Timer.h, Log.h, Lifecycle.h, PlaySystem.h, IO/UartByteStream.h'
             }
         }
 
@@ -63,48 +88,34 @@ model {
             metadata {
                 contract 'IEngine, UWorld, AActor, UActorComponent, FObjectStore'
                 boundary 'Object owns identity, Engine owns the lifetime built on it. Neither is a responsibility anything wants alone, so they are one system'
-                traceability 'Modules/MicroWorld/Engine (Engine + folded Object)'
             }
 
-            engineFrontDoor = subsystem 'Engine Front Door' {
-                #contract
-                technology '[subsystem: IEngine / TEngine<TTraits>]'
+            engineInterface = interface 'Engine Interface' {
+                technology '[interface: IEngine / TEngine<TTraits>]'
                 description 'Narrow interface the application holds.'
-                metadata {
-                    traceability 'Modules/MicroWorld/Engine/EngineHost.h'
+                style {
+                    icon ./icon-interface.svg
                 }
             }
 
             world = entity 'World' {
                 technology '[entity: UWorld]'
                 description 'Owns registered and spawned actors.'
-                metadata {
-                    traceability 'Modules/MicroWorld/Engine/World.h'
-                }
             }
 
             actor = entity 'Actor' {
                 technology '[entity: AActor]'
                 description 'Ticking participant with a lifecycle.'
-                metadata {
-                    traceability 'Modules/MicroWorld/Engine/Actor.h'
-                }
             }
 
             actorComponent = entity 'Actor Component' {
                 technology '[entity: UActorComponent]'
                 description 'Reusable behaviour attached to an actor.'
-                metadata {
-                    traceability 'Modules/MicroWorld/Engine/ActorComponent.h'
-                }
             }
 
-            spawnBarrier = domainService 'Deferred Spawn Barrier' {
-                technology '[domainService: queued actor factories]'
+            spawnBarrier = component 'Deferred Spawn Barrier' {
+                technology '[component: queued actor factories]'
                 description 'Constructs actors only at safe points.'
-                metadata {
-                    traceability 'Modules/MicroWorld/Engine/DeferredActorSpawn.h'
-                }
             }
 
             objectStore = subsystem 'Object Store' {
@@ -113,17 +124,11 @@ model {
                 style {
                     shape storage
                 }
-                metadata {
-                    traceability 'Modules/MicroWorld/Engine/ObjectStore.h'
-                }
             }
 
-            collector = domainService 'Garbage Collector' {
-                technology '[domainService: FGarbageCollector]'
+            collector = component 'Garbage Collector' {
+                technology '[component: FGarbageCollector]'
                 description 'Reclaims unreachable managed objects.'
-                metadata {
-                    traceability 'Modules/MicroWorld/Engine/GarbageCollector.h'
-                }
             }
         }
 
@@ -135,83 +140,84 @@ model {
                 icon ./icon-messaging.svg
             }
             metadata {
-                contract 'TMessageRouter (an IPlaySystem), channel bindings, reliable channel'
-                standalone 'Usable with no networking at all. Its contract names neither actors nor transports, so Core plus this system is already a working stack, and Core + Engine + this is local actor messaging with no Transport, no Networking and no driver'
+                contract 'TMessageRouter (an IPlaySystem), channel bindings, and the delivery mode a binding declares'
+                standalone 'Usable with no networking at all. Its contract names neither actors nor transports, so Core plus this system is already a working stack, and Core + Engine + this is local actor messaging with no Transport, no Networking and no driver. A binding may still declare reliable delivery there - locally the call itself satisfies it, which is why declaring a mode drags in no machinery'
                 boundary 'That independence is the whole reason it is its own system. Folding it into Networking would assert that a message between two actors on one board travels through networking, which is false'
-                traceability 'Modules/MicroWorld/Messaging; examples/22-ActorMessages is that program. TMessageRouter includes only Message.h, PlaySystem.h and Time.h - confirmation the code currently honours the decision, never the reason for it'
             }
         }
 
         transport = system 'Transport' {
             technology '[system: byte I/O]'
-            description 'Moves framed bytes over any medium.'
+            description 'Moves bytes over any medium, reporting acceptance not delivery.'
             style {
                 icon ./icon-transport.svg
             }
             metadata {
-                contract 'INetDriver, TNetHost, frame codec, protocol'
-                boundary 'Transport sits below the engine and takes only time and result codes. Anything that merely satisfies the driver contract belongs inside it - IP, wire and radio alike - and anything needing a world cannot be in here at all'
-                traceability 'Modules/MicroWorld/Transport (Net + RadioE32)'
+                contract 'one device shape - Setup, SendDataTo, OnDataReceived - realised once per medium, plus wire framing for the stream media'
+                boundary 'Transport sits below the engine and takes only time and result codes. Anything that merely realises the device shape belongs inside it - Wi-Fi, Bluetooth, wire and radio alike - and anything needing a world cannot be in here at all'
+                standalone 'It reports acceptance, never delivery, so no medium here sequences, acknowledges or retries. Reading an acknowledgement would mean opening the payload this system promised to carry opaquely'
             }
 
-            driverContract = subsystem 'Driver Contract' {
-                #contract
-                technology '[subsystem: INetDriver]'
-                description 'Send, receive and advance one transport.'
+            deviceInterface = interface 'Device Interface' {
+                technology '[interface: Setup, SendDataTo, OnDataReceived]'
+                description 'Configures, sends without blocking, drains arrivals each turn.'
+                style {
+                    icon ./icon-interface.svg
+                }
                 metadata {
-                    traceability 'Modules/MicroWorld/Transport/NetDriver.h'
+                    boundary 'The application holds a medium device directly, so this contract is both what an application writes against and what each medium realises. There is no layer above it to hide the choice of medium, because choosing the medium is the point. Whoever owns a device installs it - an application holding one pumps it in its own frame loop, Networking pumps the ones it owns, and never both for the same device'
+                    contract 'The three operations plus the four play-system turns, because a callback cannot fire itself. Setup answers with a Core result code, and a device before Setup is unusable. The span handed to a subscriber belongs to the device and is valid only for that call. A device publishes the largest payload it can take and refuses anything longer instead of splitting. A broadcast address is a value of the same shape rather than a second operation, refused by a medium that cannot reach it'
+                    standalone 'Uniform in its data path, deliberately not in Setup: one address shape lets SendDataTo read the same on every medium, while configuration stays per-medium because an SSID and a baud rate have nothing in common. That asymmetry is why an application names a concrete device type to configure it and needs nothing concrete afterwards. What is uniform is the shape, not the meaning - each medium reads the address its own way, and a point-to-point one ignores it entirely'
                 }
             }
 
-            transportHost = subsystem 'Transport Host' {
-                technology '[subsystem: TNetHost]'
-                description 'Drives one driver every frame.'
-                metadata {
-                    traceability 'Modules/MicroWorld/Transport/NetHost.h'
-                }
+            frameCodec = component 'Frame Codec' {
+                technology '[component: magic, length and CRC framing]'
+                description 'Recovers message boundaries from a byte stream.'
             }
 
-            frameCodec = domainService 'Frame Codec' {
-                technology '[domainService: magic, length and CRC framing]'
-                description 'Frames and resynchronises byte streams.'
-                metadata {
-                    traceability 'Modules/MicroWorld/Transport/FrameCodec.h'
-                }
-            }
-
-            ipDrivers = subsystem 'IP Drivers' {
+            wifiDevice = subsystem 'Wi-Fi Device' {
                 #optional
-                technology '[subsystem: FHostUdpDriver, FEsp32UdpDriver]'
-                description 'Carries frames over desktop sockets and device Wi-Fi.'
+                technology '[subsystem: UDP datagrams]'
+                description 'Carries data over Wi-Fi and desktop sockets.'
                 style {
                     icon ./icon-ip.svg
                 }
                 metadata {
-                    traceability 'Modules/MicroWorld/Platform/Host/HostUdpDriver.cpp; Modules/MicroWorld/Platform/Esp32/Esp32UdpDriver.h'
+                    boundary 'One element, two platforms. The same UDP shape serves a board and a development host, so the difference belongs on the arrows below it rather than in a second box'
                 }
             }
 
-            wiredDrivers = subsystem 'Wired Drivers' {
+            bluetoothDevice = subsystem 'Bluetooth Device' {
                 #optional
-                technology '[subsystem: FEsp32Uart, FEsp32I2cMaster/Slave, FEsp32Spi drivers]'
-                description 'Carries frames board-to-board over UART, I2C or SPI.'
+                technology '[subsystem: paired-link datagrams]'
+                description 'Carries data over Bluetooth to one peer.'
                 style {
-                    icon ./icon-wired.svg
-                }
-                metadata {
-                    traceability 'Modules/MicroWorld/Platform/Esp32/Esp32UartDriver.h, Esp32I2cDriver.h, Esp32SpiDriver.h'
+                    icon ./icon-bluetooth.svg
                 }
             }
 
-            radioDrivers = subsystem 'Radio Drivers' {
+            loraDevice = subsystem 'LoRa Device' {
                 #optional
-                technology '[subsystem: FRadioE32Driver over IUartByteStream]'
-                description 'Carries frames over long-range radio. The E32 protocol is portable; only UART ownership is per-platform.'
+                technology '[subsystem: E32 on a byte stream]'
+                description 'Carries data over long-range radio.'
                 style {
                     icon ./icon-radio.svg
                 }
                 metadata {
-                    traceability 'Modules/MicroWorld/Transport/RadioE32Driver.h; ESP-IDF and Pico UART facades in Modules/MicroWorld/Platform/Esp32, Modules/MicroWorld/Platform/Pico'
+                    boundary 'The only medium whose protocol is portable. Platform ownership stops at the byte stream underneath it, which is why one E32 implementation serves every board'
+                }
+            }
+
+            wiredDevice = subsystem 'Wired Device' {
+                #optional
+                technology '[subsystem: UART, I2C, SPI]'
+                description 'Carries data board-to-board over a bus.'
+                style {
+                    icon ./icon-wired.svg
+                }
+                metadata {
+                    boundary 'One element for three buses. UART, I2C and SPI differ in wiring, in who clocks the line, and in how a peer is named - I2C takes one per send, SPI selects one at Setup with a chip-select line, UART has only the one it is wired to. None of that changes the shape, and all three must frame'
                 }
             }
         }
@@ -224,21 +230,19 @@ model {
             }
             metadata {
                 contract 'FApplication, Run frame loop'
-                traceability 'Modules/MicroWorld/Application'
             }
         }
 
         networking = system 'Networking' {
             technology '[system: play service]'
-            description 'Carries typed messages over a transport.'
+            description 'Carries typed messages over a transport, reliably when asked.'
             style {
                 icon ./icon-networking.svg
             }
             metadata {
-                contract 'TNetSystem, an IPlaySystem that owns net drivers and channels'
+                contract 'TNetSystem, an IPlaySystem that owns net drivers and channels, plus the sequencing, acknowledgement and retransmit behind a channel that asked for reliable delivery, and the splitting of a message too large for the device carrying it'
                 standalone 'Core, Messaging and Transport are its whole closure, so a networked messaging stack needs no world, no actors and no Object. It cannot drive itself though - something must call its turn points each frame'
-                boundary 'Merged with Transport, one element would own both the byte contract and the message types, and nothing would then forbid a driver from knowing a message type. Kept apart, a driver stays reusable with no messaging, messaging stays usable with no driver, and adding a transport touches neither. A separation needs two elements to state it'
-                traceability 'Modules/MicroWorld/Networking'
+                boundary 'Merged with Transport, one element would own both the byte contract and the message types, and nothing would then forbid a driver from knowing a message type. Kept apart, a driver stays reusable with no messaging, messaging stays usable with no driver, and adding a transport touches neither. A separation needs two elements to state it. Reliability lands here for the same kind of reason: it only means something when a wire can drop things, and Messaging must stay usable with no wire at all'
             }
         }
     }
@@ -254,89 +258,56 @@ model {
     deviceFirmware -[uses]-> picoDevice 'runs on'
     deviceFirmware -[uses]-> developmentPc 'runs on'
 
-    esp32Device -[uses]-> picoDevice 'exchanges messages with' {
-        metadata {
-            traceability 'examples/26-MessagingOverLora over E32 radio; Modules/MicroWorld/Messaging router'
-        }
-    }
+    esp32Device -[uses]-> picoDevice 'exchanges messages with'
 
 
-    microworld.engine -[dependsOn]-> microworld.core 'takes Time, Timer, Lifecycle, PlaySystem' {
-        metadata {
-            traceability 'MicroWorld/Engine/EngineHost.h, MicroWorld/Engine/Actor.h includes'
-        }
-    }
+    microworld.engine -[dependsOn]-> microworld.core 'takes Time, Timer, Lifecycle, PlaySystem'
 
-    microworld.messagingSystem -[dependsOn]-> microworld.core 'takes Span, Delegate, Time, PlaySystem' {
-        metadata {
-            traceability 'MicroWorld/Messaging/MessageRouter.h, MicroWorld/Messaging/Message.h includes'
-        }
-    }
+    microworld.messagingSystem -[dependsOn]-> microworld.core 'takes Span, Delegate, Time, PlaySystem'
 
-    microworld.transport -[dependsOn]-> microworld.core 'takes Span, Delegate, Log, Time, UartByteStream' {
-        metadata {
-            traceability 'MicroWorld/Transport/NetHost.h and MicroWorld/Transport/RadioE32Driver.h includes'
-        }
-    }
+    microworld.transport -[dependsOn]-> microworld.core 'takes Span, Delegate, Log, Time, PlaySystem, UartByteStream'
 
-    microworld.networking -[dependsOn]-> microworld.core 'takes PlaySystem' {
-        metadata {
-            traceability 'MicroWorld/Networking/NetSystem.h; IPlaySystem is MicroWorld/Core/PlaySystem.h, still reached today via MicroWorld/Engine/EngineSystem.h'
-        }
-    }
+    microworld.networking -[dependsOn]-> microworld.core 'takes PlaySystem'
 
-    microworld.app -[dependsOn]-> microworld.core 'takes Lifecycle, RuntimeResult, Time' {
-        metadata {
-            traceability 'MicroWorld/Application/Application.h includes'
-        }
-    }
+    microworld.app -[dependsOn]-> microworld.core 'takes Lifecycle, RuntimeResult, Time'
 
-    microworld.app -[dependsOn]-> microworld.engine 'holds one engine for its lifetime' {
-        metadata {
-            traceability 'MicroWorld/Application/Application.h'
-        }
-    }
+    microworld.app -[dependsOn]-> microworld.engine 'holds one engine for its lifetime'
 
-    // 'uses' not 'dependsOn': Application runs whatever engine system it is handed,
-    // so it is not written against this one in particular.
-    microworld.app -[uses]-> microworld.messagingSystem 'installs the router in its frame loop, no transport involved' {
-        metadata {
-            traceability 'examples/22-ActorMessages/src/Main.cpp composes Engine and Messaging with no Transport'
-        }
-    }
+    // 'uses' not 'dependsOn': Application runs whatever play system it is handed, so it
+    // is not written against either of these in particular.
+    microworld.app -[uses]-> microworld.messagingSystem 'installs the router in its frame loop, no transport involved'
 
-    microworld.networking -[dependsOn]-> microworld.messagingSystem 'routes typed messages through' {
-        metadata {
-            traceability 'MicroWorld/Networking/NetSystem.h'
-        }
-    }
+    microworld.app -[uses]-> microworld.transport 'installs a device it was handed and pumps it each frame'
 
-    microworld.networking -[uses]-> microworld.transport 'pumps the transport host each frame' {
-        metadata {
-            traceability 'MicroWorld/Networking/NetSystem.h'
-        }
-    }
+    microworld.networking -[dependsOn]-> microworld.messagingSystem 'routes typed messages through'
+
+    microworld.networking -[uses]-> microworld.transport 'pumps the devices it owns each frame'
 
 
-    microworld.engine.engineFrontDoor -[uses]-> microworld.engine.world 'owns and advances'
-    microworld.engine.engineFrontDoor -[dependsOn]-> microworld.engine.objectStore 'resolves handles through' {
-        metadata {
-            traceability 'Engine/EngineHost.h over Object/ObjectStore.h'
-        }
-    }
-    microworld.engine.objectStore -[dependsOn]-> microworld.core 'takes Time' {
-        metadata {
-            traceability 'Object/GarbageCollector.h includes'
-        }
-    }
+    microworld.engine.engineInterface -[uses]-> microworld.engine.world 'owns and advances'
+    microworld.engine.engineInterface -[dependsOn]-> microworld.engine.objectStore 'resolves handles through'
+    microworld.engine.objectStore -[dependsOn]-> microworld.core 'takes Time'
     microworld.engine.world -[uses]-> microworld.engine.spawnBarrier 'queues spawns through'
     microworld.engine.spawnBarrier -[uses]-> microworld.engine.actor 'constructs'
     microworld.engine.actor -[uses]-> microworld.engine.actorComponent 'owns'
     microworld.engine.collector -[uses]-> microworld.engine.objectStore 'reclaims through'
 
-    microworld.transport.transportHost -[uses]-> microworld.transport.driverContract 'drives one'
-    microworld.transport.transportHost -[uses]-> microworld.transport.frameCodec 'frames through'
-    microworld.transport.ipDrivers -[uses]-> microworld.transport.driverContract 'realises'
-    microworld.transport.wiredDrivers -[uses]-> microworld.transport.driverContract 'realises'
-    microworld.transport.radioDrivers -[uses]-> microworld.transport.driverContract 'realises'
+    microworld.transport.deviceInterface -[realisedBy]-> microworld.transport.wifiDevice
+    microworld.transport.deviceInterface -[realisedBy]-> microworld.transport.bluetoothDevice
+    microworld.transport.deviceInterface -[realisedBy]-> microworld.transport.loraDevice
+    microworld.transport.deviceInterface -[realisedBy]-> microworld.transport.wiredDevice
+
+    microworld.transport.loraDevice -[uses]-> microworld.transport.frameCodec 'recovers message boundaries with'
+    microworld.transport.wiredDevice -[uses]-> microworld.transport.frameCodec 'recovers message boundaries with'
+
+
+    // 'realised by' for three media, 'takes a byte stream from' for one: LoRa is the
+    // only medium whose protocol we own, so its platform dependency stops at the wire.
+    microworld.transport.wifiDevice -[dependsOn]-> espIdf 'realised by'
+    microworld.transport.wifiDevice -[dependsOn]-> hostOs 'realised by'
+    microworld.transport.bluetoothDevice -[dependsOn]-> espIdf 'realised by'
+    microworld.transport.wiredDevice -[dependsOn]-> espIdf 'realised by'
+
+    microworld.transport.loraDevice -[dependsOn]-> espIdf 'takes a byte stream from'
+    microworld.transport.loraDevice -[dependsOn]-> picoSdk 'takes a byte stream from'
 }

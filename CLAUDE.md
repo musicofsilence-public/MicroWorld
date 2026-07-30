@@ -51,7 +51,7 @@ the non-portable edges. Only they may include OS or SDK headers.
 | System | Depends on | Owns |
 | --- | --- | --- |
 | **Core** | — | Result codes, time, logging, `FLifecycleGuard`, tick scheduling, fixed-capacity containers, delegates, smart pointers, timers, `IPlaySystem` |
-| **Engine** | Core | The managed runtime and identity: `UWorld`, `AActor`, `UActorComponent`, the `TEngine`/`IEngine` front door, timer manager, plus the folded Object store, garbage collector, and generation-checked handles |
+| **Engine** | Core | The managed runtime and identity: `UWorld`, `AActor`, `UActorComponent`, the `TEngine`/`IEngine` interface, timer manager, plus the folded Object store, garbage collector, and generation-checked handles |
 | **Messaging** | Core | Actor messaging: message types, router, channel bindings, reliable channel. Header-only — no archive |
 | **Transport** | Core | Byte I/O: `INetDriver`, `TNetHost`, protocol, framing, plus the optional portable E32 LoRa transport (`FRadioE32Driver`) over `IUartByteStream`. Link it only for LoRa builds — the RadioE32 sources are toggled by `MICROWORLD_TRANSPORT_RADIO` |
 | **Application** | Core, Engine | Program entry: `FApplication` holds one engine for its lifetime and owns the `Run` frame-loop template |
@@ -70,7 +70,7 @@ system count — the two are reconciled.
 
 ## Concepts worth knowing before reading code
 
-**The engine front door.** `TEngine<TTraits>` is the concrete engine; its traits
+**The engine interface.** `TEngine<TTraits>` is the concrete engine; its traits
 struct carries the eight compile-time capacities. `IEngine` is the narrow
 interface an application holds — `BeginPlay`, `Tick`, `EndPlay`, `GetWorld`,
 `GetObjectStore`. Class registration and object creation are function templates on
