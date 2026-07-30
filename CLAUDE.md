@@ -13,8 +13,9 @@ Time is always supplied by the caller, never read from a hidden clock.
 
 ## The dependency graph
 
-Nine packages. Dependencies point inward, and the graph is machine-enforced by
-`tools/CheckDependencyBoundaries.py` — a violation fails `ctest`, not review.
+Eight portable packages. Dependencies point inward, and the graph is
+machine-enforced by `tools/CheckDependencyBoundaries.py` — a violation fails
+`ctest`, not review.
 
 ```text
                     ┌────────────┐
@@ -24,12 +25,12 @@ Nine packages. Dependencies point inward, and the graph is machine-enforced by
             │             │             │              │
         ┌───▼────┐   ┌────▼─────┐  ┌────▼───┐          │
         │ Object │   │ Messaging│  │  Net   │          │
-        └───┬────┘   └────┬─────┘  └────┬───┘          │
-            │             │             │              │
-        ┌───▼────┐        │             │              │
-        │ Engine │        │             │              │
-        └───┬────┘        │             │              │
-            ├─────────────┴─────────────┘              │
+        └───┬────┘   └────┬─────┘  └──┬─┬───┘          │
+            │             │           │ │              │
+        ┌───▼────┐        │           │ │ ┌──────────┐ │
+        │ Engine │        │           │ └─►  RadioE32│ │
+        └───┬────┘        │           │   └──────────┘ │
+            ├─────────────┴───────────┘                │
             │                                          │
    ┌────────▼──────┐                        ┌──────────▼──────────┐
    │  Integration  │                        │     Application     │
@@ -55,11 +56,17 @@ the non-portable edges. Only they may include OS or SDK headers.
 | **Engine** | Core, Object | The managed runtime: `UWorld`, `AActor`, `UActorComponent`, the `TEngine`/`IEngine` front door, timer manager |
 | **Messaging** | Core | Actor messaging: message types, router, channel bindings, reliable channel. Header-only — no archive |
 | **Net** | Core | Byte I/O: `INetDriver`, `TNetHost`, protocol, framing |
+| **RadioE32** | Core, Net | Portable E32 LoRa transport: `FRadioE32Driver`, framing, queueing, bounded pumping over `IUartByteStream`. Optional — link it only for LoRa builds |
 | **Application** | Core, Object, Engine | Program entry: `FApplication` holds one engine for its lifetime and owns the `Run` frame-loop template |
 | **Integration** | Core, Object, Messaging, Engine, Net | `TNetSystem` — the one place Engine and Net meet |
 | **PlatformHost** | non-portable | Host UDP over OS sockets, `steady_clock` time source |
 | **PlatformEsp32** | non-portable | ESP32-S3 transports (lwIP UDP, E32 LoRa UART, wired UART/I2C/SPI), ESP timer and log |
-| **PlatformPico** | Net, non-portable | RP2040 E32 LoRa UART over the native Pico SDK |
+| **PlatformPico** | Net, RadioE32, non-portable | RP2040 E32 LoRa UART over the native Pico SDK |
+
+Eleven packages in total: the eight portable ones above the line plus the three
+platform edges. The architecture model in `docs/architecture/` groups these into
+*six contract-defined systems* — that count is deliberately different, because a
+system is a responsibility and a package is a build target. Do not reconcile them.
 
 ---
 

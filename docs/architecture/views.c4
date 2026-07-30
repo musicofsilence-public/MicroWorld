@@ -1,0 +1,68 @@
+views {
+
+    // One view per level per scope, ordered C1 -> C2 -> C3. LikeC4 has no
+    // folders for views, so the title is the only organising mechanism the
+    // reader gets:
+    //
+    //   [C1] <product> - System Context
+    //   [C2] <product>
+    //   [C3] <system>
+    //
+    // No filtered variants of a level. A level that will not fit in one
+    // readable view has too many elements, not too few views.
+
+    // -----------------------------------------------------------------------
+    // C1 - why the product exists, and who touches it.
+    // -----------------------------------------------------------------------
+
+    // Keeps the reserved id 'index'. LikeC4 auto-generates its own index view
+    // when nothing claims that id, which adds an unwanted extra export. The
+    // level lives in the title instead; only this one view is an exception.
+    view index {
+        title '[C1] MicroWorld - System Context'
+        description 'Why MicroWorld exists. One application reaching three hardware targets is the point of the product, and the fan-out states it by shape rather than by adjective. Devices exchange messages, not bytes, so the developer never writes link-level code. The UE5 familiarity claim is a property of the API, so it lives in the product description rather than pretending to be a relationship.'
+        include developer
+        include firmware
+        include microworld
+        include esp32Device
+        include picoDevice
+        include developmentPc
+        autoLayout TopBottom
+    }
+
+    // -----------------------------------------------------------------------
+    // C2 - the contract-defined systems inside the product.
+    // -----------------------------------------------------------------------
+
+    view c2Systems {
+        title '[C2] MicroWorld'
+        description 'Six systems under the names the repository already uses, so this diagram and CLAUDE.md read against each other directly. Each carries a glyph of what it does, and the layout stacks them in dependency order - composition on top, foundation at the bottom - so no colour key is needed for either. Three things here are in no directory listing. Engine is one system holding two modules. Net holds every transport, because a named medium - Wi-Fi, a wire, a radio - implements the transport responsibility rather than being one. And Engine and Net have no edge between them: that absence is the load-bearing rule of the whole shape, Net System is the only system touching both, and EngineSystem in Core is what lets Net extend a frame loop it cannot see. Messaging sits beside them on Core rather than between them - it has two ways in, one through Application with no transport and one through Net System with one, because Core plus Messaging is already a usable stack. Every dependency label names what actually crosses it.'
+        include microworld
+        include microworld.core
+        include microworld.engine
+        include microworld.messaging
+        include microworld.net
+        include microworld.app
+        include microworld.netSystem
+        autoLayout TopBottom
+    }
+
+    // -----------------------------------------------------------------------
+    // C3 - inside two systems only, where a contributor guesses wrong.
+    // -----------------------------------------------------------------------
+
+    view c3Engine of microworld.engine {
+        title '[C3] Engine'
+        description 'C3, because the deferred spawn barrier and generation-checked handles are the two things a new contributor reliably gets wrong. Which module each element comes from is deliberately not shown here - that split is a C2 fact and the C2 subtitle carries it; repeating it on seven children would cost more than it tells.'
+        include *
+        autoLayout TopBottom
+    }
+
+    view c3Net of microworld.net {
+        title '[C3] Net'
+        description 'One interface and every family that realises it. Drivers appear by family rather than one box per class, because an eighth box saying it realises INetDriver teaches nothing the third did not - the class names are in the subtitles. Each family carries an icon of its physical medium, which is the only thing the three differ by; the elements without one are the always-present machinery.'
+        include *
+        autoLayout TopBottom
+    }
+
+}
