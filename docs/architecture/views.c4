@@ -36,11 +36,11 @@ views {
 
     view c2Systems {
         title '[C2] MicroWorld'
-        description 'Six systems under the names the repository already uses, so this diagram and CLAUDE.md read against each other directly. Each carries a glyph of what it does, and the layout stacks them in dependency order - composition on top, foundation at the bottom - so no colour key is needed for either. Three things here are in no directory listing. Engine is one system holding two modules. Net holds every transport, because a named medium - Wi-Fi, a wire, a radio - implements the transport responsibility rather than being one. And Engine and Net have no edge between them: that absence is the load-bearing rule of the whole shape, Net System is the only system touching both, and EngineSystem in Core is what lets Net extend a frame loop it cannot see. Messaging sits beside them on Core rather than between them - it has two ways in, one through Application with no transport and one through Net System with one, because Core plus Messaging is already a usable stack. Every dependency label names what actually crosses it.'
+        description 'Six systems under the names the repository already uses, so this diagram and CLAUDE.md read against each other directly. Each carries a glyph of what it does, and the layout stacks them in dependency order - composition on top, foundation at the bottom - so no colour key is needed for either. Three things here are in no directory listing. Engine is one system holding two modules. Net holds every transport, because a named medium - Wi-Fi, a wire, a radio - implements the transport responsibility rather than being one. And Engine and Net have no edge between them: that absence is the load-bearing rule of the whole shape, Net System is the only system touching both, and EngineSystem in Core is what lets Net extend a frame loop it cannot see. Messaging System sits beside them on Core rather than between them - it has two ways in, one through Application with no transport and one through Net System with one, because Core plus that one system is already a usable stack. Both System-suffixed boxes are IEngineSystem implementations a composition root installs; only Net System needs Engine. Every dependency label names what actually crosses it.'
         include microworld
         include microworld.core
         include microworld.engine
-        include microworld.messaging
+        include microworld.messagingSystem
         include microworld.net
         include microworld.app
         include microworld.netSystem

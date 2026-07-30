@@ -151,7 +151,11 @@ model {
             }
         }
 
-        messaging = system 'Messaging' {
+        // The two 'System' boxes are the model's two IEngineSystem implementations:
+        // things a composition root installs into a frame loop. That is the only
+        // thing the suffix means here - it is not a claim that they are alike
+        // otherwise, and Net System needs Engine while this one does not.
+        messagingSystem = system 'Messaging System' {
             technology 'system: Modules/Messaging'
             description 'Delivers typed messages between actors, with or without a transport.'
             style {
@@ -159,8 +163,9 @@ model {
                 icon ./icon-messaging.svg
             }
             metadata {
-                contract 'FMessageRouter, channel bindings, reliable channel'
-                boundary 'Runs standalone on Core: TMessageRouter is an IEngineSystem that names neither actors nor transports, so Core + Messaging is already a usable stack. That independence is why it is its own system and not part of networking'
+                contract 'TMessageRouter (an IEngineSystem), channel bindings, reliable channel'
+                standalone 'Usable with no networking at all. TMessageRouter includes only Messaging/Message.h, EngineSystem.h and Time.h, so it names neither actors nor transports: Core plus this system is already a working stack, and Core + Engine + this is local actor messaging with no Net, no Net System and no driver. examples/22-ActorMessages is exactly that program'
+                boundary 'That independence is the whole reason it is its own system. Folding it into Net System would assert that a message between two actors on one board travels through networking, which is false'
             }
         }
 
@@ -316,7 +321,7 @@ model {
         }
     }
 
-    microworld.messaging -[dependsOn]-> microworld.core 'takes Span, Delegate, Time, EngineSystem' {
+    microworld.messagingSystem -[dependsOn]-> microworld.core 'takes Span, Delegate, Time, EngineSystem' {
         metadata {
             traceability 'Messaging/MessageRouter.h, Messaging/Message.h includes'
         }
@@ -338,13 +343,13 @@ model {
     // The transport-free path, and the reason Messaging is its own system rather than
     // part of networking. 'uses' not 'dependsOn': the composition root constructs the
     // router and installs it, so nothing in Modules/Application names Messaging.
-    microworld.app -[uses]-> microworld.messaging 'installs the router in its frame loop, no transport involved' {
+    microworld.app -[uses]-> microworld.messagingSystem 'installs the router in its frame loop, no transport involved' {
         metadata {
             traceability 'examples/22-ActorMessages/src/Main.cpp composes Engine and Messaging with no Net'
         }
     }
 
-    microworld.netSystem -[dependsOn]-> microworld.messaging 'routes typed messages through' {
+    microworld.netSystem -[dependsOn]-> microworld.messagingSystem 'routes typed messages through' {
         metadata {
             traceability 'Integration/NetSystem.h'
         }

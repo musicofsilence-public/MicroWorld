@@ -23,7 +23,7 @@ Generated previews go to `build/`, never beside the source.
 
 ### Systems carry this repository's own names
 
-`Core`, `Engine`, `Net`, `Messaging`, `Application`, `Net System` —
+`Core`, `Engine`, `Net`, `Messaging System`, `Application`, `Net System` —
 because here the module names **are** the domain vocabulary. An earlier revision
 renamed them to invented abstractions ("Runtime Substrate", "Managed Runtime",
 "Engine-Network Integration") and the result forced every reader to translate
@@ -44,10 +44,23 @@ responsibility lives today; it never justifies where the line is drawn, and wher
 the two disagree the packaging is the defect to fix. No boundary in this model may
 be defended with a `target_link_libraries` line.
 
-File references stay, demoted to what they are. Three metadata keys, and they must
-not be mixed: `contract` is what a system exposes, `boundary` is why the line is
-drawn where it is, `traceability` is where an element or dependency lives today.
-The first two are decisions; the third is replaceable the moment code moves.
+File references stay, demoted to what they are. Four metadata keys, and they must not
+be mixed:
+
+| Key | Answers |
+| --- | --- |
+| `contract` | what does this system expose? |
+| `standalone` | what can you build with **just** this? |
+| `boundary` | why is the line drawn here? |
+| `traceability` | where does this live today? |
+
+The first three are decisions. The fourth is replaceable the moment code moves, and
+must never be used to justify a boundary.
+
+`standalone` exists because it is the *evidence* `boundary` argues from, and the two
+read badly when crammed together — see `messagingSystem`, where the capability
+("usable with no networking at all") and the conclusion ("so it is not part of
+networking") are separate sentences that get cited separately.
 
 ### Boundary verdicts for this repository
 
@@ -58,7 +71,7 @@ Recorded because they are the decisions someone will otherwise re-litigate:
 | `Object` + `Engine` | **one** system, titled Engine | Object owns identity, Engine owns the lifetime built on it; neither is a responsibility anything wants alone |
 | `Net` + every transport | **one** system, titled Net | a named medium — Wi-Fi, a wire, a radio — realises `INetDriver` and declares nothing outward, so it is an implementation. `Modules/RadioE32` is portable and separately packaged and still not a system |
 | `Net` + `Net System` | **two** systems | the invariant is *about a boundary* — Net must not learn that actors exist — and a separation cannot be stated with one element |
-| `Messaging` | **own** system | it **runs standalone on Core** — `TMessageRouter` is an `IEngineSystem` naming neither actors nor transports, so Core plus Messaging is already a usable stack. Folding it into networking would claim a local message needs a transport |
+| `Messaging System` | **own** system | it **runs standalone on Core** — `TMessageRouter` is an `IEngineSystem` naming neither actors nor transports, so Core plus Messaging is already a usable stack. Folding it into networking would claim a local message needs a transport |
 | `Core` + `Engine` | **two** systems | Core is the shared vocabulary that lets independent systems interoperate. Merge it and Net → Core becomes Net → Engine, collapsing the graph |
 | `Platform*` | **not C2** | the non-portable edge, and implementations besides; they appear inside the C3 driver families that name them |
 
@@ -120,7 +133,7 @@ They render in `export png` with no network, the same as the bundled sets.
 | --- | --- | --- |
 | Core | stacked plinth | the foundation everything else rests on |
 | Engine | globe | `UWorld` is literally the central type |
-| Messaging | envelope | typed messages, delivered |
+| Messaging System | envelope | typed messages, delivered |
 | Net | frames on a wire | "moves framed bytes" drawn |
 | Application | loop with an arrowhead | it owns the `Run` frame loop |
 | Net System | two lines merging into one | the only place Engine and Net meet |
