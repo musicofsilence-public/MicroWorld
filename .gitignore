@@ -17,11 +17,13 @@ Thumbs.db
 # ESP-IDF sdkconfig files PlatformIO generates per environment (sdkconfig.<env>)
 examples/*/sdkconfig.*
 # Consumer SDK configs are likewise generated per PlatformIO environment.
-Modules/Core/tests/consumer/sdkconfig.*
+Modules/tests/Core/consumer/sdkconfig.*
 # ...but the shared board profile's sdkconfig.defaults is committed source, not
 # generated output, so keep tracking it (the pattern above would eat it).
 !examples/esp32-common/sdkconfig.defaults
 # Per-site WiFi credentials (committed template: NetworkConfig.example.h)
 examples/*/src/NetworkConfig.h
 .idea/
+# Per-session scratch plans written by the zcode tool
+.zcode/
 /build-*
