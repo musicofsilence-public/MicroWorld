@@ -1,6 +1,6 @@
 # ADR 0002a: Smart-Pointer Foundations
 
-- **Status:** Accepted pointer foundation; Memory target runtime margins remain unmeasured
+- **Status:** Accepted pointer foundation; target runtime margins remain unmeasured
 - **Date:** 2026-07-19
 - **Decision owner:** Project owner
 
@@ -43,9 +43,10 @@ atomic/toolchain compile probe, and target benchmark justify it.
 
 ### Managed references
 
-`TObjectPtr`, `TWeakObjectPtr`, and `TStrongObjectPtr` are Object-module handle
-types, not aliases for unique/shared ownership. `UObject` allocation through
-`TUniquePtr` or `TSharedPtr` is rejected.
+`TObjectPtr`, `TWeakObjectPtr`, and `TStrongObjectPtr` are managed-object handles,
+not aliases for unique/shared ownership. `UObject` allocation through `TUniquePtr`
+or `TSharedPtr` is rejected. Two lifetime categories that look alike must not be
+spelled alike.
 
 ## Comparison criteria
 
@@ -63,30 +64,25 @@ candidates and target measurements before releasing the API.
 
 The 2026-07-19 MSVC x64 public-API benchmark recorded:
 
-| Candidate | Handle size | Allocation evidence | Exceptions-off result |
+| Candidate | Handle size | Allocation | Exceptions-off result |
 | --- | ---: | --- | --- |
-| Thin `TUniquePtr<FBenchmarkValue>` | 32 bytes | one injected 16-byte allocation; zero global allocations | Passed in standalone consumer |
-| Equivalent `std::unique_ptr` plus resource deleter | 32 bytes | same injected allocation/deallocation; zero global allocations | Foundation compiles through thin wrapper |
-| Custom `TSharedPtr<FBenchmarkValue>` | 8 bytes | one injected 56-byte combined allocation; zero global allocations | Passed in standalone consumer |
-| Custom `TWeakPtr<FBenchmarkValue>` | 8 bytes | same 56-byte block retained after value expiry | Passed in standalone consumer |
-| `std::shared_ptr<FBenchmarkValue>` | 16 bytes | successful attributed `allocate_shared` used one 40-byte global block | Does not expose typed OOM in C++17 |
-| `std::weak_ptr<FBenchmarkValue>` | 16 bytes | shared standard control block | Same limitation |
+| Thin `TUniquePtr` | 32 bytes | one injected 16-byte allocation; zero global | Passed |
+| `std::unique_ptr` plus resource deleter | 32 bytes | identical | Passed |
+| Custom `TSharedPtr` | 8 bytes | one injected 56-byte combined allocation; zero global | Passed |
+| Custom `TWeakPtr` | 8 bytes | same block retained after value expiry | Passed |
+| `std::shared_ptr` | 16 bytes | one 40-byte global block | No typed OOM in C++17 |
+| `std::weak_ptr` | 16 bytes | shares the standard control block | Same limitation |
 
 The standard shared prototype ran only with exceptions enabled and successful
-allocation. No deliberate standard-library OOM was attempted. C++17
-`allocate_shared` communicates allocation failure through `std::bad_alloc`;
-disabling exceptions does not turn that failure into the required
-`ESharedPointerResult::OutOfMemory`.
+allocation; no deliberate out-of-memory case was attempted. C++17
+`allocate_shared` reports allocation failure by throwing, and disabling exceptions
+does not convert that into the typed failure result this project requires. **That
+contract mismatch is the finding — not the size difference**, which would not on
+its own have justified a custom implementation.
 
-The standalone host Core+Memory consumer compiled and ran with exceptions and
-RTTI disabled. The ESP32-S3 Memory profile compiled with the representative
-consumer translation unit under `gnu++17`, strict warnings, exceptions
-disabled, and RTTI disabled. Its map proved that Core and Memory archives were
-selected without later modules. These are compile/layout facts, not target
-runtime or accepted-budget evidence.
-
-Detailed measurements are recorded in
-[`microworld-memory/benchmarks/Results`](../../../microworld-memory/benchmarks/Results).
+Measured on a desktop host with exceptions and RTTI disabled, and compiled for the
+target under the same settings. These are size and compile facts; target runtime
+margins were not measured and are not claimed.
 
 ## Accepted decision
 
@@ -103,9 +99,9 @@ The project owner accepted the following direction on 2026-07-19:
 4. reject `std::shared_ptr`/`std::allocate_shared` as the portable foundation
    for this release because its C++17 allocation-failure contract is
    exception-based, not because the successful allocation layout is larger;
-5. keep Memory experimental until target margins are measured and accepted;
-   this decision does not invent an absolute budget or establish target runtime
-   support.
+5. treat the shared pointers as provisional until target margins are measured and
+   accepted; this decision does not invent an absolute budget or establish target
+   runtime support.
 
 ## Consequences
 

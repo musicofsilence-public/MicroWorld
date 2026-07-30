@@ -38,18 +38,10 @@ deterministic lifetimes that must not wait for collection.
 - GC never runs from an ISR, reads a hidden clock, starts a background thread,
   or owns hardware/safety services.
 
-`UObject` is implemented by the Object candidate. This decision required the
-later `UWorld`, `AActor`, and `UActorComponent` implementation to preserve
-these identity, tracing, lifecycle, and bounded-work rules; the accepted Engine
-candidate now does so.
-
-## Implementation evidence
-
-On 2026-07-19, the Object candidate at `e1e7b75` recorded evidence for handles,
-descriptors, roots, object storage, and bounded incremental GC. That evidence
-did not establish the Engine behavior implemented later. See
-[ModulePackaging.md](../ModulePackaging.md); current implementation state is
-defined by the Engine package's headers and tests.
+These identity, tracing, lifecycle, and bounded-work rules bind everything built
+on the object store — `UWorld`, `AActor` and `UActorComponent` included. Identity
+and the lifetime built on it are one system, which [ADR
+0004](0004-module-tree-mirrors-architecture.md) later made structural.
 
 ## Consequences
 

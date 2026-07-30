@@ -1,49 +1,42 @@
-# ADR 0001: Separate Portable Layers
+# ADR 0001: An Application Pays Only For The Layers It Uses
 
-- **Status:** Accepted for Core/Memory/Object separation; later package topology superseded by the active mini-engine concept
+- **Status:** Accepted in principle; the specific layer topology it named is
+  superseded by [ADR 0004](0004-module-tree-mirrors-architecture.md) and the
+  current model
 - **Date:** 2026-07-19
 - **Decision owner:** Project owner
 
 ## Context
 
-Core is a useful standalone lifecycle/tick package. Managed objects and the
-minimal Engine need additional ownership contracts without making every Core
-consumer compile them.
+The foundation is useful on its own — lifecycle, tick scheduling, time. Managed
+objects and the engine built on them need further ownership contracts, and those
+contracts cost memory and compile time that a small application has no reason to
+pay.
 
 ## Decision
 
-Keep the implemented portable layers separate:
-
-```text
-Core <- Memory <- Object <- Engine
-Core <- Memory <- Net
-```
-
-Core remains independently usable. Each implemented layer has its own adjacent
-package, CMake target, and PlatformIO manifest; consumers select the packages
-they use. This follows PlatformIO's one-manifest source-selection model and
-avoids feature macros that change Core's source set.
-
-The original release shipped `FNetwork` as a small Core lifecycle/tick boundary,
-distinct from the later Net package; the Phase 1 consolidation retired it, so Net
-is now the only MicroWorld networking package. Application composition roots own
-concrete resources and adapters; no global runtime registry is introduced.
+- **Portable layers stay separate, and a consumer selects what it uses.** The
+  foundation remains independently usable, and building on it must not change how
+  it behaves for someone who does not.
+- **Composition roots own concrete resources and adapters.** No global runtime
+  registry is introduced, so what an application depends on is visible where it is
+  assembled rather than discovered at run time.
 
 ## Consequences
 
-- Small applications keep using Core without managed-object cost.
-- Engine can build on Object without changing Core behavior.
-- Package boundaries remain easy to inspect with consumer and dependency checks.
+- The smallest applications keep the foundation without managed-object cost.
+- Layer boundaries stay inspectable, which is what later allowed them to be
+  machine-enforced rather than reviewed.
+- Selecting layers is a real decision a consumer must make, not a default.
 
 ## Historical scope
 
-The original decision also described separate Serialization, Engine-Net bridge,
-and platform-port packages. Those are not current work. The active
-[mini-engine concept](../../../../.claude/concepts/microworld-mini-engine-roadmap.md)
-supersedes that speculative topology with the smaller first-version scope.
+The original record named a specific layer chain and several packages that were
+never built — serialization, an engine-network bridge, platform-port packages.
+That topology is not current work, and it is speculative complexity of the kind
+this project now rejects on sight. What survives is the principle above.
 
 ## Revisit triggers
 
-- A real application shows a package boundary creates more complexity than it
+- A real application shows a layer boundary creates more complexity than it
   removes.
-- PlatformIO gains a simpler source-selection model.
