@@ -29,45 +29,52 @@ Do not reintroduce either; put the fact where its owner already is.
 
 ```text
 MicroWorld/
-├── Modules/            One CMake/PlatformIO package per engine layer
-│   ├── Core/           lifecycle, tick, containers, delegates, smart
-│   │                   pointers, timers, IPlaySystem
-│   ├── Object/         object store, garbage collector, handles
-│   ├── Engine/         UWorld / AActor / UActorComponent, TEngine, IEngine
-│   ├── Messaging/      message router, channel bindings (header-only)
-│   ├── Net/            byte I/O, frame codec, TNetHost
-│   ├── RadioE32/       optional portable E32 framing and driver
-│   ├── Application/    FApplication (including the Run template)
-│   ├── Integration/    TNetSystem — Messaging + Net behind IPlaySystem
-│   ├── PlatformHost/   host UDP transport (non-portable)
-│   ├── PlatformEsp32/  ESP32 UDP + UART SDK bindings + optional E32 facade (PlatformIO/ESP-IDF only)
-│   └── PlatformPico/   RP2040 UART SDK binding + optional E32 facade (native Pico SDK only)
+├── Modules/            the single engine package
+│   ├── CMakeLists.txt  one superbuild defining every per-system target + tests
+│   ├── library.json    one portable library (Platform/ excluded via srcFilter)
+│   ├── MicroWorld/     the include root's only child; .h + .cpp side by side
+│   │   ├── Core/       lifecycle, tick, containers, delegates, smart
+│   │   │               pointers, timers, IPlaySystem
+│   │   ├── Engine/     UWorld / AActor / UActorComponent + the folded Object
+│   │   │               store, GC, handles, TEngine, IEngine
+│   │   ├── Messaging/  message router, channel bindings (header-only)
+│   │   ├── Transport/  byte I/O, frame codec, TNetHost + the optional E32
+│   │   │               portable framing and driver (was Net + RadioE32)
+│   │   ├── Networking/ TNetSystem — Messaging + Transport behind IPlaySystem
+│   │   ├── Application/ FApplication (including the Run template)
+│   │   └── Platform/   non-portable edges, each its own library.json
+│   │       ├── Host/    host UDP transport
+│   │       ├── Esp32/   ESP32 UDP + UART SDK bindings + optional E32 facade
+│   │       └── Pico/    RP2040 UART SDK binding + optional E32 facade
+│   ├── tests/          per-system host test dirs (outside MicroWorld/)
+│   └── benchmarks/     per-system benchmark dirs (outside MicroWorld/)
+├── examples/           PlatformIO examples + the host HostLifecycle/TwoNodeDemo
 ├── docs/               engine-wide design docs, ADRs, diagrams, the one plan
 ├── tools/              CheckDependencyBoundaries, CheckProfileMap,
-│                       CheckFolderAgents, CheckClassDocumentation
-├── CMakeLists.txt      root superbuild (adds every portable/host module)
+│                       CheckFolderAgents, CheckClassDocumentation, CheckFormatting
+├── CMakeLists.txt      root superbuild (adds Modules/)
 └── clang-format        repo style file (invoke as --style=file:clang-format)
 ```
 
-Each package's version is its `library.json` plus its CMake `project()` line —
-both currently 0.3.0. There is no root version file; one more copy of a number
+The package's version is its `library.json` plus the CMake `project()` line —
+both currently 0.4.0. There is no root version file; one more copy of a number
 is one more copy to leave stale.
 
 Dependencies point inward:
 
 ```text
-Core <- Object <- Engine <- Application
+Core <- Engine
 Core <- Messaging
-Core <- Net
-Core <- Net <- RadioE32
-Core, Messaging, Net <- Integration
+Core <- Transport
+Core, Messaging, Transport <- Networking
+Core, Engine <- Application
 ```
 
-Memory is folded into Core; no Memory package edge remains. Net never pulls
-Object or Engine, and no package sees both Engine and Net — Integration reaches
-the engine only through Core's `IPlaySystem`, so joining the two is a
-composition root's job. PlatformHost, PlatformEsp32, and PlatformPico are the
-non-portable edges; only they may reach OS/SDK headers.
+Object folded into Engine; Net and RadioE32 folded into Transport. Transport
+never pulls Engine, and no portable system sees both Engine and Transport —
+Networking reaches the engine only through Core's `IPlaySystem`, so joining the
+two is a composition root's job. Platform/Host, Platform/Esp32, and Platform/Pico
+are the non-portable edges; only they may reach OS/SDK headers.
 
 `CLAUDE.md` at this level carries the architecture overview and each module's
 responsibility in one place.
@@ -85,10 +92,14 @@ responsibility in one place.
 
 ## Identity (frozen — do not rename during moves/refactors)
 
-CMake `project()` names, targets (`microworld_memory` etc.), `MicroWorld::*`
-aliases, `library.json` package names/versions, and the
-`include/MicroWorld/...` header layout stay exactly as they are. Only directory
-names and path references change.
+CMake `project()` names, the per-system targets (`microworld`,
+`microworld_engine`, `microworld_messaging`, `microworld_transport`,
+`microworld_networking`, `microworld_application`, `microworld_platform_host`),
+their `MicroWorld::*` aliases, the `library.json` package names/versions, and the
+`MicroWorld/<System>/<Name>.h` header layout stay exactly as they are. The folder
+tree under `Modules/MicroWorld/` now mirrors the six-system architecture model;
+future refactors preserve the system-directory names and the side-by-side
+`.h`/`.cpp` layout.
 
 ## Code documentation and formatting
 
@@ -104,7 +115,8 @@ names and path references change.
 
 ## Build and verification
 
-Superbuild (all portable/host modules) from the repo root:
+Superbuild (the single Modules package, all six systems plus platform edges)
+from the repo root:
 
 ```sh
 cmake -S . -B build
@@ -112,14 +124,9 @@ cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-Standalone per-module (same shape) — useful for exercising the deepest sibling
-chains, e.g. `Modules/Engine` or `Modules/PlatformHost`:
-
-```sh
-cmake -S Modules/Engine -B build-engine
-cmake --build build-engine --config Release
-ctest --test-dir build-engine -C Release --output-on-failure
-```
+The superbuild is the only path. Standalone per-module configuration is gone —
+the engine's systems live in one package and one `CMakeLists.txt`, so there is
+no `cmake -S Modules/<Name>` form to fall back on.
 
 Checkers (run per their documented args; see `tools/AGENTS.md`):
 

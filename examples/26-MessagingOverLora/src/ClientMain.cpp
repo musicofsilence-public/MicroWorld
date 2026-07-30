@@ -1,14 +1,14 @@
 #include "LoraMessagingShared.h"
 
-#include <MicroWorld/Containers/Span.h>
-#include <MicroWorld/Delegates/Delegate.h>
-#include <MicroWorld/Log.h>
-#include <MicroWorld/Net/NetHost.h>
-#include <MicroWorld/Net/NetResult.h>
-#include <MicroWorld/PlatformEsp32/Esp32E32LoraDriver.h>
-#include <MicroWorld/PlatformEsp32/Esp32Sleep.h>
-#include <MicroWorld/PlatformEsp32/Esp32TimeSource.h>
-#include <MicroWorld/PlatformEsp32/LoraAddress.h>
+#include <MicroWorld/Core/Containers/Span.h>
+#include <MicroWorld/Core/Delegates/Delegate.h>
+#include <MicroWorld/Core/Log.h>
+#include <MicroWorld/Transport/NetHost.h>
+#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Platform/Esp32/Esp32E32LoraDriver.h>
+#include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
+#include <MicroWorld/Platform/Esp32/Esp32TimeSource.h>
+#include <MicroWorld/Platform/Esp32/LoraAddress.h>
 
 #include <cstdint>
 

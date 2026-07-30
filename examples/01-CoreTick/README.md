@@ -8,7 +8,7 @@ visible with a real clock.
 
 ## What it does
 
-1. Logs the MicroWorld version: `microworld 0.3.0`.
+1. Logs the MicroWorld version: `microworld 0.4.0`.
 2. Constructs the portable `FCoreTickExample` with a 500 ms `FTickFunction`
    interval and calls `Begin` from `FEsp32TimeSource::Now()`.
 3. Polls every 10 ms, calling `Advance(Now())`. Each time the returned
@@ -76,7 +76,7 @@ Exactly seven lines; `n` runs 1–5; `delta` ≈ 500 (500–520 typical — real
 so approximate is expected):
 
 ```text
-I (nnnn) ex01: microworld 0.3.0
+I (nnnn) ex01: microworld 0.4.0
 I (nnnn) ex01: tick n=1 delta=500
 I (nnnn) ex01: tick n=2 delta=500
 I (nnnn) ex01: tick n=3 delta=500

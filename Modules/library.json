@@ -1,0 +1,38 @@
+{
+  "name": "MicroWorld",
+  "version": "0.4.0",
+  "description": "MicroWorld: bounded C++17 mini engine for microcontrollers — lifecycle, World/Actor/Component, GC, smart pointers, messaging, byte I/O transport, and the Networking play system",
+  "keywords": [
+    "embedded",
+    "engine",
+    "lifecycle",
+    "tick",
+    "memory",
+    "allocator",
+    "actor",
+    "messaging",
+    "transport",
+    "networking"
+  ],
+  "license": "MIT",
+  "frameworks": "*",
+  "platforms": "*",
+  "build": {
+    "includeDir": ".",
+    "srcDir": "MicroWorld",
+    "libArchive": true,
+    "flags": [
+      "-fno-exceptions",
+      "-fno-rtti"
+    ],
+    "srcFilter": [
+      "+<Core/>",
+      "+<Engine/>",
+      "+<Messaging/>",
+      "+<Transport/>",
+      "+<Networking/>",
+      "+<Application/>",
+      "-<Platform/>"
+    ]
+  }
+}

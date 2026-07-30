@@ -26,22 +26,22 @@ or inspect the
 
 ## Modules
 
-| Module | CMake target | PlatformIO package | Role |
+| System | CMake target | PlatformIO package | Role |
 | --- | --- | --- | --- |
 | Core | `MicroWorld::Core` | `MicroWorld` | Lifecycle, tick, containers, delegates, smart pointers, timers, `IPlaySystem` |
-| Object | `MicroWorld::Object` | `MicroWorldObject` | Object store, garbage collector, handles |
-| Engine | `MicroWorld::Engine` | `MicroWorldEngine` | `UWorld` / `AActor` / `UActorComponent`, `TEngine`, `IEngine` |
-| Messaging | `MicroWorld::Messaging` | `MicroWorldMessaging` | Message router, channel bindings (header-only) |
-| Net | `MicroWorld::Net` | `MicroWorldNet` | Byte I/O, frame codec, `TNetHost` |
-| RadioE32 | `MicroWorld::RadioE32` | `MicroWorldRadioE32` | Optional portable E32 framing and `FRadioE32Driver` over Core's `IUartByteStream` interface |
-| Application | `MicroWorld::Application` | `MicroWorldApplication` | `FApplication` — owns one engine and its frame loop |
-| Integration | `MicroWorld::Integration` | `MicroWorldIntegration` | `TNetSystem` — the only Engine + Net joiner |
-| PlatformHost | `MicroWorld::PlatformHost` | — | Host UDP transport (non-portable) |
-| PlatformEsp32 | — | `MicroWorldPlatformEsp32` | ESP32 UDP + wired transports, UART SDK bindings, and optional E32 facade (PlatformIO/ESP-IDF only) |
-| PlatformPico | `MicroWorld::PlatformPico` | — | RP2040 UART SDK binding and optional E32 facade (native Pico SDK only) |
+| Engine | `MicroWorld::Engine` | `MicroWorld` | `UWorld` / `AActor` / `UActorComponent`, `TEngine`, `IEngine`, plus the object store, garbage collector, and handles |
+| Messaging | `MicroWorld::Messaging` | `MicroWorld` | Message router, channel bindings, reliable channel (header-only) |
+| Transport | `MicroWorld::Transport` | `MicroWorld` | Byte I/O, frame codec, `TNetHost`, and the optional portable E32 `FRadioE32Driver` |
+| Networking | `MicroWorld::Networking` | `MicroWorld` | `TNetSystem` — Messaging over Transport behind `IPlaySystem` |
+| Application | `MicroWorld::Application` | `MicroWorld` | `FApplication` — owns one engine and its frame loop |
+| Platform/Host | `MicroWorld::PlatformHost` | `MicroWorldPlatformHost` | Host UDP transport and `steady_clock` time source (non-portable) |
+| Platform/Esp32 | — | `MicroWorldPlatformEsp32` | ESP32 UDP + wired transports, UART SDK bindings, E32 facade (PlatformIO/ESP-IDF only) |
+| Platform/Pico | `MicroWorld::PlatformPico` | `MicroWorldPlatformPico` | RP2040 UART SDK binding and E32 facade (native Pico SDK only) |
 
-Memory is folded into Core; no Memory package remains. Dependencies point
-inward:
+One folder under `Modules/MicroWorld/` per system, one CMake target per system,
+one shipped package for all six. Memory folds into Core, the object store folds
+into Engine, and the E32 radio folds into Transport behind the
+`MICROWORLD_TRANSPORT_RADIO` option. Dependencies point inward:
 
 ```text
 Core <- Object <- Engine <- Application
@@ -70,7 +70,7 @@ ctest --test-dir build -C Release --output-on-failure
 ```
 
 Each module also configures standalone with the same command shape, for example
-`Modules/Engine` or `Modules/PlatformHost`. The CMake `-Werror` gate and the
+`Modules/MicroWorld/Engine` or `Modules/MicroWorld/Platform/Host`. The CMake `-Werror` gate and the
 `tools/Check*.py` scripts enforce dependency direction, profile-map evidence,
 folder-agent coverage, class-documentation contracts, and clang-format
 conformance (`microworld_format_check` runs with every `ctest`).

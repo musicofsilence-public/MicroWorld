@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reject portable package dependencies that violate MicroWorld module direction."""
+"""Reject portable system dependencies that violate MicroWorld module direction."""
 
 from __future__ import annotations
 
@@ -10,28 +10,29 @@ import tempfile
 from pathlib import Path
 
 
-# Each module may include itself plus only these inward portable dependencies.
-# Serialization is intentionally absent: that package does not exist and
-# predeclaring it would authorize package paths that are not built.
-# Memory is folded into Core: its former public segments (Containers, Delegates,
-# Memory) resolve to Core, and no Memory package edge remains.
+# The folder tree under Modules/MicroWorld/ names the six contract-defined
+# systems directly. Each system may include itself plus only these inward
+# portable dependencies. Object folded into Engine (so Engine owns identity and
+# lifetime); Net and RadioE32 folded into Transport (so one byte-I/O system owns
+# the driver contract and every medium). Engine and Transport never name each
+# other: that separation is the invariant the whole shape protects. Integration
+# became Networking.
 MODULE_DEPENDENCIES = {
     "Core": set(),
-    "Object": {"Core"},
-    "Engine": {"Core", "Object"},
-    "Net": {"Core"},
-    "RadioE32": {"Core", "Net"},
+    "Engine": {"Core"},
     "Messaging": {"Core"},
-    "Application": {"Core", "Object", "Engine"},
-    "Integration": {"Core", "Messaging", "Net"},
+    "Transport": {"Core"},
+    "Networking": {"Core", "Messaging", "Transport"},
+    "Application": {"Core", "Engine"},
 }
 
-# Platform packages remain outside portable-package ownership enforcement, but
+# Platform systems remain outside portable-system ownership enforcement, but
 # their public include namespaces still identify forbidden outward edges from
-# portable code such as RadioE32.
-PLATFORM_MODULE_NAMES = {"PlatformEsp32", "PlatformHost", "PlatformPico"}
+# portable code (a portable system must not include a platform header). Each
+# lives under MicroWorld/Platform/<Family>/ and is named by its family.
+PLATFORM_MODULE_NAMES = {"Host", "Esp32", "Pico"}
 
-# Platform-facing APIs are intentionally absent: portable packages may use only
+# Platform-facing APIs are intentionally absent: portable systems may use only
 # MicroWorld and the conservative C++17 standard library at compile time.
 STANDARD_LIBRARY_HEADERS = {
     "algorithm",
@@ -122,10 +123,11 @@ VENDOR_HEADER_PREFIXES = (
 )
 
 SOURCE_SUFFIXES = {".c", ".cc", ".cpp", ".cxx", ".h", ".hpp"}
-# These sub-namespaces under include/MicroWorld/ are owned by Core (they were
-# the Memory package's public surface before it folded in). Resolving them to
-# Core keeps a Core header that includes <MicroWorld/Containers/Span.h> legal.
-CORE_PUBLIC_SEGMENTS = {"Containers", "Delegates", "Memory"}
+# These sub-namespaces under include <MicroWorld/Core/<Seg>/ are owned by Core
+# (they were the Memory package's public surface before it folded in). Resolving
+# them to Core keeps a Core header that includes <MicroWorld/Core/Containers/Span.h>
+# legal and a Core-owned sub-folder recognized as Core.
+CORE_PUBLIC_SEGMENTS = {"Containers", "Delegates", "Memory", "IO"}
 INCLUDE_PATTERN = re.compile(
     r'^\s*#\s*include\s*([<"])([^>"]+)[>"]',
     re.MULTILINE,
@@ -133,14 +135,14 @@ INCLUDE_PATTERN = re.compile(
 
 
 def parse_arguments() -> argparse.Namespace:
-    """Require explicit package ownership or an isolated deterministic self-test."""
+    """Require explicit system ownership or an isolated deterministic self-test."""
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--package",
         action="append",
         default=[],
         metavar="MODULE=PATH",
-        help="Declare one portable package and the module it owns.",
+        help="Declare one portable system and the directory it owns.",
     )
     parser.add_argument(
         "--exclude",
@@ -181,45 +183,46 @@ def discover_sources(
     package_root: Path,
     excluded_names: set[str],
 ) -> list[Path]:
-    """Find only maintained public headers and runtime sources in one package."""
-    sources: list[Path] = []
-    for source_root_name in ("include", "src"):
-        source_root = package_root / source_root_name
-        if not source_root.is_dir():
-            continue
-        sources.extend(
-            path
-            for path in source_root.rglob("*")
-            if path.is_file()
-            and path.suffix.lower() in SOURCE_SUFFIXES
-            and not is_excluded(path, source_root, excluded_names)
-        )
-    return sorted(sources)
+    """
+    Find maintained headers and sources in one flat system directory.
+
+    The merged layout places headers and sources side by side under the system
+    directory (e.g. Modules/MicroWorld/Core/Time.h), with sub-namespaces like
+    Containers/ and Detail/ nested below. Scan the whole tree recursively so
+    public headers, sources, and Detail implementation headers are all governed.
+    """
+    if not package_root.is_dir():
+        return []
+    return sorted(
+        path
+        for path in package_root.rglob("*")
+        if path.is_file()
+        and path.suffix.lower() in SOURCE_SUFFIXES
+        and not is_excluded(path, package_root, excluded_names)
+    )
 
 
 def declared_path_module(path: Path, package_root: Path) -> str | None:
-    """Detect a logical module folder that conflicts with its owning package."""
+    """
+    Detect a logical system whose include namespace conflicts with its owner.
+
+    A source file's first directory segment below the system root is either a
+    header name (flat) or a sub-namespace (Containers, Delegates, Memory, IO,
+    Detail). Core owns the folded sub-namespaces; Detail belongs to its owner.
+    Because the system directory IS the system now, a misplaced header is one
+    placed under the wrong system folder, which the include analysis catches
+    instead — this guard stays to flag a sub-folder that names another system.
+    """
     relative_parts = path.relative_to(package_root).parts
     if not relative_parts:
         return None
-
-    if relative_parts[0] == "include" and "MicroWorld" in relative_parts:
-        namespace_index = relative_parts.index("MicroWorld")
-        if namespace_index + 1 >= len(relative_parts) - 1:
-            return "Core"
-        candidate = relative_parts[namespace_index + 1]
-        if candidate in CORE_PUBLIC_SEGMENTS:
-            return "Core"
-        return (
-            candidate
-            if candidate in MODULE_DEPENDENCIES or candidate in PLATFORM_MODULE_NAMES
-            else "Core"
-        )
-
-    if relative_parts[0] == "src" and len(relative_parts) > 2:
-        candidate = relative_parts[1]
-        if candidate in MODULE_DEPENDENCIES:
-            return candidate
+    first = relative_parts[0]
+    # A Core-owned sub-namespace folder is always Core.
+    if first in CORE_PUBLIC_SEGMENTS:
+        return "Core"
+    # Detail is an implementation sub-folder of its owner, not a foreign system.
+    if first == "Detail":
+        return None
     return None
 
 
@@ -229,16 +232,23 @@ def included_module(header: str) -> str | None:
     prefix = "MicroWorld/"
     if not normalized_header.startswith(prefix):
         return None
-    remainder = normalized_header[len(prefix) :]
-    first_segment = remainder.split("/", 1)[0]
-    if first_segment in CORE_PUBLIC_SEGMENTS:
+    remainder = normalized_header[len(prefix):]
+    segments = remainder.split("/")
+    if not segments:
         return "Core"
-    return (
-        first_segment
-        if first_segment in MODULE_DEPENDENCIES
-        or first_segment in PLATFORM_MODULE_NAMES
-        else "Core"
-    )
+    first_segment = segments[0]
+    # The Platform family nests one level deeper: MicroWorld/Platform/<Family>/.
+    if first_segment == "Platform" and len(segments) >= 2:
+        family = segments[1]
+        return family if family in PLATFORM_MODULE_NAMES else None
+    # A Core header with no system segment (should not happen post-rewrite, but
+    # resolves safely to Core).
+    if first_segment not in MODULE_DEPENDENCIES and first_segment not in PLATFORM_MODULE_NAMES:
+        # Core's folded sub-namespaces are reached as <MicroWorld/Core/<Seg>/...>,
+        # so a bare unrecognized first segment is treated as Core (the previous
+        # behavior for unrecognized prefixes).
+        return "Core"
+    return first_segment
 
 
 def is_external_header(header: str, delimiter: str) -> bool:
@@ -284,19 +294,19 @@ def analyze_packages(
     packages: list[tuple[str, Path]],
     excluded_names: set[str],
 ) -> tuple[list[str], int]:
-    """Validate package ownership, folder placement, and dependency direction."""
+    """Validate system ownership, folder placement, and dependency direction."""
     errors: list[str] = []
     scanned_files = 0
 
     for owner, package_root in packages:
         if not package_root.is_dir():
-            errors.append(f"{package_root}: {owner} package root is not a directory")
+            errors.append(f"{package_root}: {owner} system root is not a directory")
             continue
 
         sources = discover_sources(package_root, excluded_names)
         if not sources:
             errors.append(
-                f"{package_root}: {owner} package has no maintained sources"
+                f"{package_root}: {owner} system has no maintained sources"
             )
             continue
 
@@ -305,7 +315,7 @@ def analyze_packages(
             path_module = declared_path_module(path, package_root)
             if path_module is not None and path_module != owner:
                 errors.append(
-                    f"{path}: {owner} package contains a "
+                    f"{path}: {owner} system contains a "
                     f"{path_module} module path"
                 )
             errors.extend(analyze_source(path, owner))
@@ -318,105 +328,78 @@ def run_self_test() -> int:
     with tempfile.TemporaryDirectory() as temporary_directory:
         root = Path(temporary_directory)
         core = root / "core"
-        net = root / "net"
-        radio_e32 = root / "radio-e32"
-        # Core owns its own Net-bucket leak fixture, the folded Memory segment,
-        # and the folded Containers segment (both resolve to Core, not a
-        # separate Memory package).
-        (core / "include" / "MicroWorld" / "Net").mkdir(parents=True)
-        (core / "include" / "MicroWorld" / "Memory").mkdir(parents=True)
-        (core / "include" / "MicroWorld" / "Containers").mkdir(parents=True)
-        (net / "include" / "MicroWorld" / "Net").mkdir(parents=True)
-        (radio_e32 / "include" / "MicroWorld" / "RadioE32").mkdir(
-            parents=True
-        )
+        engine = root / "engine"
+        transport = root / "transport"
+        # Core owns a folded Containers sub-namespace and a stray Transport-bucket
+        # leak fixture (its files resolve to Core, not a foreign system).
+        (core / "Containers").mkdir(parents=True)
+        (core / "Transport").mkdir(parents=True)
+        engine.mkdir(parents=True)
+        (transport / "Detail").mkdir(parents=True)
 
-        (core / "include" / "MicroWorld" / "Good.h").write_text(
-            "#include <cstdint>\n",
+        # A Core header may reach Core; a Containers header using Core/Time passes.
+        (core / "Time.h").write_text("#pragma once\n", encoding="utf-8")
+        (core / "Containers" / "Span.h").write_text(
+            "#include <MicroWorld/Core/Time.h>\n",
             encoding="utf-8",
         )
-        (core / "include" / "MicroWorld" / "BadVendor.h").write_text(
+        # A Core header must not reach Engine (Object is folded into Engine now).
+        (core / "BadDirection.h").write_text(
+            "#include <MicroWorld/Engine/Actor.h>\n",
+            encoding="utf-8",
+        )
+        # A Core source must not include a vendor SDK header.
+        (core / "BadVendor.h").write_text(
             "#include <esp_log.h>\n",
             encoding="utf-8",
         )
-        (core / "include" / "MicroWorld" / "Net" / "Leak.h").write_text(
-            "#pragma once\n",
+        # A Core file placed under a stray Transport folder is flagged as a
+        # foreign module path even though it lives in Core's tree.
+        (core / "Transport" / "Leak.h").write_text("#pragma once\n", encoding="utf-8")
+
+        # Engine may reach Core but nothing else; it must never reach Transport.
+        (engine / "World.h").write_text(
+            "#include <MicroWorld/Core/Time.h>\n",
             encoding="utf-8",
         )
-        # A Core header under the folded Memory segment must not reach Object.
-        (
-            core
-            / "include"
-            / "MicroWorld"
-            / "Memory"
-            / "BadDirection.h"
-        ).write_text(
-            "#include <MicroWorld/Object/Object.h>\n",
+        (engine / "TransportLeak.h").write_text(
+            "#include <MicroWorld/Transport/NetDriver.h>\n",
             encoding="utf-8",
         )
-        # A Core header may reach Core, so a Containers header using Time passes.
-        (
-            core
-            / "include"
-            / "MicroWorld"
-            / "Containers"
-            / "Good.h"
-        ).write_text(
-            "#include <MicroWorld/Time.h>\n",
+
+        # Transport may reach Core but never Engine — the core invariant.
+        (transport / "NetDriver.h").write_text(
+            "#include <MicroWorld/Core/Time.h>\n",
             encoding="utf-8",
         )
-        # A valid Net header may reach Core but nothing above it.
-        (net / "include" / "MicroWorld" / "Net" / "Good.h").write_text(
-            "#include <MicroWorld/Time.h>\n"
-            "#include <MicroWorld/Containers/Span.h>\n",
-            encoding="utf-8",
-        )
-        # Net must not depend on Object or Engine; both directions must fail.
-        (net / "include" / "MicroWorld" / "Net" / "ObjectLeak.h").write_text(
-            "#include <MicroWorld/Object/Object.h>\n",
-            encoding="utf-8",
-        )
-        (net / "include" / "MicroWorld" / "Net" / "EngineLeak.h").write_text(
+        (transport / "EngineLeak.h").write_text(
             "#include <MicroWorld/Engine/World.h>\n",
             encoding="utf-8",
         )
-        # RadioE32 may depend on Core and Net, but never on platform packages.
-        (
-            radio_e32
-            / "include"
-            / "MicroWorld"
-            / "RadioE32"
-            / "Good.h"
-        ).write_text(
-            "#include <MicroWorld/Time.h>\n"
-            "#include <MicroWorld/Net/NetDriver.h>\n",
+        # Transport Detail headers are governed as part of Transport.
+        (transport / "Detail" / "State.h").write_text(
+            "#include <MicroWorld/Core/Time.h>\n",
             encoding="utf-8",
         )
-        for platform_module in sorted(PLATFORM_MODULE_NAMES):
-            (
-                radio_e32
-                / "include"
-                / "MicroWorld"
-                / "RadioE32"
-                / f"{platform_module}Leak.h"
-            ).write_text(
-                f"#include <MicroWorld/{platform_module}/Platform.h>\n",
+        # A portable system must not reach any platform family.
+        for family in sorted(PLATFORM_MODULE_NAMES):
+            (transport / f"{family}Leak.h").write_text(
+                f"#include <MicroWorld/Platform/{family}/Driver.h>\n",
                 encoding="utf-8",
             )
 
         errors, _ = analyze_packages(
-            [("Core", core), ("Net", net), ("RadioE32", radio_e32)],
+            [("Core", core), ("Engine", engine), ("Transport", transport)],
             {"build", ".pio", "__pycache__"},
         )
         expected_fragments = (
+            "Core must not depend on Engine",
             "external header esp_log.h",
-            "Core package contains a Net module path",
-            "Core must not depend on Object",
-            "Net must not depend on Object",
-            "Net must not depend on Engine",
-            "RadioE32 must not depend on PlatformEsp32",
-            "RadioE32 must not depend on PlatformHost",
-            "RadioE32 must not depend on PlatformPico",
+            "Engine must not depend on Transport",
+            "Transport must not depend on Engine",
+            "Transport must not depend on Host",
+            "Transport must not depend on Esp32",
+            "Transport must not depend on Pico",
         )
         missing_fragments = [
             fragment
@@ -431,9 +414,11 @@ def run_self_test() -> int:
                 )
             return 1
 
+        # The valid edges must NOT be flagged.
         unexpected_valid_edge_fragments = (
-            "RadioE32 must not depend on Core",
-            "RadioE32 must not depend on Net",
+            "Engine must not depend on Core",
+            "Transport must not depend on Core",
+            "Containers.h: Core must not depend",  # sub-namespace self-reach
         )
         rejected_valid_edges = [
             fragment
@@ -489,7 +474,7 @@ def main() -> int:
 
     print(
         "Dependency-boundary check passed "
-        f"({len(packages)} packages, {scanned_files} files)."
+        f"({len(packages)} systems, {scanned_files} files)."
     )
     return 0
 

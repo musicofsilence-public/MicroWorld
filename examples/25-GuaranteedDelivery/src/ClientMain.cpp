@@ -1,6 +1,6 @@
 #include "GuaranteedDeliveryShared.h"
 
-#include <MicroWorld/Containers/Span.h>
+#include <MicroWorld/Core/Containers/Span.h>
 #include <MicroWorld/Engine/Actor.h>
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Engine/EngineResult.h>
@@ -10,18 +10,18 @@
 #include <MicroWorld/Engine/EngineSystem.h>
 #include <MicroWorld/Messaging/ReliableChannel.h>
 #include <MicroWorld/Engine/World.h>
-#include <MicroWorld/Log.h>
-#include <MicroWorld/Net/NetHost.h>
-#include <MicroWorld/Net/NetResult.h>
-#include <MicroWorld/Net/PacketDropDriver.h>
-#include <MicroWorld/Net/UdpAddressCodec.h>
-#include <MicroWorld/Object/ClassDescriptor.h>
-#include <MicroWorld/Object/GarbageCollector.h>
-#include <MicroWorld/Object/ObjectPtr.h>
-#include <MicroWorld/PlatformEsp32/Esp32Sleep.h>
-#include <MicroWorld/PlatformEsp32/Esp32TimeSource.h>
-#include <MicroWorld/PlatformEsp32/Esp32UdpDriver.h>
-#include <MicroWorld/PlatformEsp32/Esp32WifiLink.h>
+#include <MicroWorld/Core/Log.h>
+#include <MicroWorld/Transport/NetHost.h>
+#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Transport/PacketDropDriver.h>
+#include <MicroWorld/Transport/UdpAddressCodec.h>
+#include <MicroWorld/Engine/ClassDescriptor.h>
+#include <MicroWorld/Engine/GarbageCollector.h>
+#include <MicroWorld/Engine/ObjectPtr.h>
+#include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
+#include <MicroWorld/Platform/Esp32/Esp32TimeSource.h>
+#include <MicroWorld/Platform/Esp32/Esp32UdpDriver.h>
+#include <MicroWorld/Platform/Esp32/Esp32WifiLink.h>
 
 #include <cstddef>
 #include <cstdint>

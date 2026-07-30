@@ -28,12 +28,12 @@ Object use caller-selected fixed resources in their tested paths. Exact sizes,
 operation counts, toolchains, and qualifications belong in the immutable result
 records, not this summary:
 
-- [Core host](../Modules/Core/benchmarks/Results/Host.md) and
-  [ESP32-S3 compile evidence](../Modules/Core/benchmarks/Results/Esp32S3N16R8.md)
+- [Core host](../Modules/benchmarks/Core/Results/Host.md) and
+  [ESP32-S3 compile evidence](../Modules/benchmarks/Core/Results/Esp32S3N16R8.md)
 - [Memory host](../Modules/Memory/benchmarks/Results/Host.md) and
   [ESP32-S3 compile evidence](../Modules/Memory/benchmarks/Results/Esp32S3N16R8.md)
-- [Object host](../Modules/Object/benchmarks/Results/Host.md) and
-  [ESP32-S3 compile evidence](../Modules/Object/benchmarks/Results/Esp32S3N16R8.md)
+- [Object host](../Modules/benchmarks/Engine/Results/Host.md) and
+  [ESP32-S3 compile evidence](../Modules/benchmarks/Engine/Results/Esp32S3N16R8.md)
 
 Target runtime margins for Memory and Object remain unmeasured. This is a
 qualification for hardware support, not a reason to add speculative allocator

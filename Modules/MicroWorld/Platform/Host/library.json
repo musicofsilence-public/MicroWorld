@@ -1,0 +1,25 @@
+{
+  "name": "MicroWorldPlatformHost",
+  "version": "0.4.0",
+  "description": "MicroWorld PlatformHost: host UDP transport over OS sockets and a steady_clock time source for desktop development and host tests",
+  "keywords": [
+    "embedded",
+    "host",
+    "platform",
+    "udp",
+    "sockets",
+    "desktop"
+  ],
+  "license": "MIT",
+  "frameworks": "*",
+  "platforms": "*",
+  "build": {
+    "includeDir": ".",
+    "srcDir": ".",
+    "libArchive": true,
+    "flags": [
+      "-fno-exceptions",
+      "-fno-rtti"
+    ]
+  }
+}

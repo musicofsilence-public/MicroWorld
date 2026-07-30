@@ -2,12 +2,12 @@
 
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Messaging/Message.h>
-#include <MicroWorld/Integration/NetSystem.h>
-#include <MicroWorld/Net/UdpAddressCodec.h>
-#include <MicroWorld/Object/ClassDescriptor.h>
-#include <MicroWorld/PlatformEsp32/Esp32UartDriver.h>
-#include <MicroWorld/PlatformEsp32/Esp32UdpDriver.h>
-#include <MicroWorld/PlatformEsp32/Esp32WifiLink.h>
+#include <MicroWorld/Networking/NetSystem.h>
+#include <MicroWorld/Transport/UdpAddressCodec.h>
+#include <MicroWorld/Engine/ClassDescriptor.h>
+#include <MicroWorld/Platform/Esp32/Esp32UartDriver.h>
+#include <MicroWorld/Platform/Esp32/Esp32UdpDriver.h>
+#include <MicroWorld/Platform/Esp32/Esp32WifiLink.h>
 
 #include <cstddef>
 #include <cstdint>

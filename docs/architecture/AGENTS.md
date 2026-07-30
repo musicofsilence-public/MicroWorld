@@ -41,7 +41,7 @@ boundary, readers will not see it.
 
 ### The subtitle names the role, never a directory
 
-Every system carried a path once — `system: Modules/Core`, `system: Modules/Application`.
+Every system carried a path once — `system: Modules/MicroWorld/Core`, `system: Modules/MicroWorld/Application`.
 Five of six merely restated the title, and since the subtitle renders
 second-most-prominently, the effect was that **directory paths supplied the diagram's
 vocabulary**: the code driving the view, in the most visible position it could occupy.
@@ -99,7 +99,7 @@ to the design, and the arrow only runs the other way.
 
 Three things here disagree with the packaging on purpose, which is the check that the
 rule is real: **Engine** is one system over two modules, **Transport** holds
-`Modules/RadioE32`, which is portable and separately packaged, and neither **Transport**
+`Modules/MicroWorld/Transport`, which is portable and separately packaged, and neither **Transport**
 nor **Networking** is named after the module it contains.
 
 File references stay, demoted to what they are. Four metadata keys, and they must not

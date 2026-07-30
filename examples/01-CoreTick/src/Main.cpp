@@ -1,11 +1,11 @@
 #include "CoreTickExample.h"
 
-#include <MicroWorld/Log.h>
-#include <MicroWorld/Version.h>
+#include <MicroWorld/Core/Log.h>
+#include <MicroWorld/Core/Version.h>
 
-#include <MicroWorld/PlatformEsp32/Esp32OutputDevice.h>
-#include <MicroWorld/PlatformEsp32/Esp32Sleep.h>
-#include <MicroWorld/PlatformEsp32/Esp32TimeSource.h>
+#include <MicroWorld/Platform/Esp32/Esp32OutputDevice.h>
+#include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
+#include <MicroWorld/Platform/Esp32/Esp32TimeSource.h>
 
 namespace
 {

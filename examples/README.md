@@ -52,7 +52,7 @@ Modules\Core\tests\consumer\pico-freertos\pico.bat build example
 It resolves the Pico SDK and FreeRTOS through CMake, uses PlatformIO's cached
 host tools when available, and produces a UF2 without using Arduino. Pico
 upload is separately human-gated; see
-[`Modules/Core/tests/consumer/pico-freertos/README.md`](../Modules/Core/tests/consumer/pico-freertos/README.md).
+[`Modules/tests/Core/consumer/pico-freertos/README.md`](../Modules/tests/Core/consumer/pico-freertos/README.md).
 
 ## Catalog
 

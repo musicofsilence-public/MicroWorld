@@ -61,14 +61,14 @@ MODULE_MARKERS = {
         "fbytearchive",
     ),
     "Net": (
-        "microworld_net",
+        "microworld_transport",
         "microworld-net",
         "/microworld/net/",
         "fnetmanager",
         "inetdriver",
     ),
     "Integration": (
-        "microworld_integration",
+        "microworld_networking",
         "microworld-integration",
         "/microworld/integration/",
         "tnetsystem",
@@ -103,9 +103,9 @@ OBJECT_ARCHIVE_MARKERS = (
 # Net profiles must link their separate package archive. Header-only byte I/O
 # evidence does not prove that the INetDriver out-of-line destructor participated.
 NET_ARCHIVE_MARKERS = (
-    "microworld_net:",
-    "microworld_net.lib",
-    "libmicroworld_net.a",
+    "microworld_transport:",
+    "microworld_transport.lib",
+    "libmicroworld_transport.a",
     "libmicroworld-net.a",
     "libmicroworldnet.a",
 )
@@ -252,7 +252,7 @@ def run_self_test() -> int:
 
     invalid_map = (
         "microworld.lib\n"
-        "libmicroworld_net.a(NetManager.o)\n"
+        "libmicroworld_transport.a(NetManager.o)\n"
         "MicroWorld::TNetManager\n"
     )
     invalid_errors = analyze_map(invalid_map, "Core", [], [])
@@ -275,7 +275,7 @@ def run_self_test() -> int:
     # Object or Engine, proving the Net overlay is independent of them.
     valid_core_net_map = (
         "libmicroworld.a(TickFunction.o)\n"
-        "libmicroworld_net:NetDriver.obj\n"
+        "libmicroworld_transport:NetDriver.obj\n"
         "MicroWorld::TNetManager\n"
     )
     valid_core_net_errors = analyze_map(valid_core_net_map, "Core+Net", [], [])

@@ -11,20 +11,20 @@ set(MICROWORLD_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(MICROWORLD_BUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
 set(MICROWORLD_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 add_subdirectory(
-	"${CMAKE_CURRENT_LIST_DIR}/../../../Modules/Core"
+	"${CMAKE_CURRENT_LIST_DIR}/../../../Modules"
 	"${CMAKE_CURRENT_BINARY_DIR}/microworld"
 )
 
 add_executable(
 	microworld_core_tick_example_tests
-	"${CMAKE_CURRENT_LIST_DIR}/../../../Modules/Core/tests/TestMain.cpp"
+	"${CMAKE_CURRENT_LIST_DIR}/../../../Modules/tests/Core/TestMain.cpp"
 	"${CMAKE_CURRENT_LIST_DIR}/../src/CoreTickExample.cpp"
 	CoreTickExampleTests.cpp
 )
 target_include_directories(
 	microworld_core_tick_example_tests
 	PRIVATE
-		"${CMAKE_CURRENT_LIST_DIR}/../../../Modules/Core/tests"
+		"${CMAKE_CURRENT_LIST_DIR}/../../../Modules/tests/Core"
 		"${CMAKE_CURRENT_LIST_DIR}/../src"
 )
 target_link_libraries(

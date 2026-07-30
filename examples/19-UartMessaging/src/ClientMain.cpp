@@ -1,14 +1,14 @@
 #include "UartMessagingShared.h"
 
-#include <MicroWorld/Containers/Span.h>
-#include <MicroWorld/Delegates/Delegate.h>
-#include <MicroWorld/Log.h>
-#include <MicroWorld/Net/NetHost.h>
-#include <MicroWorld/Net/NetResult.h>
-#include <MicroWorld/PlatformEsp32/Esp32Sleep.h>
-#include <MicroWorld/PlatformEsp32/Esp32TimeSource.h>
-#include <MicroWorld/PlatformEsp32/Esp32UartDriver.h>
-#include <MicroWorld/PlatformEsp32/UartAddress.h>
+#include <MicroWorld/Core/Containers/Span.h>
+#include <MicroWorld/Core/Delegates/Delegate.h>
+#include <MicroWorld/Core/Log.h>
+#include <MicroWorld/Transport/NetHost.h>
+#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
+#include <MicroWorld/Platform/Esp32/Esp32TimeSource.h>
+#include <MicroWorld/Platform/Esp32/Esp32UartDriver.h>
+#include <MicroWorld/Platform/Esp32/UartAddress.h>
 
 #include <cstdint>
 

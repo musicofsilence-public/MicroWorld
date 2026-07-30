@@ -13,7 +13,7 @@ this folder, it never copies or forks these files.
 
 - **Provenance.** These two files are the exact profile that produced every
   verified ESP32-S3 compile and the Phase 6.2 hardware measurements recorded in
-  `Modules/PlatformEsp32/benchmarks/Results/Esp32S3N16R8.md`. They are proven,
+  `Modules/benchmarks/Platform/Esp32/Results/Esp32S3N16R8.md`. They are proven,
   not tunable — do not "improve" them.
 - `partitions.csv` describes the 16 MB flash layout (NVS, dual 4 MiB OTA slots,
   a wear-levelled FATFS data area, and a coredump region).

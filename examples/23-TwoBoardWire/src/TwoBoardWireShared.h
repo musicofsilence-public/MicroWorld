@@ -5,9 +5,9 @@
 #include <MicroWorld/Messaging/MessageChannelBinding.h>
 #include <MicroWorld/Messaging/MessageRouter.h>
 #include <MicroWorld/Engine/EngineSystem.h>
-#include <MicroWorld/Net/NetHost.h>
-#include <MicroWorld/Object/ClassDescriptor.h>
-#include <MicroWorld/PlatformEsp32/Esp32UartDriver.h>
+#include <MicroWorld/Transport/NetHost.h>
+#include <MicroWorld/Engine/ClassDescriptor.h>
+#include <MicroWorld/Platform/Esp32/Esp32UartDriver.h>
 
 #include <cstdint>
 

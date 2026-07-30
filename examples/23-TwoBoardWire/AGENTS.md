@@ -27,7 +27,7 @@ allocation-free, sized at compile time.
 - **`EChannelSendTarget`.** The client's binding sends to `Server` (its one
   connected peer); the server's binding sends to `AllPeers` (broadcasts reach
   every connected client, matching `TNetHost::Broadcast`'s own semantics).
-- **Manual frame order = the 3.1 test's.** `Modules/Engine/tests/EngineMessageChannelTests.cpp`'s
+- **Manual frame order = the 3.1 test's.** `Modules/MicroWorld/Engine/tests/EngineMessageChannelTests.cpp`'s
   `PumpSide` proved `Router.PostAdvance` -> `Host.Tick` -> `Router.PreAdvance`
   is the correct per-frame order for a router bound to a live `TNetHost`; this
   example's run loop mirrors that order exactly, on both boards.

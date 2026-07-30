@@ -1,6 +1,6 @@
 #pragma once
 
-#include <MicroWorld/TickFunction.h>
+#include <MicroWorld/Core/TickFunction.h>
 
 /** Reports one example loop decision and whether its bounded trace is complete. */
 struct FCoreTickExampleStep

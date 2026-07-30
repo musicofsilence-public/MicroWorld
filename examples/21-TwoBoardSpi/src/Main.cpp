@@ -1,10 +1,10 @@
-#include <MicroWorld/Log.h>
-#include <MicroWorld/Net/NetResult.h>
-#include <MicroWorld/PlatformEsp32/Esp32OutputDevice.h>
-#include <MicroWorld/PlatformEsp32/Esp32Sleep.h>
-#include <MicroWorld/PlatformEsp32/Esp32SpiDriver.h>
-#include <MicroWorld/PlatformEsp32/Esp32TimeSource.h>
-#include <MicroWorld/PlatformEsp32/SpiAddress.h>
+#include <MicroWorld/Core/Log.h>
+#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Platform/Esp32/Esp32OutputDevice.h>
+#include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
+#include <MicroWorld/Platform/Esp32/Esp32SpiDriver.h>
+#include <MicroWorld/Platform/Esp32/Esp32TimeSource.h>
+#include <MicroWorld/Platform/Esp32/SpiAddress.h>
 
 #include <cstddef>
 #include <cstdint>

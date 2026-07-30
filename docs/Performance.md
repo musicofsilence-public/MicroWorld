@@ -12,4 +12,4 @@ is not accepted.
 Host timing is comparative development evidence. A target compile proves build
 and static image size, not cycle cost, heap behavior, stack margin, or hardware
 behavior. Record the source, toolchain, configuration, workload, and result in
-the applicable [benchmark evidence](../Modules/Core/benchmarks/Results).
+the applicable [benchmark evidence](../Modules/benchmarks/Core/Results).

@@ -2,7 +2,7 @@
 
 **Version:** 1.0 · **Date:** 2026-07-24 · **Owner:** Mykola
 **Baseline:** `main` at `b4973be` (clean tree), Windows 11 root superbuild + PlatformIO for examples, ESP-IDF 6.0.1 via PlatformIO.
-**Scope:** `Modules/PlatformEsp32`, `examples/`, `docs/decisions/`. Portable
+**Scope:** `Modules/MicroWorld/Platform/Esp32`, `examples/`, `docs/architecture/decisions/`. Portable
 packages (`Core`, `Memory`, `Object`, `Engine`, `Net`) are **untouched** —
 a radio is just another `INetDriver` (ADR 0003 logic applies unchanged).
 
@@ -21,7 +21,7 @@ This document is the active plan and progress tracker for that work, written
 so that any LLM (including a weak one) can pick it up, find the next task,
 complete it, and record progress without extra context. Companions:
 `examples/AGENTS.md` (owns the build and hardware-verification procedure),
-`Modules/Messaging/AGENTS.md` (owns the composition recipes), and examples
+`Modules/MicroWorld/Messaging/AGENTS.md` (owns the composition recipes), and examples
 18–21 (the wired driver pattern this plan imitates for radios).
 
 Completed tasks below still cite `PROGRESS.md` and `CHANGELOG.md`. Both files
@@ -77,7 +77,7 @@ python tools/CheckClassDocumentation.py --root Modules --require-doxygen
 
 PlatformEsp32 has no host build: for its files the gate is a line-by-line
 re-read plus the ESP32 consumer compile probe (`pio run` in
-`Modules/Core/tests/consumer` for the relevant env), exactly as the wired plan
+`Modules/tests/Core/consumer` for the relevant env), exactly as the wired plan
 used.
 
 ### 1.2 Example Build Verify
@@ -134,14 +134,14 @@ join the allowed industry vocabulary alongside `Udp`/`Uart`), format with
 
 ### 2.2 Radio-edge rules (new, this plan)
 
-- **Edge-only.** New code lives in `Modules/PlatformEsp32`, `examples/`, and
-  `docs/decisions/`. If a task seems to need a portable-package change, stop
+- **Edge-only.** New code lives in `Modules/MicroWorld/Platform/Esp32`, `examples/`, and
+  `docs/architecture/decisions/`. If a task seems to need a portable-package change, stop
   and write `⛔ BLOCKED` — that is a design error in this plan, not a license
   to edit `Net`.
 - **All vendor headers stay private.** ESP-IDF/NimBLE includes are confined
   to `src/*PlatformImplementation.h` and `.cpp` files; public headers carry
   only config structs and plain types
-  (`rg -n "esp_|nimble|freertos|host/ble" Modules/PlatformEsp32/include` must
+  (`rg -n "esp_|nimble|freertos|host/ble" Modules/MicroWorld/Platform/Esp32/include` must
   stay 0).
 - **Drivers implement the full `INetDriver` contract** (`NetDriver.h:40`):
   non-blocking, at most one transport operation per call, transactional
@@ -218,13 +218,13 @@ join the allowed industry vocabulary alongside `Udp`/`Uart`), format with
 
 | Concern | Imitate |
 | --- | --- |
-| UART-attached radio transport | `Modules/RadioE32/.../RadioE32Driver.h` + `Modules/PlatformEsp32/.../Esp32E32LoraDriver.h` facade + `src/UartPlatformImplementation.h` |
-| Role-asymmetric driver pair + ISR-side inbox ring | `Modules/PlatformEsp32/.../Esp32I2cDriver.h` (`FI2cReceiveInbox`) |
-| Per-driver 1-byte address codec | `Modules/PlatformEsp32/.../LoraAddress.h`, `UartAddress.h` |
-| Design-spike ADR with header-derived answers | `docs/decisions/0003-wired-transports.md` Appendices A/B |
+| UART-attached radio transport | `Modules/MicroWorld/Transport/.../RadioE32Driver.h` + `Modules/MicroWorld/Platform/Esp32/.../Esp32E32LoraDriver.h` facade + `src/UartPlatformImplementation.h` |
+| Role-asymmetric driver pair + ISR-side inbox ring | `Modules/MicroWorld/Platform/Esp32/.../Esp32I2cDriver.h` (`FI2cReceiveInbox`) |
+| Per-driver 1-byte address codec | `Modules/MicroWorld/Platform/Esp32/.../LoraAddress.h`, `UartAddress.h` |
+| Design-spike ADR with header-derived answers | `docs/architecture/decisions/0003-wired-transports.md` Appendices A/B |
 | Driver volley example | `examples/18-TwoBoardUart` |
 | Full TNetHost + engine messaging example | `examples/19-UartMessaging` |
-| Two-link, one-world composition (Phase 5 only) | `Modules/Messaging/AGENTS.md` composition recipes |
+| Two-link, one-world composition (Phase 5 only) | `Modules/MicroWorld/Messaging/AGENTS.md` composition recipes |
 
 ---
 
@@ -284,7 +284,7 @@ pattern, own UUIDs fixed by the spike) with two characteristics: **RX**
 through `TFrameDecoder` exactly like the UART driver, so partial deliveries
 are already handled. MTU is requested at connect to cover one whole frame.
 
-**Public header target** (`Modules/PlatformEsp32/include/MicroWorld/PlatformEsp32/Esp32BleDriver.h`):
+**Public header target** (`Modules/MicroWorld/Platform/Esp32/Esp32BleDriver.h`):
 
 ```cpp
 /** Largest payload one BLE frame carries; uniform with the wired transports. */
@@ -516,7 +516,7 @@ bench, first as a raw volley, then under the full engine.
   25084 B / Flash 232341 B, client RAM 21388 B / Flash 221493 B — real numbers
   written into the README, replacing the pre-link estimates), `ctest -C Release`
   11/11, clang-format clean (all four `src/` files), no regression in the
-  `Modules/PlatformEsp32/include` vendor-include gate.
+  `Modules/MicroWorld/Platform/Esp32/include` vendor-include gate.
 
   *Blocker root-caused and fixed:* the first build failed with
   `ld: cannot open linker script file bootloader.ld` on every `pio run` while
@@ -555,7 +555,7 @@ bench, first as a raw volley, then under the full engine.
 
 ### Phase 2 — Bluetooth LE design spike ⬜
 
-- [ ] **2.1 Write `docs/decisions/0004-bluetooth-le-transport.md`.** Status
+- [ ] **2.1 Write `docs/architecture/decisions/0005-bluetooth-le-transport.md`.** Status
   "Accepted" after owner sign-off. Content: D1 (S3 = BLE only, evidence),
   the D2 edge-only architecture, and an evidence-based answer to **every**
   spike question in §4.2 (imitate ADR 0003's appendix style: quote the
@@ -586,7 +586,7 @@ bench, first as a raw volley, then under the full engine.
   enumerate sources; folder `AGENTS.md` guides.
 
   **Done when:** vendor-include gate 0 (`rg -n "esp_|nimble|freertos|host/ble"
-  Modules/PlatformEsp32/include` → 0); every declaration documented;
+  Modules/MicroWorld/Platform/Esp32/include` → 0); every declaration documented;
   line-by-line re-read recorded in the evidence line (no host build exists).
   **Verify:** Standard Verify + the include-gate grep. Compile proof
   deliberately lands in task 3.2 (the probe needs 3.2's sdkconfig plumbing) —
@@ -596,7 +596,7 @@ bench, first as a raw volley, then under the full engine.
 - [ ] **3.2 BLE build plumbing + compile probe.** Create
   `examples/esp32-common/sdkconfig.ble.defaults` with exactly the ADR 0004
   flag set (D11 — the shared `sdkconfig.defaults` is untouched). Extend the
-  ESP32 consumer project (`Modules/Core/tests/consumer`) with a `ble` env
+  ESP32 consumer project (`Modules/tests/Core/consumer`) with a `ble` env
   that layers both defaults files and compiles a minimal probe instantiating
   both drivers (imitate how the existing Net/Engine ESP32 probes are wired).
   Document the two-file `SDKCONFIG_DEFAULTS` mechanism in
@@ -661,7 +661,7 @@ BLE work in Phases 2–4.
   telemetry over BLE** (`TNetHost<2, 120>`), **channel 2 commands over LoRa**
   (`TNetHost<2, 58>`, D8 profile). One world per board, one `TMessageRouter`
   per board with `MaxMessageBytes = 48` (§4.1 — the LoRa channel is the
-  binding constraint), frame-set composition per the `Modules/Messaging/AGENTS.md`
+  binding constraint), frame-set composition per the `Modules/MicroWorld/Messaging/AGENTS.md`
   recipes (net frames first, router last). Client
   board: sensor actor streams readings on telemetry; server board: control
   actor sends a targeted rate-change command on the LoRa channel every 15 s.
@@ -683,7 +683,7 @@ BLE work in Phases 2–4.
 
 ### Phase 6 — Documentation & close-out ⬜
 
-- [ ] **6.1 Documentation sweep.** `Modules/PlatformEsp32` README/AGENTS: BLE
+- [ ] **6.1 Documentation sweep.** `Modules/MicroWorld/Platform/Esp32` README/AGENTS: BLE
   driver pair + BleAddress rows next to the existing transport tables.
   `docs/Porting.md` (locate the Net-driver section's driver list): add BLE. `docs/UE5ConceptMap.md`:
   one row (BLE/LoRa drivers ≈ more `UNetDriver` transports — reuse the

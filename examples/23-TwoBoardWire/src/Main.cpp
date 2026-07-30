@@ -1,5 +1,5 @@
-#include <MicroWorld/Log.h>
-#include <MicroWorld/PlatformEsp32/Esp32OutputDevice.h>
+#include <MicroWorld/Core/Log.h>
+#include <MicroWorld/Platform/Esp32/Esp32OutputDevice.h>
 
 // Role is chosen at build time: server (=1) or client (=0). Both roles always
 // compile — ServerMain.cpp and ClientMain.cpp are always built — and this

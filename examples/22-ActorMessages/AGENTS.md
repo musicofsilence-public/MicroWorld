@@ -24,7 +24,7 @@ and allocation-free; no wire, no second board.
   exact frame-by-frame trace.
 - **Component-before-actor tick order.** The thermometer's `Tick` runs after
   its own sensor component's `TickComponent` within the same `Advance` (see
-  `Modules/Engine/include/MicroWorld/Engine/Actor.h`), and both are configured
+  `Modules/MicroWorld/Engine/Actor.h`), and both are configured
   with the identical 500 ms cadence started from the same boot time — so the
   actor always broadcasts the reading its sensor just produced, never a stale
   one.

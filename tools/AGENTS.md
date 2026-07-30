@@ -27,9 +27,10 @@ subdirectory to add a local guide.
 - Dependency ownership is declared explicitly as `MODULE=PATH`; a package may
   not hide another module below its own manifest.
 - Profile checks inspect archive, path, and public-symbol markers. Every
-  profile requires positive Core archive evidence; Memory- and Object-selected
-  profiles additionally require their adjacent package archives. The current
-  managed profile includes Core, Memory, Object, and Engine.
+  profile requires positive Core archive evidence; Object- and Net-selected
+  profiles additionally require their adjacent system archives. The current
+  managed profile includes Core, Engine (with the folded Object), and the
+  Engine archive covers both.
 - Formatting checks delegate to `clang-format --dry-run --Werror` with the
   repo style file passed explicitly as `--style=file:<root>/clang-format`; the
   file has no leading dot, so a bare `--style=file` would fall back to LLVM
@@ -44,9 +45,9 @@ subdirectory to add a local guide.
 
 Every Python function and module-level policy constant needs a purpose-focused
 docstring or comment. Keep scans deterministic and side-effect free. Verify with
-`python tools/CheckClassDocumentation.py --root Modules/Core --require-doxygen --max-sentences 3`
+`python tools/CheckClassDocumentation.py --root Modules/MicroWorld/Core --require-doxygen --max-sentences 3`
 and
-`python tools/CheckFolderAgents.py --root Modules/Core --require-file AGENTS.md`.
+`python tools/CheckFolderAgents.py --root Modules/MicroWorld/Core --require-file AGENTS.md`.
 
 `CheckClassDocumentation.py` and `CheckFolderAgents.py` each skip generated trees
 and tool metadata through their own `DEFAULT_EXCLUDED_DIRECTORY_NAMES`, so no
@@ -56,12 +57,11 @@ the name to that constant, or pass `--exclude` for a one-off. Both carry a
 `--self-test` that pins the case where an excluded name sits in an *ancestor* of
 the scan root, which once made either checker report a pass over zero files.
 Verify module boundaries with
-`python tools/CheckDependencyBoundaries.py --package Core=Modules/Core`
+`python tools/CheckDependencyBoundaries.py --package Core=Modules/MicroWorld/Core`
 and verify a built Core map with
 `python tools/CheckProfileMap.py --map <linker-map> --profile Core`.
-Use `--profile Memory` for Core+Memory, `--profile Object` for
-Core+Memory+Object, and `--profile Managed` for
-Core+Memory+Object+Engine.
+Use `--profile Object` for Core+Object, and `--profile Managed` for
+Core+Object+Engine. (Memory folded into Core; there is no Memory profile.)
 Run each new checker with `--self-test` before trusting its repository result.
 Verify clang-format conformance with
 `python tools/CheckFormatting.py --root <repo-root>` (it also runs as the

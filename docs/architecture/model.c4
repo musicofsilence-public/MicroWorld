@@ -50,7 +50,7 @@ model {
             }
             metadata {
                 contract 'time, tick scheduling, timers, logging, lifecycle, result codes, the play-system turn points, byte streams'
-                traceability 'Modules/Core headers: Time.h, TickFunction.h, Timer.h, Log.h, Lifecycle.h, PlaySystem.h, IO/UartByteStream.h'
+                traceability 'Modules/MicroWorld/Core headers: Time.h, TickFunction.h, Timer.h, Log.h, Lifecycle.h, PlaySystem.h, IO/UartByteStream.h'
             }
         }
 
@@ -63,7 +63,7 @@ model {
             metadata {
                 contract 'IEngine, UWorld, AActor, UActorComponent, FObjectStore'
                 boundary 'Object owns identity, Engine owns the lifetime built on it. Neither is a responsibility anything wants alone, so they are one system'
-                traceability 'Modules/Engine + Modules/Object'
+                traceability 'Modules/MicroWorld/Engine (Engine + folded Object)'
             }
 
             engineFrontDoor = subsystem 'Engine Front Door' {
@@ -71,7 +71,7 @@ model {
                 technology '[subsystem: IEngine / TEngine<TTraits>]'
                 description 'Narrow interface the application holds.'
                 metadata {
-                    traceability 'Modules/Engine/include/MicroWorld/Engine/EngineHost.h'
+                    traceability 'Modules/MicroWorld/Engine/EngineHost.h'
                 }
             }
 
@@ -79,7 +79,7 @@ model {
                 technology '[entity: UWorld]'
                 description 'Owns registered and spawned actors.'
                 metadata {
-                    traceability 'Modules/Engine/include/MicroWorld/Engine/World.h'
+                    traceability 'Modules/MicroWorld/Engine/World.h'
                 }
             }
 
@@ -87,7 +87,7 @@ model {
                 technology '[entity: AActor]'
                 description 'Ticking participant with a lifecycle.'
                 metadata {
-                    traceability 'Modules/Engine/include/MicroWorld/Engine/Actor.h'
+                    traceability 'Modules/MicroWorld/Engine/Actor.h'
                 }
             }
 
@@ -95,7 +95,7 @@ model {
                 technology '[entity: UActorComponent]'
                 description 'Reusable behaviour attached to an actor.'
                 metadata {
-                    traceability 'Modules/Engine/include/MicroWorld/Engine/ActorComponent.h'
+                    traceability 'Modules/MicroWorld/Engine/ActorComponent.h'
                 }
             }
 
@@ -103,7 +103,7 @@ model {
                 technology '[domainService: queued actor factories]'
                 description 'Constructs actors only at safe points.'
                 metadata {
-                    traceability 'Modules/Engine/include/MicroWorld/Engine/DeferredActorSpawn.h'
+                    traceability 'Modules/MicroWorld/Engine/DeferredActorSpawn.h'
                 }
             }
 
@@ -114,7 +114,7 @@ model {
                     shape storage
                 }
                 metadata {
-                    traceability 'Modules/Object/include/MicroWorld/Object/ObjectStore.h'
+                    traceability 'Modules/MicroWorld/Engine/ObjectStore.h'
                 }
             }
 
@@ -122,7 +122,7 @@ model {
                 technology '[domainService: FGarbageCollector]'
                 description 'Reclaims unreachable managed objects.'
                 metadata {
-                    traceability 'Modules/Object/include/MicroWorld/Object/GarbageCollector.h'
+                    traceability 'Modules/MicroWorld/Engine/GarbageCollector.h'
                 }
             }
         }
@@ -138,7 +138,7 @@ model {
                 contract 'TMessageRouter (an IPlaySystem), channel bindings, reliable channel'
                 standalone 'Usable with no networking at all. Its contract names neither actors nor transports, so Core plus this system is already a working stack, and Core + Engine + this is local actor messaging with no Transport, no Networking and no driver'
                 boundary 'That independence is the whole reason it is its own system. Folding it into Networking would assert that a message between two actors on one board travels through networking, which is false'
-                traceability 'Modules/Messaging; examples/22-ActorMessages is that program. TMessageRouter includes only Message.h, PlaySystem.h and Time.h - confirmation the code currently honours the decision, never the reason for it'
+                traceability 'Modules/MicroWorld/Messaging; examples/22-ActorMessages is that program. TMessageRouter includes only Message.h, PlaySystem.h and Time.h - confirmation the code currently honours the decision, never the reason for it'
             }
         }
 
@@ -151,7 +151,7 @@ model {
             metadata {
                 contract 'INetDriver, TNetHost, frame codec, protocol'
                 boundary 'Transport sits below the engine and takes only time and result codes. Anything that merely satisfies the driver contract belongs inside it - IP, wire and radio alike - and anything needing a world cannot be in here at all'
-                traceability 'Modules/Net + Modules/RadioE32'
+                traceability 'Modules/MicroWorld/Transport (Net + RadioE32)'
             }
 
             driverContract = subsystem 'Driver Contract' {
@@ -159,7 +159,7 @@ model {
                 technology '[subsystem: INetDriver]'
                 description 'Send, receive and advance one transport.'
                 metadata {
-                    traceability 'Modules/Net/include/MicroWorld/Net/NetDriver.h'
+                    traceability 'Modules/MicroWorld/Transport/NetDriver.h'
                 }
             }
 
@@ -167,7 +167,7 @@ model {
                 technology '[subsystem: TNetHost]'
                 description 'Drives one driver every frame.'
                 metadata {
-                    traceability 'Modules/Net/include/MicroWorld/Net/NetHost.h'
+                    traceability 'Modules/MicroWorld/Transport/NetHost.h'
                 }
             }
 
@@ -175,7 +175,7 @@ model {
                 technology '[domainService: magic, length and CRC framing]'
                 description 'Frames and resynchronises byte streams.'
                 metadata {
-                    traceability 'Modules/Net/include/MicroWorld/Net/FrameCodec.h'
+                    traceability 'Modules/MicroWorld/Transport/FrameCodec.h'
                 }
             }
 
@@ -187,7 +187,7 @@ model {
                     icon ./icon-ip.svg
                 }
                 metadata {
-                    traceability 'Modules/PlatformHost/src/HostUdpDriver.cpp; Modules/PlatformEsp32/include/MicroWorld/PlatformEsp32/Esp32UdpDriver.h'
+                    traceability 'Modules/MicroWorld/Platform/Host/HostUdpDriver.cpp; Modules/MicroWorld/Platform/Esp32/Esp32UdpDriver.h'
                 }
             }
 
@@ -199,7 +199,7 @@ model {
                     icon ./icon-wired.svg
                 }
                 metadata {
-                    traceability 'Modules/PlatformEsp32/include/MicroWorld/PlatformEsp32/Esp32UartDriver.h, Esp32I2cDriver.h, Esp32SpiDriver.h'
+                    traceability 'Modules/MicroWorld/Platform/Esp32/Esp32UartDriver.h, Esp32I2cDriver.h, Esp32SpiDriver.h'
                 }
             }
 
@@ -211,7 +211,7 @@ model {
                     icon ./icon-radio.svg
                 }
                 metadata {
-                    traceability 'Modules/RadioE32/include/MicroWorld/RadioE32/RadioE32Driver.h; ESP-IDF and Pico UART facades in Modules/PlatformEsp32, Modules/PlatformPico'
+                    traceability 'Modules/MicroWorld/Transport/RadioE32Driver.h; ESP-IDF and Pico UART facades in Modules/MicroWorld/Platform/Esp32, Modules/MicroWorld/Platform/Pico'
                 }
             }
         }
@@ -224,7 +224,7 @@ model {
             }
             metadata {
                 contract 'FApplication, Run frame loop'
-                traceability 'Modules/Application'
+                traceability 'Modules/MicroWorld/Application'
             }
         }
 
@@ -238,7 +238,7 @@ model {
                 contract 'TNetSystem, an IPlaySystem that owns net drivers and channels'
                 standalone 'Core, Messaging and Transport are its whole closure, so a networked messaging stack needs no world, no actors and no Object. It cannot drive itself though - something must call its turn points each frame'
                 boundary 'Merged with Transport, one element would own both the byte contract and the message types, and nothing would then forbid a driver from knowing a message type. Kept apart, a driver stays reusable with no messaging, messaging stays usable with no driver, and adding a transport touches neither. A separation needs two elements to state it'
-                traceability 'Modules/Integration'
+                traceability 'Modules/MicroWorld/Networking'
             }
         }
     }
@@ -256,44 +256,44 @@ model {
 
     esp32Device -[uses]-> picoDevice 'exchanges messages with' {
         metadata {
-            traceability 'examples/26-MessagingOverLora over E32 radio; Modules/Messaging router'
+            traceability 'examples/26-MessagingOverLora over E32 radio; Modules/MicroWorld/Messaging router'
         }
     }
 
 
     microworld.engine -[dependsOn]-> microworld.core 'takes Time, Timer, Lifecycle, PlaySystem' {
         metadata {
-            traceability 'Engine/EngineHost.h, Engine/Actor.h includes'
+            traceability 'MicroWorld/Engine/EngineHost.h, MicroWorld/Engine/Actor.h includes'
         }
     }
 
     microworld.messagingSystem -[dependsOn]-> microworld.core 'takes Span, Delegate, Time, PlaySystem' {
         metadata {
-            traceability 'Messaging/MessageRouter.h, Messaging/Message.h includes'
+            traceability 'MicroWorld/Messaging/MessageRouter.h, MicroWorld/Messaging/Message.h includes'
         }
     }
 
     microworld.transport -[dependsOn]-> microworld.core 'takes Span, Delegate, Log, Time, UartByteStream' {
         metadata {
-            traceability 'Net/NetHost.h and RadioE32/RadioE32Driver.h includes'
+            traceability 'MicroWorld/Transport/NetHost.h and MicroWorld/Transport/RadioE32Driver.h includes'
         }
     }
 
     microworld.networking -[dependsOn]-> microworld.core 'takes PlaySystem' {
         metadata {
-            traceability 'Integration/NetSystem.h; IPlaySystem is Core/PlaySystem.h, still reached today via Engine/EngineSystem.h'
+            traceability 'MicroWorld/Networking/NetSystem.h; IPlaySystem is MicroWorld/Core/PlaySystem.h, still reached today via MicroWorld/Engine/EngineSystem.h'
         }
     }
 
     microworld.app -[dependsOn]-> microworld.core 'takes Lifecycle, RuntimeResult, Time' {
         metadata {
-            traceability 'Application/Application.h includes'
+            traceability 'MicroWorld/Application/Application.h includes'
         }
     }
 
     microworld.app -[dependsOn]-> microworld.engine 'holds one engine for its lifetime' {
         metadata {
-            traceability 'Application/Application.h'
+            traceability 'MicroWorld/Application/Application.h'
         }
     }
 
@@ -307,13 +307,13 @@ model {
 
     microworld.networking -[dependsOn]-> microworld.messagingSystem 'routes typed messages through' {
         metadata {
-            traceability 'Integration/NetSystem.h'
+            traceability 'MicroWorld/Networking/NetSystem.h'
         }
     }
 
     microworld.networking -[uses]-> microworld.transport 'pumps the transport host each frame' {
         metadata {
-            traceability 'Integration/NetSystem.h'
+            traceability 'MicroWorld/Networking/NetSystem.h'
         }
     }
 

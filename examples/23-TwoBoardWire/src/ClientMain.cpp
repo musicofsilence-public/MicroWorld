@@ -1,6 +1,6 @@
 #include "TwoBoardWireShared.h"
 
-#include <MicroWorld/Containers/Span.h>
+#include <MicroWorld/Core/Containers/Span.h>
 #include <MicroWorld/Engine/Actor.h>
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Engine/EngineResult.h>
@@ -9,16 +9,16 @@
 #include <MicroWorld/Messaging/MessageRouter.h>
 #include <MicroWorld/Engine/EngineSystem.h>
 #include <MicroWorld/Engine/World.h>
-#include <MicroWorld/Log.h>
-#include <MicroWorld/Net/NetHost.h>
-#include <MicroWorld/Net/NetResult.h>
-#include <MicroWorld/Object/ClassDescriptor.h>
-#include <MicroWorld/Object/GarbageCollector.h>
-#include <MicroWorld/Object/ObjectPtr.h>
-#include <MicroWorld/PlatformEsp32/Esp32Sleep.h>
-#include <MicroWorld/PlatformEsp32/Esp32TimeSource.h>
-#include <MicroWorld/PlatformEsp32/Esp32UartDriver.h>
-#include <MicroWorld/PlatformEsp32/UartAddress.h>
+#include <MicroWorld/Core/Log.h>
+#include <MicroWorld/Transport/NetHost.h>
+#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Engine/ClassDescriptor.h>
+#include <MicroWorld/Engine/GarbageCollector.h>
+#include <MicroWorld/Engine/ObjectPtr.h>
+#include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
+#include <MicroWorld/Platform/Esp32/Esp32TimeSource.h>
+#include <MicroWorld/Platform/Esp32/Esp32UartDriver.h>
+#include <MicroWorld/Platform/Esp32/UartAddress.h>
 
 #include <cstddef>
 #include <cstdint>

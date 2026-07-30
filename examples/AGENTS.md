@@ -33,7 +33,7 @@ per-example glue.
 - Every MicroWorld composition object is declared `static` at file scope (or in
   a `static` function-local), never on the `app_main` stack — the default main
   task stack overflows otherwise (the hardware lesson recorded in
-  `Modules/PlatformEsp32/benchmarks/Results/Esp32S3N16R8.md`, Phase 6.2).
+  `Modules/benchmarks/Platform/Esp32/Results/Esp32S3N16R8.md`, Phase 6.2).
 - Time is caller-supplied from `FEsp32TimeSource`; no example logic reads a
   hidden clock.
 
@@ -79,7 +79,7 @@ through `Modules\\Core\\tests\\consumer\\pico-freertos\\pico.bat upload example`
 ### Hardware checkpoint (human-gated — never self-serve)
 
 Flashing and monitoring touch a physical board. Compile success is never a
-runtime claim (see `Modules/PlatformEsp32/AGENTS.md` and `../docs/Porting.md`),
+runtime claim (see `Modules/MicroWorld/Platform/Esp32/AGENTS.md` and `../docs/Porting.md`),
 and a worker must never run `pio run -t upload` or `pio device monitor` without
 explicit human authorization in the current session.
 

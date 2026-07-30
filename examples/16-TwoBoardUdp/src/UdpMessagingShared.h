@@ -1,7 +1,7 @@
 #pragma once
 
-#include <MicroWorld/Net/NetHost.h>
-#include <MicroWorld/Object/ClassDescriptor.h>
+#include <MicroWorld/Transport/NetHost.h>
+#include <MicroWorld/Engine/ClassDescriptor.h>
 
 #include <cstdint>
 

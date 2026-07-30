@@ -1,7 +1,7 @@
-#include <MicroWorld/Log.h>
-#include <MicroWorld/Version.h>
+#include <MicroWorld/Core/Log.h>
+#include <MicroWorld/Core/Version.h>
 
-#include <MicroWorld/Containers/Span.h>
+#include <MicroWorld/Core/Containers/Span.h>
 
 #include <MicroWorld/Engine/Actor.h>
 #include <MicroWorld/Engine/ActorComponent.h>
@@ -10,12 +10,12 @@
 #include <MicroWorld/Messaging/Message.h>
 #include <MicroWorld/Messaging/MessageRouter.h>
 
-#include <MicroWorld/Object/ClassDescriptor.h>
-#include <MicroWorld/Object/ObjectPtr.h>
+#include <MicroWorld/Engine/ClassDescriptor.h>
+#include <MicroWorld/Engine/ObjectPtr.h>
 
-#include <MicroWorld/PlatformEsp32/Esp32OutputDevice.h>
-#include <MicroWorld/PlatformEsp32/Esp32Sleep.h>
-#include <MicroWorld/PlatformEsp32/Esp32TimeSource.h>
+#include <MicroWorld/Platform/Esp32/Esp32OutputDevice.h>
+#include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
+#include <MicroWorld/Platform/Esp32/Esp32TimeSource.h>
 
 #include <cstddef>
 #include <cstdint>

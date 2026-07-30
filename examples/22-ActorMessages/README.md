@@ -86,7 +86,7 @@ Not yet verified on hardware; derived from the fixed 500 ms sensor cadence,
 10 ms poll pace, and the deterministic reading formula:
 
 ```text
-I (nnnn) ex22: microworld 0.3.0
+I (nnnn) ex22: microworld 0.4.0
 I (nnnn) ex22: thermometer broadcast reading N=1 value=201
 I (nnnn) ex22: display received reading value=201 (count=1)
 I (nnnn) ex22: thermometer broadcast reading N=2 value=202

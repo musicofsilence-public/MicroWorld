@@ -135,7 +135,7 @@ interference) rather than necessarily a defect.
 ## Pico H pairing (prototype hardware-verified 2026-07-26)
 
 The captured run below used the private prototype that was promoted into
-`Modules/PlatformPico`. The current Pico-native `lora` consumer acts as node 1
+`Modules/MicroWorld/Platform/Pico`. The current Pico-native `lora` consumer acts as node 1
 through `FPicoE32LoraDriver`; this ESP32 source remains unchanged as node 2.
 Wire the Pico's E32 as GP4 TX → RXD, GP5 RX ← TXD, 3V3 → VCC, GND → GND/M0/M1,
 and leave AUX open. Attach antennas before power.
@@ -173,7 +173,7 @@ I (508876) ex17: rx n=49 from=1
 
 ### PlatformPico package checkpoint (hardware-verified 2026-07-27)
 
-Commit `45f6488` promoted the prototype into `Modules/PlatformPico`. The LoRa
+Commit `45f6488` promoted the prototype into `Modules/MicroWorld/Platform/Pico`. The LoRa
 image built from that commit had UF2 SHA-256
 `c39174625595225b514b550eb0a15bccaf64c8ec2df4fd784a7b39bb47837811`.
 It was uploaded to the Pico H through the detected `D:\` BOOTSEL volume; the

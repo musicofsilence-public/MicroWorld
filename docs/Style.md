@@ -180,7 +180,7 @@ FTickDecision FTickFunction::Advance(const TimePointMilliseconds NowMilliseconds
 }
 ```
 
-After (the real current code, `Modules/Core/src/TickFunction.cpp:52-77`):
+After (the real current code, `Modules/MicroWorld/Core/src/TickFunction.cpp:52-77`):
 
 ```cpp
 FTickDecision FTickFunction::Advance(const TimePointMilliseconds NowMilliseconds) noexcept

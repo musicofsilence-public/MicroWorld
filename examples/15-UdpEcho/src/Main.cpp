@@ -1,14 +1,14 @@
 #include "UdpEchoShared.h"
 
-#include <MicroWorld/Log.h>
-#include <MicroWorld/Net/NetAddress.h>
-#include <MicroWorld/Net/NetDriver.h>
-#include <MicroWorld/Net/NetResult.h>
-#include <MicroWorld/Net/UdpAddressCodec.h>
-#include <MicroWorld/PlatformEsp32/Esp32OutputDevice.h>
-#include <MicroWorld/PlatformEsp32/Esp32Sleep.h>
-#include <MicroWorld/PlatformEsp32/Esp32UdpDriver.h>
-#include <MicroWorld/PlatformEsp32/Esp32WifiLink.h>
+#include <MicroWorld/Core/Log.h>
+#include <MicroWorld/Transport/NetAddress.h>
+#include <MicroWorld/Transport/NetDriver.h>
+#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Transport/UdpAddressCodec.h>
+#include <MicroWorld/Platform/Esp32/Esp32OutputDevice.h>
+#include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
+#include <MicroWorld/Platform/Esp32/Esp32UdpDriver.h>
+#include <MicroWorld/Platform/Esp32/Esp32WifiLink.h>
 
 #include <cstdint>
 
