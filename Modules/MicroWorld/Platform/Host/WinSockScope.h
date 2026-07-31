@@ -20,10 +20,10 @@ public:
 	/** Decrements the shared refcount, performing `WSACleanup` when the last scope drops. */
 	~FWinSockScope() noexcept;
 
-	/** Prevents two drivers from sharing one refcount contribution through a copy. */
+	/** Prevents two devices from sharing one refcount contribution through a copy. */
 	FWinSockScope(const FWinSockScope&) = delete;
 
-	/** Prevents two drivers from sharing one refcount contribution through an assignment. */
+	/** Prevents two devices from sharing one refcount contribution through an assignment. */
 	FWinSockScope& operator=(const FWinSockScope&) = delete;
 };
 

@@ -1,6 +1,6 @@
 #include <MicroWorld/Core/Log.h>
 #include <MicroWorld/Transport/TransportResult.h>
-#include <MicroWorld/Platform/Esp32/Esp32E32LoraDriver.h>
+#include <MicroWorld/Platform/Esp32/Esp32LoraDevice.h>
 #include <MicroWorld/Platform/Esp32/Esp32OutputDevice.h>
 #include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
 #include <MicroWorld/Platform/Esp32/Esp32TimeSource.h>
@@ -27,7 +27,7 @@ MicroWorld::FEsp32TimeSource GTimeSource{};
 /** This board's node id, stamped on every frame it sends. */
 constexpr std::uint8_t LocalNodeId = MICROWORLD_EXAMPLE_NODE_ID;
 
-/** The only other node in this pairing; the destination the driver validates before broadcasting the frame. */
+/** The only other node in this pairing; the destination the device validates before broadcasting the frame. */
 constexpr std::uint8_t PeerNodeId = (LocalNodeId == 1) ? 2 : 1;
 
 #if !defined(MICROWORLD_LORA_PAYLOAD_REGRESSION)
@@ -55,7 +55,7 @@ constexpr unsigned PollPacingMilliseconds = 10;
 constexpr std::size_t VolleyPayloadBytes = 5;
 #endif
 
-/** Renders one driver outcome as a short label so the serial trace reads plainly. */
+/** Renders one device outcome as a short label so the serial trace reads plainly. */
 const char* ToText(const MicroWorld::ETransportResult Result) noexcept
 {
 	switch (Result)
@@ -92,7 +92,7 @@ std::uint32_t ReadVolleyCounter(const std::uint8_t* const In) noexcept
 }
 #endif
 
-/** Builds the driver configuration for this node from the fixed pins and baud. */
+/** Builds the device configuration for this node from the fixed pins and baud. */
 MicroWorld::FEsp32E32LoraConfig MakeLoraConfig(const std::uint8_t NodeId) noexcept
 {
 	MicroWorld::FEsp32E32LoraConfig Config;
@@ -268,9 +268,9 @@ void HandlePayloadRegressionReceive(
 	OutContext.State = EPayloadRegressionState::Failed;
 }
 
-/** Pulls at most one completed frame from the driver so radio polling remains bounded by the transport contract. */
+/** Pulls at most one completed frame from the device so radio polling remains bounded by the transport contract. */
 void ReceivePayloadRegressionFrame(
-	MicroWorld::FEsp32E32LoraDriver& InDriver,
+	MicroWorld::FEsp32LoraDevice& InDevice,
 	FPayloadRegressionContext& OutContext,
 	std::uint8_t* const InOutRxBuffer,
 	const std::uint64_t InNowMilliseconds) noexcept
@@ -278,7 +278,7 @@ void ReceivePayloadRegressionFrame(
 	MicroWorld::FDeviceAddress From{};
 	MicroWorld::FReceiveResult Received{};
 	const MicroWorld::ETransportResult RxResult =
-		InDriver.TryReceive(From, MicroWorld::TSpan<std::uint8_t>(InOutRxBuffer, MicroWorld::E32MaxPayloadBytes), Received);
+		InDevice.TryReceive(From, MicroWorld::TSpan<std::uint8_t>(InOutRxBuffer, MicroWorld::E32MaxPayloadBytes), Received);
 	if (RxResult == MicroWorld::ETransportResult::Success)
 	{
 		HandlePayloadRegressionReceive(OutContext, From, Received, InOutRxBuffer, InNowMilliseconds);
@@ -291,9 +291,9 @@ void ReceivePayloadRegressionFrame(
 	}
 }
 
-/** Queues one canonical echo or maximum frame, preserving the driver's non-blocking retry behavior when its slot is full. */
+/** Queues one canonical echo or maximum frame, preserving the device's non-blocking retry behavior when its slot is full. */
 void QueuePayloadRegressionFrame(
-	MicroWorld::FEsp32E32LoraDriver& InDriver,
+	MicroWorld::FEsp32LoraDevice& InDevice,
 	FPayloadRegressionContext& OutContext,
 	std::uint8_t (&InOutTxBuffer)[MicroWorld::E32MaxPayloadBytes],
 	const MicroWorld::Example17::EPayloadRegressionCase InCase,
@@ -302,7 +302,7 @@ void QueuePayloadRegressionFrame(
 	MicroWorld::Example17::FillCanonicalPayload(InCase, InOutTxBuffer);
 	const std::size_t PayloadBytes = MicroWorld::Example17::PayloadRegressionByteCount(InCase);
 	const MicroWorld::ETransportResult TxResult =
-		InDriver.TrySend(MicroWorld::MakeLoraAddress(PeerNodeId), MicroWorld::TSpan<const std::uint8_t>(InOutTxBuffer, PayloadBytes));
+		InDevice.TrySend(MicroWorld::MakeLoraAddress(PeerNodeId), MicroWorld::TSpan<const std::uint8_t>(InOutTxBuffer, PayloadBytes));
 	if (InCase == MicroWorld::Example17::EPayloadRegressionCase::Maximum)
 	{
 		MW_LOG(
@@ -357,7 +357,7 @@ void QueuePayloadRegressionFrame(
 
 /** Selects the next outbound case without delaying the polling loop while the required maximum-frame period elapses. */
 void SendPayloadRegressionFrame(
-	MicroWorld::FEsp32E32LoraDriver& InDriver,
+	MicroWorld::FEsp32LoraDevice& InDevice,
 	FPayloadRegressionContext& OutContext,
 	std::uint8_t (&InOutTxBuffer)[MicroWorld::E32MaxPayloadBytes],
 	const std::uint64_t InNowMilliseconds) noexcept
@@ -369,23 +369,23 @@ void SendPayloadRegressionFrame(
 
 	if (OutContext.State == EPayloadRegressionState::SendEmptyEcho || OutContext.State == EPayloadRegressionState::ResendEmptyEcho)
 	{
-		QueuePayloadRegressionFrame(InDriver, OutContext, InOutTxBuffer, MicroWorld::Example17::EPayloadRegressionCase::Empty, InNowMilliseconds);
+		QueuePayloadRegressionFrame(InDevice, OutContext, InOutTxBuffer, MicroWorld::Example17::EPayloadRegressionCase::Empty, InNowMilliseconds);
 		return;
 	}
 	if (OutContext.State == EPayloadRegressionState::SendTypicalEcho)
 	{
-		QueuePayloadRegressionFrame(InDriver, OutContext, InOutTxBuffer, MicroWorld::Example17::EPayloadRegressionCase::Typical, InNowMilliseconds);
+		QueuePayloadRegressionFrame(InDevice, OutContext, InOutTxBuffer, MicroWorld::Example17::EPayloadRegressionCase::Typical, InNowMilliseconds);
 		return;
 	}
 	if (OutContext.State == EPayloadRegressionState::SendMaximum)
 	{
-		QueuePayloadRegressionFrame(InDriver, OutContext, InOutTxBuffer, MicroWorld::Example17::EPayloadRegressionCase::Maximum, InNowMilliseconds);
+		QueuePayloadRegressionFrame(InDevice, OutContext, InOutTxBuffer, MicroWorld::Example17::EPayloadRegressionCase::Maximum, InNowMilliseconds);
 	}
 }
 
 /** Advances one bounded regression iteration; physical UART progress remains owned by the composition loop. */
 void AdvancePayloadRegression(
-	MicroWorld::FEsp32E32LoraDriver& InDriver,
+	MicroWorld::FEsp32LoraDevice& InDevice,
 	FPayloadRegressionContext& OutContext,
 	std::uint8_t* const InOutRxBuffer,
 	std::uint8_t (&InOutTxBuffer)[MicroWorld::E32MaxPayloadBytes],
@@ -402,13 +402,13 @@ void AdvancePayloadRegression(
 		return;
 	}
 
-	ReceivePayloadRegressionFrame(InDriver, OutContext, InOutRxBuffer, InNowMilliseconds);
+	ReceivePayloadRegressionFrame(InDevice, OutContext, InOutRxBuffer, InNowMilliseconds);
 	if (IsPayloadRegressionTerminal(OutContext.State))
 	{
 		return;
 	}
 
-	SendPayloadRegressionFrame(InDriver, OutContext, InOutTxBuffer, InNowMilliseconds);
+	SendPayloadRegressionFrame(InDevice, OutContext, InOutTxBuffer, InNowMilliseconds);
 }
 #endif
 } // namespace
@@ -419,9 +419,9 @@ extern "C" void app_main(void)
 	MicroWorld::SetOutputDevice(&MicroWorld::WriteEsp32LogRecord);
 
 	// Static, never on the app_main stack (the ESP32-S3 stack lesson, §2.2).
-	static MicroWorld::FEsp32E32LoraDriver Driver{MakeLoraConfig(LocalNodeId)};
-	MW_LOG(Log, "ex17", "node=%u open=%d", static_cast<unsigned>(LocalNodeId), Driver.IsOpen() ? 1 : 0);
-	if (!Driver.IsOpen())
+	static MicroWorld::FEsp32LoraDevice Device{MakeLoraConfig(LocalNodeId)};
+	MW_LOG(Log, "ex17", "node=%u open=%d", static_cast<unsigned>(LocalNodeId), Device.IsOpen() ? 1 : 0);
+	if (!Device.IsOpen())
 	{
 		// A failed UART open cannot recover here; stop with a clear line instead of looping.
 		MW_LOG(Error, "ex17", "uart failed to open; halting");
@@ -439,8 +439,8 @@ extern "C" void app_main(void)
 	for (;;)
 	{
 		const std::uint64_t Now = GTimeSource.Now();
-		AdvancePayloadRegression(Driver, Context, RxBuffer, TxBuffer, Now);
-		Driver.AdvanceTransmit();
+		AdvancePayloadRegression(Device, Context, RxBuffer, TxBuffer, Now);
+		Device.AdvanceTransmit();
 		MicroWorld::SleepMilliseconds(PollPacingMilliseconds);
 	}
 #else
@@ -456,7 +456,7 @@ extern "C" void app_main(void)
 		// Receive at most one frame; a completed volley schedules the reply (counter + 1).
 		MicroWorld::FDeviceAddress From{};
 		MicroWorld::FReceiveResult Received{};
-		const MicroWorld::ETransportResult RxResult = Driver.TryReceive(From, MicroWorld::TSpan<std::uint8_t>(RxBuffer, sizeof(RxBuffer)), Received);
+		const MicroWorld::ETransportResult RxResult = Device.TryReceive(From, MicroWorld::TSpan<std::uint8_t>(RxBuffer, sizeof(RxBuffer)), Received);
 		if (RxResult == MicroWorld::ETransportResult::Success && Received.BytesReceived == VolleyPayloadBytes)
 		{
 			const std::uint32_t Counter = ReadVolleyCounter(RxBuffer);
@@ -473,7 +473,7 @@ extern "C" void app_main(void)
 			std::uint8_t Payload[VolleyPayloadBytes];
 			WriteVolleyPayload(Payload, LocalNodeId, PendingCounter);
 			const MicroWorld::ETransportResult TxResult =
-				Driver.TrySend(MicroWorld::MakeLoraAddress(PeerNodeId), MicroWorld::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
+				Device.TrySend(MicroWorld::MakeLoraAddress(PeerNodeId), MicroWorld::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
 			MW_LOG(Log, "ex17", "tx n=%u result=%s", static_cast<unsigned>(PendingCounter), ToText(TxResult));
 			if (TxResult == MicroWorld::ETransportResult::Success)
 			{
@@ -482,7 +482,7 @@ extern "C" void app_main(void)
 		}
 
 		// Physical UART progress is independent of packet acceptance, so a Full slot keeps draining every iteration.
-		Driver.AdvanceTransmit();
+		Device.AdvanceTransmit();
 
 		MicroWorld::SleepMilliseconds(PollPacingMilliseconds);
 	}

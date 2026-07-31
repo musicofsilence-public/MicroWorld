@@ -16,7 +16,7 @@ namespace MicroWorld
  * Largest single-transmission payload one wired I2C frame carries.
  *
  * Kept equal to `UartMaxPayloadBytes` so every wired transport carries the same message size and only the
- * driver construction differs; the slave's ESP-IDF send/receive buffers are sized well above one whole frame
+ * device construction differs; the slave's ESP-IDF send/receive buffers are sized well above one whole frame
  * so a frame is never split across I2C transactions at the example's pacing.
  */
 constexpr std::size_t I2cMaxPayloadBytes = 120;
@@ -28,7 +28,7 @@ constexpr std::size_t I2cMaxPayloadBytes = 120;
 constexpr std::size_t I2cTransactionWindowBytes = I2cMaxPayloadBytes + FrameOverheadBytes;
 
 /**
- * Fixed-capacity byte inbox the I2C slave driver owns, filled by the platform receive ISR and drained by `TryReceive`.
+ * Fixed-capacity byte inbox the I2C slave device owns, filled by the platform receive ISR and drained by `TryReceive`.
  *
  * A single-producer/single-consumer ring: the ESP-IDF `on_receive` callback pushes bytes from ISR context
  * while the receive pump pops them, so the indices are `volatile` and a byte is dropped (not blocked) when the
@@ -58,7 +58,7 @@ private:
 };
 
 /**
- * Construction parameters for the wired I2C master driver.
+ * Construction parameters for the wired I2C master device.
  *
  * Holds plain-integer bus parameters so the public header stays free of the ESP-IDF I2C enum types; the
  * platform-implementation header reinterprets them on the ESP32 side. `SlaveAddress` is the 7-bit bus address
@@ -86,7 +86,7 @@ struct FEsp32I2cMasterConfig
 };
 
 /**
- * Construction parameters for the wired I2C slave driver.
+ * Construction parameters for the wired I2C slave device.
  *
  * Holds plain-integer bus parameters so the public header stays free of the ESP-IDF I2C enum types.
  * `SlaveAddress` is this board's own 7-bit bus address, the address the peer master clocks.
@@ -117,7 +117,7 @@ struct FEsp32I2cSlaveConfig
  * codec discards. It validates every argument before any syscall, leaves caller outputs unchanged on any
  * non-`Success` result, and exercises no bus traffic until example 20's hardware checkpoint passes (§1.2).
  */
-class FEsp32I2cMasterDriver final : public IDevice
+class FEsp32I2cMasterDevice final : public IDevice
 {
 public:
 	/**
@@ -129,22 +129,22 @@ public:
 	 *
 	 * @param InConfig Bus, GPIO, speed, slave-address, and local node id parameters.
 	 */
-	explicit FEsp32I2cMasterDriver(const FEsp32I2cMasterConfig& InConfig) noexcept;
+	explicit FEsp32I2cMasterDevice(const FEsp32I2cMasterConfig& InConfig) noexcept;
 
 	/** Removes the device and deletes the master bus opened by construction. */
-	~FEsp32I2cMasterDriver() noexcept override;
+	~FEsp32I2cMasterDevice() noexcept override;
 
-	/** Prevents copying so one driver value owns exactly one bus identity. */
-	FEsp32I2cMasterDriver(const FEsp32I2cMasterDriver&) = delete;
+	/** Prevents copying so one device value owns exactly one bus identity. */
+	FEsp32I2cMasterDevice(const FEsp32I2cMasterDevice&) = delete;
 
-	/** Prevents copying so one driver value owns exactly one bus identity. */
-	FEsp32I2cMasterDriver& operator=(const FEsp32I2cMasterDriver&) = delete;
-
-	/** Prevents moving so the owned bus handles and interface identity stay fixed. */
-	FEsp32I2cMasterDriver(FEsp32I2cMasterDriver&&) = delete;
+	/** Prevents copying so one device value owns exactly one bus identity. */
+	FEsp32I2cMasterDevice& operator=(const FEsp32I2cMasterDevice&) = delete;
 
 	/** Prevents moving so the owned bus handles and interface identity stay fixed. */
-	FEsp32I2cMasterDriver& operator=(FEsp32I2cMasterDriver&&) = delete;
+	FEsp32I2cMasterDevice(FEsp32I2cMasterDevice&&) = delete;
+
+	/** Prevents moving so the owned bus handles and interface identity stay fixed. */
+	FEsp32I2cMasterDevice& operator=(FEsp32I2cMasterDevice&&) = delete;
 
 	/**
 	 * Sends one complete framed message to the slave in a single bus write, transactionally.
@@ -201,38 +201,38 @@ private:
  * Non-blocking wired `IDevice` for the slave side of a point-to-point I2C link.
  *
  * The master clocks the bus, so `TrySend` stages one framed packet for the master's next read and `TryReceive`
- * drains an ISR-filled inbox through a bounded `TFrameDecoder`; it is the master driver's mirror above the `IDevice` interface.
+ * drains an ISR-filled inbox through a bounded `TFrameDecoder`; it is the master device's mirror above the `IDevice` interface.
  * It validates every argument before any syscall, leaves caller outputs unchanged on any non-`Success` result,
  * and exercises no bus traffic until example 20's hardware checkpoint passes (§1.2).
  */
-class FEsp32I2cSlaveDriver final : public IDevice
+class FEsp32I2cSlaveDevice final : public IDevice
 {
 public:
 	/**
 	 * Opens the I2C slave device and registers its receive callback.
 	 *
 	 * Creates the slave at `I2cPort` on the given SDA/SCL GPIOs listening on `SlaveAddress`, and registers the
-	 * platform `on_receive` callback that fills this driver's inbox. On any failure the constructor rolls back and
+	 * platform `on_receive` callback that fills this device's inbox. On any failure the constructor rolls back and
 	 * leaves `IsOpen() == false`; it never throws. The local node id is stamped on every outgoing frame.
 	 *
 	 * @param InConfig Bus, GPIO, own-address, and local node id parameters.
 	 */
-	explicit FEsp32I2cSlaveDriver(const FEsp32I2cSlaveConfig& InConfig) noexcept;
+	explicit FEsp32I2cSlaveDevice(const FEsp32I2cSlaveConfig& InConfig) noexcept;
 
 	/** Deletes the slave device opened by construction. */
-	~FEsp32I2cSlaveDriver() noexcept override;
+	~FEsp32I2cSlaveDevice() noexcept override;
 
-	/** Prevents copying so one driver value owns exactly one slave identity. */
-	FEsp32I2cSlaveDriver(const FEsp32I2cSlaveDriver&) = delete;
+	/** Prevents copying so one device value owns exactly one slave identity. */
+	FEsp32I2cSlaveDevice(const FEsp32I2cSlaveDevice&) = delete;
 
-	/** Prevents copying so one driver value owns exactly one slave identity. */
-	FEsp32I2cSlaveDriver& operator=(const FEsp32I2cSlaveDriver&) = delete;
-
-	/** Prevents moving so the owned slave handle, inbox address, and interface identity stay fixed. */
-	FEsp32I2cSlaveDriver(FEsp32I2cSlaveDriver&&) = delete;
+	/** Prevents copying so one device value owns exactly one slave identity. */
+	FEsp32I2cSlaveDevice& operator=(const FEsp32I2cSlaveDevice&) = delete;
 
 	/** Prevents moving so the owned slave handle, inbox address, and interface identity stay fixed. */
-	FEsp32I2cSlaveDriver& operator=(FEsp32I2cSlaveDriver&&) = delete;
+	FEsp32I2cSlaveDevice(FEsp32I2cSlaveDevice&&) = delete;
+
+	/** Prevents moving so the owned slave handle, inbox address, and interface identity stay fixed. */
+	FEsp32I2cSlaveDevice& operator=(FEsp32I2cSlaveDevice&&) = delete;
 
 	/**
 	 * Stages one complete framed message for the master's next read, transactionally.

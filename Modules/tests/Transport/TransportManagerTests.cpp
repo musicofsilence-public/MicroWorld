@@ -51,7 +51,7 @@ constexpr std::size_t ReceiveFillByteCount = 3;
 /** Number of wraparound cycles the storage-reuse case drives through the two-slot FIFO. */
 constexpr std::size_t WraparoundCycleCount = 6;
 
-/** Fill byte the recording driver writes into every received byte so a success is observable. */
+/** Fill byte the recording device writes into every received byte so a success is observable. */
 constexpr std::uint8_t ReceiveFillerByteValue = 0x7C;
 /** Default fill byte a successful forced receive stamps into destination storage. */
 constexpr std::uint8_t DefaultReceiveFillerByte = 0xAB;
@@ -70,14 +70,14 @@ constexpr std::uint8_t FullFifoAcceptedPacket[TwoBytePacketLength] = {0xAA, 0xBB
 constexpr std::uint8_t FullFifoRejectedPacket[TwoBytePacketLength] = {0xCC, 0xDD};
 /** Two-byte packet the single-advance case queues as the head. */
 constexpr std::uint8_t SingleAdvanceHeadPacket[TwoBytePacketLength] = {0x11, 0x22};
-/** Three-byte packet the driver-Full case queues first. */
-constexpr std::uint8_t DriverFullFirstPacket[ThreeBytePacketLength] = {0x01, 0x02, 0x03};
-/** Two-byte packet the driver-Full case queues second. */
-constexpr std::uint8_t DriverFullSecondPacket[TwoBytePacketLength] = {0x04, 0x05};
-/** Two-byte packet the driver-Unavailable case queues as the retained head. */
-constexpr std::uint8_t DriverUnavailablePacket[TwoBytePacketLength] = {0x55, 0x66};
-/** Two-byte packet the driver-Invalid case queues as the retained head. */
-constexpr std::uint8_t DriverInvalidPacket[TwoBytePacketLength] = {0x07, 0x08};
+/** Three-byte packet the device-Full case queues first. */
+constexpr std::uint8_t DeviceFullFirstPacket[ThreeBytePacketLength] = {0x01, 0x02, 0x03};
+/** Two-byte packet the device-Full case queues second. */
+constexpr std::uint8_t DeviceFullSecondPacket[TwoBytePacketLength] = {0x04, 0x05};
+/** Two-byte packet the device-Unavailable case queues as the retained head. */
+constexpr std::uint8_t DeviceUnavailablePacket[TwoBytePacketLength] = {0x55, 0x66};
+/** Two-byte packet the device-Invalid case queues as the retained head. */
+constexpr std::uint8_t DeviceInvalidPacket[TwoBytePacketLength] = {0x07, 0x08};
 /** Two-byte packet the recovery case queues as the retained head before backpressure clears. */
 constexpr std::uint8_t RecoveryHeadPacket[TwoBytePacketLength] = {0x99, 0xAA};
 /** Single-byte packet the recovery case queues after the retained head. */
@@ -100,17 +100,17 @@ constexpr FDeviceAddress MakeDest(const std::uint8_t InIndex) noexcept
 }
 
 /**
- * Records the exact bytes and destination address the manager passed to every driver send so FIFO order,
+ * Records the exact bytes and destination address the manager passed to every device send so FIFO order,
  * head retention, recovery, and per-packet routing can be proven across differently sized and valued packets.
  *
- * The driver returns a caller-chosen result on each send attempt and never touches a real transport, so
+ * The device returns a caller-chosen result on each send attempt and never touches a real transport, so
  * manager ordering and retention behavior stays deterministic.
  */
-class FRecordingDriver final : public IDevice
+class FRecordingDevice final : public IDevice
 {
 public:
-	/** Defaulted so the driver can live in automatic storage without side effects. */
-	~FRecordingDriver() noexcept override = default;
+	/** Defaulted so the device can live in automatic storage without side effects. */
+	~FRecordingDevice() noexcept override = default;
 
 	/** Counts every attempt and records the destination address and bytes of every successful send so FIFO order of delivered packets is provable. */
 	ETransportResult TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override
@@ -148,7 +148,7 @@ public:
 	}
 
 	/** Reports a fixed per-packet byte capacity large enough for every test packet in this suite. */
-	std::size_t MaxPacketBytes() const noexcept override { return DriverMaxPacketBytes; }
+	std::size_t MaxPacketBytes() const noexcept override { return DeviceMaxPacketBytes; }
 
 	/** The result the next TrySend call must return, regardless of packet contents. */
 	ETransportResult ForcedSendResult{ETransportResult::Success};
@@ -176,7 +176,7 @@ public:
 
 	static constexpr std::size_t MaxRecordedSends = 16;
 	static constexpr std::size_t MaxRecordedBytes = 8;
-	static constexpr std::size_t DriverMaxPacketBytes = 64;
+	static constexpr std::size_t DeviceMaxPacketBytes = 64;
 
 	/** Records the exact bytes of each send so FIFO order is provable. */
 	std::uint8_t RecordedSendBytes[MaxRecordedSends][MaxRecordedBytes]{};
@@ -189,16 +189,16 @@ public:
 };
 
 /**
- * Scenario: Construct a manager over a recording driver and fixed-capacity packet storage.
+ * Scenario: Construct a manager over a recording device and fixed-capacity packet storage.
  * Expected: The manager reports an empty non-full FIFO with queue capacity and max packet bytes matching the template parameters and zero queued
  * packets.
  */
 MW_TEST_CASE(TransportManagerStartsEmptyWithFixedConfiguration)
 {
 	// Arrange
-	FRecordingDriver Driver;
+	FRecordingDevice Device;
 	TTransportPacketStorage<2, 4> Storage;
-	TTransportManager<2, 4> Manager(Driver, Storage);
+	TTransportManager<2, 4> Manager(Device, Storage);
 
 	// Assert
 	MW_EXPECT_EQ(Test, true, Manager.IsEmpty(), "A fresh manager must report an empty FIFO");
@@ -215,9 +215,9 @@ MW_TEST_CASE(TransportManagerStartsEmptyWithFixedConfiguration)
 MW_TEST_CASE(TransportManagerRejectsOversizedPacketTransactionally)
 {
 	// Arrange
-	FRecordingDriver Driver;
+	FRecordingDevice Device;
 	TTransportPacketStorage<2, 2> Storage;
-	TTransportManager<2, 2> Manager(Driver, Storage);
+	TTransportManager<2, 2> Manager(Device, Storage);
 
 	// Act
 	const ETransportResult OversizedResult =
@@ -234,9 +234,9 @@ MW_TEST_CASE(TransportManagerRejectsOversizedPacketTransactionally)
 MW_TEST_CASE(TransportManagerRejectsNullPacketWithNonzeroLength)
 {
 	// Arrange
-	FRecordingDriver Driver;
+	FRecordingDevice Device;
 	TTransportPacketStorage<2, 4> Storage;
-	TTransportManager<2, 4> Manager(Driver, Storage);
+	TTransportManager<2, 4> Manager(Device, Storage);
 
 	// Act
 	const ETransportResult NullResult = Manager.QueueSend(MakeDest(DefaultDestIndex), TSpan<const std::uint8_t>(nullptr, TwoBytePacketLength));
@@ -246,16 +246,16 @@ MW_TEST_CASE(TransportManagerRejectsNullPacketWithNonzeroLength)
 }
 
 /**
- * Scenario: Queue three differently sized and valued packets, then advance each to the driver.
- * Expected: Three advances call the driver exactly three times and deliver the packets in FIFO order with byte-for-byte matching contents, leaving
+ * Scenario: Queue three differently sized and valued packets, then advance each to the device.
+ * Expected: Three advances call the device exactly three times and deliver the packets in FIFO order with byte-for-byte matching contents, leaving
  * the FIFO empty.
  */
 MW_TEST_CASE(TransportManagerAdvanceSendsDifferentlySizedPacketsInFifoOrder)
 {
 	// Arrange
-	FRecordingDriver Driver;
+	FRecordingDevice Device;
 	TTransportPacketStorage<3, 4> Storage;
-	TTransportManager<3, 4> Manager(Driver, Storage);
+	TTransportManager<3, 4> Manager(Device, Storage);
 
 	// Act - queue three packets
 	MW_EXPECT_EQ(
@@ -274,41 +274,41 @@ MW_TEST_CASE(TransportManagerAdvanceSendsDifferentlySizedPacketsInFifoOrder)
 		Manager.QueueSend(MakeDest(DefaultDestIndex), TSpan<const std::uint8_t>(FifoThirdPacket, sizeof(FifoThirdPacket))),
 		"Third queue must succeed");
 
-	// Act - advance each queued packet to the driver
+	// Act - advance each queued packet to the device
 	Manager.AdvanceSend();
 	Manager.AdvanceSend();
 	Manager.AdvanceSend();
 
 	// Assert
-	MW_EXPECT_EQ(Test, ThreeBytePacketLength, Driver.SendCount, "Three advances must call the driver exactly three times");
+	MW_EXPECT_EQ(Test, ThreeBytePacketLength, Device.SendCount, "Three advances must call the device exactly three times");
 
 	// First send: 2 bytes {0x10, 0x20}
-	MW_EXPECT_EQ(Test, TwoBytePacketLength, Driver.RecordedSendLengths[0], "First send must carry the first packet length");
-	MW_EXPECT_EQ(Test, FifoFirstPacket[0], Driver.RecordedSendBytes[0][0], "First send must carry the first packet first byte");
-	MW_EXPECT_EQ(Test, FifoFirstPacket[1], Driver.RecordedSendBytes[0][1], "First send must carry the first packet second byte");
+	MW_EXPECT_EQ(Test, TwoBytePacketLength, Device.RecordedSendLengths[0], "First send must carry the first packet length");
+	MW_EXPECT_EQ(Test, FifoFirstPacket[0], Device.RecordedSendBytes[0][0], "First send must carry the first packet first byte");
+	MW_EXPECT_EQ(Test, FifoFirstPacket[1], Device.RecordedSendBytes[0][1], "First send must carry the first packet second byte");
 
 	// Second send: 3 bytes {0x30, 0x40, 0x50}
-	MW_EXPECT_EQ(Test, ThreeBytePacketLength, Driver.RecordedSendLengths[1], "Second send must carry the second packet length");
-	MW_EXPECT_EQ(Test, FifoSecondPacket[0], Driver.RecordedSendBytes[1][0], "Second send must carry the second packet first byte");
-	MW_EXPECT_EQ(Test, FifoSecondPacket[2], Driver.RecordedSendBytes[1][2], "Second send must carry the second packet third byte");
+	MW_EXPECT_EQ(Test, ThreeBytePacketLength, Device.RecordedSendLengths[1], "Second send must carry the second packet length");
+	MW_EXPECT_EQ(Test, FifoSecondPacket[0], Device.RecordedSendBytes[1][0], "Second send must carry the second packet first byte");
+	MW_EXPECT_EQ(Test, FifoSecondPacket[2], Device.RecordedSendBytes[1][2], "Second send must carry the second packet third byte");
 
 	// Third send: 1 byte {0x60}
-	MW_EXPECT_EQ(Test, OneBytePacketLength, Driver.RecordedSendLengths[2], "Third send must carry the third packet length");
-	MW_EXPECT_EQ(Test, FifoThirdPacket[0], Driver.RecordedSendBytes[2][0], "Third send must carry the third packet first byte");
+	MW_EXPECT_EQ(Test, OneBytePacketLength, Device.RecordedSendLengths[2], "Third send must carry the third packet length");
+	MW_EXPECT_EQ(Test, FifoThirdPacket[0], Device.RecordedSendBytes[2][0], "Third send must carry the third packet first byte");
 
 	MW_EXPECT_EQ(Test, true, Manager.IsEmpty(), "Three successful advances must drain a three-packet FIFO");
 }
 
 /**
- * Scenario: Fill a one-slot FIFO, attempt to queue an overflow packet, then advance the driver.
+ * Scenario: Fill a one-slot FIFO, attempt to queue an overflow packet, then advance the device.
  * Expected: The overflow queue returns Full without changing the queued count, and the accepted head packet survives to be advanced intact.
  */
 MW_TEST_CASE(TransportManagerFullFifoRejectsFurtherQueue)
 {
 	// Arrange
-	FRecordingDriver Driver;
+	FRecordingDevice Device;
 	TTransportPacketStorage<1, 4> Storage;
-	TTransportManager<1, 4> Manager(Driver, Storage);
+	TTransportManager<1, 4> Manager(Device, Storage);
 
 	// Act
 	MW_EXPECT_EQ(
@@ -325,192 +325,192 @@ MW_TEST_CASE(TransportManagerFullFifoRejectsFurtherQueue)
 
 	// Act / Assert - prove the accepted head survives the rejected queue.
 	Manager.AdvanceSend();
-	MW_EXPECT_EQ(Test, TwoBytePacketLength, Driver.RecordedSendLengths[0], "Retained head must carry the accepted packet length");
-	MW_EXPECT_EQ(Test, FullFifoAcceptedPacket[0], Driver.RecordedSendBytes[0][0], "Retained head must carry the accepted first byte");
+	MW_EXPECT_EQ(Test, TwoBytePacketLength, Device.RecordedSendLengths[0], "Retained head must carry the accepted packet length");
+	MW_EXPECT_EQ(Test, FullFifoAcceptedPacket[0], Device.RecordedSendBytes[0][0], "Retained head must carry the accepted first byte");
 }
 
 /**
- * Scenario: Advance an empty FIFO and observe the recording driver's send count.
- * Expected: The advance returns Unavailable and never calls the driver.
+ * Scenario: Advance an empty FIFO and observe the recording device's send count.
+ * Expected: The advance returns Unavailable and never calls the device.
  */
-MW_TEST_CASE(TransportManagerAdvanceEmptyReturnsUnavailableWithoutDriverCall)
+MW_TEST_CASE(TransportManagerAdvanceEmptyReturnsUnavailableWithoutDeviceCall)
 {
 	// Arrange
-	FRecordingDriver Driver;
+	FRecordingDevice Device;
 	TTransportPacketStorage<2, 4> Storage;
-	TTransportManager<2, 4> Manager(Driver, Storage);
+	TTransportManager<2, 4> Manager(Device, Storage);
 
 	// Act
 	const ETransportResult EmptyAdvanceResult = Manager.AdvanceSend();
 	// Assert
 	MW_EXPECT_EQ(Test, ETransportResult::Unavailable, EmptyAdvanceResult, "Advance on an empty FIFO must return Unavailable");
-	MW_EXPECT_EQ(Test, std::size_t{0}, Driver.SendCount, "Empty advance must not call the driver");
+	MW_EXPECT_EQ(Test, std::size_t{0}, Device.SendCount, "Empty advance must not call the device");
 }
 
 /**
- * Scenario: Queue one head packet, then advance once against a successful driver.
- * Expected: The advance succeeds, calls the driver exactly once with the head packet length, and removes the head from the FIFO.
+ * Scenario: Queue one head packet, then advance once against a successful device.
+ * Expected: The advance succeeds, calls the device exactly once with the head packet length, and removes the head from the FIFO.
  */
 MW_TEST_CASE(TransportManagerAdvanceAttemptsOneSendAndRemovesHeadOnSuccess)
 {
 	// Arrange
-	FRecordingDriver Driver;
+	FRecordingDevice Device;
 	TTransportPacketStorage<2, 4> Storage;
-	TTransportManager<2, 4> Manager(Driver, Storage);
+	TTransportManager<2, 4> Manager(Device, Storage);
 
 	Manager.QueueSend(MakeDest(DefaultDestIndex), TSpan<const std::uint8_t>(SingleAdvanceHeadPacket, sizeof(SingleAdvanceHeadPacket)));
 
 	// Act
 	const ETransportResult AdvanceResult = Manager.AdvanceSend();
 	// Assert
-	MW_EXPECT_EQ(Test, ETransportResult::Success, AdvanceResult, "Advance with a successful driver must succeed");
-	MW_EXPECT_EQ(Test, OneBytePacketLength, Driver.SendCount, "Advance must call the driver exactly once");
-	MW_EXPECT_EQ(Test, TwoBytePacketLength, Driver.RecordedSendLengths[0], "Advance must send the head packet length");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, AdvanceResult, "Advance with a successful device must succeed");
+	MW_EXPECT_EQ(Test, OneBytePacketLength, Device.SendCount, "Advance must call the device exactly once");
+	MW_EXPECT_EQ(Test, TwoBytePacketLength, Device.RecordedSendLengths[0], "Advance must send the head packet length");
 	MW_EXPECT_EQ(Test, true, Manager.IsEmpty(), "Successful advance must remove the head packet");
 }
 
 /**
- * Scenario: Queue two packets, advance against a driver that returns Full, then clear backpressure and advance twice more.
- * Expected: Driver Full propagates as Full and retains all queued packets; once backpressure clears, advances send the retained first packet ahead of
+ * Scenario: Queue two packets, advance against a device that returns Full, then clear backpressure and advance twice more.
+ * Expected: Device Full propagates as Full and retains all queued packets; once backpressure clears, advances send the retained first packet ahead of
  * the second in FIFO order with byte-for-byte matching contents.
  */
-MW_TEST_CASE(TransportManagerDriverFullRetainsExactHeadContents)
+MW_TEST_CASE(TransportManagerDeviceFullRetainsExactHeadContents)
 {
 	// Arrange
-	FRecordingDriver Driver;
-	Driver.ForcedSendResult = ETransportResult::Full;
+	FRecordingDevice Device;
+	Device.ForcedSendResult = ETransportResult::Full;
 	TTransportPacketStorage<2, 4> Storage;
-	TTransportManager<2, 4> Manager(Driver, Storage);
+	TTransportManager<2, 4> Manager(Device, Storage);
 
-	Manager.QueueSend(MakeDest(DefaultDestIndex), TSpan<const std::uint8_t>(DriverFullFirstPacket, sizeof(DriverFullFirstPacket)));
-	Manager.QueueSend(MakeDest(DefaultDestIndex), TSpan<const std::uint8_t>(DriverFullSecondPacket, sizeof(DriverFullSecondPacket)));
+	Manager.QueueSend(MakeDest(DefaultDestIndex), TSpan<const std::uint8_t>(DeviceFullFirstPacket, sizeof(DeviceFullFirstPacket)));
+	Manager.QueueSend(MakeDest(DefaultDestIndex), TSpan<const std::uint8_t>(DeviceFullSecondPacket, sizeof(DeviceFullSecondPacket)));
 
 	// Act
 	const ETransportResult AdvanceResult = Manager.AdvanceSend();
 	// Assert
-	MW_EXPECT_EQ(Test, ETransportResult::Full, AdvanceResult, "Driver Full must propagate as Full");
-	MW_EXPECT_EQ(Test, TwoBytePacketLength, Manager.QueuedCount(), "Driver Full must retain all queued packets");
+	MW_EXPECT_EQ(Test, ETransportResult::Full, AdvanceResult, "Device Full must propagate as Full");
+	MW_EXPECT_EQ(Test, TwoBytePacketLength, Manager.QueuedCount(), "Device Full must retain all queued packets");
 
 	// Clear backpressure: the next advance must send the retained first packet, not the second.
-	Driver.ForcedSendResult = ETransportResult::Success;
+	Device.ForcedSendResult = ETransportResult::Success;
 	// Act
 	const ETransportResult RecoveryAdvanceResult = Manager.AdvanceSend();
 	// Assert
 	MW_EXPECT_EQ(Test, ETransportResult::Success, RecoveryAdvanceResult, "Recovery advance must succeed after backpressure clears");
-	MW_EXPECT_EQ(Test, ThreeBytePacketLength, Driver.RecordedSendLengths[0], "Retained head must be the first packet length");
-	MW_EXPECT_EQ(Test, DriverFullFirstPacket[0], Driver.RecordedSendBytes[0][0], "Retained head must carry the first packet first byte");
-	MW_EXPECT_EQ(Test, DriverFullFirstPacket[2], Driver.RecordedSendBytes[0][2], "Retained head must carry the first packet third byte");
+	MW_EXPECT_EQ(Test, ThreeBytePacketLength, Device.RecordedSendLengths[0], "Retained head must be the first packet length");
+	MW_EXPECT_EQ(Test, DeviceFullFirstPacket[0], Device.RecordedSendBytes[0][0], "Retained head must carry the first packet first byte");
+	MW_EXPECT_EQ(Test, DeviceFullFirstPacket[2], Device.RecordedSendBytes[0][2], "Retained head must carry the first packet third byte");
 
 	// Act / Assert - the next advance must send the second packet in FIFO order.
 	Manager.AdvanceSend();
-	MW_EXPECT_EQ(Test, TwoBytePacketLength, Driver.RecordedSendLengths[1], "Second advance must send the second packet length");
-	MW_EXPECT_EQ(Test, DriverFullSecondPacket[0], Driver.RecordedSendBytes[1][0], "Second advance must send the second packet first byte");
+	MW_EXPECT_EQ(Test, TwoBytePacketLength, Device.RecordedSendLengths[1], "Second advance must send the second packet length");
+	MW_EXPECT_EQ(Test, DeviceFullSecondPacket[0], Device.RecordedSendBytes[1][0], "Second advance must send the second packet first byte");
 }
 
 /**
- * Scenario: Queue one packet, advance against a driver that returns Unavailable, then switch the driver to success and advance again.
- * Expected: Driver Unavailable propagates as Unavailable and retains the head packet; the retry advance sends the retained head with its original
+ * Scenario: Queue one packet, advance against a device that returns Unavailable, then switch the device to success and advance again.
+ * Expected: Device Unavailable propagates as Unavailable and retains the head packet; the retry advance sends the retained head with its original
  * length and bytes.
  */
-MW_TEST_CASE(TransportManagerDriverUnavailableRetainsExactHead)
+MW_TEST_CASE(TransportManagerDeviceUnavailableRetainsExactHead)
 {
 	// Arrange
-	FRecordingDriver Driver;
-	Driver.ForcedSendResult = ETransportResult::Unavailable;
+	FRecordingDevice Device;
+	Device.ForcedSendResult = ETransportResult::Unavailable;
 	TTransportPacketStorage<1, 4> Storage;
-	TTransportManager<1, 4> Manager(Driver, Storage);
+	TTransportManager<1, 4> Manager(Device, Storage);
 
-	Manager.QueueSend(MakeDest(DefaultDestIndex), TSpan<const std::uint8_t>(DriverUnavailablePacket, sizeof(DriverUnavailablePacket)));
+	Manager.QueueSend(MakeDest(DefaultDestIndex), TSpan<const std::uint8_t>(DeviceUnavailablePacket, sizeof(DeviceUnavailablePacket)));
 
 	// Act
 	const ETransportResult AdvanceResult = Manager.AdvanceSend();
 	// Assert
-	MW_EXPECT_EQ(Test, ETransportResult::Unavailable, AdvanceResult, "Driver Unavailable must propagate as Unavailable");
-	MW_EXPECT_EQ(Test, OneBytePacketLength, Manager.QueuedCount(), "Driver Unavailable must retain the head packet");
+	MW_EXPECT_EQ(Test, ETransportResult::Unavailable, AdvanceResult, "Device Unavailable must propagate as Unavailable");
+	MW_EXPECT_EQ(Test, OneBytePacketLength, Manager.QueuedCount(), "Device Unavailable must retain the head packet");
 
-	Driver.ForcedSendResult = ETransportResult::Success;
+	Device.ForcedSendResult = ETransportResult::Success;
 	// Act
 	Manager.AdvanceSend();
 	// Assert
-	MW_EXPECT_EQ(Test, TwoBytePacketLength, Driver.RecordedSendLengths[0], "Retained head must carry its original length");
-	MW_EXPECT_EQ(Test, DriverUnavailablePacket[0], Driver.RecordedSendBytes[0][0], "Retained head must carry its original first byte");
+	MW_EXPECT_EQ(Test, TwoBytePacketLength, Device.RecordedSendLengths[0], "Retained head must carry its original length");
+	MW_EXPECT_EQ(Test, DeviceUnavailablePacket[0], Device.RecordedSendBytes[0][0], "Retained head must carry its original first byte");
 }
 
 /**
- * Scenario: Queue one packet, advance against a driver that returns Invalid, then switch the driver to success and advance again.
- * Expected: Driver Invalid propagates as Invalid and retains the head packet; the retry advance sends the retained head with its original length and
+ * Scenario: Queue one packet, advance against a device that returns Invalid, then switch the device to success and advance again.
+ * Expected: Device Invalid propagates as Invalid and retains the head packet; the retry advance sends the retained head with its original length and
  * bytes.
  */
-MW_TEST_CASE(TransportManagerDriverInvalidRetainsExactHead)
+MW_TEST_CASE(TransportManagerDeviceInvalidRetainsExactHead)
 {
 	// Arrange
-	FRecordingDriver Driver;
-	Driver.ForcedSendResult = ETransportResult::Invalid;
+	FRecordingDevice Device;
+	Device.ForcedSendResult = ETransportResult::Invalid;
 	TTransportPacketStorage<1, 4> Storage;
-	TTransportManager<1, 4> Manager(Driver, Storage);
+	TTransportManager<1, 4> Manager(Device, Storage);
 
-	Manager.QueueSend(MakeDest(DefaultDestIndex), TSpan<const std::uint8_t>(DriverInvalidPacket, sizeof(DriverInvalidPacket)));
+	Manager.QueueSend(MakeDest(DefaultDestIndex), TSpan<const std::uint8_t>(DeviceInvalidPacket, sizeof(DeviceInvalidPacket)));
 
 	// Act
 	const ETransportResult AdvanceResult = Manager.AdvanceSend();
 	// Assert
-	MW_EXPECT_EQ(Test, ETransportResult::Invalid, AdvanceResult, "Driver Invalid must propagate as Invalid");
-	MW_EXPECT_EQ(Test, OneBytePacketLength, Manager.QueuedCount(), "Driver Invalid must retain the head packet");
+	MW_EXPECT_EQ(Test, ETransportResult::Invalid, AdvanceResult, "Device Invalid must propagate as Invalid");
+	MW_EXPECT_EQ(Test, OneBytePacketLength, Manager.QueuedCount(), "Device Invalid must retain the head packet");
 
-	Driver.ForcedSendResult = ETransportResult::Success;
+	Device.ForcedSendResult = ETransportResult::Success;
 	// Act
 	Manager.AdvanceSend();
 	// Assert
-	MW_EXPECT_EQ(Test, TwoBytePacketLength, Driver.RecordedSendLengths[0], "Retained head must carry its original length");
-	MW_EXPECT_EQ(Test, DriverInvalidPacket[1], Driver.RecordedSendBytes[0][1], "Retained head must carry its original second byte");
+	MW_EXPECT_EQ(Test, TwoBytePacketLength, Device.RecordedSendLengths[0], "Retained head must carry its original length");
+	MW_EXPECT_EQ(Test, DeviceInvalidPacket[1], Device.RecordedSendBytes[0][1], "Retained head must carry its original second byte");
 }
 
 /**
- * Scenario: Queue a head and a later packet, advance into a full driver, clear backpressure, then advance twice.
+ * Scenario: Queue a head and a later packet, advance into a full device, clear backpressure, then advance twice.
  * Expected: Backpressure retains both packets; recovery sends the retained head first, before the later packet, removing only the head on the first
  * advance.
  */
 MW_TEST_CASE(TransportManagerRecoverySendsRetainedHeadBeforeLaterPackets)
 {
 	// Arrange
-	FRecordingDriver Driver;
-	Driver.ForcedSendResult = ETransportResult::Full;
+	FRecordingDevice Device;
+	Device.ForcedSendResult = ETransportResult::Full;
 	TTransportPacketStorage<2, 4> Storage;
-	TTransportManager<2, 4> Manager(Driver, Storage);
+	TTransportManager<2, 4> Manager(Device, Storage);
 
 	Manager.QueueSend(MakeDest(DefaultDestIndex), TSpan<const std::uint8_t>(RecoveryHeadPacket, sizeof(RecoveryHeadPacket)));
 	Manager.QueueSend(MakeDest(DefaultDestIndex), TSpan<const std::uint8_t>(RecoveryLaterPacket, sizeof(RecoveryLaterPacket)));
 
 	// Act / Assert
-	MW_EXPECT_EQ(Test, ETransportResult::Full, Manager.AdvanceSend(), "First advance into a full driver must return Full");
+	MW_EXPECT_EQ(Test, ETransportResult::Full, Manager.AdvanceSend(), "First advance into a full device must return Full");
 	MW_EXPECT_EQ(Test, TwoBytePacketLength, Manager.QueuedCount(), "Backpressure must retain both packets");
 
-	Driver.ForcedSendResult = ETransportResult::Success;
+	Device.ForcedSendResult = ETransportResult::Success;
 	// Act
 	const ETransportResult FirstRecovery = Manager.AdvanceSend();
 	// Assert
 	MW_EXPECT_EQ(Test, ETransportResult::Success, FirstRecovery, "Recovery advance must succeed");
-	MW_EXPECT_EQ(Test, TwoBytePacketLength, Driver.RecordedSendLengths[0], "Recovery must send the retained head, not the later packet");
-	MW_EXPECT_EQ(Test, RecoveryHeadPacket[0], Driver.RecordedSendBytes[0][0], "Recovery must send the retained head first byte");
+	MW_EXPECT_EQ(Test, TwoBytePacketLength, Device.RecordedSendLengths[0], "Recovery must send the retained head, not the later packet");
+	MW_EXPECT_EQ(Test, RecoveryHeadPacket[0], Device.RecordedSendBytes[0][0], "Recovery must send the retained head first byte");
 	MW_EXPECT_EQ(Test, OneBytePacketLength, Manager.QueuedCount(), "Recovery must remove only the head");
 
 	// Act / Assert
 	Manager.AdvanceSend();
-	MW_EXPECT_EQ(Test, OneBytePacketLength, Driver.RecordedSendLengths[1], "Second advance must send the later packet");
-	MW_EXPECT_EQ(Test, RecoveryLaterPacket[0], Driver.RecordedSendBytes[1][0], "Second advance must send the later packet byte");
+	MW_EXPECT_EQ(Test, OneBytePacketLength, Device.RecordedSendLengths[1], "Second advance must send the later packet");
+	MW_EXPECT_EQ(Test, RecoveryLaterPacket[0], Device.RecordedSendBytes[1][0], "Second advance must send the later packet byte");
 }
 
 /**
  * Scenario: Cycle a two-slot FIFO through queue-fill-advance-drain more times than its capacity, recording each send.
- * Expected: Caller-owned storage is reused across many wraparound cycles, each cycle queues and delivers both packets in order, and the driver is
+ * Expected: Caller-owned storage is reused across many wraparound cycles, each cycle queues and delivers both packets in order, and the device is
  * called exactly twice per cycle.
  */
 MW_TEST_CASE(TransportManagerCallerStorageReusedAfterWraparoundAndDraining)
 {
 	// Arrange
-	FRecordingDriver Driver;
+	FRecordingDevice Device;
 	TTransportPacketStorage<2, 2> Storage;
-	TTransportManager<2, 2> Manager(Driver, Storage);
+	TTransportManager<2, 2> Manager(Device, Storage);
 
 	// Act / Assert - cycle the FIFO more times than its capacity so head/tail indices wrap around repeatedly.
 	for (std::size_t Cycle = 0; Cycle < WraparoundCycleCount; ++Cycle)
@@ -532,27 +532,27 @@ MW_TEST_CASE(TransportManagerCallerStorageReusedAfterWraparoundAndDraining)
 		MW_EXPECT_EQ(Test, true, Manager.IsEmpty(), "Two advances must drain the FIFO each cycle");
 
 		const std::size_t SendIndex = Cycle * 2;
-		MW_EXPECT_EQ(Test, TwoBytePacketLength, Driver.RecordedSendLengths[SendIndex], "Cycle A send must carry two bytes");
-		MW_EXPECT_EQ(Test, WraparoundCycleAPacket[0], Driver.RecordedSendBytes[SendIndex][0], "Cycle A send must carry the A packet first byte");
-		MW_EXPECT_EQ(Test, TwoBytePacketLength, Driver.RecordedSendLengths[SendIndex + 1], "Cycle B send must carry two bytes");
-		MW_EXPECT_EQ(Test, WraparoundCycleBPacket[1], Driver.RecordedSendBytes[SendIndex + 1][1], "Cycle B send must carry the B packet second byte");
+		MW_EXPECT_EQ(Test, TwoBytePacketLength, Device.RecordedSendLengths[SendIndex], "Cycle A send must carry two bytes");
+		MW_EXPECT_EQ(Test, WraparoundCycleAPacket[0], Device.RecordedSendBytes[SendIndex][0], "Cycle A send must carry the A packet first byte");
+		MW_EXPECT_EQ(Test, TwoBytePacketLength, Device.RecordedSendLengths[SendIndex + 1], "Cycle B send must carry two bytes");
+		MW_EXPECT_EQ(Test, WraparoundCycleBPacket[1], Device.RecordedSendBytes[SendIndex + 1][1], "Cycle B send must carry the B packet second byte");
 	}
 
 	// Assert
-	MW_EXPECT_EQ(Test, WraparoundCycleCount * 2, Driver.SendCount, "Six cycles of two sends must call the driver exactly twelve times");
+	MW_EXPECT_EQ(Test, WraparoundCycleCount * 2, Device.SendCount, "Six cycles of two sends must call the device exactly twelve times");
 }
 
 /**
- * Scenario: Queue one packet to each of three distinct destinations, then advance each to the driver.
- * Expected: Three advances call the driver exactly three times and route each head to its stored destination address in FIFO order with its original
+ * Scenario: Queue one packet to each of three distinct destinations, then advance each to the device.
+ * Expected: Three advances call the device exactly three times and route each head to its stored destination address in FIFO order with its original
  * bytes, leaving the FIFO empty.
  */
 MW_TEST_CASE(TransportManagerAdvanceSendsEachHeadToItsStoredDestination)
 {
 	// Arrange
-	FRecordingDriver Driver;
+	FRecordingDevice Device;
 	TTransportPacketStorage<3, 4> Storage;
-	TTransportManager<3, 4> Manager(Driver, Storage);
+	TTransportManager<3, 4> Manager(Device, Storage);
 
 	const FDeviceAddress DestA = MakeDest(DestIndexA);
 	const FDeviceAddress DestB = MakeDest(DestIndexB);
@@ -574,33 +574,33 @@ MW_TEST_CASE(TransportManagerAdvanceSendsEachHeadToItsStoredDestination)
 		Manager.QueueSend(DestC, TSpan<const std::uint8_t>(RoutedPacketC, sizeof(RoutedPacketC))),
 		"Queue to DestC must succeed");
 
-	// Act - advance each queued packet to the driver
+	// Act - advance each queued packet to the device
 	Manager.AdvanceSend();
 	Manager.AdvanceSend();
 	Manager.AdvanceSend();
 
 	// Assert - each recorded send must carry the exact destination stored with that packet, in FIFO order.
-	MW_EXPECT_EQ(Test, ThreeBytePacketLength, Driver.SendCount, "Three advances must call the driver exactly three times");
-	MW_EXPECT_EQ(Test, true, Driver.RecordedSendDestinations[0] == DestA, "First advance must send to the first queued destination");
-	MW_EXPECT_EQ(Test, true, Driver.RecordedSendDestinations[1] == DestB, "Second advance must send to the second queued destination");
-	MW_EXPECT_EQ(Test, true, Driver.RecordedSendDestinations[2] == DestC, "Third advance must send to the third queued destination");
-	MW_EXPECT_EQ(Test, RoutedPacketA[0], Driver.RecordedSendBytes[0][0], "First send must still carry the first packet bytes");
-	MW_EXPECT_EQ(Test, RoutedPacketC[1], Driver.RecordedSendBytes[2][1], "Third send must still carry the third packet bytes");
+	MW_EXPECT_EQ(Test, ThreeBytePacketLength, Device.SendCount, "Three advances must call the device exactly three times");
+	MW_EXPECT_EQ(Test, true, Device.RecordedSendDestinations[0] == DestA, "First advance must send to the first queued destination");
+	MW_EXPECT_EQ(Test, true, Device.RecordedSendDestinations[1] == DestB, "Second advance must send to the second queued destination");
+	MW_EXPECT_EQ(Test, true, Device.RecordedSendDestinations[2] == DestC, "Third advance must send to the third queued destination");
+	MW_EXPECT_EQ(Test, RoutedPacketA[0], Device.RecordedSendBytes[0][0], "First send must still carry the first packet bytes");
+	MW_EXPECT_EQ(Test, RoutedPacketC[1], Device.RecordedSendBytes[2][1], "Third send must still carry the third packet bytes");
 	MW_EXPECT_EQ(Test, true, Manager.IsEmpty(), "Three successful advances must drain a three-packet FIFO");
 }
 
 /**
- * Scenario: Receive against a driver that returns Unavailable with pre-filled destination, byte count, and sender outputs.
- * Expected: Receive performs exactly one direct driver receive, propagates Unavailable, and leaves BytesReceived, the destination, and OutFrom
+ * Scenario: Receive against a device that returns Unavailable with pre-filled destination, byte count, and sender outputs.
+ * Expected: Receive performs exactly one direct device receive, propagates Unavailable, and leaves BytesReceived, the destination, and OutFrom
  * unchanged on failure.
  */
-MW_TEST_CASE(TransportManagerReceivePerformsOneDirectDriverReceive)
+MW_TEST_CASE(TransportManagerReceivePerformsOneDirectDeviceReceive)
 {
 	// Arrange
-	FRecordingDriver Driver;
-	Driver.ForcedReceiveResult = ETransportResult::Unavailable;
+	FRecordingDevice Device;
+	Device.ForcedReceiveResult = ETransportResult::Unavailable;
 	TTransportPacketStorage<2, 4> Storage;
-	TTransportManager<2, 4> Manager(Driver, Storage);
+	TTransportManager<2, 4> Manager(Device, Storage);
 
 	std::uint8_t Destination[FourBytePacketLength] = {DestinationPrefillByte, DestinationPrefillByte, DestinationPrefillByte, DestinationPrefillByte};
 	FReceiveResult ReceiveResult{UntouchedBytesReceivedSentinel};
@@ -608,28 +608,28 @@ MW_TEST_CASE(TransportManagerReceivePerformsOneDirectDriverReceive)
 	// Act
 	const ETransportResult UnavailableResult = Manager.Receive(ReceiveFrom, TSpan<std::uint8_t>(Destination, sizeof(Destination)), ReceiveResult);
 	// Assert
-	MW_EXPECT_EQ(Test, ETransportResult::Unavailable, UnavailableResult, "Receive must propagate the driver result");
-	MW_EXPECT_EQ(Test, OneBytePacketLength, Driver.ReceiveAttemptCount, "Receive must call the driver exactly once");
+	MW_EXPECT_EQ(Test, ETransportResult::Unavailable, UnavailableResult, "Receive must propagate the device result");
+	MW_EXPECT_EQ(Test, OneBytePacketLength, Device.ReceiveAttemptCount, "Receive must call the device exactly once");
 	MW_EXPECT_EQ(Test, UntouchedBytesReceivedSentinel, ReceiveResult.BytesReceived, "Unavailable receive must leave BytesReceived unchanged");
 	MW_EXPECT_EQ(Test, DestinationPrefillByte, Destination[0], "Unavailable receive must not modify the destination");
 	MW_EXPECT_EQ(Test, UntouchedAddressByte, ReceiveFrom.Bytes[0], "Unavailable receive must leave OutFrom unchanged");
 }
 
 /**
- * Scenario: Receive against a driver that succeeds with a chosen byte count, fill byte, and sender address.
- * Expected: Receive propagates Success with the driver-reported byte count, fills exactly that many destination bytes without writing past it, and
- * propagates the driver-reported sender address.
+ * Scenario: Receive against a device that succeeds with a chosen byte count, fill byte, and sender address.
+ * Expected: Receive propagates Success with the device-reported byte count, fills exactly that many destination bytes without writing past it, and
+ * propagates the device-reported sender address.
  */
 MW_TEST_CASE(TransportManagerReceivePropagatesSuccessAndByteCount)
 {
 	// Arrange
-	FRecordingDriver Driver;
-	Driver.ForcedReceiveResult = ETransportResult::Success;
-	Driver.ReceiveByteCount = ReceiveFillByteCount;
-	Driver.ReceiveFillerByte = ReceiveFillerByteValue;
-	Driver.ReceiveSender = MakeDest(ReceiveSenderIndex);
+	FRecordingDevice Device;
+	Device.ForcedReceiveResult = ETransportResult::Success;
+	Device.ReceiveByteCount = ReceiveFillByteCount;
+	Device.ReceiveFillerByte = ReceiveFillerByteValue;
+	Device.ReceiveSender = MakeDest(ReceiveSenderIndex);
 	TTransportPacketStorage<2, 4> Storage;
-	TTransportManager<2, 4> Manager(Driver, Storage);
+	TTransportManager<2, 4> Manager(Device, Storage);
 
 	std::uint8_t Destination[FourBytePacketLength] = {0};
 	FReceiveResult ReceiveResult{UntouchedBytesReceivedSentinel};
@@ -637,12 +637,12 @@ MW_TEST_CASE(TransportManagerReceivePropagatesSuccessAndByteCount)
 	// Act
 	const ETransportResult SuccessResult = Manager.Receive(ReceiveFrom, TSpan<std::uint8_t>(Destination, sizeof(Destination)), ReceiveResult);
 	// Assert
-	MW_EXPECT_EQ(Test, ETransportResult::Success, SuccessResult, "Receive must propagate a successful driver result");
-	MW_EXPECT_EQ(Test, ReceiveFillByteCount, ReceiveResult.BytesReceived, "Receive must propagate the driver byte count");
-	MW_EXPECT_EQ(Test, ReceiveFillerByteValue, Destination[0], "Receive must propagate the driver destination bytes");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, SuccessResult, "Receive must propagate a successful device result");
+	MW_EXPECT_EQ(Test, ReceiveFillByteCount, ReceiveResult.BytesReceived, "Receive must propagate the device byte count");
+	MW_EXPECT_EQ(Test, ReceiveFillerByteValue, Destination[0], "Receive must propagate the device destination bytes");
 	MW_EXPECT_EQ(Test, ReceiveFillerByteValue, Destination[2], "Receive must fill exactly the reported byte count");
 	MW_EXPECT_EQ(Test, std::uint8_t{0}, Destination[3], "Receive must not write past the reported byte count");
-	MW_EXPECT_EQ(Test, true, ReceiveFrom == Driver.ReceiveSender, "Receive must propagate the driver-reported sender address");
+	MW_EXPECT_EQ(Test, true, ReceiveFrom == Device.ReceiveSender, "Receive must propagate the device-reported sender address");
 }
 
 } // namespace

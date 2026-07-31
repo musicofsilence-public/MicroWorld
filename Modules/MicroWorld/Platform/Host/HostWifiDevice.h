@@ -3,7 +3,8 @@
 #include <MicroWorld/Transport/DeviceAddress.h>
 #include <MicroWorld/Transport/Device.h>
 #include <MicroWorld/Transport/TransportResult.h>
-#include <MicroWorld/Platform/Esp32/UdpAddress.h>
+#include <MicroWorld/Platform/Host/UdpAddress.h>
+#include <MicroWorld/Platform/Host/WinSockScope.h>
 #include <MicroWorld/Core/Time.h>
 
 #include <cstddef>
@@ -13,46 +14,45 @@ namespace MicroWorld
 {
 
 /**
- * Non-blocking UDP `IDevice` that carries traffic over one real lwIP socket.
+ * Non-blocking UDP `IDevice` that carries traffic over one real host socket.
  *
- * Owns a single `SOCK_DGRAM` socket bound to an IPv4 port and maps each lwIP
- * outcome to the shared `ETransportResult` so callers poll without blocking. It
- * validates every argument before any syscall and leaves caller-owned outputs
- * unchanged on any non-`Success` result, and is the ESP32 sibling of the host
- * adapter shipped in Phase 5.1.
+ * Owns a single `SOCK_DGRAM` socket bound to an IPv4 loopback port and maps each
+ * BSD/WinSock outcome to the shared `ETransportResult` so callers poll without blocking.
+ * It validates every argument before any syscall and leaves caller-owned outputs
+ * unchanged on any non-`Success` result, and is the host template that the ESP32
+ * UDP and E32 LoRa adapters in Phase 5 will mirror.
  */
-class FEsp32UdpDriver final : public IDevice
+class FHostWifiDevice final : public IDevice
 {
 public:
 	/** Largest UDP payload one send accepts and one receive destination may exceed. */
 	static constexpr std::size_t UdpMaxPacketBytes = 1200;
 
 	/**
-	 * Opens one non-blocking UDP socket bound to `INADDR_ANY:InBindPort`.
+	 * Opens one non-blocking UDP socket bound to `127.0.0.1:InBindPort`.
 	 *
-	 * An `InBindPort` of zero asks lwIP for an ephemeral port, readable through
+	 * An `InBindPort` of zero asks the host for an ephemeral port, readable through
 	 * `BoundPort()`. On any syscall failure the constructor closes what it opened
-	 * and leaves the driver with `IsOpen() == false`; it never throws. No netif
-	 * or WiFi is initialized here; a real deployment brings those up first.
+	 * and leaves the device with `IsOpen() == false`; it never throws.
 	 *
 	 * @param InBindPort Host-order UDP port to bind, or zero for an ephemeral port.
 	 */
-	explicit FEsp32UdpDriver(std::uint16_t InBindPort) noexcept;
+	explicit FHostWifiDevice(std::uint16_t InBindPort) noexcept;
 
-	/** Closes the owned socket. */
-	~FEsp32UdpDriver() noexcept override;
+	/** Closes the owned socket and releases the shared socket-stack reference. */
+	~FHostWifiDevice() noexcept override;
 
-	/** Prevents copying so one driver value owns exactly one socket identity. */
-	FEsp32UdpDriver(const FEsp32UdpDriver&) = delete;
+	/** Prevents copying so one device value owns exactly one socket identity. */
+	FHostWifiDevice(const FHostWifiDevice&) = delete;
 
-	/** Prevents copying so one driver value owns exactly one socket identity. */
-	FEsp32UdpDriver& operator=(const FEsp32UdpDriver&) = delete;
-
-	/** Prevents moving so the owned socket handle and interface identity stay fixed. */
-	FEsp32UdpDriver(FEsp32UdpDriver&&) = delete;
+	/** Prevents copying so one device value owns exactly one socket identity. */
+	FHostWifiDevice& operator=(const FHostWifiDevice&) = delete;
 
 	/** Prevents moving so the owned socket handle and interface identity stay fixed. */
-	FEsp32UdpDriver& operator=(FEsp32UdpDriver&&) = delete;
+	FHostWifiDevice(FHostWifiDevice&&) = delete;
+
+	/** Prevents moving so the owned socket handle and interface identity stay fixed. */
+	FHostWifiDevice& operator=(FHostWifiDevice&&) = delete;
 
 	/**
 	 * Sends one complete datagram to a UDP-encoded `InTo` address, transactionally.
@@ -96,7 +96,7 @@ public:
 	/**
 	 * Waits up to `InTimeoutMilliseconds` for a datagram to be readable on the socket.
 	 *
-	 * Uses lwIP `select()` with a bounded timeout so ESP32 demos can wait for
+	 * Uses `select()` with a bounded timeout so host tests and demos can wait for
 	 * readiness deterministically without sleeping in a poll loop. A true return
 	 * means a subsequent `TryReceive` has data to consume.
 	 *
@@ -106,7 +106,10 @@ public:
 	bool PollReadable(DurationMilliseconds InTimeoutMilliseconds) const noexcept;
 
 private:
-	/** Opaque OS socket handle reinterpreted to its lwIP type only in the source file. */
+	/** Holds one reference to the shared socket-stack lifetime for the owned socket. */
+	FWinSockScope WinSock{};
+
+	/** Opaque OS socket handle reinterpreted to `SOCKET` or `int` only in the source file. */
 	std::uintptr_t SocketHandle{0};
 
 	/** Host-order port captured from `getsockname` so callers can address this socket. */

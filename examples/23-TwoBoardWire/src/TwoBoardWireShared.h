@@ -7,7 +7,7 @@
 #include <MicroWorld/Engine/EngineSystem.h>
 #include <MicroWorld/Transport/TransportHost.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
-#include <MicroWorld/Platform/Esp32/Esp32UartDriver.h>
+#include <MicroWorld/Platform/Esp32/Esp32UartDevice.h>
 
 #include <cstdint>
 
@@ -87,7 +87,7 @@ using FWireBinding = MicroWorld::TMessageChannelBinding<FWireTransport>;
 /** The engine both roles compose; sized for one world with a couple of small actors using direct component storage. */
 using FWireEngine = MicroWorld::TEngine<>;
 
-/** Builds a board's UART driver configuration from the fixed pins and baud. */
+/** Builds a board's UART device configuration from the fixed pins and baud. */
 inline MicroWorld::FEsp32UartConfig MakeUartConfig(const std::uint8_t NodeId) noexcept
 {
 	MicroWorld::FEsp32UartConfig Config;

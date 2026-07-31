@@ -1,4 +1,4 @@
-#include <MicroWorld/Transport/Lora/RadioE32Driver.h>
+#include <MicroWorld/Transport/Lora/E32LoraDevice.h>
 
 #include <MicroWorld/Transport/Lora/E32Lora.h>
 #include <MicroWorld/Transport/FrameCodec.h>
@@ -20,9 +20,9 @@ namespace
 
 } // namespace
 
-FRadioE32Driver::FRadioE32Driver(IUartByteStream& InByteStream) noexcept : ByteStream(InByteStream) {}
+FE32LoraDevice::FE32LoraDevice(IUartByteStream& InByteStream) noexcept : ByteStream(InByteStream) {}
 
-ETransportResult FRadioE32Driver::Initialize(const std::uint8_t InLocalNodeId) noexcept
+ETransportResult FE32LoraDevice::Initialize(const std::uint8_t InLocalNodeId) noexcept
 {
 	if (bInitialized)
 	{
@@ -34,7 +34,7 @@ ETransportResult FRadioE32Driver::Initialize(const std::uint8_t InLocalNodeId) n
 	return ETransportResult::Success;
 }
 
-ETransportResult FRadioE32Driver::TrySend(const FDeviceAddress& InTo, const TSpan<const std::uint8_t> InPacket) noexcept
+ETransportResult FE32LoraDevice::TrySend(const FDeviceAddress& InTo, const TSpan<const std::uint8_t> InPacket) noexcept
 {
 	if (!bInitialized)
 	{
@@ -44,7 +44,7 @@ ETransportResult FRadioE32Driver::TrySend(const FDeviceAddress& InTo, const TSpa
 	return TransportState.TryQueueFrame(LocalNodeIdValue, InTo, InPacket);
 }
 
-ETransportResult FRadioE32Driver::TryReceive(FDeviceAddress& OutFrom, const TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
+ETransportResult FE32LoraDevice::TryReceive(FDeviceAddress& OutFrom, const TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
 {
 	if (InDestination.Size() != 0 && InDestination.Data() == nullptr)
 	{
@@ -82,12 +82,12 @@ ETransportResult FRadioE32Driver::TryReceive(FDeviceAddress& OutFrom, const TSpa
 	return ETransportResult::Unavailable;
 }
 
-std::size_t FRadioE32Driver::MaxPacketBytes() const noexcept
+std::size_t FE32LoraDevice::MaxPacketBytes() const noexcept
 {
 	return E32MaxPayloadBytes;
 }
 
-void FRadioE32Driver::AdvanceTransmit() noexcept
+void FE32LoraDevice::AdvanceTransmit() noexcept
 {
 	if (!bInitialized)
 	{
@@ -117,7 +117,7 @@ void FRadioE32Driver::AdvanceTransmit() noexcept
 	}
 }
 
-bool FRadioE32Driver::IsInitialized() const noexcept
+bool FE32LoraDevice::IsInitialized() const noexcept
 {
 	return bInitialized;
 }

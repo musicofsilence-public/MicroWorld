@@ -31,8 +31,8 @@ constexpr FDeviceAddress MakeSpiAddress(const std::uint8_t InNodeId) noexcept
  * Reports whether an address carries this package's one-byte SPI encoding.
  *
  * Only the active length is inspected, so a six-byte UDP address is never mistaken for an SPI one; the byte
- * value is validated when a driver actually routes the address. The one-byte UART, I2C, LoRa, and loopback
- * encodings share this shape by design — a single driver instance only ever handles addresses meant for its
+ * value is validated when a device actually routes the address. The one-byte UART, I2C, LoRa, and loopback
+ * encodings share this shape by design — a single device instance only ever handles addresses meant for its
  * own transport.
  *
  * @param InAddress Address whose encoding to test.

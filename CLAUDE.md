@@ -53,7 +53,7 @@ the non-portable edges. Only they may include OS or SDK headers.
 | **Core** | — | Result codes, time, logging, `FLifecycleGuard`, tick scheduling, fixed-capacity containers, delegates, smart pointers, timers, `IPlaySystem` |
 | **Engine** | Core | The managed runtime and identity: `UWorld`, `AActor`, `UActorComponent`, the `TEngine`/`IEngine` interface, timer manager, plus the folded Object store, garbage collector, and generation-checked handles |
 | **Messaging** | Core | Actor messaging: message types, router, channel bindings, reliable channel. Header-only — no archive |
-| **Transport** | Core | Byte I/O: `IDevice`, `TTransportHost`, protocol, framing, plus the optional portable E32 LoRa transport (`FRadioE32Driver`) over `IUartByteStream`. Link it only for LoRa builds — the RadioE32 sources are toggled by `MICROWORLD_TRANSPORT_RADIO` |
+| **Transport** | Core | Byte I/O: `IDevice`, `TTransportHost`, protocol, framing, plus the optional portable E32 LoRa transport (`FE32LoraDevice`) over `IUartByteStream`. Link it only for LoRa builds — the RadioE32 sources are toggled by `MICROWORLD_TRANSPORT_LORA` |
 | **Application** | Core, Engine | Program entry: `FApplication` holds one engine for its lifetime and owns the `Run` frame-loop template |
 | **Networking** | Core, Messaging, Transport | `TNetworking` — transport hosts, one shared router, and channels composed behind Core's `IPlaySystem` |
 | **Platform/Host** | non-portable | Host UDP over OS sockets, `steady_clock` time source |

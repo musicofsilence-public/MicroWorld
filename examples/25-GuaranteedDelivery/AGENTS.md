@@ -11,8 +11,8 @@ hold the two roles and are both always compiled, and
 `GuaranteedDeliveryShared.h` defines the message/actor/channel ids, WiFi/UDP
 configuration, and the `TTransportHost`/`TMessageRouter`/`TReliableChannel`/
 `TEngine`/`TPlaySystemSet` type shapes once (DRY within this one
-example). Per board: ONE `TTransportHost` over `FEsp32UdpDriver` -- on the client,
-wrapped in `FPacketDropDriver` -- carrying TWO channels to the same
+example). Per board: ONE `TTransportHost` over `FEsp32WifiDevice` -- on the client,
+wrapped in `FPacketDropDevice` -- carrying TWO channels to the same
 `TMessageRouter`: a best-effort binding straight to the router, and a
 guaranteed binding wrapped in `TReliableChannel`. All pumped by one
 `TPlaySystemSet<3>` (host play system, reliable channel, router) the engine holds.
@@ -37,15 +37,15 @@ Every composition object is `static` and allocation-free.
   `PostAdvance` then paces retries for anything still unacknowledged; the
   router dispatches last, once both channels have had their turn. Reversing
   this order would let the router run against stale channel state.
-- **`FPacketDropDriver` sits below the channel demux.** It wraps the raw UDP
-  driver, one layer beneath `TTransportHost`, so it drops indiscriminately --
+- **`FPacketDropDevice` sits below the channel demux.** It wraps the raw UDP
+  device, one layer beneath `TTransportHost`, so it drops indiscriminately --
   best-effort data, guaranteed data, guaranteed acks, and heartbeats are all
   equally at risk of the same dropped send. This is why the guaranteed
   column's exact resend timing is illustrative, not fixed: which packet type
   gets hit by the Nth drop depends on send interleaving, not channel identity.
 - **Actors name no transport (D9).** `FLedgerActor` and `FCounterActor` both
   take `IMessageRouter&` by constructor injection and never see `TTransportHost`, a
-  driver, UDP, or the drop injector.
+  device, UDP, or the drop injector.
 
 ## Verification
 

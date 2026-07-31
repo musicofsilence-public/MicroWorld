@@ -19,7 +19,7 @@
 #include <MicroWorld/Engine/ObjectPtr.h>
 #include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
 #include <MicroWorld/Platform/Esp32/Esp32TimeSource.h>
-#include <MicroWorld/Platform/Esp32/Esp32UdpDriver.h>
+#include <MicroWorld/Platform/Esp32/Esp32WifiDevice.h>
 #include <MicroWorld/Platform/Esp32/Esp32WifiLink.h>
 
 #include <cstddef>
@@ -121,8 +121,8 @@ private:
  * Server board: hosts the WiFi SoftAP and runs FLedgerActor over one TMessageRouter wired to ONE
  * UDP transport through TWO TMessageChannelBinding -- best-effort straight to the router, guaranteed
  * wrapped in TReliableChannel -- with the engine holding the host play system, the reliable channel, and
- * the router behind one TPlaySystemSet<3>. The server's own driver is never wrapped in
- * FPacketDropDriver: only the client injects loss (§0 of the roadmap brief).
+ * the router behind one TPlaySystemSet<3>. The server's own device is never wrapped in
+ * FPacketDropDevice: only the client injects loss (§0 of the roadmap brief).
  */
 void RunServer() noexcept
 {
@@ -135,17 +135,17 @@ void RunServer() noexcept
 	}
 	MW_LOG(Log, "ex25", "wifi softap up, gateway 192.168.4.1");
 
-	// The driver is constructed only after WiFi/netif is up (lwIP must exist first).
-	static FEsp32UdpDriver UdpDriver(ServerPort);
-	MW_LOG(Log, "ex25", "udp open=%d udp_port=%u", UdpDriver.IsOpen() ? 1 : 0, static_cast<unsigned>(UdpDriver.BoundPort()));
-	if (!UdpDriver.IsOpen())
+	// The device is constructed only after WiFi/netif is up (lwIP must exist first).
+	static FEsp32WifiDevice UdpDevice(ServerPort);
+	MW_LOG(Log, "ex25", "udp open=%d udp_port=%u", UdpDevice.IsOpen() ? 1 : 0, static_cast<unsigned>(UdpDevice.BoundPort()));
+	if (!UdpDevice.IsOpen())
 	{
 		MW_LOG(Error, "ex25", "udp socket failed; halting");
 		return;
 	}
 
 	// All composition objects are static (the ESP32-S3 stack lesson, §2.2).
-	static FWorldTransport Transport{UdpDriver};
+	static FWorldTransport Transport{UdpDevice};
 	static FWorldRouter Router;
 
 	// Best-effort channel: a plain binding straight to the router, no reliable wrapper.

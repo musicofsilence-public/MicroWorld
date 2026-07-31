@@ -3,18 +3,18 @@
 **Feature:** the full MicroWorld message design — a dedicated-server `TEngine`
 bound to `TTransportHost` through the `THostPlaySystem` interface, and a bare `TTransportHost`
 client — running over a plain wire with **zero WiFi**. **Same application
-protocol as example 16 — only the driver construction changed.**
+protocol as example 16 — only the device construction changed.**
 
 > Status: not yet verified on hardware.
 
 ## What it does
 
 1. The **server** board (`node=1`) composes a `TEngine` + `THostPlaySystem` +
-   `TTransportHost` in `DedicatedServer` mode over one `FEsp32UartDriver`, registers a
+   `TTransportHost` in `DedicatedServer` mode over one `FEsp32UartDevice`, registers a
    spawnable actor class, creates its world, and ticks forever. Each tick it
    broadcasts the world actor count on channel 2.
 2. The **client** board (`node=2`) runs a bare `TTransportHost` in `Client` mode over
-   its own `FEsp32UartDriver`, greeting `MakeUartAddress(1)` as its server. Once
+   its own `FEsp32UartDevice`, greeting `MakeUartAddress(1)` as its server. Once
    connected it sends two channel-1 spawn requests one second apart and logs
    every channel-2 state broadcast it receives.
 3. Each accepted request spawns one actor in the server world, so the broadcast
@@ -22,7 +22,7 @@ protocol as example 16 — only the driver construction changed.**
    done line; the server logs its own done line after spawning two actors
    and keeps running.
 
-The application code above the driver is identical to example 16's — there is no
+The application code above the device is identical to example 16's — there is no
 `WifiStation`, no `NetworkConfig`, no `esp_netif_init`. That deletion is the
 demonstration.
 
@@ -34,7 +34,7 @@ demonstration.
 - `THostPlaySystem` / `IPlaySystem` and the `TEngine` network-frame constructor
 - `TEngine` (`RegisterClass` / `CreateWorld` / `CreateObject` / `BeginPlay` /
   `Tick` / `GetWorld`), `UWorld::SpawnActor`, `AActor`, `FGarbageCollectionBudget`
-- `FEsp32UartDriver`, `FEsp32UartConfig`, `MakeUartAddress`
+- `FEsp32UartDevice`, `FEsp32UartConfig`, `MakeUartAddress`
 - `FEsp32TimeSource::Now`
 
 ## Hardware required

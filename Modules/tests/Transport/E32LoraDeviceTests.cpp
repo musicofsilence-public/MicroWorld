@@ -5,7 +5,7 @@
 #include <MicroWorld/Transport/FrameCodec.h>
 #include <MicroWorld/Transport/Device.h>
 #include <MicroWorld/Transport/TransportResult.h>
-#include <MicroWorld/Transport/Lora/RadioE32Driver.h>
+#include <MicroWorld/Transport/Lora/E32LoraDevice.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -17,7 +17,7 @@ using MicroWorld::E32MaxPayloadBytes;
 using MicroWorld::ETransportResult;
 using MicroWorld::EUartByteStreamResult;
 using MicroWorld::FDeviceAddress;
-using MicroWorld::FRadioE32Driver;
+using MicroWorld::FE32LoraDevice;
 using MicroWorld::FrameOverheadBytes;
 using MicroWorld::FReceiveResult;
 using MicroWorld::IUartByteStream;
@@ -27,13 +27,13 @@ using MicroWorld::TSpan;
 /** Fixed encoded E32 frame capacity used by transmit and receive test fixtures. */
 constexpr std::size_t EncodedFrameCapacity = E32MaxPayloadBytes + FrameOverheadBytes;
 
-/** Driver receive budget derived from the largest possible encoded E32 frame. */
+/** Device receive budget derived from the largest possible encoded E32 frame. */
 constexpr std::size_t ReceivePumpByteCap = 2u * EncodedFrameCapacity;
 
 /** Fixed receive-stream capacity for one capped prefix followed by up to two encoded frames. */
 constexpr std::size_t ReceiveStreamCapacity = ReceivePumpByteCap + (2u * EncodedFrameCapacity);
 
-/** Local node id used by every initialized transmitting driver fixture. */
+/** Local node id used by every initialized transmitting device fixture. */
 constexpr std::uint8_t LocalNodeId = 7;
 
 /** Peer node id used by every valid one-byte E32 destination and decoded frame fixture. */
@@ -130,20 +130,20 @@ public:
 		return true;
 	}
 
-	/** Reports how many write attempts the driver made, including blocked and failed attempts. */
+	/** Reports how many write attempts the device made, including blocked and failed attempts. */
 	std::size_t WriteCallCount() const noexcept { return WriteCallCountValue; }
 
 	/** Reports how many bytes the fake accepted after successful write attempts. */
 	std::size_t WrittenByteCount() const noexcept { return WrittenByteCountValue; }
 
-	/** Reports how many read attempts the driver made, including empty and failed attempts. */
+	/** Reports how many read attempts the device made, including empty and failed attempts. */
 	std::size_t ReadCallCount() const noexcept { return ReadCallCountValue; }
 
 	/** Reads one captured successful write for observable wire-traffic assertions. */
 	std::uint8_t WrittenByteAt(const std::size_t InIndex) const noexcept { return WrittenBytes[InIndex]; }
 
 private:
-	/** Stores all successful writes from the one fixed frame a driver may queue at once. */
+	/** Stores all successful writes from the one fixed frame a device may queue at once. */
 	std::uint8_t WrittenBytes[EncodedFrameCapacity]{};
 
 	/** Stores raw bytes supplied to later receive polls without dynamic storage. */
@@ -174,7 +174,7 @@ private:
 	std::size_t ReadCallCountValue{0};
 };
 
-/** Encodes one peer frame into fixed storage for public-driver receive scenarios. */
+/** Encodes one peer frame into fixed storage for public-device receive scenarios. */
 ETransportResult EncodePeerFrame(
 	const std::uint8_t* const InPayload,
 	const std::size_t InPayloadSize,
@@ -235,26 +235,26 @@ bool AddressHasNodeId(const FDeviceAddress& InAddress, const std::uint8_t InNode
 
 /**
  * Scenario: Use send and receive before initialization, then initialize twice.
- * Expected: The driver remains inert before initialization, initializes once without UART I/O, and rejects a later initialization.
+ * Expected: The device remains inert before initialization, initializes once without UART I/O, and rejects a later initialization.
  */
-MW_TEST_CASE(RadioE32DriverRemainsInertUntilSingleShotInitialization)
+MW_TEST_CASE(E32LoraDeviceRemainsInertUntilSingleShotInitialization)
 {
 	// Arrange
 	FFakeUartByteStream Stream;
-	FRadioE32Driver Driver(Stream);
+	FE32LoraDevice Device(Stream);
 	const FDeviceAddress DestinationAddress = MakeLoraAddress(PeerNodeId);
 	FDeviceAddress From = MakeLoraAddress(SentinelNodeId);
 	FReceiveResult ReceiveResult{SentinelByteCount};
 	std::uint8_t Destination[sizeof(Payload)] = {SentinelByte, SentinelByte, SentinelByte};
 
 	// Act
-	const bool bInitiallyInitialized = Driver.IsInitialized();
-	const ETransportResult SendBeforeInitialize = Driver.TrySend(DestinationAddress, TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
-	const ETransportResult ReceiveBeforeInitialize = Driver.TryReceive(From, TSpan<std::uint8_t>(Destination, sizeof(Destination)), ReceiveResult);
-	Driver.AdvanceTransmit();
-	const ETransportResult FirstInitializeResult = Driver.Initialize(LocalNodeId);
-	const ETransportResult SecondInitializeResult = Driver.Initialize(LocalNodeId);
-	const bool bInitializedAfterFirstCall = Driver.IsInitialized();
+	const bool bInitiallyInitialized = Device.IsInitialized();
+	const ETransportResult SendBeforeInitialize = Device.TrySend(DestinationAddress, TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
+	const ETransportResult ReceiveBeforeInitialize = Device.TryReceive(From, TSpan<std::uint8_t>(Destination, sizeof(Destination)), ReceiveResult);
+	Device.AdvanceTransmit();
+	const ETransportResult FirstInitializeResult = Device.Initialize(LocalNodeId);
+	const ETransportResult SecondInitializeResult = Device.Initialize(LocalNodeId);
+	const bool bInitializedAfterFirstCall = Device.IsInitialized();
 	const std::size_t ReadCalls = Stream.ReadCallCount();
 	const std::size_t WriteCalls = Stream.WriteCallCount();
 	const bool bDestinationPreserved = DestinationContains(Destination, sizeof(Destination), SentinelByte);
@@ -262,12 +262,12 @@ MW_TEST_CASE(RadioE32DriverRemainsInertUntilSingleShotInitialization)
 	const std::size_t PreservedByteCount = ReceiveResult.BytesReceived;
 
 	// Assert
-	MW_EXPECT_EQ(Test, false, bInitiallyInitialized, "Construction must leave the driver uninitialized");
+	MW_EXPECT_EQ(Test, false, bInitiallyInitialized, "Construction must leave the device uninitialized");
 	MW_EXPECT_EQ(Test, ETransportResult::Unavailable, SendBeforeInitialize, "Send before initialization must be unavailable");
 	MW_EXPECT_EQ(Test, ETransportResult::Unavailable, ReceiveBeforeInitialize, "Receive before initialization must be unavailable");
 	MW_EXPECT_EQ(Test, ETransportResult::Success, FirstInitializeResult, "The first initialization must succeed");
 	MW_EXPECT_EQ(Test, ETransportResult::Unavailable, SecondInitializeResult, "The second initialization must be unavailable");
-	MW_EXPECT_EQ(Test, true, bInitializedAfterFirstCall, "Successful initialization must make the driver usable");
+	MW_EXPECT_EQ(Test, true, bInitializedAfterFirstCall, "Successful initialization must make the device usable");
 	MW_EXPECT_EQ(Test, std::size_t{0}, ReadCalls, "Construction and initialization must not read the UART");
 	MW_EXPECT_EQ(Test, std::size_t{0}, WriteCalls, "Construction and initialization must not write the UART");
 	MW_EXPECT_EQ(Test, true, bDestinationPreserved, "Unavailable receive must preserve destination bytes");
@@ -279,32 +279,32 @@ MW_TEST_CASE(RadioE32DriverRemainsInertUntilSingleShotInitialization)
  * Scenario: Send malformed, null, and oversize payloads before sending valid normal, empty, and maximum packets.
  * Expected: Invalid sends do not occupy the slot; every documented valid payload boundary is accepted.
  */
-MW_TEST_CASE(RadioE32DriverValidatesSendInputsAndAcceptsPayloadBoundaries)
+MW_TEST_CASE(E32LoraDeviceValidatesSendInputsAndAcceptsPayloadBoundaries)
 {
 	// Arrange
 	FFakeUartByteStream Stream;
-	FRadioE32Driver Driver(Stream);
+	FE32LoraDevice Device(Stream);
 	FDeviceAddress InvalidAddress{};
 	const FDeviceAddress DestinationAddress = MakeLoraAddress(PeerNodeId);
-	const ETransportResult InitializeResult = Driver.Initialize(LocalNodeId);
+	const ETransportResult InitializeResult = Device.Initialize(LocalNodeId);
 
 	// Act
-	const ETransportResult InvalidAddressResult = Driver.TrySend(InvalidAddress, TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
-	const ETransportResult NullPayloadResult = Driver.TrySend(DestinationAddress, TSpan<const std::uint8_t>(nullptr, 1));
+	const ETransportResult InvalidAddressResult = Device.TrySend(InvalidAddress, TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
+	const ETransportResult NullPayloadResult = Device.TrySend(DestinationAddress, TSpan<const std::uint8_t>(nullptr, 1));
 	const ETransportResult OversizePayloadResult =
-		Driver.TrySend(DestinationAddress, TSpan<const std::uint8_t>(&OversizePayloadByte, E32MaxPayloadBytes + 1));
-	const ETransportResult ValidPayloadResult = Driver.TrySend(DestinationAddress, TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
-	Driver.AdvanceTransmit();
+		Device.TrySend(DestinationAddress, TSpan<const std::uint8_t>(&OversizePayloadByte, E32MaxPayloadBytes + 1));
+	const ETransportResult ValidPayloadResult = Device.TrySend(DestinationAddress, TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
+	Device.AdvanceTransmit();
 	const std::size_t ValidFrameWrittenBytes = Stream.WrittenByteCount();
-	const ETransportResult EmptyPayloadResult = Driver.TrySend(DestinationAddress, TSpan<const std::uint8_t>(nullptr, 0));
-	Driver.AdvanceTransmit();
+	const ETransportResult EmptyPayloadResult = Device.TrySend(DestinationAddress, TSpan<const std::uint8_t>(nullptr, 0));
+	Device.AdvanceTransmit();
 	const std::size_t EmptyFrameWrittenBytes = Stream.WrittenByteCount();
 	const ETransportResult MaximumPayloadResult =
-		Driver.TrySend(DestinationAddress, TSpan<const std::uint8_t>(MaximumPayload, sizeof(MaximumPayload)));
-	const std::size_t MaximumPacketBytes = Driver.MaxPacketBytes();
+		Device.TrySend(DestinationAddress, TSpan<const std::uint8_t>(MaximumPayload, sizeof(MaximumPayload)));
+	const std::size_t MaximumPacketBytes = Device.MaxPacketBytes();
 
 	// Assert
-	MW_EXPECT_EQ(Test, ETransportResult::Success, InitializeResult, "The send fixture driver must initialize");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, InitializeResult, "The send fixture device must initialize");
 	MW_EXPECT_EQ(Test, ETransportResult::Invalid, InvalidAddressResult, "A malformed E32 destination must be rejected");
 	MW_EXPECT_EQ(Test, ETransportResult::Invalid, NullPayloadResult, "A null non-empty payload must be rejected");
 	MW_EXPECT_EQ(Test, ETransportResult::Invalid, OversizePayloadResult, "A payload over the E32 limit must be rejected");
@@ -321,24 +321,24 @@ MW_TEST_CASE(RadioE32DriverValidatesSendInputsAndAcceptsPayloadBoundaries)
  * Scenario: Queue one maximum packet, attempt a second while occupied, then advance once through an always-writable UART.
  * Expected: The second send reports Full; one advance drains the complete fixed frame within its bounded byte budget and frees the slot.
  */
-MW_TEST_CASE(RadioE32DriverAppliesBackpressureAndDrainsMaximumFrameInOneAdvance)
+MW_TEST_CASE(E32LoraDeviceAppliesBackpressureAndDrainsMaximumFrameInOneAdvance)
 {
 	// Arrange
 	FFakeUartByteStream Stream;
-	FRadioE32Driver Driver(Stream);
+	FE32LoraDevice Device(Stream);
 	const FDeviceAddress DestinationAddress = MakeLoraAddress(PeerNodeId);
-	const ETransportResult InitializeResult = Driver.Initialize(LocalNodeId);
-	const ETransportResult FirstSendResult = Driver.TrySend(DestinationAddress, TSpan<const std::uint8_t>(MaximumPayload, sizeof(MaximumPayload)));
-	const ETransportResult FullResult = Driver.TrySend(DestinationAddress, TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
+	const ETransportResult InitializeResult = Device.Initialize(LocalNodeId);
+	const ETransportResult FirstSendResult = Device.TrySend(DestinationAddress, TSpan<const std::uint8_t>(MaximumPayload, sizeof(MaximumPayload)));
+	const ETransportResult FullResult = Device.TrySend(DestinationAddress, TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
 
 	// Act
-	Driver.AdvanceTransmit();
+	Device.AdvanceTransmit();
 	const std::size_t WrittenBytes = Stream.WrittenByteCount();
 	const std::size_t WriteCalls = Stream.WriteCallCount();
-	const ETransportResult ReuseResult = Driver.TrySend(DestinationAddress, TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
+	const ETransportResult ReuseResult = Device.TrySend(DestinationAddress, TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
 
 	// Assert
-	MW_EXPECT_EQ(Test, ETransportResult::Success, InitializeResult, "The transmit fixture driver must initialize");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, InitializeResult, "The transmit fixture device must initialize");
 	MW_EXPECT_EQ(Test, ETransportResult::Success, FirstSendResult, "An empty transmit slot must accept one maximum frame");
 	MW_EXPECT_EQ(Test, ETransportResult::Full, FullResult, "A queued frame must apply one-frame backpressure");
 	MW_EXPECT_EQ(Test, EncodedFrameCapacity, WrittenBytes, "One advance must drain every byte of the maximum encoded frame");
@@ -350,11 +350,11 @@ MW_TEST_CASE(RadioE32DriverAppliesBackpressureAndDrainsMaximumFrameInOneAdvance)
  * Scenario: Queue a frame, block the first write, then make the UART writable and advance again.
  * Expected: The blocked byte remains queued and becomes the first successfully emitted byte on retry.
  */
-MW_TEST_CASE(RadioE32DriverRetainsCurrentByteWhenWriteIsUnavailable)
+MW_TEST_CASE(E32LoraDeviceRetainsCurrentByteWhenWriteIsUnavailable)
 {
 	// Arrange
 	FFakeUartByteStream Stream;
-	FRadioE32Driver Driver(Stream);
+	FE32LoraDevice Device(Stream);
 	const FDeviceAddress DestinationAddress = MakeLoraAddress(PeerNodeId);
 	std::uint8_t ExpectedFrame[EncodedFrameCapacity] = {};
 	std::size_t ExpectedFrameBytes = 0;
@@ -363,26 +363,26 @@ MW_TEST_CASE(RadioE32DriverRetainsCurrentByteWhenWriteIsUnavailable)
 		TSpan<const std::uint8_t>(Payload, sizeof(Payload)),
 		TSpan<std::uint8_t>(ExpectedFrame, sizeof(ExpectedFrame)),
 		ExpectedFrameBytes);
-	const ETransportResult InitializeResult = Driver.Initialize(LocalNodeId);
-	const ETransportResult SendResult = Driver.TrySend(DestinationAddress, TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
+	const ETransportResult InitializeResult = Device.Initialize(LocalNodeId);
+	const ETransportResult SendResult = Device.TrySend(DestinationAddress, TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
 	Stream.SetWriteResult(EUartByteStreamResult::Unavailable);
 
 	// Act
-	Driver.AdvanceTransmit();
+	Device.AdvanceTransmit();
 	const std::size_t BlockedWriteCalls = Stream.WriteCallCount();
 	const std::size_t BlockedWrittenBytes = Stream.WrittenByteCount();
 	const ETransportResult FullWhileBlockedResult =
-		Driver.TrySend(DestinationAddress, TSpan<const std::uint8_t>(ReplacementPayload, sizeof(ReplacementPayload)));
+		Device.TrySend(DestinationAddress, TSpan<const std::uint8_t>(ReplacementPayload, sizeof(ReplacementPayload)));
 	Stream.SetWriteResult(EUartByteStreamResult::Success);
-	Driver.AdvanceTransmit();
+	Device.AdvanceTransmit();
 	const std::size_t WrittenBytesAfterRetry = Stream.WrittenByteCount();
 	const std::uint8_t FirstWrittenByte = Stream.WrittenByteAt(0);
 	const ETransportResult ReuseResult =
-		Driver.TrySend(DestinationAddress, TSpan<const std::uint8_t>(ReplacementPayload, sizeof(ReplacementPayload)));
+		Device.TrySend(DestinationAddress, TSpan<const std::uint8_t>(ReplacementPayload, sizeof(ReplacementPayload)));
 
 	// Assert
 	MW_EXPECT_EQ(Test, ETransportResult::Success, EncodeResult, "The expected wire frame fixture must encode");
-	MW_EXPECT_EQ(Test, ETransportResult::Success, InitializeResult, "The blocked-write fixture driver must initialize");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, InitializeResult, "The blocked-write fixture device must initialize");
 	MW_EXPECT_EQ(Test, ETransportResult::Success, SendResult, "The first frame must queue before the write blocks");
 	MW_EXPECT_EQ(Test, std::size_t{1}, BlockedWriteCalls, "A blocked advance must attempt the current byte once");
 	MW_EXPECT_EQ(Test, std::size_t{0}, BlockedWrittenBytes, "A blocked write must not consume the current byte");
@@ -396,25 +396,25 @@ MW_TEST_CASE(RadioE32DriverRetainsCurrentByteWhenWriteIsUnavailable)
  * Scenario: Queue a frame, make the first UART write fail permanently, then queue another frame.
  * Expected: The failed frame is discarded so the later send is accepted instead of remaining Full forever.
  */
-MW_TEST_CASE(RadioE32DriverDiscardsQueuedFrameAfterWriteError)
+MW_TEST_CASE(E32LoraDeviceDiscardsQueuedFrameAfterWriteError)
 {
 	// Arrange
 	FFakeUartByteStream Stream;
-	FRadioE32Driver Driver(Stream);
+	FE32LoraDevice Device(Stream);
 	const FDeviceAddress DestinationAddress = MakeLoraAddress(PeerNodeId);
-	const ETransportResult InitializeResult = Driver.Initialize(LocalNodeId);
-	const ETransportResult FirstSendResult = Driver.TrySend(DestinationAddress, TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
+	const ETransportResult InitializeResult = Device.Initialize(LocalNodeId);
+	const ETransportResult FirstSendResult = Device.TrySend(DestinationAddress, TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
 	Stream.SetSuccessfulWriteLimit(2);
 
 	// Act
-	Driver.AdvanceTransmit();
+	Device.AdvanceTransmit();
 	const std::size_t WriteCalls = Stream.WriteCallCount();
 	const std::size_t WrittenBytes = Stream.WrittenByteCount();
 	const ETransportResult LaterSendResult =
-		Driver.TrySend(DestinationAddress, TSpan<const std::uint8_t>(ReplacementPayload, sizeof(ReplacementPayload)));
+		Device.TrySend(DestinationAddress, TSpan<const std::uint8_t>(ReplacementPayload, sizeof(ReplacementPayload)));
 
 	// Assert
-	MW_EXPECT_EQ(Test, ETransportResult::Success, InitializeResult, "The write-error fixture driver must initialize");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, InitializeResult, "The write-error fixture device must initialize");
 	MW_EXPECT_EQ(Test, ETransportResult::Success, FirstSendResult, "The first frame must queue before the write error");
 	MW_EXPECT_EQ(Test, std::size_t{3}, WriteCalls, "The hard-error advance must attempt two bytes before failing on the next write");
 	MW_EXPECT_EQ(Test, std::size_t{2}, WrittenBytes, "Only bytes accepted before the hard write error may reach the UART");
@@ -422,25 +422,26 @@ MW_TEST_CASE(RadioE32DriverDiscardsQueuedFrameAfterWriteError)
 }
 
 /**
- * Scenario: Supply one valid peer frame through the byte stream and receive it through the public driver.
- * Expected: Success changes every receive output to the decoded sender, payload bytes, and byte count.
+ * Scenario: Supply one valid peer frame through the byte stream and receive it through the public device.
+ * Expected: Success changes every receive
+ * output to the decoded sender, payload bytes, and byte count.
  */
-MW_TEST_CASE(RadioE32DriverDeliversValidReceivedFrameTransactionally)
+MW_TEST_CASE(E32LoraDeviceDeliversValidReceivedFrameTransactionally)
 {
 	// Arrange
 	FFakeUartByteStream Stream;
-	FRadioE32Driver Driver(Stream);
+	FE32LoraDevice Device(Stream);
 	std::uint8_t Frame[EncodedFrameCapacity] = {};
 	std::size_t FrameBytes = 0;
 	const ETransportResult EncodeResult = EncodePeerFrame(Payload, sizeof(Payload), Frame, FrameBytes);
 	const bool bQueuedFrame = QueueFrame(Stream, Frame, FrameBytes);
-	const ETransportResult InitializeResult = Driver.Initialize(LocalNodeId);
+	const ETransportResult InitializeResult = Device.Initialize(LocalNodeId);
 	FDeviceAddress From = MakeLoraAddress(SentinelNodeId);
 	FReceiveResult ReceiveResult{SentinelByteCount};
 	std::uint8_t Destination[sizeof(Payload)] = {SentinelByte, SentinelByte, SentinelByte};
 
 	// Act
-	const ETransportResult ReceiveOutcome = Driver.TryReceive(From, TSpan<std::uint8_t>(Destination, sizeof(Destination)), ReceiveResult);
+	const ETransportResult ReceiveOutcome = Device.TryReceive(From, TSpan<std::uint8_t>(Destination, sizeof(Destination)), ReceiveResult);
 	const bool bPayloadMatches = DestinationMatches(Destination, Payload, sizeof(Payload));
 	const bool bSenderMatches = AddressHasNodeId(From, PeerNodeId);
 	const std::size_t ReceivedBytes = ReceiveResult.BytesReceived;
@@ -448,7 +449,7 @@ MW_TEST_CASE(RadioE32DriverDeliversValidReceivedFrameTransactionally)
 	// Assert
 	MW_EXPECT_EQ(Test, ETransportResult::Success, EncodeResult, "The valid peer frame fixture must encode");
 	MW_EXPECT_EQ(Test, true, bQueuedFrame, "The fake UART must retain the complete valid frame fixture");
-	MW_EXPECT_EQ(Test, ETransportResult::Success, InitializeResult, "The receive fixture driver must initialize");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, InitializeResult, "The receive fixture device must initialize");
 	MW_EXPECT_EQ(Test, ETransportResult::Success, ReceiveOutcome, "A valid queued frame must deliver successfully");
 	MW_EXPECT_EQ(Test, true, bPayloadMatches, "Successful receive must copy every payload byte");
 	MW_EXPECT_EQ(Test, true, bSenderMatches, "Successful receive must replace the sender output");
@@ -456,28 +457,29 @@ MW_TEST_CASE(RadioE32DriverDeliversValidReceivedFrameTransactionally)
 }
 
 /**
- * Scenario: Poll an initialized driver whose byte stream has no queued data.
- * Expected: Unavailable leaves every caller-owned receive output unchanged.
+ * Scenario: Poll an initialized device whose byte stream has no queued data.
+ * Expected: Unavailable leaves every caller-owned receive output
+ * unchanged.
  */
-MW_TEST_CASE(RadioE32DriverNoDataReceivePreservesOutputs)
+MW_TEST_CASE(E32LoraDeviceNoDataReceivePreservesOutputs)
 {
 	// Arrange
 	FFakeUartByteStream Stream;
-	FRadioE32Driver Driver(Stream);
-	const ETransportResult InitializeResult = Driver.Initialize(LocalNodeId);
+	FE32LoraDevice Device(Stream);
+	const ETransportResult InitializeResult = Device.Initialize(LocalNodeId);
 	FDeviceAddress From = MakeLoraAddress(SentinelNodeId);
 	FReceiveResult ReceiveResult{SentinelByteCount};
 	std::uint8_t Destination[sizeof(Payload)] = {SentinelByte, SentinelByte, SentinelByte};
 
 	// Act
-	const ETransportResult ReceiveOutcome = Driver.TryReceive(From, TSpan<std::uint8_t>(Destination, sizeof(Destination)), ReceiveResult);
+	const ETransportResult ReceiveOutcome = Device.TryReceive(From, TSpan<std::uint8_t>(Destination, sizeof(Destination)), ReceiveResult);
 	const bool bDestinationPreserved = DestinationContains(Destination, sizeof(Destination), SentinelByte);
 	const bool bFromPreserved = AddressHasNodeId(From, SentinelNodeId);
 	const std::size_t PreservedByteCount = ReceiveResult.BytesReceived;
 	const std::size_t ReadCalls = Stream.ReadCallCount();
 
 	// Assert
-	MW_EXPECT_EQ(Test, ETransportResult::Success, InitializeResult, "The no-data fixture driver must initialize");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, InitializeResult, "The no-data fixture device must initialize");
 	MW_EXPECT_EQ(Test, ETransportResult::Unavailable, ReceiveOutcome, "An empty byte stream must report Unavailable");
 	MW_EXPECT_EQ(Test, true, bDestinationPreserved, "Unavailable receive must preserve destination bytes");
 	MW_EXPECT_EQ(Test, true, bFromPreserved, "Unavailable receive must preserve the sender output");
@@ -489,30 +491,30 @@ MW_TEST_CASE(RadioE32DriverNoDataReceivePreservesOutputs)
  * Scenario: Hold one decoded frame, reject a short and null destination, then retry with sufficient storage.
  * Expected: Both rejections preserve caller outputs and retain the frame; the later valid retry delivers it.
  */
-MW_TEST_CASE(RadioE32DriverRetainsDecodedFrameAcrossFullAndInvalidDestinations)
+MW_TEST_CASE(E32LoraDeviceRetainsDecodedFrameAcrossFullAndInvalidDestinations)
 {
 	// Arrange
 	FFakeUartByteStream Stream;
-	FRadioE32Driver Driver(Stream);
+	FE32LoraDevice Device(Stream);
 	std::uint8_t Frame[EncodedFrameCapacity] = {};
 	std::size_t FrameBytes = 0;
 	const ETransportResult EncodeResult = EncodePeerFrame(Payload, sizeof(Payload), Frame, FrameBytes);
 	const bool bQueuedFrame = QueueFrame(Stream, Frame, FrameBytes);
-	const ETransportResult InitializeResult = Driver.Initialize(LocalNodeId);
+	const ETransportResult InitializeResult = Device.Initialize(LocalNodeId);
 	FDeviceAddress From = MakeLoraAddress(SentinelNodeId);
 	FReceiveResult ReceiveResult{SentinelByteCount};
 	std::uint8_t ShortDestination[sizeof(Payload) - 1] = {SentinelByte, SentinelByte};
 
 	// Act
-	const ETransportResult FullOutcome = Driver.TryReceive(From, TSpan<std::uint8_t>(ShortDestination, sizeof(ShortDestination)), ReceiveResult);
+	const ETransportResult FullOutcome = Device.TryReceive(From, TSpan<std::uint8_t>(ShortDestination, sizeof(ShortDestination)), ReceiveResult);
 	const bool bShortDestinationPreserved = DestinationContains(ShortDestination, sizeof(ShortDestination), SentinelByte);
 	const bool bFromPreservedAfterFull = AddressHasNodeId(From, SentinelNodeId);
 	const std::size_t ByteCountAfterFull = ReceiveResult.BytesReceived;
-	const ETransportResult InvalidOutcome = Driver.TryReceive(From, TSpan<std::uint8_t>(nullptr, 1), ReceiveResult);
+	const ETransportResult InvalidOutcome = Device.TryReceive(From, TSpan<std::uint8_t>(nullptr, 1), ReceiveResult);
 	const bool bFromPreservedAfterInvalid = AddressHasNodeId(From, SentinelNodeId);
 	const std::size_t ByteCountAfterInvalid = ReceiveResult.BytesReceived;
 	std::uint8_t Destination[sizeof(Payload)] = {};
-	const ETransportResult RetryOutcome = Driver.TryReceive(From, TSpan<std::uint8_t>(Destination, sizeof(Destination)), ReceiveResult);
+	const ETransportResult RetryOutcome = Device.TryReceive(From, TSpan<std::uint8_t>(Destination, sizeof(Destination)), ReceiveResult);
 	const bool bRetryPayloadMatches = DestinationMatches(Destination, Payload, sizeof(Payload));
 	const bool bRetrySenderMatches = AddressHasNodeId(From, PeerNodeId);
 	const std::size_t RetryByteCount = ReceiveResult.BytesReceived;
@@ -520,7 +522,7 @@ MW_TEST_CASE(RadioE32DriverRetainsDecodedFrameAcrossFullAndInvalidDestinations)
 	// Assert
 	MW_EXPECT_EQ(Test, ETransportResult::Success, EncodeResult, "The retained-frame fixture must encode");
 	MW_EXPECT_EQ(Test, true, bQueuedFrame, "The fake UART must queue the retained-frame fixture");
-	MW_EXPECT_EQ(Test, ETransportResult::Success, InitializeResult, "The retained-frame driver must initialize");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, InitializeResult, "The retained-frame device must initialize");
 	MW_EXPECT_EQ(Test, ETransportResult::Full, FullOutcome, "A too-small destination must report Full");
 	MW_EXPECT_EQ(Test, true, bShortDestinationPreserved, "Full must preserve every short-destination byte");
 	MW_EXPECT_EQ(Test, true, bFromPreservedAfterFull, "Full must preserve the sender output");
@@ -536,13 +538,13 @@ MW_TEST_CASE(RadioE32DriverRetainsDecodedFrameAcrossFullAndInvalidDestinations)
 
 /**
  * Scenario: Feed a CRC-corrupt frame immediately followed by a valid peer frame.
- * Expected: The corrupt candidate is discarded and the public driver resynchronizes to deliver the later valid frame.
+ * Expected: The corrupt candidate is discarded and the public device resynchronizes to deliver the later valid frame.
  */
-MW_TEST_CASE(RadioE32DriverResynchronizesAfterCorruptFrame)
+MW_TEST_CASE(E32LoraDeviceResynchronizesAfterCorruptFrame)
 {
 	// Arrange
 	FFakeUartByteStream Stream;
-	FRadioE32Driver Driver(Stream);
+	FE32LoraDevice Device(Stream);
 	std::uint8_t CorruptFrame[EncodedFrameCapacity] = {};
 	std::uint8_t ValidFrame[EncodedFrameCapacity] = {};
 	std::size_t CorruptFrameBytes = 0;
@@ -552,13 +554,13 @@ MW_TEST_CASE(RadioE32DriverResynchronizesAfterCorruptFrame)
 	const ETransportResult ValidEncodeResult = EncodePeerFrame(ReplacementPayload, sizeof(ReplacementPayload), ValidFrame, ValidFrameBytes);
 	const bool bQueuedCorruptFrame = QueueFrame(Stream, CorruptFrame, CorruptFrameBytes);
 	const bool bQueuedValidFrame = QueueFrame(Stream, ValidFrame, ValidFrameBytes);
-	const ETransportResult InitializeResult = Driver.Initialize(LocalNodeId);
+	const ETransportResult InitializeResult = Device.Initialize(LocalNodeId);
 	FDeviceAddress From = MakeLoraAddress(SentinelNodeId);
 	FReceiveResult ReceiveResult{SentinelByteCount};
 	std::uint8_t Destination[sizeof(Payload)] = {SentinelByte, SentinelByte, SentinelByte};
 
 	// Act
-	const ETransportResult ReceiveOutcome = Driver.TryReceive(From, TSpan<std::uint8_t>(Destination, sizeof(Destination)), ReceiveResult);
+	const ETransportResult ReceiveOutcome = Device.TryReceive(From, TSpan<std::uint8_t>(Destination, sizeof(Destination)), ReceiveResult);
 	const bool bPayloadMatches = DestinationMatches(Destination, ReplacementPayload, sizeof(ReplacementPayload));
 	const bool bSenderMatches = AddressHasNodeId(From, PeerNodeId);
 	const std::size_t ReceivedBytes = ReceiveResult.BytesReceived;
@@ -568,7 +570,7 @@ MW_TEST_CASE(RadioE32DriverResynchronizesAfterCorruptFrame)
 	MW_EXPECT_EQ(Test, ETransportResult::Success, ValidEncodeResult, "The post-corruption frame fixture must encode");
 	MW_EXPECT_EQ(Test, true, bQueuedCorruptFrame, "The fake UART must queue the corrupt candidate");
 	MW_EXPECT_EQ(Test, true, bQueuedValidFrame, "The fake UART must queue the valid recovery frame");
-	MW_EXPECT_EQ(Test, ETransportResult::Success, InitializeResult, "The corruption fixture driver must initialize");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, InitializeResult, "The corruption fixture device must initialize");
 	MW_EXPECT_EQ(Test, ETransportResult::Success, ReceiveOutcome, "A valid frame after corruption must still deliver");
 	MW_EXPECT_EQ(Test, true, bPayloadMatches, "Recovery must deliver the later valid payload bytes");
 	MW_EXPECT_EQ(Test, true, bSenderMatches, "Recovery must deliver the later valid sender");
@@ -579,11 +581,11 @@ MW_TEST_CASE(RadioE32DriverResynchronizesAfterCorruptFrame)
  * Scenario: Queue exactly one receive budget of garbage before a complete valid frame and poll twice.
  * Expected: The first poll consumes no more than the budget and preserves outputs; the second poll delivers the frame.
  */
-MW_TEST_CASE(RadioE32DriverCapsReceivePumpBeforeLaterFrameDelivery)
+MW_TEST_CASE(E32LoraDeviceCapsReceivePumpBeforeLaterFrameDelivery)
 {
 	// Arrange
 	FFakeUartByteStream Stream;
-	FRadioE32Driver Driver(Stream);
+	FE32LoraDevice Device(Stream);
 	std::uint8_t Frame[EncodedFrameCapacity] = {};
 	std::size_t FrameBytes = 0;
 	const ETransportResult EncodeResult = EncodePeerFrame(Payload, sizeof(Payload), Frame, FrameBytes);
@@ -596,18 +598,18 @@ MW_TEST_CASE(RadioE32DriverCapsReceivePumpBeforeLaterFrameDelivery)
 		}
 	}
 	const bool bQueuedFrame = QueueFrame(Stream, Frame, FrameBytes);
-	const ETransportResult InitializeResult = Driver.Initialize(LocalNodeId);
+	const ETransportResult InitializeResult = Device.Initialize(LocalNodeId);
 	FDeviceAddress From = MakeLoraAddress(SentinelNodeId);
 	FReceiveResult ReceiveResult{SentinelByteCount};
 	std::uint8_t Destination[sizeof(Payload)] = {SentinelByte, SentinelByte, SentinelByte};
 
 	// Act
-	const ETransportResult FirstReceiveOutcome = Driver.TryReceive(From, TSpan<std::uint8_t>(Destination, sizeof(Destination)), ReceiveResult);
+	const ETransportResult FirstReceiveOutcome = Device.TryReceive(From, TSpan<std::uint8_t>(Destination, sizeof(Destination)), ReceiveResult);
 	const std::size_t FirstReadCalls = Stream.ReadCallCount();
 	const bool bDestinationPreserved = DestinationContains(Destination, sizeof(Destination), SentinelByte);
 	const bool bFromPreserved = AddressHasNodeId(From, SentinelNodeId);
 	const std::size_t PreservedByteCount = ReceiveResult.BytesReceived;
-	const ETransportResult SecondReceiveOutcome = Driver.TryReceive(From, TSpan<std::uint8_t>(Destination, sizeof(Destination)), ReceiveResult);
+	const ETransportResult SecondReceiveOutcome = Device.TryReceive(From, TSpan<std::uint8_t>(Destination, sizeof(Destination)), ReceiveResult);
 	const std::size_t TotalReadCalls = Stream.ReadCallCount();
 	const bool bDeliveredPayloadMatches = DestinationMatches(Destination, Payload, sizeof(Payload));
 	const bool bDeliveredSenderMatches = AddressHasNodeId(From, PeerNodeId);
@@ -617,7 +619,7 @@ MW_TEST_CASE(RadioE32DriverCapsReceivePumpBeforeLaterFrameDelivery)
 	MW_EXPECT_EQ(Test, ETransportResult::Success, EncodeResult, "The capped-receive frame fixture must encode");
 	MW_EXPECT_EQ(Test, true, bQueuedGarbage, "The fake UART must queue the full garbage budget");
 	MW_EXPECT_EQ(Test, true, bQueuedFrame, "The fake UART must queue the later valid frame");
-	MW_EXPECT_EQ(Test, ETransportResult::Success, InitializeResult, "The capped-receive driver must initialize");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, InitializeResult, "The capped-receive device must initialize");
 	MW_EXPECT_EQ(Test, ETransportResult::Unavailable, FirstReceiveOutcome, "A frame beyond the receive budget must wait for another poll");
 	MW_EXPECT_EQ(Test, ReceivePumpByteCap, FirstReadCalls, "One receive poll must not exceed the derived byte budget");
 	MW_EXPECT_EQ(Test, true, bDestinationPreserved, "A budget-limited receive must preserve destination bytes");
@@ -632,28 +634,28 @@ MW_TEST_CASE(RadioE32DriverCapsReceivePumpBeforeLaterFrameDelivery)
 
 /**
  * Scenario: Make the UART return a hard read error while caller outputs contain sentinels.
- * Expected: The driver maps the error to Invalid and preserves every caller-owned receive output.
+ * Expected: The device maps the error to Invalid and preserves every caller-owned receive output.
  */
-MW_TEST_CASE(RadioE32DriverReadErrorPreservesReceiveOutputs)
+MW_TEST_CASE(E32LoraDeviceReadErrorPreservesReceiveOutputs)
 {
 	// Arrange
 	FFakeUartByteStream Stream;
 	Stream.SetReadResult(EUartByteStreamResult::Error);
-	FRadioE32Driver Driver(Stream);
-	const ETransportResult InitializeResult = Driver.Initialize(LocalNodeId);
+	FE32LoraDevice Device(Stream);
+	const ETransportResult InitializeResult = Device.Initialize(LocalNodeId);
 	FDeviceAddress From = MakeLoraAddress(SentinelNodeId);
 	FReceiveResult ReceiveResult{SentinelByteCount};
 	std::uint8_t Destination[sizeof(Payload)] = {SentinelByte, SentinelByte, SentinelByte};
 
 	// Act
-	const ETransportResult ReceiveOutcome = Driver.TryReceive(From, TSpan<std::uint8_t>(Destination, sizeof(Destination)), ReceiveResult);
+	const ETransportResult ReceiveOutcome = Device.TryReceive(From, TSpan<std::uint8_t>(Destination, sizeof(Destination)), ReceiveResult);
 	const bool bDestinationPreserved = DestinationContains(Destination, sizeof(Destination), SentinelByte);
 	const bool bFromPreserved = AddressHasNodeId(From, SentinelNodeId);
 	const std::size_t PreservedByteCount = ReceiveResult.BytesReceived;
 	const std::size_t ReadCalls = Stream.ReadCallCount();
 
 	// Assert
-	MW_EXPECT_EQ(Test, ETransportResult::Success, InitializeResult, "The read-error fixture driver must initialize");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, InitializeResult, "The read-error fixture device must initialize");
 	MW_EXPECT_EQ(Test, ETransportResult::Invalid, ReceiveOutcome, "A hard UART read error must map to Invalid");
 	MW_EXPECT_EQ(Test, true, bDestinationPreserved, "Read error must preserve destination bytes");
 	MW_EXPECT_EQ(Test, true, bFromPreserved, "Read error must preserve the sender output");
@@ -662,16 +664,17 @@ MW_TEST_CASE(RadioE32DriverReadErrorPreservesReceiveOutputs)
 }
 
 /**
- * Scenario: Queue a packet on one initialized public driver, advance it over a fake UART, and feed those exact bytes to another public driver.
- * Expected: The receiving driver decodes the real emitted frame and delivers the original sender, payload, and byte count.
+ * Scenario: Queue a packet on one initialized public device, advance it over a fake UART, and feed those exact bytes to another public device.
+ *
+ * Expected: The receiving device decodes the real emitted frame and delivers the original sender, payload, and byte count.
  */
-MW_TEST_CASE(RadioE32DriversExchangeOneRealEncodedFrame)
+MW_TEST_CASE(E32LoraDevicesExchangeOneRealEncodedFrame)
 {
 	// Arrange
 	FFakeUartByteStream SenderStream;
 	FFakeUartByteStream ReceiverStream;
-	FRadioE32Driver Sender(SenderStream);
-	FRadioE32Driver Receiver(ReceiverStream);
+	FE32LoraDevice Sender(SenderStream);
+	FE32LoraDevice Receiver(ReceiverStream);
 	const FDeviceAddress DestinationAddress = MakeLoraAddress(PeerNodeId);
 	const ETransportResult SenderInitializeResult = Sender.Initialize(LocalNodeId);
 	const ETransportResult ReceiverInitializeResult = Receiver.Initialize(PeerNodeId);
@@ -698,15 +701,15 @@ MW_TEST_CASE(RadioE32DriversExchangeOneRealEncodedFrame)
 	const std::size_t ReceivedBytes = ReceiveResult.BytesReceived;
 
 	// Assert
-	MW_EXPECT_EQ(Test, ETransportResult::Success, SenderInitializeResult, "The sending driver must initialize");
-	MW_EXPECT_EQ(Test, ETransportResult::Success, ReceiverInitializeResult, "The receiving driver must initialize");
-	MW_EXPECT_EQ(Test, ETransportResult::Success, SendResult, "The sending driver must accept the packet");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, SenderInitializeResult, "The sending device must initialize");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, ReceiverInitializeResult, "The receiving device must initialize");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, SendResult, "The sending device must accept the packet");
 	MW_EXPECT_EQ(Test, sizeof(Payload) + FrameOverheadBytes, EmittedBytes, "One advance must emit the complete real encoded frame");
 	MW_EXPECT_EQ(Test, true, bCopiedEveryByte, "The receiving fake UART must accept every emitted frame byte");
-	MW_EXPECT_EQ(Test, ETransportResult::Success, ReceiveOutcome, "The receiving driver must decode the transmitted frame");
-	MW_EXPECT_EQ(Test, true, bPayloadMatches, "The receiving driver must deliver the original payload");
-	MW_EXPECT_EQ(Test, true, bSenderMatches, "The receiving driver must report the sending local node id");
-	MW_EXPECT_EQ(Test, sizeof(Payload), ReceivedBytes, "The receiving driver must report the original payload size");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, ReceiveOutcome, "The receiving device must decode the transmitted frame");
+	MW_EXPECT_EQ(Test, true, bPayloadMatches, "The receiving device must deliver the original payload");
+	MW_EXPECT_EQ(Test, true, bSenderMatches, "The receiving device must report the sending local node id");
+	MW_EXPECT_EQ(Test, sizeof(Payload), ReceivedBytes, "The receiving device must report the original payload size");
 }
 
 } // namespace

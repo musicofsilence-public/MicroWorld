@@ -25,8 +25,8 @@ tree names the architecture directly.
 - `TNetworking<TTraits>` derives `IPlaySystem`; a caller hands it to a `TEngine`
   at construction and its lifecycle/frame turns drive the whole networked stack
   as one bound system.
-- `AddDevice` configures a `TTransportHost` over the driver but never starts it.
-  `BeginPlay` freezes composition and starts live hosts in driver add order at
+- `AddDevice` configures a `TTransportHost` over the device but never starts it.
+  `BeginPlay` freezes composition and starts live hosts in device add order at
   the engine's canonical timestamp.
 - `AddChannel` enforces the two ordering rules a caller would otherwise have to
   know: a guaranteed channel's `SetInnerChannel` runs before its router
@@ -35,7 +35,7 @@ tree names the architecture directly.
 - `FDeviceHandle` and `FChannelHandle` are generation-checked (index plus
   generation plus `IsValid()`), following `FPeerId` and `FTimerHandle`, so a
   rejected or stale handle cannot address a live slot.
-- One shared router serves every driver, demultiplexing by channel id.
+- One shared router serves every device, demultiplexing by channel id.
 - Portable code uses fixed-width/value types, fixed-capacity in-place storage,
   deterministic lifetimes, and no RTTI, exceptions, logging, threads, clocks,
   heap containers, SDK calls, or global mutable state.

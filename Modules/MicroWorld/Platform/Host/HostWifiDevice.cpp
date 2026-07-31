@@ -1,4 +1,4 @@
-#include <MicroWorld/Platform/Host/HostUdpDriver.h>
+#include <MicroWorld/Platform/Host/HostWifiDevice.h>
 
 #include "Internal/UdpSocketPlatformImplementation.h"
 
@@ -44,7 +44,7 @@ FWinSockScope::~FWinSockScope() noexcept
 #endif
 }
 
-FHostUdpDriver::FHostUdpDriver(const std::uint16_t InBindPort) noexcept
+FHostWifiDevice::FHostWifiDevice(const std::uint16_t InBindPort) noexcept
 {
 	const FOpenedSocket Opened = OpenBoundLoopbackUdpSocket(InBindPort);
 	if (!Opened.bOpen)
@@ -59,7 +59,7 @@ FHostUdpDriver::FHostUdpDriver(const std::uint16_t InBindPort) noexcept
 	bOpen = true;
 }
 
-FHostUdpDriver::~FHostUdpDriver() noexcept
+FHostWifiDevice::~FHostWifiDevice() noexcept
 {
 	if (bOpen)
 	{
@@ -67,7 +67,7 @@ FHostUdpDriver::~FHostUdpDriver() noexcept
 	}
 }
 
-ETransportResult FHostUdpDriver::TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
+ETransportResult FHostWifiDevice::TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
 {
 	if (!bOpen)
 	{
@@ -134,10 +134,10 @@ namespace
 
 } // namespace
 
-ETransportResult FHostUdpDriver::TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
+ETransportResult FHostWifiDevice::TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
 {
 	// Keep the sizing scratch and the advertised max in lockstep; both are 1200.
-	static_assert(PeekScratchBytes == FHostUdpDriver::UdpMaxPacketBytes, "Peek scratch must match the advertised packet maximum.");
+	static_assert(PeekScratchBytes == FHostWifiDevice::UdpMaxPacketBytes, "Peek scratch must match the advertised packet maximum.");
 
 	if (!bOpen)
 	{
@@ -169,22 +169,22 @@ ETransportResult FHostUdpDriver::TryReceive(FDeviceAddress& OutFrom, TSpan<std::
 	return ETransportResult::Success;
 }
 
-std::size_t FHostUdpDriver::MaxPacketBytes() const noexcept
+std::size_t FHostWifiDevice::MaxPacketBytes() const noexcept
 {
 	return UdpMaxPacketBytes;
 }
 
-bool FHostUdpDriver::IsOpen() const noexcept
+bool FHostWifiDevice::IsOpen() const noexcept
 {
 	return bOpen;
 }
 
-std::uint16_t FHostUdpDriver::BoundPort() const noexcept
+std::uint16_t FHostWifiDevice::BoundPort() const noexcept
 {
 	return BoundPortValue;
 }
 
-bool FHostUdpDriver::PollReadable(const DurationMilliseconds InTimeoutMilliseconds) const noexcept
+bool FHostWifiDevice::PollReadable(const DurationMilliseconds InTimeoutMilliseconds) const noexcept
 {
 	if (!bOpen)
 	{

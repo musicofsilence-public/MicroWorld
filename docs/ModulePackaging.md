@@ -35,7 +35,7 @@ CMake keeps one target per system, so link granularity survives the single
 package: a consumer links `MicroWorld::Transport` without pulling Engine, and
 `libArchive` plus static linking means unreferenced objects never reach the
 firmware. Two options trim Transport further —
-`MICROWORLD_TRANSPORT_RADIO` and `MICROWORLD_TRANSPORT_IP` — so an RP2040 build
+`MICROWORLD_TRANSPORT_LORA` and `MICROWORLD_TRANSPORT_IP` — so an RP2040 build
 omits IP and protocol code entirely.
 
 Dependencies point inward, and `tools/CheckDependencyBoundaries.py` fails

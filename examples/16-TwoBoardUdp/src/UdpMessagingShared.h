@@ -13,7 +13,7 @@
  *
  * There is no node id here (unlike the UART example 19): a UDP peer is
  * identified by its socket address, so `TTransportHost` learns each peer from the
- * datagram it arrives on rather than from a driver-stamped node id.
+ * datagram it arrives on rather than from a device-stamped node id.
  */
 namespace Ex16
 {

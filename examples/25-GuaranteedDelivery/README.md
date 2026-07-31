@@ -1,7 +1,7 @@
 # 25-GuaranteedDelivery
 
 **Feature:** best-effort vs guaranteed delivery on ONE WiFi-UDP link, with the
-client injecting deterministic loss via `FPacketDropDriver`; the guaranteed
+client injecting deterministic loss via `FPacketDropDevice`; the guaranteed
 channel (`TReliableChannel`) recovers every dropped packet.
 
 > Status: hardware-verified on two ESP32-S3 boards, 2026-07-24 (SoftAP UDP).
@@ -12,7 +12,7 @@ channel (`TReliableChannel`) recovers every dropped packet.
    `FLedgerActor`, which registers two handlers -- one per channel -- and logs
    one column per channel: `rx best-effort n=<n>` and `rx guaranteed n=<n>`.
 2. The **client** board (`esp32-s3-client`) joins the SoftAP, wraps its UDP
-   driver in `FPacketDropDriver{DropEveryNthSend = 3}`, and runs
+   device in `FPacketDropDevice{DropEveryNthSend = 3}`, and runs
    `FCounterActor`, which every 500 ms sends the next value in 1..30 to the
    server's `FLedgerActor` on **both** channels: `BestEffortChannelId` (a
    plain `TMessageChannelBinding`) and `GuaranteedChannelId` (the same kind of
@@ -23,7 +23,7 @@ channel (`TReliableChannel`) recovers every dropped packet.
    complete: `TReliableChannel` resends any unacknowledged value until the
    server acknowledges it.
 4. Every actor reaches messaging only through `IMessageRouter&`, injected at
-   construction (D9); neither actor ever sees `TTransportHost`, a driver, UDP, or
+   construction (D9); neither actor ever sees `TTransportHost`, a device, UDP, or
    the drop injector.
 5. The run is **unbounded** (matching 16-TwoBoardUdp and 24-TwoChannelWorld):
    this is a continuous two-board demo, not a self-terminating trace.
@@ -32,15 +32,15 @@ The best-effort column drops roughly every third value and never recovers it;
 the guaranteed column shows all 30 because `TReliableChannel` retries each
 unacked value until the server acknowledges it. Which exact values go missing
 depends on how the dropped-every-third counter interleaves all outgoing
-packets (data, acks, heartbeats) through the one shared driver, so treat the
+packets (data, acks, heartbeats) through the one shared device, so treat the
 gap positions as illustrative, not fixed.
 
 ## MicroWorld APIs used
 
 - `TReliableChannel` (`SetInnerChannel`, `PendingCount` / `ResentCount` /
   `DuplicateDroppedCount`)
-- `FPacketDropDriver` -- the client's deterministic loss injector, wrapping
-  the real UDP driver
+- `FPacketDropDevice` -- the client's deterministic loss injector, wrapping
+  the real UDP device
 - `TMessageChannelBinding`, `EChannelSendTarget` (`Server` on the client,
   `AllPeers` on the server, per channel)
 - `TMessageRouter`, `IMessageRouter` (`AddMessageHandler` /
@@ -48,7 +48,7 @@ gap positions as illustrative, not fixed.
 - `TPlaySystemSet` (`Add`, D3 dispatch/flush order over the host play system, the
   reliable channel, and the router)
 - `TTransportHost` (`Configure` / `Start`), `THostPlaySystem`, `ENetworkMode`
-- `FEsp32WifiLink` (`StartAccessPoint` / `JoinAccessPoint`), `FEsp32UdpDriver`,
+- `FEsp32WifiLink` (`StartAccessPoint` / `JoinAccessPoint`), `FEsp32WifiDevice`,
   `MakeUdpAddress`
 - `TEngine` (`RegisterClass` / `CreateWorld` / `CreateObject` /
   `BeginPlay` / `Tick`), `AActor`, `UWorld::RegisterActor`

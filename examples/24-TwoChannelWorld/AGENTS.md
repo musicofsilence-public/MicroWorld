@@ -10,15 +10,15 @@ Two role worlds, one source tree. `Main.cpp` is a thin dispatcher whose
 hold the two roles and are both always compiled, and `TwoChannelWorldShared.h`
 defines the message/actor/channel ids, node/pin/WiFi configuration, and the
 `TNetworking`/`TEngine` type shapes once (DRY within this one example). Per
-board, `TNetworking` owns TWO `TTransportHost` values — one over `FEsp32UdpDriver`
-(telemetry), one over `FEsp32UartDriver` (commands) — plus their bindings,
+board, `TNetworking` owns TWO `TTransportHost` values — one over `FEsp32WifiDevice`
+(telemetry), one over `FEsp32UartDevice` (commands) — plus their bindings,
 one shared `TMessageRouter`, and its ordered engine-system set. Every
 composition object is `static` and allocation-free.
 
 ## Concepts
 
 - **Two channels, two links, one world.** `TelemetryChannelId` rides
-  `FEsp32UdpDriver`; `CommandsChannelId` rides `FEsp32UartDriver`; both bind to
+  `FEsp32WifiDevice`; `CommandsChannelId` rides `FEsp32UartDevice`; both bind to
   the same router, so one actor-messaging design spans two independent
   transports at once.
 - **`TNetworking` owns the link policy.** Its derived channel wire byte matches
@@ -26,7 +26,7 @@ composition object is `static` and allocation-free.
   and its internal set pumps transport -> reliable -> router in pre-advance order.
 - **Actors name no transport (D9).** `FTelemetrySinkActor`, `FCommanderActor`,
   and `FSensorActor` all take `IMessageRouter&` by constructor injection and
-  never see `TTransportHost`, a driver, UDP, or UART.
+  never see `TTransportHost`, a device, UDP, or UART.
 - **`AActor::SetTickInterval` re-times the sensor mid-handler.** The sensor's
   `SetReportingRateMessageId` handler runs during the engine's inbound network
   dispatch step (`TEngine::Tick` step 1), strictly before the world advance

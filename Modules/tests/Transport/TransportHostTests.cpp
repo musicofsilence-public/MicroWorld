@@ -56,7 +56,7 @@ constexpr std::uint8_t FirstClientPortIndex = 1;
 constexpr std::uint8_t SecondClientPortIndex = 2;
 /** Loopback template parameter: third client port index. */
 constexpr std::uint8_t ThirdClientPortIndex = 3;
-/** FFloodDriver sender port index stamped into OutFrom. */
+/** FFloodDevice sender port index stamped into OutFrom. */
 constexpr std::uint8_t FloodSenderPortIndex = 9;
 /** Channel the host-to-host send cases address. */
 constexpr std::uint8_t SendChannel = 1;
@@ -92,9 +92,9 @@ constexpr std::size_t EmptyPeerCount = 0;
 constexpr std::size_t BroadcastPeerCount = 2;
 /** Number of receives one bounded pump is permitted to call under flood. */
 constexpr std::size_t BoundedPumpReceiveCount = 7;
-/** Byte value the FFloodDriver writes into every header byte of its empty control frame. */
+/** Byte value the FFloodDevice writes into every header byte of its empty control frame. */
 constexpr std::uint8_t EmptyControlFrameByte = 0;
-/** Byte count the FFloodDriver reports as received per call. */
+/** Byte count the FFloodDevice reports as received per call. */
 constexpr std::size_t FloodReceivedByteCount = 4;
 
 /** Sentinel payload byte the generation-bump case sends to a stale and a fresh peer id. */
@@ -446,10 +446,10 @@ MW_TEST_CASE(TransportHostSendToDeliversToTheAddressedPeer)
 
 /**
  * Scenario: Configure and start a listen server, then SendTo the local peer.
- * Expected: The local-peer message dispatches synchronously to the handler with no driver pump, attributed to the local peer id with its channel and
+ * Expected: The local-peer message dispatches synchronously to the handler with no device pump, attributed to the local peer id with its channel and
  * payload.
  */
-MW_TEST_CASE(TransportHostListenServerDispatchesToLocalPeerWithoutDriver)
+MW_TEST_CASE(TransportHostListenServerDispatchesToLocalPeerWithoutDevice)
 {
 	// Arrange
 	THostLoopback<1, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
@@ -689,12 +689,12 @@ MW_TEST_CASE(TransportHostDedicatedServerHasNoLocalDispatch)
 }
 
 /**
- * Always-ready driver that counts receive calls, so a test can prove one pump is bounded.
+ * Always-ready device that counts receive calls, so a test can prove one pump is bounded.
  *
  * Every `TryReceive` delivers a minimal empty control frame and reports `Success`, so a
  * `PumpReceive` would loop forever were it not bounded; `TrySend` is a no-op success.
  */
-class FFloodDriver final : public IDevice
+class FFloodDevice final : public IDevice
 {
 public:
 	/** Accepts and discards every send. */
@@ -725,22 +725,22 @@ public:
 };
 
 /**
- * Scenario: Pump a started server whose driver never runs dry of empty control frames.
+ * Scenario: Pump a started server whose device never runs dry of empty control frames.
  * Expected: One pump is bounded to MaxPeers plus four receives, so a flood cannot starve the frame.
  */
 MW_TEST_CASE(TransportHostPumpReceiveIsBoundedUnderFlood)
 {
 	// Arrange
-	FFloodDriver Driver;
-	TTransportHost<3, HostPacketBytes> Server(Driver);
+	FFloodDevice Device;
+	TTransportHost<3, HostPacketBytes> Server(Device);
 	(void)Server.Configure(ENetworkMode::DedicatedServer, MakeHostConfig(MatchedProtocolVersion));
 	(void)Server.Start(0);
 
 	// Act
 	Server.PumpReceive(0);
 
-	// Assert - MaxPeers (3) + 4 = 7 receives is the per-pump bound, even though the driver never runs dry.
-	MW_EXPECT_EQ(Test, BoundedPumpReceiveCount, Driver.ReceiveCallCount, "One pump is bounded to MaxPeers + 4 receives");
+	// Assert - MaxPeers (3) + 4 = 7 receives is the per-pump bound, even though the device never runs dry.
+	MW_EXPECT_EQ(Test, BoundedPumpReceiveCount, Device.ReceiveCallCount, "One pump is bounded to MaxPeers + 4 receives");
 }
 
 } // namespace

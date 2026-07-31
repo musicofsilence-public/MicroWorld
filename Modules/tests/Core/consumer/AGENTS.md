@@ -61,5 +61,5 @@ For native Pico commands, use
 `pico-freertos\\pico.bat build [probe|example|tests|lora]`; the default builds
 all four. `pico-freertos\\pico.bat upload probe|example|lora` is human-gated
 and validates the RPI-RP2 BOOTSEL volume before copying a UF2. The `lora`
-image is a downstream hardware proof and does not make Pico headers or a driver
+image is a downstream hardware proof and does not make Pico headers or a device
 part of a released MicroWorld package.

@@ -6,7 +6,7 @@ Inherits `../../AGENTS.md`.
 
 Messaging is the portable actor-messaging system. Its dependency direction is
 `Core <- Messaging`: it may depend only on Core and the C++17 standard library.
-Engine, Transport, Networking, platform, SDK, and transport-driver headers must
+Engine, Transport, Networking, platform, SDK, and transport-device headers must
 not appear here.
 
 The system owns message vocabulary and codecs, bounded routing, channel
@@ -30,7 +30,7 @@ coupling.
   caller, and physical transport policies stay outside this system.
 - Public symbols live in the flat `MicroWorld` namespace below the `Messaging/`
   include layout. The system never owns worlds, actors, engines, network hosts,
-  drivers, or platform resources.
+  devices, or platform resources.
 
 ## Composition recipes
 
@@ -49,9 +49,9 @@ static TEngine<> Engine{Budget, Router};                 // capacities from FDef
 Client/server over one wire — server side shown:
 
 ```cpp
-static FEsp32UartDriver Driver{{.UartPort = 1, .TxGpio = 17, .RxGpio = 18,
+static FEsp32UartDevice Device{{.UartPort = 1, .TxGpio = 17, .RxGpio = 18,
                                 .BaudRate = 115200, .LocalNodeId = 1}};
-static TTransportHost<2, 120> Transport{Driver};         // Configure(DedicatedServer) + Start
+static TTransportHost<2, 120> Transport{Device};         // Configure(DedicatedServer) + Start
 static TMessageRouter<16, 8, 96, 1> Router;
 static TMessageChannelBinding<decltype(Transport)> Commands{Transport, /*wire*/1, /*id*/1,
                                                             EChannelSendTarget::AllPeers, Router};
@@ -61,7 +61,7 @@ static TEngine<> Engine{Budget, Systems};
 // after wiring: Router.AddChannel(Commands);
 ```
 
-Two drivers, two channels, one world: a second driver, a second `TTransportHost`, and
+Two devices, two channels, one world: a second device, a second `TTransportHost`, and
 a second binding with a different `FMessageChannelId` — both host play systems added
 before the router.
 

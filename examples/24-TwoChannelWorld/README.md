@@ -25,7 +25,7 @@ wire, simultaneously, between the same two boards.
 4. Both links are alive **at the same time**: the server console interleaves
    telemetry-in lines (UDP) and command-out lines (UART).
 5. Every actor reaches messaging only through `IMessageRouter&`, injected at
-   construction (D9); none of them ever sees `TTransportHost`, a driver, UDP, or
+   construction (D9); none of them ever sees `TTransportHost`, a device, UDP, or
    UART — swapping which channel rides which transport is a composition-root
    edit only.
 6. The run is **unbounded** (matching 16-TwoBoardUdp and 23-TwoBoardWire):
@@ -35,14 +35,14 @@ wire, simultaneously, between the same two boards.
 ## MicroWorld APIs used
 
 - `TNetworking` (`AddDevice` / `AddChannel` / `GetRouter`) — configures
-  both drivers, derives wire channels and peer targets, and starts hosts at
+  both devices, derives wire channels and peer targets, and starts hosts at
   engine `BeginPlay`
 - `IMessageRouter` (`AddMessageHandler` / `SendMessageToActor` /
   `BroadcastMessage`)
 - `ENetworkMode` and `FTransportHostConfig` — explicit client/server session policy
-- `FEsp32WifiLink` (`StartAccessPoint` / `JoinAccessPoint`), `FEsp32UdpDriver`,
+- `FEsp32WifiLink` (`StartAccessPoint` / `JoinAccessPoint`), `FEsp32WifiDevice`,
   `MakeUdpAddress`
-- `FEsp32UartDriver`, `FEsp32UartConfig`, `MakeUartAddress`
+- `FEsp32UartDevice`, `FEsp32UartConfig`, `MakeUartAddress`
 - `AActor::SetTickInterval` — the sensor re-times its own reporting cadence
 - `TEngine` (`RegisterClass` / `CreateWorld` / `CreateObject` /
   `BeginPlay` / `Tick`), `AActor`, `UWorld::RegisterActor`

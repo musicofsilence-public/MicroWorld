@@ -31,7 +31,7 @@ or inspect the
 | Core | `MicroWorld::Core` | `MicroWorld` | Lifecycle, tick, containers, delegates, smart pointers, timers, `IPlaySystem` |
 | Engine | `MicroWorld::Engine` | `MicroWorld` | `UWorld` / `AActor` / `UActorComponent`, `TEngine`, `IEngine`, plus the object store, garbage collector, and handles |
 | Messaging | `MicroWorld::Messaging` | `MicroWorld` | Message router, channel bindings, reliable channel (header-only) |
-| Transport | `MicroWorld::Transport` | `MicroWorld` | Byte I/O, frame codec, `TTransportHost`, and the optional portable E32 `FRadioE32Driver` |
+| Transport | `MicroWorld::Transport` | `MicroWorld` | Byte I/O, frame codec, `TTransportHost`, and the optional portable E32 `FE32LoraDevice` |
 | Networking | `MicroWorld::Networking` | `MicroWorld` | `TNetworking` — Messaging over Transport behind `IPlaySystem` |
 | Application | `MicroWorld::Application` | `MicroWorld` | `FApplication` — owns one engine and its frame loop |
 | Platform/Host | `MicroWorld::PlatformHost` | `MicroWorldPlatformHost` | Host UDP transport and `steady_clock` time source (non-portable) |
@@ -41,7 +41,7 @@ or inspect the
 One folder under `Modules/MicroWorld/` per system, one CMake target per system,
 one shipped package for all six. Memory folds into Core, the object store folds
 into Engine, and the E32 radio folds into Transport behind the
-`MICROWORLD_TRANSPORT_RADIO` option. Dependencies point inward:
+`MICROWORLD_TRANSPORT_LORA` option. Dependencies point inward:
 
 ```text
 Core <- Engine <- Application

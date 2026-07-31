@@ -10,7 +10,7 @@ Two role worlds, one source tree. `Main.cpp` is a thin dispatcher whose
 hold the two roles and are both always compiled, and `TwoBoardWireShared.h`
 defines the message/actor ids, node ids, UART/session config builders, and the
 `TTransportHost`/`TMessageRouter`/`TEngine` type shapes once (DRY within this one
-example). Per board: a `TTransportHost` over `FEsp32UartDriver`, a `TMessageRouter`,
+example). Per board: a `TTransportHost` over `FEsp32UartDevice`, a `TMessageRouter`,
 and a `TMessageChannelBinding` wiring the two together. The engine holds the
 `THostPlaySystem` as its per-frame network slot; the run loop pumps the router
 manually (`PostAdvance` before `Engine.Tick`, `PreAdvance` after) because
@@ -23,7 +23,7 @@ allocation-free, sized at compile time.
 - **Actor messaging over a real wire.** The client's `FSwitchActor` and the
   server's `FLampActor`/`FDisplayActor` talk only through `IMessageRouter&`,
   injected at construction (D9); none of them ever sees `TTransportHost` or the UART
-  driver.
+  device.
 - **`EChannelSendTarget`.** The client's binding sends to `Server` (its one
   connected peer); the server's binding sends to `AllPeers` (broadcasts reach
   every connected client, matching `TTransportHost::Broadcast`'s own semantics).
@@ -31,8 +31,8 @@ allocation-free, sized at compile time.
   `PumpSide` proved `Router.PostAdvance` -> `Host.Tick` -> `Router.PreAdvance`
   is the correct per-frame order for a router bound to a live `TTransportHost`; this
   example's run loop mirrors that order exactly, on both boards.
-- **Only the driver differs from a WiFi build.** Swapping `FEsp32UartDriver`
-  for `FEsp32UdpDriver` (and `MakeUartConfig`/`MakeUartAddress` for their WiFi
+- **Only the device differs from a WiFi build.** Swapping `FEsp32UartDevice`
+  for `FEsp32WifiDevice` (and `MakeUartConfig`/`MakeUartAddress` for their WiFi
   equivalents) is the only change needed to run this same application protocol
   over WiFi instead of a wire.
 

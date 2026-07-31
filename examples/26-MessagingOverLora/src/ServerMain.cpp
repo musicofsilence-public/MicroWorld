@@ -14,7 +14,7 @@
 #include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Engine/GarbageCollector.h>
 #include <MicroWorld/Engine/ObjectPtr.h>
-#include <MicroWorld/Platform/Esp32/Esp32E32LoraDriver.h>
+#include <MicroWorld/Platform/Esp32/Esp32LoraDevice.h>
 #include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
 #include <MicroWorld/Platform/Esp32/Esp32TimeSource.h>
 
@@ -70,16 +70,16 @@ private:
 /** Server board: engine + host play system + transport host (DedicatedServer) over one E32 LoRa radio. */
 void RunServer() noexcept
 {
-	static FEsp32E32LoraDriver Driver{MakeLoraConfig(ServerNodeId)};
-	MW_LOG(Log, "ex26", "server node=%u open=%d", static_cast<unsigned>(ServerNodeId), Driver.IsOpen() ? 1 : 0);
-	if (!Driver.IsOpen())
+	static FEsp32LoraDevice Device{MakeLoraConfig(ServerNodeId)};
+	MW_LOG(Log, "ex26", "server node=%u open=%d", static_cast<unsigned>(ServerNodeId), Device.IsOpen() ? 1 : 0);
+	if (!Device.IsOpen())
 	{
 		MW_LOG(Error, "ex26", "uart failed to open; halting");
 		return;
 	}
 
 	// All composition objects are static (the ESP32-S3 stack lesson, §2.2).
-	static FServerTransport ServerTransport{Driver};
+	static FServerTransport ServerTransport{Device};
 	static THostPlaySystem<FServerTransport> ServerFrame{ServerTransport};
 	static FServerEngine ServerHost{FGarbageCollectionBudget{1, 4, 8}, ServerFrame};
 	static int SpawnSequence = 0;

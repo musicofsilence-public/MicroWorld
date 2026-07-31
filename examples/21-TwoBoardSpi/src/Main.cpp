@@ -2,7 +2,7 @@
 #include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Platform/Esp32/Esp32OutputDevice.h>
 #include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
-#include <MicroWorld/Platform/Esp32/Esp32SpiDriver.h>
+#include <MicroWorld/Platform/Esp32/Esp32SpiDevice.h>
 #include <MicroWorld/Platform/Esp32/Esp32TimeSource.h>
 #include <MicroWorld/Platform/Esp32/SpiAddress.h>
 
@@ -40,7 +40,7 @@ constexpr unsigned PollPacingMilliseconds = 10;
 /** Volley payload layout: byte 0 is the sender node id, bytes 1..4 the counter (big-endian). */
 constexpr std::size_t VolleyPayloadBytes = 5;
 
-/** Renders one driver outcome as a short label so the serial trace reads plainly. */
+/** Renders one device outcome as a short label so the serial trace reads plainly. */
 const char* ToText(const MicroWorld::ETransportResult Result) noexcept
 {
 	switch (Result)
@@ -76,7 +76,7 @@ std::uint32_t ReadVolleyCounter(const std::uint8_t* const In) noexcept
 }
 
 #if MICROWORLD_EXAMPLE_SPI_MASTER
-/** Builds the master driver configuration from the fixed pins and clock. */
+/** Builds the master device configuration from the fixed pins and clock. */
 MicroWorld::FEsp32SpiMasterConfig MakeMasterConfig() noexcept
 {
 	MicroWorld::FEsp32SpiMasterConfig Config;
@@ -95,10 +95,10 @@ void RunMaster() noexcept
 {
 	// Static, never on the app_main stack (the ESP32-S3 stack lesson, §2.2); its DMA buffers must live here.
 	static MicroWorld::FEsp32TimeSource TimeSource{};
-	static MicroWorld::FEsp32SpiMasterDriver Driver{MakeMasterConfig()};
-	MW_LOG(Log, "ex21", "master open=%d", Driver.IsOpen() ? 1 : 0);
+	static MicroWorld::FEsp32SpiMasterDevice Device{MakeMasterConfig()};
+	MW_LOG(Log, "ex21", "master open=%d", Device.IsOpen() ? 1 : 0);
 	MW_LOG(Log, "ex21", "master clocks the bus; the slave only reacts");
-	if (!Driver.IsOpen())
+	if (!Device.IsOpen())
 	{
 		// A failed bus open cannot recover here; stop with a clear line instead of looping.
 		MW_LOG(Error, "ex21", "spi master failed to open; halting");
@@ -120,7 +120,7 @@ void RunMaster() noexcept
 			std::uint8_t Payload[VolleyPayloadBytes];
 			WriteVolleyPayload(Payload, MasterNodeId, NextCounter);
 			const MicroWorld::ETransportResult TxResult =
-				Driver.TrySend(MicroWorld::MakeSpiAddress(SlaveNodeId), MicroWorld::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
+				Device.TrySend(MicroWorld::MakeSpiAddress(SlaveNodeId), MicroWorld::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
 			MW_LOG(Log, "ex21", "tx n=%u result=%s", static_cast<unsigned>(NextCounter), ToText(TxResult));
 			if (TxResult == MicroWorld::ETransportResult::Success)
 			{
@@ -135,7 +135,7 @@ void RunMaster() noexcept
 			MicroWorld::FDeviceAddress From{};
 			MicroWorld::FReceiveResult Received{};
 			const MicroWorld::ETransportResult RxResult =
-				Driver.TryReceive(From, MicroWorld::TSpan<std::uint8_t>(RxBuffer, sizeof(RxBuffer)), Received);
+				Device.TryReceive(From, MicroWorld::TSpan<std::uint8_t>(RxBuffer, sizeof(RxBuffer)), Received);
 			if (RxResult == MicroWorld::ETransportResult::Success && Received.BytesReceived == VolleyPayloadBytes)
 			{
 				const std::uint32_t Counter = ReadVolleyCounter(RxBuffer);
@@ -151,7 +151,7 @@ void RunMaster() noexcept
 	}
 }
 #else
-/** Builds the slave driver configuration from the fixed pins. */
+/** Builds the slave device configuration from the fixed pins. */
 MicroWorld::FEsp32SpiSlaveConfig MakeSlaveConfig() noexcept
 {
 	MicroWorld::FEsp32SpiSlaveConfig Config;
@@ -168,9 +168,9 @@ MicroWorld::FEsp32SpiSlaveConfig MakeSlaveConfig() noexcept
 void RunSlave() noexcept
 {
 	// Static, never on the app_main stack (§2.2); its DMA buffers must live here.
-	static MicroWorld::FEsp32SpiSlaveDriver Driver{MakeSlaveConfig()};
-	MW_LOG(Log, "ex21", "slave open=%d", Driver.IsOpen() ? 1 : 0);
-	if (!Driver.IsOpen())
+	static MicroWorld::FEsp32SpiSlaveDevice Device{MakeSlaveConfig()};
+	MW_LOG(Log, "ex21", "slave open=%d", Device.IsOpen() ? 1 : 0);
+	if (!Device.IsOpen())
 	{
 		// A failed bus open cannot recover here; stop with a clear line instead of looping.
 		MW_LOG(Error, "ex21", "spi slave failed to open; halting");
@@ -183,7 +183,7 @@ void RunSlave() noexcept
 	{
 		MicroWorld::FDeviceAddress From{};
 		MicroWorld::FReceiveResult Received{};
-		const MicroWorld::ETransportResult RxResult = Driver.TryReceive(From, MicroWorld::TSpan<std::uint8_t>(RxBuffer, sizeof(RxBuffer)), Received);
+		const MicroWorld::ETransportResult RxResult = Device.TryReceive(From, MicroWorld::TSpan<std::uint8_t>(RxBuffer, sizeof(RxBuffer)), Received);
 		if (RxResult == MicroWorld::ETransportResult::Success && Received.BytesReceived == VolleyPayloadBytes)
 		{
 			const std::uint32_t Counter = ReadVolleyCounter(RxBuffer);
@@ -194,7 +194,7 @@ void RunSlave() noexcept
 			std::uint8_t Payload[VolleyPayloadBytes];
 			WriteVolleyPayload(Payload, SlaveNodeId, Counter + 1);
 			const MicroWorld::ETransportResult TxResult =
-				Driver.TrySend(MicroWorld::MakeSpiAddress(MasterNodeId), MicroWorld::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
+				Device.TrySend(MicroWorld::MakeSpiAddress(MasterNodeId), MicroWorld::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
 			MW_LOG(Log, "ex21", "tx n=%u result=%s", static_cast<unsigned>(Counter + 1), ToText(TxResult));
 		}
 

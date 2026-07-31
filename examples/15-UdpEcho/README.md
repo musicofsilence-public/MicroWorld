@@ -1,7 +1,7 @@
 # 15-UdpEcho
 
 **Feature:** a real transport behind the same `IDevice` interface — lwIP UDP via
-`FEsp32UdpDriver` — hosting its own network with **no router**: one board hosts a SoftAP and
+`FEsp32WifiDevice` — hosting its own network with **no router**: one board hosts a SoftAP and
 echoes every UDP datagram back to its sender.
 
 > Status: not yet verified on hardware.
@@ -10,7 +10,7 @@ echoes every UDP datagram back to its sender.
 
 Single role, one board, engine-first `src/`: hosts the SoftAP `microworld-ex15` via
 `FEsp32WifiLink` — **no home WiFi and no real credentials**, the network name/password are
-fixed demo values — then opens one static `FEsp32UdpDriver` on `EchoServerPort` and loops:
+fixed demo values — then opens one static `FEsp32WifiDevice` on `EchoServerPort` and loops:
 `PollReadable` → `TryReceive` → log `rx bytes` → `TrySend` the same bytes back to the sender
 → log the echo result.
 
@@ -21,7 +21,7 @@ echoed back.
 ## MicroWorld APIs used
 
 - `FEsp32WifiLink` (`StartAccessPoint`), `FEsp32AccessPointConfig`
-- `FEsp32UdpDriver` (`TrySend` / `TryReceive` / `PollReadable` / `IsOpen` / `BoundPort`,
+- `FEsp32WifiDevice` (`TrySend` / `TryReceive` / `PollReadable` / `IsOpen` / `BoundPort`,
   `UdpMaxPacketBytes`), `ETransportResult`, `FReceiveResult`, `FDeviceAddress`, `UdpAddressPort`,
   `TSpan`
 - `SleepMilliseconds` (loop pacing)

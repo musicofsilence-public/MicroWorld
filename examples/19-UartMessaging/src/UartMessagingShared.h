@@ -2,7 +2,7 @@
 
 #include <MicroWorld/Transport/TransportHost.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
-#include <MicroWorld/Platform/Esp32/Esp32UartDriver.h>
+#include <MicroWorld/Platform/Esp32/Esp32UartDevice.h>
 
 #include <cstdint>
 
@@ -50,7 +50,7 @@ constexpr MicroWorld::FTypeId DemoSpawnedActorTypeId{0x00080001u};
 /** Poll pace for both boards; far faster than the volley so the watchdog idle task runs. */
 constexpr unsigned PollPacingMilliseconds = 20;
 
-/** Builds a board's UART driver configuration from the fixed pins and baud. */
+/** Builds a board's UART device configuration from the fixed pins and baud. */
 inline MicroWorld::FEsp32UartConfig MakeUartConfig(const std::uint8_t NodeId) noexcept
 {
 	MicroWorld::FEsp32UartConfig Config;

@@ -2,7 +2,7 @@
 
 #include <MicroWorld/Platform/Pico/Internal/PicoE32LoraPlatform.h>
 #include <MicroWorld/Platform/Pico/Internal/PicoUartByteStream.h>
-#include <MicroWorld/Transport/Lora/RadioE32Driver.h>
+#include <MicroWorld/Transport/Lora/E32LoraDevice.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -13,8 +13,9 @@ namespace MicroWorld
 /**
  * Describes one RP2040 UART connection to an E32 module without exposing Pico SDK types.
  *
- * The composition root must give the driver exclusive ownership of the selected UART; sharing it with another driver
- * or UART-backed stdio is unsupported.
+ * The composition root must give the device exclusive ownership of the selected UART; sharing it with another device
+ * or UART-backed stdio is
+ * unsupported.
  */
 struct FPicoE32LoraConfig
 {
@@ -35,35 +36,35 @@ struct FPicoE32LoraConfig
 };
 
 /**
- * Released RP2040 Pico compatibility facade over the portable RadioE32 driver.
+ * Released RP2040 Pico compatibility facade over the portable RadioE32 device.
  *
  * Construction is inert so static storage is safe before `main`; `Initialize` opens one exclusive UART and initializes
  * portable framing. `TrySend(Success)` queues one complete frame for `AdvanceTransmit`, while transparent-mode
  * destination addresses remain shape-checked metadata rather than on-air routing.
  */
-class FPicoE32LoraDriver final : public IDevice
+class FPicoLoraDevice final : public IDevice
 {
 public:
-	/** Creates a closed driver that borrows the production Pico SDK UART binding. */
-	FPicoE32LoraDriver() noexcept;
+	/** Creates a closed device that borrows the production Pico SDK UART binding. */
+	FPicoLoraDevice() noexcept;
 
-	/** Creates a closed driver that borrows the supplied binding for host policy tests or alternate Pico wiring. */
-	explicit FPicoE32LoraDriver(IPicoE32LoraPlatform& InPlatform) noexcept;
+	/** Creates a closed device that borrows the supplied binding for host policy tests or alternate Pico wiring. */
+	explicit FPicoLoraDevice(IPicoE32LoraPlatform& InPlatform) noexcept;
 
 	/** Releases the delegated byte stream, which deinitializes the exclusively owned UART when initialization succeeded. */
-	~FPicoE32LoraDriver() noexcept override;
+	~FPicoLoraDevice() noexcept override;
 
 	/** Prevents copying so one facade owns exactly one UART byte stream and delegated transport state. */
-	FPicoE32LoraDriver(const FPicoE32LoraDriver&) = delete;
+	FPicoLoraDevice(const FPicoLoraDevice&) = delete;
 
 	/** Prevents copying so one facade owns exactly one UART byte stream and delegated transport state. */
-	FPicoE32LoraDriver& operator=(const FPicoE32LoraDriver&) = delete;
+	FPicoLoraDevice& operator=(const FPicoLoraDevice&) = delete;
 
 	/** Prevents moving so byte-stream ownership and the delegated transport reference remain stable. */
-	FPicoE32LoraDriver(FPicoE32LoraDriver&&) = delete;
+	FPicoLoraDevice(FPicoLoraDevice&&) = delete;
 
 	/** Prevents moving so byte-stream ownership and the delegated transport reference remain stable. */
-	FPicoE32LoraDriver& operator=(FPicoE32LoraDriver&&) = delete;
+	FPicoLoraDevice& operator=(FPicoLoraDevice&&) = delete;
 
 	/**
 	 * Validates and configures one exclusive RP2040 UART, then initializes portable E32 framing.
@@ -80,11 +81,12 @@ public:
 	 * Transactionally accepts one complete packet into the delegated fixed transmit slot.
 	 *
 	 * Returns `Unavailable` while closed, `Invalid` for a malformed address/span or oversize packet, `Full` while a
-	 * prior frame remains queued, and `Success` once the delegated driver queued the complete encoded frame for later
+	 * prior frame remains queued, and `Success` once the delegated device queued the complete encoded frame for later
 	 * physical progress.
 	 *
-	 * @param InTo Driver-relative one-byte destination metadata; transparent mode does not route it on air.
-	 * @param InPacket Payload to frame and queue.
+	 * @param InTo Device-relative one-byte destination metadata; transparent mode does not route it on air.
+	 * @param InPacket Payload to frame
+	 * and queue.
 	 * @return Outcome of the acceptance attempt.
 	 */
 	ETransportResult TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override;
@@ -108,7 +110,7 @@ public:
 	/** Advances a bounded burst of up to one complete encoded frame's capacity when UART bytes are writable. */
 	void AdvanceTransmit() noexcept override;
 
-	/** Reports whether both the byte stream is open and the delegated RadioE32 driver is initialized. */
+	/** Reports whether both the byte stream is open and the delegated RadioE32 device is initialized. */
 	bool IsOpen() const noexcept;
 
 private:
@@ -116,7 +118,7 @@ private:
 	FPicoUartByteStream ByteStream{};
 
 	/** Owns portable E32 framing while borrowing the preceding byte stream for its full facade lifetime. */
-	FRadioE32Driver RadioDriver{ByteStream};
+	FE32LoraDevice RadioDevice{ByteStream};
 };
 
 } // namespace MicroWorld

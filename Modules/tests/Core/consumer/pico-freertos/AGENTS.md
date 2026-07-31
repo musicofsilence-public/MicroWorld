@@ -32,7 +32,7 @@ host-picotool toolchain while preserving normal Pico UF2 output.
   behavior; it has no logging or peripheral policy.
 - `tests` links existing Core test translation units only; it never runs or
   uploads their stack-heavy behavior on RP2040.
-- `lora` consumes `FPicoE32LoraDriver` from `PlatformPico`. It uses UART1
+- `lora` consumes `FPicoLoraDevice` from `PlatformPico`. It uses UART1
   GP4/GP5 and speaks the existing ESP32 example-17 frame format as node 1.
 - PlatformIO supplies cached host tools when present, but the firmware build
   remains the official Pico SDK CMake flow rather than an Arduino framework.

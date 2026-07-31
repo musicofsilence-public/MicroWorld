@@ -1,4 +1,4 @@
-#include <MicroWorld/Platform/Pico/PicoE32LoraDriver.h>
+#include <MicroWorld/Platform/Pico/PicoLoraDevice.h>
 
 #include <MicroWorld/Platform/Pico/Internal/PicoUartByteStream.h>
 #include <MicroWorld/Platform/Pico/Internal/PicoUartPlatform.h>
@@ -113,6 +113,6 @@ FPicoUartByteStream::FPicoUartByteStream() noexcept : FPicoUartByteStream(GetPic
 namespace MicroWorld
 {
 
-FPicoE32LoraDriver::FPicoE32LoraDriver() noexcept : ByteStream(), RadioDriver(ByteStream) {}
+FPicoLoraDevice::FPicoLoraDevice() noexcept : ByteStream(), RadioDevice(ByteStream) {}
 
 } // namespace MicroWorld

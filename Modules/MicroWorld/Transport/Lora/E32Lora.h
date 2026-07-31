@@ -20,7 +20,7 @@ constexpr std::size_t E32MaxPayloadBytes = 58;
  * Encodes an E32 node id into an opaque one-byte `FDeviceAddress`.
  *
  * The byte names the sender carried by a received MicroWorld frame. Transparent-mode E32 transmission is broadcast,
- * so a destination address is driver-relative metadata rather than an on-air routing command.
+ * so a destination address is device-relative metadata rather than an on-air routing command.
  *
  * @param InNodeId Node id this address names.
  * @return One-byte address carrying the node id.
@@ -34,10 +34,10 @@ constexpr FDeviceAddress MakeLoraAddress(const std::uint8_t InNodeId) noexcept
 }
 
 /**
- * Reports whether an address has the one-byte shape used by E32 drivers.
+ * Reports whether an address has the one-byte shape used by E32 devices.
  *
- * This checks shape only. Another driver may assign different meaning to a one-byte address, so callers interpret a
- * positive result within the active driver's contract.
+ * This checks shape only. Another device may assign different meaning to a one-byte address, so callers interpret a
+ * positive result within the active device's contract.
  *
  * @param InAddress Address whose active length to test.
  * @return True when the active length is exactly one byte.

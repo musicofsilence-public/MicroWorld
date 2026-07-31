@@ -1,7 +1,7 @@
 #pragma once
 
 #include <MicroWorld/Platform/Esp32/Internal/Esp32UartByteStream.h>
-#include <MicroWorld/Transport/Lora/RadioE32Driver.h>
+#include <MicroWorld/Transport/Lora/E32LoraDevice.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -36,22 +36,23 @@ struct FEsp32E32LoraConfig
 /**
  * Header-defined ESP32 compatibility facade for the portable E32 LoRa `IDevice`.
  *
- * The facade owns ESP-IDF UART lifetime through its internal byte stream while `FRadioE32Driver` owns portable
- * framing and bounded progress. Keeping all methods inline means PlatformEsp32 consumers resolve RadioE32 only when
- * they include this E32 header; non-LoRa PlatformEsp32 consumers remain independent of the optional package.
+ * The facade owns ESP-IDF UART lifetime through its internal byte stream while `FE32LoraDevice` owns portable
+ * framing and bounded progress.
+ * Keeping all methods inline means PlatformEsp32 consumers resolve RadioE32 only when they include this E32 header; non-LoRa PlatformEsp32 consumers
+ * remain independent of the optional package.
  */
-class FEsp32E32LoraDriver final : public IDevice
+class FEsp32LoraDevice final : public IDevice
 {
 public:
 	/**
-	 * Opens one exclusive ESP32 UART stream and initializes the portable E32 driver.
+	 * Opens one exclusive ESP32 UART stream and initializes the portable E32 device.
 	 *
 	 * Configuration failure leaves the facade closed. If portable initialization fails after opening, the stream closes
-	 * before construction completes so this facade never retains a usable UART without an initialized radio driver.
+	 * before construction completes so this facade never retains a usable UART without an initialized radio device.
 	 *
 	 * @param InConfig UART, GPIO, baud, and local node id parameters.
 	 */
-	explicit FEsp32E32LoraDriver(const FEsp32E32LoraConfig& InConfig) noexcept
+	explicit FEsp32LoraDevice(const FEsp32E32LoraConfig& InConfig) noexcept
 	{
 		FEsp32UartByteStreamConfig StreamConfig{};
 		StreamConfig.UartPort = InConfig.UartPort;
@@ -63,7 +64,7 @@ public:
 			return;
 		}
 
-		const ETransportResult InitializeResult = RadioDriver.Initialize(InConfig.LocalNodeId);
+		const ETransportResult InitializeResult = RadioDevice.Initialize(InConfig.LocalNodeId);
 		if (InitializeResult != ETransportResult::Success)
 		{
 			ByteStream.Close();
@@ -71,41 +72,42 @@ public:
 	}
 
 	/** Releases the internally owned UART stream through the byte-stream member destructor. */
-	~FEsp32E32LoraDriver() noexcept override = default;
+	~FEsp32LoraDevice() noexcept override = default;
 
 	/** Prevents copying so one facade value owns exactly one UART stream installation. */
-	FEsp32E32LoraDriver(const FEsp32E32LoraDriver&) = delete;
+	FEsp32LoraDevice(const FEsp32LoraDevice&) = delete;
 
 	/** Prevents copying so UART lifecycle and queued-frame ownership remain unique. */
-	FEsp32E32LoraDriver& operator=(const FEsp32E32LoraDriver&) = delete;
+	FEsp32LoraDevice& operator=(const FEsp32LoraDevice&) = delete;
 
 	/** Prevents moving so the internally referenced byte stream remains stable. */
-	FEsp32E32LoraDriver(FEsp32E32LoraDriver&&) = delete;
+	FEsp32LoraDevice(FEsp32LoraDevice&&) = delete;
 
 	/** Prevents moving so the owned UART close responsibility cannot transfer between facade values. */
-	FEsp32E32LoraDriver& operator=(FEsp32E32LoraDriver&&) = delete;
+	FEsp32LoraDevice& operator=(FEsp32LoraDevice&&) = delete;
 
 	/**
 	 * Queues one complete framed packet for later bounded UART progress.
 	 *
 	 * `Success` means the facade accepted the complete encoded frame into its fixed slot, not that the frame was
 	 * physically emitted. Direct callers must invoke `AdvanceTransmit` regularly; `TTransportHost` already does so after
-	 * each outbound FIFO drain. Invalid address/span and capacity outcomes follow `FRadioE32Driver` unchanged.
+	 * each outbound FIFO drain. Invalid address/span and capacity outcomes follow `FE32LoraDevice` unchanged.
 	 *
-	 * @param InTo Driver-relative one-byte destination metadata; transparent mode does not route it on air.
-	 * @param InPacket Caller-owned payload to frame and queue.
+	 * @param InTo Device-relative one-byte destination metadata; transparent mode does not route it on air.
+	 * @param InPacket Caller-owned
+	 * payload to frame and queue.
 	 * @return Outcome of the portable frame-acceptance attempt.
 	 */
 	ETransportResult TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override
 	{
-		return RadioDriver.TrySend(InTo, InPacket);
+		return RadioDevice.TrySend(InTo, InPacket);
 	}
 
 	/**
 	 * Pumps bounded UART input and transactionally delivers at most one decoded frame.
 	 *
 	 * Every non-success result preserves caller outputs; a `Full` destination retains the decoded frame for a larger
-	 * retry, and a UART failure maps to `Invalid` under the portable driver contract.
+	 * retry, and a UART failure maps to `Invalid` under the portable device contract.
 	 *
 	 * @param OutFrom Filled with the sender's E32 address only on `Success`.
 	 * @param InDestination Caller-owned destination for one decoded payload.
@@ -114,24 +116,24 @@ public:
 	 */
 	ETransportResult TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept override
 	{
-		return RadioDriver.TryReceive(OutFrom, InDestination, OutResult);
+		return RadioDevice.TryReceive(OutFrom, InDestination, OutResult);
 	}
 
 	/** Reports the portable E32 payload capacity, excluding framing overhead. */
-	std::size_t MaxPacketBytes() const noexcept override { return RadioDriver.MaxPacketBytes(); }
+	std::size_t MaxPacketBytes() const noexcept override { return RadioDevice.MaxPacketBytes(); }
 
 	/** Advances the queued frame through bounded physical UART progress. */
-	void AdvanceTransmit() noexcept override { RadioDriver.AdvanceTransmit(); }
+	void AdvanceTransmit() noexcept override { RadioDevice.AdvanceTransmit(); }
 
 	/** Reports whether construction opened the UART stream and completed portable radio initialization. */
-	bool IsOpen() const noexcept { return ByteStream.IsOpen() && RadioDriver.IsInitialized(); }
+	bool IsOpen() const noexcept { return ByteStream.IsOpen() && RadioDevice.IsInitialized(); }
 
 private:
 	/** Owns ESP-IDF UART configuration and lifetime while exposing only Core's non-blocking `IUartByteStream` interface. */
 	FEsp32UartByteStream ByteStream{};
 
 	/** Owns portable E32 framing and retains a reference to ByteStream for its full facade lifetime. */
-	FRadioE32Driver RadioDriver{ByteStream};
+	FE32LoraDevice RadioDevice{ByteStream};
 };
 
 } // namespace MicroWorld

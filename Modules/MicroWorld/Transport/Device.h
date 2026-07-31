@@ -13,7 +13,7 @@ namespace MicroWorld
 /**
  * Carries the byte count produced by one non-blocking receive.
  *
- * A receive is transactional: on `Full`, `Invalid`, or `Unavailable` the driver
+ * A receive is transactional: on `Full`, `Invalid`, or `Unavailable` the device
  * leaves the caller-owned destination and `BytesReceived` unchanged, so a caller
  * never confuses a failed receive with a short successful read. Only a `Success`
  * result writes a received byte count and (possibly zero) destination bytes.
@@ -45,7 +45,7 @@ public:
 	 * Returns `Success` only when the whole span was accepted, `Full` when the
 	 * transport lacks capacity for the packet, `Invalid` for a null span with
 	 * nonzero length, a packet larger than the transport's maximum, or a
-	 * destination address the driver cannot route. A non-success result leaves
+	 * destination address the device cannot route. A non-success result leaves
 	 * the transport state unchanged.
 	 */
 	virtual ETransportResult TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept = 0;
@@ -64,9 +64,9 @@ public:
 	/**
 	 * Advances one bounded unit of pending outbound transport work.
 	 *
-	 * Drivers that accept a packet before physical transmission
+	 * Devices that accept a packet before physical transmission
 	 * completes override this command to make bounded
-	 * progress. Autonomous drivers inherit the no-op implementation, preserving the
+	 * progress. Autonomous devices inherit the no-op implementation, preserving the
 	 * send/receive-only contract.
 	 */
 	virtual void AdvanceTransmit() noexcept {}
@@ -74,17 +74,17 @@ public:
 	/** Reports the largest packet, in bytes, the transport accepts on a single send. */
 	virtual std::size_t MaxPacketBytes() const noexcept = 0;
 
-	/** Gives every concrete driver one stable virtual destructor out of line. */
+	/** Gives every concrete device one stable virtual destructor out of line. */
 	virtual ~IDevice() noexcept;
 
-	/** Prevents slicing through the interface; drivers are held by reference. */
+	/** Prevents slicing through the interface; devices are held by reference. */
 	IDevice(const IDevice&) = delete;
 
-	/** Prevents slicing through the interface; drivers are held by reference. */
+	/** Prevents slicing through the interface; devices are held by reference. */
 	IDevice& operator=(const IDevice&) = delete;
 
 protected:
-	/** Lets concrete drivers construct without exposing the interface as instantiable. */
+	/** Lets concrete devices construct without exposing the interface as instantiable. */
 	IDevice() noexcept = default;
 };
 

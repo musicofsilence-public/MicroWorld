@@ -7,7 +7,7 @@
 #include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
 #include <MicroWorld/Platform/Esp32/Esp32TimeSource.h>
-#include <MicroWorld/Platform/Esp32/Esp32UartDriver.h>
+#include <MicroWorld/Platform/Esp32/Esp32UartDevice.h>
 #include <MicroWorld/Platform/Esp32/UartAddress.h>
 
 #include <cstdint>
@@ -30,15 +30,15 @@ int GLastServerActors = -1;
 /** Client board: a bare TTransportHost (Client) over one UART, no engine, no WiFi. */
 void RunClient() noexcept
 {
-	static FEsp32UartDriver Driver{MakeUartConfig(ClientNodeId)};
-	MW_LOG(Log, "ex19", "client node=%u open=%d", static_cast<unsigned>(ClientNodeId), Driver.IsOpen() ? 1 : 0);
-	if (!Driver.IsOpen())
+	static FEsp32UartDevice Device{MakeUartConfig(ClientNodeId)};
+	MW_LOG(Log, "ex19", "client node=%u open=%d", static_cast<unsigned>(ClientNodeId), Device.IsOpen() ? 1 : 0);
+	if (!Device.IsOpen())
 	{
 		MW_LOG(Error, "ex19", "uart failed to open; halting");
 		return;
 	}
 
-	static FClientTransport ClientTransport{Driver};
+	static FClientTransport ClientTransport{Device};
 
 	// Channel-2 state handler; the no-capture lambda names the static capture directly.
 	FClientTransport::FMessageHandlerBinding Binding;

@@ -1,4 +1,4 @@
-#include <MicroWorld/Platform/Esp32/Esp32UartDriver.h>
+#include <MicroWorld/Platform/Esp32/Esp32UartDevice.h>
 
 #include "Internal/UartPlatformImplementation.h"
 
@@ -11,7 +11,7 @@
 namespace MicroWorld
 {
 
-FEsp32UartDriver::FEsp32UartDriver(const FEsp32UartConfig& InConfig) noexcept
+FEsp32UartDevice::FEsp32UartDevice(const FEsp32UartConfig& InConfig) noexcept
 {
 	const FUartPort Port = AsUartPort(InConfig.UartPort);
 	const FOpenedUart Opened = OpenConfiguredUartPort(Port, InConfig.TxGpio, InConfig.RxGpio, InConfig.BaudRate);
@@ -27,7 +27,7 @@ FEsp32UartDriver::FEsp32UartDriver(const FEsp32UartConfig& InConfig) noexcept
 	bOpen = true;
 }
 
-FEsp32UartDriver::~FEsp32UartDriver() noexcept
+FEsp32UartDevice::~FEsp32UartDevice() noexcept
 {
 	if (bOpen)
 	{
@@ -38,7 +38,7 @@ FEsp32UartDriver::~FEsp32UartDriver() noexcept
 namespace
 {
 
-	/** Maps one UART write outcome to the shared driver result. */
+	/** Maps one UART write outcome to the shared device result. */
 	ETransportResult MapUartWriteOutcome(const EUartWriteOutcome InOutcome) noexcept
 	{
 		switch (InOutcome)
@@ -55,7 +55,7 @@ namespace
 
 } // namespace
 
-ETransportResult FEsp32UartDriver::TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
+ETransportResult FEsp32UartDevice::TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
 {
 	if (!bOpen)
 	{
@@ -78,7 +78,7 @@ ETransportResult FEsp32UartDriver::TrySend(const FDeviceAddress& InTo, TSpan<con
 	return MapUartWriteOutcome(Outcome);
 }
 
-ETransportResult FEsp32UartDriver::ValidateOutgoingPacket(const FDeviceAddress& InTo, const TSpan<const std::uint8_t> InPacket) const noexcept
+ETransportResult FEsp32UartDevice::ValidateOutgoingPacket(const FDeviceAddress& InTo, const TSpan<const std::uint8_t> InPacket) const noexcept
 {
 	// Validate every argument before any syscall so a rejection is truly transactional.
 	if (!IsUartAddress(InTo))
@@ -97,7 +97,7 @@ ETransportResult FEsp32UartDriver::ValidateOutgoingPacket(const FDeviceAddress& 
 	return ETransportResult::Success;
 }
 
-ETransportResult FEsp32UartDriver::TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
+ETransportResult FEsp32UartDevice::TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
 {
 	// Reject a null destination with nonzero length before any UART read.
 	const std::size_t Capacity = InDestination.Size();
@@ -117,7 +117,7 @@ ETransportResult FEsp32UartDriver::TryReceive(FDeviceAddress& OutFrom, TSpan<std
 	return PumpDecoderForFrame(InDestination, OutFrom, OutResult);
 }
 
-ETransportResult FEsp32UartDriver::DeliverFrameToDestination(
+ETransportResult FEsp32UartDevice::DeliverFrameToDestination(
 	TSpan<std::uint8_t> InDestination, FDeviceAddress& OutFrom, FReceiveResult& OutResult) noexcept
 {
 	// On Full the destination is untouched and the frame stays held for the next
@@ -134,7 +134,7 @@ ETransportResult FEsp32UartDriver::DeliverFrameToDestination(
 	return ETransportResult::Success;
 }
 
-ETransportResult FEsp32UartDriver::PumpDecoderForFrame(TSpan<std::uint8_t> InDestination, FDeviceAddress& OutFrom, FReceiveResult& OutResult) noexcept
+ETransportResult FEsp32UartDevice::PumpDecoderForFrame(TSpan<std::uint8_t> InDestination, FDeviceAddress& OutFrom, FReceiveResult& OutResult) noexcept
 {
 	// Pump available UART bytes one at a time, bounded so a flood cannot starve the caller.
 	const std::size_t PumpByteCap = 2u * (UartMaxPayloadBytes + FrameOverheadBytes);
@@ -165,12 +165,12 @@ ETransportResult FEsp32UartDriver::PumpDecoderForFrame(TSpan<std::uint8_t> InDes
 	return ETransportResult::Unavailable;
 }
 
-std::size_t FEsp32UartDriver::MaxPacketBytes() const noexcept
+std::size_t FEsp32UartDevice::MaxPacketBytes() const noexcept
 {
 	return UartMaxPayloadBytes;
 }
 
-bool FEsp32UartDriver::IsOpen() const noexcept
+bool FEsp32UartDevice::IsOpen() const noexcept
 {
 	return bOpen;
 }

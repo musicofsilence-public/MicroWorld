@@ -24,11 +24,11 @@ namespace
 	/** Provides two deterministic ports so systems exchange packets without a platform transport. */
 	using FLoopback = MicroWorld::THostLoopback<2, 8, 256>;
 
-	/** Uses the default two-driver and four-channel profile for normal composition tests. */
+	/** Uses the default two-device and four-channel profile for normal composition tests. */
 	using FSystem = MicroWorld::TNetworking<>;
 
-	/** Makes driver exhaustion observable with one fixed slot. */
-	struct FOneDriverTraits : MicroWorld::FDefaultNetworkingTraits
+	/** Makes device exhaustion observable with one fixed slot. */
+	struct FOneDeviceTraits : MicroWorld::FDefaultNetworkingTraits
 	{
 		static constexpr std::size_t MaxDevices = 1;
 	};
@@ -61,25 +61,25 @@ namespace
 		return MicroWorld::FTransportHostConfig{};
 	}
 
-	/** Supplies a shared monotonic order source so each driver's first pump is directly observable. */
-	class FDriverPumpSequence final
+	/** Supplies a shared monotonic order source so each device's first pump is directly observable. */
+	class FDevicePumpSequence final
 	{
 	public:
-		/** Returns a unique increasing stamp for one driver operation. */
+		/** Returns a unique increasing stamp for one device operation. */
 		std::uint32_t Next() noexcept { return ++Counter; }
 
 	private:
-		/** Tracks the order across every driver that shares this test-owned sequence. */
+		/** Tracks the order across every device that shares this test-owned sequence. */
 		std::uint32_t Counter{0};
 	};
 
-	/** Records the first inbound, outbound, and physical-progress pump each fake driver receives. */
-	struct FDriverPumpRecord
+	/** Records the first inbound, outbound, and physical-progress pump each fake device receives. */
+	struct FDevicePumpRecord
 	{
-		/** Counts transport receive calls so the first call identifies driver pump order. */
+		/** Counts transport receive calls so the first call identifies device pump order. */
 		std::size_t ReceiveCount{0};
 
-		/** Counts transport send calls so the first call identifies driver pump order. */
+		/** Counts transport send calls so the first call identifies device pump order. */
 		std::size_t SendCount{0};
 
 		/** Counts bounded transmit-progress calls independently of logical packet acceptance. */
@@ -95,14 +95,14 @@ namespace
 		std::uint32_t FirstAdvanceOrder{0};
 	};
 
-	/** Provides a deterministic client transport whose observable operations reveal TNetworking's driver pump order. */
-	class FRecordingDriver final : public MicroWorld::IDevice
+	/** Provides a deterministic client transport whose observable operations reveal TNetworking's device pump order. */
+	class FRecordingDevice final : public MicroWorld::IDevice
 	{
 	public:
-		/** Binds the driver to caller-owned observability and a deterministic logical-send outcome. */
-		FRecordingDriver(
-			FDriverPumpRecord& InRecord,
-			FDriverPumpSequence& InSequence,
+		/** Binds the device to caller-owned observability and a deterministic logical-send outcome. */
+		FRecordingDevice(
+			FDevicePumpRecord& InRecord,
+			FDevicePumpSequence& InSequence,
 			const MicroWorld::ETransportResult InSendResult = MicroWorld::ETransportResult::Success) noexcept
 			: Record(InRecord), Sequence(InSequence), SendResult(InSendResult)
 		{
@@ -145,23 +145,23 @@ namespace
 		std::size_t MaxPacketBytes() const noexcept override { return 256; }
 
 	private:
-		/** Receives this driver's counts and first-operation stamps; never owned here. */
-		FDriverPumpRecord& Record;
+		/** Receives this device's counts and first-operation stamps; never owned here. */
+		FDevicePumpRecord& Record;
 
-		/** Orders operations across the two fake drivers; never owned here. */
-		FDriverPumpSequence& Sequence;
+		/** Orders operations across the two fake devices; never owned here. */
+		FDevicePumpSequence& Sequence;
 
-		/** Makes full-driver lifecycle progress observable without a real transport. */
+		/** Makes full-device lifecycle progress observable without a real transport. */
 		MicroWorld::ETransportResult SendResult;
 	};
 
 } // namespace
 
 /**
- * Scenario: Configure two drivers on one system over a loopback with two ports.
- * Expected: Each driver receives a valid handle with a distinct slot identity.
+ * Scenario: Configure two devices on one system over a loopback with two ports.
+ * Expected: Each device receives a valid handle with a distinct slot identity.
  */
-MW_TEST_CASE(Networking_AddDeviceAcceptsTwoDrivers)
+MW_TEST_CASE(Networking_AddDeviceAcceptsTwoDevices)
 {
 	// Arrange
 	FLoopback Loopback;
@@ -169,97 +169,97 @@ MW_TEST_CASE(Networking_AddDeviceAcceptsTwoDrivers)
 	const MicroWorld::FTransportHostConfig Config = MakeConfig();
 
 	// Act
-	const MicroWorld::FDeviceHandle FirstDriver = System.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::Standalone, Config);
-	const MicroWorld::FDeviceHandle SecondDriver = System.AddDevice(Loopback.Port(1), MicroWorld::ENetworkMode::Standalone, Config);
-	const bool bFirstDriverValid = FirstDriver.IsValid();
-	const bool bSecondDriverValid = SecondDriver.IsValid();
-	const bool bDistinctSlots = FirstDriver.Index != SecondDriver.Index;
+	const MicroWorld::FDeviceHandle FirstDevice = System.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::Standalone, Config);
+	const MicroWorld::FDeviceHandle SecondDevice = System.AddDevice(Loopback.Port(1), MicroWorld::ENetworkMode::Standalone, Config);
+	const bool bFirstDeviceValid = FirstDevice.IsValid();
+	const bool bSecondDeviceValid = SecondDevice.IsValid();
+	const bool bDistinctSlots = FirstDevice.Index != SecondDevice.Index;
 
 	// Assert
-	MW_EXPECT_TRUE(Test, bFirstDriverValid, "The first configured driver must receive a valid handle");
-	MW_EXPECT_TRUE(Test, bSecondDriverValid, "The second configured driver must receive a valid handle");
-	MW_EXPECT_TRUE(Test, bDistinctSlots, "Two configured drivers must receive distinct slot identities");
+	MW_EXPECT_TRUE(Test, bFirstDeviceValid, "The first configured device must receive a valid handle");
+	MW_EXPECT_TRUE(Test, bSecondDeviceValid, "The second configured device must receive a valid handle");
+	MW_EXPECT_TRUE(Test, bDistinctSlots, "Two configured devices must receive distinct slot identities");
 }
 
 /**
- * Scenario: Add a best-effort and a guaranteed channel on one configured driver.
+ * Scenario: Add a best-effort and a guaranteed channel on one configured device.
  * Expected: Each reliability mode receives a valid channel handle without exposing internal wrappers.
  */
-MW_TEST_CASE(Networking_AddChannelAcceptsBestEffortAndGuaranteedOnOneDriver)
+MW_TEST_CASE(Networking_AddChannelAcceptsBestEffortAndGuaranteedOnOneDevice)
 {
 	// Arrange
 	FLoopback Loopback;
 	FSystem System;
 	const MicroWorld::FTransportHostConfig Config = MakeConfig();
-	const MicroWorld::FDeviceHandle Driver = System.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::Standalone, Config);
+	const MicroWorld::FDeviceHandle Device = System.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::Standalone, Config);
 
 	// Act
 	const MicroWorld::FChannelHandle BestEffort =
-		System.AddChannel(Driver, MicroWorld::FMessageChannelId{1}, MicroWorld::EChannelReliability::BestEffort);
+		System.AddChannel(Device, MicroWorld::FMessageChannelId{1}, MicroWorld::EChannelReliability::BestEffort);
 	const MicroWorld::FChannelHandle Guaranteed =
-		System.AddChannel(Driver, MicroWorld::FMessageChannelId{2}, MicroWorld::EChannelReliability::Guaranteed);
-	const bool bDriverValid = Driver.IsValid();
+		System.AddChannel(Device, MicroWorld::FMessageChannelId{2}, MicroWorld::EChannelReliability::Guaranteed);
+	const bool bDeviceValid = Device.IsValid();
 	const bool bBestEffortValid = BestEffort.IsValid();
 	const bool bGuaranteedValid = Guaranteed.IsValid();
 
 	// Assert
-	MW_EXPECT_TRUE(Test, bDriverValid, "Channel setup requires a valid configured driver handle");
+	MW_EXPECT_TRUE(Test, bDeviceValid, "Channel setup requires a valid configured device handle");
 	MW_EXPECT_TRUE(Test, bBestEffortValid, "A best-effort channel must receive a valid handle");
 	MW_EXPECT_TRUE(Test, bGuaranteedValid, "A guaranteed channel must receive a valid handle");
 }
 
 /**
- * Scenario: Forge a driver handle with a mismatched generation and attempt to add a channel, then add a channel on the current driver.
- * Expected: The forged-generation request is rejected and leaves the current driver slot usable.
+ * Scenario: Forge a device handle with a mismatched generation and attempt to add a channel, then add a channel on the current device.
+ * Expected: The forged-generation request is rejected and leaves the current device slot usable.
  */
-MW_TEST_CASE(Networking_AddChannelRejectsForgedDriverGeneration)
+MW_TEST_CASE(Networking_AddChannelRejectsForgedDeviceGeneration)
 {
 	// Arrange
 	FLoopback Loopback;
 	FSystem System;
 	const MicroWorld::FTransportHostConfig Config = MakeConfig();
-	const MicroWorld::FDeviceHandle Driver = System.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::Standalone, Config);
-	const MicroWorld::FDeviceHandle StaleDriver{Driver.Index, static_cast<std::uint8_t>(Driver.Generation + 1)};
+	const MicroWorld::FDeviceHandle Device = System.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::Standalone, Config);
+	const MicroWorld::FDeviceHandle StaleDevice{Device.Index, static_cast<std::uint8_t>(Device.Generation + 1)};
 
 	// Act
 	const MicroWorld::FChannelHandle RejectedChannel =
-		System.AddChannel(StaleDriver, MicroWorld::FMessageChannelId{1}, MicroWorld::EChannelReliability::BestEffort);
+		System.AddChannel(StaleDevice, MicroWorld::FMessageChannelId{1}, MicroWorld::EChannelReliability::BestEffort);
 	const MicroWorld::FChannelHandle CurrentChannel =
-		System.AddChannel(Driver, MicroWorld::FMessageChannelId{1}, MicroWorld::EChannelReliability::BestEffort);
-	const bool bDriverValid = Driver.IsValid();
+		System.AddChannel(Device, MicroWorld::FMessageChannelId{1}, MicroWorld::EChannelReliability::BestEffort);
+	const bool bDeviceValid = Device.IsValid();
 	const bool bRejectedChannelValid = RejectedChannel.IsValid();
 	const bool bCurrentChannelValid = CurrentChannel.IsValid();
 
 	// Assert
-	MW_EXPECT_TRUE(Test, bDriverValid, "The original driver handle must be valid before forging a stale one");
-	MW_EXPECT_TRUE(Test, !bRejectedChannelValid, "A mismatched driver generation must reject channel creation");
-	MW_EXPECT_TRUE(Test, bCurrentChannelValid, "A stale-handle rejection must leave the current driver usable");
+	MW_EXPECT_TRUE(Test, bDeviceValid, "The original device handle must be valid before forging a stale one");
+	MW_EXPECT_TRUE(Test, !bRejectedChannelValid, "A mismatched device generation must reject channel creation");
+	MW_EXPECT_TRUE(Test, bCurrentChannelValid, "A stale-handle rejection must leave the current device usable");
 }
 
 /**
- * Scenario: Fill a one-driver system and attempt to add a second driver.
- * Expected: The driver beyond fixed capacity is rejected with an invalid handle.
+ * Scenario: Fill a one-device system and attempt to add a second device.
+ * Expected: The device beyond fixed capacity is rejected with an invalid handle.
  */
 MW_TEST_CASE(Networking_AddDeviceRejectsCapacityExhaustion)
 {
 	// Arrange
 	FLoopback Loopback;
-	MicroWorld::TNetworking<FOneDriverTraits> System;
+	MicroWorld::TNetworking<FOneDeviceTraits> System;
 	const MicroWorld::FTransportHostConfig Config = MakeConfig();
 
 	// Act
-	const MicroWorld::FDeviceHandle AcceptedDriver = System.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::Standalone, Config);
-	const MicroWorld::FDeviceHandle RejectedDriver = System.AddDevice(Loopback.Port(1), MicroWorld::ENetworkMode::Standalone, Config);
-	const bool bAcceptedDriverValid = AcceptedDriver.IsValid();
-	const bool bRejectedDriverValid = RejectedDriver.IsValid();
+	const MicroWorld::FDeviceHandle AcceptedDevice = System.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::Standalone, Config);
+	const MicroWorld::FDeviceHandle RejectedDevice = System.AddDevice(Loopback.Port(1), MicroWorld::ENetworkMode::Standalone, Config);
+	const bool bAcceptedDeviceValid = AcceptedDevice.IsValid();
+	const bool bRejectedDeviceValid = RejectedDevice.IsValid();
 
 	// Assert
-	MW_EXPECT_TRUE(Test, bAcceptedDriverValid, "The only available driver slot must accept its first driver");
-	MW_EXPECT_TRUE(Test, !bRejectedDriverValid, "A driver beyond fixed capacity must return an invalid handle");
+	MW_EXPECT_TRUE(Test, bAcceptedDeviceValid, "The only available device slot must accept its first device");
+	MW_EXPECT_TRUE(Test, !bRejectedDeviceValid, "A device beyond fixed capacity must return an invalid handle");
 }
 
 /**
- * Scenario: Fill a one-channel driver and attempt to add a second channel.
+ * Scenario: Fill a one-channel device and attempt to add a second channel.
  * Expected: The channel beyond fixed capacity is rejected with an invalid handle and does not disturb the accepted predecessor.
  */
 MW_TEST_CASE(Networking_AddChannelRejectsCapacityExhaustion)
@@ -268,25 +268,25 @@ MW_TEST_CASE(Networking_AddChannelRejectsCapacityExhaustion)
 	FLoopback Loopback;
 	MicroWorld::TNetworking<FOneChannelTraits> System;
 	const MicroWorld::FTransportHostConfig Config = MakeConfig();
-	const MicroWorld::FDeviceHandle Driver = System.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::Standalone, Config);
+	const MicroWorld::FDeviceHandle Device = System.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::Standalone, Config);
 
 	// Act
 	const MicroWorld::FChannelHandle AcceptedChannel =
-		System.AddChannel(Driver, MicroWorld::FMessageChannelId{1}, MicroWorld::EChannelReliability::BestEffort);
+		System.AddChannel(Device, MicroWorld::FMessageChannelId{1}, MicroWorld::EChannelReliability::BestEffort);
 	const MicroWorld::FChannelHandle RejectedChannel =
-		System.AddChannel(Driver, MicroWorld::FMessageChannelId{2}, MicroWorld::EChannelReliability::BestEffort);
-	const bool bDriverValid = Driver.IsValid();
+		System.AddChannel(Device, MicroWorld::FMessageChannelId{2}, MicroWorld::EChannelReliability::BestEffort);
+	const bool bDeviceValid = Device.IsValid();
 	const bool bAcceptedChannelValid = AcceptedChannel.IsValid();
 	const bool bRejectedChannelValid = RejectedChannel.IsValid();
 
 	// Assert
-	MW_EXPECT_TRUE(Test, bDriverValid, "Channel capacity setup requires one valid driver");
+	MW_EXPECT_TRUE(Test, bDeviceValid, "Channel capacity setup requires one valid device");
 	MW_EXPECT_TRUE(Test, bAcceptedChannelValid, "The only available channel slot must accept its first channel");
 	MW_EXPECT_TRUE(Test, !bRejectedChannelValid, "A channel beyond fixed capacity must return an invalid handle");
 }
 
 /**
- * Scenario: Configure a client driver and channel, pump before BeginPlay, then close composition with BeginPlay, attempt late composition, and pump
+ * Scenario: Configure a client device and channel, pump before BeginPlay, then close composition with BeginPlay, attempt late composition, and pump
  * once more. Expected: No packet crosses the transport before BeginPlay; afterward composition is frozen and the host starts to emit packets.
  */
 MW_TEST_CASE(Networking_BeginPlayFinalizesCompositionAndDefersHostStart)
@@ -296,9 +296,9 @@ MW_TEST_CASE(Networking_BeginPlayFinalizesCompositionAndDefersHostStart)
 	FSystem System;
 	MicroWorld::FTransportHostConfig ClientConfig = MakeConfig();
 	ClientConfig.ServerAddress = MicroWorld::MakeLoopbackAddress(1);
-	const MicroWorld::FDeviceHandle Driver = System.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::Client, ClientConfig);
+	const MicroWorld::FDeviceHandle Device = System.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::Client, ClientConfig);
 	const MicroWorld::FChannelHandle InitialChannel =
-		System.AddChannel(Driver, MicroWorld::FMessageChannelId{1}, MicroWorld::EChannelReliability::BestEffort);
+		System.AddChannel(Device, MicroWorld::FMessageChannelId{1}, MicroWorld::EChannelReliability::BestEffort);
 
 	// Act: pump before BeginPlay and confirm no packet has crossed the transport yet.
 	System.PreAdvance(10);
@@ -308,57 +308,57 @@ MW_TEST_CASE(Networking_BeginPlayFinalizesCompositionAndDefersHostStart)
 	// Act: close composition with BeginPlay, attempt late composition, and pump once more.
 	System.BeginPlay(20);
 	const MicroWorld::FChannelHandle LateChannel =
-		System.AddChannel(Driver, MicroWorld::FMessageChannelId{2}, MicroWorld::EChannelReliability::BestEffort);
-	const MicroWorld::FDeviceHandle LateDriver = System.AddDevice(Loopback.Port(1), MicroWorld::ENetworkMode::Standalone, MakeConfig());
+		System.AddChannel(Device, MicroWorld::FMessageChannelId{2}, MicroWorld::EChannelReliability::BestEffort);
+	const MicroWorld::FDeviceHandle LateDevice = System.AddDevice(Loopback.Port(1), MicroWorld::ENetworkMode::Standalone, MakeConfig());
 	System.PostAdvance(20);
 	const bool bPacketQueuedAfterBeginPlay = !Loopback.IsEmpty(1);
-	const bool bDriverValid = Driver.IsValid();
+	const bool bDeviceValid = Device.IsValid();
 	const bool bInitialChannelValid = InitialChannel.IsValid();
 	const bool bLateChannelValid = LateChannel.IsValid();
-	const bool bLateDriverValid = LateDriver.IsValid();
+	const bool bLateDeviceValid = LateDevice.IsValid();
 
 	// Assert
-	MW_EXPECT_TRUE(Test, bDriverValid, "The client driver must configure before the lifecycle starts");
+	MW_EXPECT_TRUE(Test, bDeviceValid, "The client device must configure before the lifecycle starts");
 	MW_EXPECT_TRUE(Test, bInitialChannelValid, "The initial channel must configure before composition freezes");
 	MW_EXPECT_TRUE(Test, bNoPacketBeforeBeginPlay, "A configured host must not emit packets before BeginPlay starts it");
 	MW_EXPECT_TRUE(Test, !bLateChannelValid, "BeginPlay must freeze later channel composition for the completed network system");
-	MW_EXPECT_TRUE(Test, !bLateDriverValid, "BeginPlay must freeze later driver composition for the completed network system");
+	MW_EXPECT_TRUE(Test, !bLateDeviceValid, "BeginPlay must freeze later device composition for the completed network system");
 	MW_EXPECT_TRUE(Test, bPacketQueuedAfterBeginPlay, "BeginPlay must start the client host before its next outbound pump");
 }
 
 /**
- * Scenario: Compose two recording drivers and run one BeginPlay plus one PreAdvance/PostAdvance cycle.
+ * Scenario: Compose two recording devices and run one BeginPlay plus one PreAdvance/PostAdvance cycle.
  * Expected: Inbound pumps run in forward add order, and outbound and physical-progress pumps run in reverse add order.
  */
-MW_TEST_CASE(Networking_CoreLifecyclePumpsDriversInForwardAndReverseOrder)
+MW_TEST_CASE(Networking_CoreLifecyclePumpsDevicesInForwardAndReverseOrder)
 {
 	// Arrange
-	FDriverPumpSequence Sequence;
-	FDriverPumpRecord FirstRecord{};
-	FDriverPumpRecord SecondRecord{};
-	FRecordingDriver FirstDriver{FirstRecord, Sequence};
-	FRecordingDriver SecondDriver{SecondRecord, Sequence};
+	FDevicePumpSequence Sequence;
+	FDevicePumpRecord FirstRecord{};
+	FDevicePumpRecord SecondRecord{};
+	FRecordingDevice FirstDevice{FirstRecord, Sequence};
+	FRecordingDevice SecondDevice{SecondRecord, Sequence};
 	FSystem System;
 	MicroWorld::FTransportHostConfig Config = MakeConfig();
 	Config.ServerAddress = MicroWorld::MakeLoopbackAddress(0);
 
-	const MicroWorld::FDeviceHandle FirstHandle = System.AddDevice(FirstDriver, MicroWorld::ENetworkMode::Client, Config);
-	const MicroWorld::FDeviceHandle SecondHandle = System.AddDevice(SecondDriver, MicroWorld::ENetworkMode::Client, Config);
+	const MicroWorld::FDeviceHandle FirstHandle = System.AddDevice(FirstDevice, MicroWorld::ENetworkMode::Client, Config);
+	const MicroWorld::FDeviceHandle SecondHandle = System.AddDevice(SecondDevice, MicroWorld::ENetworkMode::Client, Config);
 	MicroWorld::IPlaySystem& Lifecycle = System;
 
-	// Act: one BeginPlay plus one PreAdvance/PostAdvance cycle pumps every recording driver.
+	// Act: one BeginPlay plus one PreAdvance/PostAdvance cycle pumps every recording device.
 	Lifecycle.BeginPlay(0);
 	Lifecycle.PreAdvance(10);
 	Lifecycle.PostAdvance(10);
 
 	const bool bFirstHandleValid = FirstHandle.IsValid();
 	const bool bSecondHandleValid = SecondHandle.IsValid();
-	const bool bFirstDriverReceived = FirstRecord.ReceiveCount > 0;
-	const bool bSecondDriverReceived = SecondRecord.ReceiveCount > 0;
-	const bool bFirstDriverSent = FirstRecord.SendCount > 0;
-	const bool bSecondDriverSent = SecondRecord.SendCount > 0;
-	const bool bFirstDriverAdvanced = FirstRecord.AdvanceCount == 1;
-	const bool bSecondDriverAdvanced = SecondRecord.AdvanceCount == 1;
+	const bool bFirstDeviceReceived = FirstRecord.ReceiveCount > 0;
+	const bool bSecondDeviceReceived = SecondRecord.ReceiveCount > 0;
+	const bool bFirstDeviceSent = FirstRecord.SendCount > 0;
+	const bool bSecondDeviceSent = SecondRecord.SendCount > 0;
+	const bool bFirstDeviceAdvanced = FirstRecord.AdvanceCount == 1;
+	const bool bSecondDeviceAdvanced = SecondRecord.AdvanceCount == 1;
 	const bool bReceiveOrderIsForward = FirstRecord.FirstReceiveOrder < SecondRecord.FirstReceiveOrder;
 	const bool bSendOrderIsReverse = SecondRecord.FirstSendOrder < FirstRecord.FirstSendOrder;
 	const bool bAdvanceOrderIsReverse = SecondRecord.FirstAdvanceOrder < FirstRecord.FirstAdvanceOrder;
@@ -366,58 +366,58 @@ MW_TEST_CASE(Networking_CoreLifecyclePumpsDriversInForwardAndReverseOrder)
 	const bool bFirstAdvanceFollowsSend = FirstRecord.FirstSendOrder < FirstRecord.FirstAdvanceOrder;
 
 	// Assert
-	MW_EXPECT_TRUE(Test, bFirstHandleValid, "The first recording driver must compose before lifecycle pumping");
-	MW_EXPECT_TRUE(Test, bSecondHandleValid, "The second recording driver must compose before lifecycle pumping");
-	MW_EXPECT_TRUE(Test, bFirstDriverReceived, "PreAdvance must pump the first live driver");
-	MW_EXPECT_TRUE(Test, bSecondDriverReceived, "PreAdvance must pump the second live driver");
-	MW_EXPECT_TRUE(Test, bFirstDriverSent, "PostAdvance must pump the first live driver");
-	MW_EXPECT_TRUE(Test, bSecondDriverSent, "PostAdvance must pump the second live driver");
-	MW_EXPECT_TRUE(Test, bFirstDriverAdvanced, "PostAdvance must advance the first driver exactly once after logical sends");
-	MW_EXPECT_TRUE(Test, bSecondDriverAdvanced, "PostAdvance must advance the second driver exactly once after logical sends");
-	MW_EXPECT_TRUE(Test, bReceiveOrderIsForward, "PreAdvance must pump the first-added driver before the second");
-	MW_EXPECT_TRUE(Test, bSendOrderIsReverse, "PostAdvance must pump the second-added driver before the first");
-	MW_EXPECT_TRUE(Test, bAdvanceOrderIsReverse, "PostAdvance must advance the second-added driver before the first");
-	MW_EXPECT_TRUE(Test, bSecondAdvanceFollowsSend, "The second driver's physical progress must follow its logical send attempt");
-	MW_EXPECT_TRUE(Test, bFirstAdvanceFollowsSend, "The first driver's physical progress must follow its logical send attempt");
+	MW_EXPECT_TRUE(Test, bFirstHandleValid, "The first recording device must compose before lifecycle pumping");
+	MW_EXPECT_TRUE(Test, bSecondHandleValid, "The second recording device must compose before lifecycle pumping");
+	MW_EXPECT_TRUE(Test, bFirstDeviceReceived, "PreAdvance must pump the first live device");
+	MW_EXPECT_TRUE(Test, bSecondDeviceReceived, "PreAdvance must pump the second live device");
+	MW_EXPECT_TRUE(Test, bFirstDeviceSent, "PostAdvance must pump the first live device");
+	MW_EXPECT_TRUE(Test, bSecondDeviceSent, "PostAdvance must pump the second live device");
+	MW_EXPECT_TRUE(Test, bFirstDeviceAdvanced, "PostAdvance must advance the first device exactly once after logical sends");
+	MW_EXPECT_TRUE(Test, bSecondDeviceAdvanced, "PostAdvance must advance the second device exactly once after logical sends");
+	MW_EXPECT_TRUE(Test, bReceiveOrderIsForward, "PreAdvance must pump the first-added device before the second");
+	MW_EXPECT_TRUE(Test, bSendOrderIsReverse, "PostAdvance must pump the second-added device before the first");
+	MW_EXPECT_TRUE(Test, bAdvanceOrderIsReverse, "PostAdvance must advance the second-added device before the first");
+	MW_EXPECT_TRUE(Test, bSecondAdvanceFollowsSend, "The second device's physical progress must follow its logical send attempt");
+	MW_EXPECT_TRUE(Test, bFirstAdvanceFollowsSend, "The first device's physical progress must follow its logical send attempt");
 }
 
 /**
- * Scenario: Compose an idle dedicated server driver and a full client driver, then run one BeginPlay plus one PostAdvance.
- * Expected: Each non-standalone driver advances transport even when it has no packet or its driver is full.
+ * Scenario: Compose an idle dedicated server device and a full client device, then run one BeginPlay plus one PostAdvance.
+ * Expected: Each non-standalone device advances transport even when it has no packet or its device is full.
  */
-MW_TEST_CASE(Networking_PostAdvanceAdvancesIdleAndFullDrivers)
+MW_TEST_CASE(Networking_PostAdvanceAdvancesIdleAndFullDevices)
 {
 	// Arrange
-	FDriverPumpSequence Sequence;
-	FDriverPumpRecord IdleRecord{};
-	FDriverPumpRecord FullRecord{};
-	FRecordingDriver IdleDriver{IdleRecord, Sequence};
-	FRecordingDriver FullDriver{FullRecord, Sequence, MicroWorld::ETransportResult::Full};
+	FDevicePumpSequence Sequence;
+	FDevicePumpRecord IdleRecord{};
+	FDevicePumpRecord FullRecord{};
+	FRecordingDevice IdleDevice{IdleRecord, Sequence};
+	FRecordingDevice FullDevice{FullRecord, Sequence, MicroWorld::ETransportResult::Full};
 	FSystem System;
 	MicroWorld::FTransportHostConfig ClientConfig = MakeConfig();
 	ClientConfig.ServerAddress = MicroWorld::MakeLoopbackAddress(0);
 
-	const MicroWorld::FDeviceHandle IdleHandle = System.AddDevice(IdleDriver, MicroWorld::ENetworkMode::DedicatedServer, MakeConfig());
-	const MicroWorld::FDeviceHandle FullHandle = System.AddDevice(FullDriver, MicroWorld::ENetworkMode::Client, ClientConfig);
+	const MicroWorld::FDeviceHandle IdleHandle = System.AddDevice(IdleDevice, MicroWorld::ENetworkMode::DedicatedServer, MakeConfig());
+	const MicroWorld::FDeviceHandle FullHandle = System.AddDevice(FullDevice, MicroWorld::ENetworkMode::Client, ClientConfig);
 
-	// Act: one BeginPlay plus one PostAdvance exposes both the idle and full-driver pump paths.
+	// Act: one BeginPlay plus one PostAdvance exposes both the idle and full-device pump paths.
 	System.BeginPlay(0);
 	System.PostAdvance(10);
 
 	const bool bIdleHandleValid = IdleHandle.IsValid();
 	const bool bFullHandleValid = FullHandle.IsValid();
-	const bool bIdleDriverWasNotSent = IdleRecord.SendCount == 0;
-	const bool bIdleDriverAdvanced = IdleRecord.AdvanceCount == 1;
-	const bool bFullDriverAttemptedSend = FullRecord.SendCount == 1;
-	const bool bFullDriverAdvanced = FullRecord.AdvanceCount == 1;
+	const bool bIdleDeviceWasNotSent = IdleRecord.SendCount == 0;
+	const bool bIdleDeviceAdvanced = IdleRecord.AdvanceCount == 1;
+	const bool bFullDeviceAttemptedSend = FullRecord.SendCount == 1;
+	const bool bFullDeviceAdvanced = FullRecord.AdvanceCount == 1;
 
 	// Assert
-	MW_EXPECT_TRUE(Test, bIdleHandleValid, "The idle server driver must compose before lifecycle pumping");
-	MW_EXPECT_TRUE(Test, bFullHandleValid, "The full client driver must compose before lifecycle pumping");
-	MW_EXPECT_TRUE(Test, bIdleDriverWasNotSent, "An idle dedicated server must have no logical packet to send");
-	MW_EXPECT_TRUE(Test, bIdleDriverAdvanced, "An idle non-standalone driver must still advance pending physical transmission");
-	MW_EXPECT_TRUE(Test, bFullDriverAttemptedSend, "A connecting client must attempt its queued hello even when the driver is full");
-	MW_EXPECT_TRUE(Test, bFullDriverAdvanced, "A full driver must still advance any previously staged physical transmission");
+	MW_EXPECT_TRUE(Test, bIdleHandleValid, "The idle server device must compose before lifecycle pumping");
+	MW_EXPECT_TRUE(Test, bFullHandleValid, "The full client device must compose before lifecycle pumping");
+	MW_EXPECT_TRUE(Test, bIdleDeviceWasNotSent, "An idle dedicated server must have no logical packet to send");
+	MW_EXPECT_TRUE(Test, bIdleDeviceAdvanced, "An idle non-standalone device must still advance pending physical transmission");
+	MW_EXPECT_TRUE(Test, bFullDeviceAttemptedSend, "A connecting client must attempt its queued hello even when the device is full");
+	MW_EXPECT_TRUE(Test, bFullDeviceAdvanced, "A full device must still advance any previously staged physical transmission");
 }
 
 /**
@@ -469,13 +469,13 @@ MW_TEST_CASE(Networking_PreBeginPlayPumpsLeaveQueuedLocalRouterMessageUndelivere
 MW_TEST_CASE(Networking_EndPlayStopsClientBeforeFuturePostAdvance)
 {
 	// Arrange
-	FDriverPumpSequence Sequence;
-	FDriverPumpRecord Record{};
-	FRecordingDriver Driver{Record, Sequence};
+	FDevicePumpSequence Sequence;
+	FDevicePumpRecord Record{};
+	FRecordingDevice Device{Record, Sequence};
 	FSystem System;
 	MicroWorld::FTransportHostConfig Config = MakeConfig();
 	Config.ServerAddress = MicroWorld::MakeLoopbackAddress(0);
-	const MicroWorld::FDeviceHandle DriverHandle = System.AddDevice(Driver, MicroWorld::ENetworkMode::Client, Config);
+	const MicroWorld::FDeviceHandle DeviceHandle = System.AddDevice(Device, MicroWorld::ENetworkMode::Client, Config);
 	MicroWorld::IPlaySystem& Lifecycle = System;
 
 	// Act: BeginPlay and one PostAdvance flush the initial connection hello.
@@ -486,10 +486,10 @@ MW_TEST_CASE(Networking_EndPlayStopsClientBeforeFuturePostAdvance)
 	Lifecycle.EndPlay();
 	Lifecycle.PostAdvance(20);
 	const std::size_t SendsAfterEndPlay = Record.SendCount;
-	const bool bDriverHandleValid = DriverHandle.IsValid();
+	const bool bDeviceHandleValid = DeviceHandle.IsValid();
 
 	// Assert
-	MW_EXPECT_TRUE(Test, bDriverHandleValid, "The client driver must compose before its lifecycle turns");
+	MW_EXPECT_TRUE(Test, bDeviceHandleValid, "The client device must compose before its lifecycle turns");
 	MW_EXPECT_EQ(Test, std::size_t{1}, SendsAfterBeginPlay, "A started client must emit its initial hello during PostAdvance");
 	MW_EXPECT_EQ(Test, SendsAfterBeginPlay, SendsAfterEndPlay, "EndPlay must stop the client before a later PostAdvance can emit another hello");
 }
@@ -507,12 +507,12 @@ MW_TEST_CASE(Networking_PreAdvanceAndPostAdvancePumpRoutedMessageInOrder)
 	const MicroWorld::FTransportHostConfig ServerConfig = MakeConfig();
 	MicroWorld::FTransportHostConfig ClientConfig = MakeConfig();
 	ClientConfig.ServerAddress = MicroWorld::MakeLoopbackAddress(0);
-	const MicroWorld::FDeviceHandle ServerDriver = ServerSystem.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::DedicatedServer, ServerConfig);
-	const MicroWorld::FDeviceHandle ClientDriver = ClientSystem.AddDevice(Loopback.Port(1), MicroWorld::ENetworkMode::Client, ClientConfig);
+	const MicroWorld::FDeviceHandle ServerDevice = ServerSystem.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::DedicatedServer, ServerConfig);
+	const MicroWorld::FDeviceHandle ClientDevice = ClientSystem.AddDevice(Loopback.Port(1), MicroWorld::ENetworkMode::Client, ClientConfig);
 	const MicroWorld::FChannelHandle ServerChannel =
-		ServerSystem.AddChannel(ServerDriver, MicroWorld::FMessageChannelId{1}, MicroWorld::EChannelReliability::BestEffort);
+		ServerSystem.AddChannel(ServerDevice, MicroWorld::FMessageChannelId{1}, MicroWorld::EChannelReliability::BestEffort);
 	const MicroWorld::FChannelHandle ClientChannel =
-		ClientSystem.AddChannel(ClientDriver, MicroWorld::FMessageChannelId{1}, MicroWorld::EChannelReliability::BestEffort);
+		ClientSystem.AddChannel(ClientDevice, MicroWorld::FMessageChannelId{1}, MicroWorld::EChannelReliability::BestEffort);
 	int DeliveryCount = 0;
 	MicroWorld::FMessageHandlerBinding Handler;
 	Handler.Bind([&DeliveryCount](const MicroWorld::FMessageView&) noexcept { ++DeliveryCount; });
@@ -539,15 +539,15 @@ MW_TEST_CASE(Networking_PreAdvanceAndPostAdvancePumpRoutedMessageInOrder)
 	const int DeliveriesAfterClientPostAdvance = DeliveryCount;
 	ServerSystem.PreAdvance(30);
 	const int DeliveriesAfterServerPreAdvance = DeliveryCount;
-	const bool bServerDriverValid = ServerDriver.IsValid();
-	const bool bClientDriverValid = ClientDriver.IsValid();
+	const bool bServerDeviceValid = ServerDevice.IsValid();
+	const bool bClientDeviceValid = ClientDevice.IsValid();
 	const bool bServerChannelValid = ServerChannel.IsValid();
 	const bool bClientChannelValid = ClientChannel.IsValid();
 	const bool bHandlerHandleValid = HandlerHandle.IsValid();
 
 	// Assert
-	MW_EXPECT_TRUE(Test, bServerDriverValid, "The server driver must configure for the pump-order scenario");
-	MW_EXPECT_TRUE(Test, bClientDriverValid, "The client driver must configure for the pump-order scenario");
+	MW_EXPECT_TRUE(Test, bServerDeviceValid, "The server device must configure for the pump-order scenario");
+	MW_EXPECT_TRUE(Test, bClientDeviceValid, "The client device must configure for the pump-order scenario");
 	MW_EXPECT_TRUE(Test, bServerChannelValid, "The server message channel must configure before BeginPlay");
 	MW_EXPECT_TRUE(Test, bClientChannelValid, "The client message channel must configure before BeginPlay");
 	MW_EXPECT_EQ(Test, MicroWorld::EMessageResult::Success, HandlerResult, "The server router must accept its delivery handler");

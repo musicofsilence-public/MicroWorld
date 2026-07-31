@@ -24,7 +24,7 @@
 #include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Engine/GarbageCollector.h>
 #include <MicroWorld/Engine/ObjectPtr.h>
-#include <MicroWorld/Platform/Host/HostUdpDriver.h>
+#include <MicroWorld/Platform/Host/HostWifiDevice.h>
 #include <MicroWorld/Platform/Host/UdpAddress.h>
 #include <MicroWorld/Core/Time.h>
 
@@ -86,10 +86,10 @@ struct FServerEngineTraits : FDefaultEngineTraits
 };
 using FServerEngine = TEngine<FServerEngineTraits>;
 
-/** Server network host bound to one UDP driver; capacity fits one client peer. */
+/** Server network host bound to one UDP device; capacity fits one client peer. */
 using FServerTransport = TTransportHost<2 /*MaxPeers*/, 256 /*MaxPacketBytes*/>;
 
-/** Client network host bound to its own UDP driver; capacity fits one server peer. */
+/** Client network host bound to its own UDP device; capacity fits one server peer. */
 using FClientTransport = TTransportHost<1 /*MaxPeers*/, 256 /*MaxPacketBytes*/>;
 
 /**
@@ -168,8 +168,8 @@ FTransportHostConfig MakeDemoConfig() noexcept
  * 7); the bare client uses explicit pumps.
  */
 bool RunHandshake(
-	FHostUdpDriver& ServerDriver,
-	FHostUdpDriver& ClientDriver,
+	FHostWifiDevice& ServerDevice,
+	FHostWifiDevice& ClientDevice,
 	FServerEngine& ServerHost,
 	FClientTransport& Client,
 	TimePointMilliseconds& LogicalClockMilliseconds) noexcept
@@ -178,11 +178,11 @@ bool RunHandshake(
 	{
 		LogicalClockMilliseconds += LogicalClockStepMilliseconds;
 		(void)Client.PumpSend(LogicalClockMilliseconds);
-		if (ServerDriver.PollReadable(ReadinessWaitMilliseconds))
+		if (ServerDevice.PollReadable(ReadinessWaitMilliseconds))
 		{
 			(void)ServerHost.Tick(LogicalClockMilliseconds);
 		}
-		if (ClientDriver.PollReadable(ReadinessWaitMilliseconds))
+		if (ClientDevice.PollReadable(ReadinessWaitMilliseconds))
 		{
 			(void)Client.PumpReceive(LogicalClockMilliseconds);
 		}
@@ -211,13 +211,13 @@ bool DecodeStatePayload(const TSpan<const std::uint8_t> Payload, int& OutTick, i
 }
 
 /**
- * Checks whether both loopback UDP sockets bound successfully. FHostUdpDriver
+ * Checks whether both loopback UDP sockets bound successfully. FHostWifiDevice
  * opens its socket in its constructor and cannot be moved, so this is a query
- * over already-constructed drivers, not a command that opens them.
+ * over already-constructed devices, not a command that opens them.
  */
-bool BothLoopbackDriversOpen(const FHostUdpDriver& ServerDriver, const FHostUdpDriver& ClientDriver) noexcept
+bool BothLoopbackDevicesOpen(const FHostWifiDevice& ServerDevice, const FHostWifiDevice& ClientDevice) noexcept
 {
-	return ServerDriver.IsOpen() && ClientDriver.IsOpen();
+	return ServerDevice.IsOpen() && ClientDevice.IsOpen();
 }
 
 /**
@@ -315,16 +315,16 @@ bool InstallClientStateHandler(FClientTransport& ClientTransport, FDemoStateCapt
 }
 
 /**
- * Builds the client's server address from the server driver's bound loopback
+ * Builds the client's server address from the server device's bound loopback
  * port, configures both transport hosts, starts both, and prints the two startup
  * trace lines. Returns false on the first failing step so main can abort
  * before BeginPlay runs against a half-started session.
  */
-bool ConfigureAndStartHosts(FServerTransport& ServerTransport, FClientTransport& ClientTransport, const FHostUdpDriver& ServerDriver) noexcept
+bool ConfigureAndStartHosts(FServerTransport& ServerTransport, FClientTransport& ClientTransport, const FHostWifiDevice& ServerDevice) noexcept
 {
 	FTransportHostConfig ClientConfig = MakeDemoConfig();
 	ClientConfig.ServerAddress =
-		MakeUdpAddress(LoopbackIpv4Octets[0], LoopbackIpv4Octets[1], LoopbackIpv4Octets[2], LoopbackIpv4Octets[3], ServerDriver.BoundPort());
+		MakeUdpAddress(LoopbackIpv4Octets[0], LoopbackIpv4Octets[1], LoopbackIpv4Octets[2], LoopbackIpv4Octets[3], ServerDevice.BoundPort());
 	if (ServerTransport.Configure(ENetworkMode::DedicatedServer, MakeDemoConfig()) != ETransportResult::Success)
 	{
 		return false;
@@ -386,11 +386,11 @@ bool SendSpawnRequestIfDue(FClientTransport& ClientTransport, bool bSpawnRequest
  * PumpReceive step delivers the input event, which fires the spawn handler.
  */
 bool AdvanceServerFrame(
-	FServerEngine& ServerHost, FHostUdpDriver& ServerDriver, bool bSpawnRequestDue, TimePointMilliseconds& LogicalClockMilliseconds) noexcept
+	FServerEngine& ServerHost, FHostWifiDevice& ServerDevice, bool bSpawnRequestDue, TimePointMilliseconds& LogicalClockMilliseconds) noexcept
 {
 	if (bSpawnRequestDue)
 	{
-		(void)ServerDriver.PollReadable(ReadinessWaitMilliseconds);
+		(void)ServerDevice.PollReadable(ReadinessWaitMilliseconds);
 	}
 	LogicalClockMilliseconds += LogicalClockStepMilliseconds;
 	return ServerHost.Tick(LogicalClockMilliseconds) == ERuntimeResult::Success;
@@ -425,9 +425,9 @@ bool BroadcastServerState(
  * broadcast to the client's state handler, which prints the received-state
  * trace line.
  */
-void DeliverToClient(FClientTransport& ClientTransport, FHostUdpDriver& ClientDriver, TimePointMilliseconds& LogicalClockMilliseconds) noexcept
+void DeliverToClient(FClientTransport& ClientTransport, FHostWifiDevice& ClientDevice, TimePointMilliseconds& LogicalClockMilliseconds) noexcept
 {
-	(void)ClientDriver.PollReadable(ReadinessWaitMilliseconds);
+	(void)ClientDevice.PollReadable(ReadinessWaitMilliseconds);
 	LogicalClockMilliseconds += LogicalClockStepMilliseconds;
 	(void)ClientTransport.PumpReceive(LogicalClockMilliseconds);
 }
@@ -442,8 +442,8 @@ bool RunStateBroadcastLoop(
 	FClientTransport& ClientTransport,
 	FServerTransport& ServerTransport,
 	FServerEngine& ServerHost,
-	FHostUdpDriver& ServerDriver,
-	FHostUdpDriver& ClientDriver,
+	FHostWifiDevice& ServerDevice,
+	FHostWifiDevice& ClientDevice,
 	int& WorldActorCount,
 	TimePointMilliseconds& LogicalClockMilliseconds) noexcept
 {
@@ -455,7 +455,7 @@ bool RunStateBroadcastLoop(
 		{
 			return false;
 		}
-		if (!AdvanceServerFrame(ServerHost, ServerDriver, bSpawnRequestDue, LogicalClockMilliseconds))
+		if (!AdvanceServerFrame(ServerHost, ServerDevice, bSpawnRequestDue, LogicalClockMilliseconds))
 		{
 			return false;
 		}
@@ -463,7 +463,7 @@ bool RunStateBroadcastLoop(
 		{
 			return false;
 		}
-		DeliverToClient(ClientTransport, ClientDriver, LogicalClockMilliseconds);
+		DeliverToClient(ClientTransport, ClientDevice, LogicalClockMilliseconds);
 	}
 	return true;
 }
@@ -479,10 +479,10 @@ int main()
 {
 	using namespace MicroWorld;
 
-	FHostUdpDriver ServerDriver(0);
-	FHostUdpDriver ClientDriver(0);
-	FServerTransport ServerTransport(ServerDriver);
-	FClientTransport ClientTransport(ClientDriver);
+	FHostWifiDevice ServerDevice(0);
+	FHostWifiDevice ClientDevice(0);
+	FServerTransport ServerTransport(ServerDevice);
+	FClientTransport ClientTransport(ClientDevice);
 	THostPlaySystem<FServerTransport> ServerFrame{ServerTransport};
 
 	int SpawnSequence = 0;
@@ -496,7 +496,7 @@ int main()
 	FDelegateHandle StateHandle{};
 	TimePointMilliseconds LogicalClockMilliseconds = 0;
 
-	if (!BothLoopbackDriversOpen(ServerDriver, ClientDriver))
+	if (!BothLoopbackDevicesOpen(ServerDevice, ClientDevice))
 	{
 		return 1;
 	}
@@ -512,7 +512,7 @@ int main()
 	{
 		return 1;
 	}
-	if (!ConfigureAndStartHosts(ServerTransport, ClientTransport, ServerDriver))
+	if (!ConfigureAndStartHosts(ServerTransport, ClientTransport, ServerDevice))
 	{
 		return 1;
 	}
@@ -521,13 +521,13 @@ int main()
 	{
 		return 1;
 	}
-	if (!RunHandshake(ServerDriver, ClientDriver, ServerHost, ClientTransport, LogicalClockMilliseconds))
+	if (!RunHandshake(ServerDevice, ClientDevice, ServerHost, ClientTransport, LogicalClockMilliseconds))
 	{
 		return 1;
 	}
 	std::printf("[client] connected\n");
 
-	if (!RunStateBroadcastLoop(ClientTransport, ServerTransport, ServerHost, ServerDriver, ClientDriver, WorldActorCount, LogicalClockMilliseconds))
+	if (!RunStateBroadcastLoop(ClientTransport, ServerTransport, ServerHost, ServerDevice, ClientDevice, WorldActorCount, LogicalClockMilliseconds))
 	{
 		return 1;
 	}

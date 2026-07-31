@@ -2,8 +2,8 @@
 
 **Feature:** the vision demo — actor messaging over the cheapest possible link.
 A client board's `FSwitchActor` drives a server board's `FLampActor` through
-`TMessageChannelBinding` + `TMessageRouter` over `FEsp32UartDriver`; only the
-driver construction line would change to run the same application protocol
+`TMessageChannelBinding` + `TMessageRouter` over `FEsp32UartDevice`; only the
+device construction line would change to run the same application protocol
 over WiFi.
 
 > Status: not yet verified on hardware.
@@ -19,7 +19,7 @@ over WiFi.
    `lamp ON` / `lamp OFF`) and `FDisplayActor` (subscribed to the broadcast
    `HeartbeatCountMessageId` — logs `heartbeat=<n>`).
 3. Both actors reach messaging only through `IMessageRouter&`, injected at
-   construction (D9); neither actor ever sees `TTransportHost` or the UART driver
+   construction (D9); neither actor ever sees `TTransportHost` or the UART device
    directly — that boundary is `TMessageChannelBinding`.
 4. The run is **unbounded** (matching 18-TwoBoardUart and 19-UartMessaging's
    server): this is a continuous two-board demo, not a self-terminating trace.
@@ -31,7 +31,7 @@ over WiFi.
 - `TMessageChannelBinding`, `EChannelSendTarget` (`Server` on the client,
   `AllPeers` on the server)
 - `TTransportHost` (`Configure` / `Start`), `THostPlaySystem`, `ENetworkMode`
-- `FEsp32UartDriver`, `FEsp32UartConfig`, `MakeUartAddress`
+- `FEsp32UartDevice`, `FEsp32UartConfig`, `MakeUartAddress`
 - `TEngine` (`RegisterClass` / `CreateWorld` / `CreateObject` /
   `BeginPlay` / `Tick`), `AActor`, `UWorld::RegisterActor`
 - `FEsp32TimeSource::Now`, `SleepMilliseconds`, `WriteEsp32LogRecord`, `MW_LOG`

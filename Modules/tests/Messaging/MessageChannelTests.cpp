@@ -12,7 +12,7 @@
 #include <MicroWorld/Transport/DeviceAddress.h>
 #include <MicroWorld/Transport/TransportHost.h>
 #include <MicroWorld/Transport/TransportResult.h>
-#include <MicroWorld/Transport/PacketDropDriver.h>
+#include <MicroWorld/Transport/PacketDropDevice.h>
 #include <MicroWorld/Engine/GarbageCollector.h>
 #include <MicroWorld/Engine/ObjectPtr.h>
 #include <MicroWorld/Core/Time.h>
@@ -40,7 +40,7 @@ using MicroWorld::FMessageHandlerBinding;
 using MicroWorld::FMessageHandlerHandle;
 using MicroWorld::FMessageTypeId;
 using MicroWorld::FMessageView;
-using MicroWorld::FPacketDropDriver;
+using MicroWorld::FPacketDropDevice;
 using MicroWorld::FReliableChannelConfig;
 using MicroWorld::FTransportHostConfig;
 using MicroWorld::IEncodedMessageSink;
@@ -994,7 +994,7 @@ MW_TEST_CASE(EngineMessageChannel_StalledChannelRetainsRouterHead)
 
 	// Assert: queuing succeeds regardless of transport state (both are buffered before the flush under test).
 	MW_EXPECT_SUCCESS(
-		Test, StalledEnqueueResult, "Queuing succeeds regardless of transport state: the router's own outbound queue is independent of the driver");
+		Test, StalledEnqueueResult, "Queuing succeeds regardless of transport state: the router's own outbound queue is independent of the device");
 	MW_EXPECT_SUCCESS(Test, HealthyEnqueueResult, "Queuing the healthy channel's message behind the stalled one must also succeed");
 	MW_EXPECT_EQ(Test, std::size_t{2}, ClientRouter.QueuedOutboundCount(), "Both messages must be queued before the flush under test");
 
@@ -1014,7 +1014,7 @@ MW_TEST_CASE(EngineMessageChannel_StalledChannelRetainsRouterHead)
 }
 
 /**
- * Scenario: Wrap each side's wire binding in a TReliableChannel behind an every-third-send packet-drop driver, then send several guaranteed messages
+ * Scenario: Wrap each side's wire binding in a TReliableChannel behind an every-third-send packet-drop device, then send several guaranteed messages
  * and pump until each is acknowledged. Expected: Every message is delivered to the server exactly once despite the injected drops; at least one
  * resend fires because a send was actually dropped.
  */
@@ -1032,9 +1032,9 @@ MW_TEST_CASE(EngineMessageChannel_ReliableChannelSurvivesPacketDropsDeliveringEx
 	using FServerFrameSet = TPlaySystemSet<2>;
 
 	THostLoopback<2, 8, 64> Network;
-	FPacketDropDriver ClientDropDriver(Network.Port(1), DropEveryNthSend);
+	FPacketDropDevice ClientDropDevice(Network.Port(1), DropEveryNthSend);
 	FTransport ServerTransport(Network.Port(0));
-	FTransport ClientTransport(ClientDropDriver);
+	FTransport ClientTransport(ClientDropDevice);
 	FHostPlay ServerFrame{ServerTransport};
 	FHostPlay ClientFrame{ClientTransport};
 
@@ -1124,7 +1124,7 @@ MW_TEST_CASE(EngineMessageChannel_ReliableChannelSurvivesPacketDropsDeliveringEx
 		ServerForwardSink.ForwardedCount(),
 		"Every message the client sent must be delivered to the server exactly once despite the injected drops");
 	MW_EXPECT_TRUE(
-		Test, ClientReliable.ResentCount() > 0, "At least one message must have been resent because FPacketDropDriver actually dropped a send");
+		Test, ClientReliable.ResentCount() > 0, "At least one message must have been resent because FPacketDropDevice actually dropped a send");
 }
 
 } // namespace

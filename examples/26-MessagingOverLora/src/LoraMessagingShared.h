@@ -2,7 +2,7 @@
 
 #include <MicroWorld/Transport/TransportHost.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
-#include <MicroWorld/Platform/Esp32/Esp32E32LoraDriver.h>
+#include <MicroWorld/Platform/Esp32/Esp32LoraDevice.h>
 
 #include <cstdint>
 
@@ -55,7 +55,7 @@ constexpr unsigned PollPacingMilliseconds = 20;
  *  congest the channel. */
 constexpr std::uint64_t StateBroadcastPeriodMilliseconds = 1000;
 
-/** Builds a board's E32 LoRa driver configuration from the fixed pins and baud. */
+/** Builds a board's E32 LoRa device configuration from the fixed pins and baud. */
 inline MicroWorld::FEsp32E32LoraConfig MakeLoraConfig(const std::uint8_t NodeId) noexcept
 {
 	MicroWorld::FEsp32E32LoraConfig Config;

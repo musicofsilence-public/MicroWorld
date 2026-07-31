@@ -23,7 +23,7 @@ namespace MicroWorld
 constexpr std::size_t UartMaxPayloadBytes = 120;
 
 /**
- * Construction parameters for one wired UART driver.
+ * Construction parameters for one wired UART device.
  *
  * Holds the UART port number and TX/RX GPIO numbers as plain integers so the public header stays free of
  * the ESP-IDF `uart_port_t`/`gpio_num_t` enum types; the platform-implementation header reinterprets them on the ESP32 side.
@@ -49,14 +49,14 @@ struct FEsp32UartConfig
 /**
  * Non-blocking point-to-point wired `IDevice` that frames traffic over one ESP-IDF UART.
  *
- * Functionally the E32 LoRa driver minus the radio: encodes each packet with the portable `FrameCodec`
+ * Functionally the E32 LoRa device minus the radio: encodes each packet with the portable `FrameCodec`
  * (magic, source node id, big-endian length, payload, CRC-16/CCITT-FALSE) and writes the whole frame to
  * the UART; receives pump one byte at a time through a bounded `TFrameDecoder` that resyncs on bad magic,
  * oversize length, or CRC mismatch. It validates every argument before any syscall, leaves caller-owned
- * outputs unchanged on any non-`Success` result, and exercises no UART traffic until this driver's example
+ * outputs unchanged on any non-`Success` result, and exercises no UART traffic until this device's example
  * hardware checkpoint passes (§1.2).
  */
-class FEsp32UartDriver final : public IDevice
+class FEsp32UartDevice final : public IDevice
 {
 public:
 	/**
@@ -64,26 +64,26 @@ public:
 	 *
 	 * Installs the ESP-IDF UART driver at `UartPort`, configures it for 8N1 at `BaudRate`, and routes it to the
 	 * given TX/RX GPIOs. On any configuration failure the constructor uninstalls what it installed and leaves
-	 * the driver with `IsOpen() == false`; it never throws. The local node id is stamped on every outgoing frame.
+	 * the device with `IsOpen() == false`; it never throws. The local node id is stamped on every outgoing frame.
 	 *
 	 * @param InConfig UART, GPIO, baud, and local node id parameters.
 	 */
-	explicit FEsp32UartDriver(const FEsp32UartConfig& InConfig) noexcept;
+	explicit FEsp32UartDevice(const FEsp32UartConfig& InConfig) noexcept;
 
 	/** Uninstalls the UART driver opened by construction. */
-	~FEsp32UartDriver() noexcept override;
+	~FEsp32UartDevice() noexcept override;
 
-	/** Prevents copying so one driver value owns exactly one UART identity. */
-	FEsp32UartDriver(const FEsp32UartDriver&) = delete;
+	/** Prevents copying so one device value owns exactly one UART identity. */
+	FEsp32UartDevice(const FEsp32UartDevice&) = delete;
 
-	/** Prevents copying so one driver value owns exactly one UART identity. */
-	FEsp32UartDriver& operator=(const FEsp32UartDriver&) = delete;
-
-	/** Prevents moving so the owned UART port and interface identity stay fixed. */
-	FEsp32UartDriver(FEsp32UartDriver&&) = delete;
+	/** Prevents copying so one device value owns exactly one UART identity. */
+	FEsp32UartDevice& operator=(const FEsp32UartDevice&) = delete;
 
 	/** Prevents moving so the owned UART port and interface identity stay fixed. */
-	FEsp32UartDriver& operator=(FEsp32UartDriver&&) = delete;
+	FEsp32UartDevice(FEsp32UartDevice&&) = delete;
+
+	/** Prevents moving so the owned UART port and interface identity stay fixed. */
+	FEsp32UartDevice& operator=(FEsp32UartDevice&&) = delete;
 
 	/**
 	 * Sends one complete framed message over the UART, transactionally.

@@ -17,7 +17,7 @@ namespace MicroWorld
  * Deterministic in-process multi-port loopback network for host tests.
  *
  * Owns N mailboxes and N embedded per-port `IDevice`s; `Port(index)` hands out
- * the driver bound to the 1-byte loopback address equal to `index`. Two hosts
+ * the device bound to the 1-byte loopback address equal to `index`. Two hosts
  * share one `THostLoopback` and each drive their own `Port(i)`; the ports live
  * inside the network, so their lifetimes track it automatically.
  */
@@ -256,7 +256,7 @@ class THostLoopback final
 		std::array<FMailbox, MaxPorts> Mailboxes{};
 	};
 
-	/** One port's driver view: forwards send/receive to the shared mailboxes using its bound index. */
+	/** One port's device view: forwards send/receive to the shared mailboxes using its bound index. */
 	class FPort final : public IDevice
 	{
 	public:
@@ -315,7 +315,7 @@ public:
 	/** Defaulted so a network with automatic storage destructs without side effects. */
 	~THostLoopback() noexcept = default;
 
-	/** Returns the driver bound to `InIndex`; `InIndex` must be < MaxPorts (caller contract). */
+	/** Returns the device bound to `InIndex`; `InIndex` must be < MaxPorts (caller contract). */
 	IDevice& Port(const std::uint8_t InIndex) noexcept { return Ports[InIndex]; }
 
 	/** Reports the fixed number of ports this network exposes. */
@@ -346,7 +346,7 @@ private:
 	/** The shared mailboxes; declared before Ports so it is fully constructed when ports bind. */
 	TLoopbackMailboxes<MaxPorts, MailboxCapacity, PacketBytes> Mailboxes{};
 
-	/** The N embedded per-port drivers handed out by Port(). */
+	/** The N embedded per-port devices handed out by Port(). */
 	std::array<FPort, MaxPorts> Ports{};
 };
 

@@ -5,7 +5,7 @@
 #include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Platform/Pico/Internal/PicoE32LoraPlatform.h>
 #include <MicroWorld/Platform/Pico/Internal/PicoUartPlatform.h>
-#include <MicroWorld/Platform/Pico/PicoE32LoraDriver.h>
+#include <MicroWorld/Platform/Pico/PicoLoraDevice.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -17,7 +17,7 @@ namespace
 using MicroWorld::E32MaxPayloadBytes;
 using MicroWorld::ETransportResult;
 using MicroWorld::FPicoE32LoraConfig;
-using MicroWorld::FPicoE32LoraDriver;
+using MicroWorld::FPicoLoraDevice;
 using MicroWorld::FrameOverheadBytes;
 using MicroWorld::IPicoE32LoraPlatform;
 using MicroWorld::IPicoUartPlatform;
@@ -148,16 +148,16 @@ MW_TEST_CASE(PicoE32FacadeRejectsInvalidConfigBeforeOpeningUart)
 {
 	// Arrange
 	FFakePicoUartPlatform Platform;
-	FPicoE32LoraDriver Driver(Platform);
+	FPicoLoraDevice Device(Platform);
 	FPicoE32LoraConfig InvalidConfig = MakeValidConfig();
 	InvalidConfig.TxGpio = 2;
 
 	// Act
-	const ETransportResult InitializeResult = Driver.Initialize(InvalidConfig);
+	const ETransportResult InitializeResult = Device.Initialize(InvalidConfig);
 
 	// Assert
 	MW_EXPECT_EQ(Test, ETransportResult::Invalid, InitializeResult, "Unsupported Pico UART routing must be invalid");
-	MW_EXPECT_TRUE(Test, !Driver.IsOpen(), "Invalid configuration must leave the facade closed");
+	MW_EXPECT_TRUE(Test, !Device.IsOpen(), "Invalid configuration must leave the facade closed");
 	MW_EXPECT_EQ(Test, std::size_t{0}, Platform.OpenCallCount, "Invalid configuration must not acquire a UART");
 	MW_EXPECT_EQ(Test, std::size_t{0}, Platform.CloseCallCount, "Invalid configuration must not release an unopened UART");
 }
@@ -170,7 +170,7 @@ MW_TEST_CASE(PicoE32FacadeDelegatesExactUartOpenConfiguration)
 {
 	// Arrange
 	FFakePicoUartPlatform Platform;
-	FPicoE32LoraDriver Driver(Platform);
+	FPicoLoraDevice Device(Platform);
 	FPicoE32LoraConfig Config = MakeValidConfig();
 	Config.UartIndex = 1;
 	Config.TxGpio = 4;
@@ -179,11 +179,11 @@ MW_TEST_CASE(PicoE32FacadeDelegatesExactUartOpenConfiguration)
 	Platform.AchievedBaudRate = Config.BaudRate;
 
 	// Act
-	const ETransportResult InitializeResult = Driver.Initialize(Config);
+	const ETransportResult InitializeResult = Device.Initialize(Config);
 
 	// Assert
 	MW_EXPECT_EQ(Test, ETransportResult::Success, InitializeResult, "A supported exact configuration must initialize");
-	MW_EXPECT_TRUE(Test, Driver.IsOpen(), "Successful initialization must open the facade");
+	MW_EXPECT_TRUE(Test, Device.IsOpen(), "Successful initialization must open the facade");
 	MW_EXPECT_EQ(Test, std::size_t{1}, Platform.OpenCallCount, "Initialization must delegate exactly one UART open");
 	MW_EXPECT_EQ(Test, Config.UartIndex, Platform.LastOpenedUartIndex, "The UART index must reach the platform unchanged");
 	MW_EXPECT_EQ(Test, Config.TxGpio, Platform.LastOpenedTxGpio, "The TX GPIO must reach the platform unchanged");
@@ -200,15 +200,15 @@ MW_TEST_CASE(PicoE32FacadeRollsBackMismatchedBaudRate)
 	// Arrange
 	FFakePicoUartPlatform Platform;
 	Platform.AchievedBaudRate = ExpectedBaudRate - 1;
-	FPicoE32LoraDriver Driver(Platform);
+	FPicoLoraDevice Device(Platform);
 	const FPicoE32LoraConfig Config = MakeValidConfig();
 
 	// Act
-	const ETransportResult InitializeResult = Driver.Initialize(Config);
+	const ETransportResult InitializeResult = Device.Initialize(Config);
 
 	// Assert
 	MW_EXPECT_EQ(Test, ETransportResult::Invalid, InitializeResult, "Inexact baud must reject facade initialization");
-	MW_EXPECT_TRUE(Test, !Driver.IsOpen(), "Inexact baud must leave the facade closed");
+	MW_EXPECT_TRUE(Test, !Device.IsOpen(), "Inexact baud must leave the facade closed");
 	MW_EXPECT_EQ(Test, std::size_t{1}, Platform.OpenCallCount, "Valid routing must reach one platform open attempt");
 	MW_EXPECT_EQ(Test, std::size_t{1}, Platform.CloseCallCount, "Inexact baud must release the initialized UART");
 	MW_EXPECT_EQ(Test, Config.UartIndex, Platform.LastClosedUartIndex, "Rollback must release the requested UART identity");
@@ -222,17 +222,17 @@ MW_TEST_CASE(PicoE32FacadeRejectsDoubleInitializationWithoutReopening)
 {
 	// Arrange
 	FFakePicoUartPlatform Platform;
-	FPicoE32LoraDriver Driver(Platform);
+	FPicoLoraDevice Device(Platform);
 	const FPicoE32LoraConfig Config = MakeValidConfig();
 
 	// Act
-	const ETransportResult FirstInitializeResult = Driver.Initialize(Config);
-	const ETransportResult SecondInitializeResult = Driver.Initialize(Config);
+	const ETransportResult FirstInitializeResult = Device.Initialize(Config);
+	const ETransportResult SecondInitializeResult = Device.Initialize(Config);
 
 	// Assert
 	MW_EXPECT_EQ(Test, ETransportResult::Success, FirstInitializeResult, "The first valid initialization must succeed");
 	MW_EXPECT_EQ(Test, ETransportResult::Unavailable, SecondInitializeResult, "The second initialization must be unavailable");
-	MW_EXPECT_TRUE(Test, Driver.IsOpen(), "Rejected reinitialization must retain the original open facade");
+	MW_EXPECT_TRUE(Test, Device.IsOpen(), "Rejected reinitialization must retain the original open facade");
 	MW_EXPECT_EQ(Test, std::size_t{1}, Platform.OpenCallCount, "Rejected reinitialization must not reopen the UART");
 	MW_EXPECT_EQ(Test, std::size_t{0}, Platform.CloseCallCount, "Rejected reinitialization must not close the owned UART");
 }
@@ -250,8 +250,8 @@ MW_TEST_CASE(PicoE32FacadeClosesOpenedUartOnDestruction)
 
 	// Act
 	{
-		FPicoE32LoraDriver Driver(Platform);
-		InitializeResult = Driver.Initialize(Config);
+		FPicoLoraDevice Device(Platform);
+		InitializeResult = Device.Initialize(Config);
 	}
 
 	// Assert
@@ -287,17 +287,17 @@ MW_TEST_CASE(PicoE32FacadeAdvanceTransmitDelegatesBoundedFrameBurst)
 {
 	// Arrange
 	FFakePicoUartPlatform Platform;
-	FPicoE32LoraDriver Driver(Platform);
+	FPicoLoraDevice Device(Platform);
 	const FPicoE32LoraConfig Config = MakeValidConfig();
 	const MicroWorld::FDeviceAddress Destination = MakeLoraAddress(PeerNodeId);
 	const std::uint8_t Payload[] = {0xA5};
-	const ETransportResult InitializeResult = Driver.Initialize(Config);
-	const ETransportResult FirstSendResult = Driver.TrySend(Destination, TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
+	const ETransportResult InitializeResult = Device.Initialize(Config);
+	const ETransportResult FirstSendResult = Device.TrySend(Destination, TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
 
 	// Act
-	Driver.AdvanceTransmit();
+	Device.AdvanceTransmit();
 	const std::size_t WrittenBytes = Platform.WrittenByteCount;
-	const ETransportResult RetrySendResult = Driver.TrySend(Destination, TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
+	const ETransportResult RetrySendResult = Device.TrySend(Destination, TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
 
 	// Assert
 	MW_EXPECT_EQ(Test, ETransportResult::Success, InitializeResult, "The transmit fixture must initialize successfully");
@@ -316,7 +316,7 @@ MW_TEST_CASE(PicoE32FacadeEmitsEmptyFrameAndReleasesTransmitSlot)
 {
 	// Arrange
 	FFakePicoUartPlatform Platform;
-	FPicoE32LoraDriver Driver(Platform);
+	FPicoLoraDevice Device(Platform);
 	const FPicoE32LoraConfig Config = MakeValidConfig();
 	const MicroWorld::FDeviceAddress Destination = MakeLoraAddress(PeerNodeId);
 	const TSpan<const std::uint8_t> EmptyPayload(nullptr, 0);
@@ -326,11 +326,11 @@ MW_TEST_CASE(PicoE32FacadeEmitsEmptyFrameAndReleasesTransmitSlot)
 		MicroWorld::EncodeFrame(LocalNodeId, EmptyPayload, TSpan<std::uint8_t>(ExpectedFrame, sizeof(ExpectedFrame)), ExpectedFrameBytes);
 
 	// Act
-	const ETransportResult InitializeResult = Driver.Initialize(Config);
-	const ETransportResult FirstSendResult = Driver.TrySend(Destination, EmptyPayload);
-	Driver.AdvanceTransmit();
+	const ETransportResult InitializeResult = Device.Initialize(Config);
+	const ETransportResult FirstSendResult = Device.TrySend(Destination, EmptyPayload);
+	Device.AdvanceTransmit();
 	const std::size_t WrittenFrameBytes = Platform.WrittenByteCount;
-	const ETransportResult RetrySendResult = Driver.TrySend(Destination, EmptyPayload);
+	const ETransportResult RetrySendResult = Device.TrySend(Destination, EmptyPayload);
 
 	// Assert
 	MW_EXPECT_EQ(Test, ETransportResult::Success, EncodeResult, "The empty-frame fixture must encode successfully");

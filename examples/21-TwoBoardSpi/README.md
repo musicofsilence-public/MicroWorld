@@ -1,14 +1,14 @@
 # 21-TwoBoardSpi
 
 **Feature:** the same ping-pong volley as example 20, over a wired SPI bus
-instead of I2C — proof that swapping only the driver construction line swaps the
+instead of I2C — proof that swapping only the device construction line swaps the
 transport, across every wired bus the plan builds.
 
 > Status: not yet verified on hardware.
 
 ## What it does
 
-1. Each board constructs a static SPI driver and logs
+1. Each board constructs a static SPI device and logs
    `<role> open=<0|1>`. If the bus fails to open it logs a halt line and
    stops (rather than looping on a dead link).
 2. **Only the master clocks the bus**, so the master paces every volley: it
@@ -25,7 +25,7 @@ transport, across every wired bus the plan builds.
 
 ## MicroWorld APIs used
 
-- `FEsp32SpiMasterDriver` / `FEsp32SpiSlaveDriver`
+- `FEsp32SpiMasterDevice` / `FEsp32SpiSlaveDevice`
   (`TrySend` / `TryReceive` / `IsOpen`), `FEsp32SpiMasterConfig` /
   `FEsp32SpiSlaveConfig`
 - `SpiMaxPayloadBytes`
@@ -108,7 +108,7 @@ exchange is master-initiated — the slave never speaks unprompted.
 ## Image size
 
 From `pio run` (release build, ESP32-S3-DevKitC-1). The two role environments
-produce different images because each links a different driver class:
+produce different images because each links a different device class:
 
 ```text
 master  RAM:   6.6% (used 21712 bytes from 327680 bytes)

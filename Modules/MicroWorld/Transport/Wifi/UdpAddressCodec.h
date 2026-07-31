@@ -1,7 +1,7 @@
 #pragma once
 
 // The 6-byte UDP address encoding lives here, in Transport, so both platform adapters
-// (PlatformHost, PlatformEsp32) and both UDP drivers share ONE definition rather
+// (PlatformHost, PlatformEsp32) and both UDP devices share ONE definition rather
 // than hand-copying it per package. It is pure arithmetic over FDeviceAddress with
 // no OS includes, so the Core <- Transport dependency direction still holds.
 
@@ -48,7 +48,7 @@ inline constexpr std::uint32_t Ipv4OctetCShift = 8u;
  *
  * Bytes 0-3 hold the four IPv4 octets in dotted order and bytes 4-5 hold the
  * port in network byte order (high byte first), so one address spans the UDP
- * encoding this package's driver reads and writes. The encoding is owned here
+ * encoding this package's device reads and writes. The encoding is owned here
  * because `FDeviceAddress` ascribes no meaning to its bytes.
  *
  * @param InA First IPv4 octet.
@@ -76,7 +76,7 @@ constexpr FDeviceAddress MakeUdpAddress(
  * Reports whether an address carries this package's 6-byte UDP encoding.
  *
  * Only the active length is inspected; the byte contents are validated when a
- * driver actually routes the address, so a loopback or LoRa address is never
+ * device actually routes the address, so a loopback or LoRa address is never
  * mistaken for a UDP one.
  *
  * @param InAddress Address whose encoding to test.
@@ -107,7 +107,7 @@ constexpr std::uint16_t UdpAddressPort(const FDeviceAddress& InAddress) noexcept
 /**
  * Packs a host-order IPv4 address and port into the 6-byte UDP `FDeviceAddress`.
  *
- * A driver decodes a received datagram's sender with `ntohl`/`ntohs`, then hands
+ * A device decodes a received datagram's sender with `ntohl`/`ntohs`, then hands
  * the host-order values here so the octet split lives in one place instead of
  * being hand-copied per platform. The four octets are taken most-significant
  * first to match `MakeUdpAddress`'s dotted order.

@@ -39,7 +39,7 @@ MicroWorld/
 │   │   │               store, GC, handles, TEngine, IEngine
 │   │   ├── Messaging/  message router, channel bindings (header-only)
 │   │   ├── Transport/  byte I/O, frame codec, TTransportHost + the optional E32
-│   │   │               portable framing and driver (was Net + RadioE32)
+│   │   │               portable framing and device (was Net + RadioE32)
 │   │   ├── Networking/ TNetworking — Messaging + Transport behind IPlaySystem
 │   │   ├── Application/ FApplication (including the Run template)
 │   │   └── Platform/   non-portable edges, each its own library.json

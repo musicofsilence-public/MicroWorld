@@ -18,9 +18,9 @@ table.
 ## Concepts
 
 - The adapter interfaces are `FEsp32TimeSource` (clock), the `IDevice`
-  transports (`FEsp32UdpDriver`, `FEsp32E32LoraDriver`, `FEsp32UartDriver`,
-  `FEsp32I2cMasterDriver`/`FEsp32I2cSlaveDriver`, `FEsp32SpiMasterDriver`/
-  `FEsp32SpiSlaveDriver`), and `WriteEsp32LogRecord` (the log output device); the
+  transports (`FEsp32WifiDevice`, `FEsp32LoraDevice`, `FEsp32UartDevice`,
+  `FEsp32I2cMasterDevice`/`FEsp32I2cSlaveDevice`, `FEsp32SpiMasterDevice`/
+  `FEsp32SpiSlaveDevice`), and `WriteEsp32LogRecord` (the log output device); the
   E32 facade delegates portable framing to RadioE32 (now inside Transport) while
   portable code never reaches ESP-IDF, lwIP, or vendor headers directly.
 - All lwIP, ESP-IDF, `<driver/uart.h>`, `<driver/i2c_*.h>`, and `<driver/spi_*.h>`
@@ -34,9 +34,9 @@ table.
 - Compile success on this family is a compile-only proof, never a runtime,
   timing, heap, stack, radio, or wired-link claim; see `benchmarks/Results/` for
   the measured evidence that closes that gap.
-- Each driver's `Internal/*PlatformImplementation.h` header opens with a comment
+- Each device's `Internal/*PlatformImplementation.h` header opens with a comment
   stating exactly which branches real hardware has exercised and which stay
-  unverified. A new driver says "UNVERIFIED at runtime" there until its example's
+  unverified. A new device says "UNVERIFIED at runtime" there until its example's
   hardware checkpoint passes.
 
 ## Verification

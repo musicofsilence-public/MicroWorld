@@ -16,7 +16,7 @@
 #include <MicroWorld/Engine/ObjectPtr.h>
 #include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
 #include <MicroWorld/Platform/Esp32/Esp32TimeSource.h>
-#include <MicroWorld/Platform/Esp32/Esp32UartDriver.h>
+#include <MicroWorld/Platform/Esp32/Esp32UartDevice.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -70,16 +70,16 @@ private:
 /** Server board: engine + host play system + transport host (DedicatedServer) over one UART. */
 void RunServer() noexcept
 {
-	static FEsp32UartDriver Driver{MakeUartConfig(ServerNodeId)};
-	MW_LOG(Log, "ex19", "server node=%u open=%d", static_cast<unsigned>(ServerNodeId), Driver.IsOpen() ? 1 : 0);
-	if (!Driver.IsOpen())
+	static FEsp32UartDevice Device{MakeUartConfig(ServerNodeId)};
+	MW_LOG(Log, "ex19", "server node=%u open=%d", static_cast<unsigned>(ServerNodeId), Device.IsOpen() ? 1 : 0);
+	if (!Device.IsOpen())
 	{
 		MW_LOG(Error, "ex19", "uart failed to open; halting");
 		return;
 	}
 
 	// All composition objects are static (the ESP32-S3 stack lesson, §2.2).
-	static FServerTransport ServerTransport{Driver};
+	static FServerTransport ServerTransport{Device};
 	static THostPlaySystem<FServerTransport> ServerFrame{ServerTransport};
 	static FServerEngine ServerHost{FGarbageCollectionBudget{1, 4, 8}, ServerFrame};
 	static int SpawnSequence = 0;

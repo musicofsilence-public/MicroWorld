@@ -1,4 +1,4 @@
-#include <MicroWorld/Platform/Esp32/Esp32SpiDriver.h>
+#include <MicroWorld/Platform/Esp32/Esp32SpiDevice.h>
 
 #include "Internal/SpiPlatformImplementation.h"
 
@@ -21,7 +21,7 @@ static_assert(alignof(spi_slave_transaction_t) <= 8, "TransactionStorage alignme
 namespace
 {
 
-	/** Maps one SPI transmit outcome to the shared driver result (mirrors the UART/I2C drivers' mapping). */
+	/** Maps one SPI transmit outcome to the shared device result (mirrors the UART/I2C devices' mapping). */
 	ETransportResult MapSpiTransmitOutcome(const ESpiTransmitOutcome InOutcome) noexcept
 	{
 		switch (InOutcome)
@@ -95,7 +95,7 @@ namespace
 
 } // namespace
 
-FEsp32SpiMasterDriver::FEsp32SpiMasterDriver(const FEsp32SpiMasterConfig& InConfig) noexcept
+FEsp32SpiMasterDevice::FEsp32SpiMasterDevice(const FEsp32SpiMasterConfig& InConfig) noexcept
 {
 	const FOpenedSpiMaster Opened =
 		OpenConfiguredSpiMaster(InConfig.SpiHost, InConfig.MosiGpio, InConfig.MisoGpio, InConfig.SclkGpio, InConfig.CsGpio, InConfig.ClockHz);
@@ -113,7 +113,7 @@ FEsp32SpiMasterDriver::FEsp32SpiMasterDriver(const FEsp32SpiMasterConfig& InConf
 	bOpen = true;
 }
 
-FEsp32SpiMasterDriver::~FEsp32SpiMasterDriver() noexcept
+FEsp32SpiMasterDevice::~FEsp32SpiMasterDevice() noexcept
 {
 	if (bOpen)
 	{
@@ -121,7 +121,7 @@ FEsp32SpiMasterDriver::~FEsp32SpiMasterDriver() noexcept
 	}
 }
 
-ETransportResult FEsp32SpiMasterDriver::ExchangeAndPump(const std::uint8_t* const InTransmitWindow) noexcept
+ETransportResult FEsp32SpiMasterDevice::ExchangeAndPump(const std::uint8_t* const InTransmitWindow) noexcept
 {
 	const ESpiTransmitOutcome Outcome =
 		TransmitSpiMaster(static_cast<spi_device_handle_t>(DeviceHandle), InTransmitWindow, ReceiveWindow, SpiTransactionWindowBytes);
@@ -135,7 +135,7 @@ ETransportResult FEsp32SpiMasterDriver::ExchangeAndPump(const std::uint8_t* cons
 	return Result;
 }
 
-ETransportResult FEsp32SpiMasterDriver::TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
+ETransportResult FEsp32SpiMasterDevice::TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
 {
 	if (!bOpen)
 	{
@@ -158,7 +158,7 @@ ETransportResult FEsp32SpiMasterDriver::TrySend(const FDeviceAddress& InTo, TSpa
 	return ExchangeAndPump(TransmitWindow);
 }
 
-ETransportResult FEsp32SpiMasterDriver::TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
+ETransportResult FEsp32SpiMasterDevice::TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
 {
 	// Reject a null destination with nonzero length before any bus transaction.
 	const std::size_t Capacity = InDestination.Size();
@@ -188,17 +188,17 @@ ETransportResult FEsp32SpiMasterDriver::TryReceive(FDeviceAddress& OutFrom, TSpa
 	return ETransportResult::Unavailable;
 }
 
-std::size_t FEsp32SpiMasterDriver::MaxPacketBytes() const noexcept
+std::size_t FEsp32SpiMasterDevice::MaxPacketBytes() const noexcept
 {
 	return SpiMaxPayloadBytes;
 }
 
-bool FEsp32SpiMasterDriver::IsOpen() const noexcept
+bool FEsp32SpiMasterDevice::IsOpen() const noexcept
 {
 	return bOpen;
 }
 
-FEsp32SpiSlaveDriver::FEsp32SpiSlaveDriver(const FEsp32SpiSlaveConfig& InConfig) noexcept
+FEsp32SpiSlaveDevice::FEsp32SpiSlaveDevice(const FEsp32SpiSlaveConfig& InConfig) noexcept
 {
 	const FOpenedSpiSlave Opened = OpenConfiguredSpiSlave(InConfig.SpiHost, InConfig.MosiGpio, InConfig.MisoGpio, InConfig.SclkGpio, InConfig.CsGpio);
 	if (!Opened.bOpen)
@@ -217,7 +217,7 @@ FEsp32SpiSlaveDriver::FEsp32SpiSlaveDriver(const FEsp32SpiSlaveConfig& InConfig)
 	QueueNextTransaction();
 }
 
-FEsp32SpiSlaveDriver::~FEsp32SpiSlaveDriver() noexcept
+FEsp32SpiSlaveDevice::~FEsp32SpiSlaveDevice() noexcept
 {
 	if (bOpen)
 	{
@@ -225,7 +225,7 @@ FEsp32SpiSlaveDriver::~FEsp32SpiSlaveDriver() noexcept
 	}
 }
 
-void FEsp32SpiSlaveDriver::QueueNextTransaction() noexcept
+void FEsp32SpiSlaveDevice::QueueNextTransaction() noexcept
 {
 	// Use the staged frame if one is waiting, otherwise send idle bytes the master's decoder ignores.
 	if (bFrameStaged)
@@ -245,7 +245,7 @@ void FEsp32SpiSlaveDriver::QueueNextTransaction() noexcept
 	}
 }
 
-ETransportResult FEsp32SpiSlaveDriver::TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
+ETransportResult FEsp32SpiSlaveDevice::TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
 {
 	if (!bOpen)
 	{
@@ -274,7 +274,7 @@ ETransportResult FEsp32SpiSlaveDriver::TrySend(const FDeviceAddress& InTo, TSpan
 	return ETransportResult::Success;
 }
 
-ETransportResult FEsp32SpiSlaveDriver::TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
+ETransportResult FEsp32SpiSlaveDevice::TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
 {
 	// Reject a null destination with nonzero length before touching the transaction queue.
 	const std::size_t Capacity = InDestination.Size();
@@ -312,12 +312,12 @@ ETransportResult FEsp32SpiSlaveDriver::TryReceive(FDeviceAddress& OutFrom, TSpan
 	return ETransportResult::Unavailable;
 }
 
-std::size_t FEsp32SpiSlaveDriver::MaxPacketBytes() const noexcept
+std::size_t FEsp32SpiSlaveDevice::MaxPacketBytes() const noexcept
 {
 	return SpiMaxPayloadBytes;
 }
 
-bool FEsp32SpiSlaveDriver::IsOpen() const noexcept
+bool FEsp32SpiSlaveDevice::IsOpen() const noexcept
 {
 	return bOpen;
 }

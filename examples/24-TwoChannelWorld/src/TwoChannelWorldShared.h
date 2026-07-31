@@ -5,8 +5,8 @@
 #include <MicroWorld/Networking/Networking.h>
 #include <MicroWorld/Transport/Wifi/UdpAddressCodec.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
-#include <MicroWorld/Platform/Esp32/Esp32UartDriver.h>
-#include <MicroWorld/Platform/Esp32/Esp32UdpDriver.h>
+#include <MicroWorld/Platform/Esp32/Esp32UartDevice.h>
+#include <MicroWorld/Platform/Esp32/Esp32WifiDevice.h>
 #include <MicroWorld/Platform/Esp32/Esp32WifiLink.h>
 
 #include <cstddef>
@@ -97,7 +97,7 @@ constexpr MicroWorld::FTypeId CommanderActorTypeId{0x00180003u};
 /** Sizes the one TNetworking for two links, two router channels, and the example's existing 96-byte messages. */
 struct FWorldNetworkingTraits : MicroWorld::FDefaultNetworkingTraits
 {
-	/** The example configures one UDP and one UART driver. */
+	/** The example configures one UDP and one UART device. */
 	static constexpr std::size_t MaxDevices = 2;
 
 	/** The shared router owns exactly the telemetry and command channels. */
@@ -113,7 +113,7 @@ using FWorldNetworking = MicroWorld::TNetworking<FWorldNetworkingTraits>;
 /** The engine both roles compose; sized for one world with a couple of small actors using direct component storage. */
 using FWorldEngine = MicroWorld::TEngine<>;
 
-/** Builds a board's UART driver configuration from the fixed pins and baud. */
+/** Builds a board's UART device configuration from the fixed pins and baud. */
 inline MicroWorld::FEsp32UartConfig MakeUartConfig(const std::uint8_t NodeId) noexcept
 {
 	MicroWorld::FEsp32UartConfig Config;

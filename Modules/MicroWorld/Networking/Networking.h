@@ -74,16 +74,16 @@ struct FDefaultNetworkingTraits
  */
 struct FDeviceHandle
 {
-	/** Reserved index that names no driver; the default handle is deliberately invalid. */
+	/** Reserved index that names no device; the default handle is deliberately invalid. */
 	static constexpr std::uint8_t InvalidIndex = 0xFF;
 
-	/** Driver slot index, or InvalidIndex. */
+	/** Device slot index, or InvalidIndex. */
 	std::uint8_t Index{InvalidIndex};
 
 	/** Slot generation at issue; a released slot advances it before a future reuse. */
 	std::uint8_t Generation{0};
 
-	/** Reports whether this value names a candidate driver slot before its owning system validates the generation. */
+	/** Reports whether this value names a candidate device slot before its owning system validates the generation. */
 	constexpr bool IsValid() const noexcept { return Index != InvalidIndex; }
 };
 
@@ -107,7 +107,7 @@ struct FChannelHandle
 };
 
 /**
- * One object that turns drivers into a working networked engine, owning fixed-capacity hosts,
+ * One object that turns devices into a working networked engine, owning fixed-capacity hosts,
  * bindings, reliable wrappers, and a shared router. AddDevice and AddChannel compose it;
  * BeginPlay closes composition and starts hosts at the engine's canonical time, while direct
  * frame pumping preserves the transport -> reliable -> router ordering without adapter objects.
@@ -116,16 +116,16 @@ template<typename TTraits = FDefaultNetworkingTraits>
 class TNetworking final : public IPlaySystem
 {
 	/** Prevents a valid handle index from colliding with the reserved invalid sentinel. */
-	static_assert(TTraits::MaxDevices <= FDeviceHandle::InvalidIndex, "TNetworking driver capacity must fit below FDeviceHandle::InvalidIndex.");
+	static_assert(TTraits::MaxDevices <= FDeviceHandle::InvalidIndex, "TNetworking device capacity must fit below FDeviceHandle::InvalidIndex.");
 
 	/** Prevents a valid handle index from colliding with the reserved invalid sentinel. */
 	static_assert(TTraits::MaxChannels <= FChannelHandle::InvalidIndex, "TNetworking channel capacity must fit below FChannelHandle::InvalidIndex.");
 
 	/** TTransportHost itself requires a bounded, nonzero peer table. */
-	static_assert(TTraits::MaxPeers > 0, "TNetworking requires at least one peer per driver.");
+	static_assert(TTraits::MaxPeers > 0, "TNetworking requires at least one peer per device.");
 
 private:
-	/** Names the concrete host type every driver slot stores. */
+	/** Names the concrete host type every device slot stores. */
 	using FTransportHost = TTransportHost<TTraits::MaxPeers, TTraits::MaxPacketBytes>;
 
 	/** Names the binding that connects one host wire channel to the shared router. */
@@ -139,7 +139,7 @@ private:
 	using FReliableChannel = TReliableChannel<TTraits::MaxReliablePendingMessages, TTraits::MaxRouterMessageBytes>;
 
 public:
-	/** Creates an empty system; callers finish its driver and channel composition before engine BeginPlay. */
+	/** Creates an empty system; callers finish its device and channel composition before engine BeginPlay. */
 	TNetworking() noexcept = default;
 
 	/** Stable in-place ownership keeps host and channel addresses valid for their bound relationships, so a networking system cannot copy or
@@ -156,58 +156,58 @@ public:
 		{
 			ReleaseChannelSlot(Slot);
 		}
-		for (FDriverSlot& Slot : DriverSlots)
+		for (FDeviceSlot& Slot : DeviceSlots)
 		{
-			ReleaseDriverSlot(Slot);
+			ReleaseDeviceSlot(Slot);
 		}
 	}
 
 	/**
-	 * Adds one driver-backed host and configures its role/session policy. This only performs
+	 * Adds one device-backed host and configures its role/session policy. This only performs
 	 * TTransportHost::Configure: host start is deferred to BeginPlay's engine lifecycle turn.
 	 *
-	 * @return A generation-checked driver handle, or an invalid handle on closed composition,
+	 * @return A generation-checked device handle, or an invalid handle on closed composition,
 	 *         exhausted capacity, or a rejected host configuration.
 	 */
-	FDeviceHandle AddDevice(IDevice& InDriver, ENetworkMode InMode, const FTransportHostConfig& InConfig) noexcept
+	FDeviceHandle AddDevice(IDevice& InDevice, ENetworkMode InMode, const FTransportHostConfig& InConfig) noexcept
 	{
 		if (bCompositionClosed)
 		{
 			return {};
 		}
 
-		FDriverSlot* const Slot = AcquireDriverSlot(InDriver);
+		FDeviceSlot* const Slot = AcquireDeviceSlot(InDevice);
 		if (Slot == nullptr)
 		{
 			return {};
 		}
 		if (Slot->Host->Configure(InMode, InConfig) != ETransportResult::Success)
 		{
-			ReleaseDriverSlot(*Slot);
+			ReleaseDeviceSlot(*Slot);
 			return {};
 		}
 
 		Slot->Mode = InMode;
-		return FDeviceHandle{static_cast<std::uint8_t>(Slot - DriverSlots.data()), Slot->Generation};
+		return FDeviceHandle{static_cast<std::uint8_t>(Slot - DeviceSlots.data()), Slot->Generation};
 	}
 
 	/**
-	 * Adds one router channel on a configured driver. The wire channel byte is derived directly
+	 * Adds one router channel on a configured device. The wire channel byte is derived directly
 	 * from InChannel and the host mode derives whether the binding targets the server or all peers.
 	 * A guaranteed wrapper receives its inner binding before the router observes that wrapper.
 	 *
-	 * @return A generation-checked channel handle, or an invalid handle for an invalid/stale driver,
+	 * @return A generation-checked channel handle, or an invalid handle for an invalid/stale device,
 	 *         closed composition, invalid channel id, or any fixed-capacity registration failure.
 	 */
-	FChannelHandle AddChannel(FDeviceHandle InDriver, FMessageChannelId InChannel, EChannelReliability InReliability) noexcept
+	FChannelHandle AddChannel(FDeviceHandle InDevice, FMessageChannelId InChannel, EChannelReliability InReliability) noexcept
 	{
 		if (bCompositionClosed || InChannel == LocalChannelId)
 		{
 			return {};
 		}
 
-		FDriverSlot* const Driver = ResolveDriver(InDriver);
-		if (Driver == nullptr)
+		FDeviceSlot* const Device = ResolveDevice(InDevice);
+		if (Device == nullptr)
 		{
 			return {};
 		}
@@ -218,7 +218,7 @@ public:
 		}
 
 		new (&Slot->BindingStorage)
-			FChannelBinding(*Driver->Host, static_cast<std::uint8_t>(InChannel), InChannel, GetSendTarget(Driver->Mode), Router);
+			FChannelBinding(*Device->Host, static_cast<std::uint8_t>(InChannel), InChannel, GetSendTarget(Device->Mode), Router);
 		Slot->Binding = reinterpret_cast<FChannelBinding*>(&Slot->BindingStorage);
 		if (!Slot->Binding->IsAttached())
 		{
@@ -236,17 +236,17 @@ public:
 		return FChannelHandle{static_cast<std::uint8_t>(Slot - ChannelSlots.data()), Slot->Generation};
 	}
 
-	/** Returns the single shared router that every added driver demultiplexes into by channel id. */
+	/** Returns the single shared router that every added device demultiplexes into by channel id. */
 	IMessageRouter& GetRouter() noexcept { return Router; }
 
 	/**
-	 * Closes composition before starting each live host in driver add order at the engine's
+	 * Closes composition before starting each live host in device add order at the engine's
 	 * canonical play-start time.
 	 */
 	void BeginPlay(TimePointMilliseconds InNowMilliseconds) noexcept override
 	{
 		bCompositionClosed = true;
-		for (FDriverSlot& Slot : DriverSlots)
+		for (FDeviceSlot& Slot : DeviceSlots)
 		{
 			if (Slot.bLive)
 			{
@@ -255,7 +255,7 @@ public:
 		}
 	}
 
-	/** Stops live hosts in reverse driver add order after the engine has ended its world. */
+	/** Stops live hosts in reverse device add order after the engine has ended its world. */
 	void EndPlay() noexcept override
 	{
 		if (!bCompositionClosed)
@@ -263,9 +263,9 @@ public:
 			return;
 		}
 
-		for (std::size_t Index = DriverSlots.size(); Index > 0; --Index)
+		for (std::size_t Index = DeviceSlots.size(); Index > 0; --Index)
 		{
-			FDriverSlot& Slot = DriverSlots[Index - 1];
+			FDeviceSlot& Slot = DeviceSlots[Index - 1];
 			if (Slot.bLive)
 			{
 				Slot.Host->Stop();
@@ -273,7 +273,7 @@ public:
 		}
 	}
 
-	/** Pumps live hosts in driver add order, then dispatches the shared router. */
+	/** Pumps live hosts in device add order, then dispatches the shared router. */
 	void PreAdvance(TimePointMilliseconds InNowMilliseconds) noexcept override
 	{
 		if (!bCompositionClosed)
@@ -281,7 +281,7 @@ public:
 			return;
 		}
 
-		for (FDriverSlot& Slot : DriverSlots)
+		for (FDeviceSlot& Slot : DeviceSlots)
 		{
 			if (Slot.bLive)
 			{
@@ -291,7 +291,7 @@ public:
 		Router.PreAdvance(InNowMilliseconds);
 	}
 
-	/** Flushes the router, retries live reliable channels in reverse order, then pumps hosts in reverse driver order. */
+	/** Flushes the router, retries live reliable channels in reverse order, then pumps hosts in reverse device order. */
 	void PostAdvance(TimePointMilliseconds InNowMilliseconds) noexcept override
 	{
 		if (!bCompositionClosed)
@@ -308,9 +308,9 @@ public:
 				Slot.Reliable->PostAdvance(InNowMilliseconds);
 			}
 		}
-		for (std::size_t Index = DriverSlots.size(); Index > 0; --Index)
+		for (std::size_t Index = DeviceSlots.size(); Index > 0; --Index)
 		{
-			FDriverSlot& Slot = DriverSlots[Index - 1];
+			FDeviceSlot& Slot = DeviceSlots[Index - 1];
 			if (Slot.bLive)
 			{
 				(void)Slot.Host->PumpSend(InNowMilliseconds);
@@ -328,7 +328,7 @@ private:
 #endif
 
 	/** Owns one configured host in stable in-place storage. */
-	struct FDriverSlot
+	struct FDeviceSlot
 	{
 		/** Generation published with this slot's handle; release advances it before reuse. */
 		std::uint8_t Generation{1};
@@ -372,14 +372,14 @@ private:
 #pragma warning(pop)
 #endif
 
-	/** Constructs a host in the first free slot, or returns null when driver capacity is exhausted. */
-	FDriverSlot* AcquireDriverSlot(IDevice& InDriver) noexcept
+	/** Constructs a host in the first free slot, or returns null when device capacity is exhausted. */
+	FDeviceSlot* AcquireDeviceSlot(IDevice& InDevice) noexcept
 	{
-		for (FDriverSlot& Slot : DriverSlots)
+		for (FDeviceSlot& Slot : DeviceSlots)
 		{
 			if (!Slot.bLive)
 			{
-				Slot.Host = new (&Slot.HostStorage) FTransportHost(InDriver);
+				Slot.Host = new (&Slot.HostStorage) FTransportHost(InDevice);
 				Slot.bLive = true;
 				return &Slot;
 			}
@@ -387,8 +387,8 @@ private:
 		return nullptr;
 	}
 
-	/** Destroys a driver host and advances the generation that invalidates any old handle. */
-	void ReleaseDriverSlot(FDriverSlot& InSlot) noexcept
+	/** Destroys a device host and advances the generation that invalidates any old handle. */
+	void ReleaseDeviceSlot(FDeviceSlot& InSlot) noexcept
 	{
 		if (!InSlot.bLive)
 		{
@@ -438,15 +438,15 @@ private:
 		++InSlot.Generation;
 	}
 
-	/** Resolves a generation-checked driver handle to its live slot, rejecting forged or stale identities. */
-	FDriverSlot* ResolveDriver(FDeviceHandle InHandle) noexcept
+	/** Resolves a generation-checked device handle to its live slot, rejecting forged or stale identities. */
+	FDeviceSlot* ResolveDevice(FDeviceHandle InHandle) noexcept
 	{
-		if (!InHandle.IsValid() || InHandle.Index >= DriverSlots.size())
+		if (!InHandle.IsValid() || InHandle.Index >= DeviceSlots.size())
 		{
 			return nullptr;
 		}
 
-		FDriverSlot& Slot = DriverSlots[InHandle.Index];
+		FDeviceSlot& Slot = DeviceSlots[InHandle.Index];
 		return (Slot.bLive && Slot.Generation == InHandle.Generation) ? &Slot : nullptr;
 	}
 
@@ -471,11 +471,11 @@ private:
 		return Router.AddChannel(*InSlot.Reliable);
 	}
 
-	/** Shared router every configured channel registers with and every driver delivers into. */
+	/** Shared router every configured channel registers with and every device delivers into. */
 	FRouter Router;
 
-	/** Fixed slots that own all configured driver hosts. */
-	std::array<FDriverSlot, TTraits::MaxDevices> DriverSlots{};
+	/** Fixed slots that own all configured device hosts. */
+	std::array<FDeviceSlot, TTraits::MaxDevices> DeviceSlots{};
 
 	/** Fixed slots that own all configured bindings and optional reliable wrappers. */
 	std::array<FChannelSlot, TTraits::MaxChannels> ChannelSlots{};

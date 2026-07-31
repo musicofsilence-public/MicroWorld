@@ -6,7 +6,7 @@ Inherits `../AGENTS.md`.
 
 Benchmarks are downstream public-API consumers of `MicroWorld::PlatformEsp32`
 adapters. They measure real ESP32-S3 resource usage (flash, RAM, stack
-headroom) for the UDP driver, LoRa driver, time source, and output device without
+headroom) for the UDP device, LoRa device, time source, and output device without
 becoming production dependencies.
 
 ## Concepts

@@ -2,10 +2,10 @@
 
 // =============================================================================
 // src/Esp32SocketPlatformImplementation.h is the SOLE translation unit that pulls lwIP socket
-// headers. It is included only by Esp32UdpDriver.cpp; a public header must
+// headers. It is included only by Esp32WifiDevice.cpp; a public header must
 // never reach it. Every lwIP/POSIX divergence is hidden behind the helpers
-// below so Esp32UdpDriver.cpp reads one platform-free receive/send path that
-// mirrors the host driver. This platform implementation is COMPILE-VERIFIED on ESP32-S3 (Phase 5.2)
+// below so Esp32WifiDevice.cpp reads one platform-free receive/send path that
+// mirrors the host device. This platform implementation is COMPILE-VERIFIED on ESP32-S3 (Phase 5.2)
 // but the exact oversize-datagram receive behavior is UNVERIFIED at runtime:
 // when lwIP exposes MSG_TRUNC the sizing peek returns the true datagram length,
 // otherwise it returns the delivered length and an oversize datagram is sized
@@ -54,7 +54,7 @@ inline bool IsValidHandle(const FSocketHandle InSocket) noexcept
  * `std::uintptr_t` is at least as wide as `int`, so the round trip is lossless
  * and keeps `std::uintptr_t` out of the public header.
  *
- * @param InStored Opaque handle value saved by the driver.
+ * @param InStored Opaque handle value saved by the device.
  * @return lwIP socket handle.
  */
 inline FSocketHandle AsSocketHandle(const std::uintptr_t InStored) noexcept
@@ -63,10 +63,10 @@ inline FSocketHandle AsSocketHandle(const std::uintptr_t InStored) noexcept
 }
 
 /**
- * Converts an lwIP socket handle to the driver's opaque stored form.
+ * Converts an lwIP socket handle to the device's opaque stored form.
  *
  * @param InSocket lwIP socket handle.
- * @return Opaque handle value the driver stores.
+ * @return Opaque handle value the device stores.
  */
 inline std::uintptr_t AsOpaqueHandle(const FSocketHandle InSocket) noexcept
 {
@@ -76,7 +76,7 @@ inline std::uintptr_t AsOpaqueHandle(const FSocketHandle InSocket) noexcept
 /**
  * Releases one lwIP socket descriptor.
  *
- * A no-op on an invalid handle so the driver's destructor does not need its own
+ * A no-op on an invalid handle so the device's destructor does not need its own
  * validity branch.
  *
  * @param InSocket Handle to release.
@@ -149,7 +149,7 @@ enum class ESendOutcome : std::uint8_t
  * Sends one complete datagram to a network-ready IPv4 address.
  *
  * The whole span is handed to one `sendto`; the outcome classifies only whether
- * it was fully accepted, would block, or failed, so the driver can map it to the
+ * it was fully accepted, would block, or failed, so the device can map it to the
  * shared `ETransportResult` without inspecting lwIP error codes.
  *
  * @param InSocket Open non-blocking socket.
@@ -200,8 +200,8 @@ struct FPeekProbe
 /**
  * Largest datagram the sizing peek can observe without an overflow error.
  *
- * Mirrors `FEsp32UdpDriver::UdpMaxPacketBytes` (kept in sync by a `static_assert`
- * in `Esp32UdpDriver.cpp`); the sizing peek never reads more than this, so it is
+ * Mirrors `FEsp32WifiDevice::UdpMaxPacketBytes` (kept in sync by a `static_assert`
+ * in `Esp32WifiDevice.cpp`); the sizing peek never reads more than this, so it is
  * also the largest payload one send accepts.
  */
 constexpr std::size_t PeekScratchBytes = 1200;
@@ -214,7 +214,7 @@ constexpr std::size_t PeekScratchBytes = 1200;
  * POSIX branch without a size sentinel.
  *
  * @param InErrorCode Platform last-error captured right after a failed peek.
- * @return Peek probe the driver acts on without inspecting platform codes.
+ * @return Peek probe the device acts on without inspecting platform codes.
  */
 inline FPeekProbe ClassifyPeekError(const int InErrorCode) noexcept
 {
@@ -272,7 +272,7 @@ struct FConsumeResult
  * Consumes the previously-probed head datagram into the destination.
  *
  * Uses a plain `recvfrom` (flags zero) so the datagram leaves the socket queue.
- * The caller's `OutSender` is filled only on success; the driver decodes its
+ * The caller's `OutSender` is filled only on success; the device decodes its
  * IPv4 fields with `ntohl`/`ntohs`.
  *
  * @param InSocket Open non-blocking socket.
@@ -329,7 +329,7 @@ inline FOpenedSocket CloseAndReportFailure(const FSocketHandle InSocket) noexcep
  *
  * An `InBindPort` of zero requests an ephemeral port; the actual port is read back
  * via `getsockname`. On any syscall failure the partially opened socket is closed
- * and `bOpen` is false, so the constructor can leave the driver inert without
+ * and `bOpen` is false, so the constructor can leave the device inert without
  * throwing. Binding to `INADDR_ANY` keeps the adapter free of netif assumptions;
  * a real deployment brings up netif/WiFi before any traffic can flow.
  *

@@ -4,7 +4,7 @@ Inherits `../AGENTS.md`.
 
 ## Architecture
 
-One composition root (`app_main`) owns one static `FEsp32E32LoraDriver` and
+One composition root (`app_main`) owns one static `FEsp32LoraDevice` and
 drives a bare ping-pong directly over its `TrySend`/`TryReceive` — no
 `TTransportManager`, no `TTransportHost`, no world. The role (node 1 vs node 2) is a
 compile-time constant from `-DMICROWORLD_EXAMPLE_NODE_ID`, so the two build
@@ -13,14 +13,14 @@ environments share one source file.
 ## Concepts
 
 - Makes the `IDevice` interface observable over radio: the volley loop is
-  transport-agnostic, so this is example 18 with only the driver construction
+  transport-agnostic, so this is example 18 with only the device construction
   line changed.
 - LoRa is a broadcast, half-duplex medium: the destination
   `MakeLoraAddress(PeerNodeId)` is validated but not routed on the wire; the
   sender identity a receiver prints comes from the frame's own source-id byte
   via `LoraAddressNodeId`. A module does not hear its own transmission, so the
   reply-on-receive volley logic works unchanged from the wired example.
-- Static driver and RX buffer, never `app_main` stack locals (§2.2).
+- Static device and RX buffer, never `app_main` stack locals (§2.2).
 - Airtime, not distance, sets the pace: a full LoRa frame costs hundreds of
   milliseconds on air, so the volley period is 1 s rather than the wired
   example's 500 ms, to avoid congesting the channel.

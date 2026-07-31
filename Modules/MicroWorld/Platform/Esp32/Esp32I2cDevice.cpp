@@ -1,4 +1,4 @@
-#include <MicroWorld/Platform/Esp32/Esp32I2cDriver.h>
+#include <MicroWorld/Platform/Esp32/Esp32I2cDevice.h>
 
 #include "Internal/I2cPlatformImplementation.h"
 
@@ -39,7 +39,7 @@ bool FI2cReceiveInbox::Pop(std::uint8_t& OutByte) noexcept
 namespace
 {
 
-	/** Maps one I2C write outcome to the shared driver result (mirrors the UART driver's mapping). */
+	/** Maps one I2C write outcome to the shared device result (mirrors the UART device's mapping). */
 	ETransportResult MapI2cWriteOutcome(const EI2cWriteOutcome InOutcome) noexcept
 	{
 		switch (InOutcome)
@@ -95,7 +95,7 @@ namespace
 
 } // namespace
 
-FEsp32I2cMasterDriver::FEsp32I2cMasterDriver(const FEsp32I2cMasterConfig& InConfig) noexcept
+FEsp32I2cMasterDevice::FEsp32I2cMasterDevice(const FEsp32I2cMasterConfig& InConfig) noexcept
 {
 	const FOpenedI2cMaster Opened =
 		OpenConfiguredI2cMaster(InConfig.I2cPort, InConfig.SdaGpio, InConfig.SclGpio, InConfig.SclSpeedHz, InConfig.SlaveAddress);
@@ -113,7 +113,7 @@ FEsp32I2cMasterDriver::FEsp32I2cMasterDriver(const FEsp32I2cMasterConfig& InConf
 	bOpen = true;
 }
 
-FEsp32I2cMasterDriver::~FEsp32I2cMasterDriver() noexcept
+FEsp32I2cMasterDevice::~FEsp32I2cMasterDevice() noexcept
 {
 	if (bOpen)
 	{
@@ -121,7 +121,7 @@ FEsp32I2cMasterDriver::~FEsp32I2cMasterDriver() noexcept
 	}
 }
 
-ETransportResult FEsp32I2cMasterDriver::TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
+ETransportResult FEsp32I2cMasterDevice::TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
 {
 	if (!bOpen)
 	{
@@ -144,7 +144,7 @@ ETransportResult FEsp32I2cMasterDriver::TrySend(const FDeviceAddress& InTo, TSpa
 	return MapI2cWriteOutcome(Outcome);
 }
 
-ETransportResult FEsp32I2cMasterDriver::TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
+ETransportResult FEsp32I2cMasterDevice::TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
 {
 	// Reject a null destination with nonzero length before any bus read.
 	const std::size_t Capacity = InDestination.Size();
@@ -188,17 +188,17 @@ ETransportResult FEsp32I2cMasterDriver::TryReceive(FDeviceAddress& OutFrom, TSpa
 	return ETransportResult::Unavailable;
 }
 
-std::size_t FEsp32I2cMasterDriver::MaxPacketBytes() const noexcept
+std::size_t FEsp32I2cMasterDevice::MaxPacketBytes() const noexcept
 {
 	return I2cMaxPayloadBytes;
 }
 
-bool FEsp32I2cMasterDriver::IsOpen() const noexcept
+bool FEsp32I2cMasterDevice::IsOpen() const noexcept
 {
 	return bOpen;
 }
 
-FEsp32I2cSlaveDriver::FEsp32I2cSlaveDriver(const FEsp32I2cSlaveConfig& InConfig) noexcept
+FEsp32I2cSlaveDevice::FEsp32I2cSlaveDevice(const FEsp32I2cSlaveConfig& InConfig) noexcept
 {
 	const FOpenedI2cSlave Opened = OpenConfiguredI2cSlave(InConfig.I2cPort, InConfig.SdaGpio, InConfig.SclGpio, InConfig.SlaveAddress, Inbox);
 	if (!Opened.bOpen)
@@ -213,7 +213,7 @@ FEsp32I2cSlaveDriver::FEsp32I2cSlaveDriver(const FEsp32I2cSlaveConfig& InConfig)
 	bOpen = true;
 }
 
-FEsp32I2cSlaveDriver::~FEsp32I2cSlaveDriver() noexcept
+FEsp32I2cSlaveDevice::~FEsp32I2cSlaveDevice() noexcept
 {
 	if (bOpen)
 	{
@@ -221,7 +221,7 @@ FEsp32I2cSlaveDriver::~FEsp32I2cSlaveDriver() noexcept
 	}
 }
 
-ETransportResult FEsp32I2cSlaveDriver::TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
+ETransportResult FEsp32I2cSlaveDevice::TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
 {
 	if (!bOpen)
 	{
@@ -244,7 +244,7 @@ ETransportResult FEsp32I2cSlaveDriver::TrySend(const FDeviceAddress& InTo, TSpan
 	return MapI2cWriteOutcome(Outcome);
 }
 
-ETransportResult FEsp32I2cSlaveDriver::TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
+ETransportResult FEsp32I2cSlaveDevice::TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
 {
 	// Reject a null destination with nonzero length before any inbox read.
 	const std::size_t Capacity = InDestination.Size();
@@ -284,12 +284,12 @@ ETransportResult FEsp32I2cSlaveDriver::TryReceive(FDeviceAddress& OutFrom, TSpan
 	return ETransportResult::Unavailable;
 }
 
-std::size_t FEsp32I2cSlaveDriver::MaxPacketBytes() const noexcept
+std::size_t FEsp32I2cSlaveDevice::MaxPacketBytes() const noexcept
 {
 	return I2cMaxPayloadBytes;
 }
 
-bool FEsp32I2cSlaveDriver::IsOpen() const noexcept
+bool FEsp32I2cSlaveDevice::IsOpen() const noexcept
 {
 	return bOpen;
 }

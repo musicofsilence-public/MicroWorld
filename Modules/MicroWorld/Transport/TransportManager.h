@@ -15,10 +15,10 @@ namespace MicroWorld
 /**
  * Fixed-capacity outbound queue and direct receive over one externally referenced `IDevice`.
  *
- * The manager holds one driver and one `TTransportPacketStorage` by reference; the
+ * The manager holds one device and one `TTransportPacketStorage` by reference; the
  * caller owns both. `QueueSend` copies a complete accepted packet into the
  * caller-owned FIFO tail, one `AdvanceSend` attempts at most the head (retaining
- * it on any driver failure), and `Receive` performs at most one direct driver
+ * it on any device failure), and `Receive` performs at most one direct device
  * receive without building an inbound queue.
  */
 template<std::size_t MaxPackets, std::size_t MaxPacketBytes>
@@ -28,16 +28,16 @@ class TTransportManager final
 	static_assert(MaxPacketBytes > 0, "TTransportManager requires a nonzero per-packet byte capacity.");
 
 public:
-	/** Binds the manager to one externally referenced driver and caller-owned packet storage. */
-	TTransportManager(IDevice& InDriver, TTransportPacketStorage<MaxPackets, MaxPacketBytes>& InStorage) noexcept
-		: Driver(InDriver), Storage(InStorage)
+	/** Binds the manager to one externally referenced device and caller-owned packet storage. */
+	TTransportManager(IDevice& InDevice, TTransportPacketStorage<MaxPackets, MaxPacketBytes>& InStorage) noexcept
+		: Device(InDevice), Storage(InStorage)
 	{
 	}
 
-	/** Prevents copying so one manager value binds one driver and one storage instance. */
+	/** Prevents copying so one manager value binds one device and one storage instance. */
 	TTransportManager(const TTransportManager&) = delete;
 
-	/** Prevents copying so one manager value binds one driver and one storage instance. */
+	/** Prevents copying so one manager value binds one device and one storage instance. */
 	TTransportManager& operator=(const TTransportManager&) = delete;
 
 	/** Defaulted so a manager with automatic storage destructs without side effects. */
@@ -45,7 +45,7 @@ public:
 
 	/**
 	 * Copies one complete packet with its destination address into the outbound FIFO tail.
-	 * The address is opaque to the manager; the driver validates it. Returns `Invalid`
+	 * The address is opaque to the manager; the device validates it. Returns `Invalid`
 	 * for a null packet with nonzero length or a packet larger than `MaxPacketBytes`
 	 * (it can never fit). Returns `Full` when the FIFO has no free slot. A non-success
 	 * result leaves the FIFO contents and order unchanged.
@@ -70,12 +70,12 @@ public:
 	}
 
 	/**
-	 * Attempts to send the FIFO head through the driver to its stored destination.
-	 * Performs at most one driver send. On `Success` the head packet is removed.
-	 * On `Full`, `Unavailable`, or `Invalid` from the driver, the head packet is
+	 * Attempts to send the FIFO head through the device to its stored destination.
+	 * Performs at most one device send. On `Success` the head packet is removed.
+	 * On `Full`, `Unavailable`, or `Invalid` from the device, the head packet is
 	 * retained and FIFO order is preserved so the next advance can retry it.
 	 * Returns `Unavailable` when the FIFO is empty, so a caller can distinguish
-	 * "nothing to send" from a transient driver rejection.
+	 * "nothing to send" from a transient device rejection.
 	 */
 	ETransportResult AdvanceSend() noexcept
 	{
@@ -84,7 +84,7 @@ public:
 			return ETransportResult::Unavailable;
 		}
 		const TSpan<const std::uint8_t> HeadPacket(Storage.PacketBytes[HeadIndex].data(), Storage.PacketLengths[HeadIndex]);
-		const ETransportResult SendResult = Driver.TrySend(Storage.Destinations[HeadIndex], HeadPacket);
+		const ETransportResult SendResult = Device.TrySend(Storage.Destinations[HeadIndex], HeadPacket);
 		if (SendResult != ETransportResult::Success)
 		{
 			// Retain the head and preserve order; the caller retries on the next advance.
@@ -97,14 +97,14 @@ public:
 	}
 
 	/**
-	 * Performs at most one direct driver receive into caller storage.
+	 * Performs at most one direct device receive into caller storage.
 	 * The operation is transactional: on `Full`, `Invalid`, or `Unavailable` the
 	 * destination, `OutResult.BytesReceived`, and `OutFrom` are unchanged. The
 	 * manager never queues inbound packets.
 	 */
 	ETransportResult Receive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
 	{
-		return Driver.TryReceive(OutFrom, InDestination, OutResult);
+		return Device.TryReceive(OutFrom, InDestination, OutResult);
 	}
 
 	/** Reports the fixed packet-slot capacity of this manager's outbound FIFO. */
@@ -154,8 +154,8 @@ private:
 		++QueuedPacketCount;
 	}
 
-	/** Holds the externally referenced driver; the caller owns its lifetime. */
-	IDevice& Driver;
+	/** Holds the externally referenced device; the caller owns its lifetime. */
+	IDevice& Device;
 
 	/** Holds the externally referenced caller-owned packet storage. */
 	TTransportPacketStorage<MaxPackets, MaxPacketBytes>& Storage;

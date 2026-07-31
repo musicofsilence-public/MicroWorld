@@ -52,8 +52,8 @@ constexpr std::uint8_t TargetPortCount = 3;
 constexpr std::uint8_t FirstTargetPort = 1;
 /** Out-of-range port index the unroutable-address case must reject. */
 constexpr std::uint8_t OverRangePortIndex = 99;
-/** Driver port index queried for MaxPacketBytes in the capacity-report case. */
-constexpr std::uint8_t ReportedDriverPort = 2;
+/** Device port index queried for MaxPacketBytes in the capacity-report case. */
+constexpr std::uint8_t ReportedDevicePort = 2;
 
 /** Two-byte packet the FIFO case delivers as the head packet. */
 constexpr std::uint8_t FifoFirstPacket[2] = {0x10, 0x20};
@@ -443,13 +443,13 @@ MW_TEST_CASE(HostLoopbackSatisfiesIDeviceInterface)
 	// Arrange
 	THostLoopback<SinglePortCount, OneSlotMailbox, FourBytePacketCapacity> Loopback;
 	const FDeviceAddress Port0 = MakeLoopbackAddress(SourcePort);
-	IDevice& Driver = Loopback.Port(SourcePort);
+	IDevice& Device = Loopback.Port(SourcePort);
 
 	// Act
 	MW_EXPECT_EQ(
 		Test,
 		ETransportResult::Success,
-		Driver.TrySend(Port0, TSpan<const std::uint8_t>(InterfacePacket, sizeof(InterfacePacket))),
+		Device.TrySend(Port0, TSpan<const std::uint8_t>(InterfacePacket, sizeof(InterfacePacket))),
 		"Interface send must route to the loopback mailbox");
 
 	std::uint8_t Destination[FourBytePacketCapacity] = {};
@@ -459,7 +459,7 @@ MW_TEST_CASE(HostLoopbackSatisfiesIDeviceInterface)
 	MW_EXPECT_EQ(
 		Test,
 		ETransportResult::Success,
-		Driver.TryReceive(ReceiveFrom, TSpan<std::uint8_t>(Destination, sizeof(Destination)), ReceiveResult),
+		Device.TryReceive(ReceiveFrom, TSpan<std::uint8_t>(Destination, sizeof(Destination)), ReceiveResult),
 		"Interface receive must route to the loopback mailbox");
 	MW_EXPECT_EQ(Test, sizeof(InterfacePacket), ReceiveResult.BytesReceived, "Interface receive must report the head packet length");
 	MW_EXPECT_EQ(Test, true, ReceiveFrom == Port0, "Interface receive must report the sender as port 0");
@@ -587,7 +587,7 @@ MW_TEST_CASE(HostLoopbackRejectsUnroutableDestinationAddress)
 	// Assert
 	MW_EXPECT_EQ(Test, ETransportResult::Invalid, EmptySizeResult, "A zero-size address must return Invalid");
 
-	// A two-byte address is the wrong encoding for this driver.
+	// A two-byte address is the wrong encoding for this device.
 	FDeviceAddress TwoByteAddress{};
 	TwoByteAddress.Bytes[0] = 1;
 	TwoByteAddress.Bytes[1] = 0;
@@ -606,7 +606,7 @@ MW_TEST_CASE(HostLoopbackRejectsUnroutableDestinationAddress)
 }
 
 /**
- * Scenario: Query the per-port driver and loopback maximum packet bytes, send a three-byte head, then attempt a too-small receive.
+ * Scenario: Query the per-port device and loopback maximum packet bytes, send a three-byte head, then attempt a too-small receive.
  * Expected: MaxPacketBytes reports the template packet capacity; the too-small receive returns Full, leaves BytesReceived and OutFrom unchanged, and
  * retains the head packet.
  */
@@ -616,9 +616,9 @@ MW_TEST_CASE(HostLoopbackReportsMaxPacketBytesAndRetainsHeadOnTooSmallReceive)
 	THostLoopback<FourPortCount, OneSlotMailbox, FourBytePacketCapacity> Loopback;
 	const FDeviceAddress Port0 = MakeLoopbackAddress(SourcePort);
 
-	// Assert - the per-port driver reports the network's per-packet byte capacity.
-	IDevice& Driver = Loopback.Port(ReportedDriverPort);
-	MW_EXPECT_EQ(Test, FourBytePacketCapacity, Driver.MaxPacketBytes(), "MaxPacketBytes must report the template packet byte capacity");
+	// Assert - the per-port device reports the network's per-packet byte capacity.
+	IDevice& Device = Loopback.Port(ReportedDevicePort);
+	MW_EXPECT_EQ(Test, FourBytePacketCapacity, Device.MaxPacketBytes(), "MaxPacketBytes must report the template packet byte capacity");
 	MW_EXPECT_EQ(Test, FourBytePacketCapacity, Loopback.MaximumPacketBytes(), "MaximumPacketBytes must report the template packet byte capacity");
 
 	// A too-small receive must retain the head packet and leave OutFrom at its caller sentinel.

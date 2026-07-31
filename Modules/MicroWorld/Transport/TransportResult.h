@@ -6,9 +6,9 @@ namespace MicroWorld
 {
 
 /**
- * Reports the complete portable outcome of one Transport byte, queue, packet, or driver operation.
+ * Reports the complete portable outcome of one Transport byte, queue, packet, or device operation.
  *
- * Byte I/O, the manager, and every driver share one result enum with one normalized
+ * Byte I/O, the manager, and every device share one result enum with one normalized
  * meaning per value so a caller never confuses a transient "try again later" with a
  * permanent rejection or vice versa.
  */
@@ -35,7 +35,7 @@ enum class ETransportResult : std::uint8_t
 	Invalid,
 
 	/**
-	 * A valid non-blocking driver or manager operation has no work or cannot make progress now.
+	 * A valid non-blocking device or manager operation has no work or cannot make progress now.
 	 * The transport is empty, the FIFO is empty, or a peer is not ready; a later poll may succeed.
 	 */
 	Unavailable,

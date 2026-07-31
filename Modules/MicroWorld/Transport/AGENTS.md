@@ -12,7 +12,7 @@ system may see both Engine and Transport — only a composition root joins them.
 The system owns a bounded byte reader/writer, one non-blocking `IDevice`
 contract, one caller-storage-backed fixed-capacity `TTransportManager`, the `TTransportHost`
 session layer above it, wire framing, explicit `ETransportResult` outcomes, a
-deterministic host loopback driver, the one-byte E32 node-address shape, and the
+deterministic host loopback device, the one-byte E32 node-address shape, and the
 portable RadioE32 transport over `IUartByteStream`. It does not own sequence
 numbers, retries, reliability, message routing, authentication, replication,
 real transports, threads, platform adapters, or vendor SDK code: reliability and
@@ -22,7 +22,7 @@ Net and RadioE32 were separate packages; they folded into Transport because a
 system is a responsibility and a package is a build target, and the architecture
 model states the byte contract and every medium as one system. The IP/protocol
 sources and the RadioE32 sources are toggled by the `MICROWORLD_TRANSPORT_IP` and
-`MICROWORLD_TRANSPORT_RADIO` CMake options so a Pico build can omit IP code and a
+`MICROWORLD_TRANSPORT_LORA` CMake options so a Pico build can omit IP code and a
 radio-less build can omit the E32 framing.
 
 `Lora/Internal/` holds fixed transport state and other implementation mechanics (the
@@ -30,11 +30,11 @@ portable E32 transport state); consumers must not depend on those headers.
 
 ## Concepts and boundaries
 
-- `ETransportResult` keeps every byte, queue, packet, and driver outcome explicit
+- `ETransportResult` keeps every byte, queue, packet, and device outcome explicit
   with one normalized meaning per value: `Success` (complete operation),
   `Full` (valid operation lacks destination/queue/transport capacity),
   `Invalid` (invalid span/configuration, oversized packet, or truncated
-  byte-reader request), and `Unavailable` (a valid non-blocking driver/manager
+  byte-reader request), and `Unavailable` (a valid non-blocking device/manager
   operation has no work or cannot progress now). No path silently truncates
   or drops data.
 - `FByteWriter` and `FByteReader` operate only on caller-owned
@@ -43,28 +43,28 @@ portable E32 transport state); consumers must not depend on those headers.
   consuming operation rejects as `Invalid` without dereferencing null.
 - `Wifi/UdpAddressCodec.h` holds the 6-byte IPv4+port `FDeviceAddress` encoding as pure
   `constexpr` arithmetic with no OS includes, so both UDP platform adapters and
-  their drivers share one definition without breaching the `Core <- Transport`
+  their devices share one definition without breaching the `Core <- Transport`
   boundary.
 - `Lora/E32Lora.h` owns the one-byte E32 node-address shape and payload limit;
   `Lora/Internal/E32LoraTransportState.h` owns the portable E32 state, and
-  `Lora/RadioE32Driver.h` owns the driver that uses it over `IUartByteStream`.
+  `Lora/E32LoraDevice.h` owns the device that uses it over `IUartByteStream`.
 - `IDevice` exposes one bounded non-blocking `TrySend` and one bounded
   non-blocking `TryReceive`. Every receive is transactional: on `Full`,
   `Invalid`, or `Unavailable` the destination and `FReceiveResult::BytesReceived`
-  are unchanged. `AdvanceTransmit` is a no-op by default and lets staged drivers
+  are unchanged. `AdvanceTransmit` is a no-op by default and lets staged devices
   make one bounded physical transmit step after a host FIFO drain.
 - `TTransportManager<MaxPackets, MaxPacketBytes>` holds exactly one externally
   referenced `IDevice` and one externally referenced `TTransportPacketStorage`,
   maintains one deterministic outbound FIFO, and performs at most one direct
-  driver receive.
+  device receive.
 - `TTransportHost<MaxPeers, MaxPacketBytes>` is the session layer above `TTransportManager`.
   One `ENetworkMode` role — Standalone, Client, ListenServer, or DedicatedServer —
   selects which traffic the host originates and accepts; a fixed peer table
   carries `Hello`/`Welcome` admission, heartbeats, and timeout eviction; and
   channel 0 is reserved for control.
 - `THostLoopback` is a deterministic fixed-capacity `IDevice` for host tests.
-- `FPacketDropDriver` is a test/demo `IDevice` decorator that wraps another
-  driver by reference and silently drops every Nth outgoing send; it is a loss
+- `FPacketDropDevice` is a test/demo `IDevice` decorator that wraps another
+  device by reference and silently drops every Nth outgoing send; it is a loss
   injector, not reliability or a real transport.
 - RadioE32 operations are non-blocking, bounded, fixed-capacity, and explicit
   about success, backpressure, capacity, and invalid data. Platform adapters own

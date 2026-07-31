@@ -7,7 +7,7 @@
 // ignores. This is the first example to run one world's TMessageRouter over ONE
 // WiFi-UDP link carrying TWO channels at once -- a best-effort channel and a
 // guaranteed channel (TReliableChannel) -- with the client injecting
-// deterministic packet loss via FPacketDropDriver.
+// deterministic packet loss via FPacketDropDevice.
 #ifndef MICROWORLD_EXAMPLE_SERVER
 #error "Define MICROWORLD_EXAMPLE_SERVER=1 (server) or 0 (client) via the build environment."
 #endif
@@ -15,7 +15,7 @@
 /** Runs the server role (Board A): FLedgerActor; defined in ServerMain.cpp. */
 void RunServer() noexcept;
 
-/** Runs the client role (Board B): FCounterActor behind FPacketDropDriver; defined in ClientMain.cpp. */
+/** Runs the client role (Board B): FCounterActor behind FPacketDropDevice; defined in ClientMain.cpp. */
 void RunClient() noexcept;
 
 /** Composition root: installs the output device, then runs the role this image was built for. */

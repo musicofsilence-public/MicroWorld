@@ -8,7 +8,7 @@
 #include <MicroWorld/Transport/Wifi/UdpAddressCodec.h>
 #include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
 #include <MicroWorld/Platform/Esp32/Esp32TimeSource.h>
-#include <MicroWorld/Platform/Esp32/Esp32UdpDriver.h>
+#include <MicroWorld/Platform/Esp32/Esp32WifiDevice.h>
 #include <MicroWorld/Platform/Esp32/Esp32WifiLink.h>
 
 #include <cstdint>
@@ -42,15 +42,15 @@ void RunClient() noexcept
 
 	// The client binds an ephemeral local port (0): it only needs to reach the
 	// server, and TTransportHost learns the client's address server-side from its Hello.
-	static FEsp32UdpDriver Driver(0);
-	MW_LOG(Log, "ex16", "client open=%d", Driver.IsOpen() ? 1 : 0);
-	if (!Driver.IsOpen())
+	static FEsp32WifiDevice Device(0);
+	MW_LOG(Log, "ex16", "client open=%d", Device.IsOpen() ? 1 : 0);
+	if (!Device.IsOpen())
 	{
 		MW_LOG(Error, "ex16", "socket failed; halting");
 		return;
 	}
 
-	static FClientTransport ClientTransport{Driver};
+	static FClientTransport ClientTransport{Device};
 
 	// Channel-2 state handler; the no-capture lambda names the static capture directly.
 	FClientTransport::FMessageHandlerBinding Binding;

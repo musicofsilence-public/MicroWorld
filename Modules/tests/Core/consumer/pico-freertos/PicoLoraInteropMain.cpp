@@ -1,7 +1,7 @@
 #include <MicroWorld/Transport/Lora/E32Lora.h>
 #include <MicroWorld/Transport/Device.h>
 #include <MicroWorld/Transport/TransportResult.h>
-#include <MicroWorld/Platform/Pico/PicoE32LoraDriver.h>
+#include <MicroWorld/Platform/Pico/PicoLoraDevice.h>
 
 #include <FreeRTOS.h>
 #include <task.h>
@@ -13,13 +13,13 @@
 #include "LoraPayloadRegression.h"
 #endif
 
-/** Satisfies virtual deleting-destructor linkage; the LoRa driver is never dynamically deleted. */
+/** Satisfies virtual deleting-destructor linkage; the LoRa device is never dynamically deleted. */
 void operator delete(void*) noexcept {}
 
 /** Satisfies array deleting-destructor linkage without enabling an allocator for this static-only firmware. */
 void operator delete[](void*) noexcept {}
 
-/** Satisfies sized virtual deleting-destructor linkage; static driver storage is never reclaimed. */
+/** Satisfies sized virtual deleting-destructor linkage; static device storage is never reclaimed. */
 void operator delete(void*, std::size_t) noexcept {}
 
 /** Satisfies sized array deleting-destructor linkage without creating a heap dependency. */
@@ -58,7 +58,7 @@ constexpr configSTACK_DEPTH_TYPE LoraTaskStackDepth = 512;
 /** Fails the task before an unmeasured stack margin can silently become a radio failure. */
 constexpr UBaseType_t MinimumStackHeadroomWords = 128;
 
-/** Configures the reusable driver with the exact UART wiring proven by the Pico-to-ESP32 exchange. */
+/** Configures the reusable device with the exact UART wiring proven by the Pico-to-ESP32 exchange. */
 constexpr MicroWorld::FPicoE32LoraConfig LoraConfig{
 	LoraUartIndex,
 	LoraTransmitPin,
@@ -115,7 +115,7 @@ bool IsExpectedPeerPayload(
 /** Drives the Pico node-1 counter volley and continuously checks its measured task-stack margin. */
 void RunLoraInteropTask(void* const InContext)
 {
-	auto& LoraDriver = *static_cast<MicroWorld::FPicoE32LoraDriver*>(InContext);
+	auto& LoraDevice = *static_cast<MicroWorld::FPicoLoraDevice*>(InContext);
 	std::uint8_t ReceiveBuffer[MicroWorld::E32MaxPayloadBytes]{};
 	bool bHasPendingTransmit = true;
 	std::uint32_t PendingCounter = 1;
@@ -123,12 +123,12 @@ void RunLoraInteropTask(void* const InContext)
 
 	for (;;)
 	{
-		LoraDriver.AdvanceTransmit();
+		LoraDevice.AdvanceTransmit();
 
 		MicroWorld::FDeviceAddress From{};
 		MicroWorld::FReceiveResult Received{};
 		const MicroWorld::ETransportResult ReceiveResult =
-			LoraDriver.TryReceive(From, MicroWorld::TSpan<std::uint8_t>(ReceiveBuffer, sizeof(ReceiveBuffer)), Received);
+			LoraDevice.TryReceive(From, MicroWorld::TSpan<std::uint8_t>(ReceiveBuffer, sizeof(ReceiveBuffer)), Received);
 		const TickType_t Now = xTaskGetTickCount();
 		if (ReceiveResult == MicroWorld::ETransportResult::Success && IsExpectedPeerPayload(From, Received, ReceiveBuffer))
 		{
@@ -142,10 +142,10 @@ void RunLoraInteropTask(void* const InContext)
 			std::uint8_t Payload[VolleyPayloadBytes]{};
 			WriteVolleyPayload(Payload, LocalNodeId, PendingCounter);
 			const MicroWorld::ETransportResult SendResult =
-				LoraDriver.TrySend(MicroWorld::MakeLoraAddress(PeerNodeId), MicroWorld::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
+				LoraDevice.TrySend(MicroWorld::MakeLoraAddress(PeerNodeId), MicroWorld::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
 			if (SendResult == MicroWorld::ETransportResult::Success)
 			{
-				// Success transfers the complete frame into the driver slot; later task iterations advance it onto UART.
+				// Success transfers the complete frame into the device slot; later task iterations advance it onto UART.
 				bHasPendingTransmit = false;
 			}
 		}
@@ -212,9 +212,9 @@ void AdvancePayloadRegressionReceiveState(
 	}
 }
 
-/** Queues one canonical frame and advances only after the driver accepted it into its bounded transmit slot. */
+/** Queues one canonical frame and advances only after the device accepted it into its bounded transmit slot. */
 void QueuePendingPayloadRegressionTransmit(
-	MicroWorld::FPicoE32LoraDriver& InDriver,
+	MicroWorld::FPicoLoraDevice& InDevice,
 	EPayloadRegressionState& InOutState,
 	TickType_t& OutEmptyRetryDue,
 	const TickType_t InNow,
@@ -238,7 +238,7 @@ void QueuePendingPayloadRegressionTransmit(
 	MicroWorld::Example17::FillCanonicalPayload(TransmitCase, InOutPayloadBuffer);
 	const std::size_t PayloadBytes = MicroWorld::Example17::PayloadRegressionByteCount(TransmitCase);
 	const MicroWorld::ETransportResult SendResult =
-		InDriver.TrySend(MicroWorld::MakeLoraAddress(PeerNodeId), MicroWorld::TSpan<const std::uint8_t>(InOutPayloadBuffer, PayloadBytes));
+		InDevice.TrySend(MicroWorld::MakeLoraAddress(PeerNodeId), MicroWorld::TSpan<const std::uint8_t>(InOutPayloadBuffer, PayloadBytes));
 	if (SendResult != MicroWorld::ETransportResult::Success)
 	{
 		return;
@@ -264,7 +264,7 @@ void QueuePendingPayloadRegressionTransmit(
 /** Drives the Pico peer through the fixed empty, typical, and maximum E32 payload exchange. */
 void RunLoraInteropTask(void* const InContext)
 {
-	auto& LoraDriver = *static_cast<MicroWorld::FPicoE32LoraDriver*>(InContext);
+	auto& LoraDevice = *static_cast<MicroWorld::FPicoLoraDevice*>(InContext);
 	std::uint8_t PayloadBuffer[MicroWorld::E32MaxPayloadBytes]{};
 	EPayloadRegressionState State = EPayloadRegressionState::SendEmpty;
 	TickType_t EmptyRetryDue = xTaskGetTickCount();
@@ -274,7 +274,7 @@ void RunLoraInteropTask(void* const InContext)
 		MicroWorld::FDeviceAddress From{};
 		MicroWorld::FReceiveResult Received{};
 		const MicroWorld::ETransportResult ReceiveResult =
-			LoraDriver.TryReceive(From, MicroWorld::TSpan<std::uint8_t>(PayloadBuffer, sizeof(PayloadBuffer)), Received);
+			LoraDevice.TryReceive(From, MicroWorld::TSpan<std::uint8_t>(PayloadBuffer, sizeof(PayloadBuffer)), Received);
 		if (ReceiveResult == MicroWorld::ETransportResult::Success)
 		{
 			AdvancePayloadRegressionReceiveState(State, From, Received, PayloadBuffer);
@@ -286,8 +286,8 @@ void RunLoraInteropTask(void* const InContext)
 			State = EPayloadRegressionState::SendEmpty;
 		}
 
-		QueuePendingPayloadRegressionTransmit(LoraDriver, State, EmptyRetryDue, Now, PayloadBuffer);
-		LoraDriver.AdvanceTransmit();
+		QueuePendingPayloadRegressionTransmit(LoraDevice, State, EmptyRetryDue, Now, PayloadBuffer);
+		LoraDevice.AdvanceTransmit();
 
 		configASSERT(uxTaskGetStackHighWaterMark(nullptr) >= MinimumStackHeadroomWords);
 		vTaskDelay(PollPeriodTicks);
@@ -297,17 +297,17 @@ void RunLoraInteropTask(void* const InContext)
 
 } // namespace
 
-/** Initializes the reusable driver, creates the static LoRa task, and transfers control to FreeRTOS. */
+/** Initializes the reusable device, creates the static LoRa task, and transfers control to FreeRTOS. */
 int main()
 {
-	MicroWorld::FPicoE32LoraDriver LoraDriver;
-	if (LoraDriver.Initialize(LoraConfig) != MicroWorld::ETransportResult::Success)
+	MicroWorld::FPicoLoraDevice LoraDevice;
+	if (LoraDevice.Initialize(LoraConfig) != MicroWorld::ETransportResult::Success)
 	{
 		return 1;
 	}
 
 	TaskHandle_t LoraTask = xTaskCreateStatic(
-		RunLoraInteropTask, "MicroWorldLora", LoraTaskStackDepth, &LoraDriver, tskIDLE_PRIORITY + 1, LoraTaskStack, &LoraTaskControlBlock);
+		RunLoraInteropTask, "MicroWorldLora", LoraTaskStackDepth, &LoraDevice, tskIDLE_PRIORITY + 1, LoraTaskStack, &LoraTaskControlBlock);
 	if (LoraTask == nullptr)
 	{
 		return 2;

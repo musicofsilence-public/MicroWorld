@@ -13,14 +13,14 @@
 #include <MicroWorld/Core/Log.h>
 #include <MicroWorld/Transport/TransportHost.h>
 #include <MicroWorld/Transport/TransportResult.h>
-#include <MicroWorld/Transport/PacketDropDriver.h>
+#include <MicroWorld/Transport/PacketDropDevice.h>
 #include <MicroWorld/Transport/Wifi/UdpAddressCodec.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Engine/GarbageCollector.h>
 #include <MicroWorld/Engine/ObjectPtr.h>
 #include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
 #include <MicroWorld/Platform/Esp32/Esp32TimeSource.h>
-#include <MicroWorld/Platform/Esp32/Esp32UdpDriver.h>
+#include <MicroWorld/Platform/Esp32/Esp32WifiDevice.h>
 #include <MicroWorld/Platform/Esp32/Esp32WifiLink.h>
 
 #include <cstddef>
@@ -99,8 +99,9 @@ private:
  * Client board: joins the WiFi SoftAP and runs FCounterActor over one TMessageRouter wired to ONE
  * UDP transport through TWO TMessageChannelBinding -- best-effort straight to the router, guaranteed
  * wrapped in TReliableChannel -- with the engine holding the host play system, the reliable channel, and
- * the router behind one TPlaySystemSet<3>. The UDP driver is itself wrapped in FPacketDropDriver
- * so every third outgoing packet, of any kind, is silently dropped -- the whole point of the demo.
+ * the router behind one TPlaySystemSet<3>. The UDP device is itself wrapped in FPacketDropDevice
+ * so every third outgoing packet, of any kind, is
+ * silently dropped -- the whole point of the demo.
  */
 void RunClient() noexcept
 {
@@ -114,18 +115,18 @@ void RunClient() noexcept
 
 	// The client binds an ephemeral local port (0): it only needs to reach the server, and TTransportHost
 	// learns the client's address server-side from its Hello.
-	static FEsp32UdpDriver UdpDriver(0);
-	MW_LOG(Log, "ex25", "udp open=%d", UdpDriver.IsOpen() ? 1 : 0);
-	if (!UdpDriver.IsOpen())
+	static FEsp32WifiDevice UdpDevice(0);
+	MW_LOG(Log, "ex25", "udp open=%d", UdpDevice.IsOpen() ? 1 : 0);
+	if (!UdpDevice.IsOpen())
 	{
 		MW_LOG(Error, "ex25", "udp socket failed; halting");
 		return;
 	}
 
-	// All composition objects are static (the ESP32-S3 stack lesson, §2.2). The drop driver wraps
-	// the real UDP driver, so the transport below sends and receives through the loss injector.
-	static FPacketDropDriver DropDriver{UdpDriver, DropEveryNthSend};
-	static FWorldTransport Transport{DropDriver};
+	// All composition objects are static (the ESP32-S3 stack lesson, §2.2). The drop device wraps
+	// the real UDP device, so the transport below sends and receives through the loss injector.
+	static FPacketDropDevice DropDevice{UdpDevice, DropEveryNthSend};
+	static FWorldTransport Transport{DropDevice};
 	static FWorldRouter Router;
 
 	// Best-effort channel: a plain binding straight to the router, no reliable wrapper.

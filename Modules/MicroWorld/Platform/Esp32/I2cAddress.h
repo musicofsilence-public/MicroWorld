@@ -12,7 +12,7 @@ namespace MicroWorld
  *
  * The byte carries a frame node id: the local id stamped on an outgoing frame, or the SENDER's id read
  * from a received frame. It is NOT the 7-bit bus address the hardware uses to select a device — that is a
- * driver config field; the link is point-to-point, so this address only stamps and reports identity,
+ * device config field; the link is point-to-point, so this address only stamps and reports identity,
  * exactly as the UART and LoRa encodings do. The encoding is owned here because `FDeviceAddress` ascribes no
  * meaning to its bytes and is shared with the UDP, loopback, LoRa, and UART encodings.
  *
@@ -31,8 +31,8 @@ constexpr FDeviceAddress MakeI2cAddress(const std::uint8_t InNodeId) noexcept
  * Reports whether an address carries this package's one-byte I2C encoding.
  *
  * Only the active length is inspected, so a six-byte UDP address is never mistaken for an I2C one; the byte
- * value is validated when a driver actually routes the address. The one-byte UART, LoRa, and loopback
- * encodings share this shape by design — a single driver instance only ever handles addresses meant for its
+ * value is validated when a device actually routes the address. The one-byte UART, LoRa, and loopback
+ * encodings share this shape by design — a single device instance only ever handles addresses meant for its
  * own transport.
  *
  * @param InAddress Address whose encoding to test.

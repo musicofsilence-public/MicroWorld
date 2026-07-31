@@ -27,7 +27,7 @@ using FUartPort = uart_port_t;
  * The public header stores the port as a plain `std::int32_t` so it stays free of the ESP-IDF enum; this
  * helper restores the type only where the UART syscalls expect it.
  *
- * @param InStored Opaque port number saved by the driver.
+ * @param InStored Opaque port number saved by the device.
  * @return ESP-IDF UART port number.
  */
 inline FUartPort AsUartPort(const std::int32_t InStored) noexcept
@@ -50,7 +50,7 @@ enum class EUartWriteOutcome : std::uint8_t
  * Writes one complete framed message to the UART.
  *
  * Hands the whole span to one `uart_write_bytes` call; the outcome classifies only whether it was fully
- * accepted, partially accepted, or failed, so the driver can map it to the shared `ETransportResult`. The
+ * accepted, partially accepted, or failed, so the device can map it to the shared `ETransportResult`. The
  * full-accept path is runtime-verified (example 18, 2026-07-23); the short-write would-block branch stays
  * unexercised, so a short write is still mapped to `WouldBlock` to treat the UART as transiently full.
  *
@@ -148,7 +148,7 @@ struct FOpenedUart
  * Sets the UART to 8N1 at the given baud rate, routes it to the given TX/RX GPIOs with no hardware flow
  * control, and installs the ESP-IDF driver with RX and TX ring buffers of two hardware FIFOs so the install
  * clears the ESP-IDF minimum (both must exceed `UART_HW_FIFO_LEN`). On any configuration failure the partially
- * installed driver is uninstalled and `bOpen` is false, so the constructor can leave the driver inert without
+ * installed driver is uninstalled and `bOpen` is false, so the constructor can leave the device inert without
  * throwing. The ring-buffer headroom suits bounded framing work between receive pumps; airtime-tuned sizing is
  * deferred to measured bring-up.
  *
@@ -190,7 +190,7 @@ inline FOpenedUart OpenConfiguredUartPort(
 /**
  * Uninstalls the UART driver opened by `OpenConfiguredUartPort`.
  *
- * A safe no-op when the UART was never installed; the return value is ignored because the driver is already
+ * A safe no-op when the UART was never installed; the return value is ignored because the device is already
  * inert and there is no recovery action at this layer.
  *
  * @param InPort UART port number to release.

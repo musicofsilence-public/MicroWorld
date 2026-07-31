@@ -5,7 +5,7 @@
 // compile — ServerMain.cpp and ClientMain.cpp are always built — and this
 // define only selects which one runs; never build_src_filter, which ESP-IDF
 // ignores. This is example 16's full TTransportHost message protocol with every WiFi
-// step deleted: the whole link is one wire, and only the driver construction
+// step deleted: the whole link is one wire, and only the device construction
 // line differs from example 16.
 #ifndef MICROWORLD_EXAMPLE_SERVER
 #error "Define MICROWORLD_EXAMPLE_SERVER=1 (server) or 0 (client) via the build environment."

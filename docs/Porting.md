@@ -34,31 +34,31 @@ destination and `BytesReceived` must be unchanged. `FDeviceAddress` is opaque; t
 adapter owns its concrete encoding and provides helpers to build/inspect it.
 
 - Host UDP reference:
-  [`FHostUdpDriver`](../Modules/MicroWorld/Platform/Host/HostUdpDriver.h)
+  [`FHostWifiDevice`](../Modules/MicroWorld/Platform/Host/HostWifiDevice.h)
   over a `SOCK_DGRAM` socket on `127.0.0.1`, with
   [`MakeUdpAddress`/`IsUdpAddress`/`UdpAddressPort`](../Modules/MicroWorld/Platform/Host/UdpAddress.h)
   for the 6-byte IPv4+port encoding.
 - ESP32 UDP reference:
-  [`FEsp32UdpDriver`](../Modules/MicroWorld/Platform/Esp32/Esp32UdpDriver.h)
+  [`FEsp32WifiDevice`](../Modules/MicroWorld/Platform/Esp32/Esp32WifiDevice.h)
   over lwIP; same three UDP address helpers duplicated verbatim.
 - ESP32 E32 LoRa reference:
-  [`FEsp32E32LoraDriver`](../Modules/MicroWorld/Platform/Esp32/Esp32E32LoraDriver.h)
+  [`FEsp32LoraDevice`](../Modules/MicroWorld/Platform/Esp32/Esp32LoraDevice.h)
   is an ESP32 UART-lifetime compatibility facade over optional
   [`RadioE32`](../Modules/MicroWorld/Transport/Lora). RadioE32 owns portable E32 framing and
   bounded progress over Core's narrow `IUartByteStream` interface; the facade retains a 1-byte broadcast
   [`LoraAddress`](../Modules/MicroWorld/Platform/Esp32/LoraAddress.h).
 - ESP32 wired UART reference:
-  [`FEsp32UartDriver`](../Modules/MicroWorld/Platform/Esp32/Esp32UartDriver.h)
+  [`FEsp32UartDevice`](../Modules/MicroWorld/Platform/Esp32/Esp32UartDevice.h)
   over a plain point-to-point UART, using the
   same `MicroWorld/Transport/FrameCodec.h` framing over a 1-byte point-to-point
   [`UartAddress`](../Modules/MicroWorld/Platform/Esp32/UartAddress.h).
 - ESP32 wired I2C reference (master/slave pair):
-  [`FEsp32I2cMasterDriver` / `FEsp32I2cSlaveDriver`](../Modules/MicroWorld/Platform/Esp32/Esp32I2cDriver.h)
+  [`FEsp32I2cMasterDevice` / `FEsp32I2cSlaveDevice`](../Modules/MicroWorld/Platform/Esp32/Esp32I2cDevice.h)
   over one I2C bus — the master clocks whole-frame transactions, the slave receives
   through an `on_receive` ISR inbox — with a 1-byte
   [`I2cAddress`](../Modules/MicroWorld/Platform/Esp32/I2cAddress.h).
 - ESP32 wired SPI reference (master/slave pair):
-  [`FEsp32SpiMasterDriver` / `FEsp32SpiSlaveDriver`](../Modules/MicroWorld/Platform/Esp32/Esp32SpiDriver.h)
+  [`FEsp32SpiMasterDevice` / `FEsp32SpiSlaveDevice`](../Modules/MicroWorld/Platform/Esp32/Esp32SpiDevice.h)
   over one full-duplex SPI bus — the master clocks fixed-size transactions, the
   slave keeps one queued — with a 1-byte
   [`SpiAddress`](../Modules/MicroWorld/Platform/Esp32/SpiAddress.h).

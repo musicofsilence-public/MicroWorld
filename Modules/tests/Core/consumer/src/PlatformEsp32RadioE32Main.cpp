@@ -1,4 +1,4 @@
-#include <MicroWorld/Platform/Esp32/Esp32E32LoraDriver.h>
+#include <MicroWorld/Platform/Esp32/Esp32LoraDevice.h>
 
 #include <cstdint>
 
@@ -27,7 +27,7 @@ extern "C" void app_main()
 	volatile bool bRunRadioHardwareProbe = false;
 	if (bRunRadioHardwareProbe)
 	{
-		MicroWorld::FEsp32E32LoraDriver Driver(RadioProbeConfig);
-		Driver.AdvanceTransmit();
+		MicroWorld::FEsp32LoraDevice Device(RadioProbeConfig);
+		Device.AdvanceTransmit();
 	}
 }

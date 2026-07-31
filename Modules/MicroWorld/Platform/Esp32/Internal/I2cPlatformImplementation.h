@@ -2,10 +2,10 @@
 
 // =============================================================================
 // src/I2cPlatformImplementation.h is the SOLE header that pulls ESP-IDF I2C headers.
-// It is included by one driver translation unit — Esp32I2cDriver.cpp (the wired
+// It is included by one device translation unit — Esp32I2cDevice.cpp (the wired
 // point-to-point I2C master/slave link pair) — and a public header must never reach
-// it. Every ESP-IDF I2C divergence is hidden behind the helpers below so both driver
-// classes read one platform-free send/receive path that mirrors the UART driver. Example
+// it. Every ESP-IDF I2C divergence is hidden behind the helpers below so both device
+// classes read one platform-free send/receive path that mirrors the UART device. Example
 // 20's master-clocked ping-pong runtime-verifies this path on ESP32-S3 (2026-07-23):
 // i2c_master_transmit, i2c_master_receive, i2c_slave_write's staged reply, and the
 // on_receive ISR callback all round-trip, and the NACK/timeout -> transient-full mapping
@@ -18,7 +18,7 @@
 // comment satisfies.
 // =============================================================================
 
-#include <MicroWorld/Platform/Esp32/Esp32I2cDriver.h>
+#include <MicroWorld/Platform/Esp32/Esp32I2cDevice.h>
 
 #include <driver/i2c_master.h>
 #include <driver/i2c_slave.h>
@@ -79,13 +79,13 @@ struct FOpenedI2cSlave
 };
 
 /**
- * Copies bytes a master wrote into the owning slave driver's inbox, from ISR context.
+ * Copies bytes a master wrote into the owning slave device's inbox, from ISR context.
  *
  * Registered as the ESP-IDF `on_receive` callback with the inbox address as its user data; it copies each
  * received byte into the ring and returns false because it wakes no higher-priority task. It must stay short
  * and allocation-free because it runs in ISR context.
  *
- * @param InEventData Driver-fed event carrying the received bytes and their count.
+ * @param InEventData Device-fed event carrying the received bytes and their count.
  * @param InUserData The `FI2cReceiveInbox` address passed at registration.
  * @return Always false: this callback wakes no task.
  */
@@ -108,7 +108,7 @@ inline bool OnI2cSlaveReceiveFromIsr(i2c_slave_dev_handle_t, const i2c_slave_rx_
  *
  * Uses 100 kHz standard mode with the default clock source and internal pull-ups enabled as insurance over the
  * mandatory external resistors. On any failure the partially allocated bus is deleted so the caller sees
- * `bOpen == false` and can leave the driver inert without throwing.
+ * `bOpen == false` and can leave the device inert without throwing.
  *
  * @param InPort I2C port number to open.
  * @param InSdaGpio SDA GPIO number wired to the slave's SDA pin.
@@ -156,7 +156,7 @@ inline FOpenedI2cMaster OpenConfiguredI2cMaster(
 /**
  * Writes one complete framed message to the slave in a single bus transaction.
  *
- * A NACK or timeout maps to `WouldBlock` so the driver can treat an unready peer as transiently full; any
+ * A NACK or timeout maps to `WouldBlock` so the device can treat an unready peer as transiently full; any
  * other error maps to `Error`. Runtime-verified by example 20 (2026-07-23): the full-accept and the
  * NACK/timeout -> WouldBlock paths were both observed.
  *
@@ -209,7 +209,7 @@ inline EI2cReadOutcome ReadI2cMaster(const i2c_master_dev_handle_t InDevice, std
 /**
  * Removes the device and deletes the master bus opened by `OpenConfiguredI2cMaster`.
  *
- * Each step is a safe no-op when its handle is null; the return values are ignored because the driver is
+ * Each step is a safe no-op when its handle is null; the return values are ignored because the device is
  * already going inert and there is no recovery action at this layer.
  *
  * @param InBus Master bus handle to delete.
@@ -232,7 +232,7 @@ inline void CloseI2cMaster(const i2c_master_bus_handle_t InBus, const i2c_master
  *
  * Listens on `SlaveAddress` with send and receive buffers sized to `I2cSlaveBufferDepth` and internal pull-ups
  * enabled as insurance. On any failure the partially created device is deleted so the caller sees
- * `bOpen == false` and can leave the driver inert without throwing.
+ * `bOpen == false` and can leave the device inert without throwing.
  *
  * @param InPort I2C port number to open.
  * @param InSdaGpio SDA GPIO number wired to the master's SDA pin.
@@ -308,7 +308,7 @@ inline EI2cWriteOutcome WriteI2cSlave(
 /**
  * Deletes the slave device opened by `OpenConfiguredI2cSlave`.
  *
- * A safe no-op when the device is null; the return value is ignored because the driver is already going inert
+ * A safe no-op when the device is null; the return value is ignored because the device is already going inert
  * and there is no recovery action at this layer.
  *
  * @param InDevice Slave device handle to delete.

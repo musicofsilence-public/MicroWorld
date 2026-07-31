@@ -15,7 +15,7 @@ table.
 
 ## Concepts
 
-- The two adapter interfaces are `FHostTimeSource` (clock) and `FHostUdpDriver`
+- The two adapter interfaces are `FHostTimeSource` (clock) and `FHostWifiDevice`
   (`IDevice` transport); portable code never reaches WinSock/BSD headers
   directly.
 - `FWinSockScope` is a reference-counted RAII guard: the first construction

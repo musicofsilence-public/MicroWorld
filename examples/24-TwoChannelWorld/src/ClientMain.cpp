@@ -16,8 +16,8 @@
 #include <MicroWorld/Engine/ObjectPtr.h>
 #include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
 #include <MicroWorld/Platform/Esp32/Esp32TimeSource.h>
-#include <MicroWorld/Platform/Esp32/Esp32UartDriver.h>
-#include <MicroWorld/Platform/Esp32/Esp32UdpDriver.h>
+#include <MicroWorld/Platform/Esp32/Esp32UartDevice.h>
+#include <MicroWorld/Platform/Esp32/Esp32WifiDevice.h>
 #include <MicroWorld/Platform/Esp32/Esp32WifiLink.h>
 #include <MicroWorld/Platform/Esp32/UartAddress.h>
 
@@ -124,7 +124,7 @@ private:
 
 /**
  * Client board: joins the WiFi SoftAP and runs FSensorActor over the shared router owned by one
- * TNetworking. Its two client drivers carry UDP telemetry and UART commands.
+ * TNetworking. Its two client devices carry UDP telemetry and UART commands.
  */
 void RunClient() noexcept
 {
@@ -138,17 +138,17 @@ void RunClient() noexcept
 
 	// The client binds an ephemeral local port (0): it only needs to reach the server, and TTransportHost
 	// learns the client's address server-side from its Hello.
-	static FEsp32UdpDriver TelemetryDriver(0);
-	MW_LOG(Log, "ex24", "telemetry open=%d", TelemetryDriver.IsOpen() ? 1 : 0);
-	if (!TelemetryDriver.IsOpen())
+	static FEsp32WifiDevice TelemetryDevice(0);
+	MW_LOG(Log, "ex24", "telemetry open=%d", TelemetryDevice.IsOpen() ? 1 : 0);
+	if (!TelemetryDevice.IsOpen())
 	{
 		MW_LOG(Error, "ex24", "telemetry socket failed; halting");
 		return;
 	}
 
-	static FEsp32UartDriver CommandDriver{MakeUartConfig(ClientNodeId)};
-	MW_LOG(Log, "ex24", "commands node=%u open=%d", static_cast<unsigned>(ClientNodeId), CommandDriver.IsOpen() ? 1 : 0);
-	if (!CommandDriver.IsOpen())
+	static FEsp32UartDevice CommandDevice{MakeUartConfig(ClientNodeId)};
+	MW_LOG(Log, "ex24", "commands node=%u open=%d", static_cast<unsigned>(ClientNodeId), CommandDevice.IsOpen() ? 1 : 0);
+	if (!CommandDevice.IsOpen())
 	{
 		MW_LOG(Error, "ex24", "commands uart failed to open; halting");
 		return;
@@ -161,11 +161,11 @@ void RunClient() noexcept
 
 	// TNetworking owns all hosts, bindings, and the shared router; the engine starts the hosts at BeginPlay.
 	static FWorldNetworking Networking;
-	const FDeviceHandle TelemetryHandle = Networking.AddDevice(TelemetryDriver, ENetworkMode::Client, TelemetryConfig);
-	const FDeviceHandle CommandHandle = Networking.AddDevice(CommandDriver, ENetworkMode::Client, CommandConfig);
+	const FDeviceHandle TelemetryHandle = Networking.AddDevice(TelemetryDevice, ENetworkMode::Client, TelemetryConfig);
+	const FDeviceHandle CommandHandle = Networking.AddDevice(CommandDevice, ENetworkMode::Client, CommandConfig);
 	if (!TelemetryHandle.IsValid() || !CommandHandle.IsValid())
 	{
-		MW_LOG(Error, "ex24", "client networking system rejected a driver; halting");
+		MW_LOG(Error, "ex24", "client networking system rejected a device; halting");
 		return;
 	}
 	const FChannelHandle TelemetryChannel = Networking.AddChannel(TelemetryHandle, TelemetryChannelId, EChannelReliability::BestEffort);

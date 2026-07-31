@@ -6,12 +6,12 @@ Inherits `../../../../AGENTS.md`.
 
 This subfolder holds the host UDP socket platform implementation header that
 opens OS socket (WinSock/BSD) symbols. It exists so the public
-`MicroWorld/Platform/Host/HostUdpDriver.h` declaration stays free of OS headers.
+`MicroWorld/Platform/Host/HostWifiDevice.h` declaration stays free of OS headers.
 
 ## Concepts
 
 - `UdpSocketPlatformImplementation.h` is a private implementation header:
-  consumers must not depend on it, and only `HostUdpDriver.cpp` includes it.
+  consumers must not depend on it, and only `HostWifiDevice.cpp` includes it.
 
 ## Verification
 

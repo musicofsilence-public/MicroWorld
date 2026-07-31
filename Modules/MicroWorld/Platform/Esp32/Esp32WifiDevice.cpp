@@ -1,4 +1,4 @@
-#include <MicroWorld/Platform/Esp32/Esp32UdpDriver.h>
+#include <MicroWorld/Platform/Esp32/Esp32WifiDevice.h>
 
 #include "Internal/Esp32SocketPlatformImplementation.h"
 
@@ -7,7 +7,7 @@
 namespace MicroWorld
 {
 
-FEsp32UdpDriver::FEsp32UdpDriver(const std::uint16_t InBindPort) noexcept
+FEsp32WifiDevice::FEsp32WifiDevice(const std::uint16_t InBindPort) noexcept
 {
 	const FOpenedSocket Opened = OpenBoundUdpSocket(InBindPort);
 	if (!Opened.bOpen)
@@ -22,7 +22,7 @@ FEsp32UdpDriver::FEsp32UdpDriver(const std::uint16_t InBindPort) noexcept
 	bOpen = true;
 }
 
-FEsp32UdpDriver::~FEsp32UdpDriver() noexcept
+FEsp32WifiDevice::~FEsp32WifiDevice() noexcept
 {
 	if (bOpen)
 	{
@@ -30,7 +30,7 @@ FEsp32UdpDriver::~FEsp32UdpDriver() noexcept
 	}
 }
 
-ETransportResult FEsp32UdpDriver::TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
+ETransportResult FEsp32WifiDevice::TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
 {
 	if (!bOpen)
 	{
@@ -97,10 +97,10 @@ namespace
 
 } // namespace
 
-ETransportResult FEsp32UdpDriver::TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
+ETransportResult FEsp32WifiDevice::TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
 {
 	// Keep the sizing scratch and the advertised max in lockstep; both are 1200.
-	static_assert(PeekScratchBytes == FEsp32UdpDriver::UdpMaxPacketBytes, "Peek scratch must match the advertised packet maximum.");
+	static_assert(PeekScratchBytes == FEsp32WifiDevice::UdpMaxPacketBytes, "Peek scratch must match the advertised packet maximum.");
 
 	if (!bOpen)
 	{
@@ -132,22 +132,22 @@ ETransportResult FEsp32UdpDriver::TryReceive(FDeviceAddress& OutFrom, TSpan<std:
 	return ETransportResult::Success;
 }
 
-std::size_t FEsp32UdpDriver::MaxPacketBytes() const noexcept
+std::size_t FEsp32WifiDevice::MaxPacketBytes() const noexcept
 {
 	return UdpMaxPacketBytes;
 }
 
-bool FEsp32UdpDriver::IsOpen() const noexcept
+bool FEsp32WifiDevice::IsOpen() const noexcept
 {
 	return bOpen;
 }
 
-std::uint16_t FEsp32UdpDriver::BoundPort() const noexcept
+std::uint16_t FEsp32WifiDevice::BoundPort() const noexcept
 {
 	return BoundPortValue;
 }
 
-bool FEsp32UdpDriver::PollReadable(const DurationMilliseconds InTimeoutMilliseconds) const noexcept
+bool FEsp32WifiDevice::PollReadable(const DurationMilliseconds InTimeoutMilliseconds) const noexcept
 {
 	if (!bOpen)
 	{

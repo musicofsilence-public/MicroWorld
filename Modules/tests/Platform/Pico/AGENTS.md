@@ -4,7 +4,7 @@ Inherits `../../../AGENTS.md`.
 
 ## Architecture
 
-SDK-free compatibility-facade tests for `FPicoE32LoraDriver`: UART validation,
+SDK-free compatibility-facade tests for `FPicoLoraDevice`: UART validation,
 ownership, lifecycle, and facade delegation to the portable RadioE32 transport
 (now inside Transport) without SDK access.
 

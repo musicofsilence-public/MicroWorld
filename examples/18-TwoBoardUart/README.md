@@ -1,14 +1,14 @@
 # 18-TwoBoardUart
 
 **Feature:** the same ping-pong volley as example 17, over a plain wire instead
-of a radio — proof that swapping only the driver construction line swaps the
+of a radio — proof that swapping only the device construction line swaps the
 transport, with the byte I/O, frame codec, and address helpers unchanged.
 
 > Status: not yet verified on hardware.
 
 ## What it does
 
-1. Each board constructs a static `FEsp32UartDriver` and logs
+1. Each board constructs a static `FEsp32UartDevice` and logs
    `node=<id> open=<0|1>`. If the UART fails to open it logs a halt
    line and stops (rather than looping on a dead link).
 2. Node 1 seeds the volley: half a second after boot it sends a 5-byte payload
@@ -22,7 +22,7 @@ transport, with the byte I/O, frame codec, and address helpers unchanged.
 
 ## MicroWorld APIs used
 
-- `FEsp32UartDriver` (`TrySend` / `TryReceive` / `IsOpen`), `FEsp32UartConfig`
+- `FEsp32UartDevice` (`TrySend` / `TryReceive` / `IsOpen`), `FEsp32UartConfig`
 - `UartMaxPayloadBytes`
 - `MakeUartAddress`, `UartAddressNodeId`
 - `ETransportResult`, `FReceiveResult`

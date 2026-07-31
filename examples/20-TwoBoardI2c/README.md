@@ -1,7 +1,7 @@
 # 20-TwoBoardI2c
 
 **Feature:** the same ping-pong volley as example 18, over a wired I2C bus
-instead of a UART — proof that swapping only the driver construction line swaps
+instead of a UART — proof that swapping only the device construction line swaps
 the transport, even when the new transport has a clocking master and a
 responding slave.
 
@@ -9,7 +9,7 @@ responding slave.
 
 ## What it does
 
-1. Each board constructs a static I2C driver and logs
+1. Each board constructs a static I2C device and logs
    `<role> open=<0|1>`. If the bus fails to open it logs a halt line and
    stops (rather than looping on a dead link).
 2. **Only the master clocks the bus**, so the master paces every volley: it
@@ -24,7 +24,7 @@ responding slave.
 
 ## MicroWorld APIs used
 
-- `FEsp32I2cMasterDriver` / `FEsp32I2cSlaveDriver`
+- `FEsp32I2cMasterDevice` / `FEsp32I2cSlaveDevice`
   (`TrySend` / `TryReceive` / `IsOpen`), `FEsp32I2cMasterConfig` /
   `FEsp32I2cSlaveConfig`
 - `I2cMaxPayloadBytes`
@@ -107,7 +107,7 @@ exchange is master-initiated — the slave never speaks unprompted.
 ## Image size
 
 From `pio run` (release build, ESP32-S3-DevKitC-1). The two role environments
-produce different images because each links a different driver class:
+produce different images because each links a different device class:
 
 ```text
 master  RAM:   6.4% (used 20924 bytes from 327680 bytes)

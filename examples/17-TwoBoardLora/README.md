@@ -1,15 +1,15 @@
 # 17-TwoBoardLora
 
 **Feature:** the same ping-pong counter volley as example 18, over an E32 LoRa
-radio link instead of a wire — a `FEsp32E32LoraDriver` swapped in for
-`FEsp32UartDriver` on the `IDevice` interface, with the volley loop, frame codec,
+radio link instead of a wire — a `FEsp32LoraDevice` swapped in for
+`FEsp32UartDevice` on the `IDevice` interface, with the volley loop, frame codec,
 and address helpers unchanged. This is the wireless twin of example 18.
 
 > Status: hardware-verified 2026-07-24 (EBYTE E32-433T20D, 433 MHz).
 
 ## What it does
 
-1. Each board constructs a static `FEsp32E32LoraDriver` over a local UART
+1. Each board constructs a static `FEsp32LoraDevice` over a local UART
    wired to an E32 module and logs `node=<id> open=<0|1>`. If the UART fails
    to open it logs a halt line and stops (rather than looping on a dead link).
 2. Node 1 seeds the volley: one second after boot it sends a 5-byte payload
@@ -30,7 +30,7 @@ and address helpers unchanged. This is the wireless twin of example 18.
 
 ## MicroWorld APIs used
 
-- `FEsp32E32LoraDriver` (`TrySend` / `TryReceive` / `IsOpen`), `FEsp32E32LoraConfig`
+- `FEsp32LoraDevice` (`TrySend` / `TryReceive` / `IsOpen`), `FEsp32E32LoraConfig`
 - `E32MaxPayloadBytes`
 - `MakeLoraAddress`, `LoraAddressNodeId`
 - `ETransportResult`, `FReceiveResult`
@@ -136,7 +136,7 @@ interference) rather than necessarily a defect.
 
 The captured run below used the private prototype that was promoted into
 `Modules/MicroWorld/Platform/Pico`. The current Pico-native `lora` consumer acts as node 1
-through `FPicoE32LoraDriver`; this ESP32 source remains unchanged as node 2.
+through `FPicoLoraDevice`; this ESP32 source remains unchanged as node 2.
 Wire the Pico's E32 as GP4 TX → RXD, GP5 RX ← TXD, 3V3 → VCC, GND → GND/M0/M1,
 and leave AUX open. Attach antennas before power.
 

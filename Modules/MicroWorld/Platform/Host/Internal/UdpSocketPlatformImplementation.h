@@ -2,10 +2,10 @@
 
 // =============================================================================
 // src/UdpSocketPlatformImplementation.h is the SOLE translation unit that pulls OS socket headers.
-// It is included only by HostUdpDriver.cpp; a public header must never reach it.
+// It is included only by HostWifiDevice.cpp; a public header must never reach it.
 // Every platform divergence (handle width, close, non-blocking mode, last-error
 // classification, the MSG_PEEK-vs-MSG_TRUNC size probe) is hidden behind the
-// helpers below so HostUdpDriver.cpp reads one platform-free receive/send path.
+// helpers below so HostWifiDevice.cpp reads one platform-free receive/send path.
 // The POSIX branch is compiled but NOT verified on this Windows-only host; it
 // exists so Phase 5.2 (ESP32 UDP) can reuse the same interfaces under a POSIX build.
 // =============================================================================
@@ -73,7 +73,7 @@ inline bool IsValidHandle(const FSocketHandle InSocket) noexcept
  * `std::uintptr_t` is the same width as `SOCKET`/`int` on every supported host,
  * so the round trip is lossless and keeps `std::uintptr_t` out of the public header.
  *
- * @param InStored Opaque handle value saved by the driver.
+ * @param InStored Opaque handle value saved by the device.
  * @return OS socket handle.
  */
 inline FSocketHandle AsSocketHandle(const std::uintptr_t InStored) noexcept
@@ -82,10 +82,10 @@ inline FSocketHandle AsSocketHandle(const std::uintptr_t InStored) noexcept
 }
 
 /**
- * Converts an OS socket handle to the driver's opaque stored form.
+ * Converts an OS socket handle to the device's opaque stored form.
  *
  * @param InSocket OS socket handle.
- * @return Opaque handle value the driver stores.
+ * @return Opaque handle value the device stores.
  */
 inline std::uintptr_t AsOpaqueHandle(const FSocketHandle InSocket) noexcept
 {
@@ -96,7 +96,7 @@ inline std::uintptr_t AsOpaqueHandle(const FSocketHandle InSocket) noexcept
  * Releases one OS socket descriptor.
  *
  * Windows closes via `closesocket`; POSIX via `close`. A no-op on an invalid
- * handle so the driver's destructor does not need its own validity branch.
+ * handle so the device's destructor does not need its own validity branch.
  *
  * @param InSocket Handle to release.
  */
@@ -177,7 +177,7 @@ enum class ESendOutcome : std::uint8_t
  * Sends one complete datagram to a network-ready IPv4 address.
  *
  * The whole span is handed to one `sendto`; the outcome classifies only whether
- * it was fully accepted, would block, or failed, so the driver can map it to the
+ * it was fully accepted, would block, or failed, so the device can map it to the
  * shared `ETransportResult` without inspecting platform error codes.
  *
  * @param InSocket Open non-blocking socket.
@@ -247,13 +247,13 @@ struct FPeekProbe
 /**
  * Largest datagram the sizing peek can observe without an overflow error.
  *
- * Mirrors `FHostUdpDriver::UdpMaxPacketBytes` (kept in sync by a `static_assert`
- * in `HostUdpDriver.cpp`); the sizing peek never reads more than this, so it is
+ * Mirrors `FHostWifiDevice::UdpMaxPacketBytes` (kept in sync by a `static_assert`
+ * in `HostWifiDevice.cpp`); the sizing peek never reads more than this, so it is
  * also the largest payload one send accepts.
  */
 constexpr std::size_t PeekScratchBytes = 1200;
 
-/** One past the peek scratch: a datagram at least this large cannot fit, so the driver's fits-vs-Full check reports Full without consuming it. */
+/** One past the peek scratch: a datagram at least this large cannot fit, so the device's fits-vs-Full check reports Full without consuming it. */
 constexpr std::size_t OversizeDatagramSentinelBytes = PeekScratchBytes + 1;
 
 /**
@@ -261,11 +261,11 @@ constexpr std::size_t OversizeDatagramSentinelBytes = PeekScratchBytes + 1;
  *
  * A would-block error is the common "nothing queued yet" case. On Windows an
  * oversize datagram surfaces as `WSAEMSGSIZE`, reported `Ready` with the oversize
- * sentinel so the driver's single fits-vs-`Full` decision sees one uniform "does
+ * sentinel so the device's single fits-vs-`Full` decision sees one uniform "does
  * not fit" signal; every other code is a hard error.
  *
  * @param InErrorCode Platform last-error captured right after a failed peek.
- * @return Peek probe the driver acts on without inspecting platform codes.
+ * @return Peek probe the device acts on without inspecting platform codes.
  */
 inline FPeekProbe ClassifyPeekError(const int InErrorCode) noexcept
 {
@@ -276,7 +276,7 @@ inline FPeekProbe ClassifyPeekError(const int InErrorCode) noexcept
 	}
 	if (InErrorCode == WSAEMSGSIZE)
 	{
-		// Datagram exceeds even the scratch; signal "does not fit" for the driver's single decision site.
+		// Datagram exceeds even the scratch; signal "does not fit" for the device's single decision site.
 		return FPeekProbe{EPeekStatus::Ready, OversizeDatagramSentinelBytes};
 	}
 	return FPeekProbe{EPeekStatus::Error, 0};
@@ -296,7 +296,7 @@ inline FPeekProbe ClassifyPeekError(const int InErrorCode) noexcept
  * Windows `MSG_PEEK` returns the delivered length, or `WSAEMSGSIZE` when the
  * datagram exceeds the scratch; that case is reported `Ready` with a sentinel
  * `BytesReady = OversizeDatagramSentinelBytes` so the single fits-vs-`Full` decision in
- * the driver sees one uniform "does not fit" signal. The peek never touches the
+ * the device sees one uniform "does not fit" signal. The peek never touches the
  * caller-owned destination, keeping `Full` transactional on both platforms.
  *
  * @param InSocket Open non-blocking socket.
@@ -342,7 +342,7 @@ struct FConsumeResult
  * Consumes the previously-probed head datagram into the destination.
  *
  * Uses a plain `recvfrom` (flags zero) so the datagram leaves the socket queue.
- * The caller's `OutSender` is filled only on success; the driver decodes its
+ * The caller's `OutSender` is filled only on success; the device decodes its
  * IPv4 fields with `ntohl`/`ntohs`.
  *
  * @param InSocket Open non-blocking socket.
@@ -405,7 +405,7 @@ inline FOpenedSocket CloseAndReportFailure(const FSocketHandle InSocket) noexcep
  *
  * An `InBindPort` of zero requests an ephemeral port; the actual port is read back
  * via `getsockname`. On any syscall failure the partially opened socket is closed
- * and `bOpen` is false, so the constructor can leave the driver inert without
+ * and `bOpen` is false, so the constructor can leave the device inert without
  * throwing. Binding to loopback keeps Windows firewall prompts out of the tests.
  *
  * @param InBindPort Host-order UDP port to bind, or zero for an ephemeral port.

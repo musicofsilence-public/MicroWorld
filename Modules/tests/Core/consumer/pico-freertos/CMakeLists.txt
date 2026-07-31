@@ -78,17 +78,17 @@ add_subdirectory(
     "${CMAKE_CURRENT_BINARY_DIR}/microworld"
 )
 
-# The native Pico driver needs an initialized Pico SDK (hardware_gpio,
+# The native Pico device needs an initialized Pico SDK (hardware_gpio,
 # hardware_uart), which the host Modules build deliberately does not provide.
-# Build the driver locally from the merged Platform/Pico sources so the host
+# Build the device locally from the merged Platform/Pico sources so the host
 # facade stays SDK-free while the Pico firmware links the real adapter. RadioE32
-# folds into the Transport target (MicroWorld::Transport), so the driver links it.
-set(MICROWORLD_PLATFORM_PICO_DRIVER_SOURCES
-    "${CMAKE_CURRENT_LIST_DIR}/../../../../MicroWorld/Platform/Pico/PicoE32LoraDriver.cpp"
+# folds into the Transport target (MicroWorld::Transport), so the device links it.
+set(MICROWORLD_PLATFORM_PICO_DEVICE_SOURCES
+    "${CMAKE_CURRENT_LIST_DIR}/../../../../MicroWorld/Platform/Pico/PicoLoraDevice.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/../../../../MicroWorld/Platform/Pico/PicoUartByteStream.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/../../../../MicroWorld/Platform/Pico/PicoUartPlatform.cpp"
 )
-add_library(microworld_platform_pico STATIC ${MICROWORLD_PLATFORM_PICO_DRIVER_SOURCES})
+add_library(microworld_platform_pico STATIC ${MICROWORLD_PLATFORM_PICO_DEVICE_SOURCES})
 target_include_directories(
     microworld_platform_pico
     PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/../../../../>"
@@ -100,7 +100,7 @@ target_link_libraries(
     PRIVATE hardware_gpio hardware_uart
 )
 set_source_files_properties(
-    ${MICROWORLD_PLATFORM_PICO_DRIVER_SOURCES}
+    ${MICROWORLD_PLATFORM_PICO_DEVICE_SOURCES}
     PROPERTIES
         COMPILE_OPTIONS
             "-Wall;-Wextra;-Wpedantic;-Werror;-fno-exceptions;-fno-rtti"

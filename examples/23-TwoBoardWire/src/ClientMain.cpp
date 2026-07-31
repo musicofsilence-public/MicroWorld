@@ -17,7 +17,7 @@
 #include <MicroWorld/Engine/ObjectPtr.h>
 #include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
 #include <MicroWorld/Platform/Esp32/Esp32TimeSource.h>
-#include <MicroWorld/Platform/Esp32/Esp32UartDriver.h>
+#include <MicroWorld/Platform/Esp32/Esp32UartDevice.h>
 #include <MicroWorld/Platform/Esp32/UartAddress.h>
 
 #include <cstddef>
@@ -105,16 +105,16 @@ private:
  */
 void RunClient() noexcept
 {
-	static FEsp32UartDriver Driver{MakeUartConfig(ClientNodeId)};
-	MW_LOG(Log, "ex23", "client node=%u open=%d", static_cast<unsigned>(ClientNodeId), Driver.IsOpen() ? 1 : 0);
-	if (!Driver.IsOpen())
+	static FEsp32UartDevice Device{MakeUartConfig(ClientNodeId)};
+	MW_LOG(Log, "ex23", "client node=%u open=%d", static_cast<unsigned>(ClientNodeId), Device.IsOpen() ? 1 : 0);
+	if (!Device.IsOpen())
 	{
 		MW_LOG(Error, "ex23", "uart failed to open; halting");
 		return;
 	}
 
 	// All composition objects are static (the ESP32-S3 stack lesson, §2.2).
-	static FWireTransport Transport{Driver};
+	static FWireTransport Transport{Device};
 	static FWireRouter Router;
 	static FWireBinding Wire{Transport, AppWireChannelByte, AppChannelId, EChannelSendTarget::Server, Router};
 	static FWireFrame WireFrame{Transport};

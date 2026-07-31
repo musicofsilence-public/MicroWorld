@@ -87,10 +87,10 @@ has no upload command.
 
 ## Pico + ESP32 LoRa pairing (hardware-gated)
 
-The `lora` image consumes the reusable `FPicoE32LoraDriver` from
+The `lora` image consumes the reusable `FPicoLoraDevice` from
 `Modules/MicroWorld/Platform/Pico`. It is Pico node 1 and sends the same five-byte counter
-payload and MicroWorld frame format as ESP32 example 17. The driver uses UART1
-at 9600 baud, 8N1; its direct FreeRTOS task invokes the generic driver hook
+payload and MicroWorld frame format as ESP32 example 17. The device uses UART1
+at 9600 baud, 8N1; its direct FreeRTOS task invokes the generic device hook
 once each iteration, so UART progress remains non-blocking.
 
 | Pico H | E32-433T20D | Purpose |

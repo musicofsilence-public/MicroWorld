@@ -8,19 +8,19 @@ namespace MicroWorld
 {
 
 /**
- * Opaque fixed-size transport address shared by every Transport driver.
+ * Opaque fixed-size transport address shared by every Transport device.
  *
- * Holds up to `MaxBytes` driver-defined bytes plus an active length, so one type
+ * Holds up to `MaxBytes` device-defined bytes plus an active length, so one type
  * spans a 6-byte UDP IPv4+port, a 1-2 byte LoRa node id, and a 1-byte loopback
  * port index without allocating. The address ascribes no meaning to the bytes;
- * each driver documents the encoding it writes and reads.
+ * each device documents the encoding it writes and reads.
  */
 struct FDeviceAddress
 {
-	/** Maximum address bytes any driver may store; sized for IPv4+port with headroom. */
+	/** Maximum address bytes any device may store; sized for IPv4+port with headroom. */
 	static constexpr std::size_t MaxBytes = 12;
 
-	/** Driver-defined address bytes; only the leading `Size` bytes are meaningful. */
+	/** Device-defined address bytes; only the leading `Size` bytes are meaningful. */
 	std::array<std::uint8_t, MaxBytes> Bytes{};
 
 	/** Count of meaningful leading bytes in `Bytes`; the remaining bytes are unspecified. */

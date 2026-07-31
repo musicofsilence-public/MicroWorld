@@ -1,7 +1,7 @@
 // PlatformEsp32Main.cpp — Phase 5.2 compile/composition proof.
 //
 // This translation unit composes the full MicroWorld stack on ESP32-S3:
-// FEsp32TimeSource (esp_timer, the single real clock) + FEsp32UdpDriver (lwIP
+// FEsp32TimeSource (esp_timer, the single real clock) + FEsp32WifiDevice (lwIP
 // non-blocking UDP) + TTransportHost<4,256> (dedicated server) bound into TEngine
 // via the THostPlaySystem/IPlaySystem interface from Phase 4.4, then ticks it at a
 // fixed 20 ms cadence from app_main. This is a composition proof: the lwIP
@@ -21,7 +21,7 @@
 #include <MicroWorld/Platform/Esp32/Esp32OutputDevice.h>
 #include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
 #include <MicroWorld/Platform/Esp32/Esp32TimeSource.h>
-#include <MicroWorld/Platform/Esp32/Esp32UdpDriver.h>
+#include <MicroWorld/Platform/Esp32/Esp32WifiDevice.h>
 #include <MicroWorld/Platform/Esp32/Esp32WifiLink.h>
 #include <MicroWorld/Core/Time.h>
 
@@ -96,7 +96,7 @@ extern "C" void app_main()
 	FEsp32TimeSource Clock;
 
 	// Bring up the lwIP TCP/IP stack before any socket is opened. Without the tcpip task and the
-	// default event loop, FEsp32UdpDriver's socket()/bind() asserts inside lwIP ("Invalid mbox").
+	// default event loop, FEsp32WifiDevice's socket()/bind() asserts inside lwIP ("Invalid mbox").
 	// No WiFi is associated, so the socket binds but no datagram routes. The composition objects
 	// below are STATIC: TEngine embeds its object storage inline (MaxObjects * SlotBytes) and
 	// the UDP/transport objects hold internal buffers, together too large for the 3584-byte main task
@@ -108,15 +108,15 @@ extern "C" void app_main()
 	}
 
 	// 3. One non-blocking UDP socket on INADDR_ANY:5000 over the stack brought up above.
-	static FEsp32UdpDriver Driver(5000);
+	static FEsp32WifiDevice Device(5000);
 
 	// Compile/link proof for the WiFi facade (MESSAGING 1.1): constructed and queried
 	// but never brought up here — this composition proof associates no WiFi.
 	static FEsp32WifiLink WifiLink;
 	(void)WifiLink.IsUp();
 
-	// 4. A dedicated-server session host over that driver, started at the current boot time.
-	static TTransportHost<4, 256> Transport(Driver);
+	// 4. A dedicated-server session host over that device, started at the current boot time.
+	static TTransportHost<4, 256> Transport(Device);
 	(void)Transport.Configure(ENetworkMode::DedicatedServer, FTransportHostConfig{});
 	Transport.Start(Clock.Now());
 

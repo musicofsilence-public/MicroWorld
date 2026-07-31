@@ -9,7 +9,7 @@ a radio is just another `IDevice` (ADR 0003 logic applies unchanged).
 **Mission.** Give MicroWorld two working radio links and prove them the same
 way the wired links were proven:
 
-1. **E32 LoRa** — the driver (`FEsp32E32LoraDriver`) shipped long ago but no
+1. **E32 LoRa** — the device (`FEsp32LoraDevice`) shipped long ago but no
    example exists and it has never run on hardware. Finish it: volley example,
    hardware verification, full client/server messaging example.
 2. **Bluetooth LE** — nothing exists. Design spike (ADR), a
@@ -22,7 +22,7 @@ so that any LLM (including a weak one) can pick it up, find the next task,
 complete it, and record progress without extra context. Companions:
 `examples/AGENTS.md` (owns the build and hardware-verification procedure),
 `Modules/MicroWorld/Messaging/AGENTS.md` (owns the composition recipes), and examples
-18–21 (the wired driver pattern this plan imitates for radios).
+18–21 (the wired device pattern this plan imitates for radios).
 
 Completed tasks below still cite `PROGRESS.md` and `CHANGELOG.md`. Both files
 were deleted on 2026-07-26 because they had become a third and fourth record of
@@ -143,10 +143,10 @@ join the allowed industry vocabulary alongside `Udp`/`Uart`), format with
   only config structs and plain types
   (`rg -n "esp_|nimble|freertos|host/ble" Modules/MicroWorld/Platform/Esp32/include` must
   stay 0).
-- **Drivers implement the full `IDevice` contract** (`Device.h:40`):
+- **Devices implement the full `IDevice` contract** (`Device.h:40`):
   non-blocking, at most one transport operation per call, transactional
   receives, `IsOpen()` guard after a `noexcept` constructor — mirror
-  `Esp32UartDriver.h` / `Esp32I2cDriver.h` shape for shape.
+  `Esp32UartDevice.h` / `Esp32I2cDevice.h` shape for shape.
 - **Antenna rule (safety, goes in every LoRa README):** never power an E32
   module without its antenna attached — transmitting into no load can damage
   the RF stage. Keep the two antennas ≥ 0.5 m apart on the bench.
@@ -173,7 +173,7 @@ join the allowed industry vocabulary alongside `Udp`/`Uart`), format with
   than Bluedroid, BLE-only fits D1). The Phase 2 spike confirms or overturns
   this with header/size evidence in ADR 0004; only the ADR may change it.
 - **D4 — BLE topology v1 is point-to-point**: one central ↔ one peripheral,
-  as a driver *pair* (`FEsp32BleCentralDriver` / `FEsp32BlePeripheralDriver`)
+  as a device *pair* (`FEsp32BleCentralDevice` / `FEsp32BlePeripheralDevice`)
   mirroring the I2C/SPI master/slave precedent — the role asymmetry enters
   only at the platform edge. Multi-peripheral centrals: revisit trigger is a
   real 3-board example need.
@@ -181,14 +181,14 @@ join the allowed industry vocabulary alongside `Udp`/`Uart`), format with
   frames to the RX characteristic (write-without-response); the peripheral
   notifies whole frames on the TX characteristic. The connection MTU is
   negotiated at connect and must cover `BleMaxPayloadBytes + FrameOverheadBytes + 3`;
-  if negotiation lands lower, the driver reports `Unavailable` rather than
+  if negotiation lands lower, the device reports `Unavailable` rather than
   fragmenting. No fragmentation layer in v1.
 - **D6 — No pairing, no bonding, no encryption in v1.** Bench link only.
   Revisit trigger: any deployment beyond the bench.
 - **D7 — E32 modules run factory defaults in transparent mode**, M0 = M1 =
   GND, UART 9600 8N1, factory channel/address. A module-configuration tool
   (AT/command mode) is out of scope; if a module was reconfigured, restore
-  factory defaults manually before blaming the driver.
+  factory defaults manually before blaming the device.
 - **D8 — LoRa session profile is `TTransportHost<2, 58>` with relaxed timing**:
   `HeartbeatIntervalMilliseconds = 3000`, `PeerTimeoutMilliseconds = 15000`.
   At the E32's default air rate a full frame costs hundreds of milliseconds
@@ -218,11 +218,11 @@ join the allowed industry vocabulary alongside `Udp`/`Uart`), format with
 
 | Concern | Imitate |
 | --- | --- |
-| UART-attached radio transport | `Modules/MicroWorld/Transport/.../RadioE32Driver.h` + `Modules/MicroWorld/Platform/Esp32/.../Esp32E32LoraDriver.h` facade + `src/UartPlatformImplementation.h` |
-| Role-asymmetric driver pair + ISR-side inbox ring | `Modules/MicroWorld/Platform/Esp32/.../Esp32I2cDriver.h` (`FI2cReceiveInbox`) |
-| Per-driver 1-byte address codec | `Modules/MicroWorld/Platform/Esp32/.../LoraAddress.h`, `UartAddress.h` |
+| UART-attached radio transport | `Modules/MicroWorld/Transport/.../E32LoraDevice.h` + `Modules/MicroWorld/Platform/Esp32/.../Esp32LoraDevice.h` facade + `src/UartPlatformImplementation.h` |
+| Role-asymmetric device pair + ISR-side inbox ring | `Modules/MicroWorld/Platform/Esp32/.../Esp32I2cDevice.h` (`FI2cReceiveInbox`) |
+| Per-device 1-byte address codec | `Modules/MicroWorld/Platform/Esp32/.../LoraAddress.h`, `UartAddress.h` |
 | Design-spike ADR with header-derived answers | `docs/architecture/decisions/0003-wired-transports.md` Appendices A/B |
-| Driver volley example | `examples/18-TwoBoardUart` |
+| Device volley example | `examples/18-TwoBoardUart` |
 | Full TTransportHost + engine messaging example | `examples/19-UartMessaging` |
 | Two-link, one-world composition (Phase 5 only) | `Modules/MicroWorld/Messaging/AGENTS.md` composition recipes |
 
@@ -230,11 +230,11 @@ join the allowed industry vocabulary alongside `Udp`/`Uart`), format with
 
 ## 3. What exists today (verified at `b4973be` — the map)
 
-**LoRa historical baseline: driver yes, proof no.** The current architecture
+**LoRa historical baseline: device yes, proof no.** The current architecture
 places portable E32 framing/state in optional `Transport/Lora`, with ESP32 and Pico
 compatibility facades owning UART SDK lifetime. `IUartByteStream` is a narrow
-byte-transfer interface, not a universal HAL. `FEsp32E32LoraDriver`
-(`Esp32E32LoraDriver.h:51`): config `{UartPort, TxGpio, RxGpio,
+byte-transfer interface, not a universal HAL. `FEsp32LoraDevice`
+(`Esp32LoraDevice.h:51`): config `{UartPort, TxGpio, RxGpio,
 BaudRate{9600}, LocalNodeId}`, `E32MaxPayloadBytes = 58`, frames via
 `TFrameDecoder<58>`, address codec `LoraAddress.h`
 (`MakeLoraAddress`/`IsLoraAddress`/`LoraAddressNodeId`). Compile-verified
@@ -260,13 +260,13 @@ COM5/COM7), 2 × E32 LoRa modules with antennas. BLE needs nothing extra.
 
 ### 4.1 LoRa — nothing new to design
 
-The driver, address codec, and payload cap exist. The work is examples +
+The device, address codec, and payload cap exist. The work is examples +
 hardware proof + the D8 session profile. Payload budget (mirrors the
 messaging plan's table):
 
 | Layer | LoRa budget |
 | --- | --- |
-| Driver frame payload (`E32MaxPayloadBytes`) | 58 |
+| Device frame payload (`E32MaxPayloadBytes`) | 58 |
 | `TTransportHost` message payload (−4 header) | 54 |
 | Encoded actor message, best-effort (Phase 5) | 54 (payload ≤ 48) |
 | Encoded actor message, guaranteed (−3) | 51 (payload ≤ 45) |
@@ -281,10 +281,10 @@ pattern, own UUIDs fixed by the spike) with two characteristics: **RX**
 (central writes encoded frames, write-without-response) and **TX**
 (peripheral notifies encoded frames). Both directions carry the same
 `FrameCodec` frames as every other transport; received bytes are pumped
-through `TFrameDecoder` exactly like the UART driver, so partial deliveries
+through `TFrameDecoder` exactly like the UART device, so partial deliveries
 are already handled. MTU is requested at connect to cover one whole frame.
 
-**Public header target** (`Modules/MicroWorld/Platform/Esp32/Esp32BleDriver.h`):
+**Public header target** (`Modules/MicroWorld/Platform/Esp32/Esp32BleDevice.h`):
 
 ```cpp
 /** Largest payload one BLE frame carries; uniform with the wired transports. */
@@ -294,7 +294,7 @@ inline constexpr std::size_t BleMaxPayloadBytes = 120;
 struct FEsp32BlePeripheralConfig
 {
     const char* DeviceName;          // advertised name the central scans for
-    std::uint8_t LocalNodeId;        // frame identity, mirrors the wired drivers
+    std::uint8_t LocalNodeId;        // frame identity, mirrors the wired devices
 };
 
 /** Settings for the scanning (central) side of the point-to-point link. */
@@ -306,10 +306,10 @@ struct FEsp32BleCentralConfig
 };
 
 /** Peripheral-role BLE transport: advertises, accepts one central. */
-class FEsp32BlePeripheralDriver final : public IDevice
+class FEsp32BlePeripheralDevice final : public IDevice
 {
 public:
-    explicit FEsp32BlePeripheralDriver(const FEsp32BlePeripheralConfig& Config) noexcept;
+    explicit FEsp32BlePeripheralDevice(const FEsp32BlePeripheralConfig& Config) noexcept;
     bool IsOpen() const noexcept;        // stack up, service registered, advertising
     bool IsConnected() const noexcept;   // a central is connected and MTU covers one frame
     // IDevice: TrySend = one notify of one encoded frame (Unavailable until connected);
@@ -318,10 +318,10 @@ public:
 };
 
 /** Central-role BLE transport: scans, connects to one named peripheral. */
-class FEsp32BleCentralDriver final : public IDevice
+class FEsp32BleCentralDevice final : public IDevice
 {
 public:
-    explicit FEsp32BleCentralDriver(const FEsp32BleCentralConfig& Config) noexcept;
+    explicit FEsp32BleCentralDevice(const FEsp32BleCentralConfig& Config) noexcept;
     bool IsOpen() const noexcept;
     bool IsConnected() const noexcept;
     // IDevice: TrySend = one write-without-response; TryReceive as above.
@@ -329,20 +329,20 @@ public:
 ```
 
 Plus `BleAddress.h` (`MakeBleAddress`/`IsBleAddress`/`BleAddressNodeId`,
-1-byte node id, per-driver codec duplication is the package precedent).
+1-byte node id, per-device codec duplication is the package precedent).
 NimBLE callbacks run on the host task → they push raw bytes into an SPSC
 inbox ring (imitate `FI2cReceiveInbox`); `TryReceive` pops and pumps the
 decoder on the caller's thread. Reconnect policy v1: a dropped connection
-flips `IsConnected()` false and the drivers resume
+flips `IsConnected()` false and the devices resume
 advertising/scanning internally; sends meanwhile return `Unavailable`
-(callers already handle that — it is the standard driver contract).
+(callers already handle that — it is the standard device contract).
 
 **Spike questions ADR 0004 must answer with evidence** (ESP-IDF 6.0.1
 headers/docs, imitate ADR 0003's appendices): NimBLE vs Bluedroid final call
 (flash/RAM cost figures); exact sdkconfig flag set for D11's
 `sdkconfig.ble.defaults`; service/characteristic UUIDs; achievable MTU
 between two S3s and the request sequence; write-without-response vs write
-throughput/backpressure (what does "driver `Full`" map to); connection
+throughput/backpressure (what does "device `Full`" map to); connection
 supervision timeout vs `TTransportHost` heartbeat profile for BLE; how the consumer
 compile probe builds with BT enabled without touching the shared profile.
 
@@ -363,7 +363,7 @@ compile probe builds with BT enabled without touching the shared profile.
 | 0 | Baseline & governance | 2 | ✅ |
 | 1 | LoRa proven on hardware | 4 | ✅ |
 | 2 | Bluetooth LE design spike (ADR 0004) | 1 | ⬜ |
-| 3 | BLE driver pair | 2 | ⬜ |
+| 3 | BLE device pair | 2 | ⬜ |
 | 4 | BLE examples on hardware | 4 | ⬜ |
 | 5 | Wireless actor-messaging world | 2 | ⛔ gated (D10) |
 | 6 | Documentation & close-out | 2 | ⬜ |
@@ -407,13 +407,13 @@ compile probe builds with BT enabled without touching the shared profile.
 
 ### Phase 1 — LoRa proven on hardware 🟨
 
-Goal: the four-year-old catalog hole closes — the E32 driver runs on the
+Goal: the four-year-old catalog hole closes — the E32 device runs on the
 bench, first as a raw volley, then under the full engine.
 
-- [x] **1.1 Example `17-TwoBoardLora` (driver volley).** Copy example 18's
+- [x] **1.1 Example `17-TwoBoardLora` (device volley).** Copy example 18's
   entire shape (`examples/18-TwoBoardUart` — one `Main.cpp`, two role envs
   via `-DMICROWORLD_EXAMPLE_NODE_ID=1|2`, counter ping-pong, `[ex17]` tag)
-  with these substitutions: driver `FEsp32E32LoraDriver`, config
+  with these substitutions: device `FEsp32LoraDevice`, config
   `{.UartPort = 1, .TxGpio = 17, .RxGpio = 18, .BaudRate = 9600,
   .LocalNodeId = 1|2}` (same pins as example 18 — the E32 replaces the null
   wire), addresses via `MakeLoraAddress`, volley pacing ≥ 1000 ms (airtime,
@@ -429,7 +429,7 @@ bench, first as a raw volley, then under the full engine.
   Done 2026-07-24 — `examples/17-TwoBoardLora` created (6 tracked files:
   `src/Main.cpp`, `src/CMakeLists.txt`, `CMakeLists.txt`, `platformio.ini`,
   `README.md`, `AGENTS.md`) as example 18's volley with only the transport
-  swapped to `FEsp32E32LoraDriver` (config `UartPort 1 / TxGpio 17 / RxGpio 18 /
+  swapped to `FEsp32LoraDevice` (config `UartPort 1 / TxGpio 17 / RxGpio 18 /
   BaudRate 9600 / LocalNodeId 1|2`, `MakeLoraAddress` destination,
   `LoraAddressNodeId` sender, `E32MaxPayloadBytes` RX buffer, 1000 ms airtime
   pacing per D8, `ex17` tag, engine-first `MW_LOG`/`SleepMilliseconds`/
@@ -504,7 +504,7 @@ bench, first as a raw volley, then under the full engine.
   `src/LoraMessagingShared.h`, `src/CMakeLists.txt`, `CMakeLists.txt`,
   `platformio.ini`, `README.md`, `AGENTS.md`) as example 19's `TTransportHost`
   client/server protocol with only the transport swapped to
-  `FEsp32E32LoraDriver` at the D8 airtime profile: `TTransportHost<2, 58>`, heartbeat
+  `FEsp32LoraDevice` at the D8 airtime profile: `TTransportHost<2, 58>`, heartbeat
   3000 / timeout 15000, `ServerAddress = MakeLoraAddress(1)`, 2-byte state
   broadcast paced 1000 ms (server ticks the engine every poll but gates the
   radio broadcast on a deadline — a full E32 frame costs hundreds of ms of
@@ -572,14 +572,14 @@ bench, first as a raw volley, then under the full engine.
 
 ---
 
-### Phase 3 — BLE driver pair ⬜
+### Phase 3 — BLE device pair ⬜
 
-- [ ] **3.1 `FEsp32BlePeripheralDriver` + `FEsp32BleCentralDriver` +
+- [ ] **3.1 `FEsp32BlePeripheralDevice` + `FEsp32BleCentralDevice` +
   `BleAddress.h`.** Implement §4.2 as confirmed by ADR 0004: public header
-  `Esp32BleDriver.h` (configs + both driver classes, full Doxygen), private
-  `src/BlePlatformImplementation.h` + `src/Esp32BleDriver.cpp` (all
+  `Esp32BleDevice.h` (configs + both device classes, full Doxygen), private
+  `src/BlePlatformImplementation.h` + `src/Esp32BleDevice.cpp` (all
   NimBLE/ESP-IDF includes confined there), inbox ring imitating
-  `FI2cReceiveInbox`, decoder pump imitating the UART driver's receive path,
+  `FI2cReceiveInbox`, decoder pump imitating the UART device's receive path,
   `BleAddress.h` mirroring `LoraAddress.h`'s three functions. Non-copy,
   non-move, `noexcept` constructors, `IsOpen()`/`IsConnected()` guards,
   transactional receives. Update `library.json`/CMake lists if they
@@ -590,7 +590,7 @@ bench, first as a raw volley, then under the full engine.
   line-by-line re-read recorded in the evidence line (no host build exists).
   **Verify:** Standard Verify + the include-gate grep. Compile proof
   deliberately lands in task 3.2 (the probe needs 3.2's sdkconfig plumbing) —
-  a driver nobody compiles is not done, so the phase closes only when 3.2's
+  a device nobody compiles is not done, so the phase closes only when 3.2's
   probe builds these classes.
 
 - [ ] **3.2 BLE build plumbing + compile probe.** Create
@@ -598,11 +598,11 @@ bench, first as a raw volley, then under the full engine.
   flag set (D11 — the shared `sdkconfig.defaults` is untouched). Extend the
   ESP32 consumer project (`Modules/tests/Core/consumer`) with a `ble` env
   that layers both defaults files and compiles a minimal probe instantiating
-  both drivers (imitate how the existing Transport/Engine ESP32 probes are wired).
+  both devices (imitate how the existing Transport/Engine ESP32 probes are wired).
   Document the two-file `SDKCONFIG_DEFAULTS` mechanism in
   `examples/esp32-common/AGENTS.md`.
 
-  **Done when:** the probe env compiles both drivers under the strict flags;
+  **Done when:** the probe env compiles both devices under the strict flags;
   the frozen shared profile is byte-identical to before.
   **Verify:** `pio run` (consumer `ble` env) + `git -C . diff --stat
   examples/esp32-common/sdkconfig.defaults` shows no change + Standard
@@ -612,14 +612,14 @@ bench, first as a raw volley, then under the full engine.
 
 ### Phase 4 — BLE examples on hardware ⬜
 
-- [ ] **4.1 Example `27-TwoBoardBle` (driver volley).** Example 18's shape
+- [ ] **4.1 Example `27-TwoBoardBle` (device volley).** Example 18's shape
   again: peripheral env (`-DMICROWORLD_EXAMPLE_PERIPHERAL=1`, node id 1,
   `DeviceName "microworld-ex27"`) and central env (`=0`, node id 2,
   `PeerDeviceName` matching). Volley starts only when both sides report
   `IsConnected()`; pacing 500 ms; tag `[ex27]`. `platformio.ini` layers the
   D11 defaults pair. README: no wiring at all (first wireless wired-shaped
   example — say so), the §2.2 BLE security posture verbatim, connection
-  troubleshooting (name mismatch, MTU too low → driver `Unavailable`).
+  troubleshooting (name mismatch, MTU too low → device `Unavailable`).
   AGENTS.md; catalog row.
 
   **Done when:** both envs compile; README/AGENTS/catalog complete.
@@ -684,9 +684,9 @@ BLE work in Phases 2–4.
 ### Phase 6 — Documentation & close-out ⬜
 
 - [ ] **6.1 Documentation sweep.** `Modules/MicroWorld/Platform/Esp32` README/AGENTS: BLE
-  driver pair + BleAddress rows next to the existing transport tables.
-  `docs/Porting.md` (locate the Device section's driver list): add BLE. `docs/UE5ConceptMap.md`:
-  one row (BLE/LoRa drivers ≈ more `UNetDriver` transports — reuse the
+  device pair + BleAddress rows next to the existing transport tables.
+  `docs/Porting.md` (locate the Device section's device list): add BLE. `docs/UE5ConceptMap.md`:
+  one row (BLE/LoRa devices ≈ more `UNetDevice` transports — reuse the
   existing wording). `examples/AGENTS.md`: note that radio examples carry
   mandatory safety blocks. If MESSAGING Phase 1 has shipped the log/sleep
   facades by now, sweep examples 17/26/27/28 onto them (§2.2 amendment);
@@ -699,7 +699,7 @@ BLE work in Phases 2–4.
 - [ ] **6.2 Close the plan.** `examples/README.md` final statuses. Final full
   run: Standard Verify + folder-agents + `pio run` for every example this plan
   touched. The commit that closes the plan is its release record — it names the
-  BLE driver pair, BleAddress, sdkconfig.ble.defaults, ADR 0004, examples 17 and
+  BLE device pair, BleAddress, sdkconfig.ble.defaults, ADR 0004, examples 17 and
   26–29, and E32 LoRa proven on hardware.
 
   **Done when:** everything green; tracker rows all ✅ (Phase 5 may read
@@ -713,7 +713,7 @@ BLE work in Phases 2–4.
 1. **The S3 has no Bluetooth Classic** (D1). Do not plan SPP/serial-profile
    anything; BLE GATT is the only door.
 2. **Do not fragment BLE frames** (D5). If the MTU negotiation lands too low,
-   the driver reports `Unavailable` — fix the sdkconfig/MTU request, not the
+   the device reports `Unavailable` — fix the sdkconfig/MTU request, not the
    framing.
 3. **Never power an E32 without its antenna** — and put the antenna rule in
    every LoRa README; it protects the next student's hardware.

@@ -10,11 +10,11 @@ define; `ServerMain.cpp` and `ClientMain.cpp` hold the two roles and are both
 always compiled (matching example 19's structure), and `LoraMessagingShared.h`
 defines the channels, opcode, node ids, and config builders once. The server is
 a full `TEngine` + `THostPlaySystem` + `TTransportHost` (DedicatedServer); the
-client is a bare `TTransportHost` (Client). Both run over `FEsp32E32LoraDriver`.
+client is a bare `TTransportHost` (Client). Both run over `FEsp32LoraDevice`.
 
 ## Concepts
 
-- Same application protocol as example 19 — only the driver construction and
+- Same application protocol as example 19 — only the device construction and
   the D8 session profile differ. No `WifiStation`, no `NetworkConfig`, no
   `esp_netif_init`.
 - Server node id 1, client node id 2; the client's `ServerAddress` is

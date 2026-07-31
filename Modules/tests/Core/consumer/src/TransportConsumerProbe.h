@@ -46,7 +46,7 @@ enum class ETransportConsumerExitCode : int
 	LoopbackTooSmallDidNotReturnFull = 8,
 	ManagerQueueDidNotAcceptPacket = 9,
 	ManagerAdvanceDidNotSendHead = 10,
-	ManagerDriverFullDidNotRetainHead = 11,
+	ManagerDeviceFullDidNotRetainHead = 11,
 	ManagerReceiveDidNotPropagateSuccess = 12,
 	ManagerRecoveryDidNotClearBackpressure = 13,
 	MemoryProfileFailureOffset = 100,
@@ -228,23 +228,23 @@ inline int RunTransportConsumerProbe() noexcept
 		return static_cast<int>(ETransportConsumerExitCode::ManagerAdvanceDidNotSendHead);
 	}
 
-	// Backpressure: fill the driver, then observe the manager retain its head across a Full advance.
-	THostLoopback<2, 1, 4> BackpressureDriver;
+	// Backpressure: fill the device, then observe the manager retain its head across a Full advance.
+	THostLoopback<2, 1, 4> BackpressureDevice;
 	MicroWorld::TTransportPacketStorage<1, 4> BackpressureStorage;
-	TTransportManager<1, 4> BackpressureManager(BackpressureDriver.Port(0), BackpressureStorage);
+	TTransportManager<1, 4> BackpressureManager(BackpressureDevice.Port(0), BackpressureStorage);
 	const std::uint8_t BackpressurePacket[MicroWorldConsumer::SmallPacketByteCount] = {
 		MicroWorldConsumer::ByteValue55, MicroWorldConsumer::ByteValue66};
-	BackpressureDriver.Port(0).TrySend(LoopbackPort0, TSpan<const std::uint8_t>(BackpressurePacket, MicroWorldConsumer::SmallPacketByteCount));
+	BackpressureDevice.Port(0).TrySend(LoopbackPort0, TSpan<const std::uint8_t>(BackpressurePacket, MicroWorldConsumer::SmallPacketByteCount));
 	BackpressureManager.QueueSend(LoopbackPort0, TSpan<const std::uint8_t>(BackpressurePacket, MicroWorldConsumer::SmallPacketByteCount));
 	const ETransportResult BackpressureAdvanceResult = BackpressureManager.AdvanceSend();
 	const bool bRetainsHeadOnFull = BackpressureAdvanceResult == ETransportResult::Full && !BackpressureManager.IsEmpty();
 	if (!bRetainsHeadOnFull)
 	{
-		// The manager must still hold its queued packet when the driver reports Full.
-		return static_cast<int>(ETransportConsumerExitCode::ManagerDriverFullDidNotRetainHead);
+		// The manager must still hold its queued packet when the device reports Full.
+		return static_cast<int>(ETransportConsumerExitCode::ManagerDeviceFullDidNotRetainHead);
 	}
-	// Clear backpressure and observe recovery: drain the driver, then advance must succeed.
-	BackpressureDriver.Drain(0);
+	// Clear backpressure and observe recovery: drain the device, then advance must succeed.
+	BackpressureDevice.Drain(0);
 	const ETransportResult RecoveryResult = BackpressureManager.AdvanceSend();
 	const bool bRecoveredAfterDrain = RecoveryResult == ETransportResult::Success && BackpressureManager.IsEmpty();
 	if (!bRecoveredAfterDrain)
@@ -252,7 +252,7 @@ inline int RunTransportConsumerProbe() noexcept
 		return static_cast<int>(ETransportConsumerExitCode::ManagerRecoveryDidNotClearBackpressure);
 	}
 
-	// Direct receive: the manager must propagate the driver success and byte count.
+	// Direct receive: the manager must propagate the device success and byte count.
 	std::uint8_t ReceiveDestination[MicroWorldConsumer::LoopbackDestinationByteCount]{};
 	FReceiveResult ReceiveResult{};
 	FDeviceAddress ReceiveFrom{};

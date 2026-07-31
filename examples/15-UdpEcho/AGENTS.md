@@ -6,17 +6,17 @@ Inherits `../AGENTS.md`.
 
 Single role, one file: `Main.cpp`'s `app_main` installs `WriteEsp32LogRecord`, brings up the SoftAP
 via `FEsp32WifiLink::StartAccessPoint`, then echoes every UDP datagram back to its sender
-through `FEsp32UdpDriver`, pacing the poll loop with `SleepMilliseconds`. `UdpEchoShared.h`
+through `FEsp32WifiDevice`, pacing the poll loop with `SleepMilliseconds`. `UdpEchoShared.h`
 holds the one copy of the demo AP config (SSID/password) and the echo port.
 
 ## Concepts
 
 - Proves the `IDevice` UDP transport hosting its own network with **no router**: this
-  board is the SoftAP and echoes via `FEsp32UdpDriver`. No `TTransportHost`, no engine — the driver
+  board is the SoftAP and echoes via `FEsp32WifiDevice`. No `TTransportHost`, no engine — the device
   only.
-- **Ordering + storage invariants:** the driver is constructed only after
+- **Ordering + storage invariants:** the device is constructed only after
   `FEsp32WifiLink::StartAccessPoint` returns `Success`; all composition objects (`WifiLink`,
-  `Driver`, `RxBuffer`) are `static` (§2.2).
+  `Device`, `RxBuffer`) are `static` (§2.2).
 - No secrets: the SoftAP SSID/password are fixed demo values in the committed shared header,
   not a real network's credentials.
 

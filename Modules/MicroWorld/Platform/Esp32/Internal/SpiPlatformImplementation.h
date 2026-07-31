@@ -2,23 +2,23 @@
 
 // =============================================================================
 // src/SpiPlatformImplementation.h is the SOLE header that pulls ESP-IDF SPI headers.
-// It is included by one driver translation unit — Esp32SpiDriver.cpp (the wired
+// It is included by one device translation unit — Esp32SpiDevice.cpp (the wired
 // point-to-point SPI master/slave link pair) — and a public header must never reach
-// it. Every ESP-IDF SPI divergence is hidden behind the helpers below so both driver
-// classes read one platform-free path that mirrors the UART and I2C drivers. Example
+// it. Every ESP-IDF SPI divergence is hidden behind the helpers below so both device
+// classes read one platform-free path that mirrors the UART and I2C devices. Example
 // 21's master-clocked ping-pong runtime-verifies this path on ESP32-S3 (2026-07-23):
 // SPI is full-duplex, so every master transaction both sends and receives (the master
-// driver feeds the received window to its decoder rather than discarding it — confirmed
-// working); the slave is queue-based, so the driver keeps one persistent transaction
+// device feeds the received window to its decoder rather than discarding it — confirmed
+// working); the slave is queue-based, so the device keeps one persistent transaction
 // descriptor queued and the FrameCodec CRC rejects any garbage a momentary empty-queue
 // gap produces. Error/timeout branches stayed unexercised (every exchange succeeded).
-// DMA is used (SPI_DMA_CH_AUTO), so the driver's transmit/receive buffers must live in
-// internal RAM — the example composition root makes each driver static, as the ESP32-S3
+// DMA is used (SPI_DMA_CH_AUTO), so the device's transmit/receive buffers must live in
+// internal RAM — the example composition root makes each device static, as the ESP32-S3
 // main-task stack lesson in examples/AGENTS.md already requires. See ../AGENTS.md for
 // the rule this comment satisfies.
 // =============================================================================
 
-#include <MicroWorld/Platform/Esp32/Esp32SpiDriver.h>
+#include <MicroWorld/Platform/Esp32/Esp32SpiDevice.h>
 
 #include <driver/spi_common.h>
 #include <driver/spi_master.h>
@@ -73,7 +73,7 @@ inline spi_host_device_t AsSpiHost(const int InHost) noexcept
  *
  * Uses SPI mode 0 at `ClockHz` with an automatically selected DMA channel and a transfer size of one whole
  * window. On any failure the partially initialized bus is freed so the caller sees `bOpen == false` and can
- * leave the driver inert without throwing.
+ * leave the device inert without throwing.
  *
  * @param InHost SPI host number to initialize.
  * @param InMosi MOSI GPIO number.
@@ -153,7 +153,7 @@ inline ESpiTransmitOutcome TransmitSpiMaster(
 /**
  * Removes the device and frees the master bus opened by `OpenConfiguredSpiMaster`.
  *
- * Each step is a safe no-op or ignored return because the driver is already going inert and there is no
+ * Each step is a safe no-op or ignored return because the device is already going inert and there is no
  * recovery action at this layer.
  *
  * @param InHost SPI host number to free.
@@ -172,7 +172,7 @@ inline void CloseSpiMaster(const int InHost, const spi_device_handle_t InDevice)
  * Initializes the SPI bus as a slave listening on the given pins.
  *
  * Uses SPI mode 0 with an automatically selected DMA channel; the master supplies the clock, so no speed is
- * set here. On failure the caller sees `bOpen == false` and can leave the driver inert without throwing.
+ * set here. On failure the caller sees `bOpen == false` and can leave the device inert without throwing.
  *
  * @param InHost SPI host number to initialize.
  * @param InMosi MOSI GPIO number.
@@ -250,7 +250,7 @@ inline bool HarvestSpiSlave(const int InHost) noexcept
 /**
  * Frees the SPI slave bus opened by `OpenConfiguredSpiSlave`.
  *
- * The return value is ignored because the driver is already going inert and there is no recovery action at
+ * The return value is ignored because the device is already going inert and there is no recovery action at
  * this layer.
  *
  * @param InHost SPI host number to free.

@@ -6,7 +6,7 @@
 #include <MicroWorld/Transport/TransportHost.h>
 #include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Platform/Host/HostTimeSource.h>
-#include <MicroWorld/Platform/Host/HostUdpDriver.h>
+#include <MicroWorld/Platform/Host/HostWifiDevice.h>
 #include <MicroWorld/Platform/Host/UdpAddress.h>
 #include <MicroWorld/Core/Time.h>
 #include <MicroWorld/Core/Delegates/Delegate.h>
@@ -66,8 +66,8 @@ constexpr std::uint8_t ApplicationChannel = 1;
 
 /** Drives one client and one server through the Hello/Welcome handshake over UDP, bounded by the iteration cap. */
 void PumpHandshake(
-	FHostUdpDriver& ServerDriver,
-	FHostUdpDriver& ClientDriver,
+	FHostWifiDevice& ServerDevice,
+	FHostWifiDevice& ClientDevice,
 	TTransportHost<TransportHostPeerCapacity, TransportHostScratchBytes>& Server,
 	TTransportHost<TransportHostPeerCapacity, TransportHostScratchBytes>& Client,
 	const TimePointMilliseconds Now) noexcept
@@ -75,13 +75,13 @@ void PumpHandshake(
 	for (int Iteration = 0; Iteration < HandshakeIterationCap; ++Iteration)
 	{
 		(void)Client.PumpSend(Now);
-		const bool bServerReadable = ServerDriver.PollReadable(HandshakePollTimeoutMilliseconds);
+		const bool bServerReadable = ServerDevice.PollReadable(HandshakePollTimeoutMilliseconds);
 		if (bServerReadable)
 		{
 			(void)Server.PumpReceive(Now);
 		}
 		(void)Server.PumpSend(Now);
-		const bool bClientReadable = ClientDriver.PollReadable(HandshakePollTimeoutMilliseconds);
+		const bool bClientReadable = ClientDevice.PollReadable(HandshakePollTimeoutMilliseconds);
 		if (bClientReadable)
 		{
 			(void)Client.PumpReceive(Now);
@@ -104,18 +104,18 @@ void PumpHandshake(
 MW_TEST_CASE(HostTransportHandshakeAndApplicationMessageCrossRealUdp)
 {
 	// Arrange
-	FHostUdpDriver ServerDriver(0);
-	FHostUdpDriver ClientDriver(0);
-	MW_EXPECT_TRUE(Test, ServerDriver.IsOpen(), "The server UDP driver opened");
-	MW_EXPECT_TRUE(Test, ClientDriver.IsOpen(), "The client UDP driver opened");
+	FHostWifiDevice ServerDevice(0);
+	FHostWifiDevice ClientDevice(0);
+	MW_EXPECT_TRUE(Test, ServerDevice.IsOpen(), "The server UDP device opened");
+	MW_EXPECT_TRUE(Test, ClientDevice.IsOpen(), "The client UDP device opened");
 
-	TTransportHost<TransportHostPeerCapacity, TransportHostScratchBytes> Server(ServerDriver);
-	TTransportHost<TransportHostPeerCapacity, TransportHostScratchBytes> Client(ClientDriver);
+	TTransportHost<TransportHostPeerCapacity, TransportHostScratchBytes> Server(ServerDevice);
+	TTransportHost<TransportHostPeerCapacity, TransportHostScratchBytes> Client(ClientDevice);
 	FTransportHostConfig ServerConfig{};
 	MW_EXPECT_EQ(
 		Test, ETransportResult::Success, Server.Configure(ENetworkMode::DedicatedServer, ServerConfig), "The server configures as dedicated");
 	FTransportHostConfig ClientConfig{};
-	ClientConfig.ServerAddress = MakeUdpAddress(OctetA, OctetB, OctetC, OctetD, ServerDriver.BoundPort());
+	ClientConfig.ServerAddress = MakeUdpAddress(OctetA, OctetB, OctetC, OctetD, ServerDevice.BoundPort());
 	MW_EXPECT_EQ(
 		Test,
 		ETransportResult::Success,
@@ -141,7 +141,7 @@ MW_TEST_CASE(HostTransportHandshakeAndApplicationMessageCrossRealUdp)
 	MW_EXPECT_EQ(Test, EDelegateResult::Success, Server.AddMessageHandler(std::move(Binding), ServerHandle), "The server handler binds");
 
 	// Act
-	PumpHandshake(ServerDriver, ClientDriver, Server, Client, Now);
+	PumpHandshake(ServerDevice, ClientDevice, Server, Client, Now);
 	MW_EXPECT_EQ(Test, ETransportHostState::Connected, Client.GetState(), "The client reached Connected over UDP");
 	MW_EXPECT_EQ(Test, std::size_t{1}, Server.ActivePeerCount(), "The server admitted exactly one peer");
 
@@ -153,7 +153,7 @@ MW_TEST_CASE(HostTransportHandshakeAndApplicationMessageCrossRealUdp)
 		Client.SendTo(ServerPeer, ApplicationChannel, TSpan<const std::uint8_t>(AppPayload.data(), AppPayload.size())),
 		"The client queues one channel-1 message to the server");
 	(void)Client.PumpSend(Now);
-	const bool bServerDelivered = ServerDriver.PollReadable(HandshakePollTimeoutMilliseconds);
+	const bool bServerDelivered = ServerDevice.PollReadable(HandshakePollTimeoutMilliseconds);
 	if (bServerDelivered)
 	{
 		(void)Server.PumpReceive(Now);

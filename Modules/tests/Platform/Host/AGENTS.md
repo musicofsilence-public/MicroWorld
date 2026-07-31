@@ -4,7 +4,7 @@ Inherits `../../../AGENTS.md`.
 
 ## Architecture
 
-Real-socket host tests for `FHostUdpDriver` and `FHostTimeSource`: round-trip
+Real-socket host tests for `FHostWifiDevice` and `FHostTimeSource`: round-trip
 send/receive, bind/close, WinSock reference-counting, and time-source
 monotonicity.
 

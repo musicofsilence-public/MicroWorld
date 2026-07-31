@@ -3,7 +3,7 @@
 #include <MicroWorld/Platform/Esp32/Esp32OutputDevice.h>
 #include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
 #include <MicroWorld/Platform/Esp32/Esp32TimeSource.h>
-#include <MicroWorld/Platform/Esp32/Esp32UartDriver.h>
+#include <MicroWorld/Platform/Esp32/Esp32UartDevice.h>
 #include <MicroWorld/Platform/Esp32/UartAddress.h>
 
 #include <cstddef>
@@ -46,7 +46,7 @@ constexpr unsigned PollPacingMilliseconds = 10;
 /** Volley payload layout: byte 0 is the sender node id, bytes 1..4 the counter (big-endian). */
 constexpr std::size_t VolleyPayloadBytes = 5;
 
-/** Renders one driver outcome as a short label so the serial trace reads plainly. */
+/** Renders one device outcome as a short label so the serial trace reads plainly. */
 const char* ToText(const MicroWorld::ETransportResult Result) noexcept
 {
 	switch (Result)
@@ -81,7 +81,7 @@ std::uint32_t ReadVolleyCounter(const std::uint8_t* const In) noexcept
 		| static_cast<std::uint32_t>(In[4]);
 }
 
-/** Builds the driver configuration for this node from the fixed pins and baud. */
+/** Builds the device configuration for this node from the fixed pins and baud. */
 MicroWorld::FEsp32UartConfig MakeUartConfig(const std::uint8_t NodeId) noexcept
 {
 	MicroWorld::FEsp32UartConfig Config;
@@ -100,9 +100,9 @@ extern "C" void app_main(void)
 	MicroWorld::SetOutputDevice(&MicroWorld::WriteEsp32LogRecord);
 
 	// Static, never on the app_main stack (the ESP32-S3 stack lesson, §2.2).
-	static MicroWorld::FEsp32UartDriver Driver{MakeUartConfig(LocalNodeId)};
-	MW_LOG(Log, "ex18", "node=%u open=%d", static_cast<unsigned>(LocalNodeId), Driver.IsOpen() ? 1 : 0);
-	if (!Driver.IsOpen())
+	static MicroWorld::FEsp32UartDevice Device{MakeUartConfig(LocalNodeId)};
+	MW_LOG(Log, "ex18", "node=%u open=%d", static_cast<unsigned>(LocalNodeId), Device.IsOpen() ? 1 : 0);
+	if (!Device.IsOpen())
 	{
 		// A failed UART open cannot recover here; stop with a clear line instead of looping.
 		MW_LOG(Error, "ex18", "uart failed to open; halting");
@@ -123,7 +123,7 @@ extern "C" void app_main(void)
 		// Receive at most one frame; a completed volley schedules the reply (counter + 1).
 		MicroWorld::FDeviceAddress From{};
 		MicroWorld::FReceiveResult Received{};
-		const MicroWorld::ETransportResult RxResult = Driver.TryReceive(From, MicroWorld::TSpan<std::uint8_t>(RxBuffer, sizeof(RxBuffer)), Received);
+		const MicroWorld::ETransportResult RxResult = Device.TryReceive(From, MicroWorld::TSpan<std::uint8_t>(RxBuffer, sizeof(RxBuffer)), Received);
 		if (RxResult == MicroWorld::ETransportResult::Success && Received.BytesReceived == VolleyPayloadBytes)
 		{
 			const std::uint32_t Counter = ReadVolleyCounter(RxBuffer);
@@ -140,7 +140,7 @@ extern "C" void app_main(void)
 			std::uint8_t Payload[VolleyPayloadBytes];
 			WriteVolleyPayload(Payload, LocalNodeId, PendingCounter);
 			const MicroWorld::ETransportResult TxResult =
-				Driver.TrySend(MicroWorld::MakeUartAddress(PeerNodeId), MicroWorld::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
+				Device.TrySend(MicroWorld::MakeUartAddress(PeerNodeId), MicroWorld::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
 			MW_LOG(Log, "ex18", "tx n=%u result=%s", static_cast<unsigned>(PendingCounter), ToText(TxResult));
 			if (TxResult == MicroWorld::ETransportResult::Success)
 			{

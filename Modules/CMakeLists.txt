@@ -17,7 +17,7 @@ option(MICROWORLD_BUILD_BENCHMARKS "Build MicroWorld host benchmarks" OFF)
 # sources) subsets. RP2040 builds omit the IP sources to fit 264 KB RAM; a
 # radio-less build omits the E32 framing. Both are link-time facts expressed as
 # options, not folders, so the merged Transport system keeps one home.
-option(MICROWORLD_TRANSPORT_RADIO "Include the RadioE32 transport sources" ON)
+option(MICROWORLD_TRANSPORT_LORA "Include the RadioE32 transport sources" ON)
 option(MICROWORLD_TRANSPORT_IP "Include the IP/protocol transport sources" ON)
 
 # The single include root for every system: <MicroWorld/...> resolves here.
@@ -131,17 +131,17 @@ add_library(MicroWorld::Messaging ALIAS microworld_messaging)
 # ---------------------------------------------------------------------------
 # Transport: byte I/O, frame codec, TTransportHost (the former Net package) plus the
 # optional portable RadioE32 framing. The IP and radio subsets are toggled by
-# MICROWORLD_TRANSPORT_IP / MICROWORLD_TRANSPORT_RADIO so a Pico build can omit
+# MICROWORLD_TRANSPORT_IP / MICROWORLD_TRANSPORT_LORA so a Pico build can omit
 # the IP/protocol sources and a radio-less build can omit the E32 sources.
 # ---------------------------------------------------------------------------
 set(MICROWORLD_TRANSPORT_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Transport/Device.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Transport/PacketDropDriver.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Transport/PacketDropDevice.cpp"
 )
-if(MICROWORLD_TRANSPORT_RADIO)
+if(MICROWORLD_TRANSPORT_LORA)
     list(APPEND MICROWORLD_TRANSPORT_SOURCES
         "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Transport/Lora/E32LoraTransportState.cpp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Transport/Lora/RadioE32Driver.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Transport/Lora/E32LoraDevice.cpp"
     )
 endif()
 
@@ -192,7 +192,7 @@ microworld_disable_exceptions_and_rtti("${MICROWORLD_APPLICATION_SOURCES}")
 # gate (it reaches OS headers); only the host superbuild builds it.
 # ---------------------------------------------------------------------------
 set(MICROWORLD_PLATFORM_HOST_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Platform/Host/HostUdpDriver.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Platform/Host/HostWifiDevice.cpp"
 )
 
 add_library(microworld_platform_host STATIC ${MICROWORLD_PLATFORM_HOST_SOURCES})
@@ -210,9 +210,9 @@ microworld_disable_exceptions_and_rtti("${MICROWORLD_PLATFORM_HOST_SOURCES}")
 
 # ---------------------------------------------------------------------------
 # PlatformPico: the SDK-free compatibility facade is host-tested here; the real
-# driver target requires an initialized Pico SDK and stays outside this build.
+# device target requires an initialized Pico SDK and stays outside this build.
 # ---------------------------------------------------------------------------
-set(MICROWORLD_PLATFORM_PICO_BUILD_DRIVER OFF)
+set(MICROWORLD_PLATFORM_PICO_BUILD_DEVICE OFF)
 option(
     MICROWORLD_PLATFORM_PICO_BUILD_TESTS
     "Build SDK-free PlatformPico compatibility facade tests"
@@ -253,7 +253,7 @@ function(microworld_platform_pico_enable_strict_source_options SourceFiles)
 endfunction()
 
 # A header-only facade alias so consumers can name MicroWorld::PlatformPico even
-# in the host build where the real driver target is unavailable.
+# in the host build where the real device target is unavailable.
 add_library(microworld_platform_pico INTERFACE)
 add_library(MicroWorld::PlatformPico ALIAS microworld_platform_pico)
 target_include_directories(microworld_platform_pico INTERFACE
@@ -369,12 +369,12 @@ if(MICROWORLD_BUILD_TESTS)
         "${MICROWORLD_TESTS_ROOT}/Transport/E32LoraTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Transport/FrameCodecTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Transport/HostLoopbackTests.cpp"
-        "${MICROWORLD_TESTS_ROOT}/Transport/PacketDropDriverTests.cpp"
+        "${MICROWORLD_TESTS_ROOT}/Transport/PacketDropDeviceTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Transport/TransportManagerTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Transport/TransportProtocolTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Transport/TransportHostTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Transport/TransportAllocationTests.cpp"
-        "${MICROWORLD_TESTS_ROOT}/Transport/RadioE32DriverTests.cpp"
+        "${MICROWORLD_TESTS_ROOT}/Transport/E32LoraDeviceTests.cpp"
     )
     add_executable(microworld_transport_tests ${microworld_transport_TEST_SOURCES})
     target_include_directories(microworld_transport_tests PRIVATE
@@ -422,7 +422,7 @@ if(MICROWORLD_BUILD_TESTS)
     set(MICROWORLD_PLATFORM_HOST_TEST_SOURCES
         "${MICROWORLD_TESTS_ROOT}/Core/TestMain.cpp"
         "${MICROWORLD_TESTS_ROOT}/Platform/Host/HostTimeSourceTests.cpp"
-        "${MICROWORLD_TESTS_ROOT}/Platform/Host/HostUdpDriverTests.cpp"
+        "${MICROWORLD_TESTS_ROOT}/Platform/Host/HostWifiDeviceTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Platform/Host/HostTransportEndToEndTests.cpp"
     )
     add_executable(microworld_platform_host_tests ${MICROWORLD_PLATFORM_HOST_TEST_SOURCES})
@@ -438,9 +438,9 @@ if(MICROWORLD_BUILD_TESTS)
     if(MICROWORLD_PLATFORM_PICO_BUILD_TESTS)
         set(MICROWORLD_PLATFORM_PICO_TEST_SOURCES
             "${MICROWORLD_TESTS_ROOT}/Core/TestMain.cpp"
-            "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Platform/Pico/PicoE32LoraDriver.cpp"
+            "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Platform/Pico/PicoLoraDevice.cpp"
             "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Platform/Pico/PicoUartByteStream.cpp"
-            "${MICROWORLD_TESTS_ROOT}/Platform/Pico/PicoE32LoraDriverTests.cpp"
+            "${MICROWORLD_TESTS_ROOT}/Platform/Pico/PicoLoraDeviceTests.cpp"
         )
         add_executable(
             microworld_platform_pico_compatibility_tests
@@ -457,7 +457,7 @@ if(MICROWORLD_BUILD_TESTS)
             PRIVATE cxx_std_17
         )
         # RadioE32 folded into the Transport target (MicroWorld::Transport alias), so
-        # the facade's embedded FRadioE32Driver links through it rather than a
+        # the facade's embedded FE32LoraDevice links through it rather than a
         # separate RadioE32 archive.
         target_link_libraries(
             microworld_platform_pico_compatibility_tests

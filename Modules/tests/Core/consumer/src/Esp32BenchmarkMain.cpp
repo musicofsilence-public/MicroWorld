@@ -33,7 +33,7 @@
 #include <MicroWorld/Engine/ObjectStore.h>
 #include <MicroWorld/Platform/Esp32/Esp32OutputDevice.h>
 #include <MicroWorld/Platform/Esp32/Esp32TimeSource.h>
-#include <MicroWorld/Platform/Esp32/Esp32UdpDriver.h>
+#include <MicroWorld/Platform/Esp32/Esp32WifiDevice.h>
 #include <MicroWorld/Core/Time.h>
 #include <MicroWorld/Core/Timer.h>
 
@@ -86,7 +86,7 @@ constexpr std::uint32_t TickWarmupIterations = 100;
 /** Iterations timed for the no-traffic transport pump measurement. */
 constexpr std::uint32_t TransportPumpMeasurementIterations = 1000;
 
-/** Warm-up pump cycles before timing so the driver and host settle. */
+/** Warm-up pump cycles before timing so the device and host settle. */
 constexpr std::uint32_t TransportPumpWarmupIterations = 100;
 
 /**
@@ -346,7 +346,7 @@ private:
 /**
  * Builds the representative world, the GC probe, and the transport host, then prints measurements.
  *
- * This is the COMPILE-ONLY proof: no netif/WiFi is brought up, the UDP driver
+ * This is the COMPILE-ONLY proof: no netif/WiFi is brought up, the UDP device
  * is constructed but never linked, and no flash or radio operation is performed.
  * Part B flashes and captures the printed numbers under explicit authorization.
  */
@@ -365,7 +365,7 @@ extern "C" void app_main()
 		static_cast<unsigned>(RepresentativeComponentCount),
 		static_cast<unsigned>(RepresentativeTimerCount));
 
-	// 0.5. Bring up the lwIP TCP/IP stack before any socket is created. The UDP driver's
+	// 0.5. Bring up the lwIP TCP/IP stack before any socket is created. The UDP device's
 	//      socket()/bind() asserts inside lwIP ("Invalid mbox") if the tcpip task and the
 	//      default event loop are not running first; no WiFi association is needed for a
 	//      bound, pollable socket. Initialized before the heap baseline so this ESP-IDF
@@ -389,7 +389,7 @@ extern "C" void app_main()
 	// 1. The single real clock; esp_timer feeds the engine's caller-supplied monotonic time.
 	FEsp32TimeSource Clock;
 
-	// The composition objects below (UDP driver, transport host, frame, engine, and the GC probe)
+	// The composition objects below (UDP device, transport host, frame, engine, and the GC probe)
 	// are placed in STATIC storage, not on the stack. The ESP-IDF main task stack is only 3584
 	// bytes, but TEngine embeds its fixed object storage inline (MaxObjects * SlotBytes) and
 	// the GC probe embeds its own slot bytes, which together far exceed that; a stack frame this
@@ -398,10 +398,10 @@ extern "C" void app_main()
 
 	// 2. One non-blocking UDP socket on INADDR_ANY:5000 over the TCP/IP stack brought up above;
 	//    no WiFi is associated, so the socket binds and polls but no datagram can route.
-	static FEsp32UdpDriver Driver(5000);
+	static FEsp32WifiDevice Device(5000);
 
-	// 3. A dedicated-server session host over that driver, started at boot time.
-	static FBenchmarkTransport Transport(Driver);
+	// 3. A dedicated-server session host over that device, started at boot time.
+	static FBenchmarkTransport Transport(Device);
 	(void)Transport.Configure(ENetworkMode::DedicatedServer, FTransportHostConfig{});
 	Transport.Start(Clock.Now());
 

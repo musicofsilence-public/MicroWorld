@@ -10,7 +10,7 @@ compile margins for the lwIP/wired/E32 transports.
 ## Concepts
 
 Compile margins are a compile-only proof; runtime readiness requires the
-per-driver hardware checkpoint.
+per-device hardware checkpoint.
 
 ## Verification
 

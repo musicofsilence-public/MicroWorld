@@ -43,7 +43,7 @@ MW_TEST_CASE(E32LoraAddressPreservesBoundaryNodeIds)
 
 /**
  * Scenario: Offer both an empty address and a two-byte address to the E32 address recognizer.
- * Expected: Neither address matches the E32 driver's one-byte shape.
+ * Expected: Neither address matches the E32 device's one-byte shape.
  */
 MW_TEST_CASE(E32LoraAddressRejectsOtherActiveLengths)
 {

@@ -16,17 +16,17 @@ SoftAP gateway `192.168.4.1`, so there is no IP to look up or copy:
 
 1. The **server** (`esp32-s3-server`) hosts the SoftAP `microworld-ex16`, then composes a
    `TEngine` + `THostPlaySystem` + `TTransportHost` (`DedicatedServer`) over one
-   `FEsp32UdpDriver` bound to `ServerPort`, registers a spawnable actor class, creates its
+   `FEsp32WifiDevice` bound to `ServerPort`, registers a spawnable actor class, creates its
    world, and ticks forever. Each tick it broadcasts the world actor count on channel 2.
 2. The **client** (`esp32-s3-client`) joins the AP and runs a bare `TTransportHost` (`Client`)
-   over its own `FEsp32UdpDriver`, greeting `MakeUdpAddress(192.168.4.1, ServerPort)`. Once
+   over its own `FEsp32WifiDevice`, greeting `MakeUdpAddress(192.168.4.1, ServerPort)`. Once
    connected it sends two channel-1 spawn requests one second apart and prints every
    channel-2 broadcast.
 3. Each accepted request spawns one actor, so the broadcast count climbs 0 → 1 → 2. When
    the client observes count 2 it logs `done`.
 
-The application code above the driver is identical to example 19's; only the driver and the
-pre-driver WiFi bring-up changed. The same `TTransportHost` + `TEngine` design rides UART, a
+The application code above the device is identical to example 19's; only the device and the
+pre-device WiFi bring-up changed. The same `TTransportHost` + `TEngine` design rides UART, a
 bare wire, or WiFi UDP unchanged.
 
 ## MicroWorld APIs used
@@ -37,7 +37,7 @@ bare wire, or WiFi UDP unchanged.
 - `THostPlaySystem` / `IPlaySystem` and the `TEngine` network-frame constructor
 - `TEngine` (`RegisterClass` / `CreateWorld` / `CreateObject` / `BeginPlay` / `Tick`),
   `UWorld::SpawnActor`, `AActor`, `FGarbageCollectionBudget`
-- `FEsp32UdpDriver`, `MakeUdpAddress`, `FEsp32TimeSource::Now`
+- `FEsp32WifiDevice`, `MakeUdpAddress`, `FEsp32TimeSource::Now`
 - `FEsp32WifiLink` (`StartAccessPoint` / `JoinAccessPoint`), `SleepMilliseconds`,
   `MW_LOG` / `WriteEsp32LogRecord`
 

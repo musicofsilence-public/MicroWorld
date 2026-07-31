@@ -16,7 +16,7 @@ namespace MicroWorld
  * Largest single-transmission payload one wired SPI frame carries.
  *
  * Kept equal to `UartMaxPayloadBytes` so every wired transport carries the same message size and only the
- * driver construction differs.
+ * device construction differs.
  */
 constexpr std::size_t SpiMaxPayloadBytes = 120;
 
@@ -32,7 +32,7 @@ static_assert(
 static_assert(SpiTransactionWindowBytes % 4 == 0, "SPI DMA requires the transaction length to be a multiple of four bytes.");
 
 /**
- * Bytes of opaque storage the slave driver reserves for one persistent ESP-IDF transaction descriptor.
+ * Bytes of opaque storage the slave device reserves for one persistent ESP-IDF transaction descriptor.
  *
  * A queued SPI-slave transaction must outlive the queue/harvest cycle, so its descriptor cannot be a stack
  * local; the source file places the real ESP-IDF type in this buffer and `static_assert`s that it fits.
@@ -40,7 +40,7 @@ static_assert(SpiTransactionWindowBytes % 4 == 0, "SPI DMA requires the transact
 constexpr std::size_t SpiSlaveTransactionStorageBytes = 40;
 
 /**
- * Construction parameters for the wired SPI master driver.
+ * Construction parameters for the wired SPI master device.
  *
  * Holds plain-integer bus parameters so the public header stays free of the ESP-IDF SPI enum types; the
  * platform-implementation header reinterprets them on the ESP32 side.
@@ -70,7 +70,7 @@ struct FEsp32SpiMasterConfig
 };
 
 /**
- * Construction parameters for the wired SPI slave driver.
+ * Construction parameters for the wired SPI slave device.
  *
  * Holds plain-integer bus parameters so the public header stays free of the ESP-IDF SPI enum types; the
  * slave is clocked by the master, so it carries no clock frequency.
@@ -105,7 +105,7 @@ struct FEsp32SpiSlaveConfig
  * outputs unchanged on any non-`Success` result, and exercises no bus traffic until example 21's hardware
  * checkpoint passes (§1.2).
  */
-class FEsp32SpiMasterDriver final : public IDevice
+class FEsp32SpiMasterDevice final : public IDevice
 {
 public:
 	/**
@@ -117,22 +117,22 @@ public:
 	 *
 	 * @param InConfig Host, GPIO, clock, and local node id parameters.
 	 */
-	explicit FEsp32SpiMasterDriver(const FEsp32SpiMasterConfig& InConfig) noexcept;
+	explicit FEsp32SpiMasterDevice(const FEsp32SpiMasterConfig& InConfig) noexcept;
 
 	/** Removes the device and frees the SPI bus opened by construction. */
-	~FEsp32SpiMasterDriver() noexcept override;
+	~FEsp32SpiMasterDevice() noexcept override;
 
-	/** Prevents copying so one driver value owns exactly one bus identity. */
-	FEsp32SpiMasterDriver(const FEsp32SpiMasterDriver&) = delete;
+	/** Prevents copying so one device value owns exactly one bus identity. */
+	FEsp32SpiMasterDevice(const FEsp32SpiMasterDevice&) = delete;
 
-	/** Prevents copying so one driver value owns exactly one bus identity. */
-	FEsp32SpiMasterDriver& operator=(const FEsp32SpiMasterDriver&) = delete;
-
-	/** Prevents moving so the owned device handle and DMA buffers stay fixed. */
-	FEsp32SpiMasterDriver(FEsp32SpiMasterDriver&&) = delete;
+	/** Prevents copying so one device value owns exactly one bus identity. */
+	FEsp32SpiMasterDevice& operator=(const FEsp32SpiMasterDevice&) = delete;
 
 	/** Prevents moving so the owned device handle and DMA buffers stay fixed. */
-	FEsp32SpiMasterDriver& operator=(FEsp32SpiMasterDriver&&) = delete;
+	FEsp32SpiMasterDevice(FEsp32SpiMasterDevice&&) = delete;
+
+	/** Prevents moving so the owned device handle and DMA buffers stay fixed. */
+	FEsp32SpiMasterDevice& operator=(FEsp32SpiMasterDevice&&) = delete;
 
 	/**
 	 * Sends one complete framed message to the slave in a single full-duplex transaction, transactionally.
@@ -208,7 +208,7 @@ private:
  * leaves caller outputs unchanged on any non-`Success` result, and exercises no bus traffic until example
  * 21's hardware checkpoint passes (§1.2).
  */
-class FEsp32SpiSlaveDriver final : public IDevice
+class FEsp32SpiSlaveDevice final : public IDevice
 {
 public:
 	/**
@@ -220,22 +220,22 @@ public:
 	 *
 	 * @param InConfig Host, GPIO, and local node id parameters.
 	 */
-	explicit FEsp32SpiSlaveDriver(const FEsp32SpiSlaveConfig& InConfig) noexcept;
+	explicit FEsp32SpiSlaveDevice(const FEsp32SpiSlaveConfig& InConfig) noexcept;
 
 	/** Frees the SPI slave bus opened by construction. */
-	~FEsp32SpiSlaveDriver() noexcept override;
+	~FEsp32SpiSlaveDevice() noexcept override;
 
-	/** Prevents copying so one driver value owns exactly one bus identity. */
-	FEsp32SpiSlaveDriver(const FEsp32SpiSlaveDriver&) = delete;
+	/** Prevents copying so one device value owns exactly one bus identity. */
+	FEsp32SpiSlaveDevice(const FEsp32SpiSlaveDevice&) = delete;
 
-	/** Prevents copying so one driver value owns exactly one bus identity. */
-	FEsp32SpiSlaveDriver& operator=(const FEsp32SpiSlaveDriver&) = delete;
-
-	/** Prevents moving so the owned buffers and transaction descriptor stay fixed. */
-	FEsp32SpiSlaveDriver(FEsp32SpiSlaveDriver&&) = delete;
+	/** Prevents copying so one device value owns exactly one bus identity. */
+	FEsp32SpiSlaveDevice& operator=(const FEsp32SpiSlaveDevice&) = delete;
 
 	/** Prevents moving so the owned buffers and transaction descriptor stay fixed. */
-	FEsp32SpiSlaveDriver& operator=(FEsp32SpiSlaveDriver&&) = delete;
+	FEsp32SpiSlaveDevice(FEsp32SpiSlaveDevice&&) = delete;
+
+	/** Prevents moving so the owned buffers and transaction descriptor stay fixed. */
+	FEsp32SpiSlaveDevice& operator=(FEsp32SpiSlaveDevice&&) = delete;
 
 	/**
 	 * Stages one complete framed message for the master's next read, transactionally.
@@ -282,7 +282,7 @@ private:
 	/** Receive window filled by each completed transaction; word-aligned for DMA. */
 	alignas(4) std::uint8_t ReceiveWindow[SpiTransactionWindowBytes]{};
 
-	/** Transmit window owned by the driver while a transaction is queued; word-aligned for DMA. */
+	/** Transmit window owned by the device while a transaction is queued; word-aligned for DMA. */
 	alignas(4) std::uint8_t TransmitWindow[SpiTransactionWindowBytes]{};
 
 	/** Staging buffer written by `TrySend`; copied into the transmit window at the next queue. */
@@ -303,7 +303,7 @@ private:
 	/** True when a frame is staged in `StagedFrame` awaiting its next queue. */
 	bool bFrameStaged{false};
 
-	/** True while one transaction is queued with the driver; drives recovery re-queues. */
+	/** True while one transaction is queued with the device; drives recovery re-queues. */
 	bool bTransactionQueued{false};
 
 	/** Remains false when construction failed, so every op short-circuits safely. */

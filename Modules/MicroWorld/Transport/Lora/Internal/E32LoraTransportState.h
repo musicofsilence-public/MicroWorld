@@ -14,7 +14,7 @@ namespace MicroWorld
 {
 
 /**
- * Owns the deterministic, SDK-free E32 frame state used by the portable RadioE32 driver and its host tests.
+ * Owns the deterministic, SDK-free E32 frame state used by the portable RadioE32 device and its host tests.
  *
  * The state accepts one complete transmit frame, exposes it one byte at a time for non-blocking UART progress, and
  * holds one decoded receive frame until transactional delivery succeeds. It performs no hardware access.
@@ -48,8 +48,9 @@ public:
 	 * complete encoded frame is owned by this state.
 	 *
 	 * @param InLocalNodeId Source node id stamped into the encoded frame.
-	 * @param InTo Driver-relative destination metadata whose one-byte shape is validated.
-	 * @param InPacket Payload to encode into the single transmit slot.
+	 * @param InTo Device-relative destination metadata whose one-byte shape is validated.
+	 * @param InPacket Payload to encode into the single
+	 * transmit slot.
 	 * @return Outcome of the acceptance attempt.
 	 */
 	ETransportResult TryQueueFrame(std::uint8_t InLocalNodeId, const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept;

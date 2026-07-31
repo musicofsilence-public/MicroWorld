@@ -16,7 +16,7 @@
 #include <MicroWorld/Engine/ObjectPtr.h>
 #include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
 #include <MicroWorld/Platform/Esp32/Esp32TimeSource.h>
-#include <MicroWorld/Platform/Esp32/Esp32UdpDriver.h>
+#include <MicroWorld/Platform/Esp32/Esp32WifiDevice.h>
 #include <MicroWorld/Platform/Esp32/Esp32WifiLink.h>
 
 #include <cstddef>
@@ -82,18 +82,18 @@ void RunServer() noexcept
 	}
 	MW_LOG(Log, "ex16", "wifi softap up, gateway 192.168.4.1");
 
-	// The driver is constructed only after WiFi/netif is up (lwIP must exist first).
+	// The device is constructed only after WiFi/netif is up (lwIP must exist first).
 	// The server hosts the SoftAP, so its address is the fixed gateway 192.168.4.1.
-	static FEsp32UdpDriver Driver(ServerPort);
-	MW_LOG(Log, "ex16", "server open=%d udp_port=%u", Driver.IsOpen() ? 1 : 0, static_cast<unsigned>(Driver.BoundPort()));
-	if (!Driver.IsOpen())
+	static FEsp32WifiDevice Device(ServerPort);
+	MW_LOG(Log, "ex16", "server open=%d udp_port=%u", Device.IsOpen() ? 1 : 0, static_cast<unsigned>(Device.BoundPort()));
+	if (!Device.IsOpen())
 	{
 		MW_LOG(Error, "ex16", "socket failed; halting");
 		return;
 	}
 
 	// All composition objects are static (the ESP32-S3 stack lesson, §2.2).
-	static FServerTransport ServerTransport{Driver};
+	static FServerTransport ServerTransport{Device};
 	static THostPlaySystem<FServerTransport> ServerFrame{ServerTransport};
 	static FServerEngine ServerHost{FGarbageCollectionBudget{1, 4, 8}, ServerFrame};
 	static int SpawnSequence = 0;

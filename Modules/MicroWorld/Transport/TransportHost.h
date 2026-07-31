@@ -24,7 +24,7 @@ namespace MicroWorld
 /** The UE5-style role this host plays; selects which session traffic it originates and accepts. */
 enum class ENetworkMode : std::uint8_t
 {
-	/** Runs no driver traffic; every send reports `Unavailable`. */
+	/** Runs no device traffic; every send reports `Unavailable`. */
 	Standalone,
 
 	/** Holds exactly one peer (the server) and sends `Hello` until admitted. */
@@ -161,19 +161,19 @@ public:
 	/** One bindable handler callable matching `FMessageHandler`'s signature. */
 	using FMessageHandlerBinding = TDelegate<void(FPeerId, std::uint8_t, TSpan<const std::uint8_t>), MessageHandlerInlineBytes>;
 
-	/** Binds the host to one externally owned driver; mode and config follow via `Configure`. */
-	explicit TTransportHost(IDevice& InDriver) noexcept : Driver(InDriver), OutboundManager(InDriver, OutboundStorage) {}
+	/** Binds the host to one externally owned device; mode and config follow via `Configure`. */
+	explicit TTransportHost(IDevice& InDevice) noexcept : Device(InDevice), OutboundManager(InDevice, OutboundStorage) {}
 
-	/** Prevents copying so one host value binds one driver, table, and handler. */
+	/** Prevents copying so one host value binds one device, table, and handler. */
 	TTransportHost(const TTransportHost&) = delete;
 
-	/** Prevents copying so one host value binds one driver, table, and handler. */
+	/** Prevents copying so one host value binds one device, table, and handler. */
 	TTransportHost& operator=(const TTransportHost&) = delete;
 
-	/** Prevents moving so the owned manager's driver reference and handler slots stay fixed. */
+	/** Prevents moving so the owned manager's device reference and handler slots stay fixed. */
 	TTransportHost(TTransportHost&&) = delete;
 
-	/** Prevents moving so the owned manager's driver reference and handler slots stay fixed. */
+	/** Prevents moving so the owned manager's device reference and handler slots stay fixed. */
 	TTransportHost& operator=(TTransportHost&&) = delete;
 
 	/** Defaulted; the host holds only fixed inline storage and no external resource. */
@@ -227,7 +227,7 @@ public:
 	 *
 	 * This operation never waits
 	 * for a physical transport drain; a caller that needs one must keep pumping before
-	 * destroying the externally owned driver.
+	 * destroying the externally owned device.
 	 * The
 	 * generation of each evicted slot is bumped so any outstanding `FPeerId` goes stale.
 	 */
@@ -242,7 +242,7 @@ public:
 	/**
 	 * Drains inbound packets (at most `MaxPeers + 4`), handling control internally and
 	 * dispatching application messages, then evicts peers past the timeout window.
-	 * A standalone host does no driver traffic and returns immediately.
+	 * A standalone host does no device traffic and returns immediately.
 	 */
 	ETransportResult PumpReceive(const TimePointMilliseconds InNowMilliseconds) noexcept
 	{
@@ -257,7 +257,7 @@ public:
 
 	/**
 	 * Emits due heartbeats (and client `Hello` retries), then drains the outbound FIFO.
-	 * A standalone host does no driver traffic and returns immediately.
+	 * A standalone host does no device traffic and returns immediately.
 	 */
 	ETransportResult PumpSend(const TimePointMilliseconds InNowMilliseconds) noexcept
 	{
@@ -268,14 +268,14 @@ public:
 		SendClientHelloIfDue(InNowMilliseconds);
 		SendDueHeartbeats(InNowMilliseconds);
 		DrainOutbound();
-		Driver.AdvanceTransmit();
+		Device.AdvanceTransmit();
 		return ETransportResult::Success;
 	}
 
 	/**
 	 * Queues one application message (channel 1..255) to a single peer.
 	 * A message to the listen server's local peer dispatches directly to the handler
-	 * without the driver. Returns `Unavailable` for a standalone host, `Invalid` for
+	 * without the device. Returns `Unavailable` for a standalone host, `Invalid` for
 	 * channel 0 or an unresolved peer, or the framing/queue result otherwise.
 	 */
 	ETransportResult SendTo(const FPeerId InPeer, const std::uint8_t InChannel, TSpan<const std::uint8_t> InPayload) noexcept
@@ -700,14 +700,14 @@ private:
 		(void)MessageHandler.Broadcast(InFrom, InChannel, InPayload);
 	}
 
-	/** Sends outbound FIFO entries until it empties or the driver stops accepting; bounded by depth. */
+	/** Sends outbound FIFO entries until it empties or the device stops accepting; bounded by depth. */
 	void DrainOutbound() noexcept
 	{
 		for (std::size_t Count = 0; Count < SendQueueDepth; ++Count)
 		{
 			if (OutboundManager.AdvanceSend() != ETransportResult::Success)
 			{
-				// Unavailable means the FIFO is empty; a driver failure retains the head for a later drain.
+				// Unavailable means the FIFO is empty; a device failure retains the head for a later drain.
 				break;
 			}
 		}
@@ -831,13 +831,13 @@ private:
 		return Index;
 	}
 
-	/** Driver borrowed for one host lifetime; progresses pending physical transmission after each outbound pump. */
-	IDevice& Driver;
+	/** Device borrowed for one host lifetime; progresses pending physical transmission after each outbound pump. */
+	IDevice& Device;
 
 	/** Owns the outbound packet bytes, lengths, and destinations for the FIFO. */
 	TTransportPacketStorage<SendQueueDepth, MaxPacketBytes> OutboundStorage{};
 
-	/** Owns the outbound FIFO over the driver; reused rather than re-implementing queue mechanics. */
+	/** Owns the outbound FIFO over the device; reused rather than re-implementing queue mechanics. */
 	TTransportManager<SendQueueDepth, MaxPacketBytes> OutboundManager;
 
 	/** Dispatches application messages to every registered handler. */

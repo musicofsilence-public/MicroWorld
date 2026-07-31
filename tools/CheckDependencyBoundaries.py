@@ -14,7 +14,7 @@ from pathlib import Path
 # systems directly. Each system may include itself plus only these inward
 # portable dependencies. Object folded into Engine (so Engine owns identity and
 # lifetime); Net and RadioE32 folded into Transport (so one byte-I/O system owns
-# the driver contract and every medium). Engine and Transport never name each
+# the device contract and every medium). Engine and Transport never name each
 # other: that separation is the invariant the whole shape protects. Integration
 # became Networking.
 MODULE_DEPENDENCIES = {
