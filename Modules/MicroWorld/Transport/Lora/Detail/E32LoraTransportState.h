@@ -1,7 +1,7 @@
 #pragma once
 
 #include <MicroWorld/Core/Containers/Span.h>
-#include <MicroWorld/Transport/E32Lora.h>
+#include <MicroWorld/Transport/Lora/E32Lora.h>
 #include <MicroWorld/Transport/FrameCodec.h>
 #include <MicroWorld/Transport/DeviceAddress.h>
 #include <MicroWorld/Transport/Device.h>

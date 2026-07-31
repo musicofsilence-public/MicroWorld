@@ -1,7 +1,7 @@
 #pragma once
 
 #include <MicroWorld/Platform/Esp32/Detail/Esp32UartByteStream.h>
-#include <MicroWorld/Transport/RadioE32Driver.h>
+#include <MicroWorld/Transport/Lora/RadioE32Driver.h>
 
 #include <cstddef>
 #include <cstdint>

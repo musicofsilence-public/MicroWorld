@@ -1,3 +1,3 @@
 #pragma once
 
-#include <MicroWorld/Transport/Detail/E32LoraTransportState.h>
+#include <MicroWorld/Transport/Lora/Detail/E32LoraTransportState.h>

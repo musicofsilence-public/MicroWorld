@@ -3,7 +3,7 @@
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Messaging/Message.h>
 #include <MicroWorld/Networking/Networking.h>
-#include <MicroWorld/Transport/UdpAddressCodec.h>
+#include <MicroWorld/Transport/Wifi/UdpAddressCodec.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Platform/Esp32/Esp32UartDriver.h>
 #include <MicroWorld/Platform/Esp32/Esp32UdpDriver.h>

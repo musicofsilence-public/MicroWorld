@@ -12,7 +12,7 @@ or platform-facade API.
 
 - Detail state preserves fixed transmit and retained receive frames across
   bounded public-driver calls.
-- It may depend only on RadioE32's public contract, Core, Net, and C++17.
+- It may depend only on RadioE32's public contract, Core, Transport, and C++17.
 - It must remain portable: no UART SDK calls, pin configuration, platform
   lifecycle, heap allocation, clocks, threads, exceptions, or RTTI.
 

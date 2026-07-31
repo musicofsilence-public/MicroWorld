@@ -1,6 +1,6 @@
-#include <MicroWorld/Transport/RadioE32Driver.h>
+#include <MicroWorld/Transport/Lora/RadioE32Driver.h>
 
-#include <MicroWorld/Transport/E32Lora.h>
+#include <MicroWorld/Transport/Lora/E32Lora.h>
 #include <MicroWorld/Transport/FrameCodec.h>
 
 #include <cstddef>

@@ -1,4 +1,4 @@
-#include <MicroWorld/Transport/E32Lora.h>
+#include <MicroWorld/Transport/Lora/E32Lora.h>
 #include <MicroWorld/Transport/Device.h>
 #include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Platform/Pico/PicoE32LoraDriver.h>

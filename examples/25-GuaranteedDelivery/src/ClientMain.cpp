@@ -14,7 +14,7 @@
 #include <MicroWorld/Transport/TransportHost.h>
 #include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Transport/PacketDropDriver.h>
-#include <MicroWorld/Transport/UdpAddressCodec.h>
+#include <MicroWorld/Transport/Wifi/UdpAddressCodec.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Engine/GarbageCollector.h>
 #include <MicroWorld/Engine/ObjectPtr.h>

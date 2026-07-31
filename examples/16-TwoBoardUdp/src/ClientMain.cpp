@@ -5,7 +5,7 @@
 #include <MicroWorld/Core/Log.h>
 #include <MicroWorld/Transport/TransportHost.h>
 #include <MicroWorld/Transport/TransportResult.h>
-#include <MicroWorld/Transport/UdpAddressCodec.h>
+#include <MicroWorld/Transport/Wifi/UdpAddressCodec.h>
 #include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
 #include <MicroWorld/Platform/Esp32/Esp32TimeSource.h>
 #include <MicroWorld/Platform/Esp32/Esp32UdpDriver.h>

@@ -2,7 +2,7 @@
 
 #include <MicroWorld/Core/IO/UartByteStream.h>
 #include <MicroWorld/Transport/Device.h>
-#include <MicroWorld/Transport/Detail/E32LoraTransportState.h>
+#include <MicroWorld/Transport/Lora/Detail/E32LoraTransportState.h>
 
 #include <cstddef>
 #include <cstdint>

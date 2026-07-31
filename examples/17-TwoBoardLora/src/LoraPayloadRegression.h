@@ -1,6 +1,6 @@
 #pragma once
 
-#include <MicroWorld/Transport/E32Lora.h>
+#include <MicroWorld/Transport/Lora/E32Lora.h>
 
 #include <cstddef>
 #include <cstdint>

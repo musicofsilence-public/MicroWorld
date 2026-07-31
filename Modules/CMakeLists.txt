@@ -140,8 +140,8 @@ set(MICROWORLD_TRANSPORT_SOURCES
 )
 if(MICROWORLD_TRANSPORT_RADIO)
     list(APPEND MICROWORLD_TRANSPORT_SOURCES
-        "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Transport/E32LoraTransportState.cpp"
-        "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Transport/RadioE32Driver.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Transport/Lora/E32LoraTransportState.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Transport/Lora/RadioE32Driver.cpp"
     )
 endif()
 

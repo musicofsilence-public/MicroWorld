@@ -1,11 +1,11 @@
 #include "TestSupport.h"
 
 #include <MicroWorld/Core/IO/UartByteStream.h>
-#include <MicroWorld/Transport/E32Lora.h>
+#include <MicroWorld/Transport/Lora/E32Lora.h>
 #include <MicroWorld/Transport/FrameCodec.h>
 #include <MicroWorld/Transport/Device.h>
 #include <MicroWorld/Transport/TransportResult.h>
-#include <MicroWorld/Transport/RadioE32Driver.h>
+#include <MicroWorld/Transport/Lora/RadioE32Driver.h>
 
 #include <cstddef>
 #include <cstdint>

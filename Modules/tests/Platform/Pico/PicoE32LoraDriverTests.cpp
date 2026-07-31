@@ -1,6 +1,6 @@
 #include "TestSupport.h"
 
-#include <MicroWorld/Transport/E32Lora.h>
+#include <MicroWorld/Transport/Lora/E32Lora.h>
 #include <MicroWorld/Transport/FrameCodec.h>
 #include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Platform/Pico/Detail/PicoE32LoraPlatform.h>

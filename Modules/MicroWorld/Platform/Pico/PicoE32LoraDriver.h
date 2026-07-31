@@ -2,7 +2,7 @@
 
 #include <MicroWorld/Platform/Pico/Detail/PicoE32LoraPlatform.h>
 #include <MicroWorld/Platform/Pico/Detail/PicoUartByteStream.h>
-#include <MicroWorld/Transport/RadioE32Driver.h>
+#include <MicroWorld/Transport/Lora/RadioE32Driver.h>
 
 #include <cstddef>
 #include <cstdint>
