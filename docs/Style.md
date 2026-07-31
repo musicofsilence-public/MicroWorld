@@ -128,7 +128,7 @@ rule. Each file already meets Rules N, F, and W.
 | Core | `Lifecycle.h` (the single best file in the repo), `TickFunction.h`, `Containers/Span.h`, `Memory/MemoryResource.h`, the enums in `Timer.h` |
 | Object | `ObjectHandle.h`, `Object.h` |
 | Engine | `EngineStorage.h` (member-level ownership docs), `Engine/EngineSystem.h`, the enums in `EngineResult.h` |
-| Net | `ByteReader.h`, `ByteWriter.h` |
+| Transport | `ByteReader.h`, `ByteWriter.h` |
 | Application | `Application/Application.h` — the class comment explains why every lifecycle call is sealed |
 | Platform | `WinSockScope.h`, `HostTimeSource.h`, `Esp32TimeSource.h`, and the boundary documentation in `src/UdpSocketPlatformImplementation.h` |
 

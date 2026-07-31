@@ -18,12 +18,12 @@ channel (`TReliableChannel`) recovers every dropped packet.
    plain `TMessageChannelBinding`) and `GuaranteedChannelId` (the same kind of
    binding, wrapped in `TReliableChannel`).
 3. Every third packet the client sends -- of any kind, data or ack or
-   heartbeat -- is silently dropped at the `INetDriver` interface. As a result the
+   heartbeat -- is silently dropped at the `IDevice` interface. As a result the
    server's best-effort column has gaps, while the guaranteed column is
    complete: `TReliableChannel` resends any unacknowledged value until the
    server acknowledges it.
 4. Every actor reaches messaging only through `IMessageRouter&`, injected at
-   construction (D9); neither actor ever sees `TNetHost`, a driver, UDP, or
+   construction (D9); neither actor ever sees `TTransportHost`, a driver, UDP, or
    the drop injector.
 5. The run is **unbounded** (matching 16-TwoBoardUdp and 24-TwoChannelWorld):
    this is a continuous two-board demo, not a self-terminating trace.
@@ -45,9 +45,9 @@ gap positions as illustrative, not fixed.
   `AllPeers` on the server, per channel)
 - `TMessageRouter`, `IMessageRouter` (`AddMessageHandler` /
   `SendMessageToActor`)
-- `TPlaySystemSet` (`Add`, D3 dispatch/flush order over the net frame, the
+- `TPlaySystemSet` (`Add`, D3 dispatch/flush order over the host play system, the
   reliable channel, and the router)
-- `TNetHost` (`Configure` / `Start`), `TNetHostSystem`, `ENetMode`
+- `TTransportHost` (`Configure` / `Start`), `THostPlaySystem`, `ENetworkMode`
 - `FEsp32WifiLink` (`StartAccessPoint` / `JoinAccessPoint`), `FEsp32UdpDriver`,
   `MakeUdpAddress`
 - `TEngineHost` (`RegisterClass` / `CreateWorld` / `CreateObject` /

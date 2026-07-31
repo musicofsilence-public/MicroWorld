@@ -210,9 +210,14 @@ MW_TEST_CASE(PlaySystemSet_TEngineTickPumpsBoundSetAtPreAdvanceAndPostAdvanceSte
 
 	TPlaySystemSet<2> SystemSet;
 
-	// Act - add the net-like frame first and the router-like frame last
-	MW_EXPECT_EQ(Test, EEngineResult::Success, SystemSet.Add(TransportFrame), "The net-like frame must be added first (D3 order: net before router)");
-	MW_EXPECT_EQ(Test, EEngineResult::Success, SystemSet.Add(RouterFrame), "The router-like frame must be added last (D3 order: net before router)");
+	// Act - add the transport-like frame first and the router-like frame last
+	MW_EXPECT_EQ(
+		Test,
+		EEngineResult::Success,
+		SystemSet.Add(TransportFrame),
+		"The transport-like frame must be added first (D3 order: transport before router)");
+	MW_EXPECT_EQ(
+		Test, EEngineResult::Success, SystemSet.Add(RouterFrame), "The router-like frame must be added last (D3 order: transport before router)");
 
 	// Act - build the host, then run a single tick
 	FHost Host{FGarbageCollectionBudget{1, 4, 8}, SystemSet};
@@ -221,16 +226,16 @@ MW_TEST_CASE(PlaySystemSet_TEngineTickPumpsBoundSetAtPreAdvanceAndPostAdvanceSte
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, Host.Tick(10), "The tick reports success");
 
 	// Assert
-	MW_EXPECT_EQ(Test, 1, TransportRecord.DispatchCount, "The engine's step 1 must dispatch the net-like frame exactly once");
+	MW_EXPECT_EQ(Test, 1, TransportRecord.DispatchCount, "The engine's step 1 must dispatch the transport-like frame exactly once");
 	MW_EXPECT_EQ(Test, 1, RouterRecord.DispatchCount, "The engine's step 1 must dispatch the router-like frame exactly once");
-	MW_EXPECT_EQ(Test, 1, TransportRecord.FlushCount, "The engine's step 7 must flush the net-like frame exactly once");
+	MW_EXPECT_EQ(Test, 1, TransportRecord.FlushCount, "The engine's step 7 must flush the transport-like frame exactly once");
 	MW_EXPECT_EQ(Test, 1, RouterRecord.FlushCount, "The engine's step 7 must flush the router-like frame exactly once");
 	MW_EXPECT_TRUE(
-		Test, TransportRecord.DispatchOrder < RouterRecord.DispatchOrder, "Dispatch must run the net-like frame before the router-like frame");
+		Test, TransportRecord.DispatchOrder < RouterRecord.DispatchOrder, "Dispatch must run the transport-like frame before the router-like frame");
 	MW_EXPECT_TRUE(
 		Test,
 		RouterRecord.FlushOrder < TransportRecord.FlushOrder,
-		"Flush must run the router-like frame before the net-like frame (reverse add-order)");
+		"Flush must run the router-like frame before the transport-like frame (reverse add-order)");
 	MW_EXPECT_TRUE(Test, RouterRecord.DispatchOrder < RouterRecord.FlushOrder, "Every dispatch this tick must complete before any flush begins");
 }
 

@@ -4,7 +4,7 @@ Inherits `../../AGENTS.md`.
 
 ## Architecture
 
-The Networking test executable owns `TNetSystem` composition: net driver/host
+The Networking test executable owns `TNetworking` composition: device/transport host
 ownership, the shared router, channel bindings, guaranteed channels, and the
 direct lifecycle pumping that preserves frame order. The test executable links
 Engine because `EngineNetHostTests` plays the composition root the system itself

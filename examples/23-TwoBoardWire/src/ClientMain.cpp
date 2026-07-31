@@ -100,7 +100,7 @@ private:
 
 /**
  * Client board (node 2): FSwitchActor over a TMessageRouter wired to TTransportHost (Client, greeting the
- * server's UART address) through TMessageChannelBinding, with the engine holding the net frame and
+ * server's UART address) through TMessageChannelBinding, with the engine holding the host play system and
  * the loop pumping the router manually (Phase 4.1 will fold this into TPlaySystemSet -- see §4).
  */
 void RunClient() noexcept

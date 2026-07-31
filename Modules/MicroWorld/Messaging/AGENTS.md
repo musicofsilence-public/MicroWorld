@@ -35,7 +35,7 @@ coupling.
 ## Composition recipes
 
 Four shapes cover every wiring this system supports. Frame order is the rule
-that makes them work: **net frames are added before the router**, so inbound
+that makes them work: **host play systems are added before the router**, so inbound
 bytes are decoded in the same tick they are routed.
 
 Standalone world, local messaging only — the router *is* the network frame:
@@ -51,17 +51,17 @@ Client/server over one wire — server side shown:
 ```cpp
 static FEsp32UartDriver Driver{{.UartPort = 1, .TxGpio = 17, .RxGpio = 18,
                                 .BaudRate = 115200, .LocalNodeId = 1}};
-static TNetHost<2, 120> Net{Driver};                     // Configure(DedicatedServer) + Start
+static TTransportHost<2, 120> Net{Driver};               // Configure(DedicatedServer) + Start
 static TMessageRouter<16, 8, 96, 1> Router;
 static TMessageChannelBinding<decltype(Net)> Commands{Net, /*wire*/1, /*id*/1,
                                                       EChannelSendTarget::AllPeers, Router};
-static TNetHostFrame<decltype(Net)> NetFrame{Net};
+static THostPlaySystem<decltype(Net)> NetFrame{Net};
 static TNetworkFrameSet<2> Frames;                       // Add(NetFrame); Add(Router);
 static TEngineHost<...> Engine{Budget, Frames};
 // after wiring: Router.AddChannel(Commands);
 ```
 
-Two drivers, two channels, one world: a second driver, a second `TNetHost`, and
+Two drivers, two channels, one world: a second driver, a second `TTransportHost`, and
 a second binding with a different `FMessageChannelId` — both net frames added
 before the router.
 

@@ -2,7 +2,7 @@
 
 MicroWorld is a small, embedded-suitable C++17 engine that brings familiar UE5
 concepts — lifecycle, World/Actor/Component, GC, smart pointers, and a simple
-`TNetManager`/`INetDriver` networking layer — to constrained microcontrollers
+`TTransportManager`/`IDevice` networking layer — to constrained microcontrollers
 such as ESP32, STM32, and RP2040. It keeps only essential, bounded features so
 UE5 developers can build small applications and games for these devices without
 first learning every hardware detail. Platform support is verified one target at
@@ -31,8 +31,8 @@ or inspect the
 | Core | `MicroWorld::Core` | `MicroWorld` | Lifecycle, tick, containers, delegates, smart pointers, timers, `IPlaySystem` |
 | Engine | `MicroWorld::Engine` | `MicroWorld` | `UWorld` / `AActor` / `UActorComponent`, `TEngine`, `IEngine`, plus the object store, garbage collector, and handles |
 | Messaging | `MicroWorld::Messaging` | `MicroWorld` | Message router, channel bindings, reliable channel (header-only) |
-| Transport | `MicroWorld::Transport` | `MicroWorld` | Byte I/O, frame codec, `TNetHost`, and the optional portable E32 `FRadioE32Driver` |
-| Networking | `MicroWorld::Networking` | `MicroWorld` | `TNetSystem` — Messaging over Transport behind `IPlaySystem` |
+| Transport | `MicroWorld::Transport` | `MicroWorld` | Byte I/O, frame codec, `TTransportHost`, and the optional portable E32 `FRadioE32Driver` |
+| Networking | `MicroWorld::Networking` | `MicroWorld` | `TNetworking` — Messaging over Transport behind `IPlaySystem` |
 | Application | `MicroWorld::Application` | `MicroWorld` | `FApplication` — owns one engine and its frame loop |
 | Platform/Host | `MicroWorld::PlatformHost` | `MicroWorldPlatformHost` | Host UDP transport and `steady_clock` time source (non-portable) |
 | Platform/Esp32 | — | `MicroWorldPlatformEsp32` | ESP32 UDP + wired transports, UART SDK bindings, E32 facade (PlatformIO/ESP-IDF only) |
@@ -44,16 +44,15 @@ into Engine, and the E32 radio folds into Transport behind the
 `MICROWORLD_TRANSPORT_RADIO` option. Dependencies point inward:
 
 ```text
-Core <- Object <- Engine <- Application
+Core <- Engine <- Application
 Core <- Messaging
-Core <- Net
-Core <- Net <- RadioE32
-Core, Object, Messaging, Engine, Net <- Integration
+Core <- Transport
+Core, Messaging, Transport <- Networking
 ```
 
-Net is an independent overlay above Core: it never pulls Object or Engine, so an
-application can use byte I/O without the managed runtime, and Integration is the
-only package permitted to see both. PlatformHost, PlatformEsp32, and PlatformPico are the
+Transport is an independent overlay above Core: it never pulls Engine, so an
+application can use byte I/O without the managed runtime, and a composition root is the
+only place permitted to see both. PlatformHost, PlatformEsp32, and PlatformPico are the
 non-portable edges that supply real transports. `IUartByteStream` is a narrow
 byte-transfer interface, not a universal HAL: RadioE32 owns portable E32 state and framing,
 while ESP32 and Pico facades own UART SDK lifetime. See

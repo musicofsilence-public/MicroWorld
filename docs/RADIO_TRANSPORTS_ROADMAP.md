@@ -3,8 +3,8 @@
 **Version:** 1.0 · **Date:** 2026-07-24 · **Owner:** Mykola
 **Baseline:** `main` at `b4973be` (clean tree), Windows 11 root superbuild + PlatformIO for examples, ESP-IDF 6.0.1 via PlatformIO.
 **Scope:** `Modules/MicroWorld/Platform/Esp32`, `examples/`, `docs/architecture/decisions/`. Portable
-packages (`Core`, `Memory`, `Object`, `Engine`, `Net`) are **untouched** —
-a radio is just another `INetDriver` (ADR 0003 logic applies unchanged).
+packages (`Core`, `Engine`, `Messaging`, `Transport`, `Application`, `Networking`) are **untouched** —
+a radio is just another `IDevice` (ADR 0003 logic applies unchanged).
 
 **Mission.** Give MicroWorld two working radio links and prove them the same
 way the wired links were proven:
@@ -13,7 +13,7 @@ way the wired links were proven:
    example exists and it has never run on hardware. Finish it: volley example,
    hardware verification, full client/server messaging example.
 2. **Bluetooth LE** — nothing exists. Design spike (ADR), a
-   central/peripheral `INetDriver` pair, volley + messaging examples.
+   central/peripheral `IDevice` pair, volley + messaging examples.
 3. **Capstone** — a fully wireless two-board world: BLE + LoRa as two
    channels of one actor-messaging world (gated on the messaging roadmap).
 
@@ -137,13 +137,13 @@ join the allowed industry vocabulary alongside `Udp`/`Uart`), format with
 - **Edge-only.** New code lives in `Modules/MicroWorld/Platform/Esp32`, `examples/`, and
   `docs/architecture/decisions/`. If a task seems to need a portable-package change, stop
   and write `⛔ BLOCKED` — that is a design error in this plan, not a license
-  to edit `Net`.
+  to edit `Transport`.
 - **All vendor headers stay private.** ESP-IDF/NimBLE includes are confined
   to `src/*PlatformImplementation.h` and `.cpp` files; public headers carry
   only config structs and plain types
   (`rg -n "esp_|nimble|freertos|host/ble" Modules/MicroWorld/Platform/Esp32/include` must
   stay 0).
-- **Drivers implement the full `INetDriver` contract** (`NetDriver.h:40`):
+- **Drivers implement the full `IDevice` contract** (`Device.h:40`):
   non-blocking, at most one transport operation per call, transactional
   receives, `IsOpen()` guard after a `noexcept` constructor — mirror
   `Esp32UartDriver.h` / `Esp32I2cDriver.h` shape for shape.
@@ -166,9 +166,9 @@ join the allowed industry vocabulary alongside `Udp`/`Uart`), format with
 - **D1 — "Bluetooth" means Bluetooth LE.** The ESP32-S3 has **no Bluetooth
   Classic radio** — BLE 5.0 only. Classic (SPP, A2DP…) is permanently out of
   scope for this target. Anyone asking for "Bluetooth serial" gets BLE.
-- **D2 — A radio is just another `INetDriver`** (ADR 0003 reasoning).
+- **D2 — A radio is just another `IDevice`** (ADR 0003 reasoning).
   Framing reuses the shipped `FrameCodec` byte-pump decoder; sessions reuse
-  `TNetHost`; nothing portable changes. That reuse is the entire payoff.
+  `TTransportHost`; nothing portable changes. That reuse is the entire payoff.
 - **D3 — NimBLE is the working assumption for the BLE host stack** (lighter
   than Bluedroid, BLE-only fits D1). The Phase 2 spike confirms or overturns
   this with header/size evidence in ADR 0004; only the ADR may change it.
@@ -189,7 +189,7 @@ join the allowed industry vocabulary alongside `Udp`/`Uart`), format with
   GND, UART 9600 8N1, factory channel/address. A module-configuration tool
   (AT/command mode) is out of scope; if a module was reconfigured, restore
   factory defaults manually before blaming the driver.
-- **D8 — LoRa session profile is `TNetHost<2, 58>` with relaxed timing**:
+- **D8 — LoRa session profile is `TTransportHost<2, 58>` with relaxed timing**:
   `HeartbeatIntervalMilliseconds = 3000`, `PeerTimeoutMilliseconds = 15000`.
   At the E32's default air rate a full frame costs hundreds of milliseconds
   of airtime — the UDP-era 1000/5000 defaults would congest the channel.
@@ -201,7 +201,7 @@ join the allowed industry vocabulary alongside `Udp`/`Uart`), format with
   over a wire plus `TNetworkFrameSet`, because example 29 always composes two
   channels. `TMessageRouter`, `TMessageChannelBinding`, `TNetworkFrameSet` and
   `TReliableChannel` all shipped, and examples 22–25 exercise them. Everything
-  in Phases 0–4 here uses only shipped API (`TNetHost`, `TNetHostFrame`,
+  in Phases 0–4 here uses only shipped API (`TTransportHost`, `THostPlaySystem`,
   `TEngineHost`).
 - **D11 — BLE builds extend sdkconfig additively.** The shared
   `examples/esp32-common/sdkconfig.defaults` is frozen; BLE examples pass a
@@ -223,7 +223,7 @@ join the allowed industry vocabulary alongside `Udp`/`Uart`), format with
 | Per-driver 1-byte address codec | `Modules/MicroWorld/Platform/Esp32/.../LoraAddress.h`, `UartAddress.h` |
 | Design-spike ADR with header-derived answers | `docs/architecture/decisions/0003-wired-transports.md` Appendices A/B |
 | Driver volley example | `examples/18-TwoBoardUart` |
-| Full TNetHost + engine messaging example | `examples/19-UartMessaging` |
+| Full TTransportHost + engine messaging example | `examples/19-UartMessaging` |
 | Two-link, one-world composition (Phase 5 only) | `Modules/MicroWorld/Messaging/AGENTS.md` composition recipes |
 
 ---
@@ -231,7 +231,7 @@ join the allowed industry vocabulary alongside `Udp`/`Uart`), format with
 ## 3. What exists today (verified at `b4973be` — the map)
 
 **LoRa historical baseline: driver yes, proof no.** The current architecture
-places portable E32 framing/state in optional `RadioE32`, with ESP32 and Pico
+places portable E32 framing/state in optional `Transport/Lora`, with ESP32 and Pico
 compatibility facades owning UART SDK lifetime. `IUartByteStream` is a narrow
 byte-transfer interface, not a universal HAL. `FEsp32E32LoraDriver`
 (`Esp32E32LoraDriver.h:51`): config `{UartPort, TxGpio, RxGpio,
@@ -246,9 +246,9 @@ only: **no example uses it, it has never been flashed**, and the catalog row
 modules on the rig support BLE 5.0 (and only BLE — D1). No extra hardware is
 needed for BLE.
 
-**Everything above the `INetDriver` interface is ready and battle-tested** on UDP, UART,
-I2C, and SPI: `FrameCodec` (CRC-16, resync), `TNetManager`, `TNetHost`
-(roles/peers/channels/heartbeats), `TNetHostFrame` → `TEngineHost`, and four
+**Everything above the `IDevice` interface is ready and battle-tested** on UDP, UART,
+I2C, and SPI: `FrameCodec` (CRC-16, resync), `TTransportManager`, `TTransportHost`
+(roles/peers/channels/heartbeats), `THostPlaySystem` → `TEngine`, and four
 verified two-board examples (18–21) plus two WiFi ones (15–16) to copy from.
 
 **Hardware on the desk:** 2 × ESP32-S3-WROOM-1-N16R8 boards (USB-JTAG on
@@ -267,7 +267,7 @@ messaging plan's table):
 | Layer | LoRa budget |
 | --- | --- |
 | Driver frame payload (`E32MaxPayloadBytes`) | 58 |
-| `TNetHost` message payload (−4 header) | 54 |
+| `TTransportHost` message payload (−4 header) | 54 |
 | Encoded actor message, best-effort (Phase 5) | 54 (payload ≤ 48) |
 | Encoded actor message, guaranteed (−3) | 51 (payload ≤ 45) |
 
@@ -306,25 +306,25 @@ struct FEsp32BleCentralConfig
 };
 
 /** Peripheral-role BLE transport: advertises, accepts one central. */
-class FEsp32BlePeripheralDriver final : public INetDriver
+class FEsp32BlePeripheralDriver final : public IDevice
 {
 public:
     explicit FEsp32BlePeripheralDriver(const FEsp32BlePeripheralConfig& Config) noexcept;
     bool IsOpen() const noexcept;        // stack up, service registered, advertising
     bool IsConnected() const noexcept;   // a central is connected and MTU covers one frame
-    // INetDriver: TrySend = one notify of one encoded frame (Unavailable until connected);
+    // IDevice: TrySend = one notify of one encoded frame (Unavailable until connected);
     //             TryReceive = drain inbox ring through the decoder, one frame max;
     //             MaxPacketBytes = BleMaxPayloadBytes.
 };
 
 /** Central-role BLE transport: scans, connects to one named peripheral. */
-class FEsp32BleCentralDriver final : public INetDriver
+class FEsp32BleCentralDriver final : public IDevice
 {
 public:
     explicit FEsp32BleCentralDriver(const FEsp32BleCentralConfig& Config) noexcept;
     bool IsOpen() const noexcept;
     bool IsConnected() const noexcept;
-    // INetDriver: TrySend = one write-without-response; TryReceive as above.
+    // IDevice: TrySend = one write-without-response; TryReceive as above.
 };
 ```
 
@@ -343,14 +343,14 @@ headers/docs, imitate ADR 0003's appendices): NimBLE vs Bluedroid final call
 `sdkconfig.ble.defaults`; service/characteristic UUIDs; achievable MTU
 between two S3s and the request sequence; write-without-response vs write
 throughput/backpressure (what does "driver `Full`" map to); connection
-supervision timeout vs `TNetHost` heartbeat profile for BLE; how the consumer
+supervision timeout vs `TTransportHost` heartbeat profile for BLE; how the consumer
 compile probe builds with BT enabled without touching the shared profile.
 
 ### 4.3 Session profiles per radio
 
 | | LoRa (D8) | BLE |
 | --- | --- | --- |
-| `TNetHost` | `TNetHost<2, 58>` | `TNetHost<2, 120>` |
+| `TTransportHost` | `TTransportHost<2, 58>` | `TTransportHost<2, 120>` |
 | Heartbeat / timeout ms | 3000 / 15000 | 1000 / 5000 (spike may adjust) |
 | Server address | `MakeLoraAddress(<node>)` | `MakeBleAddress(<node>)` |
 
@@ -481,9 +481,9 @@ bench, first as a raw volley, then under the full engine.
 
 - [x] **1.3 Example `26-MessagingOverLora` (the payoff demo).** Copy example 19's
   shape (`examples/19-UartMessaging` — server board: `TEngineHost` +
-  `TNetHost` DedicatedServer + `TNetHostFrame`, channel-1 message spawns an
-  actor, channel-2 state broadcast; client board: bare client `TNetHost`)
-  with the D8/§4.3 LoRa profile: `TNetHost<2, 58>`, heartbeat 3000 /
+  `TTransportHost` DedicatedServer + `THostPlaySystem`, channel-1 message spawns an
+  actor, channel-2 state broadcast; client board: bare client `TTransportHost`)
+  with the D8/§4.3 LoRa profile: `TTransportHost<2, 58>`, heartbeat 3000 /
   timeout 15000, `ServerAddress = MakeLoraAddress(1)`, payloads trimmed to
   the §4.1 budget (state broadcast stays 2 bytes — fits trivially), pacing
   ≥ 1000 ms, tag `[ex26]`. README: same wiring/safety blocks as 17 plus the
@@ -502,9 +502,9 @@ bench, first as a raw volley, then under the full engine.
   Done 2026-07-24 — `examples/26-MessagingOverLora` created (9 tracked files:
   `src/Main.cpp`, `src/ServerMain.cpp`, `src/ClientMain.cpp`,
   `src/LoraMessagingShared.h`, `src/CMakeLists.txt`, `CMakeLists.txt`,
-  `platformio.ini`, `README.md`, `AGENTS.md`) as example 19's `TNetHost`
+  `platformio.ini`, `README.md`, `AGENTS.md`) as example 19's `TTransportHost`
   client/server protocol with only the transport swapped to
-  `FEsp32E32LoraDriver` at the D8 airtime profile: `TNetHost<2, 58>`, heartbeat
+  `FEsp32E32LoraDriver` at the D8 airtime profile: `TTransportHost<2, 58>`, heartbeat
   3000 / timeout 15000, `ServerAddress = MakeLoraAddress(1)`, 2-byte state
   broadcast paced 1000 ms (server ticks the engine every poll but gates the
   radio broadcast on a deadline — a full E32 frame costs hundreds of ms of
@@ -598,7 +598,7 @@ bench, first as a raw volley, then under the full engine.
   flag set (D11 — the shared `sdkconfig.defaults` is untouched). Extend the
   ESP32 consumer project (`Modules/tests/Core/consumer`) with a `ble` env
   that layers both defaults files and compiles a minimal probe instantiating
-  both drivers (imitate how the existing Net/Engine ESP32 probes are wired).
+  both drivers (imitate how the existing Transport/Engine ESP32 probes are wired).
   Document the two-file `SDKCONFIG_DEFAULTS` mechanism in
   `examples/esp32-common/AGENTS.md`.
 
@@ -635,7 +635,7 @@ bench, first as a raw volley, then under the full engine.
 
 - [ ] **4.3 Example `28-BleMessaging`.** Example 19's shape over BLE:
   server world on the **peripheral** board (it is the stationary role),
-  client `TNetHost` on the central, `TNetHost<2, 120>` both sides, §4.3
+  client `TTransportHost` on the central, `TTransportHost<2, 120>` both sides, §4.3
   profile, tag `[ex28]`. README + AGENTS + catalog row.
 
   **Done when:** both envs compile.
@@ -658,11 +658,11 @@ BLE work in Phases 2–4.
 
 - [ ] **5.1 Example `29-WirelessWorld` (capstone: two radios, zero wires).**
   Two boards, no wire between them (D12 keeps WiFi out): **channel 1
-  telemetry over BLE** (`TNetHost<2, 120>`), **channel 2 commands over LoRa**
-  (`TNetHost<2, 58>`, D8 profile). One world per board, one `TMessageRouter`
+  telemetry over BLE** (`TTransportHost<2, 120>`), **channel 2 commands over LoRa**
+  (`TTransportHost<2, 58>`, D8 profile). One world per board, one `TMessageRouter`
   per board with `MaxMessageBytes = 48` (§4.1 — the LoRa channel is the
   binding constraint), frame-set composition per the `Modules/MicroWorld/Messaging/AGENTS.md`
-  recipes (net frames first, router last). Client
+  recipes (host play systems first, router last). Client
   board: sensor actor streams readings on telemetry; server board: control
   actor sends a targeted rate-change command on the LoRa channel every 15 s.
   Tag `[ex29]`. README: both radios' safety/security blocks, the
@@ -685,7 +685,7 @@ BLE work in Phases 2–4.
 
 - [ ] **6.1 Documentation sweep.** `Modules/MicroWorld/Platform/Esp32` README/AGENTS: BLE
   driver pair + BleAddress rows next to the existing transport tables.
-  `docs/Porting.md` (locate the Net-driver section's driver list): add BLE. `docs/UE5ConceptMap.md`:
+  `docs/Porting.md` (locate the Device section's driver list): add BLE. `docs/UE5ConceptMap.md`:
   one row (BLE/LoRa drivers ≈ more `UNetDriver` transports — reuse the
   existing wording). `examples/AGENTS.md`: note that radio examples carry
   mandatory safety blocks. If MESSAGING Phase 1 has shipped the log/sleep

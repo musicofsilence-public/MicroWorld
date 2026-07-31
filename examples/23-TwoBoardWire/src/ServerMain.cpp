@@ -138,7 +138,7 @@ private:
 
 /**
  * Server board (node 1): FLampActor + FDisplayActor over a TMessageRouter wired to TTransportHost
- * (DedicatedServer) through TMessageChannelBinding, with the engine holding the net frame and the
+ * (DedicatedServer) through TMessageChannelBinding, with the engine holding the host play system and the
  * loop pumping the router manually (Phase 4.1 will fold this into TPlaySystemSet — see §4).
  */
 void RunServer() noexcept

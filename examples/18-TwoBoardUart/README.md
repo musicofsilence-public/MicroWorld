@@ -25,7 +25,7 @@ transport, with the byte I/O, frame codec, and address helpers unchanged.
 - `FEsp32UartDriver` (`TrySend` / `TryReceive` / `IsOpen`), `FEsp32UartConfig`
 - `UartMaxPayloadBytes`
 - `MakeUartAddress`, `UartAddressNodeId`
-- `ENetResult`, `FNetReceiveResult`
+- `ETransportResult`, `FReceiveResult`
 - `FEsp32TimeSource::Now`
 
 ## Hardware required

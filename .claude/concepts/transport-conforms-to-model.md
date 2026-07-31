@@ -110,9 +110,15 @@ None outstanding. The four that opened this concept are resolved below.
   since they live in the Transport system. `ENetMode` -> `ENetworkMode` (owner's
   choice), `TNetHostSystem` -> `THostPlaySystem` because it lives in Engine and a
   Transport-flavoured name there would be worse than the one it replaces.
-- 2026-07-31: `NetifResult` (lwIP), the words `Network`/`Networking`, and
-  `docs/UE5ConceptMap.md`'s references to *Unreal's* NetDriver are protected — that
-  file exists to name foreign APIs.
+- 2026-07-31: `NetifResult` (lwIP) and the words `Network`/`Networking` are protected.
+- 2026-07-31: **Corrected** — `docs/UE5ConceptMap.md` is *not* protected wholesale. Its
+  "MicroWorld equivalent" column names our own types (`TNetSystem`, `ENetMode`,
+  `TNetHost`, `INetDriver`), so the file misdirects until they are renamed. Only the
+  phrase "UChannel / NetDriver channels" names Unreal's API and stays.
+- 2026-07-31: A document that says what to do next is updated; one that records a
+  measurement or a finished run is not. So `docs/RADIO_TRANSPORTS_ROADMAP.md` changes —
+  it is a live worker protocol with open phases naming shipped API — while
+  `Modules/benchmarks/**/Results/*.md` keeps the names its runs were made under.
 - 2026-07-31: The 26 examples rename in the same commit. They name `ENetResult`
   directly, so any split leaves the build broken.
 - 2026-07-31: `model.c4` changes with the code. Networking's contract still reads

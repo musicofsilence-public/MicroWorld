@@ -2,7 +2,7 @@
 
 **Feature:** the same ping-pong counter volley as example 18, over an E32 LoRa
 radio link instead of a wire — a `FEsp32E32LoraDriver` swapped in for
-`FEsp32UartDriver` on the `INetDriver` interface, with the volley loop, frame codec,
+`FEsp32UartDriver` on the `IDevice` interface, with the volley loop, frame codec,
 and address helpers unchanged. This is the wireless twin of example 18.
 
 > Status: hardware-verified 2026-07-24 (EBYTE E32-433T20D, 433 MHz).
@@ -33,7 +33,7 @@ and address helpers unchanged. This is the wireless twin of example 18.
 - `FEsp32E32LoraDriver` (`TrySend` / `TryReceive` / `IsOpen`), `FEsp32E32LoraConfig`
 - `E32MaxPayloadBytes`
 - `MakeLoraAddress`, `LoraAddressNodeId`
-- `ENetResult`, `FNetReceiveResult`
+- `ETransportResult`, `FReceiveResult`
 - `FEsp32TimeSource::Now`, `SleepMilliseconds`, `WriteEsp32LogRecord`, `MW_LOG`
 
 ## Hardware required
@@ -217,7 +217,7 @@ I (36446336) ex17: tx n=40 result=Success
 ```
 
 The same hardware was rechecked after moving UART SDK calls behind the
-SDK-free `IUartByteStream` interface and wiring transmit progress into `INetDriver`. The rebuilt
+SDK-free `IUartByteStream` interface and wiring transmit progress into `IDevice`. The rebuilt
 UF2 SHA-256 was
 `9d85c3cc2ce14cd099730779d0323f1bfd135b4cc61fdbf6aa50a717bf91e288`.
 After upload through `D:\`, COM5 showed an uninterrupted node-1/node-2 volley:

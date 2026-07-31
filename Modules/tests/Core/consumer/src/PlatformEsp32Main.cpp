@@ -99,7 +99,7 @@ extern "C" void app_main()
 	// default event loop, FEsp32UdpDriver's socket()/bind() asserts inside lwIP ("Invalid mbox").
 	// No WiFi is associated, so the socket binds but no datagram routes. The composition objects
 	// below are STATIC: TEngine embeds its object storage inline (MaxObjects * SlotBytes) and
-	// the UDP/net objects hold internal buffers, together too large for the 3584-byte main task
+	// the UDP/transport objects hold internal buffers, together too large for the 3584-byte main task
 	// stack; static .bss placement matches MicroWorld's bounded caller-owned-storage model.
 	if (esp_netif_init() != ESP_OK || esp_event_loop_create_default() != ESP_OK)
 	{

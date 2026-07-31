@@ -14,7 +14,7 @@ config, the fixed server IP (`192.168.4.1`), and the channel/opcode/spawn protoc
 
 ## Concepts
 
-- Proves the **whole message design over WiFi UDP, no router**: `TNetHost`
+- Proves the **whole message design over WiFi UDP, no router**: `TTransportHost`
   Hello/Welcome admission, channel-1 spawn requests, channel-2 state broadcasts,
   and the engine frame's pump steps — identical to example 19, only the driver
   and the WiFi bring-up differ. The same design rides UART, a bare wire, or WiFi.
@@ -22,7 +22,7 @@ config, the fixed server IP (`192.168.4.1`), and the channel/opcode/spawn protoc
   `192.168.4.1`, so the client's server address is a constant — no IP discovery
   or copy step, and no real credentials (demo SSID/password in the shared header).
 - **No node id** (unlike example 19): a UDP peer is keyed by its socket address,
-  which `TNetHost` learns from the datagram.
+  which `TTransportHost` learns from the datagram.
 - **Ordering + storage invariants:** driver after the WiFi bring-up returns `Success`;
   all composition objects `static`.
 - **Shared-AP caveat:** the server socket binds `INADDR_ANY`, so a stray datagram

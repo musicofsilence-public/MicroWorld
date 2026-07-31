@@ -69,7 +69,7 @@ constexpr std::int32_t RxGpioNumber = 18;
 /** A wire is fast, so 115200 baud. */
 constexpr std::uint32_t UartBaudRate = 115200;
 
-/** Protocol version both hosts advertise in Hello/Welcome, over both nets. */
+/** Protocol version both hosts advertise in Hello/Welcome, over both transports. */
 constexpr std::uint8_t ProtocolVersion = 1;
 
 /** SoftAP the server hosts and the client joins -- demo-only values, not a secret, so

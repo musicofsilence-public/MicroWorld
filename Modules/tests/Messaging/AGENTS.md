@@ -7,7 +7,7 @@ Inherits `../../AGENTS.md`.
 The Messaging test executable owns message codecs, routing, channel bindings,
 and reliable delivery. It reuses the Core test harness and the Engine
 allocation counters, and links Engine and Transport because the moved channel
-tests retain deterministic Engine/Net host-loopback fixtures. These test-only
+tests retain deterministic Engine/Transport host-loopback fixtures. These test-only
 dependencies do not expand Messaging's public Core-only boundary.
 
 ## Concepts

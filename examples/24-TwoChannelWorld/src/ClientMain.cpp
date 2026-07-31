@@ -165,14 +165,14 @@ void RunClient() noexcept
 	const FDeviceHandle CommandHandle = Networking.AddDevice(CommandDriver, ENetworkMode::Client, CommandConfig);
 	if (!TelemetryHandle.IsValid() || !CommandHandle.IsValid())
 	{
-		MW_LOG(Error, "ex24", "client net system rejected a driver; halting");
+		MW_LOG(Error, "ex24", "client networking system rejected a driver; halting");
 		return;
 	}
 	const FChannelHandle TelemetryChannel = Networking.AddChannel(TelemetryHandle, TelemetryChannelId, EChannelReliability::BestEffort);
 	const FChannelHandle CommandsChannel = Networking.AddChannel(CommandHandle, CommandsChannelId, EChannelReliability::BestEffort);
 	if (!TelemetryChannel.IsValid() || !CommandsChannel.IsValid())
 	{
-		MW_LOG(Error, "ex24", "client net system rejected a channel; halting");
+		MW_LOG(Error, "ex24", "client networking system rejected a channel; halting");
 		return;
 	}
 	static FWorldEngine Engine{FGarbageCollectionBudget{1, 4, 8}, Networking};

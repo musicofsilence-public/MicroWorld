@@ -19,7 +19,7 @@ over WiFi.
    `lamp ON` / `lamp OFF`) and `FDisplayActor` (subscribed to the broadcast
    `HeartbeatCountMessageId` — logs `heartbeat=<n>`).
 3. Both actors reach messaging only through `IMessageRouter&`, injected at
-   construction (D9); neither actor ever sees `TNetHost` or the UART driver
+   construction (D9); neither actor ever sees `TTransportHost` or the UART driver
    directly — that boundary is `TMessageChannelBinding`.
 4. The run is **unbounded** (matching 18-TwoBoardUart and 19-UartMessaging's
    server): this is a continuous two-board demo, not a self-terminating trace.
@@ -30,7 +30,7 @@ over WiFi.
   / `BroadcastMessage` / `PreAdvance` / `PostAdvance`)
 - `TMessageChannelBinding`, `EChannelSendTarget` (`Server` on the client,
   `AllPeers` on the server)
-- `TNetHost` (`Configure` / `Start`), `TNetHostSystem`, `ENetMode`
+- `TTransportHost` (`Configure` / `Start`), `THostPlaySystem`, `ENetworkMode`
 - `FEsp32UartDriver`, `FEsp32UartConfig`, `MakeUartAddress`
 - `TEngineHost` (`RegisterClass` / `CreateWorld` / `CreateObject` /
   `BeginPlay` / `Tick`), `AActor`, `UWorld::RegisterActor`

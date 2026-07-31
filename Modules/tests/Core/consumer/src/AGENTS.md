@@ -10,7 +10,7 @@ through one shared public-API probe. `ObjectNativeMain.cpp` and
 `ObjectEsp32Main.cpp` exercise the Core+Object profile through fixed storage,
 root, weak-reference, and collection APIs. `EngineNativeMain.cpp` and
 `EngineEsp32Main.cpp` exercise the accepted Core+Object+Engine compile profile.
-`NetNativeMain.cpp` and `NetEsp32Main.cpp` exercise the Core+Net compile
+`TransportNativeMain.cpp` and `TransportEsp32Main.cpp` exercise the Core+Transport compile
 profile through byte writer/reader, loopback, and manager APIs.
 `PlatformEsp32Main.cpp` proves the PlatformEsp32 network/engine composition
 without optional radio dependencies; `PlatformEsp32RadioE32Main.cpp` separately
@@ -31,8 +31,8 @@ project guarantees that only one entry point is linked per environment.
   after unrooted reclamation through public APIs.
 - Engine probes cover representative registration, lifecycle, tick, and
   collection APIs without claiming target runtime behavior.
-- Net probes cover representative byte writer/reader, loopback send/receive,
-  manager queue/advance/receive, and all four `ENetResult` paths without
+- Transport probes cover representative byte writer/reader, loopback send/receive,
+  manager queue/advance/receive, and all four `ETransportResult` paths without
   claiming target runtime behavior.
 - The benchmark owns ESP-IDF counters, serial output, heap/stack sampling, and
   fixed workloads so target dependencies remain outside MicroWorld.
@@ -47,4 +47,4 @@ bounded.
 
 - Verify with `pio run -d Modules/tests/Core/consumer -e native`,
   `-e esp32-s3`, `-e esp32-s3-memory`, `-e esp32-s3-object`,
-  `-e esp32-s3-engine`, `-e esp32-s3-net`, or `-e esp32-s3-benchmark`.
+  `-e esp32-s3-engine`, `-e esp32-s3-transport`, or `-e esp32-s3-benchmark`.

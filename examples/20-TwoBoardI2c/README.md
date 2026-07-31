@@ -29,7 +29,7 @@ responding slave.
   `FEsp32I2cSlaveConfig`
 - `I2cMaxPayloadBytes`
 - `MakeI2cAddress`, `I2cAddressNodeId`
-- `ENetResult`, `FNetReceiveResult`
+- `ETransportResult`, `FReceiveResult`
 - `FEsp32TimeSource::Now` (master pacing only)
 
 ## Hardware required

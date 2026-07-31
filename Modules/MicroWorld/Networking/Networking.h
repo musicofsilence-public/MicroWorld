@@ -27,14 +27,14 @@ enum class EChannelReliability : std::uint8_t
 };
 
 /**
- * Carries the fixed capacities a TNetworking sizes itself with: how many net drivers it accepts,
+ * Carries the fixed capacities a TNetworking sizes itself with: how many devices it accepts,
  * the peer and packet sizing every TTransportHost shares, the shared router sizing, the reliable-channel
  * retry sizing, and how many channels one system accepts in total. Every member is a compile-time
  * capacity so the system never allocates.
  */
 struct FDefaultNetworkingTraits
 {
-	/** Maximum net drivers (one TTransportHost each) the system accepts through AddDevice. */
+	/** Maximum devices (one TTransportHost each) the system accepts through AddDevice. */
 	static constexpr std::size_t MaxDevices = 2;
 
 	/** Peer slots each TTransportHost owns; reserved indices 0xFE/0xFF keep this below 0xFE. */
@@ -69,7 +69,7 @@ struct FDefaultNetworkingTraits
 };
 
 /**
- * Generation-checked identity of one net driver added to a TNetworking. The index addresses the
+ * Generation-checked identity of one device added to a TNetworking. The index addresses the
  * fixed slot and the generation prevents a stale identity from addressing a later occupant.
  */
 struct FDeviceHandle
@@ -110,7 +110,7 @@ struct FChannelHandle
  * One object that turns drivers into a working networked engine, owning fixed-capacity hosts,
  * bindings, reliable wrappers, and a shared router. AddDevice and AddChannel compose it;
  * BeginPlay closes composition and starts hosts at the engine's canonical time, while direct
- * frame pumping preserves the net -> reliable -> router ordering without adapter objects.
+ * frame pumping preserves the transport -> reliable -> router ordering without adapter objects.
  */
 template<typename TTraits = FDefaultNetworkingTraits>
 class TNetworking final : public IPlaySystem
@@ -142,7 +142,8 @@ public:
 	/** Creates an empty system; callers finish its driver and channel composition before engine BeginPlay. */
 	TNetworking() noexcept = default;
 
-	/** Stable in-place ownership keeps host and channel addresses valid for their bound relationships, so a net system cannot copy or relocate. */
+	/** Stable in-place ownership keeps host and channel addresses valid for their bound relationships, so a networking system cannot copy or
+	 * relocate. */
 	TNetworking(const TNetworking&) = delete;
 	TNetworking& operator=(const TNetworking&) = delete;
 	TNetworking(TNetworking&&) = delete;

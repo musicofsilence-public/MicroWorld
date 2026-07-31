@@ -97,8 +97,8 @@ private:
 
 /**
  * Client board: joins the WiFi SoftAP and runs FCounterActor over one TMessageRouter wired to ONE
- * UDP net through TWO TMessageChannelBinding -- best-effort straight to the router, guaranteed
- * wrapped in TReliableChannel -- with the engine holding the net frame, the reliable channel, and
+ * UDP transport through TWO TMessageChannelBinding -- best-effort straight to the router, guaranteed
+ * wrapped in TReliableChannel -- with the engine holding the host play system, the reliable channel, and
  * the router behind one TPlaySystemSet<3>. The UDP driver is itself wrapped in FPacketDropDriver
  * so every third outgoing packet, of any kind, is silently dropped -- the whole point of the demo.
  */
@@ -123,7 +123,7 @@ void RunClient() noexcept
 	}
 
 	// All composition objects are static (the ESP32-S3 stack lesson, §2.2). The drop driver wraps
-	// the real UDP driver, so the net below sends and receives through the loss injector.
+	// the real UDP driver, so the transport below sends and receives through the loss injector.
 	static FPacketDropDriver DropDriver{UdpDriver, DropEveryNthSend};
 	static FWorldTransport Transport{DropDriver};
 	static FWorldRouter Router;
@@ -140,8 +140,8 @@ void RunClient() noexcept
 
 	static FHostPlay HostPlay{Transport};
 
-	// D3 frame-set order: net first (delivers inbound traffic), reliable channel second (its
-	// PostAdvance paces retries), router last (dispatches what the net and the reliable channel just
+	// D3 frame-set order: transport first (delivers inbound traffic), reliable channel second (its
+	// PostAdvance paces retries), router last (dispatches what the transport and the reliable channel just
 	// delivered) -- see GuaranteedDeliveryShared.h's FWorldFrameSet alias.
 	static FWorldFrameSet Frames;
 	if (Frames.Add(HostPlay) != EEngineResult::Success || Frames.Add(Guaranteed) != EEngineResult::Success

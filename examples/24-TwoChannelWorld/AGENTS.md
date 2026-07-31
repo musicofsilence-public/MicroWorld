@@ -9,8 +9,8 @@ Two role worlds, one source tree. `Main.cpp` is a thin dispatcher whose
 `-DMICROWORLD_EXAMPLE_SERVER` define; `ServerMain.cpp` and `ClientMain.cpp`
 hold the two roles and are both always compiled, and `TwoChannelWorldShared.h`
 defines the message/actor/channel ids, node/pin/WiFi configuration, and the
-`TNetSystem`/`TEngine` type shapes once (DRY within this one example). Per
-board, `TNetSystem` owns TWO `TNetHost` values — one over `FEsp32UdpDriver`
+`TNetworking`/`TEngine` type shapes once (DRY within this one example). Per
+board, `TNetworking` owns TWO `TTransportHost` values — one over `FEsp32UdpDriver`
 (telemetry), one over `FEsp32UartDriver` (commands) — plus their bindings,
 one shared `TMessageRouter`, and its ordered engine-system set. Every
 composition object is `static` and allocation-free.
@@ -21,12 +21,12 @@ composition object is `static` and allocation-free.
   `FEsp32UdpDriver`; `CommandsChannelId` rides `FEsp32UartDriver`; both bind to
   the same router, so one actor-messaging design spans two independent
   transports at once.
-- **`TNetSystem` owns the link policy.** Its derived channel wire byte matches
+- **`TNetworking` owns the link policy.** Its derived channel wire byte matches
   the channel id; server modes target `AllPeers`, client mode targets `Server`,
-  and its internal set pumps net -> reliable -> router in pre-advance order.
+  and its internal set pumps transport -> reliable -> router in pre-advance order.
 - **Actors name no transport (D9).** `FTelemetrySinkActor`, `FCommanderActor`,
   and `FSensorActor` all take `IMessageRouter&` by constructor injection and
-  never see `TNetHost`, a driver, UDP, or UART.
+  never see `TTransportHost`, a driver, UDP, or UART.
 - **`AActor::SetTickInterval` re-times the sensor mid-handler.** The sensor's
   `SetReportingRateMessageId` handler runs during the engine's inbound network
   dispatch step (`TEngine::Tick` step 1), strictly before the world advance

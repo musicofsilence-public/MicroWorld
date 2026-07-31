@@ -78,7 +78,7 @@ that `pvPortMalloc`, `vPortFree`, and `heap_[1-5].c` are absent. Build output,
 SDK source, and FreeRTOS source live under ignored `build/` only; do not vendor
 either dependency into MicroWorld.
 
-Validate the `lora` map with the `Core+Net` profile and require
+Validate the `lora` map with the `Core+Transport` profile and require
 `libmicroworld_platform_pico.a`; forbid PlatformHost and PlatformEsp32
 archives. Before a paired hardware test,
 power both E32 modules with antennas attached, wire Pico GP4 TX → E32 RXD and

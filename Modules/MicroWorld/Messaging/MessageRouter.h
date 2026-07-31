@@ -14,7 +14,7 @@ namespace MicroWorld
 
 /**
  * Routes actor messages between handlers and channels.
- * Implements IPlaySystem so TEngine pumps it like any net frame:
+ * Implements IPlaySystem so TEngine pumps it like any play system:
  * PreAdvance delivers queued inbound messages to matching handlers;
  * PostAdvance hands queued outbound messages to their channels.
  */

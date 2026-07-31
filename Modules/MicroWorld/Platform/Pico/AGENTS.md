@@ -14,7 +14,7 @@ headers. It is excluded from `CheckDependencyBoundaries.py`.
 - Construction is inert; the composition root initializes one exclusively
   owned UART after entering `main`.
 - `TrySend(Success)` queues a frame; direct callers invoke `AdvanceTransmit`,
-  while `TNetHost` already advances its driver after outbound FIFO progress.
+  while `TTransportHost` already advances its driver after outbound FIFO progress.
 - FreeRTOS, SDK fetching, the complete `pico_stdlib` runtime, task scheduling,
   and upload policy belong to the consuming firmware, not this family.
 - Host tests cover UART validation, ownership, lifecycle, and facade delegation;

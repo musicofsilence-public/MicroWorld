@@ -27,7 +27,7 @@ subdirectory to add a local guide.
 - Dependency ownership is declared explicitly as `MODULE=PATH`; a package may
   not hide another module below its own manifest.
 - Profile checks inspect archive, path, and public-symbol markers. Every
-  profile requires positive Core archive evidence; Object- and Net-selected
+  profile requires positive Core archive evidence; Object- and Transport-selected
   profiles additionally require their adjacent system archives. The current
   managed profile includes Core, Engine (with the folded Object), and the
   Engine archive covers both.

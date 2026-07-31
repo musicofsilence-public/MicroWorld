@@ -19,7 +19,7 @@ reverse.
 
 ## Concepts
 
-- Each family ships adapter interfaces behind the portable `INetDriver`,
+- Each family ships adapter interfaces behind the portable `IDevice`,
   `TimePointMilliseconds`, and output-device contracts described in
   `../../docs/Porting.md`; portable code never reaches OS/SDK headers directly.
 - All OS/SDK headers are confined to `Detail/` implementation headers; public

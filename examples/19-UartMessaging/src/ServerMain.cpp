@@ -67,7 +67,7 @@ private:
 };
 } // namespace
 
-/** Server board: engine host + net frame + net host (DedicatedServer) over one UART. */
+/** Server board: engine host + host play system + transport host (DedicatedServer) over one UART. */
 void RunServer() noexcept
 {
 	static FEsp32UartDriver Driver{MakeUartConfig(ServerNodeId)};

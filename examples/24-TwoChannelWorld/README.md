@@ -1,11 +1,11 @@
 # 24-TwoChannelWorld
 
 **Feature:** one world, two live channels on two different physical links at
-once — one `TNetSystem` owns the shared `TMessageRouter`, host bindings, and
+once — one `TNetworking` owns the shared `TMessageRouter`, host bindings, and
 engine-system ordering for telemetry over WiFi UDP and commands over a UART
 wire, simultaneously, between the same two boards.
 
-> Status: not yet hardware-verified after the `TNetSystem` conversion.
+> Status: not yet hardware-verified after the `TNetworking` conversion.
 
 ## What it does
 
@@ -25,7 +25,7 @@ wire, simultaneously, between the same two boards.
 4. Both links are alive **at the same time**: the server console interleaves
    telemetry-in lines (UDP) and command-out lines (UART).
 5. Every actor reaches messaging only through `IMessageRouter&`, injected at
-   construction (D9); none of them ever sees `TNetHost`, a driver, UDP, or
+   construction (D9); none of them ever sees `TTransportHost`, a driver, UDP, or
    UART — swapping which channel rides which transport is a composition-root
    edit only.
 6. The run is **unbounded** (matching 16-TwoBoardUdp and 23-TwoBoardWire):
@@ -34,12 +34,12 @@ wire, simultaneously, between the same two boards.
 
 ## MicroWorld APIs used
 
-- `TNetSystem` (`AddNetDriver` / `AddChannel` / `GetRouter`) — configures
+- `TNetworking` (`AddDevice` / `AddChannel` / `GetRouter`) — configures
   both drivers, derives wire channels and peer targets, and starts hosts at
   engine `BeginPlay`
 - `IMessageRouter` (`AddMessageHandler` / `SendMessageToActor` /
   `BroadcastMessage`)
-- `ENetMode` and `FNetHostConfig` — explicit client/server session policy
+- `ENetworkMode` and `FTransportHostConfig` — explicit client/server session policy
 - `FEsp32WifiLink` (`StartAccessPoint` / `JoinAccessPoint`), `FEsp32UdpDriver`,
   `MakeUdpAddress`
 - `FEsp32UartDriver`, `FEsp32UartConfig`, `MakeUartAddress`
@@ -102,7 +102,7 @@ download loader; `mw log` holds the line steady and reconnects across resets.
 ## Historical hardware verification
 
 The following trace was captured on two ESP32-S3-DevKitC-1 boards on
-**2026-07-24**, before this example was converted to `TNetSystem`. It documents
+**2026-07-24**, before this example was converted to `TNetworking`. It documents
 the physical setup only; the current composition still needs a fresh hardware
 run.
 
@@ -135,7 +135,7 @@ rate=N` lands on the client as `sensor reporting rate -> N`, alternating
 
 ## Image size
 
-Historical output from `pio run` before the `TNetSystem` conversion (release
+Historical output from `pio run` before the `TNetworking` conversion (release
 build, ESP32-S3-DevKitC-1). Fresh size evidence is required for the current
 example:
 

@@ -30,7 +30,7 @@ transport, across every wired bus the plan builds.
   `FEsp32SpiSlaveConfig`
 - `SpiMaxPayloadBytes`
 - `MakeSpiAddress`, `SpiAddressNodeId`
-- `ENetResult`, `FNetReceiveResult`
+- `ETransportResult`, `FReceiveResult`
 - `FEsp32TimeSource::Now` (master pacing only)
 
 ## Hardware required

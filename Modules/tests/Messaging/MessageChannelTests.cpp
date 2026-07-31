@@ -136,10 +136,10 @@ struct FHostTraits : FDefaultEngineTraits
 /** Engine profile sized for a bare rooted world; these cases never spawn actors. */
 using FHost = TEngine<FHostTraits>;
 
-/** Per-side D3 composition root: holds one side's net frame and message router behind the one IPlaySystem slot TEngine drives. */
+/** Per-side D3 composition root: holds one side's host play system and message router behind the one IPlaySystem slot TEngine drives. */
 using FFrameSet = TPlaySystemSet<2>;
 
-/** Per-side D3 composition root for the multi-channel cases: two net frames (telemetry, command) plus the one router that binds both. */
+/** Per-side D3 composition root for the multi-channel cases: two host play systems (telemetry, command) plus the one router that binds both. */
 using FMultiChannelFrameSet = TPlaySystemSet<3>;
 
 /** Router profile shared by every case; its capacities are generous headroom, never the behavior under test. */
@@ -305,9 +305,9 @@ private:
 
 /**
  * Runs one side's frame-driven pump for one tick. Each side's TEngine is bound to an
- * FFrameSet holding that side's net frame and message router (net added first, router added
- * last per the D3 recipe), so this single Tick call already dispatches the net frame then the
- * router (inbound) and flushes the router then the net frame (outbound) in the right order.
+ * FFrameSet holding that side's host play system and message router (transport added first, router added
+ * last per the D3 recipe), so this single Tick call already dispatches the host play system then the
+ * router (inbound) and flushes the router then the host play system (outbound) in the right order.
  */
 void PumpSide(FHost& InHost, const TimePointMilliseconds InNowMilliseconds) noexcept
 {
@@ -332,8 +332,8 @@ TimePointMilliseconds ConnectClientToServer(
 
 /**
  * Extends ConnectClientToServer to two independent wires (roadmap 4.2's telemetry + command networks):
- * waits for BOTH client nets to report Connected, since each side's one Host.Tick already pumps both
- * of that side's net frames through its frame set.
+ * waits for BOTH client transports to report Connected, since each side's one Host.Tick already pumps both
+ * of that side's host play systems through its frame set.
  */
 TimePointMilliseconds ConnectClientToServerOverTwoWires(
 	FHost& InClientHost,
@@ -370,10 +370,12 @@ MW_TEST_CASE(EngineMessageChannel_ClientToServerTargetedSendReachesServerHandler
 	FTestRouter ClientRouter;
 	FTestRouter ServerRouter;
 	FFrameSet ServerSet;
-	MW_EXPECT_EQ(Test, EEngineResult::Success, ServerSet.Add(ServerFrame), "The server's frame set must accept its net frame first (D3 order)");
+	MW_EXPECT_EQ(
+		Test, EEngineResult::Success, ServerSet.Add(ServerFrame), "The server's frame set must accept its host play system first (D3 order)");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ServerSet.Add(ServerRouter), "The server's frame set must accept its router last (D3 order)");
 	FFrameSet ClientSet;
-	MW_EXPECT_EQ(Test, EEngineResult::Success, ClientSet.Add(ClientFrame), "The client's frame set must accept its net frame first (D3 order)");
+	MW_EXPECT_EQ(
+		Test, EEngineResult::Success, ClientSet.Add(ClientFrame), "The client's frame set must accept its host play system first (D3 order)");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ClientSet.Add(ClientRouter), "The client's frame set must accept its router last (D3 order)");
 	FHost ServerHost{FGarbageCollectionBudget{TestRootOperations, TestMarkOperations, TestSweepOperations}, ServerSet};
 	FHost ClientHost{FGarbageCollectionBudget{TestRootOperations, TestMarkOperations, TestSweepOperations}, ClientSet};
@@ -443,10 +445,12 @@ MW_TEST_CASE(EngineMessageChannel_ServerBroadcastReachesClientHandler)
 	FTestRouter ClientRouter;
 	FTestRouter ServerRouter;
 	FFrameSet ServerSet;
-	MW_EXPECT_EQ(Test, EEngineResult::Success, ServerSet.Add(ServerFrame), "The server's frame set must accept its net frame first (D3 order)");
+	MW_EXPECT_EQ(
+		Test, EEngineResult::Success, ServerSet.Add(ServerFrame), "The server's frame set must accept its host play system first (D3 order)");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ServerSet.Add(ServerRouter), "The server's frame set must accept its router last (D3 order)");
 	FFrameSet ClientSet;
-	MW_EXPECT_EQ(Test, EEngineResult::Success, ClientSet.Add(ClientFrame), "The client's frame set must accept its net frame first (D3 order)");
+	MW_EXPECT_EQ(
+		Test, EEngineResult::Success, ClientSet.Add(ClientFrame), "The client's frame set must accept its host play system first (D3 order)");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ClientSet.Add(ClientRouter), "The client's frame set must accept its router last (D3 order)");
 	FHost ServerHost{FGarbageCollectionBudget{TestRootOperations, TestMarkOperations, TestSweepOperations}, ServerSet};
 	FHost ClientHost{FGarbageCollectionBudget{TestRootOperations, TestMarkOperations, TestSweepOperations}, ClientSet};
@@ -513,11 +517,12 @@ MW_TEST_CASE(EngineMessageChannel_ForeignWireChannelNeverReachesBoundSink)
 	FHostPlay ClientFrame{ClientTransport};
 	FTestRouter ServerRouter;
 	FFrameSet ServerSet;
-	MW_EXPECT_EQ(Test, EEngineResult::Success, ServerSet.Add(ServerFrame), "The server's frame set must accept its net frame first (D3 order)");
+	MW_EXPECT_EQ(
+		Test, EEngineResult::Success, ServerSet.Add(ServerFrame), "The server's frame set must accept its host play system first (D3 order)");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ServerSet.Add(ServerRouter), "The server's frame set must accept its router last (D3 order)");
 	FHost ServerHost{FGarbageCollectionBudget{TestRootOperations, TestMarkOperations, TestSweepOperations}, ServerSet};
 	// The client in this case has no router at all (it sends raw wire bytes directly below), so it
-	// keeps the bare net frame instead of a frame set.
+	// keeps the bare host play system instead of a frame set.
 	FHost ClientHost{FGarbageCollectionBudget{TestRootOperations, TestMarkOperations, TestSweepOperations}, ClientFrame};
 	FBinding ServerBinding(ServerTransport, AppWireChannelByte, AppChannelId, EChannelSendTarget::AllPeers, ServerRouter);
 
@@ -593,10 +598,12 @@ MW_TEST_CASE(EngineMessageChannel_SendBeforeConnectReportsUnavailableThenDeliver
 	FTestRouter ClientRouter;
 	FTestRouter ServerRouter;
 	FFrameSet ServerSet;
-	MW_EXPECT_EQ(Test, EEngineResult::Success, ServerSet.Add(ServerFrame), "The server's frame set must accept its net frame first (D3 order)");
+	MW_EXPECT_EQ(
+		Test, EEngineResult::Success, ServerSet.Add(ServerFrame), "The server's frame set must accept its host play system first (D3 order)");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ServerSet.Add(ServerRouter), "The server's frame set must accept its router last (D3 order)");
 	FFrameSet ClientSet;
-	MW_EXPECT_EQ(Test, EEngineResult::Success, ClientSet.Add(ClientFrame), "The client's frame set must accept its net frame first (D3 order)");
+	MW_EXPECT_EQ(
+		Test, EEngineResult::Success, ClientSet.Add(ClientFrame), "The client's frame set must accept its host play system first (D3 order)");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ClientSet.Add(ClientRouter), "The client's frame set must accept its router last (D3 order)");
 	FHost ServerHost{FGarbageCollectionBudget{TestRootOperations, TestMarkOperations, TestSweepOperations}, ServerSet};
 	FHost ClientHost{FGarbageCollectionBudget{TestRootOperations, TestMarkOperations, TestSweepOperations}, ClientSet};
@@ -742,24 +749,24 @@ MW_TEST_CASE(EngineMessageChannel_MultiChannelIsolationDeliversBothInOneFrame)
 		Test,
 		EEngineResult::Success,
 		ServerSet.Add(TelemetryServerFrame),
-		"The server's frame set must accept the telemetry net frame first (D3 order)");
+		"The server's frame set must accept the telemetry host play system first (D3 order)");
 	MW_EXPECT_EQ(
 		Test,
 		EEngineResult::Success,
 		ServerSet.Add(CommandServerFrame),
-		"The server's frame set must accept the command net frame second (D3 order)");
+		"The server's frame set must accept the command host play system second (D3 order)");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ServerSet.Add(ServerRouter), "The server's frame set must accept its router last (D3 order)");
 	FMultiChannelFrameSet ClientSet;
 	MW_EXPECT_EQ(
 		Test,
 		EEngineResult::Success,
 		ClientSet.Add(TelemetryClientFrame),
-		"The client's frame set must accept the telemetry net frame first (D3 order)");
+		"The client's frame set must accept the telemetry host play system first (D3 order)");
 	MW_EXPECT_EQ(
 		Test,
 		EEngineResult::Success,
 		ClientSet.Add(CommandClientFrame),
-		"The client's frame set must accept the command net frame second (D3 order)");
+		"The client's frame set must accept the command host play system second (D3 order)");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ClientSet.Add(ClientRouter), "The client's frame set must accept its router last (D3 order)");
 	FHost ServerHost{FGarbageCollectionBudget{TestRootOperations, TestMarkOperations, TestSweepOperations}, ServerSet};
 	FHost ClientHost{FGarbageCollectionBudget{TestRootOperations, TestMarkOperations, TestSweepOperations}, ClientSet};
@@ -877,24 +884,24 @@ MW_TEST_CASE(EngineMessageChannel_StalledChannelRetainsRouterHead)
 		Test,
 		EEngineResult::Success,
 		ServerSet.Add(TelemetryServerFrame),
-		"The server's frame set must accept the telemetry net frame first (D3 order)");
+		"The server's frame set must accept the telemetry host play system first (D3 order)");
 	MW_EXPECT_EQ(
 		Test,
 		EEngineResult::Success,
 		ServerSet.Add(CommandServerFrame),
-		"The server's frame set must accept the command net frame second (D3 order)");
+		"The server's frame set must accept the command host play system second (D3 order)");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ServerSet.Add(ServerRouter), "The server's frame set must accept its router last (D3 order)");
 	FMultiChannelFrameSet ClientSet;
 	MW_EXPECT_EQ(
 		Test,
 		EEngineResult::Success,
 		ClientSet.Add(TelemetryClientFrame),
-		"The client's frame set must accept the telemetry net frame first (D3 order)");
+		"The client's frame set must accept the telemetry host play system first (D3 order)");
 	MW_EXPECT_EQ(
 		Test,
 		EEngineResult::Success,
 		ClientSet.Add(CommandClientFrame),
-		"The client's frame set must accept the command net frame second (D3 order)");
+		"The client's frame set must accept the command host play system second (D3 order)");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ClientSet.Add(ClientRouter), "The client's frame set must accept its router last (D3 order)");
 	FHost ServerHost{FGarbageCollectionBudget{TestRootOperations, TestMarkOperations, TestSweepOperations}, ServerSet};
 	FHost ClientHost{FGarbageCollectionBudget{TestRootOperations, TestMarkOperations, TestSweepOperations}, ClientSet};
@@ -1050,12 +1057,14 @@ MW_TEST_CASE(EngineMessageChannel_ReliableChannelSurvivesPacketDropsDeliveringEx
 	MW_EXPECT_SUCCESS(Test, ClientRouter.AddChannel(ClientReliable), "The client router must accept its guaranteed channel");
 
 	FClientFrameSet ClientSet;
-	MW_EXPECT_EQ(Test, EEngineResult::Success, ClientSet.Add(ClientFrame), "The client's frame set must accept its net frame first (4.4 order)");
+	MW_EXPECT_EQ(
+		Test, EEngineResult::Success, ClientSet.Add(ClientFrame), "The client's frame set must accept its host play system first (4.4 order)");
 	MW_EXPECT_EQ(
 		Test, EEngineResult::Success, ClientSet.Add(ClientReliable), "The client's frame set must accept its reliable channel second (4.4 order)");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ClientSet.Add(ClientRouter), "The client's frame set must accept its router last (4.4 order)");
 	FServerFrameSet ServerSet;
-	MW_EXPECT_EQ(Test, EEngineResult::Success, ServerSet.Add(ServerFrame), "The server's frame set must accept its net frame first (4.4 order)");
+	MW_EXPECT_EQ(
+		Test, EEngineResult::Success, ServerSet.Add(ServerFrame), "The server's frame set must accept its host play system first (4.4 order)");
 	MW_EXPECT_EQ(
 		Test,
 		EEngineResult::Success,

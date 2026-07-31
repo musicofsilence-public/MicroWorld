@@ -11,8 +11,8 @@ holds the one copy of the demo AP config (SSID/password) and the echo port.
 
 ## Concepts
 
-- Proves the `INetDriver` UDP transport hosting its own network with **no router**: this
-  board is the SoftAP and echoes via `FEsp32UdpDriver`. No `TNetHost`, no engine — the driver
+- Proves the `IDevice` UDP transport hosting its own network with **no router**: this
+  board is the SoftAP and echoes via `FEsp32UdpDriver`. No `TTransportHost`, no engine — the driver
   only.
 - **Ordering + storage invariants:** the driver is constructed only after
   `FEsp32WifiLink::StartAccessPoint` returns `Success`; all composition objects (`WifiLink`,

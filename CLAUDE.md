@@ -53,9 +53,9 @@ the non-portable edges. Only they may include OS or SDK headers.
 | **Core** | — | Result codes, time, logging, `FLifecycleGuard`, tick scheduling, fixed-capacity containers, delegates, smart pointers, timers, `IPlaySystem` |
 | **Engine** | Core | The managed runtime and identity: `UWorld`, `AActor`, `UActorComponent`, the `TEngine`/`IEngine` interface, timer manager, plus the folded Object store, garbage collector, and generation-checked handles |
 | **Messaging** | Core | Actor messaging: message types, router, channel bindings, reliable channel. Header-only — no archive |
-| **Transport** | Core | Byte I/O: `INetDriver`, `TNetHost`, protocol, framing, plus the optional portable E32 LoRa transport (`FRadioE32Driver`) over `IUartByteStream`. Link it only for LoRa builds — the RadioE32 sources are toggled by `MICROWORLD_TRANSPORT_RADIO` |
+| **Transport** | Core | Byte I/O: `IDevice`, `TTransportHost`, protocol, framing, plus the optional portable E32 LoRa transport (`FRadioE32Driver`) over `IUartByteStream`. Link it only for LoRa builds — the RadioE32 sources are toggled by `MICROWORLD_TRANSPORT_RADIO` |
 | **Application** | Core, Engine | Program entry: `FApplication` holds one engine for its lifetime and owns the `Run` frame-loop template |
-| **Networking** | Core, Messaging, Transport | `TNetSystem` — net hosts, one shared router, and channels composed behind Core's `IPlaySystem` |
+| **Networking** | Core, Messaging, Transport | `TNetworking` — transport hosts, one shared router, and channels composed behind Core's `IPlaySystem` |
 | **Platform/Host** | non-portable | Host UDP over OS sockets, `steady_clock` time source |
 | **Platform/Esp32** | non-portable | ESP32-S3 transports (lwIP UDP, E32 LoRa UART, wired UART/I2C/SPI), ESP timer and log |
 | **Platform/Pico** | Transport, non-portable | RP2040 E32 LoRa UART over the native Pico SDK |

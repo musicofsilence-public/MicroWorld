@@ -5,14 +5,14 @@ Inherits `../AGENTS.md`.
 ## Architecture
 
 One composition root (`app_main`) owns one static `FEsp32UartDriver` and drives
-a bare ping-pong directly over its `TrySend`/`TryReceive` — no `TNetManager`,
-no `TNetHost`, no world. The role (node 1 vs node 2) is a compile-time constant
+a bare ping-pong directly over its `TrySend`/`TryReceive` — no `TTransportManager`,
+no `TTransportHost`, no world. The role (node 1 vs node 2) is a compile-time constant
 from `-DMICROWORLD_EXAMPLE_NODE_ID`, so the two build environments share one
 source file.
 
 ## Concepts
 
-- Makes the `INetDriver` interface observable over a wire: the volley loop is
+- Makes the `IDevice` interface observable over a wire: the volley loop is
   transport-agnostic, so this is example 17 with only the driver construction
   line changed.
 - The wire is point-to-point, so the destination `MakeUartAddress(PeerNodeId)`

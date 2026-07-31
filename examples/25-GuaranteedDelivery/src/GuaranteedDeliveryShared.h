@@ -41,7 +41,7 @@ inline constexpr MicroWorld::FMessageChannelId GuaranteedChannelId = 2;
 inline constexpr std::uint8_t BestEffortWireChannelByte = 1;
 
 /** Wire-level channel byte the guaranteed binding reads/writes; MUST differ from best-effort's
- *  since BOTH channels share one UDP net and the wire byte is how the net demuxes them. */
+ *  since BOTH channels share one UDP transport and the wire byte is how the transport demuxes them. */
 inline constexpr std::uint8_t GuaranteedWireChannelByte = 2;
 
 /** First and last counter value the client sends on both channels (inclusive). */
@@ -93,7 +93,7 @@ using FChannelBinding = MicroWorld::TMessageChannelBinding<FWorldTransport>;
 /** Guaranteed-delivery wrapper for channel 2 (8 pending slots, 96-byte wrapped-packet budget). */
 using FGuaranteedChannel = MicroWorld::TReliableChannel<8, 96>;
 
-/** Pumps the net frame, the reliable channel, and the router behind one IPlaySystem slot (D3 order). */
+/** Pumps the host play system, the reliable channel, and the router behind one IPlaySystem slot (D3 order). */
 using FWorldFrameSet = MicroWorld::TPlaySystemSet<3>;
 
 /** The engine both roles compose; sized for one world with a couple of small actors using direct component storage. */

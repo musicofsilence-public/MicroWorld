@@ -5,8 +5,8 @@ Inherits `../AGENTS.md`.
 ## Architecture
 
 One composition root (`app_main`) runs one role over one static I2C driver and
-drives a bare ping-pong directly over `TrySend`/`TryReceive` — no `TNetManager`,
-no `TNetHost`, no world. The role is a compile-time constant from
+drives a bare ping-pong directly over `TrySend`/`TryReceive` — no `TTransportManager`,
+no `TTransportHost`, no world. The role is a compile-time constant from
 `-DMICROWORLD_EXAMPLE_I2C_MASTER`: the master build owns an
 `FEsp32I2cMasterDriver` and `RunMaster`, the slave build an
 `FEsp32I2cSlaveDriver` and `RunSlave`, so each environment compiles only its role.

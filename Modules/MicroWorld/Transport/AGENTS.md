@@ -9,9 +9,9 @@ Transport is the portable byte-I/O system. Its dependency direction is
 Transport must not depend on Engine, Messaging, or Application, and no portable
 system may see both Engine and Transport — only a composition root joins them.
 
-The system owns a bounded byte reader/writer, one non-blocking `INetDriver`
-contract, one caller-storage-backed fixed-capacity `TNetManager`, the `TNetHost`
-session layer above it, wire framing, explicit `ENetResult` outcomes, a
+The system owns a bounded byte reader/writer, one non-blocking `IDevice`
+contract, one caller-storage-backed fixed-capacity `TTransportManager`, the `TTransportHost`
+session layer above it, wire framing, explicit `ETransportResult` outcomes, a
 deterministic host loopback driver, the one-byte E32 node-address shape, and the
 portable RadioE32 transport over `IUartByteStream`. It does not own sequence
 numbers, retries, reliability, message routing, authentication, replication,
@@ -25,12 +25,12 @@ sources and the RadioE32 sources are toggled by the `MICROWORLD_TRANSPORT_IP` an
 `MICROWORLD_TRANSPORT_RADIO` CMake options so a Pico build can omit IP code and a
 radio-less build can omit the E32 framing.
 
-`Detail/` holds fixed transport state and other implementation mechanics (the
+`Lora/Detail/` holds fixed transport state and other implementation mechanics (the
 portable E32 transport state); consumers must not depend on those headers.
 
 ## Concepts and boundaries
 
-- `ENetResult` keeps every byte, queue, packet, and driver outcome explicit
+- `ETransportResult` keeps every byte, queue, packet, and driver outcome explicit
   with one normalized meaning per value: `Success` (complete operation),
   `Full` (valid operation lacks destination/queue/transport capacity),
   `Invalid` (invalid span/configuration, oversized packet, or truncated
@@ -41,29 +41,29 @@ portable E32 transport state); consumers must not depend on those headers.
   `TSpan<std::uint8_t>` and `TSpan<const std::uint8_t>`. A backing span bound
   to `{nullptr, nonzero}` is an invalid configuration that every mutating or
   consuming operation rejects as `Invalid` without dereferencing null.
-- `UdpAddressCodec.h` holds the 6-byte IPv4+port `FNetAddress` encoding as pure
+- `Wifi/UdpAddressCodec.h` holds the 6-byte IPv4+port `FDeviceAddress` encoding as pure
   `constexpr` arithmetic with no OS includes, so both UDP platform adapters and
   their drivers share one definition without breaching the `Core <- Transport`
   boundary.
-- `E32Lora.h` owns the one-byte E32 node-address shape and payload limit;
-  `Detail/E32LoraTransportState.h` owns the portable E32 state, and
-  `RadioE32Driver.h` owns the driver that uses it over `IUartByteStream`.
-- `INetDriver` exposes one bounded non-blocking `TrySend` and one bounded
+- `Lora/E32Lora.h` owns the one-byte E32 node-address shape and payload limit;
+  `Lora/Detail/E32LoraTransportState.h` owns the portable E32 state, and
+  `Lora/RadioE32Driver.h` owns the driver that uses it over `IUartByteStream`.
+- `IDevice` exposes one bounded non-blocking `TrySend` and one bounded
   non-blocking `TryReceive`. Every receive is transactional: on `Full`,
-  `Invalid`, or `Unavailable` the destination and `FNetReceiveResult::BytesReceived`
+  `Invalid`, or `Unavailable` the destination and `FReceiveResult::BytesReceived`
   are unchanged. `AdvanceTransmit` is a no-op by default and lets staged drivers
   make one bounded physical transmit step after a host FIFO drain.
-- `TNetManager<MaxPackets, MaxPacketBytes>` holds exactly one externally
-  referenced `INetDriver` and one externally referenced `TNetPacketStorage`,
+- `TTransportManager<MaxPackets, MaxPacketBytes>` holds exactly one externally
+  referenced `IDevice` and one externally referenced `TTransportPacketStorage`,
   maintains one deterministic outbound FIFO, and performs at most one direct
   driver receive.
-- `TNetHost<MaxPeers, MaxPacketBytes>` is the session layer above `TNetManager`.
-  One `ENetMode` role — Standalone, Client, ListenServer, or DedicatedServer —
+- `TTransportHost<MaxPeers, MaxPacketBytes>` is the session layer above `TTransportManager`.
+  One `ENetworkMode` role — Standalone, Client, ListenServer, or DedicatedServer —
   selects which traffic the host originates and accepts; a fixed peer table
   carries `Hello`/`Welcome` admission, heartbeats, and timeout eviction; and
   channel 0 is reserved for control.
-- `THostLoopback` is a deterministic fixed-capacity `INetDriver` for host tests.
-- `FPacketDropDriver` is a test/demo `INetDriver` decorator that wraps another
+- `THostLoopback` is a deterministic fixed-capacity `IDevice` for host tests.
+- `FPacketDropDriver` is a test/demo `IDevice` decorator that wraps another
   driver by reference and silently drops every Nth outgoing send; it is a loss
   injector, not reliability or a real transport.
 - RadioE32 operations are non-blocking, bounded, fixed-capacity, and explicit

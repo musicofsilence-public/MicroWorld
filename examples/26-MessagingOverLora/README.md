@@ -1,11 +1,11 @@
 # 26-MessagingOverLora
 
 **Feature:** the full MicroWorld message design — a dedicated-server `TEngineHost`
-bound to `TNetHost` through the `TNetHostSystem` interface, and a bare `TNetHost`
+bound to `TTransportHost` through the `THostPlaySystem` interface, and a bare `TTransportHost`
 client — running over an E32 LoRa radio. **Same application protocol as
 example 19 — only the driver construction and the D8 session profile differ.**
 
-`TNetHost` already advances queued driver transmission after outbound FIFO
+`TTransportHost` already advances queued driver transmission after outbound FIFO
 progress, so this example has no direct `AdvanceTransmit` call.
 
 > Status: hardware-verified 2026-07-24 (EBYTE E32-433T20D, 433 MHz).
@@ -18,12 +18,12 @@ progress, so this example has no direct `AdvanceTransmit` call.
 
 ## What it does
 
-1. The **server** board (`node=1`) composes a `TEngineHost` + `TNetHostSystem` +
-   `TNetHost` in `DedicatedServer` mode over one `FEsp32E32LoraDriver`,
+1. The **server** board (`node=1`) composes a `TEngineHost` + `THostPlaySystem` +
+   `TTransportHost` in `DedicatedServer` mode over one `FEsp32E32LoraDriver`,
    registers a spawnable actor class, creates its world, and ticks forever.
    It broadcasts the world actor count on channel 2 **every 1 s** (not every
    tick — see below).
-2. The **client** board (`node=2`) runs a bare `TNetHost` in `Client` mode over
+2. The **client** board (`node=2`) runs a bare `TTransportHost` in `Client` mode over
    its own `FEsp32E32LoraDriver`, greeting `MakeLoraAddress(1)` as its server.
    Once connected it sends two channel-1 spawn requests one second apart and
    logs every channel-2 state broadcast it receives.
@@ -46,10 +46,10 @@ broadcast would congest the channel and time peers out over the air.
 
 ## MicroWorld APIs used
 
-- `TNetHost` (`Configure` / `Start` / `PumpReceive` / `PumpSend` / `SendTo` /
+- `TTransportHost` (`Configure` / `Start` / `PumpReceive` / `PumpSend` / `SendTo` /
   `Broadcast` / `GetState` / `GetServerPeer`, message-handler multicast),
-  `ENetMode`, `ENetHostState`, `FNetHostConfig`, `FPeerId`
-- `TNetHostSystem` / `IPlaySystem` and the `TEngineHost` network-frame constructor
+  `ENetworkMode`, `ETransportHostState`, `FTransportHostConfig`, `FPeerId`
+- `THostPlaySystem` / `IPlaySystem` and the `TEngineHost` network-frame constructor
 - `TEngineHost` (`RegisterClass` / `CreateWorld` / `CreateObject` / `BeginPlay` /
   `Tick` / `GetWorld`), `UWorld::SpawnActor`, `AActor`, `FGarbageCollectionBudget`
 - `FEsp32E32LoraDriver`, `FEsp32E32LoraConfig`, `MakeLoraAddress`

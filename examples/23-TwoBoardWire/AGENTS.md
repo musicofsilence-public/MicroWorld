@@ -9,10 +9,10 @@ Two role worlds, one source tree. `Main.cpp` is a thin dispatcher whose
 `-DMICROWORLD_EXAMPLE_SERVER` define; `ServerMain.cpp` and `ClientMain.cpp`
 hold the two roles and are both always compiled, and `TwoBoardWireShared.h`
 defines the message/actor ids, node ids, UART/session config builders, and the
-`TNetHost`/`TMessageRouter`/`TEngineHost` type shapes once (DRY within this one
-example). Per board: a `TNetHost` over `FEsp32UartDriver`, a `TMessageRouter`,
+`TTransportHost`/`TMessageRouter`/`TEngineHost` type shapes once (DRY within this one
+example). Per board: a `TTransportHost` over `FEsp32UartDriver`, a `TMessageRouter`,
 and a `TMessageChannelBinding` wiring the two together. The engine holds the
-`TNetHostSystem` as its per-frame network slot; the run loop pumps the router
+`THostPlaySystem` as its per-frame network slot; the run loop pumps the router
 manually (`PostAdvance` before `Engine.Tick`, `PreAdvance` after) because
 `TPlaySystemSet` does not exist until Phase 4.1 and `TEngineHost` holds
 exactly one `IPlaySystem`. Every composition object is `static`,
@@ -22,14 +22,14 @@ allocation-free, sized at compile time.
 
 - **Actor messaging over a real wire.** The client's `FSwitchActor` and the
   server's `FLampActor`/`FDisplayActor` talk only through `IMessageRouter&`,
-  injected at construction (D9); none of them ever sees `TNetHost` or the UART
+  injected at construction (D9); none of them ever sees `TTransportHost` or the UART
   driver.
 - **`EChannelSendTarget`.** The client's binding sends to `Server` (its one
   connected peer); the server's binding sends to `AllPeers` (broadcasts reach
-  every connected client, matching `TNetHost::Broadcast`'s own semantics).
+  every connected client, matching `TTransportHost::Broadcast`'s own semantics).
 - **Manual frame order = the 3.1 test's.** `Modules/MicroWorld/Engine/tests/EngineMessageChannelTests.cpp`'s
   `PumpSide` proved `Router.PostAdvance` -> `Host.Tick` -> `Router.PreAdvance`
-  is the correct per-frame order for a router bound to a live `TNetHost`; this
+  is the correct per-frame order for a router bound to a live `TTransportHost`; this
   example's run loop mirrors that order exactly, on both boards.
 - **Only the driver differs from a WiFi build.** Swapping `FEsp32UartDriver`
   for `FEsp32UdpDriver` (and `MakeUartConfig`/`MakeUartAddress` for their WiFi

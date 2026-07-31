@@ -4,8 +4,8 @@ Inherits `../../AGENTS.md`.
 
 ## Architecture
 
-The Transport test executable owns byte I/O, the non-blocking `INetDriver`
-contract, `TNetManager`, `TNetHost`, wire framing, `ENetResult` outcomes, the
+The Transport test executable owns byte I/O, the non-blocking `IDevice`
+contract, `TTransportManager`, `TTransportHost`, wire framing, `ETransportResult` outcomes, the
 host loopback driver, the packet-drop decorator, the E32 node-address codec,
 and the portable RadioE32 driver over `IUartByteStream`. Net and RadioE32 tests
 were separate; they folded into one Transport test set.

@@ -10,7 +10,7 @@ the shipped adapter that implements it as a worked reference.
 
 ### 1. Time source
 
-The runtime never reads a clock. Every lifecycle, tick, timer, GC, and net
+The runtime never reads a clock. Every lifecycle, tick, timer, GC, and transport
 deadline takes a caller-supplied
 [`TimePointMilliseconds`](../Modules/MicroWorld/Core/Time.h) (`std::uint64_t`
 monotonic milliseconds). An adapter reads the real clock and feeds that value
@@ -23,14 +23,14 @@ into `TEngineHost::Tick(Now)` (or the lower-level `Advance(Now)` calls).
   [`FHostTimeSource`](../Modules/MicroWorld/Platform/Host/HostTimeSource.h)
   uses `std::chrono::steady_clock` from a process-local baseline.
 
-### 2. Net driver
+### 2. Device
 
 Implement
-[`INetDriver`](../Modules/MicroWorld/Transport/NetDriver.h) with
-two non-blocking, transactional operations — `TrySend(const FNetAddress& To,
-TSpan<const std::uint8_t>)` and `TryReceive(FNetAddress& OutFrom, TSpan<
-std::uint8_t>, FNetReceiveResult&)`. On any non-`Success` result the
-destination and `BytesReceived` must be unchanged. `FNetAddress` is opaque; the
+[`IDevice`](../Modules/MicroWorld/Transport/Device.h) with
+two non-blocking, transactional operations — `TrySend(const FDeviceAddress& To,
+TSpan<const std::uint8_t>)` and `TryReceive(FDeviceAddress& OutFrom, TSpan<
+std::uint8_t>, FReceiveResult&)`. On any non-`Success` result the
+destination and `BytesReceived` must be unchanged. `FDeviceAddress` is opaque; the
 adapter owns its concrete encoding and provides helpers to build/inspect it.
 
 - Host UDP reference:
@@ -44,7 +44,7 @@ adapter owns its concrete encoding and provides helpers to build/inspect it.
 - ESP32 E32 LoRa reference:
   [`FEsp32E32LoraDriver`](../Modules/MicroWorld/Platform/Esp32/Esp32E32LoraDriver.h)
   is an ESP32 UART-lifetime compatibility facade over optional
-  [`RadioE32`](../Modules/MicroWorld/Transport). RadioE32 owns portable E32 framing and
+  [`RadioE32`](../Modules/MicroWorld/Transport/Lora). RadioE32 owns portable E32 framing and
   bounded progress over Core's narrow `IUartByteStream` interface; the facade retains a 1-byte broadcast
   [`LoraAddress`](../Modules/MicroWorld/Platform/Esp32/LoraAddress.h).
 - ESP32 wired UART reference:
@@ -97,8 +97,8 @@ package:
   `<chrono>`, …) and confine them to private `src/*PlatformImplementation.h` headers;
 - is **excluded from `CheckDependencyBoundaries.py`** — it has no module key in
   that tool's portable table;
-- **depends inward** on any portable package (Core, Memory, Object, Engine,
-  Net) it needs; the reverse dependency is forbidden.
+- **depends inward** on any portable package (Core, Engine, Messaging, Transport,
+  Application, Networking) it needs; the reverse dependency is forbidden.
 
 The portable packages themselves stay free of OS/vendor headers and remain
 under the dependency checker.

@@ -269,7 +269,7 @@ void HandleClientSpawnRequest(FDemoSpawnContext& SpawnContext, int& SpawnedBegin
 
 /**
  * Builds the server's channel-1 spawn-request handler binding and registers it
- * with the server net host. The bound lambda only forwards to
+ * with the server transport host. The bound lambda only forwards to
  * HandleClientSpawnRequest, keeping the capture list separate from the handler
  * logic it invokes.
  */
@@ -302,7 +302,7 @@ void HandleServerStateBroadcast(FDemoStateCapture& StateCapture, TSpan<const std
 
 /**
  * Builds the client's channel-2 state-broadcast handler binding and registers
- * it with the client net host. The bound lambda only forwards to
+ * it with the client transport host. The bound lambda only forwards to
  * HandleServerStateBroadcast, keeping the capture list separate from the
  * handler logic it invokes.
  */
@@ -316,7 +316,7 @@ bool InstallClientStateHandler(FClientTransport& ClientTransport, FDemoStateCapt
 
 /**
  * Builds the client's server address from the server driver's bound loopback
- * port, configures both net hosts, starts both, and prints the two startup
+ * port, configures both transport hosts, starts both, and prints the two startup
  * trace lines. Returns false on the first failing step so main can abort
  * before BeginPlay runs against a half-started session.
  */
@@ -471,7 +471,7 @@ bool RunStateBroadcastLoop(
 } // namespace
 
 /**
- * Composes the server engine host and bare client net host over real localhost
+ * Composes the server engine host and bare client transport host over real localhost
  * UDP, drives them through one deterministic interleaved loop, and prints a
  * byte-identical trace across runs. Returns 0 on success and 1 on any failure.
  */

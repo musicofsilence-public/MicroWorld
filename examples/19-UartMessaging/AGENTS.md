@@ -9,8 +9,8 @@ calls `RunServer()` or `RunClient()` by the `-DMICROWORLD_EXAMPLE_SERVER`
 define; `ServerMain.cpp` and `ClientMain.cpp` hold the two roles and are both
 always compiled (matching example 16's structure), and `UartMessagingShared.h`
 defines the channels, opcode, node ids, and config builders once. The server is
-a full `TEngineHost` + `TNetHostSystem` + `TNetHost` (DedicatedServer); the
-client is a bare `TNetHost` (Client). Both run over `FEsp32UartDriver`.
+a full `TEngineHost` + `THostPlaySystem` + `TTransportHost` (DedicatedServer); the
+client is a bare `TTransportHost` (Client). Both run over `FEsp32UartDriver`.
 
 ## Concepts
 
@@ -20,8 +20,8 @@ client is a bare `TNetHost` (Client). Both run over `FEsp32UartDriver`.
   `esp_netif_init`.
 - Server node id 1, client node id 2; the client's `ServerAddress` is
   `MakeUartAddress(1)`. The wire is point-to-point, so those ids identify peers
-  for `TNetHost` bookkeeping but never route on the wire.
-- The server engine profile keeps `TNetHost` packets within the driver's
+  for `TTransportHost` bookkeeping but never route on the wire.
+- The server engine profile keeps `TTransportHost` packets within the driver's
   120-byte cap and completes one GC cycle per tick (budget `{1,4,8}`), so a
   spawn arriving inside a tick never hits `LifecycleLocked`.
 - All composition objects are `static` (§2.2). No socket is opened, so no

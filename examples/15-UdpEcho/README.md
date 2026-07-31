@@ -1,6 +1,6 @@
 # 15-UdpEcho
 
-**Feature:** a real transport behind the same `INetDriver` interface — lwIP UDP via
+**Feature:** a real transport behind the same `IDevice` interface — lwIP UDP via
 `FEsp32UdpDriver` — hosting its own network with **no router**: one board hosts a SoftAP and
 echoes every UDP datagram back to its sender.
 
@@ -22,7 +22,7 @@ echoed back.
 
 - `FEsp32WifiLink` (`StartAccessPoint`), `FEsp32AccessPointConfig`
 - `FEsp32UdpDriver` (`TrySend` / `TryReceive` / `PollReadable` / `IsOpen` / `BoundPort`,
-  `UdpMaxPacketBytes`), `ENetResult`, `FNetReceiveResult`, `FNetAddress`, `UdpAddressPort`,
+  `UdpMaxPacketBytes`), `ETransportResult`, `FReceiveResult`, `FDeviceAddress`, `UdpAddressPort`,
   `TSpan`
 - `SleepMilliseconds` (loop pacing)
 - `MW_LOG` / `WriteEsp32LogRecord` (installed once at `app_main` start)

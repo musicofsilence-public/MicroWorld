@@ -119,8 +119,8 @@ private:
 
 /**
  * Server board: hosts the WiFi SoftAP and runs FLedgerActor over one TMessageRouter wired to ONE
- * UDP net through TWO TMessageChannelBinding -- best-effort straight to the router, guaranteed
- * wrapped in TReliableChannel -- with the engine holding the net frame, the reliable channel, and
+ * UDP transport through TWO TMessageChannelBinding -- best-effort straight to the router, guaranteed
+ * wrapped in TReliableChannel -- with the engine holding the host play system, the reliable channel, and
  * the router behind one TPlaySystemSet<3>. The server's own driver is never wrapped in
  * FPacketDropDriver: only the client injects loss (§0 of the roadmap brief).
  */
@@ -160,7 +160,7 @@ void RunServer() noexcept
 
 	static FHostPlay HostPlay{Transport};
 
-	// D3 frame-set order: net first, reliable channel second, router last -- see
+	// D3 frame-set order: transport first, reliable channel second, router last -- see
 	// GuaranteedDeliveryShared.h's FWorldFrameSet alias.
 	static FWorldFrameSet Frames;
 	if (Frames.Add(HostPlay) != EEngineResult::Success || Frames.Add(Guaranteed) != EEngineResult::Success

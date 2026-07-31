@@ -7,7 +7,7 @@ version of familiar UE5 engine concepts. It lets UE5 developers build small
 applications, interactive software, and games for constrained devices (ESP32,
 STM32, RP2040-class) without first learning every hardware detail. It keeps only
 essential, bounded features — lifecycle, World/Actor/Component, GC, smart
-pointers, a simple `TNetManager`/`INetDriver` networking layer, and explicit
+pointers, a simple `TTransportManager`/`IDevice` networking layer, and explicit
 hardware boundaries. Platform support is verified one target at a time, not
 claimed for every board.
 
@@ -38,9 +38,9 @@ MicroWorld/
 │   │   ├── Engine/     UWorld / AActor / UActorComponent + the folded Object
 │   │   │               store, GC, handles, TEngine, IEngine
 │   │   ├── Messaging/  message router, channel bindings (header-only)
-│   │   ├── Transport/  byte I/O, frame codec, TNetHost + the optional E32
+│   │   ├── Transport/  byte I/O, frame codec, TTransportHost + the optional E32
 │   │   │               portable framing and driver (was Net + RadioE32)
-│   │   ├── Networking/ TNetSystem — Messaging + Transport behind IPlaySystem
+│   │   ├── Networking/ TNetworking — Messaging + Transport behind IPlaySystem
 │   │   ├── Application/ FApplication (including the Run template)
 │   │   └── Platform/   non-portable edges, each its own library.json
 │   │       ├── Host/    host UDP transport

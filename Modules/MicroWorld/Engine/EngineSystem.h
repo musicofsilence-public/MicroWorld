@@ -48,10 +48,10 @@ private:
  * Pumps several caller-owned systems as one bound IPlaySystem (roadmap D3):
  * lifecycle start and inbound dispatch run in add-order, while
  * lifecycle end
- * and outbound flush run in reverse add-order. This lets a net host deliver
+ * and outbound flush run in reverse add-order. This lets a transport host deliver
  * inbound traffic before a router handles it, then lets
  * the router queue
- * outbound traffic before the net host sends it.
+ * outbound traffic before the transport host sends it.
  *
  * The set only stores pointers to caller-owned systems, so it never
  * allocates

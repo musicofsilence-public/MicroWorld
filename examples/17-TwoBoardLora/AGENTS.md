@@ -6,13 +6,13 @@ Inherits `../AGENTS.md`.
 
 One composition root (`app_main`) owns one static `FEsp32E32LoraDriver` and
 drives a bare ping-pong directly over its `TrySend`/`TryReceive` — no
-`TNetManager`, no `TNetHost`, no world. The role (node 1 vs node 2) is a
+`TTransportManager`, no `TTransportHost`, no world. The role (node 1 vs node 2) is a
 compile-time constant from `-DMICROWORLD_EXAMPLE_NODE_ID`, so the two build
 environments share one source file.
 
 ## Concepts
 
-- Makes the `INetDriver` interface observable over radio: the volley loop is
+- Makes the `IDevice` interface observable over radio: the volley loop is
   transport-agnostic, so this is example 18 with only the driver construction
   line changed.
 - LoRa is a broadcast, half-duplex medium: the destination

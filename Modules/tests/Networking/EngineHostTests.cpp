@@ -69,7 +69,7 @@ constexpr std::uint8_t AppChannel = 1;
 /** Stable type id for the actor a server spawns in response to a client message. */
 constexpr MicroWorld::FTypeId TransportSpawnedActorTypeId{0x00070001u};
 
-/** Stable type id for the actor that observes the net host on both world lifecycle boundaries. */
+/** Stable type id for the actor that observes the transport host on both world lifecycle boundaries. */
 constexpr MicroWorld::FTypeId TransportHostLifecycleActorTypeId{0x00070002u};
 
 /** Records how many times each frame slot ran and their order so a test can assert the contract. */

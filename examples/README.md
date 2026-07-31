@@ -5,7 +5,7 @@ All current examples target ESP32-S3; `01-CoreTick` also has a native Pico
 C++ SDK + FreeRTOS compile path. This file is the living catalog students read
 to find an example; [`AGENTS.md`](AGENTS.md) owns the build and
 hardware-verification procedure. Examples climb the dependency ladder
-(`Core → Object → Engine → Net`) and end with two boards talking over WiFi UDP,
+(`Core → Object → Engine → Transport`) and end with two boards talking over WiFi UDP,
 E32 LoRa, and plain wires.
 
 ## Hardware shopping list
@@ -72,20 +72,20 @@ Status: ⬜ planned · 🟨 built (compiles) · ✅ hardware-verified
 | 10 | `10-EngineWorld` | `UWorld` / `AActor` / `UActorComponent` via `TEngineHost` | — | ⬜ |
 | 11 | `11-EngineTimers` | `TTimerManager` one-shot / looping / cancel | — | ⬜ |
 | 12 | `12-NetBytes` | `FByteWriter` / `FByteReader` transactional byte I/O | — | ⬜ |
-| 13 | `13-NetLoopback` | `TNetManager` FIFO over `THostLoopback` | — | ⬜ |
+| 13 | `13-NetLoopback` | `TTransportManager` FIFO over `THostLoopback` | — | ⬜ |
 | 14 | `14-NetFrameCodec` | `EncodeFrame` / `TFrameDecoder` CRC framing + resync | — | ⬜ |
 | 15 | `15-UdpEcho` | `FEsp32UdpDriver` over WiFi, board-to-board (SoftAP, no router) | 2nd board | ✅ |
-| 16 | `16-TwoBoardUdp` | `TNetHost` client/server + `TNetHostSystem` over WiFi (SoftAP, no router) | 2nd board | ✅ |
+| 16 | `16-TwoBoardUdp` | `TTransportHost` client/server + `THostPlaySystem` over WiFi (SoftAP, no router) | 2nd board | ✅ |
 | 17 | `17-TwoBoardLora` | RadioE32 through `FEsp32E32LoraDriver`; direct loop advances queued TX | 2nd board, 2 × E32 | ✅ |
-| 18 | `18-TwoBoardUart` | wired UART `INetDriver` link — example 17's volley over a plain wire | 2nd board, 3 wires | 🟨 |
-| 19 | `19-UartMessaging` | full `TNetHost` client/server message design over UART, zero WiFi — example 16's protocol, only the driver changed | 2nd board, 3 wires | 🟨 |
-| 20 | `20-TwoBoardI2c` | wired I2C master/slave `INetDriver` link — example 18's volley over a clocked bus | 2nd board, 3 wires + 2 pull-ups | 🟨 |
-| 21 | `21-TwoBoardSpi` | wired SPI master/slave `INetDriver` link — example 20's volley over a clocked full-duplex bus | 2nd board, 5 wires | 🟨 |
+| 18 | `18-TwoBoardUart` | wired UART `IDevice` link — example 17's volley over a plain wire | 2nd board, 3 wires | 🟨 |
+| 19 | `19-UartMessaging` | full `TTransportHost` client/server message design over UART, zero WiFi — example 16's protocol, only the driver changed | 2nd board, 3 wires | 🟨 |
+| 20 | `20-TwoBoardI2c` | wired I2C master/slave `IDevice` link — example 18's volley over a clocked bus | 2nd board, 3 wires + 2 pull-ups | 🟨 |
+| 21 | `21-TwoBoardSpi` | wired SPI master/slave `IDevice` link — example 20's volley over a clocked full-duplex bus | 2nd board, 5 wires | 🟨 |
 | 22 | `22-ActorMessages` | local actor messaging: `TMessageRouter` broadcast + targeted send, one board | — | 🟨 |
 | 23 | `23-TwoBoardWire` | actor messaging over a UART wire: `TMessageChannelBinding` client/server, switch drives lamp | 2nd board, 3 wires | 🟨 |
 | 24 | `24-TwoChannelWorld` | two channels, one world: telemetry over WiFi UDP + commands over a UART wire on one `TMessageRouter` via `TPlaySystemSet<3>` | 2nd board, 3 wires + WiFi | ✅ |
 | 25 | `25-GuaranteedDelivery` | best-effort vs guaranteed delivery on one WiFi-UDP link: `TReliableChannel` recovers packets `FPacketDropDriver` drops | 2nd board + WiFi | ✅ |
-| 26 | `26-MessagingOverLora` | full `TNetHost` client/server message design over E32 LoRa — example 19's protocol at the D8 airtime profile (heartbeat 3 s, state broadcast paced 1 s) | 2nd board, 2 × E32 | ✅ |
+| 26 | `26-MessagingOverLora` | full `TTransportHost` client/server message design over E32 LoRa — example 19's protocol at the D8 airtime profile (heartbeat 3 s, state broadcast paced 1 s) | 2nd board, 2 × E32 | ✅ |
 
 Wired board-to-board transports (examples 18–21) share one pattern: swapping the
-`INetDriver` line swaps the transport, and everything above it stays put.
+`IDevice` line swaps the transport, and everything above it stays put.

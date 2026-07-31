@@ -2,7 +2,7 @@
 //
 // This is the COMPILE-ONLY harness for §6.2: it builds the representative world
 // (8 actors / 16 components / 8 timers), a standalone GC probe store, and a
-// no-traffic net pump, then prints labeled measurement lines over serial at
+// no-traffic transport pump, then prints labeled measurement lines over serial at
 // 115200. Part B (a separate, human-authorized flash) captures the real numbers;
 // this image is never flashed or run on hardware as part of Part A.
 //
@@ -83,7 +83,7 @@ constexpr std::uint32_t TickMeasurementIterations = 1000;
 /** Warm-up ticks before timing so caches and branch prediction settle. */
 constexpr std::uint32_t TickWarmupIterations = 100;
 
-/** Iterations timed for the no-traffic net pump measurement. */
+/** Iterations timed for the no-traffic transport pump measurement. */
 constexpr std::uint32_t TransportPumpMeasurementIterations = 1000;
 
 /** Warm-up pump cycles before timing so the driver and host settle. */
@@ -148,7 +148,7 @@ struct FBenchmarkHostTraits : MicroWorld::FDefaultEngineTraits
 /** Sizes the engine to hold the representative world with bounded headroom. */
 using FBenchmarkHost = MicroWorld::TEngine<FBenchmarkHostTraits>;
 
-/** Dedicated server net host sized identically to the PlatformEsp32Main proof. */
+/** Dedicated server transport host sized identically to the PlatformEsp32Main proof. */
 using FBenchmarkTransport = MicroWorld::TTransportHost<4, 256>;
 
 /** Delegate type matching the host's timer manager so Schedule accepts a bound callback. */
@@ -344,7 +344,7 @@ private:
 } // namespace
 
 /**
- * Builds the representative world, the GC probe, and the net host, then prints measurements.
+ * Builds the representative world, the GC probe, and the transport host, then prints measurements.
  *
  * This is the COMPILE-ONLY proof: no netif/WiFi is brought up, the UDP driver
  * is constructed but never linked, and no flash or radio operation is performed.
@@ -389,7 +389,7 @@ extern "C" void app_main()
 	// 1. The single real clock; esp_timer feeds the engine's caller-supplied monotonic time.
 	FEsp32TimeSource Clock;
 
-	// The composition objects below (UDP driver, net host, frame, engine host, and the GC probe)
+	// The composition objects below (UDP driver, transport host, frame, engine host, and the GC probe)
 	// are placed in STATIC storage, not on the stack. The ESP-IDF main task stack is only 3584
 	// bytes, but TEngine embeds its fixed object storage inline (MaxObjects * SlotBytes) and
 	// the GC probe embeds its own slot bytes, which together far exceed that; a stack frame this
@@ -563,7 +563,7 @@ extern "C" void app_main()
 		static_cast<long long>(GcSliceStats.MeanMicroseconds()),
 		static_cast<long long>(GcSliceStats.MaxMicroseconds));
 
-	// --- Measurement 3: net pump cost (NO netif/traffic — overhead only) ---
+	// --- Measurement 3: transport pump cost (NO netif/traffic — overhead only) ---
 	for (std::uint32_t Warmup = 0; Warmup < TransportPumpWarmupIterations; ++Warmup)
 	{
 		(void)Transport.PumpReceive(Clock.Now());
