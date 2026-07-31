@@ -166,10 +166,10 @@ namespace
 	 * Minimal FApplication subclass bound to the scripted engine; OnConfigure always succeeds so the
 	 * runner's begin-then-frames loop is driven entirely by the engine's BeginPlay/Tick/EndPlay.
 	 */
-	class FRunnerApplication final : public MicroWorld::FApplication
+	class FRunnerApplication final : public MicroWorld::Application::FApplication
 	{
 	public:
-		explicit FRunnerApplication(MicroWorld::IEngine& InEngine) noexcept : MicroWorld::FApplication(InEngine) {}
+		explicit FRunnerApplication(MicroWorld::IEngine& InEngine) noexcept : MicroWorld::Application::FApplication(InEngine) {}
 
 		int BeginPlayFailedCount{0};
 

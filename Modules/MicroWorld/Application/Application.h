@@ -5,7 +5,7 @@
 #include <MicroWorld/Core/RuntimeResult.h>
 #include <MicroWorld/Core/Time.h>
 
-namespace MicroWorld
+namespace MicroWorld::Application
 {
 
 /**
@@ -126,4 +126,4 @@ private:
 	IEngine& Engine;
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Application

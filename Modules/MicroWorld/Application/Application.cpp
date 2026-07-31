@@ -1,6 +1,6 @@
 #include <MicroWorld/Application/Application.h>
 
-namespace MicroWorld
+namespace MicroWorld::Application
 {
 
 ERuntimeResult FApplication::BeginPlay(const TimePointMilliseconds InNowMilliseconds) noexcept
@@ -75,4 +75,4 @@ ERuntimeResult FApplication::OnEndPlay() noexcept
 	return Engine.EndPlay();
 }
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Application

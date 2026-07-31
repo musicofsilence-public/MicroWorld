@@ -72,10 +72,10 @@ namespace
 	 * observed: it counts OnConfigure invocations and can return a configured failure to drive the
 	 * failed-configure path, exactly as a real subclass would.
 	 */
-	class FConfiguringApplication final : public MicroWorld::FApplication
+	class FConfiguringApplication final : public MicroWorld::Application::FApplication
 	{
 	public:
-		explicit FConfiguringApplication(MicroWorld::IEngine& InEngine) noexcept : MicroWorld::FApplication(InEngine) {}
+		explicit FConfiguringApplication(MicroWorld::IEngine& InEngine) noexcept : MicroWorld::Application::FApplication(InEngine) {}
 
 		/** Drives the next OnConfigure result so the failed-configure path is reachable from a test. */
 		void ConfigureConfigureResult(MicroWorld::ERuntimeResult InResult) noexcept { ConfiguredConfigureResult = InResult; }
