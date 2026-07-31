@@ -44,13 +44,13 @@ inline constexpr MicroWorld::Messaging::FMessageChannelId TelemetryChannelId = 1
 inline constexpr MicroWorld::Messaging::FMessageChannelId CommandsChannelId = 2;
 
 /** The sensor's start/restored reporting cadence. */
-inline constexpr MicroWorld::DurationMilliseconds BaseReportingIntervalMilliseconds = 1000;
+inline constexpr MicroWorld::Core::DurationMilliseconds BaseReportingIntervalMilliseconds = 1000;
 
 /** The sensor's "halved" reporting cadence, alternated with the base cadence by the commander. */
-inline constexpr MicroWorld::DurationMilliseconds HalvedReportingIntervalMilliseconds = 500;
+inline constexpr MicroWorld::Core::DurationMilliseconds HalvedReportingIntervalMilliseconds = 500;
 
 /** Cadence the commander alternates the sensor's reporting rate at. */
-inline constexpr MicroWorld::DurationMilliseconds CommandIntervalMilliseconds = 10000;
+inline constexpr MicroWorld::Core::DurationMilliseconds CommandIntervalMilliseconds = 10000;
 
 /** Poll pace for both boards; far faster than any app cadence so the watchdog idle task runs. */
 inline constexpr unsigned PollPacingMilliseconds = 20;

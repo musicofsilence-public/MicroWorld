@@ -55,7 +55,7 @@ constexpr MicroWorld::Engine::FTypeId ReadingSensorComponentTypeId{0x00160003u};
  * instead of two copies of "500" that a future edit could desync). See
  * FThermometerActor::Tick for why same-cadence alignment matters.
  */
-constexpr MicroWorld::DurationMilliseconds ReadingCadenceMilliseconds = 500;
+constexpr MicroWorld::Core::DurationMilliseconds ReadingCadenceMilliseconds = 500;
 
 /** Number of readings the display waits for before it sends the one calibrate message. */
 constexpr std::uint32_t CalibrateAfterReadingCount = 5;
@@ -79,7 +79,7 @@ class FReadingSensorComponent final : public MicroWorld::Engine::UActorComponent
 {
 public:
 	/** Selects the 500 ms reading cadence the thermometer actor's own tick is aligned to. */
-	FReadingSensorComponent() noexcept : UActorComponent(MicroWorld::FTickConfiguration::EnabledEvery(ReadingCadenceMilliseconds)) {}
+	FReadingSensorComponent() noexcept : UActorComponent(MicroWorld::Core::FTickConfiguration::EnabledEvery(ReadingCadenceMilliseconds)) {}
 
 	/** Returns the most recently produced reading; the owning actor packs this into its broadcast. */
 	std::uint16_t GetLatestReading() const noexcept { return LatestReading; }
@@ -92,7 +92,7 @@ public:
 
 protected:
 	/** Advances the counter and derives this frame's reading from it -- see the class comment for why. */
-	void TickComponent(const MicroWorld::FTickContext&) noexcept override
+	void TickComponent(const MicroWorld::Core::FTickContext&) noexcept override
 	{
 		++ReadingCount;
 		LatestReading = static_cast<std::uint16_t>(BaseReadingValue + (ReadingCount % ReadingSpan));
@@ -128,7 +128,7 @@ public:
 	 * composed with.
 	 */
 	FThermometerActor(MicroWorld::Messaging::IMessageRouter& InRouter, MicroWorld::Engine::TObjectPtr<FReadingSensorComponent> InSensor) noexcept
-		: AActor(MicroWorld::FTickConfiguration::EnabledEvery(ReadingCadenceMilliseconds)), Router(InRouter), Sensor(InSensor)
+		: AActor(MicroWorld::Core::FTickConfiguration::EnabledEvery(ReadingCadenceMilliseconds)), Router(InRouter), Sensor(InSensor)
 	{
 	}
 
@@ -137,9 +137,9 @@ protected:
 	void BeginPlay() noexcept override
 	{
 		MicroWorld::Messaging::FMessageHandlerBinding Handler;
-		const MicroWorld::EDelegateResult BindResult =
+		const MicroWorld::Core::EDelegateResult BindResult =
 			Handler.Bind([this](const MicroWorld::Messaging::FMessageView& View) noexcept { this->OnCalibrateReceived(View); });
-		if (BindResult != MicroWorld::EDelegateResult::Success)
+		if (BindResult != MicroWorld::Core::EDelegateResult::Success)
 		{
 			MW_LOG(Error, "ex22", "thermometer calibrate handler bind failed");
 			return;
@@ -167,7 +167,7 @@ protected:
 	 * The sensor has therefore already produced this frame's reading by the time
 	 * this runs.
 	 */
-	void Tick(const MicroWorld::FTickContext&) noexcept override
+	void Tick(const MicroWorld::Core::FTickContext&) noexcept override
 	{
 		FReadingSensorComponent* const SensorPtr = Sensor.Get();
 		const std::uint16_t Reading = SensorPtr->GetLatestReading();
@@ -181,7 +181,7 @@ protected:
 			MicroWorld::Messaging::LocalChannelId,
 			TemperatureReadingMessageId,
 			ThermometerActorId,
-			MicroWorld::TSpan<const std::uint8_t>(Payload, ReadingPayloadBytes));
+			MicroWorld::Core::TSpan<const std::uint8_t>(Payload, ReadingPayloadBytes));
 		if (SendResult != MicroWorld::Messaging::EMessageResult::Success)
 		{
 			MW_LOG(Error, "ex22", "thermometer broadcast failed");
@@ -238,9 +238,9 @@ protected:
 	void BeginPlay() noexcept override
 	{
 		MicroWorld::Messaging::FMessageHandlerBinding Handler;
-		const MicroWorld::EDelegateResult BindResult =
+		const MicroWorld::Core::EDelegateResult BindResult =
 			Handler.Bind([this](const MicroWorld::Messaging::FMessageView& View) noexcept { this->OnReadingReceived(View); });
-		if (BindResult != MicroWorld::EDelegateResult::Success)
+		if (BindResult != MicroWorld::Core::EDelegateResult::Success)
 		{
 			MW_LOG(Error, "ex22", "display reading handler bind failed");
 			return;
@@ -292,7 +292,11 @@ private:
 	void SendCalibrate() noexcept
 	{
 		const MicroWorld::Messaging::EMessageResult SendResult = Router.SendMessageToActor(
-			MicroWorld::Messaging::LocalChannelId, CalibrateMessageId, ThermometerActorId, DisplayActorId, MicroWorld::TSpan<const std::uint8_t>{});
+			MicroWorld::Messaging::LocalChannelId,
+			CalibrateMessageId,
+			ThermometerActorId,
+			DisplayActorId,
+			MicroWorld::Core::TSpan<const std::uint8_t>{});
 		if (SendResult != MicroWorld::Messaging::EMessageResult::Success)
 		{
 			MW_LOG(Error, "ex22", "display calibrate send failed");
@@ -329,7 +333,7 @@ constexpr unsigned PollPacingMilliseconds = 10;
  */
 extern "C" void app_main(void)
 {
-	MicroWorld::SetOutputDevice(&MicroWorld::WriteEsp32LogRecord);
+	MicroWorld::Core::SetOutputDevice(&MicroWorld::WriteEsp32LogRecord);
 
 	// Announce the exact package contract this image was built against.
 	MW_LOG(
@@ -397,8 +401,8 @@ extern "C" void app_main(void)
 	}
 
 	// Start scheduling from a caller-supplied time point -- no hidden clock read.
-	const MicroWorld::TimePointMilliseconds BootTime = GTimeSource.Now();
-	if (GEngine.BeginPlay(BootTime) != MicroWorld::ERuntimeResult::Success)
+	const MicroWorld::Core::TimePointMilliseconds BootTime = GTimeSource.Now();
+	if (GEngine.BeginPlay(BootTime) != MicroWorld::Core::ERuntimeResult::Success)
 	{
 		MW_LOG(Error, "ex22", "engine begin play failed");
 		return;
@@ -416,7 +420,7 @@ extern "C" void app_main(void)
 	// (no side effects in the loop condition, just IsDone()).
 	while (!DisplayPtr->IsDone())
 	{
-		if (GEngine.Tick(GTimeSource.Now()) != MicroWorld::ERuntimeResult::Success)
+		if (GEngine.Tick(GTimeSource.Now()) != MicroWorld::Core::ERuntimeResult::Success)
 		{
 			MW_LOG(Error, "ex22", "engine tick failed");
 			break;

@@ -18,12 +18,12 @@
 
 namespace
 {
-using MicroWorld::ERuntimeResult;
-using MicroWorld::ETimerMode;
-using MicroWorld::ETimerResult;
-using MicroWorld::FTickConfiguration;
-using MicroWorld::FTimerHandle;
-using MicroWorld::TDelegate;
+using MicroWorld::Core::ERuntimeResult;
+using MicroWorld::Core::ETimerMode;
+using MicroWorld::Core::ETimerResult;
+using MicroWorld::Core::FTickConfiguration;
+using MicroWorld::Core::FTimerHandle;
+using MicroWorld::Core::TDelegate;
 using MicroWorld::Engine::AActor;
 using MicroWorld::Engine::AActorClassId;
 using MicroWorld::Engine::EEngineResult;
@@ -47,7 +47,7 @@ using MicroWorld::Tests::FComponentEventState;
 using MicroWorld::Tests::FSequenceCounter;
 
 /** Ticks every advance with a zero interval so the lifecycle test counts one tick per frame. */
-constexpr FTickConfiguration HostTickConfiguration{true, true, MicroWorld::DurationMilliseconds{0}};
+constexpr FTickConfiguration HostTickConfiguration{true, true, MicroWorld::Core::DurationMilliseconds{0}};
 
 /** Stable type id for the recording actor managed through TEngine in this suite. */
 constexpr FTypeId HostActorTypeId{0x00060001u};
@@ -100,7 +100,7 @@ protected:
 	}
 
 	/** Stamps the component's tick sequence after the timer slice in the same frame. */
-	void TickComponent(const MicroWorld::FTickContext&) noexcept override
+	void TickComponent(const MicroWorld::Core::FTickContext&) noexcept override
 	{
 		Events.TickOrder = Sequence.Next();
 		++Events.TickCount;
@@ -143,7 +143,7 @@ protected:
 	}
 
 	/** Stamps the actor's tick sequence after the timer slice in the same frame. */
-	void Tick(const MicroWorld::FTickContext&) noexcept override
+	void Tick(const MicroWorld::Core::FTickContext&) noexcept override
 	{
 		Events.TickOrder = Sequence.Next();
 		++Events.TickCount;
@@ -362,7 +362,7 @@ MW_TEST_CASE(EngineHostGarbageCollectorReclaimsUnrootedObjectsInBoundedSlices)
 	MW_EXPECT_TRUE(Test, Host.GetObjectStore().Stats().OccupiedSlots > std::uint32_t{3}, "One bounded slice cannot reclaim all garbage at once");
 
 	// Act - successive bounded slices reclaim the remaining garbage
-	for (MicroWorld::TimePointMilliseconds Now = 20; Now <= 200; Now += 10)
+	for (MicroWorld::Core::TimePointMilliseconds Now = 20; Now <= 200; Now += 10)
 	{
 		(void)Host.Tick(Now);
 	}

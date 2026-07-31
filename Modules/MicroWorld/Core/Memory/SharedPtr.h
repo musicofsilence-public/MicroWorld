@@ -9,7 +9,7 @@
 #include <type_traits>
 #include <utility>
 
-namespace MicroWorld
+namespace MicroWorld::Core
 {
 
 /** Identifies the only reference-counting execution contract currently supported. */
@@ -545,4 +545,4 @@ TSharedPointerResult<ValueType, Mode> MakeShared(IMemoryResource& InResource, Co
 	return SuccessfulResult;
 }
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Core

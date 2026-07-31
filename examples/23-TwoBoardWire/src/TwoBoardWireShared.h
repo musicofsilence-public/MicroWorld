@@ -118,7 +118,7 @@ inline MicroWorld::Transport::FTransportHostConfig MakeHostConfig() noexcept
  * IPlaySystem (the bound THostPlaySystem), so the router itself is pumped here rather than through
  * the engine.
  */
-inline void PumpOneFrame(FWireRouter& Router, FWireEngine& Engine, const MicroWorld::TimePointMilliseconds NowMilliseconds) noexcept
+inline void PumpOneFrame(FWireRouter& Router, FWireEngine& Engine, const MicroWorld::Core::TimePointMilliseconds NowMilliseconds) noexcept
 {
 	Router.PostAdvance(NowMilliseconds);
 	(void)Engine.Tick(NowMilliseconds);

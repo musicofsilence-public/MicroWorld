@@ -36,7 +36,7 @@ struct FEsp32StationConfig
 	const char* Password;
 
 	/** Upper bound on how long `JoinAccessPoint` waits for an IPv4 lease before giving up. */
-	DurationMilliseconds ConnectTimeoutMilliseconds{15000};
+	Core::DurationMilliseconds ConnectTimeoutMilliseconds{15000};
 };
 
 /**

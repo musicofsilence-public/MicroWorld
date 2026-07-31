@@ -55,7 +55,7 @@ namespace
 	}
 
 	/** Reports the first reason an outgoing packet cannot be framed and sent, or `Success`. */
-	ETransportResult ValidateOutgoingI2cPacket(const FDeviceAddress& InTo, const TSpan<const std::uint8_t> InPacket) noexcept
+	ETransportResult ValidateOutgoingI2cPacket(const FDeviceAddress& InTo, const Core::TSpan<const std::uint8_t> InPacket) noexcept
 	{
 		// Validate every argument before any syscall so a rejection is truly transactional.
 		if (!IsI2cAddress(InTo))
@@ -77,7 +77,10 @@ namespace
 	/** Copies the decoder's held frame into the destination and clears it, or returns `Full`
 	 * (leaving the frame held) when the payload exceeds the destination. */
 	ETransportResult DeliverFrameFromDecoder(
-		TFrameDecoder<I2cMaxPayloadBytes>& InDecoder, TSpan<std::uint8_t> InDestination, FDeviceAddress& OutFrom, FReceiveResult& OutResult) noexcept
+		TFrameDecoder<I2cMaxPayloadBytes>& InDecoder,
+		Core::TSpan<std::uint8_t> InDestination,
+		FDeviceAddress& OutFrom,
+		FReceiveResult& OutResult) noexcept
 	{
 		// On Full the destination is untouched and the frame stays held for the next call, so a
 		// receive that cannot fit is transactional.
@@ -121,7 +124,7 @@ FEsp32I2cMasterDevice::~FEsp32I2cMasterDevice() noexcept
 	}
 }
 
-ETransportResult FEsp32I2cMasterDevice::TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
+ETransportResult FEsp32I2cMasterDevice::TrySend(const FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept
 {
 	if (!bOpen)
 	{
@@ -135,7 +138,7 @@ ETransportResult FEsp32I2cMasterDevice::TrySend(const FDeviceAddress& InTo, TSpa
 	// The codec is transactional on failure.
 	std::uint8_t Frame[I2cTransactionWindowBytes];
 	std::size_t Written = 0;
-	const ETransportResult EncodeResult = EncodeFrame(LocalNodeIdValue, InPacket, TSpan<std::uint8_t>(Frame, sizeof(Frame)), Written);
+	const ETransportResult EncodeResult = EncodeFrame(LocalNodeIdValue, InPacket, Core::TSpan<std::uint8_t>(Frame, sizeof(Frame)), Written);
 	if (EncodeResult != ETransportResult::Success)
 	{
 		return EncodeResult;
@@ -144,7 +147,8 @@ ETransportResult FEsp32I2cMasterDevice::TrySend(const FDeviceAddress& InTo, TSpa
 	return MapI2cWriteOutcome(Outcome);
 }
 
-ETransportResult FEsp32I2cMasterDevice::TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
+ETransportResult FEsp32I2cMasterDevice::TryReceive(
+	FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
 {
 	// Reject a null destination with nonzero length before any bus read.
 	const std::size_t Capacity = InDestination.Size();
@@ -221,7 +225,7 @@ FEsp32I2cSlaveDevice::~FEsp32I2cSlaveDevice() noexcept
 	}
 }
 
-ETransportResult FEsp32I2cSlaveDevice::TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
+ETransportResult FEsp32I2cSlaveDevice::TrySend(const FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept
 {
 	if (!bOpen)
 	{
@@ -235,7 +239,7 @@ ETransportResult FEsp32I2cSlaveDevice::TrySend(const FDeviceAddress& InTo, TSpan
 	// The codec is transactional on failure.
 	std::uint8_t Frame[I2cTransactionWindowBytes];
 	std::size_t Written = 0;
-	const ETransportResult EncodeResult = EncodeFrame(LocalNodeIdValue, InPacket, TSpan<std::uint8_t>(Frame, sizeof(Frame)), Written);
+	const ETransportResult EncodeResult = EncodeFrame(LocalNodeIdValue, InPacket, Core::TSpan<std::uint8_t>(Frame, sizeof(Frame)), Written);
 	if (EncodeResult != ETransportResult::Success)
 	{
 		return EncodeResult;
@@ -244,7 +248,8 @@ ETransportResult FEsp32I2cSlaveDevice::TrySend(const FDeviceAddress& InTo, TSpan
 	return MapI2cWriteOutcome(Outcome);
 }
 
-ETransportResult FEsp32I2cSlaveDevice::TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
+ETransportResult FEsp32I2cSlaveDevice::TryReceive(
+	FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
 {
 	// Reject a null destination with nonzero length before any inbox read.
 	const std::size_t Capacity = InDestination.Size();

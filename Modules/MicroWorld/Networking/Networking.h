@@ -16,6 +16,8 @@
 namespace MicroWorld::Networking
 {
 
+using namespace ::MicroWorld::Core;
+
 /** Selects whether a TNetworking channel resends unacknowledged messages or sends best-effort once. */
 enum class EChannelReliability : std::uint8_t
 {

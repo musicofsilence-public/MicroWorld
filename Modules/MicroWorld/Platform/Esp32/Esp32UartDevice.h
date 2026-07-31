@@ -101,7 +101,7 @@ public:
 	 * @param InPacket Caller-owned payload bytes framed and sent as one message.
 	 * @return Normalized outcome of the single send attempt.
 	 */
-	ETransportResult TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override;
+	ETransportResult TrySend(const FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
 	 * Receives at most one framed message into the caller-owned destination, transactionally.
@@ -116,7 +116,7 @@ public:
 	 * @param OutResult Filled with the received byte count only on `Success`.
 	 * @return Normalized outcome of the single receive attempt.
 	 */
-	ETransportResult TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept override;
+	ETransportResult TryReceive(FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept override;
 
 	/** Reports the largest payload, in bytes, one send accepts (excludes framing overhead). */
 	std::size_t MaxPacketBytes() const noexcept override;
@@ -127,14 +127,14 @@ public:
 private:
 	/** Copies the decoder's held frame into the destination and clears it, or returns
 	 * `Full` (leaving the frame held) when the payload exceeds the destination. */
-	ETransportResult DeliverFrameToDestination(TSpan<std::uint8_t> InDestination, FDeviceAddress& OutFrom, FReceiveResult& OutResult) noexcept;
+	ETransportResult DeliverFrameToDestination(Core::TSpan<std::uint8_t> InDestination, FDeviceAddress& OutFrom, FReceiveResult& OutResult) noexcept;
 
 	/** Pumps the bounded UART byte budget through the decoder and delivers the first
 	 * completed frame; returns `Unavailable` when the budget drains with no frame ready. */
-	ETransportResult PumpDecoderForFrame(TSpan<std::uint8_t> InDestination, FDeviceAddress& OutFrom, FReceiveResult& OutResult) noexcept;
+	ETransportResult PumpDecoderForFrame(Core::TSpan<std::uint8_t> InDestination, FDeviceAddress& OutFrom, FReceiveResult& OutResult) noexcept;
 
 	/** Reports the first reason an outgoing packet cannot be framed and sent, or `Success`. */
-	ETransportResult ValidateOutgoingPacket(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) const noexcept;
+	ETransportResult ValidateOutgoingPacket(const FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) const noexcept;
 
 	/** Bounded RX deframer held by value; its capacity matches `UartMaxPayloadBytes`. */
 	TFrameDecoder<UartMaxPayloadBytes> Decoder{};

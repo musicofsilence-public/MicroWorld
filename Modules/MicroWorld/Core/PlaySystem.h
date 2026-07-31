@@ -2,7 +2,7 @@
 
 #include <MicroWorld/Core/Time.h>
 
-namespace MicroWorld
+namespace MicroWorld::Core
 {
 
 /**
@@ -32,4 +32,4 @@ public:
 	virtual void EndPlay() noexcept {}
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Core

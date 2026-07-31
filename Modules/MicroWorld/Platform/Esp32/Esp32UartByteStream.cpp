@@ -46,31 +46,31 @@ bool FEsp32UartByteStream::IsOpen() const noexcept
 	return bOpen;
 }
 
-EUartByteStreamResult FEsp32UartByteStream::TryWriteByte(const std::uint8_t InByte) noexcept
+Core::EUartByteStreamResult FEsp32UartByteStream::TryWriteByte(const std::uint8_t InByte) noexcept
 {
 	if (!bOpen)
 	{
-		return EUartByteStreamResult::Error;
+		return Core::EUartByteStreamResult::Error;
 	}
 
 	const EUartWriteOutcome Outcome = TryWriteUartByte(AsUartPort(UartPortNumber), InByte);
 	switch (Outcome)
 	{
 		case EUartWriteOutcome::Sent:
-			return EUartByteStreamResult::Success;
+			return Core::EUartByteStreamResult::Success;
 		case EUartWriteOutcome::WouldBlock:
-			return EUartByteStreamResult::Unavailable;
+			return Core::EUartByteStreamResult::Unavailable;
 		case EUartWriteOutcome::Error:
 		default:
-			return EUartByteStreamResult::Error;
+			return Core::EUartByteStreamResult::Error;
 	}
 }
 
-EUartByteStreamResult FEsp32UartByteStream::TryReadByte(std::uint8_t& OutByte) noexcept
+Core::EUartByteStreamResult FEsp32UartByteStream::TryReadByte(std::uint8_t& OutByte) noexcept
 {
 	if (!bOpen)
 	{
-		return EUartByteStreamResult::Error;
+		return Core::EUartByteStreamResult::Error;
 	}
 
 	std::uint8_t CandidateByte = 0;
@@ -79,12 +79,12 @@ EUartByteStreamResult FEsp32UartByteStream::TryReadByte(std::uint8_t& OutByte) n
 	{
 		case EUartReadStatus::GotByte:
 			OutByte = CandidateByte;
-			return EUartByteStreamResult::Success;
+			return Core::EUartByteStreamResult::Success;
 		case EUartReadStatus::WouldBlock:
-			return EUartByteStreamResult::Unavailable;
+			return Core::EUartByteStreamResult::Unavailable;
 		case EUartReadStatus::Error:
 		default:
-			return EUartByteStreamResult::Error;
+			return Core::EUartByteStreamResult::Error;
 	}
 }
 

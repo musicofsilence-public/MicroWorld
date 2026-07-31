@@ -67,7 +67,7 @@ FHostWifiDevice::~FHostWifiDevice() noexcept
 	}
 }
 
-ETransportResult FHostWifiDevice::TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
+ETransportResult FHostWifiDevice::TrySend(const FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept
 {
 	if (!bOpen)
 	{
@@ -134,7 +134,7 @@ namespace
 
 } // namespace
 
-ETransportResult FHostWifiDevice::TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
+ETransportResult FHostWifiDevice::TryReceive(FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
 {
 	// Keep the sizing scratch and the advertised max in lockstep; both are 1200.
 	static_assert(PeekScratchBytes == FHostWifiDevice::UdpMaxPacketBytes, "Peek scratch must match the advertised packet maximum.");
@@ -184,7 +184,7 @@ std::uint16_t FHostWifiDevice::BoundPort() const noexcept
 	return BoundPortValue;
 }
 
-bool FHostWifiDevice::PollReadable(const DurationMilliseconds InTimeoutMilliseconds) const noexcept
+bool FHostWifiDevice::PollReadable(const Core::DurationMilliseconds InTimeoutMilliseconds) const noexcept
 {
 	if (!bOpen)
 	{

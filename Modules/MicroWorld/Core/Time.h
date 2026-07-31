@@ -4,7 +4,7 @@
 
 #include <cstdint>
 
-namespace MicroWorld
+namespace MicroWorld::Core
 {
 
 /** Uses a wide monotonic domain so long-running consumers do not need wrap policy. */
@@ -57,4 +57,4 @@ struct FTickDecision
 	}
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Core

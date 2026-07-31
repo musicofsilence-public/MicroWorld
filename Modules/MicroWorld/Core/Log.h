@@ -16,8 +16,8 @@
  *     single-threaded).
  *
  * Worked expansion of MW_LOG(Log, "Boot", "x=%d", X):
- *   * level enabled  ->  ::MicroWorld::DispatchLogFormatted(
- *                         ::MicroWorld::ELogLevel::Log, ("Boot"), "x=%d", X)
+ *   * level enabled  ->  ::MicroWorld::Core::DispatchLogFormatted(
+ *                         ::MicroWorld::Core::ELogLevel::Log, ("Boot"), "x=%d", X)
  *   * below floor    ->  ((void)0)      // X is never evaluated
  */
 
@@ -76,7 +76,7 @@
 #define MW_LOG_PRINTF_FORMAT
 #endif
 
-namespace MicroWorld
+namespace MicroWorld::Core
 {
 
 /** Ranks a log record by importance so a compile-time floor can strip the rest. */
@@ -107,7 +107,7 @@ void DispatchLogMessage(ELogLevel InLevel, const char* InCategory, const char* I
 /** Formats into a bounded stack buffer then forwards to the output device, skipping work when none is set. */
 void DispatchLogFormatted(ELogLevel InLevel, const char* InCategory, const char* InFormat, ...) noexcept MW_LOG_PRINTF_FORMAT;
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Core
 
 // Two-step paste so the level's enable flag expands before it selects an emitter.
 #define MW_LOG_CONCAT_(Prefix, Suffix) Prefix##Suffix
@@ -115,10 +115,12 @@ void DispatchLogFormatted(ELogLevel InLevel, const char* InCategory, const char*
 
 // A below-floor call drops its arguments UNEVALUATED; an enabled one dispatches.
 #define MW_LOG_EMIT_FORMATTED_0(Level, Category, ...) ((void)0)
-#define MW_LOG_EMIT_FORMATTED_1(Level, Category, ...) ::MicroWorld::DispatchLogFormatted(::MicroWorld::ELogLevel::Level, (Category), __VA_ARGS__)
+#define MW_LOG_EMIT_FORMATTED_1(Level, Category, ...) \
+	::MicroWorld::Core::DispatchLogFormatted(::MicroWorld::Core::ELogLevel::Level, (Category), __VA_ARGS__)
 
 #define MW_LOG_EMIT_MESSAGE_0(Level, Category, Message) ((void)0)
-#define MW_LOG_EMIT_MESSAGE_1(Level, Category, Message) ::MicroWorld::DispatchLogMessage(::MicroWorld::ELogLevel::Level, (Category), (Message))
+#define MW_LOG_EMIT_MESSAGE_1(Level, Category, Message) \
+	::MicroWorld::Core::DispatchLogMessage(::MicroWorld::Core::ELogLevel::Level, (Category), (Message))
 
 /**
  * Logs a printf-style record at the given level and category, e.g.

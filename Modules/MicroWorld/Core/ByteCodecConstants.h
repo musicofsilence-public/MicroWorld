@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace MicroWorld
+namespace MicroWorld::Core
 {
 
 /**
@@ -26,4 +26,4 @@ inline constexpr std::uint16_t HighByteShift = 8u;
 /** Largest value representable in an unsigned 16-bit field; bounds the framed payload length. */
 inline constexpr std::uint16_t Uint16Max = 0xFFFFu;
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Core

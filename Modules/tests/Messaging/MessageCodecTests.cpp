@@ -9,7 +9,7 @@
 
 namespace
 {
-using MicroWorld::TSpan;
+using MicroWorld::Core::TSpan;
 using MicroWorld::Messaging::ActorMessageHeaderBytes;
 using MicroWorld::Messaging::DecodeActorMessage;
 using MicroWorld::Messaging::EMessageResult;

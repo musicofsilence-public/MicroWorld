@@ -128,7 +128,7 @@ void RunLoraInteropTask(void* const InContext)
 		MicroWorld::Transport::Address::FDeviceAddress From{};
 		MicroWorld::Transport::Device::FReceiveResult Received{};
 		const MicroWorld::Transport::ETransportResult ReceiveResult =
-			LoraDevice.TryReceive(From, MicroWorld::TSpan<std::uint8_t>(ReceiveBuffer, sizeof(ReceiveBuffer)), Received);
+			LoraDevice.TryReceive(From, MicroWorld::Core::TSpan<std::uint8_t>(ReceiveBuffer, sizeof(ReceiveBuffer)), Received);
 		const TickType_t Now = xTaskGetTickCount();
 		if (ReceiveResult == MicroWorld::Transport::ETransportResult::Success && IsExpectedPeerPayload(From, Received, ReceiveBuffer))
 		{
@@ -142,7 +142,7 @@ void RunLoraInteropTask(void* const InContext)
 			std::uint8_t Payload[VolleyPayloadBytes]{};
 			WriteVolleyPayload(Payload, LocalNodeId, PendingCounter);
 			const MicroWorld::Transport::ETransportResult SendResult = LoraDevice.TrySend(
-				MicroWorld::Transport::MakeLoraAddress(PeerNodeId), MicroWorld::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
+				MicroWorld::Transport::MakeLoraAddress(PeerNodeId), MicroWorld::Core::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
 			if (SendResult == MicroWorld::Transport::ETransportResult::Success)
 			{
 				// Success transfers the complete frame into the device slot; later task iterations advance it onto UART.
@@ -237,8 +237,8 @@ void QueuePendingPayloadRegressionTransmit(
 
 	MicroWorld::Example17::FillCanonicalPayload(TransmitCase, InOutPayloadBuffer);
 	const std::size_t PayloadBytes = MicroWorld::Example17::PayloadRegressionByteCount(TransmitCase);
-	const MicroWorld::Transport::ETransportResult SendResult =
-		InDevice.TrySend(MicroWorld::Transport::MakeLoraAddress(PeerNodeId), MicroWorld::TSpan<const std::uint8_t>(InOutPayloadBuffer, PayloadBytes));
+	const MicroWorld::Transport::ETransportResult SendResult = InDevice.TrySend(
+		MicroWorld::Transport::MakeLoraAddress(PeerNodeId), MicroWorld::Core::TSpan<const std::uint8_t>(InOutPayloadBuffer, PayloadBytes));
 	if (SendResult != MicroWorld::Transport::ETransportResult::Success)
 	{
 		return;
@@ -274,7 +274,7 @@ void RunLoraInteropTask(void* const InContext)
 		MicroWorld::Transport::Address::FDeviceAddress From{};
 		MicroWorld::Transport::Device::FReceiveResult Received{};
 		const MicroWorld::Transport::ETransportResult ReceiveResult =
-			LoraDevice.TryReceive(From, MicroWorld::TSpan<std::uint8_t>(PayloadBuffer, sizeof(PayloadBuffer)), Received);
+			LoraDevice.TryReceive(From, MicroWorld::Core::TSpan<std::uint8_t>(PayloadBuffer, sizeof(PayloadBuffer)), Received);
 		if (ReceiveResult == MicroWorld::Transport::ETransportResult::Success)
 		{
 			AdvancePayloadRegressionReceiveState(State, From, Received, PayloadBuffer);

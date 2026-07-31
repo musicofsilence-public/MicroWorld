@@ -97,7 +97,7 @@ MicroWorld::FEsp32UartConfig MakeUartConfig(const std::uint8_t NodeId) noexcept
 /** Composition root: installs the output device, then ping-pongs a counter with the peer board over one wired UART. */
 extern "C" void app_main(void)
 {
-	MicroWorld::SetOutputDevice(&MicroWorld::WriteEsp32LogRecord);
+	MicroWorld::Core::SetOutputDevice(&MicroWorld::WriteEsp32LogRecord);
 
 	// Static, never on the app_main stack (the ESP32-S3 stack lesson, §2.2).
 	static MicroWorld::FEsp32UartDevice Device{MakeUartConfig(LocalNodeId)};
@@ -124,7 +124,7 @@ extern "C" void app_main(void)
 		MicroWorld::Transport::Address::FDeviceAddress From{};
 		MicroWorld::Transport::Device::FReceiveResult Received{};
 		const MicroWorld::Transport::ETransportResult RxResult =
-			Device.TryReceive(From, MicroWorld::TSpan<std::uint8_t>(RxBuffer, sizeof(RxBuffer)), Received);
+			Device.TryReceive(From, MicroWorld::Core::TSpan<std::uint8_t>(RxBuffer, sizeof(RxBuffer)), Received);
 		if (RxResult == MicroWorld::Transport::ETransportResult::Success && Received.BytesReceived == VolleyPayloadBytes)
 		{
 			const std::uint32_t Counter = ReadVolleyCounter(RxBuffer);
@@ -141,7 +141,7 @@ extern "C" void app_main(void)
 			std::uint8_t Payload[VolleyPayloadBytes];
 			WriteVolleyPayload(Payload, LocalNodeId, PendingCounter);
 			const MicroWorld::Transport::ETransportResult TxResult =
-				Device.TrySend(MicroWorld::MakeUartAddress(PeerNodeId), MicroWorld::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
+				Device.TrySend(MicroWorld::MakeUartAddress(PeerNodeId), MicroWorld::Core::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
 			MW_LOG(Log, "ex18", "tx n=%u result=%s", static_cast<unsigned>(PendingCounter), ToText(TxResult));
 			if (TxResult == MicroWorld::Transport::ETransportResult::Success)
 			{

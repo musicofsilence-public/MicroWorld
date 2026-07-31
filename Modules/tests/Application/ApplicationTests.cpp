@@ -12,7 +12,7 @@ namespace
 {
 
 	/** Dispatcher timestamp every lifecycle test passes to BeginPlay and Advance. */
-	constexpr MicroWorld::TimePointMilliseconds DispatcherStartTime{100};
+	constexpr MicroWorld::Core::TimePointMilliseconds DispatcherStartTime{100};
 
 	/**
 	 * Records every IEngine call so FApplication's sealed forwarding is observed behaviourally.
@@ -26,7 +26,7 @@ namespace
 	{
 	public:
 		/** Drives the next BeginPlay result so the failed-engine-begin path is reachable from a test. */
-		void ConfigureBeginPlayResult(MicroWorld::ERuntimeResult InResult) noexcept { ConfiguredBeginPlayResult = InResult; }
+		void ConfigureBeginPlayResult(MicroWorld::Core::ERuntimeResult InResult) noexcept { ConfiguredBeginPlayResult = InResult; }
 
 		/** Observes how many times BeginPlay fired, since double-begin must not re-invoke it. */
 		int BeginPlayCount{0};
@@ -37,22 +37,22 @@ namespace
 		/** Observes whether EndPlay fired exactly once across repeated EndPlay calls. */
 		int EndPlayCount{0};
 
-		MicroWorld::ERuntimeResult BeginPlay(MicroWorld::TimePointMilliseconds) noexcept override
+		MicroWorld::Core::ERuntimeResult BeginPlay(MicroWorld::Core::TimePointMilliseconds) noexcept override
 		{
 			++BeginPlayCount;
 			return ConfiguredBeginPlayResult;
 		}
 
-		MicroWorld::ERuntimeResult Tick(MicroWorld::TimePointMilliseconds) noexcept override
+		MicroWorld::Core::ERuntimeResult Tick(MicroWorld::Core::TimePointMilliseconds) noexcept override
 		{
 			++TickCount;
-			return MicroWorld::ERuntimeResult::Success;
+			return MicroWorld::Core::ERuntimeResult::Success;
 		}
 
-		MicroWorld::ERuntimeResult EndPlay() noexcept override
+		MicroWorld::Core::ERuntimeResult EndPlay() noexcept override
 		{
 			++EndPlayCount;
-			return MicroWorld::ERuntimeResult::Success;
+			return MicroWorld::Core::ERuntimeResult::Success;
 		}
 
 		MicroWorld::Engine::UWorld& GetWorld() noexcept override { return *reinterpret_cast<MicroWorld::Engine::UWorld*>(&WorldStorage); }
@@ -63,7 +63,7 @@ namespace
 
 	private:
 		/** Holds the result BeginPlay will return, seeded to Success so the happy path needs no setup. */
-		MicroWorld::ERuntimeResult ConfiguredBeginPlayResult{MicroWorld::ERuntimeResult::Success};
+		MicroWorld::Core::ERuntimeResult ConfiguredBeginPlayResult{MicroWorld::Core::ERuntimeResult::Success};
 
 		/** Raw storage for the world/store pointers the contract requires but these tests never use. */
 		std::uint64_t WorldStorage{0};
@@ -81,7 +81,7 @@ namespace
 		explicit FConfiguringApplication(MicroWorld::Engine::IEngine& InEngine) noexcept : MicroWorld::Application::FApplication(InEngine) {}
 
 		/** Drives the next OnConfigure result so the failed-configure path is reachable from a test. */
-		void ConfigureConfigureResult(MicroWorld::ERuntimeResult InResult) noexcept { ConfiguredConfigureResult = InResult; }
+		void ConfigureConfigureResult(MicroWorld::Core::ERuntimeResult InResult) noexcept { ConfiguredConfigureResult = InResult; }
 
 		/** Observes how many times OnConfigure fired, since double-begin must not re-invoke it. */
 		int ConfigureCount{0};
@@ -90,7 +90,7 @@ namespace
 		int BeginPlayFailedCount{0};
 
 	protected:
-		MicroWorld::ERuntimeResult OnConfigure(MicroWorld::Engine::IEngine& InEngine, MicroWorld::TimePointMilliseconds) noexcept override
+		MicroWorld::Core::ERuntimeResult OnConfigure(MicroWorld::Engine::IEngine& InEngine, MicroWorld::Core::TimePointMilliseconds) noexcept override
 		{
 			(void)InEngine;
 			++ConfigureCount;
@@ -101,7 +101,7 @@ namespace
 
 	private:
 		/** Holds the result OnConfigure will return, seeded to Success so the happy path needs no setup. */
-		MicroWorld::ERuntimeResult ConfiguredConfigureResult{MicroWorld::ERuntimeResult::Success};
+		MicroWorld::Core::ERuntimeResult ConfiguredConfigureResult{MicroWorld::Core::ERuntimeResult::Success};
 	};
 
 } // namespace
@@ -117,10 +117,10 @@ MW_TEST_CASE(ApplicationBeginPlayInvokesOnConfigureThenEngineBeginPlay)
 	FConfiguringApplication Application{Engine};
 
 	// Act
-	const MicroWorld::ERuntimeResult BeginResult = Application.BeginPlay(DispatcherStartTime);
+	const MicroWorld::Core::ERuntimeResult BeginResult = Application.BeginPlay(DispatcherStartTime);
 
 	// Assert
-	MW_EXPECT_EQ(Test, MicroWorld::ERuntimeResult::Success, BeginResult, "First BeginPlay should succeed");
+	MW_EXPECT_EQ(Test, MicroWorld::Core::ERuntimeResult::Success, BeginResult, "First BeginPlay should succeed");
 	MW_EXPECT_EQ(Test, 1, Application.ConfigureCount, "First BeginPlay should invoke OnConfigure once");
 	MW_EXPECT_EQ(Test, 1, Engine.BeginPlayCount, "First BeginPlay should invoke the engine BeginPlay once");
 }
@@ -134,21 +134,22 @@ MW_TEST_CASE(ApplicationFailedConfigureInvokesFailureHookAndLatchesTerminal)
 	// Arrange
 	FRecordingEngine Engine;
 	FConfiguringApplication Application{Engine};
-	Application.ConfigureConfigureResult(MicroWorld::ERuntimeResult::CapacityExceeded);
+	Application.ConfigureConfigureResult(MicroWorld::Core::ERuntimeResult::CapacityExceeded);
 
 	// Act
-	const MicroWorld::ERuntimeResult BeginResult = Application.BeginPlay(DispatcherStartTime);
-	const MicroWorld::ERuntimeResult AdvanceAfterFailedBeginResult = Application.Advance(DispatcherStartTime);
-	const MicroWorld::ERuntimeResult EndAfterFailedBeginResult = Application.EndPlay();
+	const MicroWorld::Core::ERuntimeResult BeginResult = Application.BeginPlay(DispatcherStartTime);
+	const MicroWorld::Core::ERuntimeResult AdvanceAfterFailedBeginResult = Application.Advance(DispatcherStartTime);
+	const MicroWorld::Core::ERuntimeResult EndAfterFailedBeginResult = Application.EndPlay();
 
 	// Assert
-	MW_EXPECT_EQ(Test, MicroWorld::ERuntimeResult::CapacityExceeded, BeginResult, "Failed configure should surface the OnConfigure result");
+	MW_EXPECT_EQ(Test, MicroWorld::Core::ERuntimeResult::CapacityExceeded, BeginResult, "Failed configure should surface the OnConfigure result");
 	MW_EXPECT_EQ(Test, 0, Engine.BeginPlayCount, "Failed configure must not reach the engine BeginPlay");
 	MW_EXPECT_EQ(Test, 1, Application.BeginPlayFailedCount, "Failed configure should invoke the rollback hook once");
 	MW_EXPECT_EQ(
-		Test, MicroWorld::ERuntimeResult::InvalidLifecycle, AdvanceAfterFailedBeginResult, "Advance after a failed begin should be rejected");
+		Test, MicroWorld::Core::ERuntimeResult::InvalidLifecycle, AdvanceAfterFailedBeginResult, "Advance after a failed begin should be rejected");
 	MW_EXPECT_EQ(Test, 0, Engine.TickCount, "Advance after a failed begin must not reach the engine Tick");
-	MW_EXPECT_EQ(Test, MicroWorld::ERuntimeResult::InvalidLifecycle, EndAfterFailedBeginResult, "EndPlay after a failed begin should be rejected");
+	MW_EXPECT_EQ(
+		Test, MicroWorld::Core::ERuntimeResult::InvalidLifecycle, EndAfterFailedBeginResult, "EndPlay after a failed begin should be rejected");
 }
 
 /**
@@ -163,10 +164,10 @@ MW_TEST_CASE(ApplicationSecondBeginPlayIsRejected)
 	Application.BeginPlay(DispatcherStartTime);
 
 	// Act
-	const MicroWorld::ERuntimeResult SecondBeginResult = Application.BeginPlay(DispatcherStartTime);
+	const MicroWorld::Core::ERuntimeResult SecondBeginResult = Application.BeginPlay(DispatcherStartTime);
 
 	// Assert
-	MW_EXPECT_EQ(Test, MicroWorld::ERuntimeResult::InvalidLifecycle, SecondBeginResult, "Second BeginPlay should be rejected");
+	MW_EXPECT_EQ(Test, MicroWorld::Core::ERuntimeResult::InvalidLifecycle, SecondBeginResult, "Second BeginPlay should be rejected");
 	MW_EXPECT_EQ(Test, 1, Application.ConfigureCount, "Second BeginPlay should not re-invoke OnConfigure");
 	MW_EXPECT_EQ(Test, 1, Engine.BeginPlayCount, "Second BeginPlay should not re-invoke the engine BeginPlay");
 }
@@ -182,10 +183,10 @@ MW_TEST_CASE(ApplicationAdvanceBeforeBeginPlayIsRejected)
 	FConfiguringApplication Application{Engine};
 
 	// Act
-	const MicroWorld::ERuntimeResult AdvanceResult = Application.Advance(DispatcherStartTime);
+	const MicroWorld::Core::ERuntimeResult AdvanceResult = Application.Advance(DispatcherStartTime);
 
 	// Assert
-	MW_EXPECT_EQ(Test, MicroWorld::ERuntimeResult::InvalidLifecycle, AdvanceResult, "Advance before BeginPlay should be rejected");
+	MW_EXPECT_EQ(Test, MicroWorld::Core::ERuntimeResult::InvalidLifecycle, AdvanceResult, "Advance before BeginPlay should be rejected");
 	MW_EXPECT_EQ(Test, 0, Engine.TickCount, "Advance before BeginPlay should not invoke the engine Tick");
 }
 
@@ -202,10 +203,10 @@ MW_TEST_CASE(ApplicationAdvanceRejectsBackwardTime)
 	Application.Advance(DispatcherStartTime);
 
 	// Act
-	const MicroWorld::ERuntimeResult BackwardResult = Application.Advance(DispatcherStartTime - MicroWorld::TimePointMilliseconds{1});
+	const MicroWorld::Core::ERuntimeResult BackwardResult = Application.Advance(DispatcherStartTime - MicroWorld::Core::TimePointMilliseconds{1});
 
 	// Assert
-	MW_EXPECT_EQ(Test, MicroWorld::ERuntimeResult::NonMonotonicTime, BackwardResult, "Backward time should be rejected");
+	MW_EXPECT_EQ(Test, MicroWorld::Core::ERuntimeResult::NonMonotonicTime, BackwardResult, "Backward time should be rejected");
 	MW_EXPECT_EQ(Test, 1, Engine.TickCount, "Backward Advance should not invoke the engine Tick");
 }
 
@@ -222,10 +223,10 @@ MW_TEST_CASE(ApplicationAdvanceAcceptsRepeatedSameTimestamp)
 	Application.Advance(DispatcherStartTime);
 
 	// Act
-	const MicroWorld::ERuntimeResult RepeatedTimeResult = Application.Advance(DispatcherStartTime);
+	const MicroWorld::Core::ERuntimeResult RepeatedTimeResult = Application.Advance(DispatcherStartTime);
 
 	// Assert
-	MW_EXPECT_EQ(Test, MicroWorld::ERuntimeResult::Success, RepeatedTimeResult, "Repeated timestamp should be accepted as monotonic");
+	MW_EXPECT_EQ(Test, MicroWorld::Core::ERuntimeResult::Success, RepeatedTimeResult, "Repeated timestamp should be accepted as monotonic");
 	MW_EXPECT_EQ(Test, 2, Engine.TickCount, "Repeated-timestamp Advance should still invoke the engine Tick");
 }
 
@@ -241,12 +242,12 @@ MW_TEST_CASE(ApplicationEndPlayIsIdempotent)
 	Application.BeginPlay(DispatcherStartTime);
 
 	// Act
-	const MicroWorld::ERuntimeResult FirstEndResult = Application.EndPlay();
-	const MicroWorld::ERuntimeResult SecondEndResult = Application.EndPlay();
+	const MicroWorld::Core::ERuntimeResult FirstEndResult = Application.EndPlay();
+	const MicroWorld::Core::ERuntimeResult SecondEndResult = Application.EndPlay();
 
 	// Assert
-	MW_EXPECT_EQ(Test, MicroWorld::ERuntimeResult::Success, FirstEndResult, "First EndPlay should succeed");
-	MW_EXPECT_EQ(Test, MicroWorld::ERuntimeResult::Success, SecondEndResult, "Second EndPlay should remain successful");
+	MW_EXPECT_EQ(Test, MicroWorld::Core::ERuntimeResult::Success, FirstEndResult, "First EndPlay should succeed");
+	MW_EXPECT_EQ(Test, MicroWorld::Core::ERuntimeResult::Success, SecondEndResult, "Second EndPlay should remain successful");
 	MW_EXPECT_EQ(Test, 1, Engine.EndPlayCount, "Idempotent EndPlay should invoke the engine EndPlay once");
 }
 
@@ -263,10 +264,10 @@ MW_TEST_CASE(ApplicationAdvanceAfterEndPlayIsRejected)
 	Application.EndPlay();
 
 	// Act
-	const MicroWorld::ERuntimeResult AdvanceResult = Application.Advance(DispatcherStartTime);
+	const MicroWorld::Core::ERuntimeResult AdvanceResult = Application.Advance(DispatcherStartTime);
 
 	// Assert
-	MW_EXPECT_EQ(Test, MicroWorld::ERuntimeResult::InvalidLifecycle, AdvanceResult, "Advance after EndPlay should be rejected");
+	MW_EXPECT_EQ(Test, MicroWorld::Core::ERuntimeResult::InvalidLifecycle, AdvanceResult, "Advance after EndPlay should be rejected");
 	MW_EXPECT_EQ(Test, 0, Engine.TickCount, "Advance after EndPlay should not invoke the engine Tick");
 }
 

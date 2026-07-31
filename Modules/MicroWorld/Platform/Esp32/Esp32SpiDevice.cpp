@@ -37,7 +37,7 @@ namespace
 	}
 
 	/** Reports the first reason an outgoing packet cannot be framed and sent, or `Success`. */
-	ETransportResult ValidateOutgoingSpiPacket(const FDeviceAddress& InTo, const TSpan<const std::uint8_t> InPacket) noexcept
+	ETransportResult ValidateOutgoingSpiPacket(const FDeviceAddress& InTo, const Core::TSpan<const std::uint8_t> InPacket) noexcept
 	{
 		// Validate every argument before any syscall so a rejection is truly transactional.
 		if (!IsSpiAddress(InTo))
@@ -59,7 +59,10 @@ namespace
 	/** Copies the decoder's held frame into the destination and clears it, or returns `Full`
 	 * (leaving the frame held) when the payload exceeds the destination. */
 	ETransportResult DeliverFrameFromDecoder(
-		TFrameDecoder<SpiMaxPayloadBytes>& InDecoder, TSpan<std::uint8_t> InDestination, FDeviceAddress& OutFrom, FReceiveResult& OutResult) noexcept
+		TFrameDecoder<SpiMaxPayloadBytes>& InDecoder,
+		Core::TSpan<std::uint8_t> InDestination,
+		FDeviceAddress& OutFrom,
+		FReceiveResult& OutResult) noexcept
 	{
 		// On Full the destination is untouched and the frame stays held for the next call, so a
 		// receive that cannot fit is transactional.
@@ -135,7 +138,7 @@ ETransportResult FEsp32SpiMasterDevice::ExchangeAndPump(const std::uint8_t* cons
 	return Result;
 }
 
-ETransportResult FEsp32SpiMasterDevice::TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
+ETransportResult FEsp32SpiMasterDevice::TrySend(const FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept
 {
 	if (!bOpen)
 	{
@@ -149,7 +152,7 @@ ETransportResult FEsp32SpiMasterDevice::TrySend(const FDeviceAddress& InTo, TSpa
 	// The codec is transactional on failure; pad the window's tail with idle bytes the peer's decoder ignores.
 	std::size_t Written = 0;
 	const ETransportResult EncodeResult =
-		EncodeFrame(LocalNodeIdValue, InPacket, TSpan<std::uint8_t>(TransmitWindow, SpiTransactionWindowBytes), Written);
+		EncodeFrame(LocalNodeIdValue, InPacket, Core::TSpan<std::uint8_t>(TransmitWindow, SpiTransactionWindowBytes), Written);
 	if (EncodeResult != ETransportResult::Success)
 	{
 		return EncodeResult;
@@ -158,7 +161,8 @@ ETransportResult FEsp32SpiMasterDevice::TrySend(const FDeviceAddress& InTo, TSpa
 	return ExchangeAndPump(TransmitWindow);
 }
 
-ETransportResult FEsp32SpiMasterDevice::TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
+ETransportResult FEsp32SpiMasterDevice::TryReceive(
+	FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
 {
 	// Reject a null destination with nonzero length before any bus transaction.
 	const std::size_t Capacity = InDestination.Size();
@@ -245,7 +249,7 @@ void FEsp32SpiSlaveDevice::QueueNextTransaction() noexcept
 	}
 }
 
-ETransportResult FEsp32SpiSlaveDevice::TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
+ETransportResult FEsp32SpiSlaveDevice::TrySend(const FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept
 {
 	if (!bOpen)
 	{
@@ -264,7 +268,7 @@ ETransportResult FEsp32SpiSlaveDevice::TrySend(const FDeviceAddress& InTo, TSpan
 	// The codec is transactional on failure; pad the window's tail with idle bytes.
 	std::size_t Written = 0;
 	const ETransportResult EncodeResult =
-		EncodeFrame(LocalNodeIdValue, InPacket, TSpan<std::uint8_t>(StagedFrame, SpiTransactionWindowBytes), Written);
+		EncodeFrame(LocalNodeIdValue, InPacket, Core::TSpan<std::uint8_t>(StagedFrame, SpiTransactionWindowBytes), Written);
 	if (EncodeResult != ETransportResult::Success)
 	{
 		return EncodeResult;
@@ -274,7 +278,8 @@ ETransportResult FEsp32SpiSlaveDevice::TrySend(const FDeviceAddress& InTo, TSpan
 	return ETransportResult::Success;
 }
 
-ETransportResult FEsp32SpiSlaveDevice::TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
+ETransportResult FEsp32SpiSlaveDevice::TryReceive(
+	FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
 {
 	// Reject a null destination with nonzero length before touching the transaction queue.
 	const std::size_t Capacity = InDestination.Size();

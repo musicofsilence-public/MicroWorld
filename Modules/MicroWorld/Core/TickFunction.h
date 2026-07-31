@@ -2,7 +2,7 @@
 
 #include <MicroWorld/Core/Time.h>
 
-namespace MicroWorld
+namespace MicroWorld::Core
 {
 
 /** Configures one object's primary tick before lifecycle start. */
@@ -97,4 +97,4 @@ private:
 	bool bMustResetSchedule{true};
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Core

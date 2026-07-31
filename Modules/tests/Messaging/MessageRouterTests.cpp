@@ -12,8 +12,8 @@
 
 namespace
 {
-using MicroWorld::TimePointMilliseconds;
-using MicroWorld::TSpan;
+using MicroWorld::Core::TimePointMilliseconds;
+using MicroWorld::Core::TSpan;
 using MicroWorld::Messaging::ActorMessageHeaderBytes;
 using MicroWorld::Messaging::BroadcastActorId;
 using MicroWorld::Messaging::EMessageResult;

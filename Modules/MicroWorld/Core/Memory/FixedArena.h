@@ -8,7 +8,7 @@
 #include <cstdint>
 #include <limits>
 
-namespace MicroWorld
+namespace MicroWorld::Core
 {
 
 /**
@@ -283,4 +283,4 @@ private:
 	std::size_t UsedSizeBytes{0};
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Core

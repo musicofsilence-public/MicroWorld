@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace MicroWorld
+namespace MicroWorld::Core
 {
 
 /**
@@ -41,4 +41,4 @@ protected:
 	IUartByteStream() noexcept = default;
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Core

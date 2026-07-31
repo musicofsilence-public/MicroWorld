@@ -93,8 +93,8 @@ inline constexpr MicroWorld::Engine::FTypeId ConsumerComponentTypeId{0x00040002u
 inline constexpr std::uint32_t EngineProbeExpectedReclaimedObjectCount = 3;
 
 /** Timer probe inputs: a base clock reading and the one-shot fire delay. */
-inline constexpr MicroWorld::TimePointMilliseconds EngineProbeTimerInitialNow = 1000;
-inline constexpr MicroWorld::DurationMilliseconds EngineProbeTimerDuration = 100;
+inline constexpr MicroWorld::Core::TimePointMilliseconds EngineProbeTimerInitialNow = 1000;
+inline constexpr MicroWorld::Core::DurationMilliseconds EngineProbeTimerDuration = 100;
 
 /** Expected timer fire count after exactly one one-shot schedule has elapsed. */
 inline constexpr std::uint32_t EngineProbeExpectedTimerFireCount = 1;
@@ -104,7 +104,7 @@ inline constexpr std::uint32_t EngineProbeExpectedTimerFireCount = 1;
 /** Exercises representative Core+Object+Engine public APIs without platform I/O. */
 inline int RunEngineConsumerProbe() noexcept
 {
-	using namespace MicroWorld;
+	using namespace MicroWorld::Core;
 	using namespace MicroWorld::Engine;
 	using MicroWorldConsumer::EEngineConsumerExitCode;
 	using MicroWorldConsumer::FConsumerActor;

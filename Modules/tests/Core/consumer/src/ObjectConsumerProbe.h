@@ -51,7 +51,7 @@ inline constexpr MicroWorld::Engine::FTypeId ConsumerObjectTypeId = 1;
 /** Exercises representative Core+Object public APIs without platform I/O. */
 inline int RunObjectConsumerProbe() noexcept
 {
-	using namespace MicroWorld;
+	using namespace MicroWorld::Core;
 	using namespace MicroWorld::Engine;
 	using MicroWorldConsumer::EObjectConsumerExitCode;
 	using MicroWorldConsumer::FConsumerObject;

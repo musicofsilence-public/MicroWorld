@@ -2,7 +2,7 @@
 
 #include <MicroWorld/Core/Time.h>
 
-namespace MicroWorld
+namespace MicroWorld::Core
 {
 
 /** The phases an application can be in; it never returns to an earlier one. */
@@ -66,4 +66,4 @@ private:
 	ELifecycleState CurrentState{ELifecycleState::Constructed};
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Core

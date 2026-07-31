@@ -22,7 +22,7 @@ class FEsp32TimeSource final
 {
 public:
 	/** Reports whole milliseconds elapsed since boot as the engine's canonical time point. */
-	TimePointMilliseconds Now() const noexcept { return static_cast<TimePointMilliseconds>(esp_timer_get_time() / 1000); }
+	Core::TimePointMilliseconds Now() const noexcept { return static_cast<Core::TimePointMilliseconds>(esp_timer_get_time() / 1000); }
 };
 
 } // namespace MicroWorld

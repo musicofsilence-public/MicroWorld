@@ -1,9 +1,13 @@
 #pragma once
 
+#include <MicroWorld/Core/RuntimeResult.h>
+
 #include <cstdio>
 
 namespace MicroWorld::Tests
 {
+
+using namespace ::MicroWorld::Core;
 
 /** Records assertion failures for one named test without dynamic storage. */
 class FTestContext final

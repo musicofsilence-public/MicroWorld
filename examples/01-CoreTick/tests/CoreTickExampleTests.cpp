@@ -38,7 +38,7 @@ MW_TEST_CASE(CoreTickExampleFinishesOnTheFifthDueTick)
 	Example.Begin(0);
 
 	// Act
-	for (MicroWorld::TimePointMilliseconds DueTime = 0; DueTime < 2000; DueTime += 500)
+	for (MicroWorld::Core::TimePointMilliseconds DueTime = 0; DueTime < 2000; DueTime += 500)
 	{
 		const FCoreTickExampleStep Step = Example.Advance(DueTime);
 		MW_EXPECT_TRUE(Test, Step.Decision.bShouldTick, "each scheduled deadline before the fifth should tick");

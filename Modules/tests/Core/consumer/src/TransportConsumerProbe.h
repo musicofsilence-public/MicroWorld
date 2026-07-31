@@ -87,7 +87,7 @@ inline constexpr std::size_t EmptyReceiveByteCount = 0;
 /** Exercises representative Core+Transport public APIs without platform I/O. */
 inline int RunTransportConsumerProbe() noexcept
 {
-	using namespace MicroWorld;
+	using namespace MicroWorld::Core;
 	using MicroWorldConsumer::ETransportConsumerExitCode;
 
 	const int MemoryProfileResult = RunMemoryConsumerProbe();

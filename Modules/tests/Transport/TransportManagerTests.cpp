@@ -13,7 +13,7 @@
 namespace
 {
 
-using MicroWorld::TSpan;
+using MicroWorld::Core::TSpan;
 using MicroWorld::Transport::ETransportResult;
 using MicroWorld::Transport::TTransportManager;
 using MicroWorld::Transport::TTransportPacketStorage;

@@ -11,7 +11,7 @@
 namespace
 {
 
-using MicroWorld::TSpan;
+using MicroWorld::Core::TSpan;
 using MicroWorld::Transport::ControlChannel;
 using MicroWorld::Transport::EControlMessageType;
 using MicroWorld::Transport::ETransportResult;

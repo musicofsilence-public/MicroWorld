@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace MicroWorld
+namespace MicroWorld::Core
 {
 
 /** Identifies the exact source-level MicroWorld package contract. */
@@ -21,4 +21,4 @@ struct FVersion
 /** Lets downstream probes reject a package that does not match their API contract. */
 inline constexpr FVersion Version{0, 4, 0};
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Core

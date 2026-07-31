@@ -30,14 +30,14 @@ FPicoLoraDevice::~FPicoLoraDevice() noexcept = default;
 }
 
 ::MicroWorld::Transport::ETransportResult FPicoLoraDevice::TrySend(
-	const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, const TSpan<const std::uint8_t> InPacket) noexcept
+	const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, const Core::TSpan<const std::uint8_t> InPacket) noexcept
 {
 	return RadioDevice.TrySend(InTo, InPacket);
 }
 
 ::MicroWorld::Transport::ETransportResult FPicoLoraDevice::TryReceive(
 	::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
-	const TSpan<std::uint8_t> InDestination,
+	const Core::TSpan<std::uint8_t> InDestination,
 	::MicroWorld::Transport::Device::FReceiveResult& OutResult) noexcept
 {
 	return RadioDevice.TryReceive(OutFrom, InDestination, OutResult);

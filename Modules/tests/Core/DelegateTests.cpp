@@ -9,10 +9,10 @@
 namespace
 {
 
-using MicroWorld::EDelegateResult;
-using MicroWorld::FDelegateHandle;
-using MicroWorld::TDelegate;
-using MicroWorld::TMulticastDelegate;
+using MicroWorld::Core::EDelegateResult;
+using MicroWorld::Core::FDelegateHandle;
+using MicroWorld::Core::TDelegate;
+using MicroWorld::Core::TMulticastDelegate;
 
 /** Inline storage the small-capacity delegates and bindings share across the layout tests. */
 constexpr std::size_t SmallInlineBytes = 32;

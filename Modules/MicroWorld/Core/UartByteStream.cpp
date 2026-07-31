@@ -1,8 +1,8 @@
 #include <MicroWorld/Core/IO/UartByteStream.h>
 
-namespace MicroWorld
+namespace MicroWorld::Core
 {
 
 IUartByteStream::~IUartByteStream() noexcept = default;
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Core

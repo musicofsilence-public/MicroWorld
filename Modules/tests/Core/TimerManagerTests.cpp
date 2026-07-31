@@ -11,14 +11,14 @@
 
 namespace
 {
-using MicroWorld::CanAdvanceTimerGeneration;
-using MicroWorld::DurationMilliseconds;
-using MicroWorld::ETimerMode;
-using MicroWorld::ETimerResult;
-using MicroWorld::FTimerHandle;
-using MicroWorld::TDelegate;
-using MicroWorld::TimePointMilliseconds;
-using MicroWorld::TTimerManager;
+using MicroWorld::Core::CanAdvanceTimerGeneration;
+using MicroWorld::Core::DurationMilliseconds;
+using MicroWorld::Core::ETimerMode;
+using MicroWorld::Core::ETimerResult;
+using MicroWorld::Core::FTimerHandle;
+using MicroWorld::Core::TDelegate;
+using MicroWorld::Core::TimePointMilliseconds;
+using MicroWorld::Core::TTimerManager;
 using MicroWorld::Tests::GlobalAllocationCount;
 
 /** Asserts a timer operation returned Success without discarding the result. */

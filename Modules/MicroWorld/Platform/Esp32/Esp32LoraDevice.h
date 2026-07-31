@@ -102,7 +102,7 @@ public:
 	 * payload to frame and queue.
 	 * @return Outcome of the portable frame-acceptance attempt.
 	 */
-	ETransportResult TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override
+	ETransportResult TrySend(const FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override
 	{
 		return RadioDevice.TrySend(InTo, InPacket);
 	}
@@ -118,7 +118,7 @@ public:
 	 * @param OutResult Filled with the delivered byte count only on `Success`.
 	 * @return `Success`, `Unavailable`, `Full`, or `Invalid` under `IDevice`.
 	 */
-	ETransportResult TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept override
+	ETransportResult TryReceive(FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept override
 	{
 		return RadioDevice.TryReceive(OutFrom, InDestination, OutResult);
 	}
@@ -133,7 +133,7 @@ public:
 	bool IsOpen() const noexcept { return ByteStream.IsOpen() && RadioDevice.IsInitialized(); }
 
 private:
-	/** Owns ESP-IDF UART configuration and lifetime while exposing only Core's non-blocking `IUartByteStream` interface. */
+	/** Owns ESP-IDF UART configuration and lifetime while exposing only Core's non-blocking `Core::IUartByteStream` interface. */
 	FEsp32UartByteStream ByteStream{};
 
 	/** Owns portable E32 framing and retains a reference to ByteStream for its full facade lifetime. */

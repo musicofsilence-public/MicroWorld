@@ -12,7 +12,7 @@
 namespace
 {
 
-using MicroWorld::TSpan;
+using MicroWorld::Core::TSpan;
 using MicroWorld::Transport::ETransportResult;
 using MicroWorld::Transport::THostLoopback;
 using MicroWorld::Transport::Address::FDeviceAddress;

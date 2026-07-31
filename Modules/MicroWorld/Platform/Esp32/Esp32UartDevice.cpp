@@ -55,7 +55,7 @@ namespace
 
 } // namespace
 
-ETransportResult FEsp32UartDevice::TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
+ETransportResult FEsp32UartDevice::TrySend(const FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept
 {
 	if (!bOpen)
 	{
@@ -69,7 +69,7 @@ ETransportResult FEsp32UartDevice::TrySend(const FDeviceAddress& InTo, TSpan<con
 	// The codec is transactional on failure.
 	std::uint8_t Frame[UartMaxPayloadBytes + FrameOverheadBytes];
 	std::size_t Written = 0;
-	const ETransportResult EncodeResult = EncodeFrame(LocalNodeIdValue, InPacket, TSpan<std::uint8_t>(Frame, sizeof(Frame)), Written);
+	const ETransportResult EncodeResult = EncodeFrame(LocalNodeIdValue, InPacket, Core::TSpan<std::uint8_t>(Frame, sizeof(Frame)), Written);
 	if (EncodeResult != ETransportResult::Success)
 	{
 		return EncodeResult;
@@ -78,7 +78,7 @@ ETransportResult FEsp32UartDevice::TrySend(const FDeviceAddress& InTo, TSpan<con
 	return MapUartWriteOutcome(Outcome);
 }
 
-ETransportResult FEsp32UartDevice::ValidateOutgoingPacket(const FDeviceAddress& InTo, const TSpan<const std::uint8_t> InPacket) const noexcept
+ETransportResult FEsp32UartDevice::ValidateOutgoingPacket(const FDeviceAddress& InTo, const Core::TSpan<const std::uint8_t> InPacket) const noexcept
 {
 	// Validate every argument before any syscall so a rejection is truly transactional.
 	if (!IsUartAddress(InTo))
@@ -97,7 +97,7 @@ ETransportResult FEsp32UartDevice::ValidateOutgoingPacket(const FDeviceAddress& 
 	return ETransportResult::Success;
 }
 
-ETransportResult FEsp32UartDevice::TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
+ETransportResult FEsp32UartDevice::TryReceive(FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
 {
 	// Reject a null destination with nonzero length before any UART read.
 	const std::size_t Capacity = InDestination.Size();
@@ -118,7 +118,7 @@ ETransportResult FEsp32UartDevice::TryReceive(FDeviceAddress& OutFrom, TSpan<std
 }
 
 ETransportResult FEsp32UartDevice::DeliverFrameToDestination(
-	TSpan<std::uint8_t> InDestination, FDeviceAddress& OutFrom, FReceiveResult& OutResult) noexcept
+	Core::TSpan<std::uint8_t> InDestination, FDeviceAddress& OutFrom, FReceiveResult& OutResult) noexcept
 {
 	// On Full the destination is untouched and the frame stays held for the next
 	// call, so a receive that cannot fit is transactional.
@@ -134,7 +134,8 @@ ETransportResult FEsp32UartDevice::DeliverFrameToDestination(
 	return ETransportResult::Success;
 }
 
-ETransportResult FEsp32UartDevice::PumpDecoderForFrame(TSpan<std::uint8_t> InDestination, FDeviceAddress& OutFrom, FReceiveResult& OutResult) noexcept
+ETransportResult FEsp32UartDevice::PumpDecoderForFrame(
+	Core::TSpan<std::uint8_t> InDestination, FDeviceAddress& OutFrom, FReceiveResult& OutResult) noexcept
 {
 	// Pump available UART bytes one at a time, bounded so a flood cannot starve the caller.
 	const std::size_t PumpByteCap = 2u * (UartMaxPayloadBytes + FrameOverheadBytes);

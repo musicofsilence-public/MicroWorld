@@ -8,6 +8,8 @@
 namespace MicroWorld::Application
 {
 
+using namespace ::MicroWorld::Core;
+
 /**
  * The pacing function a runner calls between frames.
  *

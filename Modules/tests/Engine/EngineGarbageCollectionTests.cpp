@@ -17,7 +17,7 @@ namespace
 {
 using MicroWorld::Tests::GlobalAllocationCount;
 
-using MicroWorld::ERuntimeResult;
+using MicroWorld::Core::ERuntimeResult;
 using MicroWorld::Engine::AActor;
 using MicroWorld::Engine::EEngineResult;
 using MicroWorld::Engine::FGarbageCollectionBudget;
@@ -61,7 +61,7 @@ using FGarbageCollectionEnvironment = TEngineEnvironment<256, 16, 8, 4>;
 constexpr std::uint32_t CollectorWorklistCapacity = 16;
 
 /** Canonical monotonic baseline every BeginPlay call uses as its starting world time. */
-constexpr MicroWorld::TimePointMilliseconds BaselineTimeMilliseconds{0};
+constexpr MicroWorld::Core::TimePointMilliseconds BaselineTimeMilliseconds{0};
 
 /** Steady-state iterations the allocation probe runs to prove Advance never calls global new. */
 constexpr std::uint32_t SteadyStateAdvanceIterations = 64;

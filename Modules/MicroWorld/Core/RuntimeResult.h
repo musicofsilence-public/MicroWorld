@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace MicroWorld
+namespace MicroWorld::Core
 {
 
 /**
@@ -30,4 +30,4 @@ enum class ERuntimeResult : std::uint8_t
 	AlreadyOwned,	  ///< Prevents one object from entering two non-owning hierarchies.
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Core

@@ -375,7 +375,7 @@ inline FOpenedSocket OpenBoundUdpSocket(const std::uint16_t InBindPort) noexcept
  * @param InTimeoutMilliseconds Upper bound on the readiness wait.
  * @return True when the socket is readable within the timeout.
  */
-inline bool WaitForReadable(const FSocketHandle InSocket, const DurationMilliseconds InTimeoutMilliseconds) noexcept
+inline bool WaitForReadable(const FSocketHandle InSocket, const Core::DurationMilliseconds InTimeoutMilliseconds) noexcept
 {
 	fd_set ReadSet;
 	FD_ZERO(&ReadSet);

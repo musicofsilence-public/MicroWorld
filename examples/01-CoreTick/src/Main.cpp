@@ -20,7 +20,7 @@ constexpr unsigned PollPacingMilliseconds = 10;
 /** Composition root: drives one 500 ms tick schedule off real time for five ticks. */
 extern "C" void app_main(void)
 {
-	MicroWorld::SetOutputDevice(&MicroWorld::WriteEsp32LogRecord);
+	MicroWorld::Core::SetOutputDevice(&MicroWorld::WriteEsp32LogRecord);
 
 	// Announce the exact package contract this image was built against.
 	MW_LOG(
@@ -43,7 +43,7 @@ extern "C" void app_main(void)
 	while (!CoreTickExample.IsFinished())
 	{
 		const FCoreTickExampleStep Step = CoreTickExample.Advance(GTimeSource.Now());
-		const MicroWorld::FTickDecision& Decision = Step.Decision;
+		const MicroWorld::Core::FTickDecision& Decision = Step.Decision;
 		if (Decision.bShouldTick)
 		{
 			++TickCount;

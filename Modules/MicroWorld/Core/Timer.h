@@ -8,7 +8,7 @@
 #include <limits>
 #include <utility>
 
-namespace MicroWorld
+namespace MicroWorld::Core
 {
 
 /** Reports every bounded timer operation without borrowing unrelated lifecycle errors. */
@@ -487,4 +487,4 @@ private:
 	bool bDispatchActive{false};
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Core

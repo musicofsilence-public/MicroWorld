@@ -14,7 +14,7 @@ namespace
 	constexpr std::size_t MinimumWpa2PasswordLength = 8;
 
 	/** One slice of the station join wait; the poll sums these until the timeout budget is spent. */
-	constexpr DurationMilliseconds JoinWaitSliceMilliseconds = 100;
+	constexpr Core::DurationMilliseconds JoinWaitSliceMilliseconds = 100;
 
 	/** Reports the first reason a SoftAP config cannot be used, or `Success`. */
 	ETransportResult ValidateAccessPointConfig(const FEsp32AccessPointConfig& InConfig) noexcept
@@ -119,7 +119,7 @@ ETransportResult FEsp32WifiLink::JoinAccessPoint(const FEsp32StationConfig& InCo
 	// the flag latches or the accumulated wait reaches the caller's timeout budget. The slice count
 	// is the budget; no real clock is read.
 	GGotStationIpAddress = false;
-	DurationMilliseconds ElapsedMilliseconds = 0;
+	Core::DurationMilliseconds ElapsedMilliseconds = 0;
 	while (!GGotStationIpAddress && ElapsedMilliseconds < InConfig.ConnectTimeoutMilliseconds)
 	{
 		vTaskDelay(pdMS_TO_TICKS(JoinWaitSliceMilliseconds));

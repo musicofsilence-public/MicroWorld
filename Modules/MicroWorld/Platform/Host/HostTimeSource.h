@@ -31,10 +31,10 @@ public:
 	~FHostTimeSource() noexcept = default;
 
 	/** Reports milliseconds elapsed since construction as the engine's canonical time point. */
-	TimePointMilliseconds Now() const noexcept
+	Core::TimePointMilliseconds Now() const noexcept
 	{
 		const std::chrono::steady_clock::duration Elapsed = std::chrono::steady_clock::now() - Baseline;
-		return static_cast<TimePointMilliseconds>(std::chrono::duration_cast<std::chrono::milliseconds>(Elapsed).count());
+		return static_cast<Core::TimePointMilliseconds>(std::chrono::duration_cast<std::chrono::milliseconds>(Elapsed).count());
 	}
 
 private:

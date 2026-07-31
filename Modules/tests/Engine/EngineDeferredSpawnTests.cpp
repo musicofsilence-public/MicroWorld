@@ -12,7 +12,7 @@
 namespace
 {
 
-using MicroWorld::ERuntimeResult;
+using MicroWorld::Core::ERuntimeResult;
 using MicroWorld::Engine::AActor;
 using MicroWorld::Engine::EActorSpawnRequestResult;
 using MicroWorld::Engine::EActorSpawnState;

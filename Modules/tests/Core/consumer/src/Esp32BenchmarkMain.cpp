@@ -66,7 +66,7 @@ constexpr MicroWorld::Engine::FTypeId BenchComponentTypeId{0x00060011u};
 constexpr MicroWorld::Engine::FTypeId GcProbeObjectTypeId{0x00060012u};
 
 /** Representative world profile: actors tick every frame, components tick every frame. */
-constexpr MicroWorld::FTickConfiguration BenchTickConfiguration{true, true, MicroWorld::DurationMilliseconds{0}};
+constexpr MicroWorld::Core::FTickConfiguration BenchTickConfiguration{true, true, MicroWorld::Core::DurationMilliseconds{0}};
 
 /** Representative actor count the roadmap names for the runtime-margin profile. */
 constexpr std::size_t RepresentativeActorCount = 8;
@@ -152,7 +152,7 @@ using FBenchmarkHost = MicroWorld::Engine::TEngine<FBenchmarkHostTraits>;
 using FBenchmarkTransport = MicroWorld::Transport::TTransportHost<4, 256>;
 
 /** Delegate type matching the host's timer manager so Schedule accepts a bound callback. */
-using FBenchTimerDelegate = MicroWorld::TDelegate<void(), 64>;
+using FBenchTimerDelegate = MicroWorld::Core::TDelegate<void(), 64>;
 
 /**
  * Accumulates min/mean/max across one timed operation's repeated samples.
@@ -287,14 +287,14 @@ public:
 	bool IsReady() const noexcept { return bReady; }
 
 	/** Begins a fresh collection cycle so the timing loop starts from a known state. */
-	bool StartCycle() noexcept { return Collector.RequestCollection() == MicroWorld::ERuntimeResult::Success; }
+	bool StartCycle() noexcept { return Collector.RequestCollection() == MicroWorld::Core::ERuntimeResult::Success; }
 
 	/** Advances one bounded slice and reports whether that slice completed the cycle. */
 	bool AdvanceOneSlice(bool& bCycleComplete) noexcept
 	{
 		const MicroWorld::Engine::FGarbageCollectionResult Result = Collector.Advance(ProbeBudget);
 		bCycleComplete = Result.bCycleComplete;
-		return Result.Result == MicroWorld::ERuntimeResult::Success;
+		return Result.Result == MicroWorld::Core::ERuntimeResult::Success;
 	}
 
 private:
@@ -352,7 +352,7 @@ private:
  */
 extern "C" void app_main()
 {
-	using namespace MicroWorld;
+	using namespace MicroWorld::Core;
 	using namespace MicroWorld::Engine;
 
 	// 0. Route every MW_LOG call site and each measurement line through ESP-IDF logging.

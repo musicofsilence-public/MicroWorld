@@ -13,9 +13,9 @@
 
 namespace
 {
-using MicroWorld::ERuntimeResult;
-using MicroWorld::IPlaySystem;
-using MicroWorld::TimePointMilliseconds;
+using MicroWorld::Core::ERuntimeResult;
+using MicroWorld::Core::IPlaySystem;
+using MicroWorld::Core::TimePointMilliseconds;
 using MicroWorld::Engine::EEngineResult;
 using MicroWorld::Engine::FDefaultEngineTraits;
 using MicroWorld::Engine::FGarbageCollectionBudget;

@@ -18,7 +18,7 @@
 namespace
 {
 
-using MicroWorld::TSpan;
+using MicroWorld::Core::TSpan;
 using MicroWorld::Tests::GlobalAllocationCount;
 using MicroWorld::Transport::EControlMessageType;
 using MicroWorld::Transport::ETransportResult;

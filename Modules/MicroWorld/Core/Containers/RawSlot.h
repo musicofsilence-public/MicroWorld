@@ -18,7 +18,7 @@
 #include <new>
 #include <utility>
 
-namespace MicroWorld::RawStorage
+namespace MicroWorld::Core::RawStorage
 {
 
 /**
@@ -73,4 +73,4 @@ const ValueType* LaunderedPointer(const void* const InStorage) noexcept
 	return std::launder(reinterpret_cast<const ValueType*>(InStorage));
 }
 
-} // namespace MicroWorld::RawStorage
+} // namespace MicroWorld::Core::RawStorage

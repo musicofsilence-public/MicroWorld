@@ -70,7 +70,7 @@ public:
 	 * @param InPacket Caller-owned bytes to deliver as one complete datagram.
 	 * @return Normalized outcome of the single send attempt.
 	 */
-	ETransportResult TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override;
+	ETransportResult TrySend(const FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
 	 * Receives at most one datagram into the caller-owned destination, transactionally.
@@ -86,7 +86,7 @@ public:
 	 * @param OutResult Filled with the received byte count only on `Success`.
 	 * @return Normalized outcome of the single receive attempt.
 	 */
-	ETransportResult TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept override;
+	ETransportResult TryReceive(FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept override;
 
 	/** Reports the largest datagram, in bytes, one send accepts. */
 	std::size_t MaxPacketBytes() const noexcept override;
@@ -107,7 +107,7 @@ public:
 	 * @param InTimeoutMilliseconds Upper bound on the readiness wait.
 	 * @return True when the socket is readable within the timeout.
 	 */
-	bool PollReadable(DurationMilliseconds InTimeoutMilliseconds) const noexcept;
+	bool PollReadable(Core::DurationMilliseconds InTimeoutMilliseconds) const noexcept;
 
 private:
 	/** Holds one reference to the shared socket-stack lifetime for the owned socket. */

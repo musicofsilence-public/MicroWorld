@@ -1,10 +1,14 @@
 #pragma once
 
+#include <MicroWorld/Core/RuntimeResult.h>
+
 #include <cstdint>
 #include <limits>
 
 namespace MicroWorld::Engine
 {
+
+using namespace ::MicroWorld::Core;
 
 /** Selects one caller-owned object-store slot without exposing its address. */
 using ObjectIndex = std::uint32_t;

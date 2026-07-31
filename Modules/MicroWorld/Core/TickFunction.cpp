@@ -2,7 +2,7 @@
 
 #include <limits>
 
-namespace MicroWorld
+namespace MicroWorld::Core
 {
 
 FTickFunction::FTickFunction(const FTickConfiguration InConfiguration) noexcept
@@ -134,4 +134,4 @@ DurationMilliseconds FTickFunction::CalculateDeltaMilliseconds(const TimePointMi
 	return static_cast<DurationMilliseconds>(DeltaMilliseconds);
 }
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Core

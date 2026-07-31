@@ -10,6 +10,8 @@
 namespace MicroWorld::Messaging
 {
 
+using namespace ::MicroWorld::Core;
+
 /** Identifies what kind of message this is; 0 is invalid. */
 using FMessageTypeId = std::uint16_t;
 

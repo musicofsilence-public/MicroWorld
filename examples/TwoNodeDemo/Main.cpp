@@ -36,9 +36,11 @@
 namespace
 {
 
-using namespace MicroWorld;
+using namespace MicroWorld::Core;
 using namespace MicroWorld::Engine;
 using namespace MicroWorld::Transport;
+using MicroWorld::FHostWifiDevice;
+using MicroWorld::MakeUdpAddress;
 
 /** Loopback IPv4 octets shared by every endpoint address in the demo. */
 constexpr std::uint8_t LoopbackIpv4Octets[4] = {127, 0, 0, 1};
@@ -479,8 +481,10 @@ bool RunStateBroadcastLoop(
  */
 int main()
 {
-	using namespace MicroWorld;
+	using namespace MicroWorld::Core;
 	using namespace MicroWorld::Engine;
+	using MicroWorld::FHostWifiDevice;
+	using MicroWorld::MakeUdpAddress;
 
 	FHostWifiDevice ServerDevice(0);
 	FHostWifiDevice ClientDevice(0);

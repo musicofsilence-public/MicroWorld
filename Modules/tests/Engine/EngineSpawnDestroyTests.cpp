@@ -20,10 +20,10 @@
 namespace
 {
 
-using MicroWorld::DurationMilliseconds;
-using MicroWorld::ERuntimeResult;
-using MicroWorld::FTickConfiguration;
-using MicroWorld::FTickContext;
+using MicroWorld::Core::DurationMilliseconds;
+using MicroWorld::Core::ERuntimeResult;
+using MicroWorld::Core::FTickConfiguration;
+using MicroWorld::Core::FTickContext;
 using MicroWorld::Engine::AActor;
 using MicroWorld::Engine::EEngineResult;
 using MicroWorld::Engine::EObjectResult;
@@ -63,13 +63,13 @@ constexpr MicroWorld::Engine::FTypeId PlainActorTypeId{0x00040003u};
 constexpr MicroWorld::Engine::FTypeId PlainComponentTypeId{0x00040004u};
 
 /** Canonical monotonic baseline every BeginPlay call uses as its starting world time. */
-constexpr MicroWorld::TimePointMilliseconds BaselineTimeMilliseconds{0};
+constexpr MicroWorld::Core::TimePointMilliseconds BaselineTimeMilliseconds{0};
 
 /** World time at which ApplyPending flushes the queued spawn/destroy barrier in these tests. */
-constexpr MicroWorld::TimePointMilliseconds BarrierTimeMilliseconds{10};
+constexpr MicroWorld::Core::TimePointMilliseconds BarrierTimeMilliseconds{10};
 
 /** World time used to advance survivors after a destroy barrier in the order-preservation tests. */
-constexpr MicroWorld::TimePointMilliseconds SurvivorAdvanceTimeMilliseconds{20};
+constexpr MicroWorld::Core::TimePointMilliseconds SurvivorAdvanceTimeMilliseconds{20};
 
 /** Fixed capacity of the GC fixture worklist, large enough for every reachable object in these tests. */
 constexpr std::uint32_t CollectorWorklistCapacity = 16;

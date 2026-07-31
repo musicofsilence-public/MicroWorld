@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace MicroWorld
+namespace MicroWorld::Core
 {
 
 /** Reports the complete portable outcome of one memory-resource operation. */
@@ -67,4 +67,4 @@ public:
 	virtual std::size_t UsedBytes() const noexcept = 0;
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Core

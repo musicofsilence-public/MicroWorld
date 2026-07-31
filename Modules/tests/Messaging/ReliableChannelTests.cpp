@@ -10,11 +10,11 @@
 
 namespace
 {
-using MicroWorld::DurationMilliseconds;
-using MicroWorld::HighByteShift;
-using MicroWorld::LowByteMask;
-using MicroWorld::TimePointMilliseconds;
-using MicroWorld::TSpan;
+using MicroWorld::Core::DurationMilliseconds;
+using MicroWorld::Core::HighByteShift;
+using MicroWorld::Core::LowByteMask;
+using MicroWorld::Core::TimePointMilliseconds;
+using MicroWorld::Core::TSpan;
 using MicroWorld::Messaging::EMessageResult;
 using MicroWorld::Messaging::EReliablePacketKind;
 using MicroWorld::Messaging::FMessageChannelId;

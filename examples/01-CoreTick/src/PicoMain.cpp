@@ -35,7 +35,7 @@ void RunCoreTickTask(void*)
 	while (!CoreTickExample.IsFinished())
 	{
 		const FCoreTickExampleStep Step = CoreTickExample.Advance(to_ms_since_boot(get_absolute_time()));
-		if (Step.Decision.Result != MicroWorld::ERuntimeResult::Success)
+		if (Step.Decision.Result != MicroWorld::Core::ERuntimeResult::Success)
 		{
 			bFailed = true;
 			break;

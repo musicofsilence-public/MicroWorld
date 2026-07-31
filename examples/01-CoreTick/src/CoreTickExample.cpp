@@ -1,13 +1,13 @@
 #include "CoreTickExample.h"
 
-void FCoreTickExample::Begin(const MicroWorld::TimePointMilliseconds InNowMilliseconds) noexcept
+void FCoreTickExample::Begin(const MicroWorld::Core::TimePointMilliseconds InNowMilliseconds) noexcept
 {
 	TickCount = 0;
 	bFinished = false;
 	SensorTick.BeginPlay(InNowMilliseconds);
 }
 
-FCoreTickExampleStep FCoreTickExample::Advance(const MicroWorld::TimePointMilliseconds InNowMilliseconds) noexcept
+FCoreTickExampleStep FCoreTickExample::Advance(const MicroWorld::Core::TimePointMilliseconds InNowMilliseconds) noexcept
 {
 	FCoreTickExampleStep Step;
 	Step.bFinished = bFinished;

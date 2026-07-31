@@ -12,7 +12,7 @@
 namespace
 {
 
-using MicroWorld::ERuntimeResult;
+using MicroWorld::Core::ERuntimeResult;
 using MicroWorld::Engine::AActor;
 using MicroWorld::Engine::EEngineResult;
 using MicroWorld::Engine::EObjectResult;
@@ -48,7 +48,7 @@ constexpr MicroWorld::Engine::FTypeId PlainActorTypeId{0x00020001u};
 constexpr MicroWorld::Engine::FTypeId PlainComponentTypeId{0x00020002u};
 
 /** Canonical monotonic baseline every BeginPlay call uses as its starting world time. */
-constexpr MicroWorld::TimePointMilliseconds BaselineTimeMilliseconds{0};
+constexpr MicroWorld::Core::TimePointMilliseconds BaselineTimeMilliseconds{0};
 
 /** Fixed capacity of the GC worklist used by the active-collection guard test. */
 constexpr std::uint32_t CollectorWorklistCapacity = 16;

@@ -13,7 +13,7 @@
 namespace
 {
 
-using MicroWorld::ERuntimeResult;
+using MicroWorld::Core::ERuntimeResult;
 using MicroWorld::Engine::CanAdvanceObjectGeneration;
 using MicroWorld::Engine::DestroyManagedObject;
 using MicroWorld::Engine::EObjectResult;

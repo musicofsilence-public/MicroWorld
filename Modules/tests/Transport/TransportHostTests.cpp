@@ -15,9 +15,9 @@
 namespace
 {
 
-using MicroWorld::FDelegateHandle;
-using MicroWorld::TimePointMilliseconds;
-using MicroWorld::TSpan;
+using MicroWorld::Core::FDelegateHandle;
+using MicroWorld::Core::TimePointMilliseconds;
+using MicroWorld::Core::TSpan;
 using MicroWorld::Tests::GlobalAllocationCount;
 using MicroWorld::Transport::ENetworkMode;
 using MicroWorld::Transport::ETransportHostState;

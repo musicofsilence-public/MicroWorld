@@ -10,7 +10,7 @@
 namespace
 {
 
-using MicroWorld::ERuntimeResult;
+using MicroWorld::Core::ERuntimeResult;
 using MicroWorld::Engine::EGarbageCollectionPhase;
 using MicroWorld::Engine::EObjectResult;
 using MicroWorld::Engine::FClassDescriptor;

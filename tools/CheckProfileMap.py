@@ -211,12 +211,12 @@ def run_self_test() -> int:
     valid_object_map = (
         f"{valid_core_map}"
         "libMicroWorldObject.a(ObjectStore.o)\n"
-        "MicroWorld::FObjectStore\n"
+        "MicroWorld::Engine::FObjectStore\n"
     )
     valid_object_errors = analyze_map(
         valid_object_map,
         "Object",
-        ["MicroWorld::FObjectStore"],
+        ["MicroWorld::Engine::FObjectStore"],
         [],
     )
     if valid_object_errors:
@@ -238,7 +238,7 @@ def run_self_test() -> int:
     outward_object_map = (
         f"{valid_object_map}"
         "libmicroworld_engine.a(Engine.o)\n"
-        "MicroWorld::FEngine\n"
+        "MicroWorld::Engine::TEngine\n"
     )
     outward_object_errors = analyze_map(outward_object_map, "Object", [], [])
     if not any(
@@ -253,7 +253,7 @@ def run_self_test() -> int:
     invalid_map = (
         "microworld.lib\n"
         "libmicroworld_transport.a(TransportManager.o)\n"
-        "MicroWorld::TTransportManager\n"
+        "MicroWorld::Transport::TTransportManager\n"
     )
     invalid_errors = analyze_map(invalid_map, "Core", [], [])
     if not any("unselected Transport" in error for error in invalid_errors):
@@ -276,7 +276,7 @@ def run_self_test() -> int:
     valid_core_transport_map = (
         "libmicroworld.a(TickFunction.o)\n"
         "libmicroworld_transport:Device.obj\n"
-        "MicroWorld::TTransportManager\n"
+        "MicroWorld::Transport::TTransportManager\n"
     )
     valid_core_transport_errors = analyze_map(valid_core_transport_map, "Core+Transport", [], [])
     if valid_core_transport_errors:
@@ -302,7 +302,7 @@ def run_self_test() -> int:
     outward_core_transport_map = (
         f"{valid_core_transport_map}"
         "libmicroworld_engine.a(World.o)\n"
-        "MicroWorld::UWorld\n"
+        "MicroWorld::Engine::UWorld\n"
     )
     outward_core_transport_errors = analyze_map(outward_core_transport_map, "Core+Transport", [], [])
     if not any(

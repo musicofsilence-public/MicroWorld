@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <type_traits>
 
-namespace MicroWorld
+namespace MicroWorld::Core
 {
 
 /** Observes a caller-owned contiguous sequence without extending its lifetime or allocating. */
@@ -61,4 +61,4 @@ private:
 	std::size_t ElementCount{0};
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Core

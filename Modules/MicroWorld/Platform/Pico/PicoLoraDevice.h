@@ -90,7 +90,7 @@ public:
 	 * @return Outcome of the acceptance attempt.
 	 */
 	::MicroWorld::Transport::ETransportResult TrySend(
-		const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override;
+		const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
 	 * Pumps a bounded number of UART bytes and transactionally delivers at most one frame.
@@ -105,7 +105,7 @@ public:
 	 */
 	::MicroWorld::Transport::ETransportResult TryReceive(
 		::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
-		TSpan<std::uint8_t> InDestination,
+		Core::TSpan<std::uint8_t> InDestination,
 		::MicroWorld::Transport::Device::FReceiveResult& OutResult) noexcept override;
 
 	/** Reports the delegated shared E32 payload capacity, excluding framing overhead. */

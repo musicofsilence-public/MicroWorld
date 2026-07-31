@@ -15,7 +15,11 @@
 namespace
 {
 
-using namespace MicroWorld;
+using namespace MicroWorld::Core;
+using namespace MicroWorld::Transport;
+using namespace MicroWorld::Transport::Address;
+using namespace MicroWorld::Transport::Device;
+using MicroWorld::FHostWifiDevice;
 
 /** Loopback prefix reused by every test's target address. */
 constexpr std::uint8_t OctetA = 127;

@@ -6,6 +6,6 @@ namespace MicroWorld
 {
 
 /** Yields the calling task for at least the given time (wraps vTaskDelay, rounded up to >= 1 tick). */
-void SleepMilliseconds(DurationMilliseconds InSleepDurationMilliseconds) noexcept;
+void SleepMilliseconds(Core::DurationMilliseconds InSleepDurationMilliseconds) noexcept;
 
 } // namespace MicroWorld

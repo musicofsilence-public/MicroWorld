@@ -7,7 +7,7 @@
 #include <type_traits>
 #include <utility>
 
-namespace MicroWorld
+namespace MicroWorld::Core
 {
 
 /** Owns a contiguous, insertion-ordered sequence whose capacity is fixed at compile time. */
@@ -156,4 +156,4 @@ private:
 	std::size_t ElementCount{0};
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Core

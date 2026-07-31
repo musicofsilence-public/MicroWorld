@@ -28,7 +28,7 @@ namespace
 	 * The signature must match FSleepFunction exactly, so the call counter cannot live on a member
 	 * and the runner exercises the same binding a real platform sleep would use.
 	 */
-	void CountingSleepFunction(MicroWorld::DurationMilliseconds) noexcept
+	void CountingSleepFunction(MicroWorld::Core::DurationMilliseconds) noexcept
 	{
 		++GPacingCallCount;
 	}
@@ -49,10 +49,10 @@ namespace
 	{
 	public:
 		/** Seeds the clock with the monotonic values the test expects BeginPlay and each Advance to see. */
-		explicit FScriptedClock(std::initializer_list<MicroWorld::TimePointMilliseconds> InValues) noexcept
+		explicit FScriptedClock(std::initializer_list<MicroWorld::Core::TimePointMilliseconds> InValues) noexcept
 		{
 			// Copying under the capacity check keeps an over-long list from writing past Sequence.
-			for (const MicroWorld::TimePointMilliseconds Value : InValues)
+			for (const MicroWorld::Core::TimePointMilliseconds Value : InValues)
 			{
 				if (ValueCount == MaximumScriptedValues)
 				{
@@ -68,9 +68,9 @@ namespace
 		 * Holding rather than extrapolating keeps every reading monotonic without inventing
 		 * timestamps a test never scripted; FApplication accepts a repeated timestamp.
 		 */
-		MicroWorld::TimePointMilliseconds Now() noexcept
+		MicroWorld::Core::TimePointMilliseconds Now() noexcept
 		{
-			const MicroWorld::TimePointMilliseconds ScriptedValue = Sequence[CallIndex];
+			const MicroWorld::Core::TimePointMilliseconds ScriptedValue = Sequence[CallIndex];
 			if (CallIndex + 1 < ValueCount)
 			{
 				++CallIndex;
@@ -83,7 +83,7 @@ namespace
 		static constexpr std::size_t MaximumScriptedValues = MaximumScriptedEntries;
 
 		/** Holds the scripted monotonic values the test selected. */
-		MicroWorld::TimePointMilliseconds Sequence[MaximumScriptedValues]{};
+		MicroWorld::Core::TimePointMilliseconds Sequence[MaximumScriptedValues]{};
 
 		/** Counts how many scripted values are populated, so unused tail slots are never read. */
 		std::size_t ValueCount{0};
@@ -106,10 +106,10 @@ namespace
 		void ConfigureStopOnFrame(int InFrameIndex) noexcept { StopOnFrameIndex = InFrameIndex; }
 
 		/** Selects the result BeginPlay returns, so a failed-begin run is reachable from a test. */
-		void ConfigureBeginPlayResult(MicroWorld::ERuntimeResult InResult) noexcept { ConfiguredBeginPlayResult = InResult; }
+		void ConfigureBeginPlayResult(MicroWorld::Core::ERuntimeResult InResult) noexcept { ConfiguredBeginPlayResult = InResult; }
 
 		/** Holds the Now timestamps Tick observed, so a test can assert the scripted clock reached frames. */
-		MicroWorld::TimePointMilliseconds ObservedTickTimestamps[MaximumObservedTickTimestamps]{};
+		MicroWorld::Core::TimePointMilliseconds ObservedTickTimestamps[MaximumObservedTickTimestamps]{};
 
 		/** Counts how many frames Tick accepted, so a test can size observed timestamps and pacing calls. */
 		int TickCount{0};
@@ -120,13 +120,13 @@ namespace
 		/** Counts EndPlay calls so a test can confirm the runner ends exactly once after a stopping frame. */
 		int EndPlayCount{0};
 
-		MicroWorld::ERuntimeResult BeginPlay(MicroWorld::TimePointMilliseconds) noexcept override
+		MicroWorld::Core::ERuntimeResult BeginPlay(MicroWorld::Core::TimePointMilliseconds) noexcept override
 		{
 			++BeginPlayCount;
 			return ConfiguredBeginPlayResult;
 		}
 
-		MicroWorld::ERuntimeResult Tick(MicroWorld::TimePointMilliseconds InNowMilliseconds) noexcept override
+		MicroWorld::Core::ERuntimeResult Tick(MicroWorld::Core::TimePointMilliseconds InNowMilliseconds) noexcept override
 		{
 			if (static_cast<std::size_t>(TickCount) < MaximumObservedTickTimestamps)
 			{
@@ -135,16 +135,16 @@ namespace
 			if (TickCount == StopOnFrameIndex)
 			{
 				++TickCount;
-				return MicroWorld::ERuntimeResult::CapacityExceeded;
+				return MicroWorld::Core::ERuntimeResult::CapacityExceeded;
 			}
 			++TickCount;
-			return MicroWorld::ERuntimeResult::Success;
+			return MicroWorld::Core::ERuntimeResult::Success;
 		}
 
-		MicroWorld::ERuntimeResult EndPlay() noexcept override
+		MicroWorld::Core::ERuntimeResult EndPlay() noexcept override
 		{
 			++EndPlayCount;
-			return MicroWorld::ERuntimeResult::Success;
+			return MicroWorld::Core::ERuntimeResult::Success;
 		}
 
 		MicroWorld::Engine::UWorld& GetWorld() noexcept override { return *reinterpret_cast<MicroWorld::Engine::UWorld*>(&WorldStorage); }
@@ -158,7 +158,7 @@ namespace
 		int StopOnFrameIndex{0};
 
 		/** Holds the result BeginPlay returns, seeded to Success so the happy-path runs need no setup. */
-		MicroWorld::ERuntimeResult ConfiguredBeginPlayResult{MicroWorld::ERuntimeResult::Success};
+		MicroWorld::Core::ERuntimeResult ConfiguredBeginPlayResult{MicroWorld::Core::ERuntimeResult::Success};
 
 		/** Raw storage for the world/store pointers the contract requires but these tests never use. */
 		std::uint64_t WorldStorage{0};
@@ -177,10 +177,10 @@ namespace
 		int BeginPlayFailedCount{0};
 
 	protected:
-		MicroWorld::ERuntimeResult OnConfigure(MicroWorld::Engine::IEngine& InEngine, MicroWorld::TimePointMilliseconds) noexcept override
+		MicroWorld::Core::ERuntimeResult OnConfigure(MicroWorld::Engine::IEngine& InEngine, MicroWorld::Core::TimePointMilliseconds) noexcept override
 		{
 			(void)InEngine;
-			return MicroWorld::ERuntimeResult::Success;
+			return MicroWorld::Core::ERuntimeResult::Success;
 		}
 
 		void OnBeginPlayFailed() noexcept override { ++BeginPlayFailedCount; }
@@ -201,10 +201,10 @@ MW_TEST_CASE(RunnerStopsOnFirstNonSuccessFrameAndReturnsIt)
 	FRunnerApplication Application{Engine};
 
 	// Act
-	const MicroWorld::ERuntimeResult StopResult = Application.Run(Clock, &CountingSleepFunction, 1);
+	const MicroWorld::Core::ERuntimeResult StopResult = Application.Run(Clock, &CountingSleepFunction, 1);
 
 	// Assert
-	MW_EXPECT_EQ(Test, MicroWorld::ERuntimeResult::CapacityExceeded, StopResult, "Runner should return the stopping frame's result");
+	MW_EXPECT_EQ(Test, MicroWorld::Core::ERuntimeResult::CapacityExceeded, StopResult, "Runner should return the stopping frame's result");
 }
 
 /**
@@ -235,14 +235,14 @@ MW_TEST_CASE(RunnerDoesNotEndPlayAfterFailedBeginPlay)
 	// Arrange
 	FScriptedClock Clock{10, 20, 30};
 	FScriptedEngine Engine;
-	Engine.ConfigureBeginPlayResult(MicroWorld::ERuntimeResult::CapacityExceeded);
+	Engine.ConfigureBeginPlayResult(MicroWorld::Core::ERuntimeResult::CapacityExceeded);
 	FRunnerApplication Application{Engine};
 
 	// Act
-	const MicroWorld::ERuntimeResult StopResult = Application.Run(Clock, &CountingSleepFunction, 1);
+	const MicroWorld::Core::ERuntimeResult StopResult = Application.Run(Clock, &CountingSleepFunction, 1);
 
 	// Assert
-	MW_EXPECT_EQ(Test, MicroWorld::ERuntimeResult::CapacityExceeded, StopResult, "Runner should return the begin failure result");
+	MW_EXPECT_EQ(Test, MicroWorld::Core::ERuntimeResult::CapacityExceeded, StopResult, "Runner should return the begin failure result");
 	MW_EXPECT_EQ(Test, 0, Engine.EndPlayCount, "Runner must not invoke EndPlay after a failed begin");
 }
 
@@ -282,8 +282,8 @@ MW_TEST_CASE(RunnerFeedsClockValuesIntoTick)
 	(void)Application.Run(Clock, &CountingSleepFunction, 1);
 
 	// Assert
-	const bool bFirstFrameSawSecondClockValue = Engine.ObservedTickTimestamps[0] == MicroWorld::TimePointMilliseconds{20};
-	const bool bSecondFrameSawThirdClockValue = Engine.ObservedTickTimestamps[1] == MicroWorld::TimePointMilliseconds{30};
+	const bool bFirstFrameSawSecondClockValue = Engine.ObservedTickTimestamps[0] == MicroWorld::Core::TimePointMilliseconds{20};
+	const bool bSecondFrameSawThirdClockValue = Engine.ObservedTickTimestamps[1] == MicroWorld::Core::TimePointMilliseconds{30};
 	MW_EXPECT_TRUE(Test, bFirstFrameSawSecondClockValue, "First Tick should see the second clock value (begin consumed the first)");
 	MW_EXPECT_TRUE(Test, bSecondFrameSawThirdClockValue, "Second Tick should see the third clock value");
 }

@@ -12,10 +12,10 @@
 namespace
 {
 
-using MicroWorld::DurationMilliseconds;
-using MicroWorld::ERuntimeResult;
-using MicroWorld::FTickConfiguration;
-using MicroWorld::FTickContext;
+using MicroWorld::Core::DurationMilliseconds;
+using MicroWorld::Core::ERuntimeResult;
+using MicroWorld::Core::FTickConfiguration;
+using MicroWorld::Core::FTickContext;
 using MicroWorld::Engine::AActor;
 using MicroWorld::Engine::EEngineResult;
 using MicroWorld::Engine::EObjectResult;
@@ -36,10 +36,10 @@ using MicroWorld::Tests::TEngineEnvironment;
 constexpr FTickConfiguration OrderingTickConfiguration{true, true, DurationMilliseconds{0}};
 
 /** Canonical monotonic baseline every BeginPlay call uses as its starting world time. */
-constexpr MicroWorld::TimePointMilliseconds BaselineTimeMilliseconds{0};
+constexpr MicroWorld::Core::TimePointMilliseconds BaselineTimeMilliseconds{0};
 
 /** First advance time the ordering and interval tests use after the baseline begin. */
-constexpr MicroWorld::TimePointMilliseconds FirstTickTimeMilliseconds{100};
+constexpr MicroWorld::Core::TimePointMilliseconds FirstTickTimeMilliseconds{100};
 
 /** Fixed capacity of the GC worklist used by the lifecycle-mutation guard test. */
 constexpr std::uint32_t CollectorWorklistCapacity = 8;

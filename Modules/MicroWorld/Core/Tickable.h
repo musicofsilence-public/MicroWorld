@@ -2,7 +2,7 @@
 
 #include <MicroWorld/Core/TickFunction.h>
 
-namespace MicroWorld
+namespace MicroWorld::Core
 {
 
 /** Adds one primary tick to a runtime type without defining its behavior. */
@@ -54,4 +54,4 @@ private:
 	FTickFunction PrimaryTick;
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Core

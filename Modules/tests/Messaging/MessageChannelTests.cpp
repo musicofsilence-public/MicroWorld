@@ -23,10 +23,10 @@
 
 namespace
 {
-using MicroWorld::DurationMilliseconds;
-using MicroWorld::ERuntimeResult;
-using MicroWorld::TimePointMilliseconds;
-using MicroWorld::TSpan;
+using MicroWorld::Core::DurationMilliseconds;
+using MicroWorld::Core::ERuntimeResult;
+using MicroWorld::Core::TimePointMilliseconds;
+using MicroWorld::Core::TSpan;
 using MicroWorld::Engine::EEngineResult;
 using MicroWorld::Engine::FDefaultEngineTraits;
 using MicroWorld::Engine::FGarbageCollectionBudget;

@@ -9,7 +9,7 @@ namespace
 {
 
 using MicroWorld::FHostTimeSource;
-using MicroWorld::TimePointMilliseconds;
+using MicroWorld::Core::TimePointMilliseconds;
 
 /** Iteration count large enough that two Now() readings are reliably separated on the host steady clock. */
 constexpr std::uint64_t MonotonicProbeIterations = 100000;

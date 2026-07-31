@@ -3,7 +3,7 @@
 #include <cstdarg>
 #include <cstdio>
 
-namespace MicroWorld
+namespace MicroWorld::Core
 {
 
 namespace
@@ -46,4 +46,4 @@ void DispatchLogFormatted(ELogLevel InLevel, const char* InCategory, const char*
 	WriteRecord(InLevel, InCategory, Message);
 }
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Core

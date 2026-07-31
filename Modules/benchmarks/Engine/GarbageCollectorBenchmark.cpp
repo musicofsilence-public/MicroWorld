@@ -164,7 +164,7 @@ bool BuildRepresentativeGraph(
 /** Measures one full or incremental cycle over an equivalent fixed graph. */
 FBenchmarkObservation RunCollection(const bool bIncremental) noexcept
 {
-	using namespace MicroWorld;
+	using namespace MicroWorld::Core;
 	using namespace MicroWorld::Engine;
 
 	FBenchmarkLifetimeState Lifetime{};

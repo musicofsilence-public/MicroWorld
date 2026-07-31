@@ -7,7 +7,7 @@
 #include <type_traits>
 #include <utility>
 
-namespace MicroWorld
+namespace MicroWorld::Core
 {
 
 template<typename ValueType>
@@ -155,4 +155,4 @@ TUniquePointerResult<ValueType> MakeUnique(IMemoryResource& InResource, Construc
 	return SuccessfulResult;
 }
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Core

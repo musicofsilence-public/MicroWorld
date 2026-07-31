@@ -25,11 +25,11 @@
 
 namespace
 {
-using MicroWorld::ERuntimeResult;
-using MicroWorld::FDelegateHandle;
-using MicroWorld::IPlaySystem;
-using MicroWorld::TimePointMilliseconds;
-using MicroWorld::TSpan;
+using MicroWorld::Core::ERuntimeResult;
+using MicroWorld::Core::FDelegateHandle;
+using MicroWorld::Core::IPlaySystem;
+using MicroWorld::Core::TimePointMilliseconds;
+using MicroWorld::Core::TSpan;
 using MicroWorld::Engine::AActor;
 using MicroWorld::Engine::EEngineResult;
 using MicroWorld::Engine::EObjectResult;

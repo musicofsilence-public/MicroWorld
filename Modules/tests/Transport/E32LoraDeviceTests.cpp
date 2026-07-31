@@ -13,9 +13,9 @@
 namespace
 {
 
-using MicroWorld::EUartByteStreamResult;
-using MicroWorld::IUartByteStream;
-using MicroWorld::TSpan;
+using MicroWorld::Core::EUartByteStreamResult;
+using MicroWorld::Core::IUartByteStream;
+using MicroWorld::Core::TSpan;
 using MicroWorld::Transport::E32MaxPayloadBytes;
 using MicroWorld::Transport::ETransportResult;
 using MicroWorld::Transport::FE32LoraDevice;

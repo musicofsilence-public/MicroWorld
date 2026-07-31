@@ -13,21 +13,21 @@ namespace
 {
 
 /** The sensor samples every 100 ms; the demo's tick times straddle this cadence. */
-constexpr MicroWorld::DurationMilliseconds SensorCadenceMilliseconds = 100;
+constexpr MicroWorld::Core::DurationMilliseconds SensorCadenceMilliseconds = 100;
 
 /** Samples a host value at its own 100 ms cadence in the managed lifecycle example. */
 class FSensorComponent final : public MicroWorld::Engine::UActorComponent
 {
 public:
 	/** Selects a 100 ms schedule so the trace includes due and not-due updates. */
-	FSensorComponent() noexcept : UActorComponent(MicroWorld::FTickConfiguration::EnabledEvery(SensorCadenceMilliseconds)) {}
+	FSensorComponent() noexcept : UActorComponent(MicroWorld::Core::FTickConfiguration::EnabledEvery(SensorCadenceMilliseconds)) {}
 
 protected:
 	/** Marks Component startup so its order relative to the Actor is visible. */
 	void BeginPlay() noexcept override { std::printf("sensor begin\n"); }
 
 	/** Prints canonical time and per-Component delta to demonstrate schedule ownership. */
-	void TickComponent(const MicroWorld::FTickContext& InContext) noexcept override
+	void TickComponent(const MicroWorld::Core::FTickContext& InContext) noexcept override
 	{
 		std::printf(
 			"sensor tick now=%llu delta=%u\n",
@@ -51,7 +51,7 @@ protected:
 	void BeginPlay() noexcept override { std::printf("actor begin (primary tick disabled)\n"); }
 
 	/** Would expose an incorrect Actor execution if disabled scheduling regressed. */
-	void Tick(const MicroWorld::FTickContext&) noexcept override { std::printf("actor tick\n"); }
+	void Tick(const MicroWorld::Core::FTickContext&) noexcept override { std::printf("actor tick\n"); }
 
 	/** Marks Actor shutdown before the Component end hook. */
 	void EndPlay() noexcept override { std::printf("actor end\n"); }
@@ -79,7 +79,7 @@ struct FDeviceHostTraits : MicroWorld::Engine::FDefaultEngineTraits
 /** Builds a managed composition through TEngine and prints deterministic lifecycle evidence. */
 int main()
 {
-	using namespace MicroWorld;
+	using namespace MicroWorld::Core;
 	using namespace MicroWorld::Engine;
 
 	// TEngine owns every subsystem — class registry, object store, garbage collector, world

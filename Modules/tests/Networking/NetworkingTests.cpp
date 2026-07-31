@@ -110,7 +110,7 @@ namespace
 
 		/** Records each outbound transport attempt and accepts it without a real network. */
 		MicroWorld::Transport::ETransportResult TrySend(
-			const MicroWorld::Transport::Address::FDeviceAddress&, MicroWorld::TSpan<const std::uint8_t>) noexcept override
+			const MicroWorld::Transport::Address::FDeviceAddress&, MicroWorld::Core::TSpan<const std::uint8_t>) noexcept override
 		{
 			++Record.SendCount;
 			if (Record.FirstSendOrder == 0)
@@ -123,7 +123,7 @@ namespace
 		/** Records each inbound transport attempt and reports the deterministic empty state. */
 		MicroWorld::Transport::ETransportResult TryReceive(
 			MicroWorld::Transport::Address::FDeviceAddress&,
-			MicroWorld::TSpan<std::uint8_t>,
+			MicroWorld::Core::TSpan<std::uint8_t>,
 			MicroWorld::Transport::Device::FReceiveResult&) noexcept override
 		{
 			++Record.ReceiveCount;
@@ -353,7 +353,7 @@ MW_TEST_CASE(Networking_CoreLifecyclePumpsDevicesInForwardAndReverseOrder)
 
 	const MicroWorld::Networking::FDeviceHandle FirstHandle = System.AddDevice(FirstDevice, MicroWorld::Transport::ENetworkMode::Client, Config);
 	const MicroWorld::Networking::FDeviceHandle SecondHandle = System.AddDevice(SecondDevice, MicroWorld::Transport::ENetworkMode::Client, Config);
-	MicroWorld::IPlaySystem& Lifecycle = System;
+	MicroWorld::Core::IPlaySystem& Lifecycle = System;
 
 	// Act: one BeginPlay plus one PreAdvance/PostAdvance cycle pumps every recording device.
 	Lifecycle.BeginPlay(0);
@@ -450,7 +450,7 @@ MW_TEST_CASE(Networking_PreBeginPlayPumpsLeaveQueuedLocalRouterMessageUndelivere
 		MicroWorld::Messaging::LocalChannelId,
 		SampleMessageTypeId,
 		MicroWorld::Messaging::BroadcastActorId,
-		MicroWorld::TSpan<const std::uint8_t>(Payload, 1));
+		MicroWorld::Core::TSpan<const std::uint8_t>(Payload, 1));
 
 	// Act: pump before BeginPlay and confirm the queued local message has still not been dispatched.
 	System.PreAdvance(10);
@@ -492,7 +492,7 @@ MW_TEST_CASE(Networking_EndPlayStopsClientBeforeFuturePostAdvance)
 	MicroWorld::Transport::FTransportHostConfig Config = MakeConfig();
 	Config.ServerAddress = MicroWorld::Transport::Address::MakeLoopbackAddress(0);
 	const MicroWorld::Networking::FDeviceHandle DeviceHandle = System.AddDevice(Device, MicroWorld::Transport::ENetworkMode::Client, Config);
-	MicroWorld::IPlaySystem& Lifecycle = System;
+	MicroWorld::Core::IPlaySystem& Lifecycle = System;
 
 	// Act: BeginPlay and one PostAdvance flush the initial connection hello.
 	Lifecycle.BeginPlay(0);
@@ -551,7 +551,7 @@ MW_TEST_CASE(Networking_PreAdvanceAndPostAdvancePumpRoutedMessageInOrder)
 	// Act: broadcast from the client, then advance to observe send-before-delivery ordering.
 	const std::uint8_t Payload[1] = {CrossSystemPayloadByte};
 	const MicroWorld::Messaging::EMessageResult SendResult = ClientSystem.GetRouter().BroadcastMessage(
-		SampleChannelId, SampleMessageTypeId, SampleActorId, MicroWorld::TSpan<const std::uint8_t>(Payload, 1));
+		SampleChannelId, SampleMessageTypeId, SampleActorId, MicroWorld::Core::TSpan<const std::uint8_t>(Payload, 1));
 	ClientSystem.PreAdvance(30);
 	ClientSystem.PostAdvance(30);
 	const int DeliveriesAfterClientPostAdvance = DeliveryCount;

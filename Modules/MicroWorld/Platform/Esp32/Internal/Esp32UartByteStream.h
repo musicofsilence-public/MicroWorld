@@ -11,7 +11,7 @@ namespace MicroWorld
  * Plain-integer configuration for one ESP-IDF UART byte stream.
  *
  * Platform composition owns the selected UART exclusively and supplies all pin and baud policy before opening the
- * stream; this Detail type stays free of ESP-IDF enum types so RadioE32 can depend only on Core's `IUartByteStream` interface.
+ * stream; this Detail type stays free of ESP-IDF enum types so RadioE32 can depend only on Core's `Core::IUartByteStream` interface.
  */
 struct FEsp32UartByteStreamConfig
 {
@@ -34,7 +34,7 @@ struct FEsp32UartByteStreamConfig
  * This adapter owns one configured UART installation for its lifetime while callers retain all device configuration
  * policy. It is a platform Detail type for compatibility facades, not a supported direct-composition API.
  */
-class FEsp32UartByteStream final : public IUartByteStream
+class FEsp32UartByteStream final : public Core::IUartByteStream
 {
 public:
 	/** Creates an inert stream that owns no UART until one successful Open call. */
@@ -73,10 +73,10 @@ public:
 	bool IsOpen() const noexcept;
 
 	/** Attempts one non-blocking UART write and maps sent, blocked, and failed outcomes to the Core contract. */
-	EUartByteStreamResult TryWriteByte(std::uint8_t InByte) noexcept override;
+	Core::EUartByteStreamResult TryWriteByte(std::uint8_t InByte) noexcept override;
 
 	/** Attempts one non-blocking UART read and changes OutByte only after the ESP-IDF read succeeds. */
-	EUartByteStreamResult TryReadByte(std::uint8_t& OutByte) noexcept override;
+	Core::EUartByteStreamResult TryReadByte(std::uint8_t& OutByte) noexcept override;
 
 private:
 	/** Stores the open UART identity as a plain integer until private source code converts it for ESP-IDF calls. */

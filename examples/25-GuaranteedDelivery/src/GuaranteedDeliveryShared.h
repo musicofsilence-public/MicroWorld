@@ -49,7 +49,7 @@ inline constexpr std::uint8_t FirstCounterValue = 1;
 inline constexpr std::uint8_t LastCounterValue = 30;
 
 /** How often the client emits the next counter value on both channels. */
-inline constexpr MicroWorld::DurationMilliseconds CounterIntervalMilliseconds = 500;
+inline constexpr MicroWorld::Core::DurationMilliseconds CounterIntervalMilliseconds = 500;
 
 /** The client drops every third outgoing packet through this injector (Task 5.1). */
 inline constexpr std::uint32_t DropEveryNthSend = 3;

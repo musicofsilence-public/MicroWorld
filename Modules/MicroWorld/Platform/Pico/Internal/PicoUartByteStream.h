@@ -35,7 +35,7 @@ struct FPicoUartConfig
  * The stream owns one validated UART open/close lifetime while borrowing the SDK binding; it is a platform Detail
  * extension interface for compatibility facades, not a universal hardware abstraction or supported direct-composition API.
  */
-class FPicoUartByteStream final : public IUartByteStream
+class FPicoUartByteStream final : public Core::IUartByteStream
 {
 public:
 	/** Creates an inert stream that borrows the process-lifetime Pico SDK binding. */
@@ -77,10 +77,10 @@ public:
 	bool IsOpen() const noexcept;
 
 	/** Attempts one byte write, returning Unavailable when the UART has no non-blocking transmit capacity. */
-	EUartByteStreamResult TryWriteByte(std::uint8_t InByte) noexcept override;
+	Core::EUartByteStreamResult TryWriteByte(std::uint8_t InByte) noexcept override;
 
 	/** Attempts one byte read and changes OutByte only after the borrowed platform binding supplies a byte. */
-	EUartByteStreamResult TryReadByte(std::uint8_t& OutByte) noexcept override;
+	Core::EUartByteStreamResult TryReadByte(std::uint8_t& OutByte) noexcept override;
 
 private:
 	/** Reports whether a GPIO can carry TX for the selected RP2040 UART. */

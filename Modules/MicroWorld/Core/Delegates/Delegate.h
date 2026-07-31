@@ -8,7 +8,7 @@
 #include <type_traits>
 #include <utility>
 
-namespace MicroWorld
+namespace MicroWorld::Core
 {
 
 /** Reports every bounded delegate operation without borrowing unrelated lifecycle errors. */
@@ -523,4 +523,4 @@ private:
 	bool bBroadcastActive{false};
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Core

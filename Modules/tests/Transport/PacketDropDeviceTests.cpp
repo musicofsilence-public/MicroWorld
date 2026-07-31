@@ -14,7 +14,7 @@
 namespace
 {
 
-using MicroWorld::TSpan;
+using MicroWorld::Core::TSpan;
 using MicroWorld::Transport::ETransportResult;
 using MicroWorld::Transport::FPacketDropDevice;
 using MicroWorld::Transport::THostLoopback;

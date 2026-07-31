@@ -18,7 +18,7 @@ using MicroWorld::FPicoE32LoraConfig;
 using MicroWorld::FPicoLoraDevice;
 using MicroWorld::IPicoE32LoraPlatform;
 using MicroWorld::IPicoUartPlatform;
-using MicroWorld::TSpan;
+using MicroWorld::Core::TSpan;
 using MicroWorld::Transport::E32MaxPayloadBytes;
 using MicroWorld::Transport::ETransportResult;
 using MicroWorld::Transport::MakeLoraAddress;

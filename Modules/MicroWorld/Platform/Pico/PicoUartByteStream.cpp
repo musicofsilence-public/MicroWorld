@@ -52,36 +52,36 @@ bool FPicoUartByteStream::IsOpen() const noexcept
 	return bOpen;
 }
 
-EUartByteStreamResult FPicoUartByteStream::TryWriteByte(const std::uint8_t InByte) noexcept
+Core::EUartByteStreamResult FPicoUartByteStream::TryWriteByte(const std::uint8_t InByte) noexcept
 {
 	if (!bOpen)
 	{
-		return EUartByteStreamResult::Error;
+		return Core::EUartByteStreamResult::Error;
 	}
 	if (!Platform.IsUartWritable(UartIndexValue))
 	{
-		return EUartByteStreamResult::Unavailable;
+		return Core::EUartByteStreamResult::Unavailable;
 	}
 
 	Platform.WriteUartByte(UartIndexValue, InByte);
-	return EUartByteStreamResult::Success;
+	return Core::EUartByteStreamResult::Success;
 }
 
-EUartByteStreamResult FPicoUartByteStream::TryReadByte(std::uint8_t& OutByte) noexcept
+Core::EUartByteStreamResult FPicoUartByteStream::TryReadByte(std::uint8_t& OutByte) noexcept
 {
 	if (!bOpen)
 	{
-		return EUartByteStreamResult::Error;
+		return Core::EUartByteStreamResult::Error;
 	}
 
 	std::uint8_t CandidateByte = 0;
 	if (!Platform.TryReadUartByte(UartIndexValue, CandidateByte))
 	{
-		return EUartByteStreamResult::Unavailable;
+		return Core::EUartByteStreamResult::Unavailable;
 	}
 
 	OutByte = CandidateByte;
-	return EUartByteStreamResult::Success;
+	return Core::EUartByteStreamResult::Success;
 }
 
 bool FPicoUartByteStream::IsValidTransmitPin(const std::uint8_t InUartIndex, const unsigned int InPin) noexcept

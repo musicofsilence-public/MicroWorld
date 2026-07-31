@@ -12,7 +12,7 @@
 
 #include <cstdint>
 
-using namespace MicroWorld;
+using namespace MicroWorld::Core;
 using namespace MicroWorld::Transport;
 using namespace Ex19;
 

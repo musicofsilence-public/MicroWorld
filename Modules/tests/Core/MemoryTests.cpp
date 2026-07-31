@@ -16,23 +16,23 @@
 namespace
 {
 
-using MicroWorld::EMemoryResult;
-using MicroWorld::ERuntimeResult;
-using MicroWorld::ESharedPointerMode;
-using MicroWorld::ESharedPointerResult;
-using MicroWorld::FMemoryBlock;
-using MicroWorld::IMemoryResource;
-using MicroWorld::MakeShared;
-using MicroWorld::MakeUnique;
-using MicroWorld::TFixedArena;
-using MicroWorld::TSharedPointerResult;
-using MicroWorld::TSharedPtr;
-using MicroWorld::TSpan;
-using MicroWorld::TStaticVector;
-using MicroWorld::TUniquePointerResult;
-using MicroWorld::TUniquePtr;
-using MicroWorld::TWeakPointerResult;
-using MicroWorld::TWeakPtr;
+using MicroWorld::Core::EMemoryResult;
+using MicroWorld::Core::ERuntimeResult;
+using MicroWorld::Core::ESharedPointerMode;
+using MicroWorld::Core::ESharedPointerResult;
+using MicroWorld::Core::FMemoryBlock;
+using MicroWorld::Core::IMemoryResource;
+using MicroWorld::Core::MakeShared;
+using MicroWorld::Core::MakeUnique;
+using MicroWorld::Core::TFixedArena;
+using MicroWorld::Core::TSharedPointerResult;
+using MicroWorld::Core::TSharedPtr;
+using MicroWorld::Core::TSpan;
+using MicroWorld::Core::TStaticVector;
+using MicroWorld::Core::TUniquePointerResult;
+using MicroWorld::Core::TUniquePtr;
+using MicroWorld::Core::TWeakPointerResult;
+using MicroWorld::Core::TWeakPtr;
 
 /** Records value construction and destruction without sharing state between tests. */
 struct FLifetimeState final

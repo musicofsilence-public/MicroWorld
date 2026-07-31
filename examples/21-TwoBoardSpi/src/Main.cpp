@@ -120,7 +120,7 @@ void RunMaster() noexcept
 			std::uint8_t Payload[VolleyPayloadBytes];
 			WriteVolleyPayload(Payload, MasterNodeId, NextCounter);
 			const MicroWorld::Transport::ETransportResult TxResult =
-				Device.TrySend(MicroWorld::MakeSpiAddress(SlaveNodeId), MicroWorld::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
+				Device.TrySend(MicroWorld::MakeSpiAddress(SlaveNodeId), MicroWorld::Core::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
 			MW_LOG(Log, "ex21", "tx n=%u result=%s", static_cast<unsigned>(NextCounter), ToText(TxResult));
 			if (TxResult == MicroWorld::Transport::ETransportResult::Success)
 			{
@@ -135,7 +135,7 @@ void RunMaster() noexcept
 			MicroWorld::Transport::Address::FDeviceAddress From{};
 			MicroWorld::Transport::Device::FReceiveResult Received{};
 			const MicroWorld::Transport::ETransportResult RxResult =
-				Device.TryReceive(From, MicroWorld::TSpan<std::uint8_t>(RxBuffer, sizeof(RxBuffer)), Received);
+				Device.TryReceive(From, MicroWorld::Core::TSpan<std::uint8_t>(RxBuffer, sizeof(RxBuffer)), Received);
 			if (RxResult == MicroWorld::Transport::ETransportResult::Success && Received.BytesReceived == VolleyPayloadBytes)
 			{
 				const std::uint32_t Counter = ReadVolleyCounter(RxBuffer);
@@ -184,7 +184,7 @@ void RunSlave() noexcept
 		MicroWorld::Transport::Address::FDeviceAddress From{};
 		MicroWorld::Transport::Device::FReceiveResult Received{};
 		const MicroWorld::Transport::ETransportResult RxResult =
-			Device.TryReceive(From, MicroWorld::TSpan<std::uint8_t>(RxBuffer, sizeof(RxBuffer)), Received);
+			Device.TryReceive(From, MicroWorld::Core::TSpan<std::uint8_t>(RxBuffer, sizeof(RxBuffer)), Received);
 		if (RxResult == MicroWorld::Transport::ETransportResult::Success && Received.BytesReceived == VolleyPayloadBytes)
 		{
 			const std::uint32_t Counter = ReadVolleyCounter(RxBuffer);
@@ -195,7 +195,7 @@ void RunSlave() noexcept
 			std::uint8_t Payload[VolleyPayloadBytes];
 			WriteVolleyPayload(Payload, SlaveNodeId, Counter + 1);
 			const MicroWorld::Transport::ETransportResult TxResult =
-				Device.TrySend(MicroWorld::MakeSpiAddress(MasterNodeId), MicroWorld::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
+				Device.TrySend(MicroWorld::MakeSpiAddress(MasterNodeId), MicroWorld::Core::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
 			MW_LOG(Log, "ex21", "tx n=%u result=%s", static_cast<unsigned>(Counter + 1), ToText(TxResult));
 		}
 
@@ -208,7 +208,7 @@ void RunSlave() noexcept
 /** Composition root: installs the output device, then ping-pongs a counter with the peer board over one wired SPI bus. */
 extern "C" void app_main(void)
 {
-	MicroWorld::SetOutputDevice(&MicroWorld::WriteEsp32LogRecord);
+	MicroWorld::Core::SetOutputDevice(&MicroWorld::WriteEsp32LogRecord);
 #if MICROWORLD_EXAMPLE_SPI_MASTER
 	RunMaster();
 #else
