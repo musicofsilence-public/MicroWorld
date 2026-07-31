@@ -8,7 +8,7 @@
 #include <cstdint>
 #include <utility>
 
-namespace MicroWorld
+namespace MicroWorld::Messaging
 {
 
 /** Which peers a wired channel sends to (roadmap D4): a client's server, or every active peer. */
@@ -177,4 +177,4 @@ private:
 	std::uint32_t DroppedInbound{0};
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Messaging

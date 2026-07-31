@@ -8,7 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace MicroWorld
+namespace MicroWorld::Messaging
 {
 
 /** Encoded byte count of the reliable wrapper's own header prefix: one Kind byte plus a little-endian u16 sequence. */
@@ -440,4 +440,4 @@ private:
 	std::uint32_t DuplicateDroppedTotal{0};
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Messaging

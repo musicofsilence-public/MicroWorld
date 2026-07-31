@@ -11,20 +11,20 @@
 namespace
 {
 using MicroWorld::DurationMilliseconds;
-using MicroWorld::EMessageResult;
-using MicroWorld::EReliablePacketKind;
-using MicroWorld::FMessageChannelId;
-using MicroWorld::FReliableChannelConfig;
 using MicroWorld::HighByteShift;
-using MicroWorld::IEncodedMessageSink;
-using MicroWorld::IMessageChannel;
-using MicroWorld::LocalChannelId;
 using MicroWorld::LowByteMask;
-using MicroWorld::ReliableHeaderBytes;
-using MicroWorld::ReliableSequenceFieldByteIndex;
 using MicroWorld::TimePointMilliseconds;
-using MicroWorld::TReliableChannel;
 using MicroWorld::TSpan;
+using MicroWorld::Messaging::EMessageResult;
+using MicroWorld::Messaging::EReliablePacketKind;
+using MicroWorld::Messaging::FMessageChannelId;
+using MicroWorld::Messaging::FReliableChannelConfig;
+using MicroWorld::Messaging::IEncodedMessageSink;
+using MicroWorld::Messaging::IMessageChannel;
+using MicroWorld::Messaging::LocalChannelId;
+using MicroWorld::Messaging::ReliableHeaderBytes;
+using MicroWorld::Messaging::ReliableSequenceFieldByteIndex;
+using MicroWorld::Messaging::TReliableChannel;
 
 /** Fixed channel id FRecordingInnerChannel reports, distinct from LocalChannelId. */
 constexpr FMessageChannelId InnerChannelId = 7;
@@ -69,7 +69,7 @@ constexpr std::uint16_t SequenceThirtyThree = 33;
 constexpr std::uint16_t MaxSequenceValue = 0xFFFFu;
 
 /** Sequence value the allocator must reuse after the field wraps past its maximum, since 0 is reserved as "never sent". */
-constexpr std::uint16_t FirstSequenceAfterWrap = MicroWorld::FirstOutgoingSequence;
+constexpr std::uint16_t FirstSequenceAfterWrap = MicroWorld::Messaging::FirstOutgoingSequence;
 
 /** Wall-clock baseline the retry cases establish before advancing toward the retry interval. */
 constexpr TimePointMilliseconds BaselineTime = 1000;

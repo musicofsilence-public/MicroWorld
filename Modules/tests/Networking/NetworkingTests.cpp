@@ -41,13 +41,13 @@ namespace
 	};
 
 	/** Message type id both router tests register and broadcast so the handler and payload stay paired. */
-	constexpr MicroWorld::FMessageTypeId SampleMessageTypeId{1};
+	constexpr MicroWorld::Messaging::FMessageTypeId SampleMessageTypeId{1};
 
 	/** Routed actor id the cross-system broadcast targets so sender and receiver address one logical actor. */
-	constexpr MicroWorld::FMessageActorId SampleActorId{1};
+	constexpr MicroWorld::Messaging::FMessageActorId SampleActorId{1};
 
 	/** Channel id the cross-system test composes and broadcasts on so the routed message stays on one channel. */
-	constexpr MicroWorld::FMessageChannelId SampleChannelId{1};
+	constexpr MicroWorld::Messaging::FMessageChannelId SampleChannelId{1};
 
 	/** Single-byte payload the local-router test broadcasts so a delivery is observable without transport framing. */
 	constexpr std::uint8_t LocalRouterMessagePayloadByte{0x31};
@@ -195,9 +195,9 @@ MW_TEST_CASE(Networking_AddChannelAcceptsBestEffortAndGuaranteedOnOneDevice)
 
 	// Act
 	const MicroWorld::Networking::FChannelHandle BestEffort =
-		System.AddChannel(Device, MicroWorld::FMessageChannelId{1}, MicroWorld::Networking::EChannelReliability::BestEffort);
+		System.AddChannel(Device, MicroWorld::Messaging::FMessageChannelId{1}, MicroWorld::Networking::EChannelReliability::BestEffort);
 	const MicroWorld::Networking::FChannelHandle Guaranteed =
-		System.AddChannel(Device, MicroWorld::FMessageChannelId{2}, MicroWorld::Networking::EChannelReliability::Guaranteed);
+		System.AddChannel(Device, MicroWorld::Messaging::FMessageChannelId{2}, MicroWorld::Networking::EChannelReliability::Guaranteed);
 	const bool bDeviceValid = Device.IsValid();
 	const bool bBestEffortValid = BestEffort.IsValid();
 	const bool bGuaranteedValid = Guaranteed.IsValid();
@@ -223,9 +223,9 @@ MW_TEST_CASE(Networking_AddChannelRejectsForgedDeviceGeneration)
 
 	// Act
 	const MicroWorld::Networking::FChannelHandle RejectedChannel =
-		System.AddChannel(StaleDevice, MicroWorld::FMessageChannelId{1}, MicroWorld::Networking::EChannelReliability::BestEffort);
+		System.AddChannel(StaleDevice, MicroWorld::Messaging::FMessageChannelId{1}, MicroWorld::Networking::EChannelReliability::BestEffort);
 	const MicroWorld::Networking::FChannelHandle CurrentChannel =
-		System.AddChannel(Device, MicroWorld::FMessageChannelId{1}, MicroWorld::Networking::EChannelReliability::BestEffort);
+		System.AddChannel(Device, MicroWorld::Messaging::FMessageChannelId{1}, MicroWorld::Networking::EChannelReliability::BestEffort);
 	const bool bDeviceValid = Device.IsValid();
 	const bool bRejectedChannelValid = RejectedChannel.IsValid();
 	const bool bCurrentChannelValid = CurrentChannel.IsValid();
@@ -272,9 +272,9 @@ MW_TEST_CASE(Networking_AddChannelRejectsCapacityExhaustion)
 
 	// Act
 	const MicroWorld::Networking::FChannelHandle AcceptedChannel =
-		System.AddChannel(Device, MicroWorld::FMessageChannelId{1}, MicroWorld::Networking::EChannelReliability::BestEffort);
+		System.AddChannel(Device, MicroWorld::Messaging::FMessageChannelId{1}, MicroWorld::Networking::EChannelReliability::BestEffort);
 	const MicroWorld::Networking::FChannelHandle RejectedChannel =
-		System.AddChannel(Device, MicroWorld::FMessageChannelId{2}, MicroWorld::Networking::EChannelReliability::BestEffort);
+		System.AddChannel(Device, MicroWorld::Messaging::FMessageChannelId{2}, MicroWorld::Networking::EChannelReliability::BestEffort);
 	const bool bDeviceValid = Device.IsValid();
 	const bool bAcceptedChannelValid = AcceptedChannel.IsValid();
 	const bool bRejectedChannelValid = RejectedChannel.IsValid();
@@ -298,7 +298,7 @@ MW_TEST_CASE(Networking_BeginPlayFinalizesCompositionAndDefersHostStart)
 	ClientConfig.ServerAddress = MicroWorld::MakeLoopbackAddress(1);
 	const MicroWorld::Networking::FDeviceHandle Device = System.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::Client, ClientConfig);
 	const MicroWorld::Networking::FChannelHandle InitialChannel =
-		System.AddChannel(Device, MicroWorld::FMessageChannelId{1}, MicroWorld::Networking::EChannelReliability::BestEffort);
+		System.AddChannel(Device, MicroWorld::Messaging::FMessageChannelId{1}, MicroWorld::Networking::EChannelReliability::BestEffort);
 
 	// Act: pump before BeginPlay and confirm no packet has crossed the transport yet.
 	System.PreAdvance(10);
@@ -308,7 +308,7 @@ MW_TEST_CASE(Networking_BeginPlayFinalizesCompositionAndDefersHostStart)
 	// Act: close composition with BeginPlay, attempt late composition, and pump once more.
 	System.BeginPlay(20);
 	const MicroWorld::Networking::FChannelHandle LateChannel =
-		System.AddChannel(Device, MicroWorld::FMessageChannelId{2}, MicroWorld::Networking::EChannelReliability::BestEffort);
+		System.AddChannel(Device, MicroWorld::Messaging::FMessageChannelId{2}, MicroWorld::Networking::EChannelReliability::BestEffort);
 	const MicroWorld::Networking::FDeviceHandle LateDevice = System.AddDevice(Loopback.Port(1), MicroWorld::ENetworkMode::Standalone, MakeConfig());
 	System.PostAdvance(20);
 	const bool bPacketQueuedAfterBeginPlay = !Loopback.IsEmpty(1);
@@ -430,14 +430,17 @@ MW_TEST_CASE(Networking_PreBeginPlayPumpsLeaveQueuedLocalRouterMessageUndelivere
 	FLoopback Loopback;
 	FSystem System;
 	int DeliveryCount = 0;
-	MicroWorld::FMessageHandlerBinding Handler;
-	Handler.Bind([&DeliveryCount](const MicroWorld::FMessageView&) noexcept { ++DeliveryCount; });
-	MicroWorld::FMessageHandlerHandle HandlerHandle{};
-	const MicroWorld::EMessageResult HandlerResult =
-		System.GetRouter().AddMessageHandler(SampleMessageTypeId, MicroWorld::BroadcastActorId, std::move(Handler), HandlerHandle);
+	MicroWorld::Messaging::FMessageHandlerBinding Handler;
+	Handler.Bind([&DeliveryCount](const MicroWorld::Messaging::FMessageView&) noexcept { ++DeliveryCount; });
+	MicroWorld::Messaging::FMessageHandlerHandle HandlerHandle{};
+	const MicroWorld::Messaging::EMessageResult HandlerResult =
+		System.GetRouter().AddMessageHandler(SampleMessageTypeId, MicroWorld::Messaging::BroadcastActorId, std::move(Handler), HandlerHandle);
 	const std::uint8_t Payload[1] = {LocalRouterMessagePayloadByte};
-	const MicroWorld::EMessageResult QueueResult = System.GetRouter().BroadcastMessage(
-		MicroWorld::LocalChannelId, SampleMessageTypeId, MicroWorld::BroadcastActorId, MicroWorld::TSpan<const std::uint8_t>(Payload, 1));
+	const MicroWorld::Messaging::EMessageResult QueueResult = System.GetRouter().BroadcastMessage(
+		MicroWorld::Messaging::LocalChannelId,
+		SampleMessageTypeId,
+		MicroWorld::Messaging::BroadcastActorId,
+		MicroWorld::TSpan<const std::uint8_t>(Payload, 1));
 
 	// Act: pump before BeginPlay and confirm the queued local message has still not been dispatched.
 	System.PreAdvance(10);
@@ -454,9 +457,12 @@ MW_TEST_CASE(Networking_PreBeginPlayPumpsLeaveQueuedLocalRouterMessageUndelivere
 
 	// Assert
 	MW_EXPECT_EQ(
-		Test, MicroWorld::EMessageResult::Success, HandlerResult, "The router must register the local delivery handler before lifecycle pumping");
+		Test,
+		MicroWorld::Messaging::EMessageResult::Success,
+		HandlerResult,
+		"The router must register the local delivery handler before lifecycle pumping");
 	MW_EXPECT_TRUE(Test, bHandlerHandleValid, "Successful local handler registration must publish a valid handle");
-	MW_EXPECT_EQ(Test, MicroWorld::EMessageResult::Success, QueueResult, "The router must queue the local message before BeginPlay");
+	MW_EXPECT_EQ(Test, MicroWorld::Messaging::EMessageResult::Success, QueueResult, "The router must queue the local message before BeginPlay");
 	MW_EXPECT_EQ(Test, 0, DeliveriesBeforeBeginPlay, "Pre-BeginPlay frame turns must not dispatch queued router messages");
 	MW_EXPECT_EQ(Test, 1, DeliveriesAfterBeginPlay, "The first post-BeginPlay frame must dispatch the queued local router message");
 	MW_EXPECT_TRUE(Test, bLoopbackStayedUnused, "A router-only lifecycle test must not emit transport packets");
@@ -512,15 +518,15 @@ MW_TEST_CASE(Networking_PreAdvanceAndPostAdvancePumpRoutedMessageInOrder)
 	const MicroWorld::Networking::FDeviceHandle ClientDevice =
 		ClientSystem.AddDevice(Loopback.Port(1), MicroWorld::ENetworkMode::Client, ClientConfig);
 	const MicroWorld::Networking::FChannelHandle ServerChannel =
-		ServerSystem.AddChannel(ServerDevice, MicroWorld::FMessageChannelId{1}, MicroWorld::Networking::EChannelReliability::BestEffort);
+		ServerSystem.AddChannel(ServerDevice, MicroWorld::Messaging::FMessageChannelId{1}, MicroWorld::Networking::EChannelReliability::BestEffort);
 	const MicroWorld::Networking::FChannelHandle ClientChannel =
-		ClientSystem.AddChannel(ClientDevice, MicroWorld::FMessageChannelId{1}, MicroWorld::Networking::EChannelReliability::BestEffort);
+		ClientSystem.AddChannel(ClientDevice, MicroWorld::Messaging::FMessageChannelId{1}, MicroWorld::Networking::EChannelReliability::BestEffort);
 	int DeliveryCount = 0;
-	MicroWorld::FMessageHandlerBinding Handler;
-	Handler.Bind([&DeliveryCount](const MicroWorld::FMessageView&) noexcept { ++DeliveryCount; });
-	MicroWorld::FMessageHandlerHandle HandlerHandle{};
-	const MicroWorld::EMessageResult HandlerResult =
-		ServerSystem.GetRouter().AddMessageHandler(SampleMessageTypeId, MicroWorld::BroadcastActorId, std::move(Handler), HandlerHandle);
+	MicroWorld::Messaging::FMessageHandlerBinding Handler;
+	Handler.Bind([&DeliveryCount](const MicroWorld::Messaging::FMessageView&) noexcept { ++DeliveryCount; });
+	MicroWorld::Messaging::FMessageHandlerHandle HandlerHandle{};
+	const MicroWorld::Messaging::EMessageResult HandlerResult =
+		ServerSystem.GetRouter().AddMessageHandler(SampleMessageTypeId, MicroWorld::Messaging::BroadcastActorId, std::move(Handler), HandlerHandle);
 
 	// Act: BeginPlay plus alternating PreAdvance/PostAdvance turns connect the client to the server.
 	ServerSystem.BeginPlay(0);
@@ -534,7 +540,7 @@ MW_TEST_CASE(Networking_PreAdvanceAndPostAdvancePumpRoutedMessageInOrder)
 
 	// Act: broadcast from the client, then advance to observe send-before-delivery ordering.
 	const std::uint8_t Payload[1] = {CrossSystemPayloadByte};
-	const MicroWorld::EMessageResult SendResult = ClientSystem.GetRouter().BroadcastMessage(
+	const MicroWorld::Messaging::EMessageResult SendResult = ClientSystem.GetRouter().BroadcastMessage(
 		SampleChannelId, SampleMessageTypeId, SampleActorId, MicroWorld::TSpan<const std::uint8_t>(Payload, 1));
 	ClientSystem.PreAdvance(30);
 	ClientSystem.PostAdvance(30);
@@ -552,9 +558,9 @@ MW_TEST_CASE(Networking_PreAdvanceAndPostAdvancePumpRoutedMessageInOrder)
 	MW_EXPECT_TRUE(Test, bClientDeviceValid, "The client device must configure for the pump-order scenario");
 	MW_EXPECT_TRUE(Test, bServerChannelValid, "The server message channel must configure before BeginPlay");
 	MW_EXPECT_TRUE(Test, bClientChannelValid, "The client message channel must configure before BeginPlay");
-	MW_EXPECT_EQ(Test, MicroWorld::EMessageResult::Success, HandlerResult, "The server router must accept its delivery handler");
+	MW_EXPECT_EQ(Test, MicroWorld::Messaging::EMessageResult::Success, HandlerResult, "The server router must accept its delivery handler");
 	MW_EXPECT_TRUE(Test, bHandlerHandleValid, "A successful router handler registration must publish a valid handle");
-	MW_EXPECT_EQ(Test, MicroWorld::EMessageResult::Success, SendResult, "The connected client router must queue the outbound message");
+	MW_EXPECT_EQ(Test, MicroWorld::Messaging::EMessageResult::Success, SendResult, "The connected client router must queue the outbound message");
 	MW_EXPECT_EQ(Test, 0, DeliveriesAfterClientPostAdvance, "Client PostAdvance must send before the remote router can deliver the message");
 	MW_EXPECT_EQ(Test, 1, DeliveriesAfterServerPreAdvance, "Server PreAdvance must receive and deliver the routed message exactly once");
 }

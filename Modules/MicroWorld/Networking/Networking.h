@@ -129,14 +129,14 @@ private:
 	using FTransportHost = TTransportHost<TTraits::MaxPeers, TTraits::MaxPacketBytes>;
 
 	/** Names the binding that connects one host wire channel to the shared router. */
-	using FChannelBinding = TMessageChannelBinding<FTransportHost>;
+	using FChannelBinding = ::MicroWorld::Messaging::TMessageChannelBinding<FTransportHost>;
 
 	/** Names the one shared actor-message router. */
-	using FRouter =
+	using FRouter = ::MicroWorld::Messaging::
 		TMessageRouter<TTraits::MaxRouterHandlers, TTraits::MaxRouterQueuedMessages, TTraits::MaxRouterMessageBytes, TTraits::MaxRouterChannels>;
 
 	/** Names the optional wrapper that retries a guaranteed channel. */
-	using FReliableChannel = TReliableChannel<TTraits::MaxReliablePendingMessages, TTraits::MaxRouterMessageBytes>;
+	using FReliableChannel = ::MicroWorld::Messaging::TReliableChannel<TTraits::MaxReliablePendingMessages, TTraits::MaxRouterMessageBytes>;
 
 public:
 	/** Creates an empty system; callers finish its device and channel composition before engine BeginPlay. */
@@ -199,9 +199,10 @@ public:
 	 * @return A generation-checked channel handle, or an invalid handle for an invalid/stale device,
 	 *         closed composition, invalid channel id, or any fixed-capacity registration failure.
 	 */
-	FChannelHandle AddChannel(FDeviceHandle InDevice, FMessageChannelId InChannel, EChannelReliability InReliability) noexcept
+	FChannelHandle AddChannel(
+		FDeviceHandle InDevice, ::MicroWorld::Messaging::FMessageChannelId InChannel, EChannelReliability InReliability) noexcept
 	{
-		if (bCompositionClosed || InChannel == LocalChannelId)
+		if (bCompositionClosed || InChannel == ::MicroWorld::Messaging::LocalChannelId)
 		{
 			return {};
 		}
@@ -226,8 +227,8 @@ public:
 			return {};
 		}
 
-		const EMessageResult AddResult = AddChannelToRouter(*Slot, InReliability);
-		if (AddResult != EMessageResult::Success)
+		const ::MicroWorld::Messaging::EMessageResult AddResult = AddChannelToRouter(*Slot, InReliability);
+		if (AddResult != ::MicroWorld::Messaging::EMessageResult::Success)
 		{
 			ReleaseChannelSlot(*Slot);
 			return {};
@@ -237,7 +238,7 @@ public:
 	}
 
 	/** Returns the single shared router that every added device demultiplexes into by channel id. */
-	IMessageRouter& GetRouter() noexcept { return Router; }
+	::MicroWorld::Messaging::IMessageRouter& GetRouter() noexcept { return Router; }
 
 	/**
 	 * Closes composition before starting each live host in device add order at the engine's
@@ -451,20 +452,21 @@ private:
 	}
 
 	/** Maps the configured role to the only valid outbound target for its bindings. */
-	static constexpr EChannelSendTarget GetSendTarget(ENetworkMode InMode) noexcept
+	static constexpr ::MicroWorld::Messaging::EChannelSendTarget GetSendTarget(ENetworkMode InMode) noexcept
 	{
-		return InMode == ENetworkMode::Client ? EChannelSendTarget::Server : EChannelSendTarget::AllPeers;
+		return InMode == ENetworkMode::Client ? ::MicroWorld::Messaging::EChannelSendTarget::Server
+											  : ::MicroWorld::Messaging::EChannelSendTarget::AllPeers;
 	}
 
 	/** Creates a guaranteed wrapper before router registration, or registers a best-effort binding directly. */
-	EMessageResult AddChannelToRouter(FChannelSlot& InSlot, EChannelReliability InReliability) noexcept
+	::MicroWorld::Messaging::EMessageResult AddChannelToRouter(FChannelSlot& InSlot, EChannelReliability InReliability) noexcept
 	{
 		if (InReliability == EChannelReliability::BestEffort)
 		{
 			return Router.AddChannel(*InSlot.Binding);
 		}
 
-		const FReliableChannelConfig Config{TTraits::ReliableRetryIntervalMilliseconds, TTraits::MaxReliableSendAttempts};
+		const ::MicroWorld::Messaging::FReliableChannelConfig Config{TTraits::ReliableRetryIntervalMilliseconds, TTraits::MaxReliableSendAttempts};
 		new (&InSlot.ReliableStorage) FReliableChannel(Router, Config);
 		InSlot.Reliable = reinterpret_cast<FReliableChannel*>(&InSlot.ReliableStorage);
 		InSlot.Reliable->SetInnerChannel(*InSlot.Binding);

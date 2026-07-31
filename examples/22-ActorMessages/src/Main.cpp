@@ -28,18 +28,18 @@ namespace
 // ---- Message and managed-type ids (roadmap section 4.5) ------------------
 
 /** Identifies the thermometer's broadcast reading message. */
-inline constexpr MicroWorld::FMessageTypeId TemperatureReadingMessageId = 1;
+inline constexpr MicroWorld::Messaging::FMessageTypeId TemperatureReadingMessageId = 1;
 
 /** Identifies the display's targeted calibrate message. */
-inline constexpr MicroWorld::FMessageTypeId CalibrateMessageId = 2;
+inline constexpr MicroWorld::Messaging::FMessageTypeId CalibrateMessageId = 2;
 
 /** Actor id the display targets its calibrate send at, and the thermometer
  *  registers its calibrate handler under. */
-inline constexpr MicroWorld::FMessageActorId ThermometerActorId = 10;
+inline constexpr MicroWorld::Messaging::FMessageActorId ThermometerActorId = 10;
 
 /** Actor id recorded as the sender of the calibrate message; not currently
  *  used as anyone's listener id, since the thermometer never messages it back. */
-inline constexpr MicroWorld::FMessageActorId DisplayActorId = 11;
+inline constexpr MicroWorld::Messaging::FMessageActorId DisplayActorId = 11;
 
 /** Stable descriptor id for the managed FThermometerActor type (0x0016 == example 22). */
 constexpr MicroWorld::FTypeId ThermometerActorTypeId{0x00160001u};
@@ -127,7 +127,7 @@ public:
 	 * for why the alignment matters) and stores the router and sensor this actor was
 	 * composed with.
 	 */
-	FThermometerActor(MicroWorld::IMessageRouter& InRouter, MicroWorld::TObjectPtr<FReadingSensorComponent> InSensor) noexcept
+	FThermometerActor(MicroWorld::Messaging::IMessageRouter& InRouter, MicroWorld::TObjectPtr<FReadingSensorComponent> InSensor) noexcept
 		: AActor(MicroWorld::FTickConfiguration::EnabledEvery(ReadingCadenceMilliseconds)), Router(InRouter), Sensor(InSensor)
 	{
 	}
@@ -136,9 +136,9 @@ protected:
 	/** Subscribes to a calibrate message targeted at this actor's own id. */
 	void BeginPlay() noexcept override
 	{
-		MicroWorld::FMessageHandlerBinding Handler;
+		MicroWorld::Messaging::FMessageHandlerBinding Handler;
 		const MicroWorld::EDelegateResult BindResult =
-			Handler.Bind([this](const MicroWorld::FMessageView& View) noexcept { this->OnCalibrateReceived(View); });
+			Handler.Bind([this](const MicroWorld::Messaging::FMessageView& View) noexcept { this->OnCalibrateReceived(View); });
 		if (BindResult != MicroWorld::EDelegateResult::Success)
 		{
 			MW_LOG(Error, "ex22", "thermometer calibrate handler bind failed");
@@ -147,10 +147,10 @@ protected:
 
 		// This bounded example never removes handlers (EndPlay tears the router and
 		// its actors down together), so the returned handle is not retained.
-		MicroWorld::FMessageHandlerHandle CalibrateHandlerHandle;
-		const MicroWorld::EMessageResult AddResult =
+		MicroWorld::Messaging::FMessageHandlerHandle CalibrateHandlerHandle;
+		const MicroWorld::Messaging::EMessageResult AddResult =
 			Router.AddMessageHandler(CalibrateMessageId, ThermometerActorId, std::move(Handler), CalibrateHandlerHandle);
-		if (AddResult != MicroWorld::EMessageResult::Success)
+		if (AddResult != MicroWorld::Messaging::EMessageResult::Success)
 		{
 			MW_LOG(Error, "ex22", "thermometer calibrate handler registration failed");
 		}
@@ -177,12 +177,12 @@ protected:
 		Payload[0] = static_cast<std::uint8_t>(Reading & 0xFFu);
 		Payload[1] = static_cast<std::uint8_t>((Reading >> 8) & 0xFFu);
 
-		const MicroWorld::EMessageResult SendResult = Router.BroadcastMessage(
-			MicroWorld::LocalChannelId,
+		const MicroWorld::Messaging::EMessageResult SendResult = Router.BroadcastMessage(
+			MicroWorld::Messaging::LocalChannelId,
 			TemperatureReadingMessageId,
 			ThermometerActorId,
 			MicroWorld::TSpan<const std::uint8_t>(Payload, ReadingPayloadBytes));
-		if (SendResult != MicroWorld::EMessageResult::Success)
+		if (SendResult != MicroWorld::Messaging::EMessageResult::Success)
 		{
 			MW_LOG(Error, "ex22", "thermometer broadcast failed");
 			return;
@@ -198,14 +198,14 @@ protected:
 
 private:
 	/** Logs receipt and resets the sensor's reading counter; this is the calibrate handler bound in BeginPlay. */
-	void OnCalibrateReceived(const MicroWorld::FMessageView&) noexcept
+	void OnCalibrateReceived(const MicroWorld::Messaging::FMessageView&) noexcept
 	{
 		MW_LOG(Log, "ex22", "thermometer calibrated (reset reading counter)");
 		Sensor.Get()->ResetReadingCount();
 	}
 
 	/** Router this actor sends and subscribes through; injected at construction (D9), never a global. */
-	MicroWorld::IMessageRouter& Router;
+	MicroWorld::Messaging::IMessageRouter& Router;
 
 	/** Sensor this actor owns and reads each tick; registered as this actor's one inline component slot. */
 	MicroWorld::TObjectPtr<FReadingSensorComponent> Sensor;
@@ -222,7 +222,7 @@ class FDisplayActor final : public MicroWorld::AActor
 {
 public:
 	/** Stores the injected router (D9); this actor never ticks on its own (see the disabled tick config below). */
-	explicit FDisplayActor(MicroWorld::IMessageRouter& InRouter) noexcept
+	explicit FDisplayActor(MicroWorld::Messaging::IMessageRouter& InRouter) noexcept
 		: AActor({/*bCanEverTick*/ false, /*bStartWithTickEnabled*/ false, /*TickIntervalMilliseconds*/ 0}), Router(InRouter)
 	{
 	}
@@ -237,9 +237,9 @@ protected:
 	/** Subscribes to every broadcast reading (ListenerActorId = BroadcastActorId receives broadcasts). */
 	void BeginPlay() noexcept override
 	{
-		MicroWorld::FMessageHandlerBinding Handler;
+		MicroWorld::Messaging::FMessageHandlerBinding Handler;
 		const MicroWorld::EDelegateResult BindResult =
-			Handler.Bind([this](const MicroWorld::FMessageView& View) noexcept { this->OnReadingReceived(View); });
+			Handler.Bind([this](const MicroWorld::Messaging::FMessageView& View) noexcept { this->OnReadingReceived(View); });
 		if (BindResult != MicroWorld::EDelegateResult::Success)
 		{
 			MW_LOG(Error, "ex22", "display reading handler bind failed");
@@ -248,10 +248,10 @@ protected:
 
 		// This bounded example never removes handlers (EndPlay tears the router and
 		// its actors down together), so the returned handle is not retained.
-		MicroWorld::FMessageHandlerHandle ReadingHandlerHandle;
-		const MicroWorld::EMessageResult AddResult =
-			Router.AddMessageHandler(TemperatureReadingMessageId, MicroWorld::BroadcastActorId, std::move(Handler), ReadingHandlerHandle);
-		if (AddResult != MicroWorld::EMessageResult::Success)
+		MicroWorld::Messaging::FMessageHandlerHandle ReadingHandlerHandle;
+		const MicroWorld::Messaging::EMessageResult AddResult =
+			Router.AddMessageHandler(TemperatureReadingMessageId, MicroWorld::Messaging::BroadcastActorId, std::move(Handler), ReadingHandlerHandle);
+		if (AddResult != MicroWorld::Messaging::EMessageResult::Success)
 		{
 			MW_LOG(Error, "ex22", "display reading handler registration failed");
 		}
@@ -259,7 +259,7 @@ protected:
 
 private:
 	/** Decodes, logs, and counts one reading; triggers the one-time calibrate once CalibrateAfterReadingCount is reached. */
-	void OnReadingReceived(const MicroWorld::FMessageView& View) noexcept
+	void OnReadingReceived(const MicroWorld::Messaging::FMessageView& View) noexcept
 	{
 		if (View.Payload.Size() < ReadingPayloadBytes)
 		{
@@ -291,9 +291,9 @@ private:
 	 */
 	void SendCalibrate() noexcept
 	{
-		const MicroWorld::EMessageResult SendResult = Router.SendMessageToActor(
-			MicroWorld::LocalChannelId, CalibrateMessageId, ThermometerActorId, DisplayActorId, MicroWorld::TSpan<const std::uint8_t>{});
-		if (SendResult != MicroWorld::EMessageResult::Success)
+		const MicroWorld::Messaging::EMessageResult SendResult = Router.SendMessageToActor(
+			MicroWorld::Messaging::LocalChannelId, CalibrateMessageId, ThermometerActorId, DisplayActorId, MicroWorld::TSpan<const std::uint8_t>{});
+		if (SendResult != MicroWorld::Messaging::EMessageResult::Success)
 		{
 			MW_LOG(Error, "ex22", "display calibrate send failed");
 			return;
@@ -304,7 +304,7 @@ private:
 	}
 
 	/** Router this actor listens and sends through; injected at construction (D9), never a global. */
-	MicroWorld::IMessageRouter& Router;
+	MicroWorld::Messaging::IMessageRouter& Router;
 
 	/** Counts every reading received since BeginPlay; drives both the calibrate trigger and IsDone. */
 	std::uint32_t ReceivedReadingCount{0};
@@ -345,7 +345,7 @@ extern "C" void app_main(void)
 
 	// Local actor-message router. Passed by reference into each actor's constructor
 	// below (D9); neither actor ever reaches into a global to find it.
-	static MicroWorld::TMessageRouter<16, 8, 96, 1> GRouter;
+	static MicroWorld::Messaging::TMessageRouter<16, 8, 96, 1> GRouter;
 
 	// Per-tick garbage-collection slice for this tiny graph: one root (the world),
 	// a few mark steps for world -> actor -> component, and enough sweep steps to

@@ -23,22 +23,22 @@
 namespace Ex23
 {
 /** Targeted message id: switch actor -> lamp actor, 1-byte payload (0 = off, 1 = on). */
-inline constexpr MicroWorld::FMessageTypeId SetLampStateMessageId = 1;
+inline constexpr MicroWorld::Messaging::FMessageTypeId SetLampStateMessageId = 1;
 
 /** Broadcast message id: switch actor -> every subscriber, 1-byte heartbeat counter. */
-inline constexpr MicroWorld::FMessageTypeId HeartbeatCountMessageId = 2;
+inline constexpr MicroWorld::Messaging::FMessageTypeId HeartbeatCountMessageId = 2;
 
 /** Actor id FLampActor registers its SetLampState handler under and the switch targets. */
-inline constexpr MicroWorld::FMessageActorId LampActorId = 10;
+inline constexpr MicroWorld::Messaging::FMessageActorId LampActorId = 10;
 
 /** Actor id recorded as the switch actor's sender on every message it sends. */
-inline constexpr MicroWorld::FMessageActorId SwitchActorId = 11;
+inline constexpr MicroWorld::Messaging::FMessageActorId SwitchActorId = 11;
 
 /** Actor id recorded as the display actor's sender; nothing ever targets a send at it. */
-inline constexpr MicroWorld::FMessageActorId DisplayActorId = 12;
+inline constexpr MicroWorld::Messaging::FMessageActorId DisplayActorId = 12;
 
 /** Router-facing channel id both roles register their TMessageChannelBinding under. */
-inline constexpr MicroWorld::FMessageChannelId AppChannelId = 1;
+inline constexpr MicroWorld::Messaging::FMessageChannelId AppChannelId = 1;
 
 /** TTransportHost wire-level channel byte the binding reads and writes (channel 0 is reserved control). */
 inline constexpr std::uint8_t AppWireChannelByte = 1;
@@ -76,13 +76,13 @@ constexpr MicroWorld::FTypeId SwitchActorTypeId{0x00170003u};
 using FWireTransport = MicroWorld::TTransportHost<2, 120>;
 
 /** The local actor-message router both roles compose, sized for this example's one channel and few handlers. */
-using FWireRouter = MicroWorld::TMessageRouter<16, 8, 96, 1>;
+using FWireRouter = MicroWorld::Messaging::TMessageRouter<16, 8, 96, 1>;
 
 /** Adapts FWireTransport to the engine's per-frame network slot (only PreAdvance/PostAdvance; the router is pumped separately, see §4). */
 using FWireFrame = MicroWorld::THostPlaySystem<FWireTransport>;
 
 /** Two-way adapter binding one FWireTransport wire channel to the local FWireRouter. */
-using FWireBinding = MicroWorld::TMessageChannelBinding<FWireTransport>;
+using FWireBinding = MicroWorld::Messaging::TMessageChannelBinding<FWireTransport>;
 
 /** The engine both roles compose; sized for one world with a couple of small actors using direct component storage. */
 using FWireEngine = MicroWorld::TEngine<>;

@@ -9,14 +9,14 @@
 
 namespace
 {
-using MicroWorld::ActorMessageHeaderBytes;
-using MicroWorld::DecodeActorMessage;
-using MicroWorld::EMessageResult;
-using MicroWorld::EncodeActorMessage;
-using MicroWorld::FActorMessageHeader;
-using MicroWorld::FMessageActorId;
-using MicroWorld::FMessageTypeId;
 using MicroWorld::TSpan;
+using MicroWorld::Messaging::ActorMessageHeaderBytes;
+using MicroWorld::Messaging::DecodeActorMessage;
+using MicroWorld::Messaging::EMessageResult;
+using MicroWorld::Messaging::EncodeActorMessage;
+using MicroWorld::Messaging::FActorMessageHeader;
+using MicroWorld::Messaging::FMessageActorId;
+using MicroWorld::Messaging::FMessageTypeId;
 using MicroWorld::Tests::GlobalAllocationCount;
 
 /** Sentinel value pre-loaded into OutWrittenBytes so a failed encode leaving it untouched is observable. */
@@ -178,7 +178,7 @@ MW_TEST_CASE(EngineMessageCodec_EncodeProducesExactLittleEndianByteLayout)
 MW_TEST_CASE(EngineMessageCodec_ZeroLengthPayloadRoundTrips)
 {
 	// Arrange
-	const FActorMessageHeader Header{MessageTypeId0001, MicroWorld::BroadcastActorId, MicroWorld::BroadcastActorId};
+	const FActorMessageHeader Header{MessageTypeId0001, MicroWorld::Messaging::BroadcastActorId, MicroWorld::Messaging::BroadcastActorId};
 	std::uint8_t Encoded[ActorMessageHeaderBytes] = {};
 	std::size_t WrittenBytes = 0;
 

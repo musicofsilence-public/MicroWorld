@@ -12,22 +12,22 @@
 
 namespace
 {
-using MicroWorld::ActorMessageHeaderBytes;
-using MicroWorld::BroadcastActorId;
-using MicroWorld::EMessageResult;
-using MicroWorld::EncodeActorMessage;
-using MicroWorld::FActorMessageHeader;
-using MicroWorld::FMessageActorId;
-using MicroWorld::FMessageChannelId;
-using MicroWorld::FMessageHandlerBinding;
-using MicroWorld::FMessageHandlerHandle;
-using MicroWorld::FMessageTypeId;
-using MicroWorld::FMessageView;
-using MicroWorld::IMessageChannel;
-using MicroWorld::LocalChannelId;
 using MicroWorld::TimePointMilliseconds;
-using MicroWorld::TMessageRouter;
 using MicroWorld::TSpan;
+using MicroWorld::Messaging::ActorMessageHeaderBytes;
+using MicroWorld::Messaging::BroadcastActorId;
+using MicroWorld::Messaging::EMessageResult;
+using MicroWorld::Messaging::EncodeActorMessage;
+using MicroWorld::Messaging::FActorMessageHeader;
+using MicroWorld::Messaging::FMessageActorId;
+using MicroWorld::Messaging::FMessageChannelId;
+using MicroWorld::Messaging::FMessageHandlerBinding;
+using MicroWorld::Messaging::FMessageHandlerHandle;
+using MicroWorld::Messaging::FMessageTypeId;
+using MicroWorld::Messaging::FMessageView;
+using MicroWorld::Messaging::IMessageChannel;
+using MicroWorld::Messaging::LocalChannelId;
+using MicroWorld::Messaging::TMessageRouter;
 using MicroWorld::Tests::GlobalAllocationCount;
 
 /** Asserts a router operation returned Success without discarding the result. */

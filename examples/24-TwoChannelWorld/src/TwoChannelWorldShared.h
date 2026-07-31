@@ -23,25 +23,25 @@
 namespace Ex24
 {
 /** Broadcast message id: client sensor -> server, 2-byte LE reading, delivered over UDP. */
-inline constexpr MicroWorld::FMessageTypeId TelemetryReadingMessageId = 1;
+inline constexpr MicroWorld::Messaging::FMessageTypeId TelemetryReadingMessageId = 1;
 
 /** Targeted message id: server -> client sensor, 2-byte LE interval milliseconds, delivered over UART. */
-inline constexpr MicroWorld::FMessageTypeId SetReportingRateMessageId = 2;
+inline constexpr MicroWorld::Messaging::FMessageTypeId SetReportingRateMessageId = 2;
 
 /** Actor id FSensorActor registers its SetReportingRate handler under and the commander targets. */
-inline constexpr MicroWorld::FMessageActorId SensorActorId = 10;
+inline constexpr MicroWorld::Messaging::FMessageActorId SensorActorId = 10;
 
 /** Actor id recorded as the telemetry sink's sender; nothing ever targets a send at it. */
-inline constexpr MicroWorld::FMessageActorId TelemetrySinkActorId = 11;
+inline constexpr MicroWorld::Messaging::FMessageActorId TelemetrySinkActorId = 11;
 
 /** Actor id recorded as the commander's sender; nothing ever targets a send at it. */
-inline constexpr MicroWorld::FMessageActorId CommanderActorId = 12;
+inline constexpr MicroWorld::Messaging::FMessageActorId CommanderActorId = 12;
 
 /** Router-facing channel id both roles register their UDP telemetry binding under. */
-inline constexpr MicroWorld::FMessageChannelId TelemetryChannelId = 1;
+inline constexpr MicroWorld::Messaging::FMessageChannelId TelemetryChannelId = 1;
 
 /** Router-facing channel id both roles register their UART commands binding under. */
-inline constexpr MicroWorld::FMessageChannelId CommandsChannelId = 2;
+inline constexpr MicroWorld::Messaging::FMessageChannelId CommandsChannelId = 2;
 
 /** The sensor's start/restored reporting cadence. */
 inline constexpr MicroWorld::DurationMilliseconds BaseReportingIntervalMilliseconds = 1000;

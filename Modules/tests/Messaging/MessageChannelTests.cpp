@@ -23,40 +23,40 @@
 
 namespace
 {
-using MicroWorld::BroadcastActorId;
 using MicroWorld::DurationMilliseconds;
-using MicroWorld::EChannelSendTarget;
 using MicroWorld::EEngineResult;
-using MicroWorld::EMessageResult;
 using MicroWorld::ENetworkMode;
 using MicroWorld::ERuntimeResult;
 using MicroWorld::ETransportHostState;
 using MicroWorld::ETransportResult;
 using MicroWorld::FDefaultEngineTraits;
 using MicroWorld::FGarbageCollectionBudget;
-using MicroWorld::FMessageActorId;
-using MicroWorld::FMessageChannelId;
-using MicroWorld::FMessageHandlerBinding;
-using MicroWorld::FMessageHandlerHandle;
-using MicroWorld::FMessageTypeId;
-using MicroWorld::FMessageView;
 using MicroWorld::FPacketDropDevice;
-using MicroWorld::FReliableChannelConfig;
 using MicroWorld::FTransportHostConfig;
-using MicroWorld::IEncodedMessageSink;
-using MicroWorld::LocalChannelId;
 using MicroWorld::MakeLoopbackAddress;
-using MicroWorld::ReliableHeaderBytes;
 using MicroWorld::TEngine;
 using MicroWorld::THostLoopback;
 using MicroWorld::THostPlaySystem;
 using MicroWorld::TimePointMilliseconds;
-using MicroWorld::TMessageChannelBinding;
-using MicroWorld::TMessageRouter;
 using MicroWorld::TPlaySystemSet;
-using MicroWorld::TReliableChannel;
 using MicroWorld::TSpan;
 using MicroWorld::TTransportHost;
+using MicroWorld::Messaging::BroadcastActorId;
+using MicroWorld::Messaging::EChannelSendTarget;
+using MicroWorld::Messaging::EMessageResult;
+using MicroWorld::Messaging::FMessageActorId;
+using MicroWorld::Messaging::FMessageChannelId;
+using MicroWorld::Messaging::FMessageHandlerBinding;
+using MicroWorld::Messaging::FMessageHandlerHandle;
+using MicroWorld::Messaging::FMessageTypeId;
+using MicroWorld::Messaging::FMessageView;
+using MicroWorld::Messaging::FReliableChannelConfig;
+using MicroWorld::Messaging::IEncodedMessageSink;
+using MicroWorld::Messaging::LocalChannelId;
+using MicroWorld::Messaging::ReliableHeaderBytes;
+using MicroWorld::Messaging::TMessageChannelBinding;
+using MicroWorld::Messaging::TMessageRouter;
+using MicroWorld::Messaging::TReliableChannel;
 
 /** Asserts a messaging operation returned Success without discarding the result. */
 #define MW_EXPECT_SUCCESS(TestContext, Result, Message) MW_EXPECT_EQ(TestContext, EMessageResult::Success, Result, Message)

@@ -7,7 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace MicroWorld
+namespace MicroWorld::Messaging
 {
 
 /** Identifies what kind of message this is; 0 is invalid. */
@@ -347,4 +347,4 @@ public:
 		TSpan<const std::uint8_t> InPayload) noexcept = 0;
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Messaging

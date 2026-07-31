@@ -26,6 +26,7 @@
 #include <utility>
 
 using namespace MicroWorld;
+using namespace MicroWorld::Messaging;
 using namespace Ex24;
 
 namespace

@@ -20,22 +20,22 @@
 namespace Ex25
 {
 /** Targeted message id carrying one counter value on the BEST-EFFORT channel. */
-inline constexpr MicroWorld::FMessageTypeId BestEffortCounterMessageId = 1;
+inline constexpr MicroWorld::Messaging::FMessageTypeId BestEffortCounterMessageId = 1;
 
 /** Targeted message id carrying one counter value on the GUARANTEED channel. */
-inline constexpr MicroWorld::FMessageTypeId GuaranteedCounterMessageId = 2;
+inline constexpr MicroWorld::Messaging::FMessageTypeId GuaranteedCounterMessageId = 2;
 
 /** Actor id the client's counter records as sender; nothing ever targets a send at it. */
-inline constexpr MicroWorld::FMessageActorId CounterActorId = 10;
+inline constexpr MicroWorld::Messaging::FMessageActorId CounterActorId = 10;
 
 /** Actor id the server's ledger registers its two handlers under and the counter targets. */
-inline constexpr MicroWorld::FMessageActorId LedgerActorId = 11;
+inline constexpr MicroWorld::Messaging::FMessageActorId LedgerActorId = 11;
 
 /** Router-facing channel id both roles register their best-effort binding under. */
-inline constexpr MicroWorld::FMessageChannelId BestEffortChannelId = 1;
+inline constexpr MicroWorld::Messaging::FMessageChannelId BestEffortChannelId = 1;
 
 /** Router-facing channel id both roles register their guaranteed (reliable) channel under. */
-inline constexpr MicroWorld::FMessageChannelId GuaranteedChannelId = 2;
+inline constexpr MicroWorld::Messaging::FMessageChannelId GuaranteedChannelId = 2;
 
 /** Wire-level channel byte the best-effort binding reads/writes (channel 0 is reserved control). */
 inline constexpr std::uint8_t BestEffortWireChannelByte = 1;
@@ -82,16 +82,16 @@ constexpr MicroWorld::FTypeId LedgerActorTypeId{0x00190002u};
 using FWorldTransport = MicroWorld::TTransportHost<2, 256>;
 
 /** The one local actor-message router both roles compose, sized for this example's two channels. */
-using FWorldRouter = MicroWorld::TMessageRouter<16, 8, 96, 2>;
+using FWorldRouter = MicroWorld::Messaging::TMessageRouter<16, 8, 96, 2>;
 
 /** Adapts FWorldTransport to the engine's per-frame network slot inside the frame set. */
 using FHostPlay = MicroWorld::THostPlaySystem<FWorldTransport>;
 
 /** Two-way adapter binding one wire channel to the shared router; both channels use this type. */
-using FChannelBinding = MicroWorld::TMessageChannelBinding<FWorldTransport>;
+using FChannelBinding = MicroWorld::Messaging::TMessageChannelBinding<FWorldTransport>;
 
 /** Guaranteed-delivery wrapper for channel 2 (8 pending slots, 96-byte wrapped-packet budget). */
-using FGuaranteedChannel = MicroWorld::TReliableChannel<8, 96>;
+using FGuaranteedChannel = MicroWorld::Messaging::TReliableChannel<8, 96>;
 
 /** Pumps the host play system, the reliable channel, and the router behind one IPlaySystem slot (D3 order). */
 using FWorldFrameSet = MicroWorld::TPlaySystemSet<3>;

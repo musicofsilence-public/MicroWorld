@@ -9,7 +9,7 @@
 #include <limits>
 #include <utility>
 
-namespace MicroWorld
+namespace MicroWorld::Messaging
 {
 
 /**
@@ -567,4 +567,4 @@ private:
 	FChannelSlot ChannelSlots[MaxChannels == 0 ? 1 : MaxChannels];
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Messaging
