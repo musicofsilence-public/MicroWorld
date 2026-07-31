@@ -4,7 +4,7 @@
 
 #include <chrono>
 
-namespace MicroWorld
+namespace MicroWorld::Platform::Host
 {
 
 /**
@@ -42,4 +42,4 @@ private:
 	std::chrono::steady_clock::time_point Baseline;
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Platform::Host

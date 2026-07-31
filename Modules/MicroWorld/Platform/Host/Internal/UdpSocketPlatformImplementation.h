@@ -30,7 +30,7 @@
 #include <unistd.h>
 #endif
 
-namespace MicroWorld
+namespace MicroWorld::Platform::Host
 {
 
 #ifdef _WIN32
@@ -460,4 +460,4 @@ inline bool WaitForReadable(const FSocketHandle InSocket, const Core::DurationMi
 	return Ready > 0;
 }
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Platform::Host

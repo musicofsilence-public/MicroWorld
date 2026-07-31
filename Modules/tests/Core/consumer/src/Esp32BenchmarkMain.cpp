@@ -353,6 +353,7 @@ private:
 extern "C" void app_main()
 {
 	using namespace MicroWorld::Core;
+	using namespace MicroWorld::Platform::Esp32;
 	using namespace MicroWorld::Engine;
 
 	// 0. Route every MW_LOG call site and each measurement line through ESP-IDF logging.

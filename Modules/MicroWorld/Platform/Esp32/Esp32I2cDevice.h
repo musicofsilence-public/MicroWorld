@@ -9,7 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace MicroWorld
+namespace MicroWorld::Platform::Esp32
 {
 
 using namespace ::MicroWorld::Transport;
@@ -290,4 +290,4 @@ private:
 	bool bOpen{false};
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Platform::Esp32

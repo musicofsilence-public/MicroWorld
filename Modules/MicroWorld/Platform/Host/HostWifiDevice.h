@@ -10,7 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace MicroWorld
+namespace MicroWorld::Platform::Host
 {
 
 using namespace ::MicroWorld::Transport;
@@ -123,4 +123,4 @@ private:
 	bool bOpen{false};
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Platform::Host

@@ -6,7 +6,7 @@ namespace
 {
 
 /** Uses plain configuration values so the released facade compiles without exposing ESP-IDF UART types. */
-constexpr MicroWorld::FEsp32E32LoraConfig RadioProbeConfig{1, 17, 18, 9600, 1};
+constexpr MicroWorld::Platform::Esp32::FEsp32E32LoraConfig RadioProbeConfig{1, 17, 18, 9600, 1};
 
 } // namespace
 
@@ -27,7 +27,7 @@ extern "C" void app_main()
 	volatile bool bRunRadioHardwareProbe = false;
 	if (bRunRadioHardwareProbe)
 	{
-		MicroWorld::FEsp32LoraDevice Device(RadioProbeConfig);
+		MicroWorld::Platform::Esp32::FEsp32LoraDevice Device(RadioProbeConfig);
 		Device.AdvanceTransmit();
 	}
 }

@@ -56,9 +56,9 @@ constexpr unsigned PollPacingMilliseconds = 20;
 constexpr std::uint64_t StateBroadcastPeriodMilliseconds = 1000;
 
 /** Builds a board's E32 LoRa device configuration from the fixed pins and baud. */
-inline MicroWorld::FEsp32E32LoraConfig MakeLoraConfig(const std::uint8_t NodeId) noexcept
+inline MicroWorld::Platform::Esp32::FEsp32E32LoraConfig MakeLoraConfig(const std::uint8_t NodeId) noexcept
 {
-	MicroWorld::FEsp32E32LoraConfig Config;
+	MicroWorld::Platform::Esp32::FEsp32E32LoraConfig Config;
 	Config.UartPort = UartPortNumber;
 	Config.TxGpio = TxGpioNumber;
 	Config.RxGpio = RxGpioNumber;

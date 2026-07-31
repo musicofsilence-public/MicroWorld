@@ -5,7 +5,7 @@
 
 #include <cstdint>
 
-namespace MicroWorld
+namespace MicroWorld::Platform::Esp32
 {
 
 using namespace ::MicroWorld::Transport;
@@ -114,4 +114,4 @@ private:
 	bool bIsUp{false};
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Platform::Esp32

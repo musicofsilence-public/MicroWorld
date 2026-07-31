@@ -20,7 +20,7 @@ editor, or asset compatible with UE.
 | Actor messaging / channels | `IMessageChannel`, `TMessageChannelBinding`, `FMessageChannelId` | Messaging (0.4.0) | Resembles UE `UChannel` / NetDevice channels; bounded typed byte messages keyed by type+actor id, no replication or property sync; channel 0 is local delivery; a wire channel is one `TMessageChannelBinding` over a `TTransportHost` |
 | Gameplay Message Subsystem (broadcast/targeted message bus) | `TMessageRouter` | Messaging (0.4.0) | Fixed-capacity handler table, two ring FIFOs, one-frame local latency, no reflection; registration-order dispatch; Transport-free (channels bind through an interface) |
 | Reliable channel / `bReliable` RPC flag | `TReliableChannel` | Messaging (0.4.0) | Opt-in per channel by wrapping the binding; sequence + ack + retry (bounded by `MaxSendAttempts`, then counted lost) + a 32-wide duplicate window, so a delivered message arrives exactly once; no ordering across messages, no reliable broadcast |
-| Optional E32 transport | `FE32LoraDevice`, `FEsp32LoraDevice`, `FPicoLoraDevice` | Transport + platform facades | RadioE32 owns portable framing; ESP32/Pico own UART SDK lifetime and compatibility facades; direct callers advance TX, while `TTransportHost` already does |
+| Optional E32 transport | `MicroWorld::Transport::FE32LoraDevice`, `MicroWorld::Platform::Esp32::FEsp32LoraDevice`, `MicroWorld::Platform::Pico::FPicoLoraDevice` | Transport + platform facades | RadioE32 owns portable framing; ESP32/Pico own UART SDK lifetime and compatibility facades; direct callers advance TX, while `TTransportHost` already does |
 
 `TObjectPtr` is a traced managed reference, `TWeakObjectPtr` observes without
 retaining, and `TStrongObjectPtr` is an explicit external root. They are not

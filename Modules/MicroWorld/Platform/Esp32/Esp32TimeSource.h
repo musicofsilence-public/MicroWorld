@@ -6,7 +6,7 @@
 
 #include <cstdint>
 
-namespace MicroWorld
+namespace MicroWorld::Platform::Esp32
 {
 
 /**
@@ -25,4 +25,4 @@ public:
 	Core::TimePointMilliseconds Now() const noexcept { return static_cast<Core::TimePointMilliseconds>(esp_timer_get_time() / 1000); }
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Platform::Esp32

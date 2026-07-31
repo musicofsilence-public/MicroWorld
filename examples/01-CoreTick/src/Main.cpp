@@ -10,7 +10,7 @@
 namespace
 {
 /** Single real-time source; every MicroWorld deadline in this example reads it. */
-MicroWorld::FEsp32TimeSource GTimeSource{};
+MicroWorld::Platform::Esp32::FEsp32TimeSource GTimeSource{};
 
 /** Poll far faster than the cadence so the FreeRTOS idle task (and its watchdog)
  *  always runs; the tick function, not this delay, decides when a tick is due. */
@@ -20,7 +20,7 @@ constexpr unsigned PollPacingMilliseconds = 10;
 /** Composition root: drives one 500 ms tick schedule off real time for five ticks. */
 extern "C" void app_main(void)
 {
-	MicroWorld::Core::SetOutputDevice(&MicroWorld::WriteEsp32LogRecord);
+	MicroWorld::Core::SetOutputDevice(&MicroWorld::Platform::Esp32::WriteEsp32LogRecord);
 
 	// Announce the exact package contract this image was built against.
 	MW_LOG(
@@ -49,7 +49,7 @@ extern "C" void app_main(void)
 			++TickCount;
 			MW_LOG(Log, "ex01", "tick n=%u delta=%u", TickCount, static_cast<unsigned>(Decision.Context.DeltaMilliseconds));
 		}
-		MicroWorld::SleepMilliseconds(PollPacingMilliseconds);
+		MicroWorld::Platform::Esp32::SleepMilliseconds(PollPacingMilliseconds);
 	}
 
 	// The shared bounded behavior closes its schedule on the fifth due tick.

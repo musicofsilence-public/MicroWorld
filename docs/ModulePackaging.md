@@ -21,9 +21,9 @@ inspect the
 | Transport | `MicroWorld::Transport` | `MicroWorld` |
 | Networking | `MicroWorld::Networking` | `MicroWorld` |
 | Application | `MicroWorld::Application` | `MicroWorld` |
-| Platform/Host | `MicroWorld::PlatformHost` | `MicroWorldPlatformHost` |
+| Platform/Host | `MicroWorld::Platform::Host` | `MicroWorldPlatformHost` |
 | Platform/Esp32 | — (ESP-IDF only) | `MicroWorldPlatformEsp32` |
-| Platform/Pico | `MicroWorld::PlatformPico` | `MicroWorldPlatformPico` |
+| Platform/Pico | `MicroWorld::Platform::Pico` | `MicroWorldPlatformPico` |
 
 PlatformIO selects a library's source set through its manifest, and one manifest
 cannot offer different source sets to different consumers. The portable systems

@@ -51,9 +51,9 @@ constexpr MicroWorld::Engine::FTypeId DemoSpawnedActorTypeId{0x00080001u};
 constexpr unsigned PollPacingMilliseconds = 20;
 
 /** Builds a board's UART device configuration from the fixed pins and baud. */
-inline MicroWorld::FEsp32UartConfig MakeUartConfig(const std::uint8_t NodeId) noexcept
+inline MicroWorld::Platform::Esp32::FEsp32UartConfig MakeUartConfig(const std::uint8_t NodeId) noexcept
 {
-	MicroWorld::FEsp32UartConfig Config;
+	MicroWorld::Platform::Esp32::FEsp32UartConfig Config;
 	Config.UartPort = UartPortNumber;
 	Config.TxGpio = TxGpioNumber;
 	Config.RxGpio = RxGpioNumber;

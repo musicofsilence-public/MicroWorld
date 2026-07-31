@@ -4,7 +4,7 @@
 
 #include <cstring>
 
-namespace MicroWorld
+namespace MicroWorld::Platform::Esp32
 {
 
 namespace
@@ -152,4 +152,4 @@ void FEsp32WifiLink::Stop() noexcept
 	bIsUp = false;
 }
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Platform::Esp32

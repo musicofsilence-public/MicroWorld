@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace MicroWorld
+namespace MicroWorld::Platform::Pico
 {
 
 /**
@@ -44,4 +44,4 @@ protected:
 /** Returns the process-lifetime Pico SDK binding used by the default byte-stream constructor. */
 IPicoUartPlatform& GetPicoUartPlatform() noexcept;
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Platform::Pico

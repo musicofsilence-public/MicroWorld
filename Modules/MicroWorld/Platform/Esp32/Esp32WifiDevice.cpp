@@ -4,7 +4,7 @@
 
 #include <cstdint>
 
-namespace MicroWorld
+namespace MicroWorld::Platform::Esp32
 {
 
 FEsp32WifiDevice::FEsp32WifiDevice(const std::uint16_t InBindPort) noexcept
@@ -156,4 +156,4 @@ bool FEsp32WifiDevice::PollReadable(const Core::DurationMilliseconds InTimeoutMi
 	return WaitForReadable(AsSocketHandle(SocketHandle), InTimeoutMilliseconds);
 }
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Platform::Esp32

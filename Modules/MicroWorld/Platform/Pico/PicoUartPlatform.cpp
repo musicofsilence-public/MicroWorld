@@ -26,7 +26,7 @@ uart_inst_t* ResolveUart(const std::uint8_t InUartIndex) noexcept
 }
 
 /** Pico SDK implementation whose process-lifetime storage keeps the default byte-stream binding valid. */
-class FPicoUartPlatform final : public MicroWorld::IPicoUartPlatform
+class FPicoUartPlatform final : public MicroWorld::Platform::Pico::IPicoUartPlatform
 {
 public:
 	/** Opens the requested UART and configures its pins after the requested baud rate was accepted. */
@@ -97,7 +97,7 @@ public:
 
 } // namespace
 
-namespace MicroWorld
+namespace MicroWorld::Platform::Pico
 {
 
 IPicoUartPlatform& GetPicoUartPlatform() noexcept
@@ -108,11 +108,11 @@ IPicoUartPlatform& GetPicoUartPlatform() noexcept
 
 FPicoUartByteStream::FPicoUartByteStream() noexcept : FPicoUartByteStream(GetPicoUartPlatform()) {}
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Platform::Pico
 
-namespace MicroWorld
+namespace MicroWorld::Platform::Pico
 {
 
 FPicoLoraDevice::FPicoLoraDevice() noexcept : ByteStream(), RadioDevice(ByteStream) {}
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Platform::Pico

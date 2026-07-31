@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace MicroWorld
+namespace MicroWorld::Platform::Pico
 {
 
 FPicoUartByteStream::FPicoUartByteStream(IPicoUartPlatform& InPlatform) noexcept : Platform(InPlatform) {}
@@ -110,4 +110,4 @@ bool FPicoUartByteStream::IsValidReceivePin(const std::uint8_t InUartIndex, cons
 	return false;
 }
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Platform::Pico

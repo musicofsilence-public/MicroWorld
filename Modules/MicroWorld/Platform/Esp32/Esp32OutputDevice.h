@@ -2,7 +2,7 @@
 
 #include <MicroWorld/Core/Log.h>
 
-namespace MicroWorld
+namespace MicroWorld::Platform::Esp32
 {
 
 /**
@@ -19,4 +19,4 @@ namespace MicroWorld
  */
 void WriteEsp32LogRecord(Core::ELogLevel InLevel, const char* InCategory, const char* InMessage) noexcept;
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Platform::Esp32

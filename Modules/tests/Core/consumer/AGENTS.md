@@ -6,7 +6,7 @@ Inherits `../AGENTS.md`.
 
 This is a downstream CMake/PlatformIO project, not part of the MicroWorld
 library. Standalone CMake adds selected adjacent packages as subdirectories and
-links `MicroWorld::Core`, `MicroWorld::Object`, or `MicroWorld::Engine`.
+links `MicroWorld::Core` or `MicroWorld::Engine`.
 PlatformIO resolves local packages through `symlink://`, then builds mutually
 exclusive native, Core ESP32-S3, Memory ESP32-S3, Object ESP32-S3, Engine
 ESP32-S3, and executable benchmark applications. The sibling

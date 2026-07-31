@@ -22,8 +22,8 @@ using namespace MicroWorld::Core;
 using namespace MicroWorld::Transport;
 using namespace MicroWorld::Transport::Address;
 using namespace MicroWorld::Transport::Device;
-using MicroWorld::FHostTimeSource;
-using MicroWorld::FHostWifiDevice;
+using MicroWorld::Platform::Host::FHostTimeSource;
+using MicroWorld::Platform::Host::FHostWifiDevice;
 
 /** Records the last application message the server handler observed. */
 struct FServerCapture

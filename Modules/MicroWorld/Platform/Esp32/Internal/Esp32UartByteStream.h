@@ -4,7 +4,7 @@
 
 #include <cstdint>
 
-namespace MicroWorld
+namespace MicroWorld::Platform::Esp32
 {
 
 /**
@@ -86,4 +86,4 @@ private:
 	bool bOpen{false};
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Platform::Esp32

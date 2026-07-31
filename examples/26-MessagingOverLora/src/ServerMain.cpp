@@ -22,6 +22,7 @@
 #include <cstdint>
 
 using namespace MicroWorld::Core;
+using namespace MicroWorld::Platform::Esp32;
 using namespace MicroWorld::Engine;
 using namespace MicroWorld::Transport;
 using namespace Ex26;

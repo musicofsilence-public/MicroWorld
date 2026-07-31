@@ -2,7 +2,7 @@
 
 #include <MicroWorld/Platform/Pico/Internal/PicoUartPlatform.h>
 
-namespace MicroWorld
+namespace MicroWorld::Platform::Pico
 {
 
 /** Legacy E32 platform spelling retained while compatibility callers migrate to the generic IPicoUartPlatform interface. */
@@ -14,4 +14,4 @@ inline IPicoE32LoraPlatform& GetPicoE32LoraPlatform() noexcept
 	return GetPicoUartPlatform();
 }
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Platform::Pico

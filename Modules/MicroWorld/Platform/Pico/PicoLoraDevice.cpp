@@ -1,6 +1,6 @@
 #include <MicroWorld/Platform/Pico/PicoLoraDevice.h>
 
-namespace MicroWorld
+namespace MicroWorld::Platform::Pico
 {
 
 FPicoLoraDevice::FPicoLoraDevice(IPicoE32LoraPlatform& InPlatform) noexcept : ByteStream(InPlatform), RadioDevice(ByteStream) {}
@@ -58,4 +58,4 @@ bool FPicoLoraDevice::IsOpen() const noexcept
 	return ByteStream.IsOpen() && RadioDevice.IsInitialized();
 }
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Platform::Pico

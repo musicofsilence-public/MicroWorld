@@ -7,7 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace MicroWorld
+namespace MicroWorld::Platform::Pico
 {
 
 /**
@@ -125,4 +125,4 @@ private:
 	::MicroWorld::Transport::FE32LoraDevice RadioDevice{ByteStream};
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Platform::Pico

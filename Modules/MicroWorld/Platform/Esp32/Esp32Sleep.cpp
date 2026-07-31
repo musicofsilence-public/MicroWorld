@@ -3,7 +3,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
-namespace MicroWorld
+namespace MicroWorld::Platform::Esp32
 {
 
 void SleepMilliseconds(Core::DurationMilliseconds InSleepDurationMilliseconds) noexcept
@@ -18,4 +18,4 @@ void SleepMilliseconds(Core::DurationMilliseconds InSleepDurationMilliseconds) n
 	vTaskDelay(Ticks);
 }
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Platform::Esp32

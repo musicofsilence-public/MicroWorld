@@ -4,7 +4,7 @@
 
 #include <cstdint>
 
-namespace MicroWorld
+namespace MicroWorld::Platform::Esp32
 {
 
 using namespace ::MicroWorld::Transport::Address;
@@ -59,4 +59,4 @@ constexpr std::uint8_t I2cAddressNodeId(const FDeviceAddress& InAddress) noexcep
 	return InAddress.Bytes[0];
 }
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Platform::Esp32

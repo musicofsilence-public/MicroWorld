@@ -15,7 +15,7 @@ table.
 
 ## Concepts
 
-- The two adapter interfaces are `FHostTimeSource` (clock) and `FHostWifiDevice`
+- The two adapter interfaces are `MicroWorld::Platform::Host::FHostTimeSource` (clock) and `MicroWorld::Platform::Host::FHostWifiDevice`
   (`IDevice` transport); portable code never reaches WinSock/BSD headers
   directly.
 - `FWinSockScope` is a reference-counted RAII guard: the first construction

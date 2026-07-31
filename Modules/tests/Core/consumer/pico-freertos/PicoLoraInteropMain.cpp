@@ -59,7 +59,7 @@ constexpr configSTACK_DEPTH_TYPE LoraTaskStackDepth = 512;
 constexpr UBaseType_t MinimumStackHeadroomWords = 128;
 
 /** Configures the reusable device with the exact UART wiring proven by the Pico-to-ESP32 exchange. */
-constexpr MicroWorld::FPicoE32LoraConfig LoraConfig{
+constexpr MicroWorld::Platform::Pico::FPicoE32LoraConfig LoraConfig{
 	LoraUartIndex,
 	LoraTransmitPin,
 	LoraReceivePin,
@@ -115,7 +115,7 @@ bool IsExpectedPeerPayload(
 /** Drives the Pico node-1 counter volley and continuously checks its measured task-stack margin. */
 void RunLoraInteropTask(void* const InContext)
 {
-	auto& LoraDevice = *static_cast<MicroWorld::FPicoLoraDevice*>(InContext);
+	auto& LoraDevice = *static_cast<MicroWorld::Platform::Pico::FPicoLoraDevice*>(InContext);
 	std::uint8_t ReceiveBuffer[MicroWorld::Transport::E32MaxPayloadBytes]{};
 	bool bHasPendingTransmit = true;
 	std::uint32_t PendingCounter = 1;
@@ -214,7 +214,7 @@ void AdvancePayloadRegressionReceiveState(
 
 /** Queues one canonical frame and advances only after the device accepted it into its bounded transmit slot. */
 void QueuePendingPayloadRegressionTransmit(
-	MicroWorld::FPicoLoraDevice& InDevice,
+	MicroWorld::Platform::Pico::FPicoLoraDevice& InDevice,
 	EPayloadRegressionState& InOutState,
 	TickType_t& OutEmptyRetryDue,
 	const TickType_t InNow,
@@ -264,7 +264,7 @@ void QueuePendingPayloadRegressionTransmit(
 /** Drives the Pico peer through the fixed empty, typical, and maximum E32 payload exchange. */
 void RunLoraInteropTask(void* const InContext)
 {
-	auto& LoraDevice = *static_cast<MicroWorld::FPicoLoraDevice*>(InContext);
+	auto& LoraDevice = *static_cast<MicroWorld::Platform::Pico::FPicoLoraDevice*>(InContext);
 	std::uint8_t PayloadBuffer[MicroWorld::Transport::E32MaxPayloadBytes]{};
 	EPayloadRegressionState State = EPayloadRegressionState::SendEmpty;
 	TickType_t EmptyRetryDue = xTaskGetTickCount();
@@ -300,7 +300,7 @@ void RunLoraInteropTask(void* const InContext)
 /** Initializes the reusable device, creates the static LoRa task, and transfers control to FreeRTOS. */
 int main()
 {
-	MicroWorld::FPicoLoraDevice LoraDevice;
+	MicroWorld::Platform::Pico::FPicoLoraDevice LoraDevice;
 	if (LoraDevice.Initialize(LoraConfig) != MicroWorld::Transport::ETransportResult::Success)
 	{
 		return 1;

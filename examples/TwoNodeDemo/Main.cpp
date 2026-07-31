@@ -39,8 +39,8 @@ namespace
 using namespace MicroWorld::Core;
 using namespace MicroWorld::Engine;
 using namespace MicroWorld::Transport;
-using MicroWorld::FHostWifiDevice;
-using MicroWorld::MakeUdpAddress;
+using MicroWorld::Platform::Host::FHostWifiDevice;
+using MicroWorld::Transport::MakeUdpAddress;
 
 /** Loopback IPv4 octets shared by every endpoint address in the demo. */
 constexpr std::uint8_t LoopbackIpv4Octets[4] = {127, 0, 0, 1};
@@ -483,8 +483,8 @@ int main()
 {
 	using namespace MicroWorld::Core;
 	using namespace MicroWorld::Engine;
-	using MicroWorld::FHostWifiDevice;
-	using MicroWorld::MakeUdpAddress;
+	using MicroWorld::Platform::Host::FHostWifiDevice;
+	using MicroWorld::Transport::MakeUdpAddress;
 
 	FHostWifiDevice ServerDevice(0);
 	FHostWifiDevice ClientDevice(0);

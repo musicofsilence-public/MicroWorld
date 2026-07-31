@@ -88,6 +88,7 @@ struct FDemoHostTraits : MicroWorld::Engine::FDefaultEngineTraits
 extern "C" void app_main()
 {
 	using namespace MicroWorld::Core;
+	using namespace MicroWorld::Platform::Esp32;
 	using namespace MicroWorld::Engine;
 
 	// 1. Route every surviving MW_LOG call site through ESP-IDF logging.

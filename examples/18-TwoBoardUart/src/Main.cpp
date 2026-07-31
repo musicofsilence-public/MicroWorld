@@ -18,7 +18,7 @@
 namespace
 {
 /** Single real-time source; every deadline in this example reads it. */
-MicroWorld::FEsp32TimeSource GTimeSource{};
+MicroWorld::Platform::Esp32::FEsp32TimeSource GTimeSource{};
 
 /** This board's node id, stamped on every frame it sends. */
 constexpr std::uint8_t LocalNodeId = MICROWORLD_EXAMPLE_NODE_ID;
@@ -82,9 +82,9 @@ std::uint32_t ReadVolleyCounter(const std::uint8_t* const In) noexcept
 }
 
 /** Builds the device configuration for this node from the fixed pins and baud. */
-MicroWorld::FEsp32UartConfig MakeUartConfig(const std::uint8_t NodeId) noexcept
+MicroWorld::Platform::Esp32::FEsp32UartConfig MakeUartConfig(const std::uint8_t NodeId) noexcept
 {
-	MicroWorld::FEsp32UartConfig Config;
+	MicroWorld::Platform::Esp32::FEsp32UartConfig Config;
 	Config.UartPort = UartPortNumber;
 	Config.TxGpio = TxGpioNumber;
 	Config.RxGpio = RxGpioNumber;
@@ -97,10 +97,10 @@ MicroWorld::FEsp32UartConfig MakeUartConfig(const std::uint8_t NodeId) noexcept
 /** Composition root: installs the output device, then ping-pongs a counter with the peer board over one wired UART. */
 extern "C" void app_main(void)
 {
-	MicroWorld::Core::SetOutputDevice(&MicroWorld::WriteEsp32LogRecord);
+	MicroWorld::Core::SetOutputDevice(&MicroWorld::Platform::Esp32::WriteEsp32LogRecord);
 
 	// Static, never on the app_main stack (the ESP32-S3 stack lesson, §2.2).
-	static MicroWorld::FEsp32UartDevice Device{MakeUartConfig(LocalNodeId)};
+	static MicroWorld::Platform::Esp32::FEsp32UartDevice Device{MakeUartConfig(LocalNodeId)};
 	MW_LOG(Log, "ex18", "node=%u open=%d", static_cast<unsigned>(LocalNodeId), Device.IsOpen() ? 1 : 0);
 	if (!Device.IsOpen())
 	{
@@ -140,8 +140,8 @@ extern "C" void app_main(void)
 		{
 			std::uint8_t Payload[VolleyPayloadBytes];
 			WriteVolleyPayload(Payload, LocalNodeId, PendingCounter);
-			const MicroWorld::Transport::ETransportResult TxResult =
-				Device.TrySend(MicroWorld::MakeUartAddress(PeerNodeId), MicroWorld::Core::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
+			const MicroWorld::Transport::ETransportResult TxResult = Device.TrySend(
+				MicroWorld::Platform::Esp32::MakeUartAddress(PeerNodeId), MicroWorld::Core::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
 			MW_LOG(Log, "ex18", "tx n=%u result=%s", static_cast<unsigned>(PendingCounter), ToText(TxResult));
 			if (TxResult == MicroWorld::Transport::ETransportResult::Success)
 			{
@@ -149,6 +149,6 @@ extern "C" void app_main(void)
 			}
 		}
 
-		MicroWorld::SleepMilliseconds(PollPacingMilliseconds);
+		MicroWorld::Platform::Esp32::SleepMilliseconds(PollPacingMilliseconds);
 	}
 }

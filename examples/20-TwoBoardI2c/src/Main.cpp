@@ -78,9 +78,9 @@ std::uint32_t ReadVolleyCounter(const std::uint8_t* const In) noexcept
 
 #if MICROWORLD_EXAMPLE_I2C_MASTER
 /** Builds the master device configuration from the fixed pins, speed, and peer address. */
-MicroWorld::FEsp32I2cMasterConfig MakeMasterConfig() noexcept
+MicroWorld::Platform::Esp32::FEsp32I2cMasterConfig MakeMasterConfig() noexcept
 {
-	MicroWorld::FEsp32I2cMasterConfig Config;
+	MicroWorld::Platform::Esp32::FEsp32I2cMasterConfig Config;
 	Config.I2cPort = I2cPortNumber;
 	Config.SdaGpio = SdaGpioNumber;
 	Config.SclGpio = SclGpioNumber;
@@ -94,8 +94,8 @@ MicroWorld::FEsp32I2cMasterConfig MakeMasterConfig() noexcept
 void RunMaster() noexcept
 {
 	// Static, never on the app_main stack (the ESP32-S3 stack lesson, §2.2).
-	static MicroWorld::FEsp32TimeSource TimeSource{};
-	static MicroWorld::FEsp32I2cMasterDevice Device{MakeMasterConfig()};
+	static MicroWorld::Platform::Esp32::FEsp32TimeSource TimeSource{};
+	static MicroWorld::Platform::Esp32::FEsp32I2cMasterDevice Device{MakeMasterConfig()};
 	MW_LOG(Log, "ex20", "master open=%d", Device.IsOpen() ? 1 : 0);
 	MW_LOG(Log, "ex20", "master clocks the bus; the slave only reacts");
 	if (!Device.IsOpen())
@@ -119,8 +119,8 @@ void RunMaster() noexcept
 		{
 			std::uint8_t Payload[VolleyPayloadBytes];
 			WriteVolleyPayload(Payload, MasterNodeId, NextCounter);
-			const MicroWorld::Transport::ETransportResult TxResult =
-				Device.TrySend(MicroWorld::MakeI2cAddress(SlaveNodeId), MicroWorld::Core::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
+			const MicroWorld::Transport::ETransportResult TxResult = Device.TrySend(
+				MicroWorld::Platform::Esp32::MakeI2cAddress(SlaveNodeId), MicroWorld::Core::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
 			MW_LOG(Log, "ex20", "tx n=%u result=%s", static_cast<unsigned>(NextCounter), ToText(TxResult));
 			if (TxResult == MicroWorld::Transport::ETransportResult::Success)
 			{
@@ -146,14 +146,14 @@ void RunMaster() noexcept
 			}
 		}
 
-		MicroWorld::SleepMilliseconds(PollPacingMilliseconds);
+		MicroWorld::Platform::Esp32::SleepMilliseconds(PollPacingMilliseconds);
 	}
 }
 #else
 /** Builds the slave device configuration from the fixed pins and this board's own bus address. */
-MicroWorld::FEsp32I2cSlaveConfig MakeSlaveConfig() noexcept
+MicroWorld::Platform::Esp32::FEsp32I2cSlaveConfig MakeSlaveConfig() noexcept
 {
-	MicroWorld::FEsp32I2cSlaveConfig Config;
+	MicroWorld::Platform::Esp32::FEsp32I2cSlaveConfig Config;
 	Config.I2cPort = I2cPortNumber;
 	Config.SdaGpio = SdaGpioNumber;
 	Config.SclGpio = SclGpioNumber;
@@ -165,7 +165,7 @@ MicroWorld::FEsp32I2cSlaveConfig MakeSlaveConfig() noexcept
 /** Slave composition root: purely reactive — on each received counter it stages counter + 1 for the master's next read. */
 void RunSlave() noexcept
 {
-	static MicroWorld::FEsp32I2cSlaveDevice Device{MakeSlaveConfig()};
+	static MicroWorld::Platform::Esp32::FEsp32I2cSlaveDevice Device{MakeSlaveConfig()};
 	MW_LOG(Log, "ex20", "slave open=%d", Device.IsOpen() ? 1 : 0);
 	if (!Device.IsOpen())
 	{
@@ -191,12 +191,12 @@ void RunSlave() noexcept
 			// Stage the reply (counter + 1) for the master's next read; the master clocks it out.
 			std::uint8_t Payload[VolleyPayloadBytes];
 			WriteVolleyPayload(Payload, SlaveNodeId, Counter + 1);
-			const MicroWorld::Transport::ETransportResult TxResult =
-				Device.TrySend(MicroWorld::MakeI2cAddress(MasterNodeId), MicroWorld::Core::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
+			const MicroWorld::Transport::ETransportResult TxResult = Device.TrySend(
+				MicroWorld::Platform::Esp32::MakeI2cAddress(MasterNodeId), MicroWorld::Core::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
 			MW_LOG(Log, "ex20", "tx n=%u result=%s", static_cast<unsigned>(Counter + 1), ToText(TxResult));
 		}
 
-		MicroWorld::SleepMilliseconds(PollPacingMilliseconds);
+		MicroWorld::Platform::Esp32::SleepMilliseconds(PollPacingMilliseconds);
 	}
 }
 #endif
@@ -205,7 +205,7 @@ void RunSlave() noexcept
 /** Composition root: installs the output device, then ping-pongs a counter with the peer board over one wired I2C bus. */
 extern "C" void app_main(void)
 {
-	MicroWorld::Core::SetOutputDevice(&MicroWorld::WriteEsp32LogRecord);
+	MicroWorld::Core::SetOutputDevice(&MicroWorld::Platform::Esp32::WriteEsp32LogRecord);
 #if MICROWORLD_EXAMPLE_I2C_MASTER
 	RunMaster();
 #else

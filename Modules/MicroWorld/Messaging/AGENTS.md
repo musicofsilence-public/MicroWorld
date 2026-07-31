@@ -49,7 +49,7 @@ static TEngine<> Engine{Budget, Router};                 // capacities from FDef
 Client/server over one wire — server side shown:
 
 ```cpp
-static FEsp32UartDevice Device{{.UartPort = 1, .TxGpio = 17, .RxGpio = 18,
+static MicroWorld::Platform::Esp32::FEsp32UartDevice Device{{.UartPort = 1, .TxGpio = 17, .RxGpio = 18,
                                 .BaudRate = 115200, .LocalNodeId = 1}};
 static TTransportHost<2, 120> Transport{Device};         // Configure(DedicatedServer) + Start
 static TMessageRouter<16, 8, 96, 1> Router;

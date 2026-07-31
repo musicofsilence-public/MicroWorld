@@ -25,7 +25,7 @@
 
 #include <lwip/sockets.h>
 
-namespace MicroWorld
+namespace MicroWorld::Platform::Esp32
 {
 
 /** lwIP socket descriptor width; a negative value is its sentinel. */
@@ -388,4 +388,4 @@ inline bool WaitForReadable(const FSocketHandle InSocket, const Core::DurationMi
 	return Ready > 0;
 }
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Platform::Esp32

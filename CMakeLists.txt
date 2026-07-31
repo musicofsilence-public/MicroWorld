@@ -54,3 +54,10 @@ add_test(
         ${CMAKE_CURRENT_SOURCE_DIR}/tools/CheckFormatting.py
         --root ${CMAKE_CURRENT_SOURCE_DIR}
 )
+add_test(
+    NAME microworld_namespace_check
+    COMMAND
+        Python3::Interpreter
+        ${CMAKE_CURRENT_SOURCE_DIR}/tools/CheckNamespaces.py
+        --root ${CMAKE_CURRENT_SOURCE_DIR}
+)

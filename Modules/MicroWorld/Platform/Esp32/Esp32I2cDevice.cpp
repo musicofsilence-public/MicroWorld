@@ -9,7 +9,7 @@
 #include <cstdint>
 #include <cstring>
 
-namespace MicroWorld
+namespace MicroWorld::Platform::Esp32
 {
 
 void FI2cReceiveInbox::PushFromIsr(const std::uint8_t InByte) noexcept
@@ -299,4 +299,4 @@ bool FEsp32I2cSlaveDevice::IsOpen() const noexcept
 	return bOpen;
 }
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Platform::Esp32

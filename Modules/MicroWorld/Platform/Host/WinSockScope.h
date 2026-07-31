@@ -1,6 +1,6 @@
 #pragma once
 
-namespace MicroWorld
+namespace MicroWorld::Platform::Host
 {
 
 /**
@@ -27,4 +27,4 @@ public:
 	FWinSockScope& operator=(const FWinSockScope&) = delete;
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Platform::Host

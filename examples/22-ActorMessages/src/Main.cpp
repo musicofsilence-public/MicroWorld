@@ -318,7 +318,7 @@ private:
 };
 
 /** Single real-time source; every MicroWorld deadline in this example reads it. */
-MicroWorld::FEsp32TimeSource GTimeSource{};
+MicroWorld::Platform::Esp32::FEsp32TimeSource GTimeSource{};
 
 /** Poll far faster than any schedule so the FreeRTOS idle task (and its watchdog)
  *  always runs; the engine's tick schedules, not this delay, decide what fires. */
@@ -333,7 +333,7 @@ constexpr unsigned PollPacingMilliseconds = 10;
  */
 extern "C" void app_main(void)
 {
-	MicroWorld::Core::SetOutputDevice(&MicroWorld::WriteEsp32LogRecord);
+	MicroWorld::Core::SetOutputDevice(&MicroWorld::Platform::Esp32::WriteEsp32LogRecord);
 
 	// Announce the exact package contract this image was built against.
 	MW_LOG(
@@ -425,7 +425,7 @@ extern "C" void app_main(void)
 			MW_LOG(Error, "ex22", "engine tick failed");
 			break;
 		}
-		MicroWorld::SleepMilliseconds(PollPacingMilliseconds);
+		MicroWorld::Platform::Esp32::SleepMilliseconds(PollPacingMilliseconds);
 	}
 
 	(void)GEngine.EndPlay();

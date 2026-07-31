@@ -4,3 +4,7 @@
 // both platform adapters and the shared UDP devices agree on one layout. This
 // public header keeps its historical path and forwards to the canonical codec.
 #include <MicroWorld/Transport/Wifi/UdpAddressCodec.h>
+
+namespace MicroWorld::Platform::Esp32
+{
+} // namespace MicroWorld::Platform::Esp32

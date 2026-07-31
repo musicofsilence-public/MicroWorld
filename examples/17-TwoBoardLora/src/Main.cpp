@@ -22,7 +22,7 @@
 namespace
 {
 /** Single real-time source; every deadline in this example reads it. */
-MicroWorld::FEsp32TimeSource GTimeSource{};
+MicroWorld::Platform::Esp32::FEsp32TimeSource GTimeSource{};
 
 /** This board's node id, stamped on every frame it sends. */
 constexpr std::uint8_t LocalNodeId = MICROWORLD_EXAMPLE_NODE_ID;
@@ -93,9 +93,9 @@ std::uint32_t ReadVolleyCounter(const std::uint8_t* const In) noexcept
 #endif
 
 /** Builds the device configuration for this node from the fixed pins and baud. */
-MicroWorld::FEsp32E32LoraConfig MakeLoraConfig(const std::uint8_t NodeId) noexcept
+MicroWorld::Platform::Esp32::FEsp32E32LoraConfig MakeLoraConfig(const std::uint8_t NodeId) noexcept
 {
-	MicroWorld::FEsp32E32LoraConfig Config;
+	MicroWorld::Platform::Esp32::FEsp32E32LoraConfig Config;
 	Config.UartPort = UartPortNumber;
 	Config.TxGpio = TxGpioNumber;
 	Config.RxGpio = RxGpioNumber;
@@ -270,7 +270,7 @@ void HandlePayloadRegressionReceive(
 
 /** Pulls at most one completed frame from the device so radio polling remains bounded by the transport contract. */
 void ReceivePayloadRegressionFrame(
-	MicroWorld::FEsp32LoraDevice& InDevice,
+	MicroWorld::Platform::Esp32::FEsp32LoraDevice& InDevice,
 	FPayloadRegressionContext& OutContext,
 	std::uint8_t* const InOutRxBuffer,
 	const std::uint64_t InNowMilliseconds) noexcept
@@ -293,7 +293,7 @@ void ReceivePayloadRegressionFrame(
 
 /** Queues one canonical echo or maximum frame, preserving the device's non-blocking retry behavior when its slot is full. */
 void QueuePayloadRegressionFrame(
-	MicroWorld::FEsp32LoraDevice& InDevice,
+	MicroWorld::Platform::Esp32::FEsp32LoraDevice& InDevice,
 	FPayloadRegressionContext& OutContext,
 	std::uint8_t (&InOutTxBuffer)[MicroWorld::Transport::E32MaxPayloadBytes],
 	const MicroWorld::Example17::EPayloadRegressionCase InCase,
@@ -357,7 +357,7 @@ void QueuePayloadRegressionFrame(
 
 /** Selects the next outbound case without delaying the polling loop while the required maximum-frame period elapses. */
 void SendPayloadRegressionFrame(
-	MicroWorld::FEsp32LoraDevice& InDevice,
+	MicroWorld::Platform::Esp32::FEsp32LoraDevice& InDevice,
 	FPayloadRegressionContext& OutContext,
 	std::uint8_t (&InOutTxBuffer)[MicroWorld::Transport::E32MaxPayloadBytes],
 	const std::uint64_t InNowMilliseconds) noexcept
@@ -385,7 +385,7 @@ void SendPayloadRegressionFrame(
 
 /** Advances one bounded regression iteration; physical UART progress remains owned by the composition loop. */
 void AdvancePayloadRegression(
-	MicroWorld::FEsp32LoraDevice& InDevice,
+	MicroWorld::Platform::Esp32::FEsp32LoraDevice& InDevice,
 	FPayloadRegressionContext& OutContext,
 	std::uint8_t* const InOutRxBuffer,
 	std::uint8_t (&InOutTxBuffer)[MicroWorld::Transport::E32MaxPayloadBytes],
@@ -416,10 +416,10 @@ void AdvancePayloadRegression(
 /** Composition root: installs the output device, then runs the selected bounded LoRa exchange with the peer board. */
 extern "C" void app_main(void)
 {
-	MicroWorld::Core::SetOutputDevice(&MicroWorld::WriteEsp32LogRecord);
+	MicroWorld::Core::SetOutputDevice(&MicroWorld::Platform::Esp32::WriteEsp32LogRecord);
 
 	// Static, never on the app_main stack (the ESP32-S3 stack lesson, §2.2).
-	static MicroWorld::FEsp32LoraDevice Device{MakeLoraConfig(LocalNodeId)};
+	static MicroWorld::Platform::Esp32::FEsp32LoraDevice Device{MakeLoraConfig(LocalNodeId)};
 	MW_LOG(Log, "ex17", "node=%u open=%d", static_cast<unsigned>(LocalNodeId), Device.IsOpen() ? 1 : 0);
 	if (!Device.IsOpen())
 	{
@@ -441,7 +441,7 @@ extern "C" void app_main(void)
 		const std::uint64_t Now = GTimeSource.Now();
 		AdvancePayloadRegression(Device, Context, RxBuffer, TxBuffer, Now);
 		Device.AdvanceTransmit();
-		MicroWorld::SleepMilliseconds(PollPacingMilliseconds);
+		MicroWorld::Platform::Esp32::SleepMilliseconds(PollPacingMilliseconds);
 	}
 #else
 	// Node 1 seeds the volley one period after boot; node 2 stays idle until it hears frame 1.
@@ -485,7 +485,7 @@ extern "C" void app_main(void)
 		// Physical UART progress is independent of packet acceptance, so a Full slot keeps draining every iteration.
 		Device.AdvanceTransmit();
 
-		MicroWorld::SleepMilliseconds(PollPacingMilliseconds);
+		MicroWorld::Platform::Esp32::SleepMilliseconds(PollPacingMilliseconds);
 	}
 #endif
 }

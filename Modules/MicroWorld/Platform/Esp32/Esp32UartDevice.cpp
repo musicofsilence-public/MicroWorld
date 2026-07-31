@@ -8,7 +8,7 @@
 #include <cstdint>
 #include <cstring>
 
-namespace MicroWorld
+namespace MicroWorld::Platform::Esp32
 {
 
 FEsp32UartDevice::FEsp32UartDevice(const FEsp32UartConfig& InConfig) noexcept
@@ -176,4 +176,4 @@ bool FEsp32UartDevice::IsOpen() const noexcept
 	return bOpen;
 }
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Platform::Esp32

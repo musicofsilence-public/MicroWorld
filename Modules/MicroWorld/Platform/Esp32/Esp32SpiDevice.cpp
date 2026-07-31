@@ -10,7 +10,7 @@
 #include <cstring>
 #include <new>
 
-namespace MicroWorld
+namespace MicroWorld::Platform::Esp32
 {
 
 static_assert(
@@ -327,4 +327,4 @@ bool FEsp32SpiSlaveDevice::IsOpen() const noexcept
 	return bOpen;
 }
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Platform::Esp32

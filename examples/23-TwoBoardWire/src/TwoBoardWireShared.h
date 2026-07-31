@@ -88,9 +88,9 @@ using FWireBinding = MicroWorld::Messaging::TMessageChannelBinding<FWireTranspor
 using FWireEngine = MicroWorld::Engine::TEngine<>;
 
 /** Builds a board's UART device configuration from the fixed pins and baud. */
-inline MicroWorld::FEsp32UartConfig MakeUartConfig(const std::uint8_t NodeId) noexcept
+inline MicroWorld::Platform::Esp32::FEsp32UartConfig MakeUartConfig(const std::uint8_t NodeId) noexcept
 {
-	MicroWorld::FEsp32UartConfig Config;
+	MicroWorld::Platform::Esp32::FEsp32UartConfig Config;
 	Config.UartPort = UartPortNumber;
 	Config.TxGpio = TxGpioNumber;
 	Config.RxGpio = RxGpioNumber;

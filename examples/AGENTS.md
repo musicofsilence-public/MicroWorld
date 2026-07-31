@@ -12,7 +12,7 @@ inward: an example consumes `Modules/` packages, and MicroWorld never depends
 on an example. Duplication *across* examples (the `platformio.ini` boilerplate,
 the role-dispatch `Main.cpp`) is deliberate so each folder copies out
 standalone; DRY applies only *within* one example. WiFi, sleep, logging, and
-time come from the shared `PlatformEsp32` facades (`FEsp32WifiLink`,
+time come from the shared `MicroWorld::Platform::Esp32` facades (`FEsp32WifiLink`,
 `SleepMilliseconds`, `WriteEsp32LogRecord`, `FEsp32TimeSource`), not
 per-example glue.
 

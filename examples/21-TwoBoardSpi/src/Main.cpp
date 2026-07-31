@@ -77,9 +77,9 @@ std::uint32_t ReadVolleyCounter(const std::uint8_t* const In) noexcept
 
 #if MICROWORLD_EXAMPLE_SPI_MASTER
 /** Builds the master device configuration from the fixed pins and clock. */
-MicroWorld::FEsp32SpiMasterConfig MakeMasterConfig() noexcept
+MicroWorld::Platform::Esp32::FEsp32SpiMasterConfig MakeMasterConfig() noexcept
 {
-	MicroWorld::FEsp32SpiMasterConfig Config;
+	MicroWorld::Platform::Esp32::FEsp32SpiMasterConfig Config;
 	Config.SpiHost = SpiHostNumber;
 	Config.MosiGpio = MosiGpioNumber;
 	Config.MisoGpio = MisoGpioNumber;
@@ -94,8 +94,8 @@ MicroWorld::FEsp32SpiMasterConfig MakeMasterConfig() noexcept
 void RunMaster() noexcept
 {
 	// Static, never on the app_main stack (the ESP32-S3 stack lesson, §2.2); its DMA buffers must live here.
-	static MicroWorld::FEsp32TimeSource TimeSource{};
-	static MicroWorld::FEsp32SpiMasterDevice Device{MakeMasterConfig()};
+	static MicroWorld::Platform::Esp32::FEsp32TimeSource TimeSource{};
+	static MicroWorld::Platform::Esp32::FEsp32SpiMasterDevice Device{MakeMasterConfig()};
 	MW_LOG(Log, "ex21", "master open=%d", Device.IsOpen() ? 1 : 0);
 	MW_LOG(Log, "ex21", "master clocks the bus; the slave only reacts");
 	if (!Device.IsOpen())
@@ -119,8 +119,8 @@ void RunMaster() noexcept
 		{
 			std::uint8_t Payload[VolleyPayloadBytes];
 			WriteVolleyPayload(Payload, MasterNodeId, NextCounter);
-			const MicroWorld::Transport::ETransportResult TxResult =
-				Device.TrySend(MicroWorld::MakeSpiAddress(SlaveNodeId), MicroWorld::Core::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
+			const MicroWorld::Transport::ETransportResult TxResult = Device.TrySend(
+				MicroWorld::Platform::Esp32::MakeSpiAddress(SlaveNodeId), MicroWorld::Core::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
 			MW_LOG(Log, "ex21", "tx n=%u result=%s", static_cast<unsigned>(NextCounter), ToText(TxResult));
 			if (TxResult == MicroWorld::Transport::ETransportResult::Success)
 			{
@@ -147,14 +147,14 @@ void RunMaster() noexcept
 			}
 		}
 
-		MicroWorld::SleepMilliseconds(PollPacingMilliseconds);
+		MicroWorld::Platform::Esp32::SleepMilliseconds(PollPacingMilliseconds);
 	}
 }
 #else
 /** Builds the slave device configuration from the fixed pins. */
-MicroWorld::FEsp32SpiSlaveConfig MakeSlaveConfig() noexcept
+MicroWorld::Platform::Esp32::FEsp32SpiSlaveConfig MakeSlaveConfig() noexcept
 {
-	MicroWorld::FEsp32SpiSlaveConfig Config;
+	MicroWorld::Platform::Esp32::FEsp32SpiSlaveConfig Config;
 	Config.SpiHost = SpiHostNumber;
 	Config.MosiGpio = MosiGpioNumber;
 	Config.MisoGpio = MisoGpioNumber;
@@ -168,7 +168,7 @@ MicroWorld::FEsp32SpiSlaveConfig MakeSlaveConfig() noexcept
 void RunSlave() noexcept
 {
 	// Static, never on the app_main stack (§2.2); its DMA buffers must live here.
-	static MicroWorld::FEsp32SpiSlaveDevice Device{MakeSlaveConfig()};
+	static MicroWorld::Platform::Esp32::FEsp32SpiSlaveDevice Device{MakeSlaveConfig()};
 	MW_LOG(Log, "ex21", "slave open=%d", Device.IsOpen() ? 1 : 0);
 	if (!Device.IsOpen())
 	{
@@ -194,12 +194,12 @@ void RunSlave() noexcept
 			// Stage the reply (counter + 1) for the master's next read; the master clocks it out.
 			std::uint8_t Payload[VolleyPayloadBytes];
 			WriteVolleyPayload(Payload, SlaveNodeId, Counter + 1);
-			const MicroWorld::Transport::ETransportResult TxResult =
-				Device.TrySend(MicroWorld::MakeSpiAddress(MasterNodeId), MicroWorld::Core::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
+			const MicroWorld::Transport::ETransportResult TxResult = Device.TrySend(
+				MicroWorld::Platform::Esp32::MakeSpiAddress(MasterNodeId), MicroWorld::Core::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
 			MW_LOG(Log, "ex21", "tx n=%u result=%s", static_cast<unsigned>(Counter + 1), ToText(TxResult));
 		}
 
-		MicroWorld::SleepMilliseconds(PollPacingMilliseconds);
+		MicroWorld::Platform::Esp32::SleepMilliseconds(PollPacingMilliseconds);
 	}
 }
 #endif
@@ -208,7 +208,7 @@ void RunSlave() noexcept
 /** Composition root: installs the output device, then ping-pongs a counter with the peer board over one wired SPI bus. */
 extern "C" void app_main(void)
 {
-	MicroWorld::Core::SetOutputDevice(&MicroWorld::WriteEsp32LogRecord);
+	MicroWorld::Core::SetOutputDevice(&MicroWorld::Platform::Esp32::WriteEsp32LogRecord);
 #if MICROWORLD_EXAMPLE_SPI_MASTER
 	RunMaster();
 #else

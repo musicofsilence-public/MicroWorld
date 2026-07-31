@@ -14,11 +14,11 @@
 namespace
 {
 
-using MicroWorld::FPicoE32LoraConfig;
-using MicroWorld::FPicoLoraDevice;
-using MicroWorld::IPicoE32LoraPlatform;
-using MicroWorld::IPicoUartPlatform;
 using MicroWorld::Core::TSpan;
+using MicroWorld::Platform::Pico::FPicoE32LoraConfig;
+using MicroWorld::Platform::Pico::FPicoLoraDevice;
+using MicroWorld::Platform::Pico::IPicoE32LoraPlatform;
+using MicroWorld::Platform::Pico::IPicoUartPlatform;
 using MicroWorld::Transport::E32MaxPayloadBytes;
 using MicroWorld::Transport::ETransportResult;
 using MicroWorld::Transport::MakeLoraAddress;

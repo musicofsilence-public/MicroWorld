@@ -4,7 +4,7 @@
 
 #include <cstdint>
 
-namespace MicroWorld
+namespace MicroWorld::Platform::Host
 {
 
 namespace
@@ -193,4 +193,4 @@ bool FHostWifiDevice::PollReadable(const Core::DurationMilliseconds InTimeoutMil
 	return WaitForReadable(AsSocketHandle(SocketHandle), InTimeoutMilliseconds);
 }
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Platform::Host

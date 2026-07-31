@@ -85,9 +85,9 @@ what retired that name.
 Read the two suppliers in one `app_main` side by side; both announce themselves:
 
 ```cpp
-MicroWorld::SetOutputDevice(&MicroWorld::WriteEsp32LogRecord);
-const MicroWorld::ERuntimeResult StopResult = ValveApplication.Run(
-        TimeSource, &MicroWorld::SleepMilliseconds, kFramePacingMilliseconds);
+MicroWorld::Core::SetOutputDevice(&MicroWorld::Platform::Esp32::WriteEsp32LogRecord);
+const MicroWorld::Core::ERuntimeResult StopResult = ValveApplication.Run(
+        TimeSource, &MicroWorld::Platform::Esp32::SleepMilliseconds, kFramePacingMilliseconds);
 ```
 
 Adding `Function` to an alias whose root word is borrowed from UE5 is worth the

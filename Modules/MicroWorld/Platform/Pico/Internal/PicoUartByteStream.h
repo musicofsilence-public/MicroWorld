@@ -5,7 +5,7 @@
 
 #include <cstdint>
 
-namespace MicroWorld
+namespace MicroWorld::Platform::Pico
 {
 
 /**
@@ -99,4 +99,4 @@ private:
 	bool bOpen{false};
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Platform::Pico

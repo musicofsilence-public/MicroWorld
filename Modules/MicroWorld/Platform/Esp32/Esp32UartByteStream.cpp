@@ -2,7 +2,7 @@
 
 #include "Internal/UartPlatformImplementation.h"
 
-namespace MicroWorld
+namespace MicroWorld::Platform::Esp32
 {
 
 FEsp32UartByteStream::~FEsp32UartByteStream() noexcept
@@ -88,4 +88,4 @@ Core::EUartByteStreamResult FEsp32UartByteStream::TryReadByte(std::uint8_t& OutB
 	}
 }
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Platform::Esp32
