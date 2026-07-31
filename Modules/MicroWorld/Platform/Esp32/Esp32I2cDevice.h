@@ -12,11 +12,6 @@
 namespace MicroWorld::Platform::Esp32
 {
 
-using namespace ::MicroWorld::Transport;
-using namespace ::MicroWorld::Transport::Address;
-using namespace ::MicroWorld::Transport::Device;
-using namespace ::MicroWorld::Transport::FrameCodec;
-
 /**
  * Largest single-transmission payload one wired I2C frame carries.
  *
@@ -30,7 +25,7 @@ constexpr std::size_t I2cMaxPayloadBytes = 120;
  * Bytes of one whole I2C transaction window: the largest single frame (payload plus framing) the master reads
  * or the slave stages in one transfer.
  */
-constexpr std::size_t I2cTransactionWindowBytes = I2cMaxPayloadBytes + FrameOverheadBytes;
+constexpr std::size_t I2cTransactionWindowBytes = I2cMaxPayloadBytes + Transport::FrameCodec::FrameOverheadBytes;
 
 /**
  * Fixed-capacity byte inbox the I2C slave device owns, filled by the platform receive ISR and drained by `TryReceive`.
@@ -122,7 +117,7 @@ struct FEsp32I2cSlaveConfig
  * codec discards. It validates every argument before any syscall, leaves caller outputs unchanged on any
  * non-`Success` result, and exercises no bus traffic until example 20's hardware checkpoint passes (§1.2).
  */
-class FEsp32I2cMasterDevice final : public IDevice
+class FEsp32I2cMasterDevice final : public Transport::Device::IDevice
 {
 public:
 	/**
@@ -162,7 +157,7 @@ public:
 	 * @param InPacket Caller-owned payload bytes framed and sent as one message.
 	 * @return Normalized outcome of the single send attempt.
 	 */
-	ETransportResult TrySend(const FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
+	Transport::ETransportResult TrySend(const Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
 	 * Receives at most one framed message by clocking one whole-frame window from the slave, transactionally.
@@ -177,7 +172,10 @@ public:
 	 * @param OutResult Filled with the received byte count only on `Success`.
 	 * @return Normalized outcome of the single receive attempt.
 	 */
-	ETransportResult TryReceive(FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept override;
+	Transport::ETransportResult TryReceive(
+		Transport::Address::FDeviceAddress& OutFrom,
+		Core::TSpan<std::uint8_t> InDestination,
+		Transport::Device::FReceiveResult& OutResult) noexcept override;
 
 	/** Reports the largest payload, in bytes, one send accepts (excludes framing overhead). */
 	std::size_t MaxPacketBytes() const noexcept override;
@@ -187,7 +185,7 @@ public:
 
 private:
 	/** Bounded RX deframer held by value; its capacity matches `I2cMaxPayloadBytes`. */
-	TFrameDecoder<I2cMaxPayloadBytes> Decoder{};
+	Transport::FrameCodec::TFrameDecoder<I2cMaxPayloadBytes> Decoder{};
 
 	/** ESP-IDF `i2c_master_bus_handle_t` stored opaquely; reinterpreted only in the source file. */
 	void* BusHandle{nullptr};
@@ -210,7 +208,7 @@ private:
  * It validates every argument before any syscall, leaves caller outputs unchanged on any non-`Success` result,
  * and exercises no bus traffic until example 20's hardware checkpoint passes (§1.2).
  */
-class FEsp32I2cSlaveDevice final : public IDevice
+class FEsp32I2cSlaveDevice final : public Transport::Device::IDevice
 {
 public:
 	/**
@@ -250,7 +248,7 @@ public:
 	 * @param InPacket Caller-owned payload bytes framed and staged as one message.
 	 * @return Normalized outcome of the single send attempt.
 	 */
-	ETransportResult TrySend(const FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
+	Transport::ETransportResult TrySend(const Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
 	 * Receives at most one framed message by draining the ISR-filled inbox, transactionally.
@@ -265,7 +263,10 @@ public:
 	 * @param OutResult Filled with the received byte count only on `Success`.
 	 * @return Normalized outcome of the single receive attempt.
 	 */
-	ETransportResult TryReceive(FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept override;
+	Transport::ETransportResult TryReceive(
+		Transport::Address::FDeviceAddress& OutFrom,
+		Core::TSpan<std::uint8_t> InDestination,
+		Transport::Device::FReceiveResult& OutResult) noexcept override;
 
 	/** Reports the largest payload, in bytes, one send accepts (excludes framing overhead). */
 	std::size_t MaxPacketBytes() const noexcept override;
@@ -275,7 +276,7 @@ public:
 
 private:
 	/** Bounded RX deframer held by value; its capacity matches `I2cMaxPayloadBytes`. */
-	TFrameDecoder<I2cMaxPayloadBytes> Decoder{};
+	Transport::FrameCodec::TFrameDecoder<I2cMaxPayloadBytes> Decoder{};
 
 	/** Inbox the platform receive ISR fills and `TryReceive` drains; its address is passed to the callback. */
 	FI2cReceiveInbox Inbox{};

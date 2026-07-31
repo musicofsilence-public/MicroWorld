@@ -12,10 +12,6 @@
 namespace MicroWorld::Platform::Esp32
 {
 
-using namespace ::MicroWorld::Transport;
-using namespace ::MicroWorld::Transport::Address;
-using namespace ::MicroWorld::Transport::Device;
-
 /**
  * Non-blocking UDP `IDevice` that carries traffic over one real lwIP socket.
  *
@@ -25,7 +21,7 @@ using namespace ::MicroWorld::Transport::Device;
  * unchanged on any non-`Success` result, and is the ESP32 sibling of the host
  * adapter shipped in Phase 5.1.
  */
-class FEsp32WifiDevice final : public IDevice
+class FEsp32WifiDevice final : public Transport::Device::IDevice
 {
 public:
 	/** Largest UDP payload one send accepts and one receive destination may exceed. */
@@ -70,7 +66,7 @@ public:
 	 * @param InPacket Caller-owned bytes to deliver as one complete datagram.
 	 * @return Normalized outcome of the single send attempt.
 	 */
-	ETransportResult TrySend(const FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
+	Transport::ETransportResult TrySend(const Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
 	 * Receives at most one datagram into the caller-owned destination, transactionally.
@@ -86,7 +82,10 @@ public:
 	 * @param OutResult Filled with the received byte count only on `Success`.
 	 * @return Normalized outcome of the single receive attempt.
 	 */
-	ETransportResult TryReceive(FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept override;
+	Transport::ETransportResult TryReceive(
+		Transport::Address::FDeviceAddress& OutFrom,
+		Core::TSpan<std::uint8_t> InDestination,
+		Transport::Device::FReceiveResult& OutResult) noexcept override;
 
 	/** Reports the largest datagram, in bytes, one send accepts. */
 	std::size_t MaxPacketBytes() const noexcept override;

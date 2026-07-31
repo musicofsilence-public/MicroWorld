@@ -53,7 +53,7 @@ class THostLoopback final
 		ETransportResult Deliver(
 			const ::MicroWorld::Transport::Address::FDeviceAddress& InTo,
 			const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom,
-			TSpan<const std::uint8_t> InPacket) noexcept
+			Core::TSpan<const std::uint8_t> InPacket) noexcept
 		{
 			const ETransportResult AddressResult = ValidateDeliverAddress(InTo);
 			if (AddressResult != ETransportResult::Success)
@@ -88,7 +88,7 @@ class THostLoopback final
 		ETransportResult Receive(
 			const std::uint8_t InLocalPort,
 			::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
-			TSpan<std::uint8_t> InDestination,
+			Core::TSpan<std::uint8_t> InDestination,
 			::MicroWorld::Transport::Device::FReceiveResult& OutResult) noexcept
 		{
 			const ETransportResult DestinationResult = ValidateReceiveDestination(InDestination);
@@ -177,7 +177,7 @@ class THostLoopback final
 
 		/** Enqueues one already-validated packet at the tail, or `Full` when the mailbox has no free slot. */
 		static ETransportResult EnqueuePacket(
-			FMailbox& InTarget, const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom, TSpan<const std::uint8_t> InPacket) noexcept
+			FMailbox& InTarget, const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom, Core::TSpan<const std::uint8_t> InPacket) noexcept
 		{
 			if (InTarget.QueuedCount >= MailboxCapacity)
 			{
@@ -189,7 +189,7 @@ class THostLoopback final
 		}
 
 		/** Rejects a null destination with nonzero length before the mailbox state is consulted. */
-		static ETransportResult ValidateReceiveDestination(TSpan<std::uint8_t> InDestination) noexcept
+		static ETransportResult ValidateReceiveDestination(Core::TSpan<std::uint8_t> InDestination) noexcept
 		{
 			// A null destination with nonzero length is an invalid request independent of the
 			// mailbox state: validate it before the empty check so an empty mailbox still
@@ -221,7 +221,7 @@ class THostLoopback final
 			FMailbox& InMailbox,
 			const std::size_t InHeadSize,
 			::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
-			TSpan<std::uint8_t> InDestination,
+			Core::TSpan<std::uint8_t> InDestination,
 			::MicroWorld::Transport::Device::FReceiveResult& OutResult) noexcept
 		{
 			if (InHeadSize > 0)
@@ -241,7 +241,7 @@ class THostLoopback final
 			FMailbox& InMailbox,
 			const std::size_t InIndex,
 			const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom,
-			TSpan<const std::uint8_t> InPacket,
+			Core::TSpan<const std::uint8_t> InPacket,
 			const std::size_t InPacketSize) noexcept
 		{
 			if (InPacketSize > 0)
@@ -281,7 +281,8 @@ class THostLoopback final
 		}
 
 		/** Delivers one packet to `InTo`'s mailbox stamped with this port's address. */
-		ETransportResult TrySend(const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override
+		ETransportResult TrySend(
+			const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override
 		{
 			return Mailboxes->Deliver(InTo, ::MicroWorld::Transport::Address::MakeLoopbackAddress(LocalIndex), InPacket);
 		}
@@ -289,7 +290,7 @@ class THostLoopback final
 		/** Pops one packet from this port's mailbox, reporting the sender via OutFrom. */
 		ETransportResult TryReceive(
 			::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
-			TSpan<std::uint8_t> InDestination,
+			Core::TSpan<std::uint8_t> InDestination,
 			::MicroWorld::Transport::Device::FReceiveResult& OutResult) noexcept override
 		{
 			return Mailboxes->Receive(LocalIndex, OutFrom, InDestination, OutResult);

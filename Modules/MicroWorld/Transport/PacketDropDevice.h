@@ -41,12 +41,13 @@ public:
 	 * Counts this call and, on every `DropEveryNthSend`-th call, drops the packet by returning
 	 * `Success` without forwarding it; every other call forwards verbatim to the inner device.
 	 */
-	ETransportResult TrySend(const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override;
+	ETransportResult TrySend(
+		const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/** Forwards verbatim to the inner device; receives are never counted or dropped. */
 	ETransportResult TryReceive(
 		::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
-		TSpan<std::uint8_t> InDestination,
+		Core::TSpan<std::uint8_t> InDestination,
 		::MicroWorld::Transport::Device::FReceiveResult& OutResult) noexcept override;
 
 	/** Forwards bounded physical transmit progress so wrapped staged devices cannot stall behind loss injection. */

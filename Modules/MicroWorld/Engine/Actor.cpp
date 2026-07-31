@@ -13,7 +13,7 @@
 namespace MicroWorld::Engine
 {
 
-AActor::AActor(const FTickConfiguration InTickConfiguration) noexcept : UObject(), FTickable(InTickConfiguration) {}
+AActor::AActor(const Core::FTickConfiguration InTickConfiguration) noexcept : UObject(), Core::FTickable(InTickConfiguration) {}
 
 AActor::~AActor() noexcept = default;
 
@@ -104,26 +104,26 @@ UWorld* AActor::GetOwnerWorld() const noexcept
 	return static_cast<UWorld*>(ResolveObjectHandle(*ObjectStore, WorldObjectHandle));
 }
 
-ERuntimeResult AActor::DispatchBeginPlay(const TimePointMilliseconds InNowMilliseconds) noexcept
+Core::ERuntimeResult AActor::DispatchBeginPlay(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 {
-	const ERuntimeResult BeginResult = Lifecycle.Begin();
-	if (BeginResult != ERuntimeResult::Success)
+	const Core::ERuntimeResult BeginResult = Lifecycle.Begin();
+	if (BeginResult != Core::ERuntimeResult::Success)
 	{
 		return BeginResult;
 	}
 	BeginPrimaryTickLifecycle(InNowMilliseconds);
 
-	const ERuntimeResult ComponentsResult = BeginComponentsWithRollback(InNowMilliseconds);
-	if (ComponentsResult != ERuntimeResult::Success)
+	const Core::ERuntimeResult ComponentsResult = BeginComponentsWithRollback(InNowMilliseconds);
+	if (ComponentsResult != Core::ERuntimeResult::Success)
 	{
 		return ComponentsResult;
 	}
 
 	BeginPlay();
-	return ERuntimeResult::Success;
+	return Core::ERuntimeResult::Success;
 }
 
-ERuntimeResult AActor::BeginComponentsWithRollback(const TimePointMilliseconds InNowMilliseconds) noexcept
+Core::ERuntimeResult AActor::BeginComponentsWithRollback(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 {
 	// Components begin in registration order; on first failure the previously
 	// begun components are ended in reverse so the actor never observes a
@@ -132,9 +132,9 @@ ERuntimeResult AActor::BeginComponentsWithRollback(const TimePointMilliseconds I
 	for (std::size_t Index = 0; Index < ComponentCount; ++Index)
 	{
 		UActorComponent* const Component = Components[Index].Get();
-		const ERuntimeResult ComponentResult =
-			Component != nullptr ? Component->DispatchBeginPlay(InNowMilliseconds) : ERuntimeResult::InvalidLifecycle;
-		if (ComponentResult != ERuntimeResult::Success)
+		const Core::ERuntimeResult ComponentResult =
+			Component != nullptr ? Component->DispatchBeginPlay(InNowMilliseconds) : Core::ERuntimeResult::InvalidLifecycle;
+		if (ComponentResult != Core::ERuntimeResult::Success)
 		{
 			for (std::size_t RollbackIndex = BegunComponentCount; RollbackIndex > 0; --RollbackIndex)
 			{
@@ -149,13 +149,13 @@ ERuntimeResult AActor::BeginComponentsWithRollback(const TimePointMilliseconds I
 		}
 		++BegunComponentCount;
 	}
-	return ERuntimeResult::Success;
+	return Core::ERuntimeResult::Success;
 }
 
-ERuntimeResult AActor::DispatchAdvance(const TimePointMilliseconds InNowMilliseconds) noexcept
+Core::ERuntimeResult AActor::DispatchAdvance(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 {
-	const ERuntimeResult PlayingResult = Lifecycle.RequirePlaying();
-	if (PlayingResult != ERuntimeResult::Success)
+	const Core::ERuntimeResult PlayingResult = Lifecycle.RequirePlaying();
+	if (PlayingResult != Core::ERuntimeResult::Success)
 	{
 		return PlayingResult;
 	}
@@ -167,17 +167,17 @@ ERuntimeResult AActor::DispatchAdvance(const TimePointMilliseconds InNowMillisec
 		UActorComponent* const Component = Components[Index].Get();
 		if (Component == nullptr)
 		{
-			return ERuntimeResult::InvalidLifecycle;
+			return Core::ERuntimeResult::InvalidLifecycle;
 		}
-		const ERuntimeResult ComponentResult = Component->DispatchAdvance(InNowMilliseconds);
-		if (ComponentResult != ERuntimeResult::Success)
+		const Core::ERuntimeResult ComponentResult = Component->DispatchAdvance(InNowMilliseconds);
+		if (ComponentResult != Core::ERuntimeResult::Success)
 		{
 			return ComponentResult;
 		}
 	}
 
-	const FTickDecision Decision = AdvancePrimaryTick(InNowMilliseconds);
-	if (Decision.Result != ERuntimeResult::Success)
+	const Core::FTickDecision Decision = AdvancePrimaryTick(InNowMilliseconds);
+	if (Decision.Result != Core::ERuntimeResult::Success)
 	{
 		return Decision.Result;
 	}
@@ -185,32 +185,32 @@ ERuntimeResult AActor::DispatchAdvance(const TimePointMilliseconds InNowMillisec
 	{
 		Tick(Decision.Context);
 	}
-	return ERuntimeResult::Success;
+	return Core::ERuntimeResult::Success;
 }
 
-ERuntimeResult AActor::DispatchEndPlay() noexcept
+Core::ERuntimeResult AActor::DispatchEndPlay() noexcept
 {
 	// EndPlay is idempotent after a successful end so repeated shutdown paths
 	// never re-enter the consumer hook or component end cascade.
-	if (Lifecycle.GetState() == ELifecycleState::Ended)
+	if (Lifecycle.GetState() == Core::ELifecycleState::Ended)
 	{
-		return ERuntimeResult::Success;
+		return Core::ERuntimeResult::Success;
 	}
-	const ERuntimeResult EndResult = Lifecycle.End();
-	if (EndResult != ERuntimeResult::Success)
+	const Core::ERuntimeResult EndResult = Lifecycle.End();
+	if (EndResult != Core::ERuntimeResult::Success)
 	{
 		return EndResult;
 	}
 
 	// The actor's own hook runs before its components end, matching Core.
 	EndPlay();
-	ERuntimeResult FirstError = ERuntimeResult::Success;
+	Core::ERuntimeResult FirstError = Core::ERuntimeResult::Success;
 	for (std::size_t Index = ComponentCount; Index > 0; --Index)
 	{
 		if (UActorComponent* const Component = Components[Index - 1].Get())
 		{
-			const ERuntimeResult ComponentResult = Component->DispatchEndPlay();
-			if (FirstError == ERuntimeResult::Success && ComponentResult != ERuntimeResult::Success)
+			const Core::ERuntimeResult ComponentResult = Component->DispatchEndPlay();
+			if (FirstError == Core::ERuntimeResult::Success && ComponentResult != Core::ERuntimeResult::Success)
 			{
 				FirstError = ComponentResult;
 			}

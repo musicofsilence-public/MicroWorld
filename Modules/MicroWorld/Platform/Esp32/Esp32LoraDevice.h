@@ -9,10 +9,6 @@
 namespace MicroWorld::Platform::Esp32
 {
 
-using namespace ::MicroWorld::Transport;
-using namespace ::MicroWorld::Transport::Address;
-using namespace ::MicroWorld::Transport::Device;
-
 /**
  * Construction parameters for one ESP32 E32 LoRa compatibility facade.
  *
@@ -45,7 +41,7 @@ struct FEsp32E32LoraConfig
  * Keeping all methods inline means PlatformEsp32 consumers resolve RadioE32 only when they include this E32 header; non-LoRa PlatformEsp32 consumers
  * remain independent of the optional package.
  */
-class FEsp32LoraDevice final : public IDevice
+class FEsp32LoraDevice final : public Transport::Device::IDevice
 {
 public:
 	/**
@@ -68,8 +64,8 @@ public:
 			return;
 		}
 
-		const ETransportResult InitializeResult = RadioDevice.Initialize(InConfig.LocalNodeId);
-		if (InitializeResult != ETransportResult::Success)
+		const Transport::ETransportResult InitializeResult = RadioDevice.Initialize(InConfig.LocalNodeId);
+		if (InitializeResult != Transport::ETransportResult::Success)
 		{
 			ByteStream.Close();
 		}
@@ -102,7 +98,7 @@ public:
 	 * payload to frame and queue.
 	 * @return Outcome of the portable frame-acceptance attempt.
 	 */
-	ETransportResult TrySend(const FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override
+	Transport::ETransportResult TrySend(const Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override
 	{
 		return RadioDevice.TrySend(InTo, InPacket);
 	}
@@ -118,7 +114,10 @@ public:
 	 * @param OutResult Filled with the delivered byte count only on `Success`.
 	 * @return `Success`, `Unavailable`, `Full`, or `Invalid` under `IDevice`.
 	 */
-	ETransportResult TryReceive(FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept override
+	Transport::ETransportResult TryReceive(
+		Transport::Address::FDeviceAddress& OutFrom,
+		Core::TSpan<std::uint8_t> InDestination,
+		Transport::Device::FReceiveResult& OutResult) noexcept override
 	{
 		return RadioDevice.TryReceive(OutFrom, InDestination, OutResult);
 	}
@@ -137,7 +136,7 @@ private:
 	FEsp32UartByteStream ByteStream{};
 
 	/** Owns portable E32 framing and retains a reference to ByteStream for its full facade lifetime. */
-	FE32LoraDevice RadioDevice{ByteStream};
+	Transport::FE32LoraDevice RadioDevice{ByteStream};
 };
 
 } // namespace MicroWorld::Platform::Esp32

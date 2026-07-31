@@ -40,7 +40,7 @@ enum class EReliablePacketKind : std::uint8_t
 struct FReliableChannelConfig
 {
 	/** Minimum wall-clock gap between successive resend attempts for one unacknowledged message. */
-	DurationMilliseconds RetryIntervalMilliseconds{250};
+	Core::DurationMilliseconds RetryIntervalMilliseconds{250};
 
 	/** Total send attempts (the initial send plus retries) before a message is abandoned. */
 	std::uint8_t MaxSendAttempts{8};
@@ -54,7 +54,7 @@ struct FReliableChannelConfig
  * Implements IPlaySystem so PostAdvance resends due unacknowledged messages; point-to-point only.
  */
 template<std::size_t MaxPendingMessages, std::size_t MaxMessageBytes>
-class TReliableChannel final : public IMessageChannel, public IEncodedMessageSink, public IPlaySystem
+class TReliableChannel final : public IMessageChannel, public IEncodedMessageSink, public Core::IPlaySystem
 {
 public:
 	/** Stores the forward sink and retry configuration; the inner channel is bound later via SetInnerChannel. */
@@ -101,7 +101,7 @@ public:
 	 * every pending slot is already in use (CapacityExceeded). Otherwise keeps the pending slot even when the
 	 * initial inner send does not report Success, since PostAdvance retries it later instead of losing it.
 	 */
-	EMessageResult TrySendEncodedMessage(const TSpan<const std::uint8_t> InEncoded) noexcept override
+	EMessageResult TrySendEncodedMessage(const Core::TSpan<const std::uint8_t> InEncoded) noexcept override
 	{
 		if (InnerChannel == nullptr)
 		{
@@ -126,7 +126,7 @@ public:
 		Slot->bBaselineTimeSet = false;
 		Slot->bInUse = true;
 
-		return InnerChannel->TrySendEncodedMessage(TSpan<const std::uint8_t>(Slot->Bytes, Slot->Length));
+		return InnerChannel->TrySendEncodedMessage(Core::TSpan<const std::uint8_t>(Slot->Bytes, Slot->Length));
 	}
 
 	/**
@@ -135,7 +135,8 @@ public:
 	 * triggers an ack (fresh or duplicate, since the sender's first ack may itself have been lost), then
 	 * forwards a fresh payload to ForwardSink once or counts a duplicate; an Acknowledgement frees the matching pending slot.
 	 */
-	EMessageResult ReceiveEncodedMessage(const FMessageChannelId InArrivedOnChannelId, const TSpan<const std::uint8_t> InEncoded) noexcept override
+	EMessageResult ReceiveEncodedMessage(
+		const FMessageChannelId InArrivedOnChannelId, const Core::TSpan<const std::uint8_t> InEncoded) noexcept override
 	{
 		if (InEncoded.Size() < ReliableHeaderBytes)
 		{
@@ -164,14 +165,14 @@ public:
 	}
 
 	/** No-op: this wrapper has no inbound polling of its own; inbound arrives via ReceiveEncodedMessage. */
-	void PreAdvance(const TimePointMilliseconds InNowMilliseconds) noexcept override { (void)InNowMilliseconds; }
+	void PreAdvance(const Core::TimePointMilliseconds InNowMilliseconds) noexcept override { (void)InNowMilliseconds; }
 
 	/**
 	 * Paces retries for every pending slot: the first flush after a send only records the retry baseline
 	 * (never resending that same tick), a later flush resends once RetryIntervalMilliseconds has elapsed
 	 * and the slot has not exhausted Config.MaxSendAttempts, and an exhausted slot is dropped and counted lost instead.
 	 */
-	void PostAdvance(const TimePointMilliseconds InNowMilliseconds) noexcept override
+	void PostAdvance(const Core::TimePointMilliseconds InNowMilliseconds) noexcept override
 	{
 		if (InnerChannel == nullptr)
 		{
@@ -230,7 +231,7 @@ private:
 		bool bBaselineTimeSet{false};
 
 		/** Wall-clock time PostAdvance last (re)sent this slot, meaningful only once bBaselineTimeSet is true. */
-		TimePointMilliseconds LastSendTimeMilliseconds{0};
+		Core::TimePointMilliseconds LastSendTimeMilliseconds{0};
 
 		/** Distinguishes an occupied slot from reusable free storage. */
 		bool bInUse{false};
@@ -364,12 +365,12 @@ private:
 	 * (the message is already acked and marked seen, so this wrapper never un-acks or re-delivers it).
 	 */
 	EMessageResult HandleInboundData(
-		const FMessageChannelId InArrivedOnChannelId, const std::uint16_t InSequence, const TSpan<const std::uint8_t> InEncoded) noexcept
+		const FMessageChannelId InArrivedOnChannelId, const std::uint16_t InSequence, const Core::TSpan<const std::uint8_t> InEncoded) noexcept
 	{
 		std::uint8_t AckBytes[ReliableHeaderBytes];
 		WriteReliableHeader(AckBytes, EReliablePacketKind::Acknowledgement, InSequence);
 		// Best-effort: a lost ack is recovered by the sender's own retry-driven resend, not by us.
-		(void)InnerChannel->TrySendEncodedMessage(TSpan<const std::uint8_t>(AckBytes, ReliableHeaderBytes));
+		(void)InnerChannel->TrySendEncodedMessage(Core::TSpan<const std::uint8_t>(AckBytes, ReliableHeaderBytes));
 
 		if (WasSeen(InSequence))
 		{
@@ -378,13 +379,13 @@ private:
 		}
 
 		MarkSeen(InSequence);
-		const TSpan<const std::uint8_t> InnerPayload(InEncoded.Data() + ReliableHeaderBytes, InEncoded.Size() - ReliableHeaderBytes);
+		const Core::TSpan<const std::uint8_t> InnerPayload(InEncoded.Data() + ReliableHeaderBytes, InEncoded.Size() - ReliableHeaderBytes);
 		(void)ForwardSink.ReceiveEncodedMessage(InArrivedOnChannelId, InnerPayload);
 		return EMessageResult::Success;
 	}
 
 	/** Advances one pending slot's retry state by exactly one PostAdvance's worth of elapsed time. */
-	void TickOnePendingSlot(FPendingMessage& InSlot, const TimePointMilliseconds InNowMilliseconds) noexcept
+	void TickOnePendingSlot(FPendingMessage& InSlot, const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		if (!InSlot.bBaselineTimeSet)
 		{
@@ -403,7 +404,7 @@ private:
 			return;
 		}
 
-		(void)InnerChannel->TrySendEncodedMessage(TSpan<const std::uint8_t>(InSlot.Bytes, InSlot.Length));
+		(void)InnerChannel->TrySendEncodedMessage(Core::TSpan<const std::uint8_t>(InSlot.Bytes, InSlot.Length));
 		++InSlot.Attempts;
 		++ResentTotal;
 		InSlot.LastSendTimeMilliseconds = InNowMilliseconds;

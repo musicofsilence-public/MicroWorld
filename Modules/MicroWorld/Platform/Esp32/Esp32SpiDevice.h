@@ -12,11 +12,6 @@
 namespace MicroWorld::Platform::Esp32
 {
 
-using namespace ::MicroWorld::Transport;
-using namespace ::MicroWorld::Transport::Address;
-using namespace ::MicroWorld::Transport::Device;
-using namespace ::MicroWorld::Transport::FrameCodec;
-
 /**
  * Largest single-transmission payload one wired SPI frame carries.
  *
@@ -32,7 +27,7 @@ constexpr std::size_t SpiMaxPayloadBytes = 120;
 constexpr std::size_t SpiTransactionWindowBytes = 128;
 
 static_assert(
-	SpiTransactionWindowBytes >= SpiMaxPayloadBytes + FrameOverheadBytes,
+	SpiTransactionWindowBytes >= SpiMaxPayloadBytes + Transport::FrameCodec::FrameOverheadBytes,
 	"SpiTransactionWindowBytes must hold one whole frame (payload plus framing overhead).");
 static_assert(SpiTransactionWindowBytes % 4 == 0, "SPI DMA requires the transaction length to be a multiple of four bytes.");
 
@@ -110,7 +105,7 @@ struct FEsp32SpiSlaveConfig
  * outputs unchanged on any non-`Success` result, and exercises no bus traffic until example 21's hardware
  * checkpoint passes (§1.2).
  */
-class FEsp32SpiMasterDevice final : public IDevice
+class FEsp32SpiMasterDevice final : public Transport::Device::IDevice
 {
 public:
 	/**
@@ -151,7 +146,7 @@ public:
 	 * @param InPacket Caller-owned payload bytes framed and sent as one message.
 	 * @return Normalized outcome of the single send attempt.
 	 */
-	ETransportResult TrySend(const FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
+	Transport::ETransportResult TrySend(const Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
 	 * Receives at most one framed message by clocking one idle full-duplex transaction, transactionally.
@@ -166,7 +161,10 @@ public:
 	 * @param OutResult Filled with the received byte count only on `Success`.
 	 * @return Normalized outcome of the single receive attempt.
 	 */
-	ETransportResult TryReceive(FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept override;
+	Transport::ETransportResult TryReceive(
+		Transport::Address::FDeviceAddress& OutFrom,
+		Core::TSpan<std::uint8_t> InDestination,
+		Transport::Device::FReceiveResult& OutResult) noexcept override;
 
 	/** Reports the largest payload, in bytes, one send accepts (excludes framing overhead). */
 	std::size_t MaxPacketBytes() const noexcept override;
@@ -177,10 +175,10 @@ public:
 private:
 	/** Runs one full-duplex transaction with the given transmit window and pumps the received window into
 	 * the decoder (only while no frame is already held); returns the transaction's send outcome. */
-	ETransportResult ExchangeAndPump(const std::uint8_t* InTransmitWindow) noexcept;
+	Transport::ETransportResult ExchangeAndPump(const std::uint8_t* InTransmitWindow) noexcept;
 
 	/** Bounded RX deframer held by value; its capacity matches `SpiMaxPayloadBytes`. */
-	TFrameDecoder<SpiMaxPayloadBytes> Decoder{};
+	Transport::FrameCodec::TFrameDecoder<SpiMaxPayloadBytes> Decoder{};
 
 	/** Transmit window (encoded frame plus idle padding); word-aligned for DMA. */
 	alignas(4) std::uint8_t TransmitWindow[SpiTransactionWindowBytes]{};
@@ -213,7 +211,7 @@ private:
  * leaves caller outputs unchanged on any non-`Success` result, and exercises no bus traffic until example
  * 21's hardware checkpoint passes (§1.2).
  */
-class FEsp32SpiSlaveDevice final : public IDevice
+class FEsp32SpiSlaveDevice final : public Transport::Device::IDevice
 {
 public:
 	/**
@@ -253,7 +251,7 @@ public:
 	 * @param InPacket Caller-owned payload bytes framed and staged as one message.
 	 * @return Normalized outcome of the single send attempt.
 	 */
-	ETransportResult TrySend(const FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
+	Transport::ETransportResult TrySend(const Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
 	 * Receives at most one framed message by harvesting a completed transaction, transactionally.
@@ -268,7 +266,10 @@ public:
 	 * @param OutResult Filled with the received byte count only on `Success`.
 	 * @return Normalized outcome of the single receive attempt.
 	 */
-	ETransportResult TryReceive(FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept override;
+	Transport::ETransportResult TryReceive(
+		Transport::Address::FDeviceAddress& OutFrom,
+		Core::TSpan<std::uint8_t> InDestination,
+		Transport::Device::FReceiveResult& OutResult) noexcept override;
 
 	/** Reports the largest payload, in bytes, one send accepts (excludes framing overhead). */
 	std::size_t MaxPacketBytes() const noexcept override;
@@ -282,7 +283,7 @@ private:
 	void QueueNextTransaction() noexcept;
 
 	/** Bounded RX deframer held by value; its capacity matches `SpiMaxPayloadBytes`. */
-	TFrameDecoder<SpiMaxPayloadBytes> Decoder{};
+	Transport::FrameCodec::TFrameDecoder<SpiMaxPayloadBytes> Decoder{};
 
 	/** Receive window filled by each completed transaction; word-aligned for DMA. */
 	alignas(4) std::uint8_t ReceiveWindow[SpiTransactionWindowBytes]{};

@@ -47,8 +47,8 @@ static_assert(FrameOverheadBytes == FrameHeaderBytes + 2, "Frame overhead is the
  */
 inline void UpdateCrc16Byte(std::uint16_t& InOutCrc, const std::uint8_t InByte) noexcept
 {
-	InOutCrc = static_cast<std::uint16_t>(InOutCrc ^ static_cast<std::uint16_t>(static_cast<std::uint16_t>(InByte) << HighByteShift));
-	for (int Bit = 0; Bit < BitsPerByte; ++Bit)
+	InOutCrc = static_cast<std::uint16_t>(InOutCrc ^ static_cast<std::uint16_t>(static_cast<std::uint16_t>(InByte) << Core::HighByteShift));
+	for (int Bit = 0; Bit < Core::BitsPerByte; ++Bit)
 	{
 		if ((InOutCrc & Crc16TopBitMask) != 0u)
 		{
@@ -70,7 +70,7 @@ inline void UpdateCrc16Byte(std::uint16_t& InOutCrc, const std::uint8_t InByte) 
  * @param InBytes Caller-owned span covered by the checksum; a valid empty span returns 0xFFFF.
  * @return The computed checksum.
  */
-inline std::uint16_t ComputeCrc16Ccitt(const TSpan<const std::uint8_t> InBytes) noexcept
+inline std::uint16_t ComputeCrc16Ccitt(const Core::TSpan<const std::uint8_t> InBytes) noexcept
 {
 	std::uint16_t Crc = Crc16InitValue;
 	const std::uint8_t* const ChecksumBytes = InBytes.Data();
@@ -94,7 +94,7 @@ inline std::uint16_t ComputeCrc16Ccitt(const TSpan<const std::uint8_t> InBytes) 
  * @param InFrame Caller-owned destination whose capacity is checked before any write.
  * @return Invalid for a null-with-length span or an oversize payload, Full for a destination too small, else Success.
  */
-inline ETransportResult ValidateEncodeInputs(const TSpan<const std::uint8_t> InPayload, const TSpan<std::uint8_t> InFrame) noexcept
+inline ETransportResult ValidateEncodeInputs(const Core::TSpan<const std::uint8_t> InPayload, const Core::TSpan<std::uint8_t> InFrame) noexcept
 {
 	const std::size_t PayloadSize = InPayload.Size();
 	if (PayloadSize != 0 && InPayload.Data() == nullptr)
@@ -105,7 +105,7 @@ inline ETransportResult ValidateEncodeInputs(const TSpan<const std::uint8_t> InP
 	{
 		return ETransportResult::Invalid;
 	}
-	if (PayloadSize > Uint16Max)
+	if (PayloadSize > Core::Uint16Max)
 	{
 		// Oversize input can never fit the 16-bit length field, so it can never succeed on retry (D7).
 		return ETransportResult::Invalid;
@@ -118,7 +118,7 @@ inline ETransportResult ValidateEncodeInputs(const TSpan<const std::uint8_t> InP
 }
 
 /** Writes the fixed frame header: magic byte, source node id, then the payload length as two big-endian bytes. */
-inline void WriteFrameHeader(const std::uint8_t InSourceNodeId, const std::size_t InPayloadSize, const TSpan<std::uint8_t> OutFrame) noexcept
+inline void WriteFrameHeader(const std::uint8_t InSourceNodeId, const std::size_t InPayloadSize, const Core::TSpan<std::uint8_t> OutFrame) noexcept
 {
 	OutFrame[0] = FrameMagicByte;
 	OutFrame[1] = InSourceNodeId;
@@ -127,7 +127,7 @@ inline void WriteFrameHeader(const std::uint8_t InSourceNodeId, const std::size_
 }
 
 /** Copies the payload after the header, then appends the CRC-16 over the source id, length, and payload. */
-inline void AppendPayloadAndChecksum(const TSpan<const std::uint8_t> InPayload, const TSpan<std::uint8_t> OutFrame) noexcept
+inline void AppendPayloadAndChecksum(const Core::TSpan<const std::uint8_t> InPayload, const Core::TSpan<std::uint8_t> OutFrame) noexcept
 {
 	const std::size_t PayloadSize = InPayload.Size();
 	if (PayloadSize != 0)
@@ -136,9 +136,9 @@ inline void AppendPayloadAndChecksum(const TSpan<const std::uint8_t> InPayload, 
 	}
 	// CRC covers the source node id, both length bytes, and the payload; magic and CRC are excluded.
 	const std::uint16_t Crc =
-		ComputeCrc16Ccitt(TSpan<const std::uint8_t>(&OutFrame[FrameSourceNodeIdByteIndex], FrameCrcCoveredPrefixBytes + PayloadSize));
-	OutFrame[FrameHeaderBytes + PayloadSize] = static_cast<std::uint8_t>(Crc >> HighByteShift);
-	OutFrame[FrameHeaderBytes + PayloadSize + 1] = static_cast<std::uint8_t>(Crc & LowByteMask);
+		ComputeCrc16Ccitt(Core::TSpan<const std::uint8_t>(&OutFrame[FrameSourceNodeIdByteIndex], FrameCrcCoveredPrefixBytes + PayloadSize));
+	OutFrame[FrameHeaderBytes + PayloadSize] = static_cast<std::uint8_t>(Crc >> Core::HighByteShift);
+	OutFrame[FrameHeaderBytes + PayloadSize + 1] = static_cast<std::uint8_t>(Crc & Core::LowByteMask);
 }
 
 /**
@@ -158,8 +158,8 @@ inline void AppendPayloadAndChecksum(const TSpan<const std::uint8_t> InPayload, 
  */
 inline ETransportResult EncodeFrame(
 	const std::uint8_t InSourceNodeId,
-	const TSpan<const std::uint8_t> InPayload,
-	const TSpan<std::uint8_t> OutFrame,
+	const Core::TSpan<const std::uint8_t> InPayload,
+	const Core::TSpan<std::uint8_t> OutFrame,
 	std::size_t& OutWritten) noexcept
 {
 	const ETransportResult ValidationResult = ValidateEncodeInputs(InPayload, OutFrame);
@@ -258,7 +258,7 @@ public:
 	std::uint8_t FrameNodeId() const noexcept { return HeldSourceNodeId; }
 
 	/** Returns a view of the held frame's payload bytes; valid only when HasFrame is true. */
-	TSpan<const std::uint8_t> FramePayload() const noexcept { return TSpan<const std::uint8_t>(PayloadStorage, HeldLength); }
+	Core::TSpan<const std::uint8_t> FramePayload() const noexcept { return Core::TSpan<const std::uint8_t>(PayloadStorage, HeldLength); }
 
 	/** Releases the held frame so assembly of the next frame may overwrite its storage. */
 	void ClearFrame() noexcept { bHasFrame = false; }
@@ -357,7 +357,7 @@ private:
 	EFrameEvent CompleteFrameIfChecksumMatches(const std::uint8_t InByte) noexcept
 	{
 		const std::uint16_t ReceivedCrc =
-			static_cast<std::uint16_t>((static_cast<std::uint16_t>(PendingCrcHighByte) << HighByteShift) | static_cast<std::uint16_t>(InByte));
+			static_cast<std::uint16_t>((static_cast<std::uint16_t>(PendingCrcHighByte) << Core::HighByteShift) | static_cast<std::uint16_t>(InByte));
 		State = EState::WaitingForMagic;
 		// A CRC mismatch means the candidate was corrupted; resync at the next magic.
 		if (ReceivedCrc != RunningCrc)

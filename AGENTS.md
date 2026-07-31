@@ -51,7 +51,8 @@ MicroWorld/
 ├── examples/           PlatformIO examples + the host HostLifecycle/TwoNodeDemo
 ├── docs/               engine-wide design docs, ADRs, diagrams, the one plan
 ├── tools/              CheckDependencyBoundaries, CheckProfileMap,
-│                       CheckFolderAgents, CheckClassDocumentation, CheckFormatting
+│                       CheckFolderAgents, CheckClassDocumentation,
+│                       CheckFormatting, CheckNamespaces
 ├── CMakeLists.txt      root superbuild (adds Modules/)
 └── clang-format        repo style file (invoke as --style=file:clang-format)
 ```
@@ -138,6 +139,8 @@ python tools/CheckFolderAgents.py --root Modules
 python tools/CheckClassDocumentation.py --self-test
 python tools/CheckClassDocumentation.py --root . --require-doxygen
 python tools/CheckFormatting.py
+python tools/CheckNamespaces.py --self-test
+python tools/CheckNamespaces.py
 ```
 
 `ctest --test-dir build` runs every one of them, each alongside its self-test, so

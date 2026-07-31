@@ -7,8 +7,6 @@
 namespace MicroWorld::Engine
 {
 
-using namespace ::MicroWorld::Core;
-
 /**
  * Reports registration outcomes for the managed engine.
  *

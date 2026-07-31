@@ -124,10 +124,10 @@ struct FControlMessage
  * `Invalid` result leaves the writer cursor and accepted bytes unchanged. A zero-length
  * payload writes only the four-byte header.
  */
-inline ETransportResult WriteMessage(FByteWriter& InWriter, std::uint8_t InChannel, TSpan<const std::uint8_t> InPayload) noexcept
+inline ETransportResult WriteMessage(FByteWriter& InWriter, std::uint8_t InChannel, Core::TSpan<const std::uint8_t> InPayload) noexcept
 {
 	const std::size_t PayloadSize = InPayload.Size();
-	if (PayloadSize > Uint16Max)
+	if (PayloadSize > Core::Uint16Max)
 	{
 		// A u16 length field cannot represent a payload this large; reject before any write.
 		return ETransportResult::Invalid;
@@ -144,7 +144,7 @@ inline ETransportResult WriteMessage(FByteWriter& InWriter, std::uint8_t InChann
 	// The message header length is little-endian to match this layer's byte I/O convention (D6).
 	std::uint8_t PayloadLengthBytes[MessagePayloadLengthFieldBytes];
 	WriteUint16LittleEndian(PayloadBytes, PayloadLengthBytes);
-	(void)InWriter.Write(TSpan<const std::uint8_t>(PayloadLengthBytes, MessagePayloadLengthFieldBytes));
+	(void)InWriter.Write(Core::TSpan<const std::uint8_t>(PayloadLengthBytes, MessagePayloadLengthFieldBytes));
 	if (PayloadSize > 0)
 	{
 		(void)InWriter.Write(InPayload);
@@ -158,7 +158,8 @@ inline ETransportResult WriteMessage(FByteWriter& InWriter, std::uint8_t InChann
  * Outputs are written only on `Success`: a too-short message, a nonzero Flags byte, or a
  * payload-size mismatch all return `Invalid` and leave `OutHeader` and `OutPayload` unchanged.
  */
-inline ETransportResult ReadMessage(TSpan<const std::uint8_t> InMessage, FMessageHeader& OutHeader, TSpan<const std::uint8_t>& OutPayload) noexcept
+inline ETransportResult ReadMessage(
+	Core::TSpan<const std::uint8_t> InMessage, FMessageHeader& OutHeader, Core::TSpan<const std::uint8_t>& OutPayload) noexcept
 {
 	if (InMessage.Size() < MessageHeaderBytes)
 	{
@@ -181,7 +182,7 @@ inline ETransportResult ReadMessage(TSpan<const std::uint8_t> InMessage, FMessag
 	OutHeader.Channel = InMessage[MessageChannelByteIndex];
 	OutHeader.Flags = MessageReservedFlags;
 	OutHeader.PayloadBytes = PayloadBytes;
-	OutPayload = TSpan<const std::uint8_t>(InMessage.Data() + MessageHeaderBytes, PayloadBytes);
+	OutPayload = Core::TSpan<const std::uint8_t>(InMessage.Data() + MessageHeaderBytes, PayloadBytes);
 	return ETransportResult::Success;
 }
 
@@ -217,7 +218,7 @@ inline ETransportResult WriteControlMessage(FByteWriter& InWriter, const FContro
 			// An unknown type has no defined encoding; reject before any write.
 			return ETransportResult::Invalid;
 	}
-	return WriteMessage(InWriter, ControlChannel, TSpan<const std::uint8_t>(Payload.data(), PayloadLength));
+	return WriteMessage(InWriter, ControlChannel, Core::TSpan<const std::uint8_t>(Payload.data(), PayloadLength));
 }
 
 /**
@@ -287,7 +288,7 @@ inline void DecodeControlFields(FByteReader& InReader, const EControlMessageType
  * Outputs are written only on `Success`; a malformed payload returns `Invalid` and leaves
  * `OutMessage` unchanged.
  */
-inline ETransportResult ReadControlMessage(TSpan<const std::uint8_t> InPayload, FControlMessage& OutMessage) noexcept
+inline ETransportResult ReadControlMessage(Core::TSpan<const std::uint8_t> InPayload, FControlMessage& OutMessage) noexcept
 {
 	FByteReader Reader(InPayload);
 	std::uint8_t TypeByte = 0;

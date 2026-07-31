@@ -16,8 +16,6 @@
 namespace MicroWorld::Networking
 {
 
-using namespace ::MicroWorld::Core;
-
 /** Selects whether a TNetworking channel resends unacknowledged messages or sends best-effort once. */
 enum class EChannelReliability : std::uint8_t
 {
@@ -61,7 +59,7 @@ struct FDefaultNetworkingTraits
 	static constexpr std::size_t MaxReliablePendingMessages = 8;
 
 	/** Retry interval a guaranteed channel paces resends at. */
-	static constexpr DurationMilliseconds ReliableRetryIntervalMilliseconds = 200;
+	static constexpr Core::DurationMilliseconds ReliableRetryIntervalMilliseconds = 200;
 
 	/** Total send attempts (initial plus retries) a guaranteed channel makes before abandoning one message. */
 	static constexpr std::uint8_t MaxReliableSendAttempts = 8;
@@ -115,7 +113,7 @@ struct FChannelHandle
  * frame pumping preserves the transport -> reliable -> router ordering without adapter objects.
  */
 template<typename TTraits = FDefaultNetworkingTraits>
-class TNetworking final : public IPlaySystem
+class TNetworking final : public Core::IPlaySystem
 {
 	/** Prevents a valid handle index from colliding with the reserved invalid sentinel. */
 	static_assert(TTraits::MaxDevices <= FDeviceHandle::InvalidIndex, "TNetworking device capacity must fit below FDeviceHandle::InvalidIndex.");
@@ -249,7 +247,7 @@ public:
 	 * Closes composition before starting each live host in device add order at the engine's
 	 * canonical play-start time.
 	 */
-	void BeginPlay(TimePointMilliseconds InNowMilliseconds) noexcept override
+	void BeginPlay(Core::TimePointMilliseconds InNowMilliseconds) noexcept override
 	{
 		bCompositionClosed = true;
 		for (FDeviceSlot& Slot : DeviceSlots)
@@ -280,7 +278,7 @@ public:
 	}
 
 	/** Pumps live hosts in device add order, then dispatches the shared router. */
-	void PreAdvance(TimePointMilliseconds InNowMilliseconds) noexcept override
+	void PreAdvance(Core::TimePointMilliseconds InNowMilliseconds) noexcept override
 	{
 		if (!bCompositionClosed)
 		{
@@ -298,7 +296,7 @@ public:
 	}
 
 	/** Flushes the router, retries live reliable channels in reverse order, then pumps hosts in reverse device order. */
-	void PostAdvance(TimePointMilliseconds InNowMilliseconds) noexcept override
+	void PostAdvance(Core::TimePointMilliseconds InNowMilliseconds) noexcept override
 	{
 		if (!bCompositionClosed)
 		{

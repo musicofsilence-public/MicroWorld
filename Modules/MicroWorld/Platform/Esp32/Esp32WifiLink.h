@@ -8,8 +8,6 @@
 namespace MicroWorld::Platform::Esp32
 {
 
-using namespace ::MicroWorld::Transport;
-
 /** Settings for hosting a SoftAP network (board is the access point). */
 struct FEsp32AccessPointConfig
 {
@@ -80,7 +78,7 @@ public:
 	 * @param InConfig SoftAP SSID, password, channel, and station limit.
 	 * @return `Success` once the SoftAP is broadcasting; `Invalid` or `Unavailable` otherwise.
 	 */
-	ETransportResult StartAccessPoint(const FEsp32AccessPointConfig& InConfig) noexcept;
+	Transport::ETransportResult StartAccessPoint(const FEsp32AccessPointConfig& InConfig) noexcept;
 
 	/**
 	 * Joins an existing network as a station and waits for an IPv4 lease, transactionally.
@@ -95,7 +93,7 @@ public:
 	 * @param InConfig Target SSID, password, and connect timeout.
 	 * @return `Success` once an IPv4 lease is held; `Invalid` or `Unavailable` otherwise.
 	 */
-	ETransportResult JoinAccessPoint(const FEsp32StationConfig& InConfig) noexcept;
+	Transport::ETransportResult JoinAccessPoint(const FEsp32StationConfig& InConfig) noexcept;
 
 	/** Reports whether a prior `StartAccessPoint`/`JoinAccessPoint` call is still up. */
 	bool IsUp() const noexcept;

@@ -54,10 +54,10 @@ enum class ETransportHostState : std::uint8_t
 };
 
 /** Default heartbeat cadence used when a caller does not override `FTransportHostConfig`. */
-inline constexpr DurationMilliseconds DefaultHeartbeatIntervalMilliseconds = 1000;
+inline constexpr Core::DurationMilliseconds DefaultHeartbeatIntervalMilliseconds = 1000;
 
 /** Default peer eviction window used when a caller does not override `FTransportHostConfig`. */
-inline constexpr DurationMilliseconds DefaultPeerTimeoutMilliseconds = 5000;
+inline constexpr Core::DurationMilliseconds DefaultPeerTimeoutMilliseconds = 5000;
 
 /** Default protocol version advertised in `Hello`/`Welcome` when a caller does not override it. */
 inline constexpr std::uint8_t DefaultProtocolVersion = 1;
@@ -66,10 +66,10 @@ inline constexpr std::uint8_t DefaultProtocolVersion = 1;
 struct FTransportHostConfig
 {
 	/** Interval between outgoing heartbeats (and client `Hello` retries while connecting). */
-	DurationMilliseconds HeartbeatIntervalMilliseconds{DefaultHeartbeatIntervalMilliseconds};
+	Core::DurationMilliseconds HeartbeatIntervalMilliseconds{DefaultHeartbeatIntervalMilliseconds};
 
 	/** Silence window after which a peer is evicted; must exceed the heartbeat interval. */
-	DurationMilliseconds PeerTimeoutMilliseconds{DefaultPeerTimeoutMilliseconds};
+	Core::DurationMilliseconds PeerTimeoutMilliseconds{DefaultPeerTimeoutMilliseconds};
 
 	/** Address the client greets with `Hello`; ignored by every non-client mode. */
 	::MicroWorld::Transport::Address::FDeviceAddress ServerAddress{};
@@ -156,10 +156,11 @@ public:
 	static constexpr std::uint8_t ServerPeerSlotIndex = 0;
 
 	/** Multicast dispatcher type for application (channel >= 1) messages. */
-	using FMessageHandler = TMulticastDelegate<void(FPeerId, std::uint8_t, TSpan<const std::uint8_t>), MaxMessageHandlers, MessageHandlerInlineBytes>;
+	using FMessageHandler =
+		Core::TMulticastDelegate<void(FPeerId, std::uint8_t, Core::TSpan<const std::uint8_t>), MaxMessageHandlers, MessageHandlerInlineBytes>;
 
 	/** One bindable handler callable matching `FMessageHandler`'s signature. */
-	using FMessageHandlerBinding = TDelegate<void(FPeerId, std::uint8_t, TSpan<const std::uint8_t>), MessageHandlerInlineBytes>;
+	using FMessageHandlerBinding = Core::TDelegate<void(FPeerId, std::uint8_t, Core::TSpan<const std::uint8_t>), MessageHandlerInlineBytes>;
 
 	/** Binds the host to one externally owned device; mode and config follow via `Configure`. */
 	explicit TTransportHost(::MicroWorld::Transport::Device::IDevice& InDevice) noexcept
@@ -202,7 +203,7 @@ public:
 	 * Begins the session: a client enters `Connecting` (and greets on the next `PumpSend`),
 	 * a server enters `Listening`, standalone stays `Idle`. Returns `Invalid` when already started.
 	 */
-	ETransportResult Start(const TimePointMilliseconds InNowMilliseconds) noexcept
+	ETransportResult Start(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		if (State != ETransportHostState::Idle)
 		{
@@ -247,7 +248,7 @@ public:
 	 * dispatching application messages, then evicts peers past the timeout window.
 	 * A standalone host does no device traffic and returns immediately.
 	 */
-	ETransportResult PumpReceive(const TimePointMilliseconds InNowMilliseconds) noexcept
+	ETransportResult PumpReceive(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		if (Mode == ENetworkMode::Standalone)
 		{
@@ -262,7 +263,7 @@ public:
 	 * Emits due heartbeats (and client `Hello` retries), then drains the outbound FIFO.
 	 * A standalone host does no device traffic and returns immediately.
 	 */
-	ETransportResult PumpSend(const TimePointMilliseconds InNowMilliseconds) noexcept
+	ETransportResult PumpSend(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		if (Mode == ENetworkMode::Standalone)
 		{
@@ -281,7 +282,7 @@ public:
 	 * without the device. Returns `Unavailable` for a standalone host, `Invalid` for
 	 * channel 0 or an unresolved peer, or the framing/queue result otherwise.
 	 */
-	ETransportResult SendTo(const FPeerId InPeer, const std::uint8_t InChannel, TSpan<const std::uint8_t> InPayload) noexcept
+	ETransportResult SendTo(const FPeerId InPeer, const std::uint8_t InChannel, Core::TSpan<const std::uint8_t> InPayload) noexcept
 	{
 		if (Mode == ENetworkMode::Standalone)
 		{
@@ -308,7 +309,7 @@ public:
 	 * A listen server also dispatches to its local peer directly. Best-effort: returns
 	 * `Success` when every active peer queued, otherwise the first failure result.
 	 */
-	ETransportResult Broadcast(const std::uint8_t InChannel, TSpan<const std::uint8_t> InPayload) noexcept
+	ETransportResult Broadcast(const std::uint8_t InChannel, Core::TSpan<const std::uint8_t> InPayload) noexcept
 	{
 		if (Mode == ENetworkMode::Standalone)
 		{
@@ -339,13 +340,13 @@ public:
 	}
 
 	/** Registers one message handler; forwards the multicast delegate's own result. */
-	EDelegateResult AddMessageHandler(FMessageHandlerBinding&& InBinding, FDelegateHandle& OutHandle) noexcept
+	Core::EDelegateResult AddMessageHandler(FMessageHandlerBinding&& InBinding, Core::FDelegateHandle& OutHandle) noexcept
 	{
 		return MessageHandler.Add(std::move(InBinding), OutHandle);
 	}
 
 	/** Removes a previously registered message handler by its generation-checked handle. */
-	EDelegateResult RemoveMessageHandler(const FDelegateHandle InHandle) noexcept { return MessageHandler.Remove(InHandle); }
+	Core::EDelegateResult RemoveMessageHandler(const Core::FDelegateHandle InHandle) noexcept { return MessageHandler.Remove(InHandle); }
 
 	/** Reports the observable session state. */
 	ETransportHostState GetState() const noexcept { return State; }
@@ -391,10 +392,10 @@ private:
 		::MicroWorld::Transport::Address::FDeviceAddress Address{};
 
 		/** Time of the last packet received from this peer; drives timeout eviction. */
-		TimePointMilliseconds LastReceiveMilliseconds{0};
+		Core::TimePointMilliseconds LastReceiveMilliseconds{0};
 
 		/** Time of the last packet sent to this peer; paces outgoing heartbeats. */
-		TimePointMilliseconds LastSendMilliseconds{0};
+		Core::TimePointMilliseconds LastSendMilliseconds{0};
 
 		/** Reuse counter bumped on eviction so a stale `FPeerId` cannot match a later occupant. */
 		std::uint8_t Generation{0};
@@ -404,28 +405,28 @@ private:
 	};
 
 	/** Returns monotonic elapsed milliseconds, clamped so a backward clock reads as zero elapsed. */
-	static constexpr DurationMilliseconds ElapsedSince(
-		const TimePointMilliseconds InNowMilliseconds, const TimePointMilliseconds InPastMilliseconds) noexcept
+	static constexpr Core::DurationMilliseconds ElapsedSince(
+		const Core::TimePointMilliseconds InNowMilliseconds, const Core::TimePointMilliseconds InPastMilliseconds) noexcept
 	{
 		if (InNowMilliseconds <= InPastMilliseconds)
 		{
 			return 0;
 		}
-		const TimePointMilliseconds Delta = InNowMilliseconds - InPastMilliseconds;
+		const Core::TimePointMilliseconds Delta = InNowMilliseconds - InPastMilliseconds;
 		// DurationMilliseconds is u32 (~49 days max), so clamp a wider gap to that
 		// ceiling instead of overflowing when it is narrowed.
-		constexpr TimePointMilliseconds MaxDuration = std::numeric_limits<DurationMilliseconds>::max();
-		return Delta > MaxDuration ? static_cast<DurationMilliseconds>(MaxDuration) : static_cast<DurationMilliseconds>(Delta);
+		constexpr Core::TimePointMilliseconds MaxDuration = std::numeric_limits<Core::DurationMilliseconds>::max();
+		return Delta > MaxDuration ? static_cast<Core::DurationMilliseconds>(MaxDuration) : static_cast<Core::DurationMilliseconds>(Delta);
 	}
 
 	/** Reports whether an active peer has been silent past the configured eviction window. */
-	bool IsPeerTimedOut(const FTransportPeerSlot& InSlot, const TimePointMilliseconds InNowMilliseconds) const noexcept
+	bool IsPeerTimedOut(const FTransportPeerSlot& InSlot, const Core::TimePointMilliseconds InNowMilliseconds) const noexcept
 	{
 		return ElapsedSince(InNowMilliseconds, InSlot.LastReceiveMilliseconds) > Config.PeerTimeoutMilliseconds;
 	}
 
 	/** Reports whether a peer's last send is older than the heartbeat cadence. */
-	bool IsHeartbeatDue(const FTransportPeerSlot& InSlot, const TimePointMilliseconds InNowMilliseconds) const noexcept
+	bool IsHeartbeatDue(const FTransportPeerSlot& InSlot, const Core::TimePointMilliseconds InNowMilliseconds) const noexcept
 	{
 		return ElapsedSince(InNowMilliseconds, InSlot.LastSendMilliseconds) >= Config.HeartbeatIntervalMilliseconds;
 	}
@@ -500,7 +501,7 @@ private:
 	}
 
 	/** Evicts every active peer whose last receive is older than the timeout window. */
-	void EvictTimedOutPeers(const TimePointMilliseconds InNowMilliseconds) noexcept
+	void EvictTimedOutPeers(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		for (std::size_t Index = 0; Index < MaxPeers; ++Index)
 		{
@@ -521,11 +522,11 @@ private:
 	/** Parses one inbound packet, routing control internally and application messages to the handler. */
 	void HandleInboundPacket(
 		const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom,
-		TSpan<const std::uint8_t> InPacket,
-		const TimePointMilliseconds InNowMilliseconds) noexcept
+		Core::TSpan<const std::uint8_t> InPacket,
+		const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		FMessageHeader Header{};
-		TSpan<const std::uint8_t> Payload{};
+		Core::TSpan<const std::uint8_t> Payload{};
 		if (ReadMessage(InPacket, Header, Payload) != ETransportResult::Success)
 		{
 			MW_LOG_MSG(Log, "TransportHost", "dropped malformed inbound packet");
@@ -549,8 +550,8 @@ private:
 	/** Decodes one channel-0 control payload and dispatches it by type. */
 	void HandleControlMessage(
 		const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom,
-		TSpan<const std::uint8_t> InPayload,
-		const TimePointMilliseconds InNowMilliseconds) noexcept
+		Core::TSpan<const std::uint8_t> InPayload,
+		const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		FControlMessage Control{};
 		if (ReadControlMessage(InPayload, Control) != ETransportResult::Success)
@@ -579,7 +580,7 @@ private:
 	void HandleHello(
 		const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom,
 		const FControlMessage& InControl,
-		const TimePointMilliseconds InNowMilliseconds) noexcept
+		const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		if (!IsServer())
 		{
@@ -607,7 +608,7 @@ private:
 	void HandleWelcome(
 		const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom,
 		const FControlMessage& InControl,
-		const TimePointMilliseconds InNowMilliseconds) noexcept
+		const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		if (Mode != ENetworkMode::Client)
 		{
@@ -633,7 +634,7 @@ private:
 	}
 
 	/** Refreshes a known peer's liveness on `Heartbeat`; ignores heartbeats from strangers. */
-	void HandleHeartbeat(const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom, const TimePointMilliseconds InNowMilliseconds) noexcept
+	void HandleHeartbeat(const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom, const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		const std::size_t Index = FindActivePeerIndexByAddress(InFrom);
 		if (Index == MaxPeers)
@@ -686,7 +687,7 @@ private:
 	ETransportResult QueueControl(const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, const FControlMessage& InControl) noexcept
 	{
 		std::array<std::uint8_t, MessageHeaderBytes + MaxControlPayloadBytes> FrameBuffer{};
-		FByteWriter Writer(TSpan<std::uint8_t>(FrameBuffer.data(), FrameBuffer.size()));
+		FByteWriter Writer(Core::TSpan<std::uint8_t>(FrameBuffer.data(), FrameBuffer.size()));
 		const ETransportResult WriteResult = WriteControlMessage(Writer, InControl);
 		if (WriteResult != ETransportResult::Success)
 		{
@@ -697,10 +698,12 @@ private:
 
 	/** Frames one application message and queues it to `InTo`; returns the framing or queue result. */
 	ETransportResult QueueAppMessage(
-		const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, const std::uint8_t InChannel, TSpan<const std::uint8_t> InPayload) noexcept
+		const ::MicroWorld::Transport::Address::FDeviceAddress& InTo,
+		const std::uint8_t InChannel,
+		Core::TSpan<const std::uint8_t> InPayload) noexcept
 	{
 		std::array<std::uint8_t, MaxPacketBytes> FrameBuffer{};
-		FByteWriter Writer(TSpan<std::uint8_t>(FrameBuffer.data(), FrameBuffer.size()));
+		FByteWriter Writer(Core::TSpan<std::uint8_t>(FrameBuffer.data(), FrameBuffer.size()));
 		const ETransportResult WriteResult = WriteMessage(Writer, InChannel, InPayload);
 		if (WriteResult != ETransportResult::Success)
 		{
@@ -710,7 +713,7 @@ private:
 	}
 
 	/** Delivers one application message to every registered handler; a dispatch failure is best-effort ignored. */
-	void DispatchToHandler(const FPeerId InFrom, const std::uint8_t InChannel, TSpan<const std::uint8_t> InPayload) noexcept
+	void DispatchToHandler(const FPeerId InFrom, const std::uint8_t InChannel, Core::TSpan<const std::uint8_t> InPayload) noexcept
 	{
 		(void)MessageHandler.Broadcast(InFrom, InChannel, InPayload);
 	}
@@ -729,7 +732,7 @@ private:
 	}
 
 	/** Receives up to `MaxPeers + PumpSlackPackets` packets this pump, routing each to `HandleInboundPacket`. */
-	void DrainInboundPackets(const TimePointMilliseconds InNowMilliseconds) noexcept
+	void DrainInboundPackets(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		std::array<std::uint8_t, MaxPacketBytes> ReceiveBuffer{};
 		const std::size_t MaxReceives = MaxPeers + PumpSlackPackets;
@@ -738,18 +741,18 @@ private:
 			::MicroWorld::Transport::Address::FDeviceAddress From{};
 			::MicroWorld::Transport::Device::FReceiveResult Result{};
 			const ETransportResult ReceiveResult =
-				OutboundManager.Receive(From, TSpan<std::uint8_t>(ReceiveBuffer.data(), ReceiveBuffer.size()), Result);
+				OutboundManager.Receive(From, Core::TSpan<std::uint8_t>(ReceiveBuffer.data(), ReceiveBuffer.size()), Result);
 			if (ReceiveResult != ETransportResult::Success)
 			{
 				// Unavailable means the transport is drained; any other failure cannot make progress now.
 				break;
 			}
-			HandleInboundPacket(From, TSpan<const std::uint8_t>(ReceiveBuffer.data(), Result.BytesReceived), InNowMilliseconds);
+			HandleInboundPacket(From, Core::TSpan<const std::uint8_t>(ReceiveBuffer.data(), Result.BytesReceived), InNowMilliseconds);
 		}
 	}
 
 	/** Client-only: greets the server on the first connecting pump and on each heartbeat interval afterward. */
-	void SendClientHelloIfDue(const TimePointMilliseconds InNowMilliseconds) noexcept
+	void SendClientHelloIfDue(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		if (Mode != ENetworkMode::Client || State != ETransportHostState::Connecting)
 		{
@@ -764,7 +767,7 @@ private:
 	}
 
 	/** Queues a heartbeat to every active peer whose last send is older than the heartbeat interval. */
-	void SendDueHeartbeats(const TimePointMilliseconds InNowMilliseconds) noexcept
+	void SendDueHeartbeats(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		for (std::size_t Index = 0; Index < MaxPeers; ++Index)
 		{
@@ -811,7 +814,7 @@ private:
 	}
 
 	/** Dispatches an application message directly to the listen server's local peer; `Invalid` in any other mode. */
-	ETransportResult SendToLocalPeer(const std::uint8_t InChannel, TSpan<const std::uint8_t> InPayload) noexcept
+	ETransportResult SendToLocalPeer(const std::uint8_t InChannel, Core::TSpan<const std::uint8_t> InPayload) noexcept
 	{
 		if (Mode != ENetworkMode::ListenServer)
 		{
@@ -822,7 +825,8 @@ private:
 	}
 
 	/** Finds this address's peer or allocates a free slot, refreshing liveness; returns `MaxPeers` when the table is full. */
-	std::size_t AdmitPeer(const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom, const TimePointMilliseconds InNowMilliseconds) noexcept
+	std::size_t AdmitPeer(
+		const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom, const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		std::size_t Index = FindActivePeerIndexByAddress(InFrom);
 		if (Index == MaxPeers)
@@ -874,7 +878,7 @@ private:
 	FPeerId AssignedPeer{};
 
 	/** Time the client last sent `Hello`; paces connecting retries. */
-	TimePointMilliseconds LastHelloSendMilliseconds{0};
+	Core::TimePointMilliseconds LastHelloSendMilliseconds{0};
 
 	/** Forces the next connecting `PumpSend` to greet immediately after start or reconnect. */
 	bool bHelloDue{false};

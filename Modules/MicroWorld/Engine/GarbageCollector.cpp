@@ -70,10 +70,10 @@ FGarbageCollector::~FGarbageCollector() noexcept
 	}
 }
 
-ERuntimeResult FGarbageCollector::RequestCollection() noexcept
+Core::ERuntimeResult FGarbageCollector::RequestCollection() noexcept
 {
-	const ERuntimeResult StartFailure = ClassifyStartFailure();
-	if (StartFailure != ERuntimeResult::Success)
+	const Core::ERuntimeResult StartFailure = ClassifyStartFailure();
+	if (StartFailure != Core::ERuntimeResult::Success)
 	{
 		IncrementSaturated(CollectionStats.RejectedRequests);
 		return StartFailure;
@@ -83,39 +83,39 @@ ERuntimeResult FGarbageCollector::RequestCollection() noexcept
 	WorklistCount = 0;
 	SweepCursor = 0;
 	CurrentPhase = EGarbageCollectionPhase::SeedRoots;
-	return ERuntimeResult::Success;
+	return Core::ERuntimeResult::Success;
 }
 
-ERuntimeResult FGarbageCollector::ClassifyStartFailure() noexcept
+Core::ERuntimeResult FGarbageCollector::ClassifyStartFailure() noexcept
 {
 	if (CurrentPhase != EGarbageCollectionPhase::Idle)
 	{
-		return ERuntimeResult::LifecycleLocked;
+		return Core::ERuntimeResult::LifecycleLocked;
 	}
 	if (ObjectStore != nullptr && ObjectStore->CollectorIsMutationLocked())
 	{
-		return ERuntimeResult::LifecycleLocked;
+		return Core::ERuntimeResult::LifecycleLocked;
 	}
 	const bool bStoreReady = ObjectStore != nullptr && ObjectStore->ConfigurationResult() == EObjectResult::Success;
 	const bool bWorklistReady = ObjectStore != nullptr && CollectorStorage.WorklistCapacity >= ObjectStore->CollectorSlotCapacity()
 		&& (CollectorStorage.WorklistCapacity == 0 || CollectorStorage.Worklist != nullptr);
 	if (!bStoreReady || !bWorklistReady)
 	{
-		return ERuntimeResult::CapacityExceeded;
+		return Core::ERuntimeResult::CapacityExceeded;
 	}
 	if (!ObjectStore->CollectorTryBegin(*this))
 	{
-		return ERuntimeResult::LifecycleLocked;
+		return Core::ERuntimeResult::LifecycleLocked;
 	}
-	return ERuntimeResult::Success;
+	return Core::ERuntimeResult::Success;
 }
 
 FGarbageCollectionResult FGarbageCollector::Advance(const FGarbageCollectionBudget InBudget) noexcept
 {
 	FGarbageCollectionResult CollectionResult{};
 	CollectionResult.Phase = CurrentPhase;
-	const ERuntimeResult PreconditionResult = ValidateAdvancePreconditions();
-	if (PreconditionResult != ERuntimeResult::Success)
+	const Core::ERuntimeResult PreconditionResult = ValidateAdvancePreconditions();
+	if (PreconditionResult != Core::ERuntimeResult::Success)
 	{
 		CollectionResult.Result = PreconditionResult;
 		return CollectionResult;
@@ -144,7 +144,7 @@ FGarbageCollectionResult FGarbageCollector::Advance(const FGarbageCollectionBudg
 		if (bWorklistOverflowed)
 		{
 			// DiscoverReference aborts the cycle on worklist overflow -- detect that abort here.
-			CollectionResult.Result = ERuntimeResult::CapacityExceeded;
+			CollectionResult.Result = Core::ERuntimeResult::CapacityExceeded;
 			AccumulateOperations(CollectionResult);
 			CollectionResult.Phase = CurrentPhase;
 			return CollectionResult;
@@ -160,29 +160,29 @@ FGarbageCollectionResult FGarbageCollector::Advance(const FGarbageCollectionBudg
 	return CollectionResult;
 }
 
-ERuntimeResult FGarbageCollector::ValidateAdvancePreconditions() const noexcept
+Core::ERuntimeResult FGarbageCollector::ValidateAdvancePreconditions() const noexcept
 {
 	if (bAdvanceActive)
 	{
-		return ERuntimeResult::LifecycleLocked;
+		return Core::ERuntimeResult::LifecycleLocked;
 	}
 	if (ObjectStore != nullptr && ObjectStore->CollectorIsDispatchLocked())
 	{
-		return ERuntimeResult::LifecycleLocked;
+		return Core::ERuntimeResult::LifecycleLocked;
 	}
 	if (CurrentPhase == EGarbageCollectionPhase::Idle || ObjectStore == nullptr)
 	{
-		return ERuntimeResult::InvalidLifecycle;
+		return Core::ERuntimeResult::InvalidLifecycle;
 	}
 	if (ObjectStore != nullptr && ObjectStore->CollectorIsMutationLocked())
 	{
-		return ERuntimeResult::LifecycleLocked;
+		return Core::ERuntimeResult::LifecycleLocked;
 	}
 	if (ObjectStore != nullptr && !ObjectStore->CollectorIsOwnedBy(*this))
 	{
-		return ERuntimeResult::LifecycleLocked;
+		return Core::ERuntimeResult::LifecycleLocked;
 	}
-	return ERuntimeResult::Success;
+	return Core::ERuntimeResult::Success;
 }
 
 bool FGarbageCollector::AdvanceSeedRootsPhase(const FGarbageCollectionBudget& InBudget, FGarbageCollectionResult& OutResult) noexcept
@@ -288,8 +288,8 @@ FGarbageCollectionResult FGarbageCollector::CollectFull() noexcept
 {
 	if (CurrentPhase == EGarbageCollectionPhase::Idle)
 	{
-		const ERuntimeResult RequestResult = RequestCollection();
-		if (RequestResult != ERuntimeResult::Success)
+		const Core::ERuntimeResult RequestResult = RequestCollection();
+		if (RequestResult != Core::ERuntimeResult::Success)
 		{
 			FGarbageCollectionResult RejectedCollection{};
 			RejectedCollection.Result = RequestResult;
@@ -306,14 +306,14 @@ FGarbageCollectionResult FGarbageCollector::CollectFull() noexcept
 	});
 }
 
-ERuntimeResult FGarbageCollector::CancelCollection() noexcept
+Core::ERuntimeResult FGarbageCollector::CancelCollection() noexcept
 {
 	if (CurrentPhase == EGarbageCollectionPhase::Idle)
 	{
-		return ERuntimeResult::InvalidLifecycle;
+		return Core::ERuntimeResult::InvalidLifecycle;
 	}
 	ResetCycle();
-	return ERuntimeResult::Success;
+	return Core::ERuntimeResult::Success;
 }
 
 bool FGarbageCollector::IsHandleDiscoverable(const FObjectHandle InHandle) const noexcept

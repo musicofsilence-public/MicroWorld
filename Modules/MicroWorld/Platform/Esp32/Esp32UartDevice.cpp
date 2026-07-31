@@ -39,38 +39,40 @@ namespace
 {
 
 	/** Maps one UART write outcome to the shared device result. */
-	ETransportResult MapUartWriteOutcome(const EUartWriteOutcome InOutcome) noexcept
+	Transport::ETransportResult MapUartWriteOutcome(const EUartWriteOutcome InOutcome) noexcept
 	{
 		switch (InOutcome)
 		{
 			case EUartWriteOutcome::Sent:
-				return ETransportResult::Success;
+				return Transport::ETransportResult::Success;
 			case EUartWriteOutcome::WouldBlock:
-				return ETransportResult::Full;
+				return Transport::ETransportResult::Full;
 			case EUartWriteOutcome::Error:
 			default:
-				return ETransportResult::Invalid;
+				return Transport::ETransportResult::Invalid;
 		}
 	}
 
 } // namespace
 
-ETransportResult FEsp32UartDevice::TrySend(const FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept
+Transport::ETransportResult FEsp32UartDevice::TrySend(
+	const Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept
 {
 	if (!bOpen)
 	{
-		return ETransportResult::Unavailable;
+		return Transport::ETransportResult::Unavailable;
 	}
-	const ETransportResult Validation = ValidateOutgoingPacket(InTo, InPacket);
-	if (Validation != ETransportResult::Success)
+	const Transport::ETransportResult Validation = ValidateOutgoingPacket(InTo, InPacket);
+	if (Validation != Transport::ETransportResult::Success)
 	{
 		return Validation;
 	}
 	// The codec is transactional on failure.
-	std::uint8_t Frame[UartMaxPayloadBytes + FrameOverheadBytes];
+	std::uint8_t Frame[UartMaxPayloadBytes + Transport::FrameCodec::FrameOverheadBytes];
 	std::size_t Written = 0;
-	const ETransportResult EncodeResult = EncodeFrame(LocalNodeIdValue, InPacket, Core::TSpan<std::uint8_t>(Frame, sizeof(Frame)), Written);
-	if (EncodeResult != ETransportResult::Success)
+	const Transport::ETransportResult EncodeResult =
+		Transport::FrameCodec::EncodeFrame(LocalNodeIdValue, InPacket, Core::TSpan<std::uint8_t>(Frame, sizeof(Frame)), Written);
+	if (EncodeResult != Transport::ETransportResult::Success)
 	{
 		return EncodeResult;
 	}
@@ -78,36 +80,38 @@ ETransportResult FEsp32UartDevice::TrySend(const FDeviceAddress& InTo, Core::TSp
 	return MapUartWriteOutcome(Outcome);
 }
 
-ETransportResult FEsp32UartDevice::ValidateOutgoingPacket(const FDeviceAddress& InTo, const Core::TSpan<const std::uint8_t> InPacket) const noexcept
+Transport::ETransportResult FEsp32UartDevice::ValidateOutgoingPacket(
+	const Transport::Address::FDeviceAddress& InTo, const Core::TSpan<const std::uint8_t> InPacket) const noexcept
 {
 	// Validate every argument before any syscall so a rejection is truly transactional.
 	if (!IsUartAddress(InTo))
 	{
-		return ETransportResult::Invalid;
+		return Transport::ETransportResult::Invalid;
 	}
 	const std::size_t PacketSize = InPacket.Size();
 	if (PacketSize > UartMaxPayloadBytes)
 	{
-		return ETransportResult::Invalid;
+		return Transport::ETransportResult::Invalid;
 	}
 	if (PacketSize != 0 && InPacket.Data() == nullptr)
 	{
-		return ETransportResult::Invalid;
+		return Transport::ETransportResult::Invalid;
 	}
-	return ETransportResult::Success;
+	return Transport::ETransportResult::Success;
 }
 
-ETransportResult FEsp32UartDevice::TryReceive(FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
+Transport::ETransportResult FEsp32UartDevice::TryReceive(
+	Transport::Address::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Transport::Device::FReceiveResult& OutResult) noexcept
 {
 	// Reject a null destination with nonzero length before any UART read.
 	const std::size_t Capacity = InDestination.Size();
 	if (Capacity != 0 && InDestination.Data() == nullptr)
 	{
-		return ETransportResult::Invalid;
+		return Transport::ETransportResult::Invalid;
 	}
 	if (!bOpen)
 	{
-		return ETransportResult::Unavailable;
+		return Transport::ETransportResult::Unavailable;
 	}
 	// A frame held from a prior Full is delivered first so the decoder precondition is honored.
 	if (Decoder.HasFrame())
@@ -117,28 +121,28 @@ ETransportResult FEsp32UartDevice::TryReceive(FDeviceAddress& OutFrom, Core::TSp
 	return PumpDecoderForFrame(InDestination, OutFrom, OutResult);
 }
 
-ETransportResult FEsp32UartDevice::DeliverFrameToDestination(
-	Core::TSpan<std::uint8_t> InDestination, FDeviceAddress& OutFrom, FReceiveResult& OutResult) noexcept
+Transport::ETransportResult FEsp32UartDevice::DeliverFrameToDestination(
+	Core::TSpan<std::uint8_t> InDestination, Transport::Address::FDeviceAddress& OutFrom, Transport::Device::FReceiveResult& OutResult) noexcept
 {
 	// On Full the destination is untouched and the frame stays held for the next
 	// call, so a receive that cannot fit is transactional.
 	const std::size_t HeldLength = Decoder.FramePayload().Size();
 	if (HeldLength > InDestination.Size())
 	{
-		return ETransportResult::Full;
+		return Transport::ETransportResult::Full;
 	}
 	std::memcpy(InDestination.Data(), Decoder.FramePayload().Data(), HeldLength);
 	OutFrom = MakeUartAddress(Decoder.FrameNodeId());
 	OutResult.BytesReceived = HeldLength;
 	Decoder.ClearFrame();
-	return ETransportResult::Success;
+	return Transport::ETransportResult::Success;
 }
 
-ETransportResult FEsp32UartDevice::PumpDecoderForFrame(
-	Core::TSpan<std::uint8_t> InDestination, FDeviceAddress& OutFrom, FReceiveResult& OutResult) noexcept
+Transport::ETransportResult FEsp32UartDevice::PumpDecoderForFrame(
+	Core::TSpan<std::uint8_t> InDestination, Transport::Address::FDeviceAddress& OutFrom, Transport::Device::FReceiveResult& OutResult) noexcept
 {
 	// Pump available UART bytes one at a time, bounded so a flood cannot starve the caller.
-	const std::size_t PumpByteCap = 2u * (UartMaxPayloadBytes + FrameOverheadBytes);
+	const std::size_t PumpByteCap = 2u * (UartMaxPayloadBytes + Transport::FrameCodec::FrameOverheadBytes);
 	const FUartPort Port = AsUartPort(UartPortNumber);
 	for (std::size_t Pumped = 0; Pumped < PumpByteCap; ++Pumped)
 	{
@@ -150,20 +154,20 @@ ETransportResult FEsp32UartDevice::PumpDecoderForFrame(
 		}
 		if (Status == EUartReadStatus::Error)
 		{
-			return ETransportResult::Invalid;
+			return Transport::ETransportResult::Invalid;
 		}
-		const EFrameEvent Event = Decoder.PushByte(IncomingByte);
-		if (Event == EFrameEvent::FrameReady)
+		const Transport::FrameCodec::EFrameEvent Event = Decoder.PushByte(IncomingByte);
+		if (Event == Transport::FrameCodec::EFrameEvent::FrameReady)
 		{
 			// A completed frame is delivered immediately; Full keeps it held for the next call.
 			return DeliverFrameToDestination(InDestination, OutFrom, OutResult);
 		}
-		if (Event == EFrameEvent::Discarded)
+		if (Event == Transport::FrameCodec::EFrameEvent::Discarded)
 		{
 			MW_LOG_MSG(Warning, "Uart", "decoder discarded a candidate frame (bad length or CRC)");
 		}
 	}
-	return ETransportResult::Unavailable;
+	return Transport::ETransportResult::Unavailable;
 }
 
 std::size_t FEsp32UartDevice::MaxPacketBytes() const noexcept

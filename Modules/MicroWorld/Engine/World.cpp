@@ -60,7 +60,7 @@ bool UWorld::HasPendingBarrierWork() const noexcept
 EEngineResult UWorld::CheckActorRegistrable(const TObjectPtr<AActor> InActor) const noexcept
 {
 	// Registration is only permitted before BeginPlay can begin dispatch.
-	if (Lifecycle.GetState() != ELifecycleState::Constructed)
+	if (Lifecycle.GetState() != Core::ELifecycleState::Constructed)
 	{
 		return EEngineResult::LifecycleLocked;
 	}
@@ -118,34 +118,34 @@ void UWorld::PublishActor(const TObjectPtr<AActor> InActor) noexcept
 	Actors.Add(InActor);
 }
 
-ERuntimeResult UWorld::BeginPlay(const TimePointMilliseconds InNowMilliseconds) noexcept
+Core::ERuntimeResult UWorld::BeginPlay(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 {
-	if (Lifecycle.GetState() != ELifecycleState::Constructed)
+	if (Lifecycle.GetState() != Core::ELifecycleState::Constructed)
 	{
-		return ERuntimeResult::InvalidLifecycle;
+		return Core::ERuntimeResult::InvalidLifecycle;
 	}
 	if (!Actors.IsValid())
 	{
-		return ERuntimeResult::CapacityExceeded;
+		return Core::ERuntimeResult::CapacityExceeded;
 	}
 	FObjectStore* const ObjectStore = GetObjectStore();
 	if (ObjectStore == nullptr)
 	{
-		return ERuntimeResult::InvalidLifecycle;
+		return Core::ERuntimeResult::InvalidLifecycle;
 	}
 	if (DeferredSpawns.IsValid() && ObjectStore->IsCollectionActive())
 	{
-		return ERuntimeResult::LifecycleLocked;
+		return Core::ERuntimeResult::LifecycleLocked;
 	}
 	{
 		FObjectStoreDispatchGuard DispatchGuard(*ObjectStore);
 		if (!DispatchGuard.IsAcquired())
 		{
-			return ERuntimeResult::LifecycleLocked;
+			return Core::ERuntimeResult::LifecycleLocked;
 		}
 
-		const ERuntimeResult BeginResult = Lifecycle.Begin();
-		if (BeginResult != ERuntimeResult::Success)
+		const Core::ERuntimeResult BeginResult = Lifecycle.Begin();
+		if (BeginResult != Core::ERuntimeResult::Success)
 		{
 			return BeginResult;
 		}
@@ -164,24 +164,24 @@ ERuntimeResult UWorld::BeginPlay(const TimePointMilliseconds InNowMilliseconds) 
 		FObjectStoreDispatchGuard DispatchGuard(*ObjectStore);
 		if (!DispatchGuard.IsAcquired())
 		{
-			return ERuntimeResult::LifecycleLocked;
+			return Core::ERuntimeResult::LifecycleLocked;
 		}
 
-		const ERuntimeResult BeginResult = BeginRegisteredActorsWithRollback(InNowMilliseconds);
-		if (BeginResult != ERuntimeResult::Success)
+		const Core::ERuntimeResult BeginResult = BeginRegisteredActorsWithRollback(InNowMilliseconds);
+		if (BeginResult != Core::ERuntimeResult::Success)
 		{
 			return BeginResult;
 		}
 	}
 
-	ERuntimeResult FirstError = ERuntimeResult::Success;
+	Core::ERuntimeResult FirstError = Core::ERuntimeResult::Success;
 	return BeginDeferredSpawnsUnderGuard(*ObjectStore, InNowMilliseconds, FirstError);
 }
 
-ERuntimeResult UWorld::Advance(const TimePointMilliseconds InNowMilliseconds) noexcept
+Core::ERuntimeResult UWorld::Advance(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 {
-	const ERuntimeResult PlayingResult = Lifecycle.RequirePlaying();
-	if (PlayingResult != ERuntimeResult::Success)
+	const Core::ERuntimeResult PlayingResult = Lifecycle.RequirePlaying();
+	if (PlayingResult != Core::ERuntimeResult::Success)
 	{
 		return PlayingResult;
 	}
@@ -189,17 +189,17 @@ ERuntimeResult UWorld::Advance(const TimePointMilliseconds InNowMilliseconds) no
 	// non-monotonic dispatcher cannot corrupt per-actor scheduling baselines.
 	if (InNowMilliseconds < LastUpdateMilliseconds)
 	{
-		return ERuntimeResult::NonMonotonicTime;
+		return Core::ERuntimeResult::NonMonotonicTime;
 	}
 	FObjectStore* const ObjectStore = GetObjectStore();
 	if (ObjectStore == nullptr)
 	{
-		return ERuntimeResult::InvalidLifecycle;
+		return Core::ERuntimeResult::InvalidLifecycle;
 	}
 	FObjectStoreDispatchGuard DispatchGuard(*ObjectStore);
 	if (!DispatchGuard.IsAcquired())
 	{
-		return ERuntimeResult::LifecycleLocked;
+		return Core::ERuntimeResult::LifecycleLocked;
 	}
 	LastUpdateMilliseconds = InNowMilliseconds;
 
@@ -208,41 +208,41 @@ ERuntimeResult UWorld::Advance(const TimePointMilliseconds InNowMilliseconds) no
 		AActor* const Actor = Actors.At(Index).Get();
 		if (Actor == nullptr)
 		{
-			return ERuntimeResult::InvalidLifecycle;
+			return Core::ERuntimeResult::InvalidLifecycle;
 		}
-		const ERuntimeResult ActorResult = DispatchActorAdvance(*Actor, InNowMilliseconds);
-		if (ActorResult != ERuntimeResult::Success)
+		const Core::ERuntimeResult ActorResult = DispatchActorAdvance(*Actor, InNowMilliseconds);
+		if (ActorResult != Core::ERuntimeResult::Success)
 		{
 			return ActorResult;
 		}
 	}
-	return ERuntimeResult::Success;
+	return Core::ERuntimeResult::Success;
 }
 
-ERuntimeResult UWorld::EndPlay() noexcept
+Core::ERuntimeResult UWorld::EndPlay() noexcept
 {
 	// EndPlay is idempotent after a successful end so repeated shutdown paths
 	// never re-enter the actor end cascade.
-	if (Lifecycle.GetState() == ELifecycleState::Ended)
+	if (Lifecycle.GetState() == Core::ELifecycleState::Ended)
 	{
-		return ERuntimeResult::Success;
+		return Core::ERuntimeResult::Success;
 	}
-	if (Lifecycle.GetState() != ELifecycleState::Playing)
+	if (Lifecycle.GetState() != Core::ELifecycleState::Playing)
 	{
-		return ERuntimeResult::InvalidLifecycle;
+		return Core::ERuntimeResult::InvalidLifecycle;
 	}
 	FObjectStore* const ObjectStore = GetObjectStore();
 	if (ObjectStore == nullptr)
 	{
-		return ERuntimeResult::InvalidLifecycle;
+		return Core::ERuntimeResult::InvalidLifecycle;
 	}
 	FObjectStoreDispatchGuard DispatchGuard(*ObjectStore);
 	if (!DispatchGuard.IsAcquired())
 	{
-		return ERuntimeResult::LifecycleLocked;
+		return Core::ERuntimeResult::LifecycleLocked;
 	}
-	const ERuntimeResult EndResult = Lifecycle.End();
-	if (EndResult != ERuntimeResult::Success)
+	const Core::ERuntimeResult EndResult = Lifecycle.End();
+	if (EndResult != Core::ERuntimeResult::Success)
 	{
 		return EndResult;
 	}
@@ -250,7 +250,7 @@ ERuntimeResult UWorld::EndPlay() noexcept
 	return EndRegisteredActorsReverse();
 }
 
-ERuntimeResult UWorld::BeginRegisteredActorsWithRollback(const TimePointMilliseconds InNowMilliseconds) noexcept
+Core::ERuntimeResult UWorld::BeginRegisteredActorsWithRollback(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 {
 	// Actors begin in registration order; on first failure the previously begun
 	// actors are ended in reverse so the world never observes a partially begun
@@ -259,8 +259,9 @@ ERuntimeResult UWorld::BeginRegisteredActorsWithRollback(const TimePointMillisec
 	for (std::size_t Index = 0; Index < Actors.GetCount(); ++Index)
 	{
 		AActor* const Actor = Actors.At(Index).Get();
-		const ERuntimeResult ActorResult = Actor != nullptr ? DispatchActorBegin(*Actor, InNowMilliseconds) : ERuntimeResult::InvalidLifecycle;
-		if (ActorResult != ERuntimeResult::Success)
+		const Core::ERuntimeResult ActorResult =
+			Actor != nullptr ? DispatchActorBegin(*Actor, InNowMilliseconds) : Core::ERuntimeResult::InvalidLifecycle;
+		if (ActorResult != Core::ERuntimeResult::Success)
 		{
 			for (std::size_t RollbackIndex = BegunActorCount; RollbackIndex > 0; --RollbackIndex)
 			{
@@ -274,20 +275,20 @@ ERuntimeResult UWorld::BeginRegisteredActorsWithRollback(const TimePointMillisec
 		}
 		++BegunActorCount;
 	}
-	return ERuntimeResult::Success;
+	return Core::ERuntimeResult::Success;
 }
 
-ERuntimeResult UWorld::EndRegisteredActorsReverse() noexcept
+Core::ERuntimeResult UWorld::EndRegisteredActorsReverse() noexcept
 {
 	// Actors end in reverse registration order; the first error is retained but
 	// every actor still receives its EndPlay so shutdown stays symmetric.
-	ERuntimeResult FirstError = ERuntimeResult::Success;
+	Core::ERuntimeResult FirstError = Core::ERuntimeResult::Success;
 	for (std::size_t Index = Actors.GetCount(); Index > 0; --Index)
 	{
 		if (AActor* const Actor = Actors.At(Index - 1).Get())
 		{
-			const ERuntimeResult ActorResult = DispatchActorEnd(*Actor);
-			if (FirstError == ERuntimeResult::Success && ActorResult != ERuntimeResult::Success)
+			const Core::ERuntimeResult ActorResult = DispatchActorEnd(*Actor);
+			if (FirstError == Core::ERuntimeResult::Success && ActorResult != Core::ERuntimeResult::Success)
 			{
 				FirstError = ActorResult;
 			}
@@ -296,17 +297,17 @@ ERuntimeResult UWorld::EndRegisteredActorsReverse() noexcept
 	return FirstError;
 }
 
-ERuntimeResult UWorld::DispatchActorBegin(AActor& InActor, const TimePointMilliseconds InNowMilliseconds) noexcept
+Core::ERuntimeResult UWorld::DispatchActorBegin(AActor& InActor, const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 {
 	return InActor.DispatchBeginPlay(InNowMilliseconds);
 }
 
-ERuntimeResult UWorld::DispatchActorAdvance(AActor& InActor, const TimePointMilliseconds InNowMilliseconds) noexcept
+Core::ERuntimeResult UWorld::DispatchActorAdvance(AActor& InActor, const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 {
 	return InActor.DispatchAdvance(InNowMilliseconds);
 }
 
-ERuntimeResult UWorld::DispatchActorEnd(AActor& InActor) noexcept
+Core::ERuntimeResult UWorld::DispatchActorEnd(AActor& InActor) noexcept
 {
 	return InActor.DispatchEndPlay();
 }
@@ -331,8 +332,8 @@ FActorSpawnStatus UWorld::GetSpawnStatus(const FActorSpawnHandle InHandle) const
 
 EActorSpawnRequestResult UWorld::CheckDeferredSpawnRequest() const noexcept
 {
-	const ELifecycleState LifecycleState = Lifecycle.GetState();
-	if (LifecycleState != ELifecycleState::Constructed && LifecycleState != ELifecycleState::Playing)
+	const Core::ELifecycleState LifecycleState = Lifecycle.GetState();
+	if (LifecycleState != Core::ELifecycleState::Constructed && LifecycleState != Core::ELifecycleState::Playing)
 	{
 		return EActorSpawnRequestResult::LifecycleLocked;
 	}
@@ -365,7 +366,7 @@ EEngineResult UWorld::CheckSpawnable(const TObjectPtr<AActor> InActor) const noe
 {
 	// Deferred spawn is a play-time structural request; it only queues here and
 	// the actual registration and begin happen at the next ApplyPending barrier.
-	if (Lifecycle.GetState() != ELifecycleState::Playing)
+	if (Lifecycle.GetState() != Core::ELifecycleState::Playing)
 	{
 		return EEngineResult::LifecycleLocked;
 	}
@@ -428,7 +429,7 @@ EEngineResult UWorld::DestroyActor(const TObjectPtr<AActor> InActor) noexcept
 
 EEngineResult UWorld::CheckDestroyable(const TObjectPtr<AActor> InActor) const noexcept
 {
-	if (Lifecycle.GetState() != ELifecycleState::Playing)
+	if (Lifecycle.GetState() != Core::ELifecycleState::Playing)
 	{
 		return EEngineResult::LifecycleLocked;
 	}
@@ -471,17 +472,17 @@ EEngineResult UWorld::CheckDestroyable(const TObjectPtr<AActor> InActor) const n
 	return EEngineResult::Success;
 }
 
-ERuntimeResult UWorld::ApplyPending(const TimePointMilliseconds InNowMilliseconds) noexcept
+Core::ERuntimeResult UWorld::ApplyPending(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 {
-	const ERuntimeResult PlayingResult = Lifecycle.RequirePlaying();
-	if (PlayingResult != ERuntimeResult::Success)
+	const Core::ERuntimeResult PlayingResult = Lifecycle.RequirePlaying();
+	if (PlayingResult != Core::ERuntimeResult::Success)
 	{
 		return PlayingResult;
 	}
 	FObjectStore* const ObjectStore = GetObjectStore();
 	if (ObjectStore == nullptr)
 	{
-		return ERuntimeResult::InvalidLifecycle;
+		return Core::ERuntimeResult::InvalidLifecycle;
 	}
 	// Freeze typed work before destroy or BeginPlay callbacks can queue new requests.
 	if (DeferredSpawns.IsValid())
@@ -490,16 +491,16 @@ ERuntimeResult UWorld::ApplyPending(const TimePointMilliseconds InNowMillisecond
 	}
 	if (!HasPendingBarrierWork())
 	{
-		return ERuntimeResult::Success;
+		return Core::ERuntimeResult::Success;
 	}
 
-	ERuntimeResult FirstError = ERuntimeResult::Success;
+	Core::ERuntimeResult FirstError = Core::ERuntimeResult::Success;
 
 	// Destroys apply before spawns so ending actors free capacity that the same
 	// barrier can immediately reuse for pending spawns. Each cascade phase aborts
 	// the whole barrier if its dispatch guard cannot be acquired.
-	const ERuntimeResult EndGuardResult = EndDoomedActorsUnderGuard(*ObjectStore, FirstError);
-	if (EndGuardResult != ERuntimeResult::Success)
+	const Core::ERuntimeResult EndGuardResult = EndDoomedActorsUnderGuard(*ObjectStore, FirstError);
+	if (EndGuardResult != Core::ERuntimeResult::Success)
 	{
 		DeferredSpawns.RestoreUnconstructedFrom(0);
 		DeferredSpawns.RestoreUnpublishedFrom(0);
@@ -508,8 +509,8 @@ ERuntimeResult UWorld::ApplyPending(const TimePointMilliseconds InNowMillisecond
 
 	MarkAndUnregisterDoomedActors(*ObjectStore);
 
-	const ERuntimeResult BeginGuardResult = BeginPendingSpawnsUnderGuard(*ObjectStore, InNowMilliseconds, FirstError);
-	if (BeginGuardResult != ERuntimeResult::Success)
+	const Core::ERuntimeResult BeginGuardResult = BeginPendingSpawnsUnderGuard(*ObjectStore, InNowMilliseconds, FirstError);
+	if (BeginGuardResult != Core::ERuntimeResult::Success)
 	{
 		DeferredSpawns.RestoreUnconstructedFrom(0);
 		DeferredSpawns.RestoreUnpublishedFrom(0);
@@ -522,11 +523,11 @@ ERuntimeResult UWorld::ApplyPending(const TimePointMilliseconds InNowMillisecond
 		{
 			DeferredSpawns.RestoreUnconstructedFrom(0);
 			DeferredSpawns.RestoreUnpublishedFrom(0);
-			return ERuntimeResult::LifecycleLocked;
+			return Core::ERuntimeResult::LifecycleLocked;
 		}
 		ConstructDeferredSpawns(*ObjectStore);
-		const ERuntimeResult DeferredBeginResult = BeginDeferredSpawnsUnderGuard(*ObjectStore, InNowMilliseconds, FirstError);
-		if (DeferredBeginResult != ERuntimeResult::Success)
+		const Core::ERuntimeResult DeferredBeginResult = BeginDeferredSpawnsUnderGuard(*ObjectStore, InNowMilliseconds, FirstError);
+		if (DeferredBeginResult != Core::ERuntimeResult::Success)
 		{
 			return DeferredBeginResult;
 		}
@@ -535,7 +536,7 @@ ERuntimeResult UWorld::ApplyPending(const TimePointMilliseconds InNowMillisecond
 	return FirstError;
 }
 
-ERuntimeResult UWorld::EndDoomedActorsUnderGuard(FObjectStore& InObjectStore, ERuntimeResult& InOutFirstError) noexcept
+Core::ERuntimeResult UWorld::EndDoomedActorsUnderGuard(FObjectStore& InObjectStore, Core::ERuntimeResult& InOutFirstError) noexcept
 {
 	// The end cascade holds the dispatch guard; store destruction marking waits
 	// until the guard releases because MarkPendingDestroy is rejected while
@@ -543,20 +544,20 @@ ERuntimeResult UWorld::EndDoomedActorsUnderGuard(FObjectStore& InObjectStore, ER
 	FObjectStoreDispatchGuard DispatchGuard(InObjectStore);
 	if (!DispatchGuard.IsAcquired())
 	{
-		return ERuntimeResult::LifecycleLocked;
+		return Core::ERuntimeResult::LifecycleLocked;
 	}
 	for (std::size_t Index = 0; Index < Actors.GetPendingDestroyCount(); ++Index)
 	{
 		if (AActor* const Actor = Actors.PendingDestroyAt(Index).Get())
 		{
-			const ERuntimeResult EndResult = DispatchActorEnd(*Actor);
-			if (InOutFirstError == ERuntimeResult::Success && EndResult != ERuntimeResult::Success)
+			const Core::ERuntimeResult EndResult = DispatchActorEnd(*Actor);
+			if (InOutFirstError == Core::ERuntimeResult::Success && EndResult != Core::ERuntimeResult::Success)
 			{
 				InOutFirstError = EndResult;
 			}
 		}
 	}
-	return ERuntimeResult::Success;
+	return Core::ERuntimeResult::Success;
 }
 
 void UWorld::MarkAndUnregisterDoomedActors(FObjectStore& InObjectStore) noexcept
@@ -595,19 +596,19 @@ void UWorld::ConstructDeferredSpawns(FObjectStore& InObjectStore) noexcept
 	}
 }
 
-ERuntimeResult UWorld::BeginDeferredSpawnsUnderGuard(
-	FObjectStore& InObjectStore, const TimePointMilliseconds InNowMilliseconds, ERuntimeResult& InOutFirstError) noexcept
+Core::ERuntimeResult UWorld::BeginDeferredSpawnsUnderGuard(
+	FObjectStore& InObjectStore, const Core::TimePointMilliseconds InNowMilliseconds, Core::ERuntimeResult& InOutFirstError) noexcept
 {
 	if (DeferredSpawns.SealedPublishCount() == 0)
 	{
-		return ERuntimeResult::Success;
+		return Core::ERuntimeResult::Success;
 	}
 
 	FObjectStoreDispatchGuard DispatchGuard(InObjectStore);
 	if (!DispatchGuard.IsAcquired())
 	{
 		DeferredSpawns.RestoreUnpublishedFrom(0);
-		return ERuntimeResult::LifecycleLocked;
+		return Core::ERuntimeResult::LifecycleLocked;
 	}
 
 	for (std::size_t Index = 0; Index < DeferredSpawns.SealedPublishCount(); ++Index)
@@ -621,18 +622,18 @@ ERuntimeResult UWorld::BeginDeferredSpawnsUnderGuard(
 		}
 		Actor->AssignWorld(GetObjectHandle());
 		Actors.Add(SpawnedActor);
-		const ERuntimeResult BeginResult = DispatchActorBegin(*Actor, InNowMilliseconds);
-		if (InOutFirstError == ERuntimeResult::Success && BeginResult != ERuntimeResult::Success)
+		const Core::ERuntimeResult BeginResult = DispatchActorBegin(*Actor, InNowMilliseconds);
+		if (InOutFirstError == Core::ERuntimeResult::Success && BeginResult != Core::ERuntimeResult::Success)
 		{
 			InOutFirstError = BeginResult;
 		}
 		DeferredSpawns.CompletePublish(SpawnHandle);
 	}
-	return ERuntimeResult::Success;
+	return Core::ERuntimeResult::Success;
 }
 
-ERuntimeResult UWorld::BeginPendingSpawnsUnderGuard(
-	FObjectStore& InObjectStore, const TimePointMilliseconds InNowMilliseconds, ERuntimeResult& InOutFirstError) noexcept
+Core::ERuntimeResult UWorld::BeginPendingSpawnsUnderGuard(
+	FObjectStore& InObjectStore, const Core::TimePointMilliseconds InNowMilliseconds, Core::ERuntimeResult& InOutFirstError) noexcept
 {
 	// Spawns register into the freed live capacity and begin under a fresh guard.
 	// The guard scope closes before ClearPendingSpawn so the pending list is only
@@ -641,7 +642,7 @@ ERuntimeResult UWorld::BeginPendingSpawnsUnderGuard(
 		FObjectStoreDispatchGuard DispatchGuard(InObjectStore);
 		if (!DispatchGuard.IsAcquired())
 		{
-			return ERuntimeResult::LifecycleLocked;
+			return Core::ERuntimeResult::LifecycleLocked;
 		}
 		for (std::size_t Index = 0; Index < Actors.GetPendingSpawnCount(); ++Index)
 		{
@@ -653,15 +654,15 @@ ERuntimeResult UWorld::BeginPendingSpawnsUnderGuard(
 			}
 			Actor->AssignWorld(GetObjectHandle());
 			Actors.Add(SpawnedActor);
-			const ERuntimeResult BeginResult = DispatchActorBegin(*Actor, InNowMilliseconds);
-			if (InOutFirstError == ERuntimeResult::Success && BeginResult != ERuntimeResult::Success)
+			const Core::ERuntimeResult BeginResult = DispatchActorBegin(*Actor, InNowMilliseconds);
+			if (InOutFirstError == Core::ERuntimeResult::Success && BeginResult != Core::ERuntimeResult::Success)
 			{
 				InOutFirstError = BeginResult;
 			}
 		}
 	}
 	Actors.ClearPendingSpawn();
-	return ERuntimeResult::Success;
+	return Core::ERuntimeResult::Success;
 }
 
 std::size_t UWorld::PendingSpawnCount() const noexcept

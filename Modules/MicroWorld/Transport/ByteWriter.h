@@ -23,7 +23,7 @@ class FByteWriter final
 {
 public:
 	/** Binds the writer to a caller-owned destination view; storage is observed, never owned. */
-	constexpr explicit FByteWriter(TSpan<std::uint8_t> InStorage) noexcept : Buffer(InStorage), WritePosition(0) {}
+	constexpr explicit FByteWriter(Core::TSpan<std::uint8_t> InStorage) noexcept : Buffer(InStorage), WritePosition(0) {}
 
 	/** Prevents the writer from being copied while caller storage has one owner. */
 	FByteWriter(const FByteWriter&) = delete;
@@ -76,7 +76,7 @@ public:
 	 * A span that fits the total capacity but exceeds remaining capacity returns `Full`.
 	 * None of these failures advances the cursor or alters accepted bytes.
 	 */
-	ETransportResult Write(TSpan<const std::uint8_t> InBytes) noexcept
+	ETransportResult Write(Core::TSpan<const std::uint8_t> InBytes) noexcept
 	{
 		const std::size_t IncomingSize = InBytes.Size();
 		if (IncomingSize == 0)
@@ -122,13 +122,13 @@ public:
 	 * Returns a read-only view of the accepted prefix without exposing mutable storage.
 	 * The view is empty for an invalid `{nullptr, nonzero}` backing buffer.
 	 */
-	constexpr TSpan<const std::uint8_t> WrittenBytes() const noexcept
+	constexpr Core::TSpan<const std::uint8_t> WrittenBytes() const noexcept
 	{
 		if (!HasValidStorage())
 		{
-			return TSpan<const std::uint8_t>(nullptr, 0);
+			return Core::TSpan<const std::uint8_t>(nullptr, 0);
 		}
-		return TSpan<const std::uint8_t>(Buffer.Data(), WritePosition);
+		return Core::TSpan<const std::uint8_t>(Buffer.Data(), WritePosition);
 	}
 
 	/**
@@ -147,7 +147,7 @@ private:
 	constexpr bool HasValidStorage() const noexcept { return Buffer.Data() != nullptr || Buffer.Size() == 0; }
 
 	/** Observes the caller-owned destination; the writer never releases or grows it. */
-	TSpan<std::uint8_t> Buffer;
+	Core::TSpan<std::uint8_t> Buffer;
 
 	/** Tracks the accepted prefix length so failures leave prior bytes intact. */
 	std::size_t WritePosition;
@@ -161,8 +161,8 @@ private:
  */
 inline void WriteUint16BigEndian(const std::uint16_t InValue, std::uint8_t* const OutBytes) noexcept
 {
-	OutBytes[0] = static_cast<std::uint8_t>(InValue >> HighByteShift);
-	OutBytes[1] = static_cast<std::uint8_t>(InValue & LowByteMask);
+	OutBytes[0] = static_cast<std::uint8_t>(InValue >> Core::HighByteShift);
+	OutBytes[1] = static_cast<std::uint8_t>(InValue & Core::LowByteMask);
 }
 
 /**
@@ -173,8 +173,8 @@ inline void WriteUint16BigEndian(const std::uint16_t InValue, std::uint8_t* cons
  */
 inline void WriteUint16LittleEndian(const std::uint16_t InValue, std::uint8_t* const OutBytes) noexcept
 {
-	OutBytes[0] = static_cast<std::uint8_t>(InValue & LowByteMask);
-	OutBytes[1] = static_cast<std::uint8_t>(InValue >> HighByteShift);
+	OutBytes[0] = static_cast<std::uint8_t>(InValue & Core::LowByteMask);
+	OutBytes[1] = static_cast<std::uint8_t>(InValue >> Core::HighByteShift);
 }
 
 } // namespace MicroWorld::Transport

@@ -43,6 +43,13 @@ NAMESPACE_DECLARATION = re.compile(
     r"^\s*namespace\s+([A-Za-z_]\w*(?:::[A-Za-z_]\w*)*)\s*(?:\{\s*)?$"
 )
 
+# A using-directive at namespace scope re-exports everything the nominated
+# namespace holds into the enclosing one, and a header carries that leak into
+# every consumer that includes it. One directive is enough to make the flat
+# namespace resolve again, so the system boundary must be crossed by explicit
+# qualification instead.
+USING_DIRECTIVE = re.compile(r"^\s*using\s+namespace\b")
+
 
 def infer_repository_root() -> Path:
     """Resolve the repository root relative to this checker script."""
@@ -106,12 +113,18 @@ def namespace_errors(root: Path) -> list[str]:
     errors: list[str] = []
     for source_path in discover_sources(root):
         relative_path = source_path.relative_to(root).as_posix()
+        source_text = source_path.read_text(encoding="utf-8")
+
+        for line_number, line in enumerate(source_text.splitlines(), start=1):
+            if USING_DIRECTIVE.match(line):
+                errors.append(f"{relative_path}:{line_number}: using-directive re-exports a namespace; qualify the names instead")
+
         expected = expected_namespace(Path(relative_path))
         if expected is None:
             errors.append(f"{relative_path}: no namespace rule exists for this source tree")
             continue
 
-        actual = extract_namespaces(source_path.read_text(encoding="utf-8"))
+        actual = extract_namespaces(source_text)
         unique_actual = list(dict.fromkeys(actual))
         if unique_actual != [expected]:
             actual_text = ", ".join(unique_actual) if unique_actual else "<missing>"
@@ -176,6 +189,12 @@ def run_self_test() -> int:
             "forbidden nested Transport namespace",
             "Modules/MicroWorld/Transport/Wifi/Link.h",
             "namespace MicroWorld::Transport::Wifi\n{\n}\n",
+            False,
+        ),
+        (
+            "forbidden using-directive in an otherwise correct source",
+            "Modules/MicroWorld/Transport/Host.h",
+            "namespace MicroWorld::Transport\n{\nusing namespace ::MicroWorld::Core;\n}\n",
             False,
         ),
     ]

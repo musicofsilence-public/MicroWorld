@@ -50,7 +50,7 @@ public:
 	 * (it can never fit). Returns `Full` when the FIFO has no free slot. A non-success
 	 * result leaves the FIFO contents and order unchanged.
 	 */
-	ETransportResult QueueSend(const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
+	ETransportResult QueueSend(const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept
 	{
 		const std::size_t PacketSize = InPacket.Size();
 		if (PacketSize == 0)
@@ -83,7 +83,7 @@ public:
 		{
 			return ETransportResult::Unavailable;
 		}
-		const TSpan<const std::uint8_t> HeadPacket(Storage.PacketBytes[HeadIndex].data(), Storage.PacketLengths[HeadIndex]);
+		const Core::TSpan<const std::uint8_t> HeadPacket(Storage.PacketBytes[HeadIndex].data(), Storage.PacketLengths[HeadIndex]);
 		const ETransportResult SendResult = Device.TrySend(Storage.Destinations[HeadIndex], HeadPacket);
 		if (SendResult != ETransportResult::Success)
 		{
@@ -104,7 +104,7 @@ public:
 	 */
 	ETransportResult Receive(
 		::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
-		TSpan<std::uint8_t> InDestination,
+		Core::TSpan<std::uint8_t> InDestination,
 		::MicroWorld::Transport::Device::FReceiveResult& OutResult) noexcept
 	{
 		return Device.TryReceive(OutFrom, InDestination, OutResult);
@@ -127,7 +127,7 @@ public:
 
 private:
 	/** Copies one already-validated packet into the FIFO tail, or `Full` when no slot is free. */
-	ETransportResult EnqueuePacket(const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
+	ETransportResult EnqueuePacket(const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept
 	{
 		if (QueuedPacketCount >= MaxPackets)
 		{
@@ -142,7 +142,7 @@ private:
 	void StorePacketAt(
 		const std::size_t InIndex,
 		const ::MicroWorld::Transport::Address::FDeviceAddress& InTo,
-		TSpan<const std::uint8_t> InPacket,
+		Core::TSpan<const std::uint8_t> InPacket,
 		const std::size_t InPacketSize) noexcept
 	{
 		if (InPacketSize > 0)

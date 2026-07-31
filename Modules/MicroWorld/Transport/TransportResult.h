@@ -7,8 +7,6 @@
 namespace MicroWorld::Transport
 {
 
-using namespace ::MicroWorld::Core;
-
 /**
  * Reports the complete portable outcome of one Transport byte, queue, packet, or device operation.
  *

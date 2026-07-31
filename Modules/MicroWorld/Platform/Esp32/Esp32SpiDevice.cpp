@@ -22,74 +22,76 @@ namespace
 {
 
 	/** Maps one SPI transmit outcome to the shared device result (mirrors the UART/I2C devices' mapping). */
-	ETransportResult MapSpiTransmitOutcome(const ESpiTransmitOutcome InOutcome) noexcept
+	Transport::ETransportResult MapSpiTransmitOutcome(const ESpiTransmitOutcome InOutcome) noexcept
 	{
 		switch (InOutcome)
 		{
 			case ESpiTransmitOutcome::Sent:
-				return ETransportResult::Success;
+				return Transport::ETransportResult::Success;
 			case ESpiTransmitOutcome::WouldBlock:
-				return ETransportResult::Full;
+				return Transport::ETransportResult::Full;
 			case ESpiTransmitOutcome::Error:
 			default:
-				return ETransportResult::Invalid;
+				return Transport::ETransportResult::Invalid;
 		}
 	}
 
 	/** Reports the first reason an outgoing packet cannot be framed and sent, or `Success`. */
-	ETransportResult ValidateOutgoingSpiPacket(const FDeviceAddress& InTo, const Core::TSpan<const std::uint8_t> InPacket) noexcept
+	Transport::ETransportResult ValidateOutgoingSpiPacket(
+		const Transport::Address::FDeviceAddress& InTo, const Core::TSpan<const std::uint8_t> InPacket) noexcept
 	{
 		// Validate every argument before any syscall so a rejection is truly transactional.
 		if (!IsSpiAddress(InTo))
 		{
-			return ETransportResult::Invalid;
+			return Transport::ETransportResult::Invalid;
 		}
 		const std::size_t PacketSize = InPacket.Size();
 		if (PacketSize > SpiMaxPayloadBytes)
 		{
-			return ETransportResult::Invalid;
+			return Transport::ETransportResult::Invalid;
 		}
 		if (PacketSize != 0 && InPacket.Data() == nullptr)
 		{
-			return ETransportResult::Invalid;
+			return Transport::ETransportResult::Invalid;
 		}
-		return ETransportResult::Success;
+		return Transport::ETransportResult::Success;
 	}
 
 	/** Copies the decoder's held frame into the destination and clears it, or returns `Full`
 	 * (leaving the frame held) when the payload exceeds the destination. */
-	ETransportResult DeliverFrameFromDecoder(
-		TFrameDecoder<SpiMaxPayloadBytes>& InDecoder,
+	Transport::ETransportResult DeliverFrameFromDecoder(
+		Transport::FrameCodec::TFrameDecoder<SpiMaxPayloadBytes>& InDecoder,
 		Core::TSpan<std::uint8_t> InDestination,
-		FDeviceAddress& OutFrom,
-		FReceiveResult& OutResult) noexcept
+		Transport::Address::FDeviceAddress& OutFrom,
+		Transport::Device::FReceiveResult& OutResult) noexcept
 	{
 		// On Full the destination is untouched and the frame stays held for the next call, so a
 		// receive that cannot fit is transactional.
 		const std::size_t HeldLength = InDecoder.FramePayload().Size();
 		if (HeldLength > InDestination.Size())
 		{
-			return ETransportResult::Full;
+			return Transport::ETransportResult::Full;
 		}
 		std::memcpy(InDestination.Data(), InDecoder.FramePayload().Data(), HeldLength);
 		OutFrom = MakeSpiAddress(InDecoder.FrameNodeId());
 		OutResult.BytesReceived = HeldLength;
 		InDecoder.ClearFrame();
-		return ETransportResult::Success;
+		return Transport::ETransportResult::Success;
 	}
 
 	/** Pushes a whole received window through the decoder, stopping at the first completed frame; the
 	 * caller must ensure the decoder holds no frame before calling. */
-	void PumpWindowIntoDecoder(TFrameDecoder<SpiMaxPayloadBytes>& InDecoder, const std::uint8_t* const InWindow, const std::size_t InLength) noexcept
+	void PumpWindowIntoDecoder(
+		Transport::FrameCodec::TFrameDecoder<SpiMaxPayloadBytes>& InDecoder, const std::uint8_t* const InWindow, const std::size_t InLength) noexcept
 	{
 		for (std::size_t Index = 0; Index < InLength; ++Index)
 		{
-			const EFrameEvent Event = InDecoder.PushByte(InWindow[Index]);
-			if (Event == EFrameEvent::FrameReady)
+			const Transport::FrameCodec::EFrameEvent Event = InDecoder.PushByte(InWindow[Index]);
+			if (Event == Transport::FrameCodec::EFrameEvent::FrameReady)
 			{
 				return;
 			}
-			if (Event == EFrameEvent::Discarded)
+			if (Event == Transport::FrameCodec::EFrameEvent::Discarded)
 			{
 				MW_LOG_MSG(Warning, "Spi", "decoder discarded a candidate frame (bad length or CRC)");
 			}
@@ -124,36 +126,37 @@ FEsp32SpiMasterDevice::~FEsp32SpiMasterDevice() noexcept
 	}
 }
 
-ETransportResult FEsp32SpiMasterDevice::ExchangeAndPump(const std::uint8_t* const InTransmitWindow) noexcept
+Transport::ETransportResult FEsp32SpiMasterDevice::ExchangeAndPump(const std::uint8_t* const InTransmitWindow) noexcept
 {
 	const ESpiTransmitOutcome Outcome =
 		TransmitSpiMaster(static_cast<spi_device_handle_t>(DeviceHandle), InTransmitWindow, ReceiveWindow, SpiTransactionWindowBytes);
-	const ETransportResult Result = MapSpiTransmitOutcome(Outcome);
+	const Transport::ETransportResult Result = MapSpiTransmitOutcome(Outcome);
 	// SPI is full-duplex: the received window holds the slave's simultaneous output, so feed it to the
 	// decoder rather than discard it. Only pump when no frame is already held (the decoder precondition).
-	if (Result == ETransportResult::Success && !Decoder.HasFrame())
+	if (Result == Transport::ETransportResult::Success && !Decoder.HasFrame())
 	{
 		PumpWindowIntoDecoder(Decoder, ReceiveWindow, SpiTransactionWindowBytes);
 	}
 	return Result;
 }
 
-ETransportResult FEsp32SpiMasterDevice::TrySend(const FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept
+Transport::ETransportResult FEsp32SpiMasterDevice::TrySend(
+	const Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept
 {
 	if (!bOpen)
 	{
-		return ETransportResult::Unavailable;
+		return Transport::ETransportResult::Unavailable;
 	}
-	const ETransportResult Validation = ValidateOutgoingSpiPacket(InTo, InPacket);
-	if (Validation != ETransportResult::Success)
+	const Transport::ETransportResult Validation = ValidateOutgoingSpiPacket(InTo, InPacket);
+	if (Validation != Transport::ETransportResult::Success)
 	{
 		return Validation;
 	}
 	// The codec is transactional on failure; pad the window's tail with idle bytes the peer's decoder ignores.
 	std::size_t Written = 0;
-	const ETransportResult EncodeResult =
-		EncodeFrame(LocalNodeIdValue, InPacket, Core::TSpan<std::uint8_t>(TransmitWindow, SpiTransactionWindowBytes), Written);
-	if (EncodeResult != ETransportResult::Success)
+	const Transport::ETransportResult EncodeResult =
+		Transport::FrameCodec::EncodeFrame(LocalNodeIdValue, InPacket, Core::TSpan<std::uint8_t>(TransmitWindow, SpiTransactionWindowBytes), Written);
+	if (EncodeResult != Transport::ETransportResult::Success)
 	{
 		return EncodeResult;
 	}
@@ -161,18 +164,18 @@ ETransportResult FEsp32SpiMasterDevice::TrySend(const FDeviceAddress& InTo, Core
 	return ExchangeAndPump(TransmitWindow);
 }
 
-ETransportResult FEsp32SpiMasterDevice::TryReceive(
-	FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
+Transport::ETransportResult FEsp32SpiMasterDevice::TryReceive(
+	Transport::Address::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Transport::Device::FReceiveResult& OutResult) noexcept
 {
 	// Reject a null destination with nonzero length before any bus transaction.
 	const std::size_t Capacity = InDestination.Size();
 	if (Capacity != 0 && InDestination.Data() == nullptr)
 	{
-		return ETransportResult::Invalid;
+		return Transport::ETransportResult::Invalid;
 	}
 	if (!bOpen)
 	{
-		return ETransportResult::Unavailable;
+		return Transport::ETransportResult::Unavailable;
 	}
 	// A frame held from a prior Full is delivered first so the decoder precondition is honored.
 	if (Decoder.HasFrame())
@@ -180,16 +183,16 @@ ETransportResult FEsp32SpiMasterDevice::TryReceive(
 		return DeliverFrameFromDecoder(Decoder, InDestination, OutFrom, OutResult);
 	}
 	// One idle full-duplex transaction clocks in whatever the slave has staged (ADR Appendix B).
-	const ETransportResult Exchange = ExchangeAndPump(IdleWindow);
-	if (Exchange == ETransportResult::Invalid)
+	const Transport::ETransportResult Exchange = ExchangeAndPump(IdleWindow);
+	if (Exchange == Transport::ETransportResult::Invalid)
 	{
-		return ETransportResult::Invalid;
+		return Transport::ETransportResult::Invalid;
 	}
 	if (Decoder.HasFrame())
 	{
 		return DeliverFrameFromDecoder(Decoder, InDestination, OutFrom, OutResult);
 	}
-	return ETransportResult::Unavailable;
+	return Transport::ETransportResult::Unavailable;
 }
 
 std::size_t FEsp32SpiMasterDevice::MaxPacketBytes() const noexcept
@@ -249,47 +252,48 @@ void FEsp32SpiSlaveDevice::QueueNextTransaction() noexcept
 	}
 }
 
-ETransportResult FEsp32SpiSlaveDevice::TrySend(const FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept
+Transport::ETransportResult FEsp32SpiSlaveDevice::TrySend(
+	const Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept
 {
 	if (!bOpen)
 	{
-		return ETransportResult::Unavailable;
+		return Transport::ETransportResult::Unavailable;
 	}
-	const ETransportResult Validation = ValidateOutgoingSpiPacket(InTo, InPacket);
-	if (Validation != ETransportResult::Success)
+	const Transport::ETransportResult Validation = ValidateOutgoingSpiPacket(InTo, InPacket);
+	if (Validation != Transport::ETransportResult::Success)
 	{
 		return Validation;
 	}
 	// A staged frame not yet queued must not be overwritten; report Full so the caller retries.
 	if (bFrameStaged)
 	{
-		return ETransportResult::Full;
+		return Transport::ETransportResult::Full;
 	}
 	// The codec is transactional on failure; pad the window's tail with idle bytes.
 	std::size_t Written = 0;
-	const ETransportResult EncodeResult =
-		EncodeFrame(LocalNodeIdValue, InPacket, Core::TSpan<std::uint8_t>(StagedFrame, SpiTransactionWindowBytes), Written);
-	if (EncodeResult != ETransportResult::Success)
+	const Transport::ETransportResult EncodeResult =
+		Transport::FrameCodec::EncodeFrame(LocalNodeIdValue, InPacket, Core::TSpan<std::uint8_t>(StagedFrame, SpiTransactionWindowBytes), Written);
+	if (EncodeResult != Transport::ETransportResult::Success)
 	{
 		return EncodeResult;
 	}
 	std::memset(StagedFrame + Written, 0, SpiTransactionWindowBytes - Written);
 	bFrameStaged = true;
-	return ETransportResult::Success;
+	return Transport::ETransportResult::Success;
 }
 
-ETransportResult FEsp32SpiSlaveDevice::TryReceive(
-	FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
+Transport::ETransportResult FEsp32SpiSlaveDevice::TryReceive(
+	Transport::Address::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Transport::Device::FReceiveResult& OutResult) noexcept
 {
 	// Reject a null destination with nonzero length before touching the transaction queue.
 	const std::size_t Capacity = InDestination.Size();
 	if (Capacity != 0 && InDestination.Data() == nullptr)
 	{
-		return ETransportResult::Invalid;
+		return Transport::ETransportResult::Invalid;
 	}
 	if (!bOpen)
 	{
-		return ETransportResult::Unavailable;
+		return Transport::ETransportResult::Unavailable;
 	}
 	// A frame held from a prior Full is delivered first so the decoder precondition is honored.
 	if (Decoder.HasFrame())
@@ -304,7 +308,7 @@ ETransportResult FEsp32SpiSlaveDevice::TryReceive(
 	// Harvest one completed transaction (the master clocked it); nothing done yet means Unavailable.
 	if (!HarvestSpiSlave(SpiHostValue))
 	{
-		return ETransportResult::Unavailable;
+		return Transport::ETransportResult::Unavailable;
 	}
 	bTransactionQueued = false;
 	PumpWindowIntoDecoder(Decoder, ReceiveWindow, SpiTransactionWindowBytes);
@@ -314,7 +318,7 @@ ETransportResult FEsp32SpiSlaveDevice::TryReceive(
 	{
 		return DeliverFrameFromDecoder(Decoder, InDestination, OutFrom, OutResult);
 	}
-	return ETransportResult::Unavailable;
+	return Transport::ETransportResult::Unavailable;
 }
 
 std::size_t FEsp32SpiSlaveDevice::MaxPacketBytes() const noexcept

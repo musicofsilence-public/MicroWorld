@@ -6,7 +6,9 @@ namespace MicroWorld::Transport
 {
 
 ETransportResult FE32LoraTransportState::TryQueueFrame(
-	const std::uint8_t InLocalNodeId, const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, const TSpan<const std::uint8_t> InPacket) noexcept
+	const std::uint8_t InLocalNodeId,
+	const ::MicroWorld::Transport::Address::FDeviceAddress& InTo,
+	const Core::TSpan<const std::uint8_t> InPacket) noexcept
 {
 	if (!IsLoraAddress(InTo))
 	{
@@ -24,7 +26,7 @@ ETransportResult FE32LoraTransportState::TryQueueFrame(
 
 	std::size_t WrittenBytes = 0;
 	const ETransportResult EncodeResult = ::MicroWorld::Transport::FrameCodec::EncodeFrame(
-		InLocalNodeId, InPacket, TSpan<std::uint8_t>(TransmitFrame, sizeof(TransmitFrame)), WrittenBytes);
+		InLocalNodeId, InPacket, Core::TSpan<std::uint8_t>(TransmitFrame, sizeof(TransmitFrame)), WrittenBytes);
 	if (EncodeResult != ETransportResult::Success)
 	{
 		return EncodeResult;
@@ -87,7 +89,7 @@ bool FE32LoraTransportState::HasReceivedFrame() const noexcept
 
 ETransportResult FE32LoraTransportState::TryDeliverReceivedFrame(
 	::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
-	const TSpan<std::uint8_t> InDestination,
+	const Core::TSpan<std::uint8_t> InDestination,
 	::MicroWorld::Transport::Device::FReceiveResult& OutResult) noexcept
 {
 	if (InDestination.Size() != 0 && InDestination.Data() == nullptr)
@@ -99,7 +101,7 @@ ETransportResult FE32LoraTransportState::TryDeliverReceivedFrame(
 		return ETransportResult::Unavailable;
 	}
 
-	const TSpan<const std::uint8_t> Payload = Decoder.FramePayload();
+	const Core::TSpan<const std::uint8_t> Payload = Decoder.FramePayload();
 	const std::size_t PayloadBytes = Payload.Size();
 	if (PayloadBytes > InDestination.Size())
 	{

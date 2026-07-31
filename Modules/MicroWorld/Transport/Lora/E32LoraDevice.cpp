@@ -20,7 +20,7 @@ namespace
 
 } // namespace
 
-FE32LoraDevice::FE32LoraDevice(IUartByteStream& InByteStream) noexcept : ByteStream(InByteStream) {}
+FE32LoraDevice::FE32LoraDevice(Core::IUartByteStream& InByteStream) noexcept : ByteStream(InByteStream) {}
 
 ETransportResult FE32LoraDevice::Initialize(const std::uint8_t InLocalNodeId) noexcept
 {
@@ -35,7 +35,7 @@ ETransportResult FE32LoraDevice::Initialize(const std::uint8_t InLocalNodeId) no
 }
 
 ETransportResult FE32LoraDevice::TrySend(
-	const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, const TSpan<const std::uint8_t> InPacket) noexcept
+	const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, const Core::TSpan<const std::uint8_t> InPacket) noexcept
 {
 	if (!bInitialized)
 	{
@@ -47,7 +47,7 @@ ETransportResult FE32LoraDevice::TrySend(
 
 ETransportResult FE32LoraDevice::TryReceive(
 	::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
-	const TSpan<std::uint8_t> InDestination,
+	const Core::TSpan<std::uint8_t> InDestination,
 	::MicroWorld::Transport::Device::FReceiveResult& OutResult) noexcept
 {
 	if (InDestination.Size() != 0 && InDestination.Data() == nullptr)
@@ -66,12 +66,12 @@ ETransportResult FE32LoraDevice::TryReceive(
 	for (std::size_t PumpedBytes = 0; PumpedBytes < ReceivePumpByteCap; ++PumpedBytes)
 	{
 		std::uint8_t ReceivedByte = 0;
-		const EUartByteStreamResult ReadResult = ByteStream.TryReadByte(ReceivedByte);
-		if (ReadResult == EUartByteStreamResult::Unavailable)
+		const Core::EUartByteStreamResult ReadResult = ByteStream.TryReadByte(ReceivedByte);
+		if (ReadResult == Core::EUartByteStreamResult::Unavailable)
 		{
 			return ETransportResult::Unavailable;
 		}
-		if (ReadResult == EUartByteStreamResult::Error)
+		if (ReadResult == Core::EUartByteStreamResult::Error)
 		{
 			return ETransportResult::Invalid;
 		}
@@ -106,12 +106,12 @@ void FE32LoraDevice::AdvanceTransmit() noexcept
 			return;
 		}
 
-		const EUartByteStreamResult WriteResult = ByteStream.TryWriteByte(NextByte);
-		if (WriteResult == EUartByteStreamResult::Unavailable)
+		const Core::EUartByteStreamResult WriteResult = ByteStream.TryWriteByte(NextByte);
+		if (WriteResult == Core::EUartByteStreamResult::Unavailable)
 		{
 			return;
 		}
-		if (WriteResult == EUartByteStreamResult::Error)
+		if (WriteResult == Core::EUartByteStreamResult::Error)
 		{
 			TransportState.DiscardTransmitFrame();
 			return;

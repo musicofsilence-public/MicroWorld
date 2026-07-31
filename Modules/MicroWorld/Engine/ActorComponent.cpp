@@ -11,7 +11,7 @@
 namespace MicroWorld::Engine
 {
 
-UActorComponent::UActorComponent(FTickConfiguration InTickConfiguration) noexcept : FTickable(InTickConfiguration) {}
+UActorComponent::UActorComponent(Core::FTickConfiguration InTickConfiguration) noexcept : Core::FTickable(InTickConfiguration) {}
 
 UActorComponent::~UActorComponent() noexcept = default;
 
@@ -34,10 +34,10 @@ AActor* UActorComponent::GetOwnerActor() const noexcept
 	return static_cast<AActor*>(ResolveObjectHandle(*ObjectStore, OwnerObjectHandle));
 }
 
-ERuntimeResult UActorComponent::DispatchBeginPlay(const TimePointMilliseconds InNowMilliseconds) noexcept
+Core::ERuntimeResult UActorComponent::DispatchBeginPlay(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 {
-	const ERuntimeResult BeginResult = Lifecycle.Begin();
-	if (BeginResult != ERuntimeResult::Success)
+	const Core::ERuntimeResult BeginResult = Lifecycle.Begin();
+	if (BeginResult != Core::ERuntimeResult::Success)
 	{
 		return BeginResult;
 	}
@@ -46,19 +46,19 @@ ERuntimeResult UActorComponent::DispatchBeginPlay(const TimePointMilliseconds In
 	// the same dispatcher step observes a baseline time.
 	BeginPrimaryTickLifecycle(InNowMilliseconds);
 	BeginPlay();
-	return ERuntimeResult::Success;
+	return Core::ERuntimeResult::Success;
 }
 
-ERuntimeResult UActorComponent::DispatchAdvance(const TimePointMilliseconds InNowMilliseconds) noexcept
+Core::ERuntimeResult UActorComponent::DispatchAdvance(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 {
-	const ERuntimeResult PlayingResult = Lifecycle.RequirePlaying();
-	if (PlayingResult != ERuntimeResult::Success)
+	const Core::ERuntimeResult PlayingResult = Lifecycle.RequirePlaying();
+	if (PlayingResult != Core::ERuntimeResult::Success)
 	{
 		return PlayingResult;
 	}
 
-	const FTickDecision Decision = AdvancePrimaryTick(InNowMilliseconds);
-	if (Decision.Result != ERuntimeResult::Success)
+	const Core::FTickDecision Decision = AdvancePrimaryTick(InNowMilliseconds);
+	if (Decision.Result != Core::ERuntimeResult::Success)
 	{
 		return Decision.Result;
 	}
@@ -66,26 +66,26 @@ ERuntimeResult UActorComponent::DispatchAdvance(const TimePointMilliseconds InNo
 	{
 		TickComponent(Decision.Context);
 	}
-	return ERuntimeResult::Success;
+	return Core::ERuntimeResult::Success;
 }
 
-ERuntimeResult UActorComponent::DispatchEndPlay() noexcept
+Core::ERuntimeResult UActorComponent::DispatchEndPlay() noexcept
 {
 	// EndPlay is idempotent after a successful end so repeated shutdown paths
 	// never re-enter the consumer hook.
-	if (Lifecycle.GetState() == ELifecycleState::Ended)
+	if (Lifecycle.GetState() == Core::ELifecycleState::Ended)
 	{
-		return ERuntimeResult::Success;
+		return Core::ERuntimeResult::Success;
 	}
-	const ERuntimeResult EndResult = Lifecycle.End();
-	if (EndResult != ERuntimeResult::Success)
+	const Core::ERuntimeResult EndResult = Lifecycle.End();
+	if (EndResult != Core::ERuntimeResult::Success)
 	{
 		return EndResult;
 	}
 
 	EndPlay();
 	EndPrimaryTickLifecycle();
-	return ERuntimeResult::Success;
+	return Core::ERuntimeResult::Success;
 }
 
 void UActorComponent::AssignOwner(const FObjectHandle InOwner) noexcept

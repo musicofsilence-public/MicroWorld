@@ -41,13 +41,13 @@ public:
 	virtual ~IEngine() noexcept = default;
 
 	/** Starts the bound system then the world at one canonical time and records it as the tick baseline. */
-	virtual ERuntimeResult BeginPlay(TimePointMilliseconds InNowMilliseconds) noexcept = 0;
+	virtual Core::ERuntimeResult BeginPlay(Core::TimePointMilliseconds InNowMilliseconds) noexcept = 0;
 
 	/** Runs one canonical frame in the documented fixed order and returns the world's advance/apply result. */
-	virtual ERuntimeResult Tick(TimePointMilliseconds InNowMilliseconds) noexcept = 0;
+	virtual Core::ERuntimeResult Tick(Core::TimePointMilliseconds InNowMilliseconds) noexcept = 0;
 
 	/** Ends the world in reverse registration order, then ends the bound system; idempotent after success. */
-	virtual ERuntimeResult EndPlay() noexcept = 0;
+	virtual Core::ERuntimeResult EndPlay() noexcept = 0;
 
 	/** Returns the rooted world; only valid after CreateWorld has succeeded. */
 	virtual UWorld& GetWorld() noexcept = 0;
@@ -131,7 +131,7 @@ public:
 	static constexpr std::size_t InlineDeferredSpawnFactoryBytes = TTraits::InlineDeferredSpawnFactoryBytes;
 
 	/** Alias for the timer manager this engine owns, so callers name one concrete type. */
-	using FTimerManager = TTimerManager<MaxTimers, InlineTimerCallbackBytes>;
+	using FTimerManager = Core::TTimerManager<MaxTimers, InlineTimerCallbackBytes>;
 
 	/**
 	 * Builds every subsystem over this host's storage and registers the three
@@ -147,7 +147,7 @@ public:
 		, FrameReclamationBudget(InReclamationBudget)
 		, Store(MakeStoreStorage(), MakeClassRegistryView(Registry))
 		, Collector(Store, FGarbageCollectorStorage{Worklist.data(), static_cast<std::uint32_t>(MaxObjects)})
-		, Timers(TimePointMilliseconds{0})
+		, Timers(Core::TimePointMilliseconds{0})
 	{
 		RegisterBaseClasses();
 	}
@@ -161,7 +161,7 @@ public:
 	 */
 	explicit TEngine(
 		const FGarbageCollectionBudget InCollectionBudget,
-		IPlaySystem& InSystem,
+		Core::IPlaySystem& InSystem,
 		const std::uint32_t InReclamationBudget = static_cast<std::uint32_t>(MaxObjects)) noexcept
 		: TEngine(InCollectionBudget, InReclamationBudget)
 	{
@@ -285,12 +285,12 @@ public:
 	 * the tick baseline. Returns InvalidLifecycle if no world has
 	 * been created.
 	 */
-	ERuntimeResult BeginPlay(const TimePointMilliseconds InNowMilliseconds) noexcept override
+	Core::ERuntimeResult BeginPlay(const Core::TimePointMilliseconds InNowMilliseconds) noexcept override
 	{
 		UWorld* const World = WorldRoot.Get();
 		if (World == nullptr)
 		{
-			return ERuntimeResult::InvalidLifecycle;
+			return Core::ERuntimeResult::InvalidLifecycle;
 		}
 
 		LastTickMilliseconds = InNowMilliseconds;
@@ -314,22 +314,22 @@ public:
 	 * authoritative per-frame outcome. The two system turns run only when a system
 	 * was bound at construction; otherwise they are inert.
 	 */
-	ERuntimeResult Tick(const TimePointMilliseconds InNowMilliseconds) noexcept override
+	Core::ERuntimeResult Tick(const Core::TimePointMilliseconds InNowMilliseconds) noexcept override
 	{
 		UWorld* const World = WorldRoot.Get();
 		if (World == nullptr)
 		{
-			return ERuntimeResult::InvalidLifecycle;
+			return Core::ERuntimeResult::InvalidLifecycle;
 		}
 		if (InNowMilliseconds < LastTickMilliseconds)
 		{
-			return ERuntimeResult::NonMonotonicTime;
+			return Core::ERuntimeResult::NonMonotonicTime;
 		}
 		LastTickMilliseconds = InNowMilliseconds;
 
 		PreAdvanceSystem(InNowMilliseconds);
 		(void)Timers.Advance(InNowMilliseconds);
-		const ERuntimeResult FrameResult = AdvanceWorldAndApplyBarrier(*World, InNowMilliseconds);
+		const Core::ERuntimeResult FrameResult = AdvanceWorldAndApplyBarrier(*World, InNowMilliseconds);
 		ReclaimAndCollect();
 		PostAdvanceSystem(InNowMilliseconds);
 
@@ -337,15 +337,15 @@ public:
 	}
 
 	/** Ends the world in reverse registration order, then ends the bound system; idempotent after success. */
-	ERuntimeResult EndPlay() noexcept override
+	Core::ERuntimeResult EndPlay() noexcept override
 	{
 		UWorld* const World = WorldRoot.Get();
 		if (World == nullptr)
 		{
-			return ERuntimeResult::InvalidLifecycle;
+			return Core::ERuntimeResult::InvalidLifecycle;
 		}
 
-		const ERuntimeResult EndResult = World->EndPlay();
+		const Core::ERuntimeResult EndResult = World->EndPlay();
 		EndPlaySystem();
 		return EndResult;
 	}
@@ -379,7 +379,7 @@ private:
 	}
 
 	/** Starts the bound system before the world's actors receive their BeginPlay turn. */
-	void BeginPlaySystem(const TimePointMilliseconds InNowMilliseconds) noexcept
+	void BeginPlaySystem(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		if (System != nullptr)
 		{
@@ -388,7 +388,7 @@ private:
 	}
 
 	/** Frame step 1: drains inbound traffic, dispatches messages, and ages peers when a network frame is bound. */
-	void PreAdvanceSystem(const TimePointMilliseconds InNowMilliseconds) noexcept
+	void PreAdvanceSystem(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		if (System != nullptr)
 		{
@@ -398,14 +398,14 @@ private:
 
 	/** Frame steps 3-4: advances every actor then applies the spawn/destroy barrier, returning the
 	 * authoritative per-frame result (the advance error if any, otherwise the barrier result). */
-	ERuntimeResult AdvanceWorldAndApplyBarrier(UWorld& InWorld, const TimePointMilliseconds InNowMilliseconds) noexcept
+	Core::ERuntimeResult AdvanceWorldAndApplyBarrier(UWorld& InWorld, const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
-		const ERuntimeResult AdvanceResult = InWorld.Advance(InNowMilliseconds);
-		if (AdvanceResult != ERuntimeResult::Success)
+		const Core::ERuntimeResult AdvanceResult = InWorld.Advance(InNowMilliseconds);
+		if (AdvanceResult != Core::ERuntimeResult::Success)
 		{
 			return AdvanceResult;
 		}
-		const ERuntimeResult PendingResult = InWorld.ApplyPending(InNowMilliseconds);
+		const Core::ERuntimeResult PendingResult = InWorld.ApplyPending(InNowMilliseconds);
 		return PendingResult;
 	}
 
@@ -422,7 +422,7 @@ private:
 	}
 
 	/** Frame step 7: flushes outbound traffic and heartbeats when a network frame is bound. */
-	void PostAdvanceSystem(const TimePointMilliseconds InNowMilliseconds) noexcept
+	void PostAdvanceSystem(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		if (System != nullptr)
 		{
@@ -446,10 +446,10 @@ private:
 	std::uint32_t FrameReclamationBudget;
 
 	/** Optional caller-owned system started before and stopped after the world, then advanced first and last each tick. */
-	IPlaySystem* System{nullptr};
+	Core::IPlaySystem* System{nullptr};
 
 	/** Records the last accepted tick time so a rolled-back clock is rejected. */
-	TimePointMilliseconds LastTickMilliseconds{0};
+	Core::TimePointMilliseconds LastTickMilliseconds{0};
 
 	/** Owns the class registry that validates every managed construction. */
 	TClassRegistry<MaxClasses> Registry;

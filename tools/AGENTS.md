@@ -8,7 +8,8 @@ Tools are read-only repository policy checks. The documentation scanner
 enforces adjacent intent contracts for C++ type definitions, the folder scanner
 ensures every non-generated package directory has local architectural guidance,
 the dependency scanner enforces package ownership and inward portable includes,
-the profile-map scanner rejects unselected module evidence, and the formatting
+the profile-map scanner rejects unselected module evidence, the namespace scanner
+holds each source to the system namespace its folder names, and the formatting
 scanner rejects C++ sources that drift from the tracked clang-format policy.
 Function and state documentation remains a declaration-level review requirement
 because a regex-only parser must not pretend to understand arbitrary C++.
@@ -37,6 +38,11 @@ subdirectory to add a local guide.
   style and falsely flag every file. The file set is tracked `*.h`/`*.cpp`
   under `Modules/` (PlatformEsp32 sources included), discovered via
   `git ls-files` when available.
+- Namespace checks assert the namespace each source must open, from a literal
+  map of system folders plus the three declared Transport leaves, and reject any
+  `using namespace` in a library source. The directive is rejected because it
+  re-exports a whole namespace into the enclosing one — in a header, into every
+  consumer — which restores the flat namespace ADR 0006 removed.
 - Each architectural checker owns a deterministic `--self-test` covering both
   an accepted input and the violation it is intended to block.
 - Scripts return non-zero on failure so CMake or CI can use them as gates.
@@ -66,3 +72,5 @@ Run each new checker with `--self-test` before trusting its repository result.
 Verify clang-format conformance with
 `python tools/CheckFormatting.py --root <repo-root>` (it also runs as the
 ctest step `microworld_format_check`).
+Verify the namespace contract with `python tools/CheckNamespaces.py` (it also runs
+as the ctest step `microworld_namespace_check`).

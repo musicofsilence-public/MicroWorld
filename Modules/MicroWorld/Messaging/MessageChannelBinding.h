@@ -49,14 +49,14 @@ public:
 		: Host(InHost), WireChannelByte(InWireChannelByte), ChannelId(InChannelId), SendTarget(InSendTarget), Sink(InSink)
 	{
 		typename THost::FMessageHandlerBinding InboundHandler;
-		const EDelegateResult BindResult =
-			InboundHandler.Bind([this](auto /*Peer*/, const std::uint8_t Channel, const TSpan<const std::uint8_t> Payload) noexcept
+		const Core::EDelegateResult BindResult =
+			InboundHandler.Bind([this](auto /*Peer*/, const std::uint8_t Channel, const Core::TSpan<const std::uint8_t> Payload) noexcept
 								{ this->OnWireBytesReceived(Channel, Payload); });
 		// AddMessageHandler clears InboundHandle to invalid on any failure, so a short-circuited
 		// ternary (skipping the call entirely when Bind already failed) needs no separate cleanup.
-		const EDelegateResult AddResult =
-			(BindResult == EDelegateResult::Success) ? Host.AddMessageHandler(std::move(InboundHandler), InboundHandle) : BindResult;
-		bAttached = (AddResult == EDelegateResult::Success);
+		const Core::EDelegateResult AddResult =
+			(BindResult == Core::EDelegateResult::Success) ? Host.AddMessageHandler(std::move(InboundHandler), InboundHandle) : BindResult;
+		bAttached = (AddResult == Core::EDelegateResult::Success);
 	}
 
 	/**
@@ -96,7 +96,7 @@ public:
 	 * Server target requires a connected server peer, reporting Unavailable otherwise so the
 	 * router retains the message and retries later; AllPeers broadcasts to every active peer.
 	 */
-	EMessageResult TrySendEncodedMessage(const TSpan<const std::uint8_t> InEncoded) noexcept override
+	EMessageResult TrySendEncodedMessage(const Core::TSpan<const std::uint8_t> InEncoded) noexcept override
 	{
 		if (SendTarget == EChannelSendTarget::Server)
 		{
@@ -140,7 +140,7 @@ private:
 	 * A different wire-channel byte on the same host belongs to some other binding and is silently
 	 * ignored here; a Sink rejection (its own queue full) counts against DroppedInbound.
 	 */
-	void OnWireBytesReceived(const std::uint8_t InChannel, const TSpan<const std::uint8_t> InPayload) noexcept
+	void OnWireBytesReceived(const std::uint8_t InChannel, const Core::TSpan<const std::uint8_t> InPayload) noexcept
 	{
 		if (InChannel != WireChannelByte)
 		{
@@ -168,7 +168,7 @@ private:
 	IEncodedMessageSink& Sink;
 
 	/** Identifies the registered inbound handler so the destructor removes exactly this one. */
-	FDelegateHandle InboundHandle;
+	Core::FDelegateHandle InboundHandle;
 
 	/** Reports whether the constructor's AddMessageHandler call succeeded. */
 	bool bAttached{false};

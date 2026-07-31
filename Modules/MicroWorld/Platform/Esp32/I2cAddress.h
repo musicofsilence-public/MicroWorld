@@ -7,8 +7,6 @@
 namespace MicroWorld::Platform::Esp32
 {
 
-using namespace ::MicroWorld::Transport::Address;
-
 /**
  * Encodes an I2C node id into an opaque one-byte `FDeviceAddress`.
  *
@@ -21,9 +19,9 @@ using namespace ::MicroWorld::Transport::Address;
  * @param InNodeId Node id of the sender or recipient this address names.
  * @return One-byte address carrying the node id.
  */
-constexpr FDeviceAddress MakeI2cAddress(const std::uint8_t InNodeId) noexcept
+constexpr Transport::Address::FDeviceAddress MakeI2cAddress(const std::uint8_t InNodeId) noexcept
 {
-	FDeviceAddress Address{};
+	Transport::Address::FDeviceAddress Address{};
 	Address.Bytes[0] = InNodeId;
 	Address.Size = 1;
 	return Address;
@@ -40,7 +38,7 @@ constexpr FDeviceAddress MakeI2cAddress(const std::uint8_t InNodeId) noexcept
  * @param InAddress Address whose encoding to test.
  * @return True when the active length is exactly one byte.
  */
-constexpr bool IsI2cAddress(const FDeviceAddress& InAddress) noexcept
+constexpr bool IsI2cAddress(const Transport::Address::FDeviceAddress& InAddress) noexcept
 {
 	return InAddress.Size == 1;
 }
@@ -54,7 +52,7 @@ constexpr bool IsI2cAddress(const FDeviceAddress& InAddress) noexcept
  * @param InAddress Address whose first byte holds the node id.
  * @return Node id carried by the address.
  */
-constexpr std::uint8_t I2cAddressNodeId(const FDeviceAddress& InAddress) noexcept
+constexpr std::uint8_t I2cAddressNodeId(const Transport::Address::FDeviceAddress& InAddress) noexcept
 {
 	return InAddress.Bytes[0];
 }

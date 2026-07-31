@@ -66,8 +66,8 @@ constexpr ::MicroWorld::Transport::Address::FDeviceAddress MakeUdpAddress(
 	Address.Bytes[UdpAddressOctetBIndex] = InB;
 	Address.Bytes[UdpAddressOctetCIndex] = InC;
 	Address.Bytes[UdpAddressOctetDIndex] = InD;
-	Address.Bytes[UdpAddressPortHighByteIndex] = static_cast<std::uint8_t>(InPort >> HighByteShift);
-	Address.Bytes[UdpAddressPortLowByteIndex] = static_cast<std::uint8_t>(InPort & LowByteMask);
+	Address.Bytes[UdpAddressPortHighByteIndex] = static_cast<std::uint8_t>(InPort >> Core::HighByteShift);
+	Address.Bytes[UdpAddressPortLowByteIndex] = static_cast<std::uint8_t>(InPort & Core::LowByteMask);
 	Address.Size = UdpAddressByteCount;
 	return Address;
 }
@@ -100,7 +100,7 @@ constexpr bool IsUdpAddress(const ::MicroWorld::Transport::Address::FDeviceAddre
 constexpr std::uint16_t UdpAddressPort(const ::MicroWorld::Transport::Address::FDeviceAddress& InAddress) noexcept
 {
 	return static_cast<std::uint16_t>(
-		(static_cast<std::uint16_t>(InAddress.Bytes[UdpAddressPortHighByteIndex]) << HighByteShift)
+		(static_cast<std::uint16_t>(InAddress.Bytes[UdpAddressPortHighByteIndex]) << Core::HighByteShift)
 		| static_cast<std::uint16_t>(InAddress.Bytes[UdpAddressPortLowByteIndex]));
 }
 

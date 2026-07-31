@@ -19,7 +19,7 @@ namespace MicroWorld::Messaging
  * PostAdvance hands queued outbound messages to their channels.
  */
 template<std::size_t MaxHandlers, std::size_t MaxQueuedMessages, std::size_t MaxMessageBytes, std::size_t MaxChannels>
-class TMessageRouter final : public IMessageRouter, public IPlaySystem
+class TMessageRouter final : public IMessageRouter, public Core::IPlaySystem
 {
 	static_assert(MaxHandlers < FMessageHandlerHandle::InvalidIndex, "A message router's handler capacity must fit below the reserved handle index.");
 	static_assert(MaxMessageBytes >= ActorMessageHeaderBytes, "A message router's per-message byte budget must be able to hold at least a header.");
@@ -131,7 +131,7 @@ public:
 		const FMessageTypeId InMessageTypeId,
 		const FMessageActorId InTargetActorId,
 		const FMessageActorId InSenderActorId,
-		const TSpan<const std::uint8_t> InPayload) noexcept override
+		const Core::TSpan<const std::uint8_t> InPayload) noexcept override
 	{
 		if (InMessageTypeId == 0)
 		{
@@ -166,7 +166,7 @@ public:
 		FQueuedMessage& TailEntry = OutboundEntries[OutboundTailIndex];
 		std::size_t WrittenBytes = 0;
 		const EMessageResult EncodeResult =
-			EncodeActorMessage(Header, InPayload, TSpan<std::uint8_t>(TailEntry.Bytes, MaxMessageBytes), WrittenBytes);
+			EncodeActorMessage(Header, InPayload, Core::TSpan<std::uint8_t>(TailEntry.Bytes, MaxMessageBytes), WrittenBytes);
 		if (EncodeResult != EMessageResult::Success)
 		{
 			// Unreachable given the size checks above, kept only so a future change to
@@ -186,7 +186,7 @@ public:
 		const FMessageChannelId InChannelId,
 		const FMessageTypeId InMessageTypeId,
 		const FMessageActorId InSenderActorId,
-		const TSpan<const std::uint8_t> InPayload) noexcept override
+		const Core::TSpan<const std::uint8_t> InPayload) noexcept override
 	{
 		return SendMessageToActor(InChannelId, InMessageTypeId, BroadcastActorId, InSenderActorId, InPayload);
 	}
@@ -198,7 +198,8 @@ public:
 	 * PayloadTooLarge; on a full inbound queue increments DroppedInboundCount
 	 * and returns CapacityExceeded while leaving the queue unchanged.
 	 */
-	EMessageResult ReceiveEncodedMessage(const FMessageChannelId InArrivedOnChannelId, const TSpan<const std::uint8_t> InEncoded) noexcept override
+	EMessageResult ReceiveEncodedMessage(
+		const FMessageChannelId InArrivedOnChannelId, const Core::TSpan<const std::uint8_t> InEncoded) noexcept override
 	{
 		if (!IsEncodedSizeAccepted(InEncoded.Size()))
 		{
@@ -217,7 +218,7 @@ public:
 	 * Delivers exactly the inbound messages queued at entry, oldest first, to their matching handlers.
 	 * Messages enqueued during this pass (including from a handler's own send) wait for the next PreAdvance.
 	 */
-	void PreAdvance(const TimePointMilliseconds InNowMilliseconds) noexcept override
+	void PreAdvance(const Core::TimePointMilliseconds InNowMilliseconds) noexcept override
 	{
 		(void)InNowMilliseconds; // The router orders delivery by queue position, not by wall-clock time.
 
@@ -237,7 +238,7 @@ public:
 	 * stalled channel also holds back every later entry queued for a different channel (accepted v1
 	 * head-of-line behavior, matching TTransportManager::AdvanceSend's retained-head discipline).
 	 */
-	void PostAdvance(const TimePointMilliseconds InNowMilliseconds) noexcept override
+	void PostAdvance(const Core::TimePointMilliseconds InNowMilliseconds) noexcept override
 	{
 		(void)InNowMilliseconds; // Flushing drains whatever is queued; it does not itself schedule by time.
 
@@ -262,7 +263,8 @@ public:
 					// treated the same as a failed send so a future change cannot drop the message.
 					break;
 				}
-				const EMessageResult SendResult = Channel->TrySendEncodedMessage(TSpan<const std::uint8_t>(HeadEntry.Bytes, HeadEntry.LengthBytes));
+				const EMessageResult SendResult =
+					Channel->TrySendEncodedMessage(Core::TSpan<const std::uint8_t>(HeadEntry.Bytes, HeadEntry.LengthBytes));
 				if (SendResult != EMessageResult::Success)
 				{
 					break;
@@ -417,8 +419,9 @@ private:
 	{
 		const FQueuedMessage& HeadEntry = InboundEntries[InboundHeadIndex];
 		FActorMessageHeader Header{};
-		TSpan<const std::uint8_t> Payload;
-		const EMessageResult DecodeResult = DecodeActorMessage(TSpan<const std::uint8_t>(HeadEntry.Bytes, HeadEntry.LengthBytes), Header, Payload);
+		Core::TSpan<const std::uint8_t> Payload;
+		const EMessageResult DecodeResult =
+			DecodeActorMessage(Core::TSpan<const std::uint8_t>(HeadEntry.Bytes, HeadEntry.LengthBytes), Header, Payload);
 		if (DecodeResult == EMessageResult::Success)
 		{
 			InvokeMatchingHandlers(FMessageView{Header, HeadEntry.ChannelId, Payload});

@@ -12,11 +12,6 @@
 namespace MicroWorld::Platform::Esp32
 {
 
-using namespace ::MicroWorld::Transport;
-using namespace ::MicroWorld::Transport::Address;
-using namespace ::MicroWorld::Transport::Device;
-using namespace ::MicroWorld::Transport::FrameCodec;
-
 /**
  * Largest single-transmission payload one wired UART frame carries.
  *
@@ -61,7 +56,7 @@ struct FEsp32UartConfig
  * outputs unchanged on any non-`Success` result, and exercises no UART traffic until this device's example
  * hardware checkpoint passes (§1.2).
  */
-class FEsp32UartDevice final : public IDevice
+class FEsp32UartDevice final : public Transport::Device::IDevice
 {
 public:
 	/**
@@ -101,7 +96,7 @@ public:
 	 * @param InPacket Caller-owned payload bytes framed and sent as one message.
 	 * @return Normalized outcome of the single send attempt.
 	 */
-	ETransportResult TrySend(const FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
+	Transport::ETransportResult TrySend(const Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
 	 * Receives at most one framed message into the caller-owned destination, transactionally.
@@ -116,7 +111,10 @@ public:
 	 * @param OutResult Filled with the received byte count only on `Success`.
 	 * @return Normalized outcome of the single receive attempt.
 	 */
-	ETransportResult TryReceive(FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept override;
+	Transport::ETransportResult TryReceive(
+		Transport::Address::FDeviceAddress& OutFrom,
+		Core::TSpan<std::uint8_t> InDestination,
+		Transport::Device::FReceiveResult& OutResult) noexcept override;
 
 	/** Reports the largest payload, in bytes, one send accepts (excludes framing overhead). */
 	std::size_t MaxPacketBytes() const noexcept override;
@@ -127,17 +125,20 @@ public:
 private:
 	/** Copies the decoder's held frame into the destination and clears it, or returns
 	 * `Full` (leaving the frame held) when the payload exceeds the destination. */
-	ETransportResult DeliverFrameToDestination(Core::TSpan<std::uint8_t> InDestination, FDeviceAddress& OutFrom, FReceiveResult& OutResult) noexcept;
+	Transport::ETransportResult DeliverFrameToDestination(
+		Core::TSpan<std::uint8_t> InDestination, Transport::Address::FDeviceAddress& OutFrom, Transport::Device::FReceiveResult& OutResult) noexcept;
 
 	/** Pumps the bounded UART byte budget through the decoder and delivers the first
 	 * completed frame; returns `Unavailable` when the budget drains with no frame ready. */
-	ETransportResult PumpDecoderForFrame(Core::TSpan<std::uint8_t> InDestination, FDeviceAddress& OutFrom, FReceiveResult& OutResult) noexcept;
+	Transport::ETransportResult PumpDecoderForFrame(
+		Core::TSpan<std::uint8_t> InDestination, Transport::Address::FDeviceAddress& OutFrom, Transport::Device::FReceiveResult& OutResult) noexcept;
 
 	/** Reports the first reason an outgoing packet cannot be framed and sent, or `Success`. */
-	ETransportResult ValidateOutgoingPacket(const FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) const noexcept;
+	Transport::ETransportResult ValidateOutgoingPacket(
+		const Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) const noexcept;
 
 	/** Bounded RX deframer held by value; its capacity matches `UartMaxPayloadBytes`. */
-	TFrameDecoder<UartMaxPayloadBytes> Decoder{};
+	Transport::FrameCodec::TFrameDecoder<UartMaxPayloadBytes> Decoder{};
 
 	/** UART port number reinterpreted to its ESP-IDF type only in the source file. */
 	std::int32_t UartPortNumber{0};

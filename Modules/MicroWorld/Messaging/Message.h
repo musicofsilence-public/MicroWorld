@@ -10,8 +10,6 @@
 namespace MicroWorld::Messaging
 {
 
-using namespace ::MicroWorld::Core;
-
 /** Identifies what kind of message this is; 0 is invalid. */
 using FMessageTypeId = std::uint16_t;
 
@@ -95,14 +93,14 @@ struct FActorMessageHeader
 /** Writes one 16-bit value into two bytes, least-significant byte first. */
 inline void WriteMessageUint16LittleEndian(const std::uint16_t InValue, std::uint8_t* const OutBytes) noexcept
 {
-	OutBytes[0] = static_cast<std::uint8_t>(InValue & LowByteMask);
-	OutBytes[1] = static_cast<std::uint8_t>((InValue >> HighByteShift) & LowByteMask);
+	OutBytes[0] = static_cast<std::uint8_t>(InValue & Core::LowByteMask);
+	OutBytes[1] = static_cast<std::uint8_t>((InValue >> Core::HighByteShift) & Core::LowByteMask);
 }
 
 /** Reads one 16-bit value from two bytes, least-significant byte first. */
 inline std::uint16_t ReadMessageUint16LittleEndian(const std::uint8_t* const InBytes) noexcept
 {
-	return static_cast<std::uint16_t>(static_cast<std::uint16_t>(InBytes[0]) | (static_cast<std::uint16_t>(InBytes[1]) << HighByteShift));
+	return static_cast<std::uint16_t>(static_cast<std::uint16_t>(InBytes[0]) | (static_cast<std::uint16_t>(InBytes[1]) << Core::HighByteShift));
 }
 
 /**
@@ -123,8 +121,8 @@ inline std::uint16_t ReadMessageUint16LittleEndian(const std::uint8_t* const InB
  */
 inline EMessageResult EncodeActorMessage(
 	const FActorMessageHeader& InHeader,
-	const TSpan<const std::uint8_t> InPayload,
-	const TSpan<std::uint8_t> InEncoded,
+	const Core::TSpan<const std::uint8_t> InPayload,
+	const Core::TSpan<std::uint8_t> InEncoded,
 	std::size_t& OutWrittenBytes) noexcept
 {
 	if (InHeader.MessageTypeId == 0)
@@ -168,7 +166,7 @@ inline EMessageResult EncodeActorMessage(
  * @return Outcome of the single decode attempt.
  */
 inline EMessageResult DecodeActorMessage(
-	const TSpan<const std::uint8_t> InEncoded, FActorMessageHeader& OutHeader, TSpan<const std::uint8_t>& OutPayload) noexcept
+	const Core::TSpan<const std::uint8_t> InEncoded, FActorMessageHeader& OutHeader, Core::TSpan<const std::uint8_t>& OutPayload) noexcept
 {
 	if (InEncoded.Size() < ActorMessageHeaderBytes)
 	{
@@ -186,7 +184,7 @@ inline EMessageResult DecodeActorMessage(
 	}
 
 	OutHeader = DecodedHeader;
-	OutPayload = TSpan<const std::uint8_t>(Source + ActorMessageHeaderBytes, InEncoded.Size() - ActorMessageHeaderBytes);
+	OutPayload = Core::TSpan<const std::uint8_t>(Source + ActorMessageHeaderBytes, InEncoded.Size() - ActorMessageHeaderBytes);
 	return EMessageResult::Success;
 }
 
@@ -200,14 +198,14 @@ struct FMessageView
 	FMessageChannelId ArrivedOnChannelId{LocalChannelId};
 
 	/** View of the message body following the header; valid only for the duration of the callback. */
-	TSpan<const std::uint8_t> Payload;
+	Core::TSpan<const std::uint8_t> Payload;
 };
 
 /** Inline byte budget for one message-handler callable (TTransportHost precedent). */
 inline constexpr std::size_t MessageHandlerInlineBytes = 32;
 
 /** Callback type actors bind to receive messages. */
-using FMessageHandlerBinding = TDelegate<void(const FMessageView&), MessageHandlerInlineBytes>;
+using FMessageHandlerBinding = Core::TDelegate<void(const FMessageView&), MessageHandlerInlineBytes>;
 
 /**
  * Identifies one registered message handler without exposing router storage.
@@ -260,7 +258,7 @@ public:
 	 * @param InEncoded Complete encoded actor message, as produced by EncodeActorMessage.
 	 * @return Outcome of the single queue attempt.
 	 */
-	virtual EMessageResult ReceiveEncodedMessage(FMessageChannelId InArrivedOnChannelId, TSpan<const std::uint8_t> InEncoded) noexcept = 0;
+	virtual EMessageResult ReceiveEncodedMessage(FMessageChannelId InArrivedOnChannelId, Core::TSpan<const std::uint8_t> InEncoded) noexcept = 0;
 };
 
 /** Outbound side of one configured channel; implemented by channel bindings and wrappers such as a reliability layer. */
@@ -283,7 +281,7 @@ public:
 	 * @return Success once accepted; Unavailable or PayloadTooLarge means the caller may retry
 	 *         (a later frame, or after re-encoding within MaxEncodedMessageBytes) rather than the send being lost.
 	 */
-	virtual EMessageResult TrySendEncodedMessage(TSpan<const std::uint8_t> InEncoded) noexcept = 0;
+	virtual EMessageResult TrySendEncodedMessage(Core::TSpan<const std::uint8_t> InEncoded) noexcept = 0;
 };
 
 /** The actor-facing messaging API; actors hold this by reference and never see channels or transports directly. */
@@ -331,7 +329,7 @@ public:
 		FMessageTypeId InMessageTypeId,
 		FMessageActorId InTargetActorId,
 		FMessageActorId InSenderActorId,
-		TSpan<const std::uint8_t> InPayload) noexcept = 0;
+		Core::TSpan<const std::uint8_t> InPayload) noexcept = 0;
 
 	/**
 	 * Queues one message for every subscriber of the type on the given channel.
@@ -346,7 +344,7 @@ public:
 		FMessageChannelId InChannelId,
 		FMessageTypeId InMessageTypeId,
 		FMessageActorId InSenderActorId,
-		TSpan<const std::uint8_t> InPayload) noexcept = 0;
+		Core::TSpan<const std::uint8_t> InPayload) noexcept = 0;
 };
 
 } // namespace MicroWorld::Messaging

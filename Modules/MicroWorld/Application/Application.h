@@ -8,8 +8,6 @@
 namespace MicroWorld::Application
 {
 
-using namespace ::MicroWorld::Core;
-
 /**
  * The pacing function a runner calls between frames.
  *
@@ -17,7 +15,7 @@ using namespace ::MicroWorld::Core;
  * no
  * wrapper and the compiler rejects one that could throw into a noexcept Run.
  */
-using FSleepFunction = void (*)(DurationMilliseconds InSleepDurationMilliseconds) noexcept;
+using FSleepFunction = void (*)(Core::DurationMilliseconds InSleepDurationMilliseconds) noexcept;
 
 /**
  * Base class for an application that owns one engine: BeginPlay runs once,
@@ -51,13 +49,13 @@ public:
 	virtual ~FApplication() = default;
 
 	/** Starts the application once, at the caller's current time; fails if already started. */
-	ERuntimeResult BeginPlay(TimePointMilliseconds InNowMilliseconds) noexcept;
+	Core::ERuntimeResult BeginPlay(Core::TimePointMilliseconds InNowMilliseconds) noexcept;
 
 	/** Runs one frame; rejects a time earlier than the last one instead of forwarding it. */
-	ERuntimeResult Advance(TimePointMilliseconds InNowMilliseconds) noexcept;
+	Core::ERuntimeResult Advance(Core::TimePointMilliseconds InNowMilliseconds) noexcept;
 
 	/** Stops the application; calling it again after success does nothing and still succeeds. */
-	ERuntimeResult EndPlay() noexcept;
+	Core::ERuntimeResult EndPlay() noexcept;
 
 	/**
 	 * Runs the application and returns the result of the frame that failed.
@@ -72,18 +70,19 @@ public:
 	 * real reason.
 	 */
 	template<typename TimeSourceType>
-	ERuntimeResult Run(TimeSourceType& InTimeSource, const FSleepFunction InSleep, const DurationMilliseconds InPacingMilliseconds) noexcept
+	Core::ERuntimeResult Run(
+		TimeSourceType& InTimeSource, const FSleepFunction InSleep, const Core::DurationMilliseconds InPacingMilliseconds) noexcept
 	{
-		const ERuntimeResult BeginResult = BeginPlay(InTimeSource.Now());
-		if (BeginResult != ERuntimeResult::Success)
+		const Core::ERuntimeResult BeginResult = BeginPlay(InTimeSource.Now());
+		if (BeginResult != Core::ERuntimeResult::Success)
 		{
 			return BeginResult;
 		}
 
 		for (;;)
 		{
-			const ERuntimeResult FrameResult = Advance(InTimeSource.Now());
-			if (FrameResult != ERuntimeResult::Success)
+			const Core::ERuntimeResult FrameResult = Advance(InTimeSource.Now());
+			if (FrameResult != Core::ERuntimeResult::Success)
 			{
 				(void)EndPlay();
 				return FrameResult;
@@ -103,26 +102,26 @@ protected:
 	 * Defaulted to success so an application with nothing to configure writes no body
 	 * at all, rather than a hook that discards both parameters to satisfy the compiler.
 	 */
-	virtual ERuntimeResult OnConfigure(::MicroWorld::Engine::IEngine&, TimePointMilliseconds) { return ERuntimeResult::Success; }
+	virtual Core::ERuntimeResult OnConfigure(::MicroWorld::Engine::IEngine&, Core::TimePointMilliseconds) { return Core::ERuntimeResult::Success; }
 
 	/** Undoes whatever OnConfigure started before it failed; it runs on the failure path, so it cannot throw. */
 	virtual void OnBeginPlayFailed() noexcept = 0;
 
 private:
 	/** Runs OnConfigure first, then forwards to the engine's BeginPlay, returning the first failure. */
-	ERuntimeResult OnBeginPlay(TimePointMilliseconds InNowMilliseconds) noexcept;
+	Core::ERuntimeResult OnBeginPlay(Core::TimePointMilliseconds InNowMilliseconds) noexcept;
 
 	/** Forwards one frame to the engine's Tick. */
-	ERuntimeResult OnAdvance(TimePointMilliseconds InNowMilliseconds) noexcept;
+	Core::ERuntimeResult OnAdvance(Core::TimePointMilliseconds InNowMilliseconds) noexcept;
 
 	/** Forwards the stop to the engine's EndPlay. */
-	ERuntimeResult OnEndPlay() noexcept;
+	Core::ERuntimeResult OnEndPlay() noexcept;
 
 	/** Tracks the current phase, so a failed start stays dead and a second EndPlay is harmless. */
-	FLifecycleGuard Lifecycle;
+	Core::FLifecycleGuard Lifecycle;
 
 	/** The last time Advance accepted; a smaller one is rejected before the engine sees it. */
-	TimePointMilliseconds LastUpdateMilliseconds{0};
+	Core::TimePointMilliseconds LastUpdateMilliseconds{0};
 
 	/** The one engine this application drives; bound at construction and never rebound. */
 	::MicroWorld::Engine::IEngine& Engine;

@@ -60,7 +60,7 @@ struct FGarbageCollectionBudget
 struct FGarbageCollectionResult
 {
 	/** Reports invalid lifecycle or caller-storage capacity without throwing. */
-	ERuntimeResult Result{ERuntimeResult::Success};
+	Core::ERuntimeResult Result{Core::ERuntimeResult::Success};
 
 	/** Exposes the phase waiting for the next caller-provided budget. */
 	EGarbageCollectionPhase Phase{EGarbageCollectionPhase::Idle};
@@ -158,7 +158,7 @@ public:
 	FGarbageCollector& operator=(FGarbageCollector&&) = delete;
 
 	/** Begins one cycle only while idle and only with sufficient caller storage. */
-	ERuntimeResult RequestCollection() noexcept;
+	Core::ERuntimeResult RequestCollection() noexcept;
 
 	/** Performs no more than each phase's caller-provided operation budget. */
 	FGarbageCollectionResult Advance(FGarbageCollectionBudget InBudget) noexcept;
@@ -167,7 +167,7 @@ public:
 	FGarbageCollectionResult CollectFull() noexcept;
 
 	/** Abandons one active cycle, clears marks, and releases public store mutation. */
-	ERuntimeResult CancelCollection() noexcept;
+	Core::ERuntimeResult CancelCollection() noexcept;
 
 	/** Reports the phase that will consume the next relevant budget. */
 	EGarbageCollectionPhase Phase() const noexcept { return CurrentPhase; }
@@ -194,10 +194,10 @@ private:
 	void CompleteCycle() noexcept;
 
 	/** Reports why a collection cannot start, or acquires store ownership for the cycle and returns Success. */
-	ERuntimeResult ClassifyStartFailure() noexcept;
+	Core::ERuntimeResult ClassifyStartFailure() noexcept;
 
 	/** Rejects an Advance call whose lifecycle or store ownership is not ready. */
-	ERuntimeResult ValidateAdvancePreconditions() const noexcept;
+	Core::ERuntimeResult ValidateAdvancePreconditions() const noexcept;
 
 	/** Scans root-table entries into the worklist within the root budget. */
 	bool AdvanceSeedRootsPhase(const FGarbageCollectionBudget& InBudget, FGarbageCollectionResult& OutResult) noexcept;

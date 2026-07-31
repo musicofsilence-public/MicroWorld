@@ -54,7 +54,7 @@ public:
 	 * @return Outcome of the acceptance attempt.
 	 */
 	ETransportResult TryQueueFrame(
-		std::uint8_t InLocalNodeId, const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept;
+		std::uint8_t InLocalNodeId, const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept;
 
 	/**
 	 * Reads the next queued transmit byte without advancing state.
@@ -100,7 +100,7 @@ public:
 	 */
 	ETransportResult TryDeliverReceivedFrame(
 		::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
-		TSpan<std::uint8_t> InDestination,
+		Core::TSpan<std::uint8_t> InDestination,
 		::MicroWorld::Transport::Device::FReceiveResult& OutResult) noexcept;
 
 private:

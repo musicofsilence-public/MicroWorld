@@ -20,7 +20,7 @@ class FE32LoraDevice final : public ::MicroWorld::Transport::Device::IDevice
 {
 public:
 	/** Creates an inert device that borrows a byte stream the platform adapter keeps alive. */
-	explicit FE32LoraDevice(IUartByteStream& InByteStream) noexcept;
+	explicit FE32LoraDevice(Core::IUartByteStream& InByteStream) noexcept;
 
 	/**
 	 * Initializes the portable device with the source node id for future outgoing frames.
@@ -43,7 +43,8 @@ public:
 	 * and queue.
 	 * @return Outcome of the acceptance attempt.
 	 */
-	ETransportResult TrySend(const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override;
+	ETransportResult TrySend(
+		const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
 	 * Pumps a bounded number of UART bytes and transactionally delivers at most one decoded frame.
@@ -59,7 +60,7 @@ public:
 	 */
 	ETransportResult TryReceive(
 		::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
-		TSpan<std::uint8_t> InDestination,
+		Core::TSpan<std::uint8_t> InDestination,
 		::MicroWorld::Transport::Device::FReceiveResult& OutResult) noexcept override;
 
 	/** Reports the shared E32 payload capacity, excluding framing overhead. */
@@ -78,7 +79,7 @@ public:
 
 private:
 	/** Borrows the platform-owned non-blocking `IUartByteStream` for the device's full lifetime. */
-	IUartByteStream& ByteStream;
+	Core::IUartByteStream& ByteStream;
 
 	/** Owns fixed transmit framing, receive assembly, and retained decoded-frame state. */
 	FE32LoraTransportState TransportState{};

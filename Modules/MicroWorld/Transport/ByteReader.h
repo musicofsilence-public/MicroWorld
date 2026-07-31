@@ -24,7 +24,7 @@ class FByteReader final
 {
 public:
 	/** Binds the reader to a caller-owned source view; storage is observed, never owned. */
-	constexpr explicit FByteReader(TSpan<const std::uint8_t> InSource) noexcept : Buffer(InSource), ReadPosition(0) {}
+	constexpr explicit FByteReader(Core::TSpan<const std::uint8_t> InSource) noexcept : Buffer(InSource), ReadPosition(0) {}
 
 	/** Prevents the reader from being copied while caller storage has one observer. */
 	FByteReader(const FByteReader&) = delete;
@@ -73,7 +73,7 @@ public:
 	 * `Invalid` (a truncated request) without modifying the destination or advancing.
 	 * A source bound to `{nullptr, nonzero}` returns `Invalid` for any nonzero read.
 	 */
-	ETransportResult Read(TSpan<std::uint8_t> InDestination) noexcept
+	ETransportResult Read(Core::TSpan<std::uint8_t> InDestination) noexcept
 	{
 		const std::size_t RequestedSize = InDestination.Size();
 		if (RequestedSize == 0)
@@ -128,15 +128,15 @@ public:
 	 * valid `{nullptr, 0}` empty source and the invalid `{nullptr, nonzero}`
 	 * source — so no caller performs pointer arithmetic on null.
 	 */
-	constexpr TSpan<const std::uint8_t> RemainingBytes() const noexcept
+	constexpr Core::TSpan<const std::uint8_t> RemainingBytes() const noexcept
 	{
 		if (Buffer.Data() == nullptr)
 		{
 			// A null data pointer has no honest base address for the suffix view,
 			// whether the source is the valid empty `{nullptr, 0}` or an invalid `{nullptr, nonzero}`.
-			return TSpan<const std::uint8_t>(nullptr, 0);
+			return Core::TSpan<const std::uint8_t>(nullptr, 0);
 		}
-		return TSpan<const std::uint8_t>(Buffer.Data() + ReadPosition, Buffer.Size() - ReadPosition);
+		return Core::TSpan<const std::uint8_t>(Buffer.Data() + ReadPosition, Buffer.Size() - ReadPosition);
 	}
 
 	/** Resets the cursor to zero so the caller-owned source can be re-parsed. */
@@ -151,7 +151,7 @@ private:
 	constexpr bool HasValidStorage() const noexcept { return Buffer.Data() != nullptr || Buffer.Size() == 0; }
 
 	/** Observes the caller-owned source; the reader never releases or grows it. */
-	TSpan<const std::uint8_t> Buffer;
+	Core::TSpan<const std::uint8_t> Buffer;
 
 	/** Tracks the consumed prefix length so failures leave the cursor intact. */
 	std::size_t ReadPosition;
@@ -165,7 +165,7 @@ private:
  */
 inline std::uint16_t ReadUint16BigEndian(const std::uint8_t* const InBytes) noexcept
 {
-	return static_cast<std::uint16_t>((static_cast<std::uint16_t>(InBytes[0]) << HighByteShift) | static_cast<std::uint16_t>(InBytes[1]));
+	return static_cast<std::uint16_t>((static_cast<std::uint16_t>(InBytes[0]) << Core::HighByteShift) | static_cast<std::uint16_t>(InBytes[1]));
 }
 
 /**
@@ -177,7 +177,7 @@ inline std::uint16_t ReadUint16BigEndian(const std::uint8_t* const InBytes) noex
 inline std::uint16_t ReadUint16LittleEndian(const std::uint8_t* const InBytes) noexcept
 {
 	return static_cast<std::uint16_t>(
-		static_cast<std::uint16_t>(InBytes[0]) | static_cast<std::uint16_t>(static_cast<std::uint16_t>(InBytes[1]) << HighByteShift));
+		static_cast<std::uint16_t>(InBytes[0]) | static_cast<std::uint16_t>(static_cast<std::uint16_t>(InBytes[1]) << Core::HighByteShift));
 }
 
 } // namespace MicroWorld::Transport

@@ -48,7 +48,8 @@ public:
 	 * destination address the device cannot route. A non-success result leaves
 	 * the transport state unchanged.
 	 */
-	virtual ETransportResult TrySend(const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept = 0;
+	virtual ETransportResult TrySend(
+		const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept = 0;
 
 	/**
 	 * Receives at most one packet into the caller-owned destination.
@@ -60,7 +61,7 @@ public:
 	 * head packet, and `Invalid` for a null destination with nonzero length.
 	 */
 	virtual ETransportResult TryReceive(
-		::MicroWorld::Transport::Address::FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept = 0;
+		::MicroWorld::Transport::Address::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept = 0;
 
 	/**
 	 * Advances one bounded unit of pending outbound transport work.

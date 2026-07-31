@@ -21,20 +21,20 @@ namespace MicroWorld::Engine
  * must outlive the TEngine it is bound to.
  */
 template<typename THost>
-class THostPlaySystem final : public IPlaySystem
+class THostPlaySystem final : public Core::IPlaySystem
 {
 public:
 	/** Binds this adapter to one externally owned network host for its lifetime. */
 	explicit THostPlaySystem(THost& InHost) noexcept : Host(InHost) {}
 
 	/** Opens the bound host session at the engine's canonical play-start time. */
-	void BeginPlay(const TimePointMilliseconds InNowMilliseconds) noexcept override { (void)Host.Start(InNowMilliseconds); }
+	void BeginPlay(const Core::TimePointMilliseconds InNowMilliseconds) noexcept override { (void)Host.Start(InNowMilliseconds); }
 
 	/** Forwards the frame's inbound step to the bound host. */
-	void PreAdvance(const TimePointMilliseconds InNowMilliseconds) noexcept override { (void)Host.PumpReceive(InNowMilliseconds); }
+	void PreAdvance(const Core::TimePointMilliseconds InNowMilliseconds) noexcept override { (void)Host.PumpReceive(InNowMilliseconds); }
 
 	/** Forwards the frame's outbound step to the bound host. */
-	void PostAdvance(const TimePointMilliseconds InNowMilliseconds) noexcept override { (void)Host.PumpSend(InNowMilliseconds); }
+	void PostAdvance(const Core::TimePointMilliseconds InNowMilliseconds) noexcept override { (void)Host.PumpSend(InNowMilliseconds); }
 
 	/** Closes the bound host session after the engine world has ended. */
 	void EndPlay() noexcept override { Host.Stop(); }
@@ -58,7 +58,7 @@ private:
  * and never owns their lifetime; every added system must outlive this set.
  */
 template<std::size_t MaxFrames>
-class TPlaySystemSet final : public IPlaySystem
+class TPlaySystemSet final : public Core::IPlaySystem
 {
 public:
 	/** Creates a set with no frames added. */
@@ -82,7 +82,7 @@ public:
 	 * by pointer identity) and a full
 	 * set as CapacityExceeded, leaving the set unchanged in both cases.
 	 */
-	EEngineResult Add(IPlaySystem& InFrame) noexcept
+	EEngineResult Add(Core::IPlaySystem& InFrame) noexcept
 	{
 		for (std::size_t Index = 0; Index < Count; ++Index)
 		{
@@ -102,7 +102,7 @@ public:
 	}
 
 	/** Starts every added system in add-order. An empty set does nothing. */
-	void BeginPlay(const TimePointMilliseconds InNowMilliseconds) noexcept override
+	void BeginPlay(const Core::TimePointMilliseconds InNowMilliseconds) noexcept override
 	{
 		for (std::size_t Index = 0; Index < Count; ++Index)
 		{
@@ -111,7 +111,7 @@ public:
 	}
 
 	/** Dispatches every added system's inbound step in add-order. An empty set does nothing. */
-	void PreAdvance(const TimePointMilliseconds InNowMilliseconds) noexcept override
+	void PreAdvance(const Core::TimePointMilliseconds InNowMilliseconds) noexcept override
 	{
 		for (std::size_t Index = 0; Index < Count; ++Index)
 		{
@@ -120,7 +120,7 @@ public:
 	}
 
 	/** Flushes every added system's outbound step in reverse add-order. An empty set does nothing. */
-	void PostAdvance(const TimePointMilliseconds InNowMilliseconds) noexcept override
+	void PostAdvance(const Core::TimePointMilliseconds InNowMilliseconds) noexcept override
 	{
 		for (std::size_t Index = Count; Index > 0; --Index)
 		{
@@ -142,7 +142,7 @@ public:
 
 private:
 	/** Caller-owned systems in add-order; never owned here. */
-	IPlaySystem* Frames[MaxFrames == 0 ? 1 : MaxFrames]{};
+	Core::IPlaySystem* Frames[MaxFrames == 0 ? 1 : MaxFrames]{};
 
 	/** Number of occupied entries at the front of Frames. */
 	std::size_t Count{0};
