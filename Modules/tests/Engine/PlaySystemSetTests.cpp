@@ -13,14 +13,14 @@
 
 namespace
 {
-using MicroWorld::EEngineResult;
 using MicroWorld::ERuntimeResult;
-using MicroWorld::FDefaultEngineTraits;
-using MicroWorld::FGarbageCollectionBudget;
 using MicroWorld::IPlaySystem;
-using MicroWorld::TEngine;
 using MicroWorld::TimePointMilliseconds;
-using MicroWorld::TPlaySystemSet;
+using MicroWorld::Engine::EEngineResult;
+using MicroWorld::Engine::FDefaultEngineTraits;
+using MicroWorld::Engine::FGarbageCollectionBudget;
+using MicroWorld::Engine::TEngine;
+using MicroWorld::Engine::TPlaySystemSet;
 
 /** Carries the exact capacities FHost sized before the traits refactor, so the test store is unchanged. */
 struct FHostTraits : FDefaultEngineTraits

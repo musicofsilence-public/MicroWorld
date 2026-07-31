@@ -6,7 +6,7 @@
 
 #include <cstdint>
 
-namespace MicroWorld
+namespace MicroWorld::Engine
 {
 
 class FObjectStore;
@@ -243,4 +243,4 @@ private:
 	bool bWorklistOverflowed{false};
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Engine

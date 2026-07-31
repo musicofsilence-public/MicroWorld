@@ -14,7 +14,7 @@
 #include <type_traits>
 #include <utility>
 
-namespace MicroWorld
+namespace MicroWorld::Engine
 {
 
 class AActor;
@@ -259,4 +259,4 @@ private:
 	TimePointMilliseconds LastUpdateMilliseconds{0};
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Engine

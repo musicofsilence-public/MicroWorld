@@ -18,29 +18,29 @@
 
 namespace
 {
-using MicroWorld::AActor;
-using MicroWorld::AActorClassId;
-using MicroWorld::EEngineResult;
-using MicroWorld::EObjectResult;
 using MicroWorld::ERuntimeResult;
 using MicroWorld::ETimerMode;
 using MicroWorld::ETimerResult;
-using MicroWorld::FClassDescriptor;
-using MicroWorld::FDefaultEngineTraits;
-using MicroWorld::FGarbageCollectionBudget;
-using MicroWorld::FObjectStoreStats;
 using MicroWorld::FTickConfiguration;
 using MicroWorld::FTimerHandle;
-using MicroWorld::FTypeId;
-using MicroWorld::MakeClassDescriptor;
 using MicroWorld::TDelegate;
-using MicroWorld::TEngine;
-using MicroWorld::TObjectCreationResult;
-using MicroWorld::TObjectPtr;
-using MicroWorld::TraceManagedObjectReferences;
-using MicroWorld::UActorComponent;
-using MicroWorld::UActorComponentClassId;
-using MicroWorld::UWorld;
+using MicroWorld::Engine::AActor;
+using MicroWorld::Engine::AActorClassId;
+using MicroWorld::Engine::EEngineResult;
+using MicroWorld::Engine::EObjectResult;
+using MicroWorld::Engine::FClassDescriptor;
+using MicroWorld::Engine::FDefaultEngineTraits;
+using MicroWorld::Engine::FGarbageCollectionBudget;
+using MicroWorld::Engine::FObjectStoreStats;
+using MicroWorld::Engine::FTypeId;
+using MicroWorld::Engine::MakeClassDescriptor;
+using MicroWorld::Engine::TEngine;
+using MicroWorld::Engine::TObjectCreationResult;
+using MicroWorld::Engine::TObjectPtr;
+using MicroWorld::Engine::TraceManagedObjectReferences;
+using MicroWorld::Engine::UActorComponent;
+using MicroWorld::Engine::UActorComponentClassId;
+using MicroWorld::Engine::UWorld;
 
 using MicroWorld::Tests::FActorEventState;
 using MicroWorld::Tests::FComponentEventState;

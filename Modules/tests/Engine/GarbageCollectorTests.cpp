@@ -10,30 +10,30 @@
 namespace
 {
 
-using MicroWorld::EGarbageCollectionPhase;
-using MicroWorld::EObjectResult;
 using MicroWorld::ERuntimeResult;
-using MicroWorld::FClassDescriptor;
-using MicroWorld::FGarbageCollectionBudget;
-using MicroWorld::FGarbageCollectionResult;
-using MicroWorld::FGarbageCollector;
-using MicroWorld::FGarbageCollectorStorage;
-using MicroWorld::FObjectHandle;
-using MicroWorld::FObjectRootEntry;
-using MicroWorld::FObjectSlotMetadata;
-using MicroWorld::FObjectStore;
-using MicroWorld::FObjectStoreStats;
-using MicroWorld::FObjectStoreStorage;
-using MicroWorld::FReferenceCollector;
-using MicroWorld::MakeClassDescriptor;
-using MicroWorld::MakeClassRegistryView;
-using MicroWorld::TClassRegistry;
-using MicroWorld::TObjectCreationResult;
-using MicroWorld::TObjectPtr;
-using MicroWorld::TraceManagedObjectReferences;
-using MicroWorld::TStrongObjectPointerResult;
-using MicroWorld::TWeakObjectPtr;
-using MicroWorld::UObject;
+using MicroWorld::Engine::EGarbageCollectionPhase;
+using MicroWorld::Engine::EObjectResult;
+using MicroWorld::Engine::FClassDescriptor;
+using MicroWorld::Engine::FGarbageCollectionBudget;
+using MicroWorld::Engine::FGarbageCollectionResult;
+using MicroWorld::Engine::FGarbageCollector;
+using MicroWorld::Engine::FGarbageCollectorStorage;
+using MicroWorld::Engine::FObjectHandle;
+using MicroWorld::Engine::FObjectRootEntry;
+using MicroWorld::Engine::FObjectSlotMetadata;
+using MicroWorld::Engine::FObjectStore;
+using MicroWorld::Engine::FObjectStoreStats;
+using MicroWorld::Engine::FObjectStoreStorage;
+using MicroWorld::Engine::FReferenceCollector;
+using MicroWorld::Engine::MakeClassDescriptor;
+using MicroWorld::Engine::MakeClassRegistryView;
+using MicroWorld::Engine::TClassRegistry;
+using MicroWorld::Engine::TObjectCreationResult;
+using MicroWorld::Engine::TObjectPtr;
+using MicroWorld::Engine::TraceManagedObjectReferences;
+using MicroWorld::Engine::TStrongObjectPointerResult;
+using MicroWorld::Engine::TWeakObjectPtr;
+using MicroWorld::Engine::UObject;
 
 /** Per-slice operation budget used by the bounded-slice test: one root, one mark, one sweep per advance. */
 constexpr FGarbageCollectionBudget UnitSliceBudget{1, 1, 1};
@@ -180,7 +180,7 @@ class TGraphStoreFixture final
 {
 public:
 	/** Binds the store to this fixture's complete aligned caller-owned storage. */
-	explicit TGraphStoreFixture(const MicroWorld::FClassRegistryView InClasses) noexcept : Store(MakeStorage(), InClasses) {}
+	explicit TGraphStoreFixture(const MicroWorld::Engine::FClassRegistryView InClasses) noexcept : Store(MakeStorage(), InClasses) {}
 
 	/** Exposes the public store under test. */
 	FObjectStore& GetStore() noexcept { return Store; }
@@ -278,7 +278,7 @@ FCollectionObservation ObserveEquivalentCollection(const bool bIncremental) noex
 	}
 
 	const FObjectStoreStats StoreStats = Store.Stats();
-	const MicroWorld::FGarbageCollectionStats CollectionStats = Collector.Stats();
+	const MicroWorld::Engine::FGarbageCollectionStats CollectionStats = Collector.Stats();
 	return FCollectionObservation{
 		FinalResult.bCycleComplete,
 		CollectionStats.ReclaimedObjects,
@@ -468,7 +468,7 @@ MW_TEST_CASE(GarbageCollectorHonorsZeroAndOneOperationBudgets)
 	const ERuntimeResult ExpectedCollectionSuccess = ERuntimeResult::Success;
 	const std::uint32_t ExpectedZeroOperations = 0;
 	const std::uint32_t ExpectedReclaimedObjects = 1;
-	const MicroWorld::FGarbageCollectionStats CollectionStats = Collector.Stats();
+	const MicroWorld::Engine::FGarbageCollectionStats CollectionStats = Collector.Stats();
 	MW_EXPECT_EQ(Test, ExpectedObjectSuccess, RegistrationResult, "The graph class should register");
 	MW_EXPECT_EQ(Test, ExpectedCollectionSuccess, RequestResult, "An adequately provisioned cycle should start");
 	MW_EXPECT_EQ(Test, ExpectedZeroOperations, ZeroBudgetResult.OperationsPerformed, "Zero budgets must perform no hidden work");
@@ -521,7 +521,7 @@ MW_TEST_CASE(GarbageCollectorMultiReferenceVisitorCountsOneMarkAndPreservesGraph
 	const std::uint32_t ExpectedOccupiedSlots = 3;
 	const std::uint32_t ExpectedReclaimedObjects = 0;
 	const FObjectStoreStats StoreStats = Store.Stats();
-	const MicroWorld::FGarbageCollectionStats CollectionStats = Collector.Stats();
+	const MicroWorld::Engine::FGarbageCollectionStats CollectionStats = Collector.Stats();
 	MW_EXPECT_EQ(Test, ExpectedObjectSuccess, RegistrationResult, "The graph class should register");
 	MW_EXPECT_EQ(Test, ExpectedCollectionSuccess, RequestResult, "The bounded traversal should start");
 	MW_EXPECT_TRUE(Test, bMarkBudgetRespected, "A multi-reference visitor should consume only one mark operation");
@@ -614,7 +614,7 @@ MW_TEST_CASE(GarbageCollectorLocksMutationAndSecondCollectorBetweenSlices)
 	const TObjectCreationResult<FGraphObject> RejectedCreation = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
 	const EObjectResult RejectedPending = Store.MarkPendingDestroy(Rooted.Object.Handle());
 	TStrongObjectPointerResult<FGraphObject> RejectedRoot = Store.MakeStrongObjectPtr(Rooted.Object);
-	const MicroWorld::FObjectMutationResult RejectedBarrier = Store.ApplyPendingDestroy(1);
+	const MicroWorld::Engine::FObjectMutationResult RejectedBarrier = Store.ApplyPendingDestroy(1);
 	const ERuntimeResult RejectedSecondCollector = SecondCollector.RequestCollection();
 	Root.Pointer.Reset();
 	const FObjectStoreStats StatsAfterRootRemoval = Store.Stats();
@@ -752,7 +752,7 @@ MW_TEST_CASE(GarbageCollectorRejectsInsufficientWorklistAtomically)
 	const std::uint32_t ExpectedDestructionCount = 0;
 	const bool bObjectStillResolves = Creation.Object.Get() != nullptr;
 	const EGarbageCollectionPhase CollectorPhase = Collector.Phase();
-	const MicroWorld::FGarbageCollectionStats CollectionStats = Collector.Stats();
+	const MicroWorld::Engine::FGarbageCollectionStats CollectionStats = Collector.Stats();
 	MW_EXPECT_EQ(Test, ExpectedObjectSuccess, RegistrationResult, "The graph class should register");
 	MW_EXPECT_EQ(Test, ExpectedCapacityFailure, RequestResult, "A worklist smaller than slot capacity should reject collection");
 	MW_EXPECT_EQ(Test, EGarbageCollectionPhase::Idle, CollectorPhase, "Rejected collection should remain idle");

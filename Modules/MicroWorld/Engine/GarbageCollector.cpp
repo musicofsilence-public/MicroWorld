@@ -4,7 +4,7 @@
 
 #include <limits>
 
-namespace MicroWorld
+namespace MicroWorld::Engine
 {
 
 namespace
@@ -388,4 +388,4 @@ void FGarbageCollector::CompleteCycle() noexcept
 	CurrentPhase = EGarbageCollectionPhase::Idle;
 }
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Engine

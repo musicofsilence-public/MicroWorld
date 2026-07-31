@@ -22,7 +22,7 @@ namespace
 	 * references to backing storage so the IEngine contract is satisfied even though these tests
 	 * never exercise the world or store.
 	 */
-	class FRecordingEngine final : public MicroWorld::IEngine
+	class FRecordingEngine final : public MicroWorld::Engine::IEngine
 	{
 	public:
 		/** Drives the next BeginPlay result so the failed-engine-begin path is reachable from a test. */
@@ -55,8 +55,11 @@ namespace
 			return MicroWorld::ERuntimeResult::Success;
 		}
 
-		MicroWorld::UWorld& GetWorld() noexcept override { return *reinterpret_cast<MicroWorld::UWorld*>(&WorldStorage); }
-		MicroWorld::FObjectStore& GetObjectStore() noexcept override { return *reinterpret_cast<MicroWorld::FObjectStore*>(&StoreStorage); }
+		MicroWorld::Engine::UWorld& GetWorld() noexcept override { return *reinterpret_cast<MicroWorld::Engine::UWorld*>(&WorldStorage); }
+		MicroWorld::Engine::FObjectStore& GetObjectStore() noexcept override
+		{
+			return *reinterpret_cast<MicroWorld::Engine::FObjectStore*>(&StoreStorage);
+		}
 
 	private:
 		/** Holds the result BeginPlay will return, seeded to Success so the happy path needs no setup. */
@@ -75,7 +78,7 @@ namespace
 	class FConfiguringApplication final : public MicroWorld::Application::FApplication
 	{
 	public:
-		explicit FConfiguringApplication(MicroWorld::IEngine& InEngine) noexcept : MicroWorld::Application::FApplication(InEngine) {}
+		explicit FConfiguringApplication(MicroWorld::Engine::IEngine& InEngine) noexcept : MicroWorld::Application::FApplication(InEngine) {}
 
 		/** Drives the next OnConfigure result so the failed-configure path is reachable from a test. */
 		void ConfigureConfigureResult(MicroWorld::ERuntimeResult InResult) noexcept { ConfiguredConfigureResult = InResult; }
@@ -87,7 +90,7 @@ namespace
 		int BeginPlayFailedCount{0};
 
 	protected:
-		MicroWorld::ERuntimeResult OnConfigure(MicroWorld::IEngine& InEngine, MicroWorld::TimePointMilliseconds) noexcept override
+		MicroWorld::ERuntimeResult OnConfigure(MicroWorld::Engine::IEngine& InEngine, MicroWorld::TimePointMilliseconds) noexcept override
 		{
 			(void)InEngine;
 			++ConfigureCount;

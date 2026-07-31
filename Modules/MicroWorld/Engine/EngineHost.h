@@ -21,7 +21,7 @@
 #include <type_traits>
 #include <utility>
 
-namespace MicroWorld
+namespace MicroWorld::Engine
 {
 
 /**
@@ -489,4 +489,4 @@ private:
 #pragma warning(pop)
 #endif
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Engine

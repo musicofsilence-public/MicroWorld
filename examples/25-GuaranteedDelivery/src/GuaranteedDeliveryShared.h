@@ -73,10 +73,10 @@ constexpr std::uint8_t ServerIpv4[4] = {192, 168, 4, 1};
 constexpr std::uint16_t ServerPort = 40404;
 
 /** Stable descriptor id for the managed FCounterActor type (0x0019 == example 25). */
-constexpr MicroWorld::FTypeId CounterActorTypeId{0x00190001u};
+constexpr MicroWorld::Engine::FTypeId CounterActorTypeId{0x00190001u};
 
 /** Stable descriptor id for the managed FLedgerActor type. */
-constexpr MicroWorld::FTypeId LedgerActorTypeId{0x00190002u};
+constexpr MicroWorld::Engine::FTypeId LedgerActorTypeId{0x00190002u};
 
 /** The one WiFi-backed network host both roles compose (256-byte packet, matching example 16/24). */
 using FWorldTransport = MicroWorld::Transport::TTransportHost<2, 256>;
@@ -85,7 +85,7 @@ using FWorldTransport = MicroWorld::Transport::TTransportHost<2, 256>;
 using FWorldRouter = MicroWorld::Messaging::TMessageRouter<16, 8, 96, 2>;
 
 /** Adapts FWorldTransport to the engine's per-frame network slot inside the frame set. */
-using FHostPlay = MicroWorld::THostPlaySystem<FWorldTransport>;
+using FHostPlay = MicroWorld::Engine::THostPlaySystem<FWorldTransport>;
 
 /** Two-way adapter binding one wire channel to the shared router; both channels use this type. */
 using FChannelBinding = MicroWorld::Messaging::TMessageChannelBinding<FWorldTransport>;
@@ -97,7 +97,7 @@ using FGuaranteedChannel = MicroWorld::Messaging::TReliableChannel<8, 96>;
 using FWorldFrameSet = MicroWorld::TPlaySystemSet<3>;
 
 /** The engine both roles compose; sized for one world with a couple of small actors using direct component storage. */
-using FWorldEngine = MicroWorld::TEngine<>;
+using FWorldEngine = MicroWorld::Engine::TEngine<>;
 
 /** Builds the shared session config; heartbeats keep the point-to-point peer alive between sends. */
 inline MicroWorld::Transport::FTransportHostConfig MakeHostConfig() noexcept

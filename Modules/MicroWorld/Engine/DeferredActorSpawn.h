@@ -14,7 +14,7 @@
 #include <type_traits>
 #include <utility>
 
-namespace MicroWorld
+namespace MicroWorld::Engine
 {
 
 /** Identifies one bounded deferred-spawn request generation. */
@@ -774,4 +774,4 @@ private:
 	bool bReferenceMade{false};
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Engine

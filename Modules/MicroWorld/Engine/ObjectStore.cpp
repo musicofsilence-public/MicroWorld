@@ -2,7 +2,7 @@
 
 #include <limits>
 
-namespace MicroWorld
+namespace MicroWorld::Engine
 {
 
 namespace
@@ -537,4 +537,4 @@ void TraceManagedObjectReferences(UObject& InObject, FReferenceCollector& InColl
 	InObject.VisitReferences(InCollector);
 }
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Engine

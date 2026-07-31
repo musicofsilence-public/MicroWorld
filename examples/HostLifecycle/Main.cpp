@@ -16,7 +16,7 @@ namespace
 constexpr MicroWorld::DurationMilliseconds SensorCadenceMilliseconds = 100;
 
 /** Samples a host value at its own 100 ms cadence in the managed lifecycle example. */
-class FSensorComponent final : public MicroWorld::UActorComponent
+class FSensorComponent final : public MicroWorld::Engine::UActorComponent
 {
 public:
 	/** Selects a 100 ms schedule so the trace includes due and not-due updates. */
@@ -40,7 +40,7 @@ protected:
 };
 
 /** Aggregates component state through the actor's fixed component slots. */
-class FDeviceActor final : public MicroWorld::AActor
+class FDeviceActor final : public MicroWorld::Engine::AActor
 {
 public:
 	/** Disables only the Actor schedule so Component independence is observable. */
@@ -58,13 +58,13 @@ protected:
 };
 
 /** Stable type id for the example's user-derived managed actor descriptor. */
-constexpr MicroWorld::FTypeId DeviceActorTypeId{0x00010001u};
+constexpr MicroWorld::Engine::FTypeId DeviceActorTypeId{0x00010001u};
 
 /** Stable type id for the example's user-derived managed component descriptor. */
-constexpr MicroWorld::FTypeId SensorComponentTypeId{0x00010002u};
+constexpr MicroWorld::Engine::FTypeId SensorComponentTypeId{0x00010002u};
 
 /** Carries the exact capacities FDeviceHost sized before the traits refactor, so the demo store is unchanged. */
-struct FDeviceHostTraits : MicroWorld::FDefaultEngineTraits
+struct FDeviceHostTraits : MicroWorld::Engine::FDefaultEngineTraits
 {
 	static constexpr std::size_t MaxClasses = 5;
 	static constexpr std::size_t MaxObjects = 3;
@@ -80,6 +80,7 @@ struct FDeviceHostTraits : MicroWorld::FDefaultEngineTraits
 int main()
 {
 	using namespace MicroWorld;
+	using namespace MicroWorld::Engine;
 
 	// TEngine owns every subsystem — class registry, object store, garbage collector, world
 	// actor registry, and timer manager — and registers the three engine base descriptors itself.

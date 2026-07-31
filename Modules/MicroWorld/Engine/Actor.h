@@ -10,7 +10,7 @@
 
 #include <cstddef>
 
-namespace MicroWorld
+namespace MicroWorld::Engine
 {
 
 struct FClassDescriptor;
@@ -145,4 +145,4 @@ private:
 	FLifecycleGuard Lifecycle;
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Engine

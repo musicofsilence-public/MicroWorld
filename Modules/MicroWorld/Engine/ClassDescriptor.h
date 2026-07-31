@@ -6,7 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace MicroWorld
+namespace MicroWorld::Engine
 {
 
 class FReferenceCollector;
@@ -306,4 +306,4 @@ private:
 	FTypeId NextAutomaticTypeId{FirstAutomaticTypeId};
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Engine

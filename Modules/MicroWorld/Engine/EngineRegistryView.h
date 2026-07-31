@@ -4,7 +4,7 @@
 
 #include <cstddef>
 
-namespace MicroWorld
+namespace MicroWorld::Engine
 {
 
 class AActor;
@@ -184,4 +184,4 @@ private:
 	std::size_t* PendingDestroyCount{nullptr};
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Engine

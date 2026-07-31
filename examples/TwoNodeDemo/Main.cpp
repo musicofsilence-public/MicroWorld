@@ -37,6 +37,7 @@ namespace
 {
 
 using namespace MicroWorld;
+using namespace MicroWorld::Engine;
 using namespace MicroWorld::Transport;
 
 /** Loopback IPv4 octets shared by every endpoint address in the demo. */
@@ -479,6 +480,7 @@ bool RunStateBroadcastLoop(
 int main()
 {
 	using namespace MicroWorld;
+	using namespace MicroWorld::Engine;
 
 	FHostWifiDevice ServerDevice(0);
 	FHostWifiDevice ClientDevice(0);

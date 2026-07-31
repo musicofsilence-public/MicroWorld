@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <limits>
 
-namespace MicroWorld
+namespace MicroWorld::Engine
 {
 
 /** Selects one caller-owned object-store slot without exposing its address. */
@@ -106,4 +106,4 @@ constexpr bool CanAdvanceObjectGeneration(const ObjectGeneration InCurrentGenera
 	return InCurrentGeneration < std::numeric_limits<ObjectGeneration>::max();
 }
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Engine

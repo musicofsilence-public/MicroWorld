@@ -57,7 +57,7 @@ enum class EEngineConsumerExitCode : int
 };
 
 /** A concrete component proving the engine component base is constructible. */
-class FConsumerComponent final : public MicroWorld::UActorComponent
+class FConsumerComponent final : public MicroWorld::Engine::UActorComponent
 {
 public:
 	/** Keeps exact descriptor-driven destruction publicly instantiable. */
@@ -65,7 +65,7 @@ public:
 };
 
 /** A concrete actor proving the engine actor base is constructible. */
-class FConsumerActor final : public MicroWorld::AActor
+class FConsumerActor final : public MicroWorld::Engine::AActor
 {
 public:
 	/** Initializes the managed actor base, which owns its bounded component slots. */
@@ -86,8 +86,8 @@ inline constexpr std::size_t EngineProbeTimerCapacity = 4;
 inline constexpr std::size_t EngineProbeTimerInlineBytes = 32;
 
 /** Type ids assigned to the probe's derived actor and component classes. */
-inline constexpr MicroWorld::FTypeId ConsumerActorTypeId{0x00040001u};
-inline constexpr MicroWorld::FTypeId ConsumerComponentTypeId{0x00040002u};
+inline constexpr MicroWorld::Engine::FTypeId ConsumerActorTypeId{0x00040001u};
+inline constexpr MicroWorld::Engine::FTypeId ConsumerComponentTypeId{0x00040002u};
 
 /** Number of managed objects the unrooted collection is expected to reclaim (world, actor, component). */
 inline constexpr std::uint32_t EngineProbeExpectedReclaimedObjectCount = 3;
@@ -105,6 +105,7 @@ inline constexpr std::uint32_t EngineProbeExpectedTimerFireCount = 1;
 inline int RunEngineConsumerProbe() noexcept
 {
 	using namespace MicroWorld;
+	using namespace MicroWorld::Engine;
 	using MicroWorldConsumer::EEngineConsumerExitCode;
 	using MicroWorldConsumer::FConsumerActor;
 	using MicroWorldConsumer::FConsumerComponent;

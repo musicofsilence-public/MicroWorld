@@ -42,10 +42,10 @@ inline constexpr MicroWorld::Messaging::FMessageActorId ThermometerActorId = 10;
 inline constexpr MicroWorld::Messaging::FMessageActorId DisplayActorId = 11;
 
 /** Stable descriptor id for the managed FThermometerActor type (0x0016 == example 22). */
-constexpr MicroWorld::FTypeId ThermometerActorTypeId{0x00160001u};
+constexpr MicroWorld::Engine::FTypeId ThermometerActorTypeId{0x00160001u};
 
 /** Stable descriptor id for the managed FReadingSensorComponent type. */
-constexpr MicroWorld::FTypeId ReadingSensorComponentTypeId{0x00160003u};
+constexpr MicroWorld::Engine::FTypeId ReadingSensorComponentTypeId{0x00160003u};
 
 // ---- Shared cadence and bounds ---------------------------------------------
 
@@ -75,7 +75,7 @@ constexpr std::size_t ReadingPayloadBytes = 2;
  * and non-deterministic anyway) -- the reading is a named base plus a bounded
  * ramp, so the trace is byte-for-byte reproducible run to run.
  */
-class FReadingSensorComponent final : public MicroWorld::UActorComponent
+class FReadingSensorComponent final : public MicroWorld::Engine::UActorComponent
 {
 public:
 	/** Selects the 500 ms reading cadence the thermometer actor's own tick is aligned to. */
@@ -119,7 +119,7 @@ private:
  * Takes the router and its sensor by constructor injection (D9) instead of
  * reaching into a global -- see the constructor below.
  */
-class FThermometerActor final : public MicroWorld::AActor
+class FThermometerActor final : public MicroWorld::Engine::AActor
 {
 public:
 	/**
@@ -127,7 +127,7 @@ public:
 	 * for why the alignment matters) and stores the router and sensor this actor was
 	 * composed with.
 	 */
-	FThermometerActor(MicroWorld::Messaging::IMessageRouter& InRouter, MicroWorld::TObjectPtr<FReadingSensorComponent> InSensor) noexcept
+	FThermometerActor(MicroWorld::Messaging::IMessageRouter& InRouter, MicroWorld::Engine::TObjectPtr<FReadingSensorComponent> InSensor) noexcept
 		: AActor(MicroWorld::FTickConfiguration::EnabledEvery(ReadingCadenceMilliseconds)), Router(InRouter), Sensor(InSensor)
 	{
 	}
@@ -208,7 +208,7 @@ private:
 	MicroWorld::Messaging::IMessageRouter& Router;
 
 	/** Sensor this actor owns and reads each tick; registered as this actor's one inline component slot. */
-	MicroWorld::TObjectPtr<FReadingSensorComponent> Sensor;
+	MicroWorld::Engine::TObjectPtr<FReadingSensorComponent> Sensor;
 };
 
 /**
@@ -218,7 +218,7 @@ private:
  * Uses AActor directly: it reserves bounded component slots but registers
  * none, which keeps this display-only actor deliberately simple.
  */
-class FDisplayActor final : public MicroWorld::AActor
+class FDisplayActor final : public MicroWorld::Engine::AActor
 {
 public:
 	/** Stores the injected router (D9); this actor never ticks on its own (see the disabled tick config below). */
@@ -356,20 +356,21 @@ extern "C" void app_main(void)
 
 	// Owns every managed subsystem and pumps GRouter as its network frame, so
 	// Tick's step 1 (PreAdvance) and step 7 (PostAdvance) drive local delivery.
-	static MicroWorld::TEngine<> GEngine{
-		MicroWorld::FGarbageCollectionBudget{GcRootOperationsPerTick, GcMarkOperationsPerTick, GcSweepOperationsPerTick}, GRouter};
+	static MicroWorld::Engine::TEngine<> GEngine{
+		MicroWorld::Engine::FGarbageCollectionBudget{GcRootOperationsPerTick, GcMarkOperationsPerTick, GcSweepOperationsPerTick}, GRouter};
 
-	if (GEngine.RegisterClass<FThermometerActor>(ThermometerActorTypeId, "ThermometerActor") != MicroWorld::EObjectResult::Success
+	if (GEngine.RegisterClass<FThermometerActor>(ThermometerActorTypeId, "ThermometerActor") != MicroWorld::Engine::EObjectResult::Success
 		|| GEngine.RegisterClass<FReadingSensorComponent>(ReadingSensorComponentTypeId, "ReadingSensorComponent")
-			!= MicroWorld::EObjectResult::Success)
+			!= MicroWorld::Engine::EObjectResult::Success)
 	{
 		MW_LOG(Error, "ex22", "class registration failed");
 		return;
 	}
 
-	const MicroWorld::TObjectPtr<MicroWorld::UWorld> World = GEngine.CreateWorld();
-	const MicroWorld::TObjectPtr<FReadingSensorComponent> Sensor = GEngine.CreateObject<FReadingSensorComponent>(ReadingSensorComponentTypeId).Object;
-	const MicroWorld::TObjectPtr<FThermometerActor> Thermometer =
+	const MicroWorld::Engine::TObjectPtr<MicroWorld::Engine::UWorld> World = GEngine.CreateWorld();
+	const MicroWorld::Engine::TObjectPtr<FReadingSensorComponent> Sensor =
+		GEngine.CreateObject<FReadingSensorComponent>(ReadingSensorComponentTypeId).Object;
+	const MicroWorld::Engine::TObjectPtr<FThermometerActor> Thermometer =
 		GEngine.CreateObject<FThermometerActor>(ThermometerActorTypeId, GRouter, Sensor).Object;
 	if (World.Get() == nullptr || Sensor.Get() == nullptr || Thermometer.Get() == nullptr)
 	{
@@ -377,8 +378,10 @@ extern "C" void app_main(void)
 		return;
 	}
 
-	if (Thermometer.Get()->RegisterComponent(MicroWorld::TObjectPtr<MicroWorld::UActorComponent>{Sensor}) != MicroWorld::EEngineResult::Success
-		|| GEngine.GetWorld().RegisterActor(MicroWorld::TObjectPtr<MicroWorld::AActor>{Thermometer}) != MicroWorld::EEngineResult::Success)
+	if (Thermometer.Get()->RegisterComponent(MicroWorld::Engine::TObjectPtr<MicroWorld::Engine::UActorComponent>{Sensor})
+			!= MicroWorld::Engine::EEngineResult::Success
+		|| GEngine.GetWorld().RegisterActor(MicroWorld::Engine::TObjectPtr<MicroWorld::Engine::AActor>{Thermometer})
+			!= MicroWorld::Engine::EEngineResult::Success)
 	{
 		MW_LOG(Error, "ex22", "component or actor registration failed");
 		return;
@@ -386,8 +389,8 @@ extern "C" void app_main(void)
 
 	// Queue the display during composition so BeginPlay proves typed spawning also works before play starts.
 	// Deferred spawning stores arguments by value; std::ref preserves the router injection without copying it.
-	const MicroWorld::FActorSpawnRequest DisplaySpawnRequest = GEngine.GetWorld().SpawnActor<FDisplayActor>(std::ref(GRouter));
-	if (DisplaySpawnRequest.Result != MicroWorld::EActorSpawnRequestResult::Queued)
+	const MicroWorld::Engine::FActorSpawnRequest DisplaySpawnRequest = GEngine.GetWorld().SpawnActor<FDisplayActor>(std::ref(GRouter));
+	if (DisplaySpawnRequest.Result != MicroWorld::Engine::EActorSpawnRequestResult::Queued)
 	{
 		MW_LOG(Error, "ex22", "display spawn request failed");
 		return;
@@ -401,9 +404,9 @@ extern "C" void app_main(void)
 		return;
 	}
 
-	const MicroWorld::FActorSpawnStatus DisplaySpawnStatus = GEngine.GetWorld().GetSpawnStatus(DisplaySpawnRequest.Handle);
+	const MicroWorld::Engine::FActorSpawnStatus DisplaySpawnStatus = GEngine.GetWorld().GetSpawnStatus(DisplaySpawnRequest.Handle);
 	FDisplayActor* const DisplayPtr = static_cast<FDisplayActor*>(DisplaySpawnStatus.Actor.Get());
-	if (DisplaySpawnStatus.State != MicroWorld::EActorSpawnState::Spawned || DisplayPtr == nullptr)
+	if (DisplaySpawnStatus.State != MicroWorld::Engine::EActorSpawnState::Spawned || DisplayPtr == nullptr)
 	{
 		MW_LOG(Error, "ex22", "display spawn failed during begin play");
 		return;

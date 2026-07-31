@@ -37,13 +37,13 @@ namespace
 {
 
 /** Stable type id for the example's user-derived managed actor descriptor. */
-constexpr MicroWorld::FTypeId DemoActorTypeId{0x00050001u};
+constexpr MicroWorld::Engine::FTypeId DemoActorTypeId{0x00050001u};
 
 /** Stable type id for the example's user-derived managed component descriptor. */
-constexpr MicroWorld::FTypeId DemoComponentTypeId{0x00050002u};
+constexpr MicroWorld::Engine::FTypeId DemoComponentTypeId{0x00050002u};
 
 /** A concrete component proving the engine component base is constructible on ESP32. */
-class FDemoComponent final : public MicroWorld::UActorComponent
+class FDemoComponent final : public MicroWorld::Engine::UActorComponent
 {
 public:
 	/** Keeps exact descriptor-driven destruction publicly instantiable. */
@@ -51,7 +51,7 @@ public:
 };
 
 /** A concrete actor proving the engine actor base is constructible on ESP32. */
-class FDemoActor final : public MicroWorld::AActor
+class FDemoActor final : public MicroWorld::Engine::AActor
 {
 public:
 	/** Initializes the managed actor base, which owns its bounded component slots. */
@@ -75,7 +75,7 @@ volatile int PlatformEsp32CompositionResult = -1;
  * explicit authorization that is out of scope for Phase 5.2.
  */
 /** Carries the exact capacities FDemoHost sized before the traits refactor, so the proof store is unchanged. */
-struct FDemoHostTraits : MicroWorld::FDefaultEngineTraits
+struct FDemoHostTraits : MicroWorld::Engine::FDefaultEngineTraits
 {
 	static constexpr std::size_t MaxClasses = 6;
 	static constexpr std::size_t MaxObjects = 8;
@@ -88,6 +88,7 @@ struct FDemoHostTraits : MicroWorld::FDefaultEngineTraits
 extern "C" void app_main()
 {
 	using namespace MicroWorld;
+	using namespace MicroWorld::Engine;
 
 	// 1. Route every surviving MW_LOG call site through ESP-IDF logging.
 	SetOutputDevice(&WriteEsp32LogRecord);

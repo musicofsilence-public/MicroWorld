@@ -13,29 +13,29 @@
 namespace
 {
 
-using MicroWorld::CanAdvanceObjectGeneration;
-using MicroWorld::DestroyManagedObject;
-using MicroWorld::EObjectResult;
 using MicroWorld::ERuntimeResult;
-using MicroWorld::FClassDescriptor;
-using MicroWorld::FGarbageCollector;
-using MicroWorld::FGarbageCollectorStorage;
-using MicroWorld::FObjectHandle;
-using MicroWorld::FObjectRootEntry;
-using MicroWorld::FObjectSlotMetadata;
-using MicroWorld::FObjectStore;
-using MicroWorld::FObjectStoreStats;
-using MicroWorld::FObjectStoreStorage;
-using MicroWorld::MakeClassDescriptor;
-using MicroWorld::MakeClassRegistryView;
-using MicroWorld::ObjectGeneration;
-using MicroWorld::TClassRegistry;
-using MicroWorld::TObjectCreationResult;
-using MicroWorld::TObjectPtr;
-using MicroWorld::TStrongObjectPointerResult;
-using MicroWorld::TStrongObjectPtr;
-using MicroWorld::TWeakObjectPtr;
-using MicroWorld::UObject;
+using MicroWorld::Engine::CanAdvanceObjectGeneration;
+using MicroWorld::Engine::DestroyManagedObject;
+using MicroWorld::Engine::EObjectResult;
+using MicroWorld::Engine::FClassDescriptor;
+using MicroWorld::Engine::FGarbageCollector;
+using MicroWorld::Engine::FGarbageCollectorStorage;
+using MicroWorld::Engine::FObjectHandle;
+using MicroWorld::Engine::FObjectRootEntry;
+using MicroWorld::Engine::FObjectSlotMetadata;
+using MicroWorld::Engine::FObjectStore;
+using MicroWorld::Engine::FObjectStoreStats;
+using MicroWorld::Engine::FObjectStoreStorage;
+using MicroWorld::Engine::MakeClassDescriptor;
+using MicroWorld::Engine::MakeClassRegistryView;
+using MicroWorld::Engine::ObjectGeneration;
+using MicroWorld::Engine::TClassRegistry;
+using MicroWorld::Engine::TObjectCreationResult;
+using MicroWorld::Engine::TObjectPtr;
+using MicroWorld::Engine::TStrongObjectPointerResult;
+using MicroWorld::Engine::TStrongObjectPtr;
+using MicroWorld::Engine::TWeakObjectPtr;
+using MicroWorld::Engine::UObject;
 
 /** Records managed lifetime hooks in fresh state owned by one test. */
 struct FObjectLifetimeState final
@@ -173,7 +173,7 @@ protected:
 		State.AddRootResult = Store.AddRoot(GetObjectHandle());
 		State.MarkPendingResult = Store.MarkPendingDestroy(GetObjectHandle());
 		State.CollectionRequestResult = Collector.RequestCollection();
-		State.CollectionAdvanceResult = Collector.Advance(MicroWorld::FGarbageCollectionBudget{1, 1, 1}).Result;
+		State.CollectionAdvanceResult = Collector.Advance(MicroWorld::Engine::FGarbageCollectionBudget{1, 1, 1}).Result;
 		State.RemoveRootResult = Store.RemoveRoot(GetObjectHandle());
 	}
 
@@ -207,7 +207,7 @@ class TObjectStoreFixture final
 {
 public:
 	/** Binds a store to this fixture's aligned slots, metadata, and root entries. */
-	explicit TObjectStoreFixture(const MicroWorld::FClassRegistryView InClasses) noexcept : Store(MakeStorage(), InClasses) {}
+	explicit TObjectStoreFixture(const MicroWorld::Engine::FClassRegistryView InClasses) noexcept : Store(MakeStorage(), InClasses) {}
 
 	/** Provides the public store under test without exposing fixture storage. */
 	FObjectStore& GetStore() noexcept { return Store; }
@@ -246,7 +246,7 @@ private:
 
 /** Registers one tracked-object descriptor and returns its registry-owned identity. */
 EObjectResult RegisterTrackedDescriptor(
-	TClassRegistry<2>& InRegistry, const FClassDescriptor*& OutDescriptor, const MicroWorld::FTypeId InTypeId = 1) noexcept
+	TClassRegistry<2>& InRegistry, const FClassDescriptor*& OutDescriptor, const MicroWorld::Engine::FTypeId InTypeId = 1) noexcept
 {
 	const FClassDescriptor Candidate = MakeClassDescriptor<FTrackedObject>(InTypeId, "Tracked");
 	const EObjectResult Result = InRegistry.Register(Candidate);
@@ -394,7 +394,7 @@ MW_TEST_CASE(ObjectStoreUsesImmutableRegistryOwnedDescriptorCopy)
 	const TObjectCreationResult<FTrackedObject> OwnedCreation = Store.NewObject<FTrackedObject>(*RegisteredDescriptor, Lifetime);
 	const TObjectCreationResult<FTrackedObject> RejectedSourceCreation = Store.NewObject<FTrackedObject>(SourceDescriptor, Lifetime);
 	const EObjectResult PendingResult = Store.MarkPendingDestroy(OwnedCreation.Object.Handle());
-	const MicroWorld::FObjectMutationResult Barrier = Store.ApplyPendingDestroy(1);
+	const MicroWorld::Engine::FObjectMutationResult Barrier = Store.ApplyPendingDestroy(1);
 
 	// Assert
 	const EObjectResult ExpectedSuccess = EObjectResult::Success;
@@ -462,8 +462,8 @@ MW_TEST_CASE(ObjectStoreDeferredDestructionRunsLifecycleHooksOnce)
 	// Act
 	const EObjectResult FirstPendingResult = Store.MarkPendingDestroy(Creation.Object.Handle());
 	const EObjectResult SecondPendingResult = Store.MarkPendingDestroy(Creation.Object.Handle());
-	const MicroWorld::FObjectMutationResult FirstBarrier = Store.ApplyPendingDestroy(1);
-	const MicroWorld::FObjectMutationResult SecondBarrier = Store.ApplyPendingDestroy(1);
+	const MicroWorld::Engine::FObjectMutationResult FirstBarrier = Store.ApplyPendingDestroy(1);
+	const MicroWorld::Engine::FObjectMutationResult SecondBarrier = Store.ApplyPendingDestroy(1);
 
 	// Assert
 	const EObjectResult ExpectedSuccess = EObjectResult::Success;
@@ -500,7 +500,7 @@ MW_TEST_CASE(ObjectStoreSlotReuseInvalidatesEveryOldHandle)
 	const TObjectCreationResult<FTrackedObject> FirstCreation = Store.NewObject<FTrackedObject>(*Descriptor, Lifetime);
 	const FObjectHandle FirstHandle = FirstCreation.Object.Handle();
 	const EObjectResult PendingResult = Store.MarkPendingDestroy(FirstHandle);
-	const MicroWorld::FObjectMutationResult BarrierResult = Store.ApplyPendingDestroy(1);
+	const MicroWorld::Engine::FObjectMutationResult BarrierResult = Store.ApplyPendingDestroy(1);
 
 	// Act
 	const TObjectCreationResult<FTrackedObject> SecondCreation = Store.NewObject<FTrackedObject>(*Descriptor, Lifetime);
@@ -656,7 +656,7 @@ MW_TEST_CASE(ObjectStoreLocksMutationUntilPlacementConstructionPublishes)
 	const TObjectCreationResult<FConstructorReentryObject> Creation = Store.NewObject<FConstructorReentryObject>(
 		*RegisteredOuterDescriptor, Store, *RegisteredNestedDescriptor, NestedLifetime, Collector, Reentry);
 	const EObjectResult PendingResult = Store.MarkPendingDestroy(Creation.Object.Handle());
-	const MicroWorld::FObjectMutationResult Barrier = Store.ApplyPendingDestroy(2);
+	const MicroWorld::Engine::FObjectMutationResult Barrier = Store.ApplyPendingDestroy(2);
 
 	// Assert
 	const EObjectResult ExpectedSuccess = EObjectResult::Success;

@@ -20,34 +20,34 @@
 namespace
 {
 
-using MicroWorld::AActor;
 using MicroWorld::DurationMilliseconds;
-using MicroWorld::EEngineResult;
-using MicroWorld::EObjectResult;
 using MicroWorld::ERuntimeResult;
-using MicroWorld::FClassDescriptor;
-using MicroWorld::FGarbageCollectionResult;
-using MicroWorld::FGarbageCollector;
-using MicroWorld::FGarbageCollectorStorage;
-using MicroWorld::FObjectHandle;
-using MicroWorld::FObjectMutationResult;
-using MicroWorld::FObjectRootEntry;
-using MicroWorld::FObjectSlotMetadata;
-using MicroWorld::FObjectStore;
-using MicroWorld::FObjectStoreStats;
-using MicroWorld::FObjectStoreStorage;
 using MicroWorld::FTickConfiguration;
 using MicroWorld::FTickContext;
-using MicroWorld::FWorldActorRegistry;
-using MicroWorld::FWorldActorRegistryReference;
-using MicroWorld::MakeClassDescriptor;
-using MicroWorld::MakeClassRegistryView;
-using MicroWorld::TClassRegistry;
-using MicroWorld::TObjectPtr;
-using MicroWorld::TStrongObjectPtr;
-using MicroWorld::TWeakObjectPtr;
-using MicroWorld::UActorComponent;
-using MicroWorld::UWorld;
+using MicroWorld::Engine::AActor;
+using MicroWorld::Engine::EEngineResult;
+using MicroWorld::Engine::EObjectResult;
+using MicroWorld::Engine::FClassDescriptor;
+using MicroWorld::Engine::FGarbageCollectionResult;
+using MicroWorld::Engine::FGarbageCollector;
+using MicroWorld::Engine::FGarbageCollectorStorage;
+using MicroWorld::Engine::FObjectHandle;
+using MicroWorld::Engine::FObjectMutationResult;
+using MicroWorld::Engine::FObjectRootEntry;
+using MicroWorld::Engine::FObjectSlotMetadata;
+using MicroWorld::Engine::FObjectStore;
+using MicroWorld::Engine::FObjectStoreStats;
+using MicroWorld::Engine::FObjectStoreStorage;
+using MicroWorld::Engine::FWorldActorRegistry;
+using MicroWorld::Engine::FWorldActorRegistryReference;
+using MicroWorld::Engine::MakeClassDescriptor;
+using MicroWorld::Engine::MakeClassRegistryView;
+using MicroWorld::Engine::TClassRegistry;
+using MicroWorld::Engine::TObjectPtr;
+using MicroWorld::Engine::TStrongObjectPtr;
+using MicroWorld::Engine::TWeakObjectPtr;
+using MicroWorld::Engine::UActorComponent;
+using MicroWorld::Engine::UWorld;
 using MicroWorld::Tests::FActorEventState;
 using MicroWorld::Tests::FComponentEventState;
 using MicroWorld::Tests::FSequenceCounter;
@@ -57,10 +57,10 @@ using MicroWorld::Tests::TEngineEnvironment;
 constexpr FTickConfiguration OrderingTickConfiguration{true, true, DurationMilliseconds{0}};
 
 /** Test-local type ids for the ordering, plain, and component descriptors. */
-constexpr MicroWorld::FTypeId OrderingActorTypeId{0x00040001u};
-constexpr MicroWorld::FTypeId OrderingComponentTypeId{0x00040002u};
-constexpr MicroWorld::FTypeId PlainActorTypeId{0x00040003u};
-constexpr MicroWorld::FTypeId PlainComponentTypeId{0x00040004u};
+constexpr MicroWorld::Engine::FTypeId OrderingActorTypeId{0x00040001u};
+constexpr MicroWorld::Engine::FTypeId OrderingComponentTypeId{0x00040002u};
+constexpr MicroWorld::Engine::FTypeId PlainActorTypeId{0x00040003u};
+constexpr MicroWorld::Engine::FTypeId PlainComponentTypeId{0x00040004u};
 
 /** Canonical monotonic baseline every BeginPlay call uses as its starting world time. */
 constexpr MicroWorld::TimePointMilliseconds BaselineTimeMilliseconds{0};
@@ -217,9 +217,12 @@ public:
 		(void)Registry.Register(AActor::StaticClassDescriptor());
 		(void)Registry.Register(UWorld::StaticClassDescriptor());
 		(void)Registry.Register(MakeClassDescriptor<FPlainActor>(
-			PlainActorTypeId, "PlainActor", Registry.Find(MicroWorld::AActorClassId), &MicroWorld::TraceManagedObjectReferences));
+			PlainActorTypeId, "PlainActor", Registry.Find(MicroWorld::Engine::AActorClassId), &MicroWorld::Engine::TraceManagedObjectReferences));
 		(void)Registry.Register(MakeClassDescriptor<FPlainComponent>(
-			PlainComponentTypeId, "PlainComponent", Registry.Find(MicroWorld::UActorComponentClassId), &MicroWorld::TraceManagedObjectReferences));
+			PlainComponentTypeId,
+			"PlainComponent",
+			Registry.Find(MicroWorld::Engine::UActorComponentClassId),
+			&MicroWorld::Engine::TraceManagedObjectReferences));
 	}
 
 	/** Returns the foreign store used to mint cross-store references. */
@@ -264,7 +267,7 @@ MW_TEST_CASE(EngineSpawnActorBeginsAtNextBarrierNotImmediately)
 
 	FSpawnDestroyEnvironment Env{};
 	FWorldActorRegistry<2> WorldActors;
-	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, WorldActors.MakeReference());
+	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::Engine::UWorldClassId, WorldActors.MakeReference());
 	const TObjectPtr<FOrderingActor> Spawned = MakeOrderingActor(Env, Sequence, SpawnedEvents);
 
 	// Act - BeginPlay, then the SpawnActor call itself queues without beginning
@@ -312,7 +315,7 @@ MW_TEST_CASE(EngineDestroyActorEndsAtBarrierWithReverseComponentShutdown)
 
 	FSpawnDestroyEnvironment Env{};
 	FWorldActorRegistry<1> WorldActors;
-	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, WorldActors.MakeReference());
+	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::Engine::UWorldClassId, WorldActors.MakeReference());
 	const TObjectPtr<FOrderingActor> Actor = MakeOrderingActor(Env, Sequence, ActorEvents);
 	const TObjectPtr<FOrderingComponent> FirstComponent = MakeOrderingComponent(Env, Sequence, FirstComponentEvents);
 	const TObjectPtr<FOrderingComponent> SecondComponent = MakeOrderingComponent(Env, Sequence, SecondComponentEvents);
@@ -352,7 +355,7 @@ MW_TEST_CASE(EngineSpawnCapacityCountsLiveAndPending)
 	// Arrange
 	FSpawnDestroyEnvironment Env{};
 	FWorldActorRegistry<2> WorldActors;
-	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, WorldActors.MakeReference());
+	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::Engine::UWorldClassId, WorldActors.MakeReference());
 	const TObjectPtr<FPlainActor> PreRegistered = MakePlainActor(Env);
 	const TObjectPtr<FPlainActor> FirstSpawn = MakePlainActor(Env);
 	const TObjectPtr<FPlainActor> SecondSpawn = MakePlainActor(Env);
@@ -388,7 +391,7 @@ MW_TEST_CASE(EngineDuplicateSpawnRejected)
 	// Arrange
 	FSpawnDestroyEnvironment Env{};
 	FWorldActorRegistry<4> WorldActors;
-	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, WorldActors.MakeReference());
+	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::Engine::UWorldClassId, WorldActors.MakeReference());
 	const TObjectPtr<FPlainActor> Actor = MakePlainActor(Env);
 	(void)World.Get()->BeginPlay(BaselineTimeMilliseconds);
 
@@ -417,7 +420,7 @@ MW_TEST_CASE(EngineDestroyOfNeverRegisteredActorRejected)
 	// Arrange
 	FSpawnDestroyEnvironment Env{};
 	FWorldActorRegistry<2> WorldActors;
-	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, WorldActors.MakeReference());
+	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::Engine::UWorldClassId, WorldActors.MakeReference());
 	const TObjectPtr<FPlainActor> Registered = MakePlainActor(Env);
 	const TObjectPtr<FPlainActor> Stranger = MakePlainActor(Env);
 	(void)World.Get()->RegisterActor(TObjectPtr<AActor>{Registered});
@@ -444,7 +447,7 @@ MW_TEST_CASE(EngineSpawnAndDestroyRejectedOutsidePlayingLifecycle)
 	FWorldActorRegistry<2> ConstructedWorldActors;
 	FWorldActorRegistry<2> EndedWorldActors;
 	// A world that never began play rejects both structural requests.
-	const TObjectPtr<UWorld> ConstructedWorld = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, ConstructedWorldActors.MakeReference());
+	const TObjectPtr<UWorld> ConstructedWorld = Env.CreateObject<UWorld>(MicroWorld::Engine::UWorldClassId, ConstructedWorldActors.MakeReference());
 	const TObjectPtr<FPlainActor> RegisteredBeforePlay = MakePlainActor(Env);
 	(void)ConstructedWorld.Get()->RegisterActor(TObjectPtr<AActor>{RegisteredBeforePlay});
 
@@ -453,7 +456,7 @@ MW_TEST_CASE(EngineSpawnAndDestroyRejectedOutsidePlayingLifecycle)
 	const EEngineResult DestroyWhileConstructed = ConstructedWorld.Get()->DestroyActor(TObjectPtr<AActor>{RegisteredBeforePlay});
 
 	// Arrange - a world that ended play rejects both structural requests
-	const TObjectPtr<UWorld> EndedWorld = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, EndedWorldActors.MakeReference());
+	const TObjectPtr<UWorld> EndedWorld = Env.CreateObject<UWorld>(MicroWorld::Engine::UWorldClassId, EndedWorldActors.MakeReference());
 	const TObjectPtr<FPlainActor> RegisteredActor = MakePlainActor(Env);
 	const TObjectPtr<FPlainActor> WouldSpawn = MakePlainActor(Env);
 	(void)EndedWorld.Get()->RegisterActor(TObjectPtr<AActor>{RegisteredActor});
@@ -490,8 +493,8 @@ MW_TEST_CASE(EngineSpawnReferenceRejectionsLeaveStateUnchanged)
 
 	FWorldActorRegistry<4> WorldActors;
 	FWorldActorRegistry<2> OtherWorldActors;
-	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, WorldActors.MakeReference());
-	const TObjectPtr<UWorld> OtherWorld = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, OtherWorldActors.MakeReference());
+	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::Engine::UWorldClassId, WorldActors.MakeReference());
+	const TObjectPtr<UWorld> OtherWorld = Env.CreateObject<UWorld>(MicroWorld::Engine::UWorldClassId, OtherWorldActors.MakeReference());
 	const TObjectPtr<FPlainActor> OwnedByOther = MakePlainActor(Env);
 	const TObjectPtr<FPlainActor> ForeignActor = ForeignStore.NewObject<FPlainActor>(*ForeignStoreOwner.GetRegistry().Find(PlainActorTypeId)).Object;
 	// Bind OwnedByOther to a different world so the spawning world sees it as owned.
@@ -522,7 +525,7 @@ MW_TEST_CASE(EngineDestroyReferenceRejectionsLeaveStateUnchanged)
 	FObjectStore& ForeignStore = ForeignStoreOwner.GetStore();
 
 	FWorldActorRegistry<2> WorldActors;
-	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, WorldActors.MakeReference());
+	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::Engine::UWorldClassId, WorldActors.MakeReference());
 	const TObjectPtr<FPlainActor> Registered = MakePlainActor(Env);
 	const TObjectPtr<FPlainActor> ForeignActor = ForeignStore.NewObject<FPlainActor>(*ForeignStoreOwner.GetRegistry().Find(PlainActorTypeId)).Object;
 	(void)World.Get()->RegisterActor(TObjectPtr<AActor>{Registered});
@@ -557,7 +560,7 @@ MW_TEST_CASE(EngineSurvivorDispatchOrderPreservedAfterMidListRemoval)
 
 	FSpawnDestroyEnvironment Env{};
 	FWorldActorRegistry<3> WorldActors;
-	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, WorldActors.MakeReference());
+	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::Engine::UWorldClassId, WorldActors.MakeReference());
 	const TObjectPtr<FOrderingActor> First = MakeOrderingActor(Env, Sequence, FirstEvents);
 	const TObjectPtr<FOrderingActor> Middle = MakeOrderingActor(Env, Sequence, MiddleEvents);
 	const TObjectPtr<FOrderingActor> Last = MakeOrderingActor(Env, Sequence, LastEvents);
@@ -595,7 +598,7 @@ MW_TEST_CASE(EngineSpawnThenDestroySameActorInOneFrame)
 
 	FSpawnDestroyEnvironment Env{};
 	FWorldActorRegistry<2> WorldActors;
-	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, WorldActors.MakeReference());
+	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::Engine::UWorldClassId, WorldActors.MakeReference());
 	const TObjectPtr<FOrderingActor> Actor = MakeOrderingActor(Env, Sequence, ActorEvents);
 	(void)World.Get()->BeginPlay(BaselineTimeMilliseconds);
 
@@ -629,7 +632,7 @@ MW_TEST_CASE(EngineDestroyedActorHandleGoesStaleAfterReclamation)
 	FSpawnDestroyEnvironment Env{};
 	FObjectStore& Store = Env.GetStore();
 	FWorldActorRegistry<1> WorldActors;
-	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, WorldActors.MakeReference());
+	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::Engine::UWorldClassId, WorldActors.MakeReference());
 	const TObjectPtr<FPlainActor> Actor = MakePlainActor(Env);
 	const TObjectPtr<FPlainComponent> Component = Env.CreateDerivedObject<FPlainComponent>(PlainComponentTypeId, "PlainComponent");
 	(void)Actor.Get()->RegisterComponent(Component);
@@ -674,7 +677,7 @@ MW_TEST_CASE(EngineDestroyReclaimsActorAndComponentsWithRootsAndWorklistAccounte
 	FCollectorFixture Fixture{Store};
 	FGarbageCollector& Collector = Fixture.GetCollector();
 	FWorldActorRegistry<1> WorldActors;
-	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, WorldActors.MakeReference());
+	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::Engine::UWorldClassId, WorldActors.MakeReference());
 	const TObjectPtr<FPlainActor> Actor = MakePlainActor(Env);
 	const TObjectPtr<FPlainComponent> FirstComponent = Env.CreateDerivedObject<FPlainComponent>(PlainComponentTypeId, "PlainComponent");
 	const TObjectPtr<FPlainComponent> SecondComponent = Env.CreateDerivedObject<FPlainComponent>(PlainComponentTypeId, "PlainComponent");

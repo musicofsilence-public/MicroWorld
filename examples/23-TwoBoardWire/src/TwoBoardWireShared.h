@@ -64,13 +64,13 @@ constexpr std::uint8_t ProtocolVersion = 1;
 constexpr unsigned PollPacingMilliseconds = 20;
 
 /** Stable descriptor id for the managed FLampActor type (0x0017 == example 23). */
-constexpr MicroWorld::FTypeId LampActorTypeId{0x00170001u};
+constexpr MicroWorld::Engine::FTypeId LampActorTypeId{0x00170001u};
 
 /** Stable descriptor id for the managed FDisplayActor type. */
-constexpr MicroWorld::FTypeId DisplayActorTypeId{0x00170002u};
+constexpr MicroWorld::Engine::FTypeId DisplayActorTypeId{0x00170002u};
 
 /** Stable descriptor id for the managed FSwitchActor type. */
-constexpr MicroWorld::FTypeId SwitchActorTypeId{0x00170003u};
+constexpr MicroWorld::Engine::FTypeId SwitchActorTypeId{0x00170003u};
 
 /** The wired network host both roles compose their board's UART link through. */
 using FWireTransport = MicroWorld::Transport::TTransportHost<2, 120>;
@@ -79,13 +79,13 @@ using FWireTransport = MicroWorld::Transport::TTransportHost<2, 120>;
 using FWireRouter = MicroWorld::Messaging::TMessageRouter<16, 8, 96, 1>;
 
 /** Adapts FWireTransport to the engine's per-frame network slot (only PreAdvance/PostAdvance; the router is pumped separately, see §4). */
-using FWireFrame = MicroWorld::THostPlaySystem<FWireTransport>;
+using FWireFrame = MicroWorld::Engine::THostPlaySystem<FWireTransport>;
 
 /** Two-way adapter binding one FWireTransport wire channel to the local FWireRouter. */
 using FWireBinding = MicroWorld::Messaging::TMessageChannelBinding<FWireTransport>;
 
 /** The engine both roles compose; sized for one world with a couple of small actors using direct component storage. */
-using FWireEngine = MicroWorld::TEngine<>;
+using FWireEngine = MicroWorld::Engine::TEngine<>;
 
 /** Builds a board's UART device configuration from the fixed pins and baud. */
 inline MicroWorld::FEsp32UartConfig MakeUartConfig(const std::uint8_t NodeId) noexcept

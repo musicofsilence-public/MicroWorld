@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace MicroWorld
+namespace MicroWorld::Engine
 {
 
 /**
@@ -27,4 +27,4 @@ enum class EEngineResult : std::uint8_t
 	InvalidReference, ///< Rejects an empty, stale, or non-resolvable managed reference.
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Engine

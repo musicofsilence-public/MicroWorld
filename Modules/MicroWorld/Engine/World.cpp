@@ -11,7 +11,7 @@
 
 #include <utility>
 
-namespace MicroWorld
+namespace MicroWorld::Engine
 {
 
 UWorld::UWorld(FWorldActorRegistryReference InActorStorage) noexcept : UObject(), Actors(std::move(InActorStorage)) {}
@@ -696,4 +696,4 @@ void UWorld::VisitDeferredSpawnReferences(FReferenceCollector& InCollector) noex
 	DeferredSpawns.VisitReferences(InCollector);
 }
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Engine

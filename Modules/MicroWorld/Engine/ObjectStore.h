@@ -8,7 +8,7 @@
 #include <type_traits>
 #include <utility>
 
-namespace MicroWorld
+namespace MicroWorld::Engine
 {
 
 class FGarbageCollector;
@@ -651,4 +651,4 @@ private:
 	const FGarbageCollector* ActiveCollector{nullptr};
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Engine

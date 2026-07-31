@@ -57,13 +57,13 @@ namespace
 constexpr const char* BenchmarkTag = "mwbench";
 
 /** Stable type id for the benchmark's user-derived managed actor descriptor. */
-constexpr MicroWorld::FTypeId BenchActorTypeId{0x00060010u};
+constexpr MicroWorld::Engine::FTypeId BenchActorTypeId{0x00060010u};
 
 /** Stable type id for the benchmark's user-derived managed component descriptor. */
-constexpr MicroWorld::FTypeId BenchComponentTypeId{0x00060011u};
+constexpr MicroWorld::Engine::FTypeId BenchComponentTypeId{0x00060011u};
 
 /** Stable type id for the standalone GC probe's unrooted garbage object descriptor. */
-constexpr MicroWorld::FTypeId GcProbeObjectTypeId{0x00060012u};
+constexpr MicroWorld::Engine::FTypeId GcProbeObjectTypeId{0x00060012u};
 
 /** Representative world profile: actors tick every frame, components tick every frame. */
 constexpr MicroWorld::FTickConfiguration BenchTickConfiguration{true, true, MicroWorld::DurationMilliseconds{0}};
@@ -95,7 +95,7 @@ constexpr std::uint32_t TransportPumpWarmupIterations = 100;
  * Carries a zero-interval tick configuration so every frame produces one
  * TickComponent call across the representative component population.
  */
-class FBenchComponent final : public MicroWorld::UActorComponent
+class FBenchComponent final : public MicroWorld::Engine::UActorComponent
 {
 public:
 	/** Adopts the representative always-tick schedule so each frame exercises the component. */
@@ -111,7 +111,7 @@ public:
  * Owns bounded component slots directly, mirroring the proven PlatformEsp32Main
  * composition.
  */
-class FBenchActor final : public MicroWorld::AActor
+class FBenchActor final : public MicroWorld::Engine::AActor
 {
 public:
 	/** Initializes the managed actor base, which owns its bounded component slots. */
@@ -127,7 +127,7 @@ public:
  * Constructed into every probe slot, rooted exactly once, then left unreferenced
  * so the collector's sweep phase reclaims the rest across multiple bounded slices.
  */
-class FGcProbeObject final : public MicroWorld::UObject
+class FGcProbeObject final : public MicroWorld::Engine::UObject
 {
 public:
 	/** Keeps exact descriptor-driven destruction publicly instantiable. */
@@ -135,7 +135,7 @@ public:
 };
 
 /** Carries the exact capacities FBenchmarkHost sized before the traits refactor, so the benchmark store is unchanged. */
-struct FBenchmarkHostTraits : MicroWorld::FDefaultEngineTraits
+struct FBenchmarkHostTraits : MicroWorld::Engine::FDefaultEngineTraits
 {
 	static constexpr std::size_t MaxClasses = 6;					   // UWorld + AActor + UActorComponent + 2 user types + 1 spare.
 	static constexpr std::size_t MaxObjects = 32;					   // 1 world + 8 actors + 16 components = 25 live; +7 headroom.
@@ -146,7 +146,7 @@ struct FBenchmarkHostTraits : MicroWorld::FDefaultEngineTraits
 };
 
 /** Sizes the engine to hold the representative world with bounded headroom. */
-using FBenchmarkHost = MicroWorld::TEngine<FBenchmarkHostTraits>;
+using FBenchmarkHost = MicroWorld::Engine::TEngine<FBenchmarkHostTraits>;
 
 /** Dedicated server transport host sized identically to the PlatformEsp32Main proof. */
 using FBenchmarkTransport = MicroWorld::Transport::TTransportHost<4, 256>;
@@ -229,7 +229,7 @@ public:
 	static constexpr std::uint32_t RootCapacity = 1;
 
 	/** Probe budget: a sweep budget below SlotCount produces measurable per-slice pauses. */
-	static constexpr MicroWorld::FGarbageCollectionBudget ProbeBudget{1, 1, 8};
+	static constexpr MicroWorld::Engine::FGarbageCollectionBudget ProbeBudget{1, 1, 8};
 
 	/** Slot extent matching the largest probe object, rounded to the slot alignment. */
 	static constexpr std::size_t SlotSizeBytes = 128;
@@ -239,18 +239,18 @@ public:
 
 	/** Builds the registry, store, collector, and rooted survivor the timing loop traces. */
 	FGcProbe() noexcept
-		: Store(MakeStorage(), MicroWorld::MakeClassRegistryView(Registry))
-		, Collector(Store, MicroWorld::FGarbageCollectorStorage{Worklist.data(), SlotCount})
+		: Store(MakeStorage(), MicroWorld::Engine::MakeClassRegistryView(Registry))
+		, Collector(Store, MicroWorld::Engine::FGarbageCollectorStorage{Worklist.data(), SlotCount})
 	{
-		if (Store.ConfigurationResult() != MicroWorld::EObjectResult::Success)
+		if (Store.ConfigurationResult() != MicroWorld::Engine::EObjectResult::Success)
 		{
 			return;
 		}
 
 		// Register the probe's single type against the already-constructed store.
-		(void)Registry.Register(MicroWorld::MakeClassDescriptor<FGcProbeObject>(
-			GcProbeObjectTypeId, "GcProbeObject", nullptr, &MicroWorld::TraceManagedObjectReferences));
-		const MicroWorld::FClassDescriptor* const Descriptor = Registry.Find(GcProbeObjectTypeId);
+		(void)Registry.Register(MicroWorld::Engine::MakeClassDescriptor<FGcProbeObject>(
+			GcProbeObjectTypeId, "GcProbeObject", nullptr, &MicroWorld::Engine::TraceManagedObjectReferences));
+		const MicroWorld::Engine::FClassDescriptor* const Descriptor = Registry.Find(GcProbeObjectTypeId);
 		if (Descriptor == nullptr)
 		{
 			return;
@@ -259,16 +259,16 @@ public:
 		// Populate every slot; root exactly one so the others are true garbage.
 		for (std::uint32_t Index = 0; Index < SlotCount; ++Index)
 		{
-			const MicroWorld::TObjectCreationResult<FGcProbeObject> Creation = Store.NewObject<FGcProbeObject>(*Descriptor);
-			if (Creation.Result != MicroWorld::EObjectResult::Success)
+			const MicroWorld::Engine::TObjectCreationResult<FGcProbeObject> Creation = Store.NewObject<FGcProbeObject>(*Descriptor);
+			if (Creation.Result != MicroWorld::Engine::EObjectResult::Success)
 			{
 				return;
 			}
 			if (Index == 0)
 			{
 				// Non-const so std::move selects the move-assign rather than the deleted copy-assign.
-				MicroWorld::TStrongObjectPointerResult<FGcProbeObject> RootResult = Store.MakeStrongObjectPtr(Creation.Object);
-				if (RootResult.Result != MicroWorld::EObjectResult::Success)
+				MicroWorld::Engine::TStrongObjectPointerResult<FGcProbeObject> RootResult = Store.MakeStrongObjectPtr(Creation.Object);
+				if (RootResult.Result != MicroWorld::Engine::EObjectResult::Success)
 				{
 					return;
 				}
@@ -292,16 +292,16 @@ public:
 	/** Advances one bounded slice and reports whether that slice completed the cycle. */
 	bool AdvanceOneSlice(bool& bCycleComplete) noexcept
 	{
-		const MicroWorld::FGarbageCollectionResult Result = Collector.Advance(ProbeBudget);
+		const MicroWorld::Engine::FGarbageCollectionResult Result = Collector.Advance(ProbeBudget);
 		bCycleComplete = Result.bCycleComplete;
 		return Result.Result == MicroWorld::ERuntimeResult::Success;
 	}
 
 private:
 	/** Describes this probe's complete caller-owned store storage for the store constructor. */
-	MicroWorld::FObjectStoreStorage MakeStorage() noexcept
+	MicroWorld::Engine::FObjectStoreStorage MakeStorage() noexcept
 	{
-		return MicroWorld::FObjectStoreStorage{
+		return MicroWorld::Engine::FObjectStoreStorage{
 			SlotStorage.data(),
 			SlotStorage.size(),
 			Slots.data(),
@@ -314,28 +314,28 @@ private:
 	}
 
 	/** Owns the descriptor the probe's single managed type is constructed against. */
-	MicroWorld::TClassRegistry<2> Registry;
+	MicroWorld::Engine::TClassRegistry<2> Registry;
 
 	/** Backing bytes for the equal-size, non-moving object slots. */
 	alignas(SlotAlignmentBytes) std::array<std::byte, SlotSizeBytes * SlotCount> SlotStorage{};
 
 	/** One lifecycle record per object slot, owned by the application. */
-	std::array<MicroWorld::FObjectSlotMetadata, SlotCount> Slots{};
+	std::array<MicroWorld::Engine::FObjectSlotMetadata, SlotCount> Slots{};
 
 	/** Backing entries for the independent explicit-root table. */
-	std::array<MicroWorld::FObjectRootEntry, RootCapacity> Roots{};
+	std::array<MicroWorld::Engine::FObjectRootEntry, RootCapacity> Roots{};
 
 	/** Owns every managed lifetime over this probe's caller-owned storage. */
-	MicroWorld::FObjectStore Store;
+	MicroWorld::Engine::FObjectStore Store;
 
 	/** Backing handles for the collector's reachable-object worklist. */
-	std::array<MicroWorld::FObjectHandle, SlotCount> Worklist{};
+	std::array<MicroWorld::Engine::FObjectHandle, SlotCount> Worklist{};
 
 	/** Performs bounded incremental mark/sweep over the probe store. */
-	MicroWorld::FGarbageCollector Collector;
+	MicroWorld::Engine::FGarbageCollector Collector;
 
 	/** Holds the single root token that keeps the survivor alive across the cycle. */
-	MicroWorld::TStrongObjectPtr<FGcProbeObject> Root;
+	MicroWorld::Engine::TStrongObjectPtr<FGcProbeObject> Root;
 
 	/** Records whether construction reached a ready-to-measure state. */
 	bool bReady{false};
@@ -353,6 +353,7 @@ private:
 extern "C" void app_main()
 {
 	using namespace MicroWorld;
+	using namespace MicroWorld::Engine;
 
 	// 0. Route every MW_LOG call site and each measurement line through ESP-IDF logging.
 	SetOutputDevice(&WriteEsp32LogRecord);

@@ -10,7 +10,7 @@
 #include <MicroWorld/Engine/ObjectPtr.h>
 #include <MicroWorld/Core/TickFunction.h>
 
-namespace MicroWorld
+namespace MicroWorld::Engine
 {
 
 AActor::AActor(const FTickConfiguration InTickConfiguration) noexcept : UObject(), FTickable(InTickConfiguration) {}
@@ -251,4 +251,4 @@ void AActor::VisitReferences(FReferenceCollector& InCollector) noexcept
 	}
 }
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Engine

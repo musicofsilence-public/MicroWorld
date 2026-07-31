@@ -5,7 +5,7 @@
 #include <type_traits>
 #include <utility>
 
-namespace MicroWorld
+namespace MicroWorld::Engine
 {
 
 class FObjectStore;
@@ -228,4 +228,4 @@ struct TStrongObjectPointerResult
 	TStrongObjectPtr<T> Pointer{};
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Engine

@@ -17,24 +17,24 @@ namespace
 {
 using MicroWorld::Tests::GlobalAllocationCount;
 
-using MicroWorld::AActor;
-using MicroWorld::EEngineResult;
 using MicroWorld::ERuntimeResult;
-using MicroWorld::FGarbageCollectionBudget;
-using MicroWorld::FGarbageCollector;
-using MicroWorld::FGarbageCollectorStorage;
-using MicroWorld::FObjectHandle;
-using MicroWorld::FObjectRootEntry;
-using MicroWorld::FObjectSlotMetadata;
-using MicroWorld::FObjectStore;
-using MicroWorld::FObjectStoreStats;
-using MicroWorld::FWorldActorRegistry;
-using MicroWorld::FWorldActorRegistryReference;
-using MicroWorld::TObjectPtr;
-using MicroWorld::TStrongObjectPtr;
-using MicroWorld::TWeakObjectPtr;
-using MicroWorld::UActorComponent;
-using MicroWorld::UWorld;
+using MicroWorld::Engine::AActor;
+using MicroWorld::Engine::EEngineResult;
+using MicroWorld::Engine::FGarbageCollectionBudget;
+using MicroWorld::Engine::FGarbageCollector;
+using MicroWorld::Engine::FGarbageCollectorStorage;
+using MicroWorld::Engine::FObjectHandle;
+using MicroWorld::Engine::FObjectRootEntry;
+using MicroWorld::Engine::FObjectSlotMetadata;
+using MicroWorld::Engine::FObjectStore;
+using MicroWorld::Engine::FObjectStoreStats;
+using MicroWorld::Engine::FWorldActorRegistry;
+using MicroWorld::Engine::FWorldActorRegistryReference;
+using MicroWorld::Engine::TObjectPtr;
+using MicroWorld::Engine::TStrongObjectPtr;
+using MicroWorld::Engine::TWeakObjectPtr;
+using MicroWorld::Engine::UActorComponent;
+using MicroWorld::Engine::UWorld;
 using MicroWorld::Tests::TEngineEnvironment;
 
 /** A component that observes lifetime and exposes its actor parent for tests. */
@@ -51,8 +51,8 @@ public:
 	explicit FTrackedActor() noexcept : AActor() {}
 };
 
-constexpr MicroWorld::FTypeId TrackedActorTypeId{0x00030001u};
-constexpr MicroWorld::FTypeId TrackedComponentTypeId{0x00030002u};
+constexpr MicroWorld::Engine::FTypeId TrackedActorTypeId{0x00030001u};
+constexpr MicroWorld::Engine::FTypeId TrackedComponentTypeId{0x00030002u};
 
 /** Environment sized for GC tests with enough slots for world, actors, components, and roots. */
 using FGarbageCollectionEnvironment = TEngineEnvironment<256, 16, 8, 4>;
@@ -111,7 +111,7 @@ MW_TEST_CASE(EngineRootedWorldRetainsActorsAndComponentsThroughFullGC)
 	FWorldActorRegistry<2> WorldActors;
 	FWorldActorRegistryReference WorldActorsView = WorldActors.MakeReference();
 
-	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, std::move(WorldActorsView));
+	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::Engine::UWorldClassId, std::move(WorldActorsView));
 	const TObjectPtr<FTrackedActor> Actor = MakeTrackedActor(Env);
 	const TObjectPtr<FTrackedComponent> Component = MakeTrackedComponent(Env);
 	(void)Actor.Get()->RegisterComponent(Component);
@@ -121,7 +121,7 @@ MW_TEST_CASE(EngineRootedWorldRetainsActorsAndComponentsThroughFullGC)
 
 	// Act
 	const ERuntimeResult CollectResult = Collector.RequestCollection();
-	const MicroWorld::FGarbageCollectionResult FullResult = Collector.CollectFull();
+	const MicroWorld::Engine::FGarbageCollectionResult FullResult = Collector.CollectFull();
 	const FObjectStoreStats Stats = Store.Stats();
 
 	// Assert
@@ -150,7 +150,7 @@ MW_TEST_CASE(EngineReleasingWorldRootReclaimsEntireGraph)
 	FWorldActorRegistry<2> WorldActors;
 	FWorldActorRegistryReference WorldActorsView = WorldActors.MakeReference();
 
-	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, std::move(WorldActorsView));
+	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::Engine::UWorldClassId, std::move(WorldActorsView));
 	const TObjectPtr<FTrackedActor> Actor = MakeTrackedActor(Env);
 	const TObjectPtr<FTrackedComponent> Component = MakeTrackedComponent(Env);
 	(void)Actor.Get()->RegisterComponent(Component);
@@ -164,7 +164,7 @@ MW_TEST_CASE(EngineReleasingWorldRootReclaimsEntireGraph)
 
 	// Act
 	const ERuntimeResult CollectResult = Collector.RequestCollection();
-	const MicroWorld::FGarbageCollectionResult FullResult = Collector.CollectFull();
+	const MicroWorld::Engine::FGarbageCollectionResult FullResult = Collector.CollectFull();
 	const FObjectStoreStats Stats = Store.Stats();
 
 	// Assert
@@ -194,7 +194,7 @@ MW_TEST_CASE(EngineWeakParentReferencesExpireCorrectly)
 	FWorldActorRegistry<2> WorldActors;
 	FWorldActorRegistryReference WorldActorsView = WorldActors.MakeReference();
 
-	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, std::move(WorldActorsView));
+	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::Engine::UWorldClassId, std::move(WorldActorsView));
 	const TObjectPtr<FTrackedActor> Actor = MakeTrackedActor(Env);
 	const TObjectPtr<FTrackedComponent> Component = MakeTrackedComponent(Env);
 	const EEngineResult ComponentRegistration = Actor.Get()->RegisterComponent(Component);
@@ -217,9 +217,9 @@ MW_TEST_CASE(EngineWeakParentReferencesExpireCorrectly)
 	// Act - reclaim the world only
 	WorldRoot.Reset();
 	const ERuntimeResult WorldCollectionRequest = Collector.RequestCollection();
-	const MicroWorld::FGarbageCollectionResult WorldCollection = Collector.CollectFull();
+	const MicroWorld::Engine::FGarbageCollectionResult WorldCollection = Collector.CollectFull();
 	FWorldActorRegistry<1> ReplacementWorldActors;
-	const TObjectPtr<UWorld> ReplacementWorld = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, ReplacementWorldActors.MakeReference());
+	const TObjectPtr<UWorld> ReplacementWorld = Env.CreateObject<UWorld>(MicroWorld::Engine::UWorldClassId, ReplacementWorldActors.MakeReference());
 	TStrongObjectPtr<UWorld> ReplacementWorldRoot = Env.MakeRoot(ReplacementWorld);
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ComponentRegistration, "Component setup succeeds");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ActorRegistration, "Actor setup succeeds");
@@ -237,7 +237,7 @@ MW_TEST_CASE(EngineWeakParentReferencesExpireCorrectly)
 	// Act - reclaim the actor only
 	ActorRoot.Reset();
 	const ERuntimeResult ActorCollectionRequest = Collector.RequestCollection();
-	const MicroWorld::FGarbageCollectionResult ActorCollection = Collector.CollectFull();
+	const MicroWorld::Engine::FGarbageCollectionResult ActorCollection = Collector.CollectFull();
 	const TObjectPtr<FTrackedActor> ReplacementActor = MakeTrackedActor(Env);
 	TStrongObjectPtr<AActor> ReplacementActorRoot = Env.MakeRoot(TObjectPtr<AActor>{ReplacementActor});
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, ActorCollectionRequest, "Actor reclamation request succeeds");
@@ -263,7 +263,7 @@ MW_TEST_CASE(EngineAdvancePerformsNoObservableAllocation)
 	FWorldActorRegistry<2> WorldActors;
 	FWorldActorRegistryReference WorldActorsView = WorldActors.MakeReference();
 
-	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, std::move(WorldActorsView));
+	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::Engine::UWorldClassId, std::move(WorldActorsView));
 	const TObjectPtr<FTrackedActor> Actor = MakeTrackedActor(Env);
 	const TObjectPtr<FTrackedComponent> Component = MakeTrackedComponent(Env);
 	(void)Actor.Get()->RegisterComponent(Component);
@@ -306,7 +306,7 @@ MW_TEST_CASE(EngineEndPlayIsIdempotentAndRepeatedLifecycleCallsMatchCore)
 	FWorldActorRegistry<2> WorldActors;
 	FWorldActorRegistryReference WorldActorsView = WorldActors.MakeReference();
 
-	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, std::move(WorldActorsView));
+	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::Engine::UWorldClassId, std::move(WorldActorsView));
 	const TObjectPtr<FTrackedActor> Actor = MakeTrackedActor(Env);
 	(void)World.Get()->RegisterActor(TObjectPtr<AActor>{Actor});
 

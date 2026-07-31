@@ -8,7 +8,7 @@
 #include <MicroWorld/Core/Tickable.h>
 #include <MicroWorld/Core/Time.h>
 
-namespace MicroWorld
+namespace MicroWorld::Engine
 {
 
 class AActor;
@@ -109,4 +109,4 @@ private:
 	FLifecycleGuard Lifecycle;
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Engine

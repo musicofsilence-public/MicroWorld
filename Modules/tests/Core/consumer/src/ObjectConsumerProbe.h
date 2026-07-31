@@ -32,7 +32,7 @@ enum class EObjectConsumerExitCode : int
 };
 
 /** Supplies one concrete managed type for downstream construction and collection. */
-class FConsumerObject final : public MicroWorld::UObject
+class FConsumerObject final : public MicroWorld::Engine::UObject
 {
 public:
 	/** Makes exact descriptor-driven destruction publicly instantiable. */
@@ -44,7 +44,7 @@ inline constexpr std::uint32_t ProbeSlotCount = 1;
 inline constexpr std::uint32_t ProbeRootCapacity = 1;
 inline constexpr std::size_t ProbeSlotSizeBytes = 128;
 inline constexpr std::size_t ProbeSlotAlignmentBytes = 16;
-inline constexpr MicroWorld::FTypeId ConsumerObjectTypeId = 1;
+inline constexpr MicroWorld::Engine::FTypeId ConsumerObjectTypeId = 1;
 
 } // namespace MicroWorldConsumer
 
@@ -52,6 +52,7 @@ inline constexpr MicroWorld::FTypeId ConsumerObjectTypeId = 1;
 inline int RunObjectConsumerProbe() noexcept
 {
 	using namespace MicroWorld;
+	using namespace MicroWorld::Engine;
 	using MicroWorldConsumer::EObjectConsumerExitCode;
 	using MicroWorldConsumer::FConsumerObject;
 

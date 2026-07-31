@@ -26,7 +26,7 @@ constexpr std::size_t SlotSizeBytes = 128;
 constexpr std::size_t SlotAlignmentBytes = 16;
 
 /** Bounds each incremental call by observable semantic operations. */
-constexpr MicroWorld::FGarbageCollectionBudget IncrementalBudget{2, 4, 8};
+constexpr MicroWorld::Engine::FGarbageCollectionBudget IncrementalBudget{2, 4, 8};
 
 /** Prevents a collector regression from turning the benchmark into an unbounded loop. */
 constexpr std::uint32_t MaximumIncrementalSlices = 128;
@@ -42,7 +42,7 @@ struct FBenchmarkLifetimeState final
 };
 
 /** Provides one bounded outgoing edge for chain and cycle workloads. */
-class FBenchmarkObject final : public MicroWorld::UObject
+class FBenchmarkObject final : public MicroWorld::Engine::UObject
 {
 public:
 	/** Begins one observable managed lifetime. */
@@ -52,18 +52,18 @@ public:
 	~FBenchmarkObject() noexcept override { ++State.DestructionCount; }
 
 	/** Selects the one descriptor-visible edge used by this graph node. */
-	void SetNext(const MicroWorld::TObjectPtr<FBenchmarkObject> InNext) noexcept { Next = InNext; }
+	void SetNext(const MicroWorld::Engine::TObjectPtr<FBenchmarkObject> InNext) noexcept { Next = InNext; }
 
 protected:
 	/** Presents the bounded outgoing edge to the iterative collector. */
-	void VisitReferences(MicroWorld::FReferenceCollector& InCollector) noexcept override { InCollector.AddReferencedObject(Next); }
+	void VisitReferences(MicroWorld::Engine::FReferenceCollector& InCollector) noexcept override { InCollector.AddReferencedObject(Next); }
 
 private:
 	/** Shares lifetime evidence with the benchmark invocation. */
 	FBenchmarkLifetimeState& State;
 
 	/** Retains store-qualified generation identity without caching a target address. */
-	MicroWorld::TObjectPtr<FBenchmarkObject> Next{};
+	MicroWorld::Engine::TObjectPtr<FBenchmarkObject> Next{};
 };
 
 /** Owns one complete fixed store whose storage outlives all managed objects. */
@@ -71,9 +71,9 @@ class FBenchmarkStoreFixture final
 {
 public:
 	/** Binds the store to fixed caller-owned placement, metadata, and root storage. */
-	explicit FBenchmarkStoreFixture(const MicroWorld::FClassRegistryView InClasses) noexcept
+	explicit FBenchmarkStoreFixture(const MicroWorld::Engine::FClassRegistryView InClasses) noexcept
 		: Store(
-			  MicroWorld::FObjectStoreStorage{
+			  MicroWorld::Engine::FObjectStoreStorage{
 				  SlotBytes.data(),
 				  SlotBytes.size(),
 				  Slots.data(),
@@ -88,20 +88,20 @@ public:
 	}
 
 	/** Exposes the public store used by each measured collector mode. */
-	MicroWorld::FObjectStore& GetStore() noexcept { return Store; }
+	MicroWorld::Engine::FObjectStore& GetStore() noexcept { return Store; }
 
 private:
 	/** Provides aligned non-moving placement storage for the complete graph. */
 	alignas(SlotAlignmentBytes) std::array<std::byte, SlotSizeBytes * NodeCount> SlotBytes{};
 
 	/** Provides one lifecycle and collector record per object slot. */
-	std::array<MicroWorld::FObjectSlotMetadata, NodeCount> Slots{};
+	std::array<MicroWorld::Engine::FObjectSlotMetadata, NodeCount> Slots{};
 
 	/** Provides the single explicit-root token used by the reachable chain. */
-	std::array<MicroWorld::FObjectRootEntry, RootCapacity> Roots{};
+	std::array<MicroWorld::Engine::FObjectRootEntry, RootCapacity> Roots{};
 
 	/** Owns all managed graph lifetimes while caller-owned storage remains valid. */
-	MicroWorld::FObjectStore Store;
+	MicroWorld::Engine::FObjectStore Store;
 };
 
 /** Captures comparable semantics and host-only cost for one collection mode. */
@@ -126,21 +126,21 @@ struct FBenchmarkObservation final
 	std::uint64_t HostNanoseconds{0};
 
 	/** Preserves fixed-store occupancy and fragmentation after collection. */
-	MicroWorld::FObjectStoreStats StoreStats{};
+	MicroWorld::Engine::FObjectStoreStats StoreStats{};
 };
 
 /** Constructs one rooted chain and one unreachable cycle in fixed storage. */
 bool BuildRepresentativeGraph(
-	MicroWorld::FObjectStore& InStore,
-	const MicroWorld::FClassDescriptor& InDescriptor,
+	MicroWorld::Engine::FObjectStore& InStore,
+	const MicroWorld::Engine::FClassDescriptor& InDescriptor,
 	FBenchmarkLifetimeState& InLifetime,
-	std::array<MicroWorld::TObjectPtr<FBenchmarkObject>, NodeCount>& InNodes,
-	MicroWorld::TStrongObjectPointerResult<FBenchmarkObject>& OutRoot) noexcept
+	std::array<MicroWorld::Engine::TObjectPtr<FBenchmarkObject>, NodeCount>& InNodes,
+	MicroWorld::Engine::TStrongObjectPointerResult<FBenchmarkObject>& OutRoot) noexcept
 {
 	for (std::uint32_t NodeIndex = 0; NodeIndex < NodeCount; ++NodeIndex)
 	{
-		const MicroWorld::TObjectCreationResult<FBenchmarkObject> Creation = InStore.NewObject<FBenchmarkObject>(InDescriptor, InLifetime);
-		if (Creation.Result != MicroWorld::EObjectResult::Success)
+		const MicroWorld::Engine::TObjectCreationResult<FBenchmarkObject> Creation = InStore.NewObject<FBenchmarkObject>(InDescriptor, InLifetime);
+		if (Creation.Result != MicroWorld::Engine::EObjectResult::Success)
 		{
 			return false;
 		}
@@ -158,13 +158,14 @@ bool BuildRepresentativeGraph(
 	}
 
 	OutRoot = InStore.MakeStrongObjectPtr(InNodes[0]);
-	return OutRoot.Result == MicroWorld::EObjectResult::Success;
+	return OutRoot.Result == MicroWorld::Engine::EObjectResult::Success;
 }
 
 /** Measures one full or incremental cycle over an equivalent fixed graph. */
 FBenchmarkObservation RunCollection(const bool bIncremental) noexcept
 {
 	using namespace MicroWorld;
+	using namespace MicroWorld::Engine;
 
 	FBenchmarkLifetimeState Lifetime{};
 	TClassRegistry<1> Registry;
@@ -262,9 +263,9 @@ int main()
 		"incremental_budget=%u/%u/%u,target_timing_claimed=0\n",
 		sizeof(FBenchmarkObject),
 		SlotSizeBytes * NodeCount,
-		sizeof(MicroWorld::FObjectSlotMetadata) * NodeCount,
-		sizeof(MicroWorld::FObjectRootEntry) * RootCapacity,
-		sizeof(MicroWorld::FObjectHandle) * NodeCount,
+		sizeof(MicroWorld::Engine::FObjectSlotMetadata) * NodeCount,
+		sizeof(MicroWorld::Engine::FObjectRootEntry) * RootCapacity,
+		sizeof(MicroWorld::Engine::FObjectHandle) * NodeCount,
 		IncrementalBudget.MaxRootOperations,
 		IncrementalBudget.MaxMarkOperations,
 		IncrementalBudget.MaxSweepOperations);

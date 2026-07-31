@@ -21,6 +21,8 @@
 namespace MicroWorld::Tests
 {
 
+using namespace ::MicroWorld::Engine;
+
 /**
  * Shares one monotonic event sequence across every observed object in a test so
  * begin/tick/end ordering is recorded without per-object clocks.

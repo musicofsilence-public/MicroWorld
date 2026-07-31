@@ -8,7 +8,7 @@
 #include <MicroWorld/Engine/ObjectPtr.h>
 #include <MicroWorld/Core/TickFunction.h>
 
-namespace MicroWorld
+namespace MicroWorld::Engine
 {
 
 UActorComponent::UActorComponent(FTickConfiguration InTickConfiguration) noexcept : FTickable(InTickConfiguration) {}
@@ -93,4 +93,4 @@ void UActorComponent::AssignOwner(const FObjectHandle InOwner) noexcept
 	OwnerObjectHandle = InOwner;
 }
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Engine

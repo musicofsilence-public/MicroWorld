@@ -25,21 +25,21 @@
 
 namespace
 {
-using MicroWorld::AActor;
-using MicroWorld::EEngineResult;
-using MicroWorld::EObjectResult;
 using MicroWorld::ERuntimeResult;
-using MicroWorld::FDefaultEngineTraits;
 using MicroWorld::FDelegateHandle;
-using MicroWorld::FGarbageCollectionBudget;
 using MicroWorld::IPlaySystem;
-using MicroWorld::TEngine;
-using MicroWorld::THostPlaySystem;
 using MicroWorld::TimePointMilliseconds;
-using MicroWorld::TObjectCreationResult;
-using MicroWorld::TObjectPtr;
 using MicroWorld::TSpan;
-using MicroWorld::UWorld;
+using MicroWorld::Engine::AActor;
+using MicroWorld::Engine::EEngineResult;
+using MicroWorld::Engine::EObjectResult;
+using MicroWorld::Engine::FDefaultEngineTraits;
+using MicroWorld::Engine::FGarbageCollectionBudget;
+using MicroWorld::Engine::TEngine;
+using MicroWorld::Engine::THostPlaySystem;
+using MicroWorld::Engine::TObjectCreationResult;
+using MicroWorld::Engine::TObjectPtr;
+using MicroWorld::Engine::UWorld;
 using MicroWorld::Transport::ENetworkMode;
 using MicroWorld::Transport::ETransportHostState;
 using MicroWorld::Transport::ETransportResult;
@@ -67,10 +67,10 @@ using FHost = TEngine<FHostTraits>;
 constexpr std::uint8_t AppChannel = 1;
 
 /** Stable type id for the actor a server spawns in response to a client message. */
-constexpr MicroWorld::FTypeId TransportSpawnedActorTypeId{0x00070001u};
+constexpr MicroWorld::Engine::FTypeId TransportSpawnedActorTypeId{0x00070001u};
 
 /** Stable type id for the actor that observes the transport host on both world lifecycle boundaries. */
-constexpr MicroWorld::FTypeId TransportHostLifecycleActorTypeId{0x00070002u};
+constexpr MicroWorld::Engine::FTypeId TransportHostLifecycleActorTypeId{0x00070002u};
 
 /** Records how many times each frame slot ran and their order so a test can assert the contract. */
 struct FFrameCallRecord

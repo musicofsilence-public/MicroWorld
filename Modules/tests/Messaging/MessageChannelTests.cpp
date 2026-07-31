@@ -24,15 +24,15 @@
 namespace
 {
 using MicroWorld::DurationMilliseconds;
-using MicroWorld::EEngineResult;
 using MicroWorld::ERuntimeResult;
-using MicroWorld::FDefaultEngineTraits;
-using MicroWorld::FGarbageCollectionBudget;
-using MicroWorld::TEngine;
-using MicroWorld::THostPlaySystem;
 using MicroWorld::TimePointMilliseconds;
-using MicroWorld::TPlaySystemSet;
 using MicroWorld::TSpan;
+using MicroWorld::Engine::EEngineResult;
+using MicroWorld::Engine::FDefaultEngineTraits;
+using MicroWorld::Engine::FGarbageCollectionBudget;
+using MicroWorld::Engine::TEngine;
+using MicroWorld::Engine::THostPlaySystem;
+using MicroWorld::Engine::TPlaySystemSet;
 using MicroWorld::Messaging::BroadcastActorId;
 using MicroWorld::Messaging::EChannelSendTarget;
 using MicroWorld::Messaging::EMessageResult;

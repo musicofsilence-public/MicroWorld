@@ -99,7 +99,7 @@ namespace
 	 * of looping forever; the observed-timestamp vector is what RunnerFeedsClockValuesIntoTick inspects.
 	 * BeginPlay can also be configured to fail so a failed-begin run is reachable from a test.
 	 */
-	class FScriptedEngine final : public MicroWorld::IEngine
+	class FScriptedEngine final : public MicroWorld::Engine::IEngine
 	{
 	public:
 		/** Selects the zero-based Tick index that returns non-Success so Run terminates. */
@@ -147,8 +147,11 @@ namespace
 			return MicroWorld::ERuntimeResult::Success;
 		}
 
-		MicroWorld::UWorld& GetWorld() noexcept override { return *reinterpret_cast<MicroWorld::UWorld*>(&WorldStorage); }
-		MicroWorld::FObjectStore& GetObjectStore() noexcept override { return *reinterpret_cast<MicroWorld::FObjectStore*>(&StoreStorage); }
+		MicroWorld::Engine::UWorld& GetWorld() noexcept override { return *reinterpret_cast<MicroWorld::Engine::UWorld*>(&WorldStorage); }
+		MicroWorld::Engine::FObjectStore& GetObjectStore() noexcept override
+		{
+			return *reinterpret_cast<MicroWorld::Engine::FObjectStore*>(&StoreStorage);
+		}
 
 	private:
 		/** Holds the frame index at which Tick stops the run, so Run always returns in tests. */
@@ -169,12 +172,12 @@ namespace
 	class FRunnerApplication final : public MicroWorld::Application::FApplication
 	{
 	public:
-		explicit FRunnerApplication(MicroWorld::IEngine& InEngine) noexcept : MicroWorld::Application::FApplication(InEngine) {}
+		explicit FRunnerApplication(MicroWorld::Engine::IEngine& InEngine) noexcept : MicroWorld::Application::FApplication(InEngine) {}
 
 		int BeginPlayFailedCount{0};
 
 	protected:
-		MicroWorld::ERuntimeResult OnConfigure(MicroWorld::IEngine& InEngine, MicroWorld::TimePointMilliseconds) noexcept override
+		MicroWorld::ERuntimeResult OnConfigure(MicroWorld::Engine::IEngine& InEngine, MicroWorld::TimePointMilliseconds) noexcept override
 		{
 			(void)InEngine;
 			return MicroWorld::ERuntimeResult::Success;

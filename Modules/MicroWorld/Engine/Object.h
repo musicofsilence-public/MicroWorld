@@ -3,7 +3,7 @@
 #include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Engine/ObjectHandle.h>
 
-namespace MicroWorld
+namespace MicroWorld::Engine
 {
 
 class FGarbageCollector;
@@ -83,4 +83,4 @@ private:
 	bool bPendingDestroy{false};
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Engine

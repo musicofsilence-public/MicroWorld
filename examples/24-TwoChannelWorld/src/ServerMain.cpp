@@ -24,6 +24,7 @@
 #include <utility>
 
 using namespace MicroWorld;
+using namespace MicroWorld::Engine;
 using namespace MicroWorld::Transport;
 using namespace MicroWorld::Messaging;
 using namespace Ex24;

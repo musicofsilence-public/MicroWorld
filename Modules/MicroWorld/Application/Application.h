@@ -93,7 +93,7 @@ public:
 
 protected:
 	/** Binds this application to the one engine it will drive for its lifetime. */
-	explicit FApplication(IEngine& InEngine) noexcept : Engine(InEngine) {}
+	explicit FApplication(::MicroWorld::Engine::IEngine& InEngine) noexcept : Engine(InEngine) {}
 
 	/**
 	 * The world exists and nothing has begun. Spawn actors and configure systems here.
@@ -101,7 +101,7 @@ protected:
 	 * Defaulted to success so an application with nothing to configure writes no body
 	 * at all, rather than a hook that discards both parameters to satisfy the compiler.
 	 */
-	virtual ERuntimeResult OnConfigure(IEngine&, TimePointMilliseconds) { return ERuntimeResult::Success; }
+	virtual ERuntimeResult OnConfigure(::MicroWorld::Engine::IEngine&, TimePointMilliseconds) { return ERuntimeResult::Success; }
 
 	/** Undoes whatever OnConfigure started before it failed; it runs on the failure path, so it cannot throw. */
 	virtual void OnBeginPlayFailed() noexcept = 0;
@@ -123,7 +123,7 @@ private:
 	TimePointMilliseconds LastUpdateMilliseconds{0};
 
 	/** The one engine this application drives; bound at construction and never rebound. */
-	IEngine& Engine;
+	::MicroWorld::Engine::IEngine& Engine;
 };
 
 } // namespace MicroWorld::Application

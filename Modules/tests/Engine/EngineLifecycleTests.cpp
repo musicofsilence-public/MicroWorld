@@ -12,21 +12,21 @@
 namespace
 {
 
-using MicroWorld::AActor;
 using MicroWorld::DurationMilliseconds;
-using MicroWorld::EEngineResult;
-using MicroWorld::EObjectResult;
 using MicroWorld::ERuntimeResult;
-using MicroWorld::FGarbageCollectionBudget;
-using MicroWorld::FGarbageCollector;
-using MicroWorld::FObjectStore;
 using MicroWorld::FTickConfiguration;
 using MicroWorld::FTickContext;
-using MicroWorld::FWorldActorRegistry;
-using MicroWorld::FWorldActorRegistryReference;
-using MicroWorld::TObjectPtr;
-using MicroWorld::UActorComponent;
-using MicroWorld::UWorld;
+using MicroWorld::Engine::AActor;
+using MicroWorld::Engine::EEngineResult;
+using MicroWorld::Engine::EObjectResult;
+using MicroWorld::Engine::FGarbageCollectionBudget;
+using MicroWorld::Engine::FGarbageCollector;
+using MicroWorld::Engine::FObjectStore;
+using MicroWorld::Engine::FWorldActorRegistry;
+using MicroWorld::Engine::FWorldActorRegistryReference;
+using MicroWorld::Engine::TObjectPtr;
+using MicroWorld::Engine::UActorComponent;
+using MicroWorld::Engine::UWorld;
 using MicroWorld::Tests::FActorEventState;
 using MicroWorld::Tests::FComponentEventState;
 using MicroWorld::Tests::FSequenceCounter;
@@ -107,9 +107,9 @@ private:
 };
 
 /** Test-local type ids for the ordering actor and component descriptors. */
-constexpr MicroWorld::FTypeId OrderingActorTypeId{0x00010001u};
-constexpr MicroWorld::FTypeId OrderingComponentTypeId{0x00010002u};
-constexpr MicroWorld::FTypeId MutationAttemptActorTypeId{0x00010003u};
+constexpr MicroWorld::Engine::FTypeId OrderingActorTypeId{0x00010001u};
+constexpr MicroWorld::Engine::FTypeId OrderingComponentTypeId{0x00010002u};
+constexpr MicroWorld::Engine::FTypeId MutationAttemptActorTypeId{0x00010003u};
 
 /** Records every structural operation attempted from each lifecycle hook. */
 struct FLifecycleMutationState final
@@ -129,7 +129,7 @@ public:
 	FMutationAttemptActor(
 		FObjectStore& InStore,
 		FGarbageCollector& InCollector,
-		const MicroWorld::FClassDescriptor& InComponentDescriptor,
+		const MicroWorld::Engine::FClassDescriptor& InComponentDescriptor,
 		FLifecycleMutationState& InState) noexcept
 		: AActor(OrderingTickConfiguration), Store(InStore), Collector(InCollector), ComponentDescriptor(InComponentDescriptor), State(InState)
 	{
@@ -153,7 +153,7 @@ private:
 
 	FObjectStore& Store;
 	FGarbageCollector& Collector;
-	const MicroWorld::FClassDescriptor& ComponentDescriptor;
+	const MicroWorld::Engine::FClassDescriptor& ComponentDescriptor;
 	FLifecycleMutationState& State;
 };
 
@@ -198,7 +198,7 @@ MW_TEST_CASE(EngineBeginPlayOrderIsActorsThenComponentsPerActor)
 
 	FWorldActorRegistry<2> WorldActors;
 
-	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, WorldActors.MakeReference());
+	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::Engine::UWorldClassId, WorldActors.MakeReference());
 	const TObjectPtr<FOrderingActor> ActorA = MakeOrderingActor(Env, Sequence, ActorAEvents);
 	const TObjectPtr<FOrderingActor> ActorB = MakeOrderingActor(Env, Sequence, ActorBEvents);
 	const TObjectPtr<FOrderingComponent> CompA1 = MakeOrderingComponent(Env, Sequence, CompA1Events);
@@ -250,7 +250,7 @@ MW_TEST_CASE(EngineTickOrderIsActorsThenComponentsPerActor)
 
 	FWorldActorRegistry<2> WorldActors;
 
-	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, WorldActors.MakeReference());
+	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::Engine::UWorldClassId, WorldActors.MakeReference());
 	const TObjectPtr<FOrderingActor> ActorA = MakeOrderingActor(Env, Sequence, ActorAEvents);
 	const TObjectPtr<FOrderingActor> ActorB = MakeOrderingActor(Env, Sequence, ActorBEvents);
 	const TObjectPtr<FOrderingComponent> CompA = MakeOrderingComponent(Env, Sequence, CompAEvents);
@@ -300,7 +300,7 @@ MW_TEST_CASE(EngineEndPlayIsReverseRegistrationAndActorBeforeComponents)
 
 	FWorldActorRegistry<2> WorldActors;
 
-	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, WorldActors.MakeReference());
+	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::Engine::UWorldClassId, WorldActors.MakeReference());
 	const TObjectPtr<FOrderingActor> ActorA = MakeOrderingActor(Env, Sequence, ActorAEvents);
 	const TObjectPtr<FOrderingActor> ActorB = MakeOrderingActor(Env, Sequence, ActorBEvents);
 	const TObjectPtr<FOrderingComponent> CompA1 = MakeOrderingComponent(Env, Sequence, CompA1Events);
@@ -350,7 +350,7 @@ MW_TEST_CASE(EngineTickIntervalAndNoCatchUpBehavior)
 	FWorldActorRegistry<1> WorldActors;
 
 	const FTickConfiguration IntervalConfiguration{true, true, DurationMilliseconds{50}};
-	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, WorldActors.MakeReference());
+	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::Engine::UWorldClassId, WorldActors.MakeReference());
 	const TObjectPtr<FOrderingActor> Actor =
 		Env.CreateDerivedObject<FOrderingActor>(OrderingActorTypeId, "OrderingActor", IntervalConfiguration, Sequence, ActorEvents);
 	(void)World.Get()->RegisterActor(TObjectPtr<AActor>{Actor});
@@ -386,13 +386,13 @@ MW_TEST_CASE(EngineLifecycleHooksCannotMutateManagedGraph)
 	// Arrange
 	FLifecycleEnvironment Env{};
 	FObjectStore& Store = Env.GetStore();
-	MicroWorld::FObjectHandle Worklist[CollectorWorklistCapacity]{};
-	FGarbageCollector Collector{Store, MicroWorld::FGarbageCollectorStorage{Worklist, CollectorWorklistCapacity}};
+	MicroWorld::Engine::FObjectHandle Worklist[CollectorWorklistCapacity]{};
+	FGarbageCollector Collector{Store, MicroWorld::Engine::FGarbageCollectorStorage{Worklist, CollectorWorklistCapacity}};
 	FLifecycleMutationState MutationState{};
 	FWorldActorRegistry<1> WorldActors;
 
-	const MicroWorld::FClassDescriptor* const ComponentDescriptor = Env.FindDescriptor(MicroWorld::UActorComponentClassId);
-	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::UWorldClassId, WorldActors.MakeReference());
+	const MicroWorld::Engine::FClassDescriptor* const ComponentDescriptor = Env.FindDescriptor(MicroWorld::Engine::UActorComponentClassId);
+	const TObjectPtr<UWorld> World = Env.CreateObject<UWorld>(MicroWorld::Engine::UWorldClassId, WorldActors.MakeReference());
 	const TObjectPtr<FMutationAttemptActor> Actor = Env.CreateDerivedObject<FMutationAttemptActor>(
 		MutationAttemptActorTypeId, "MutationAttemptActor", Store, Collector, *ComponentDescriptor, MutationState);
 
@@ -401,7 +401,7 @@ MW_TEST_CASE(EngineLifecycleHooksCannotMutateManagedGraph)
 	const ERuntimeResult BeginResult = World.Get()->BeginPlay(BaselineTimeMilliseconds);
 	const ERuntimeResult AdvanceResult = World.Get()->Advance(1);
 	const ERuntimeResult EndResult = World.Get()->EndPlay();
-	const MicroWorld::FObjectStoreStats FinalStats = Store.Stats();
+	const MicroWorld::Engine::FObjectStoreStats FinalStats = Store.Stats();
 
 	// Assert
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ActorRegistration, "Adversarial actor setup succeeds");

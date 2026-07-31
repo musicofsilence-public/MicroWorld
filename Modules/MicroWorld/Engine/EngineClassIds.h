@@ -2,7 +2,7 @@
 
 #include <MicroWorld/Engine/ObjectHandle.h>
 
-namespace MicroWorld
+namespace MicroWorld::Engine
 {
 
 /**
@@ -18,4 +18,4 @@ constexpr FTypeId UActorComponentClassId{0x00001001u};
 constexpr FTypeId AActorClassId{0x00001002u};
 constexpr FTypeId UWorldClassId{0x00001003u};
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Engine

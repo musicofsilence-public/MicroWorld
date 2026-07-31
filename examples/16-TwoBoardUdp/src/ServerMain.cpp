@@ -23,6 +23,7 @@
 #include <cstdint>
 
 using namespace MicroWorld;
+using namespace MicroWorld::Engine;
 using namespace MicroWorld::Transport;
 using namespace Ex16;
 

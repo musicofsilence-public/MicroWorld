@@ -86,13 +86,13 @@ constexpr std::uint8_t ServerIpv4[4] = {192, 168, 4, 1};
 constexpr std::uint16_t ServerPort = 40404;
 
 /** Stable descriptor id for the managed FSensorActor type (0x0018 == example 24). */
-constexpr MicroWorld::FTypeId SensorActorTypeId{0x00180001u};
+constexpr MicroWorld::Engine::FTypeId SensorActorTypeId{0x00180001u};
 
 /** Stable descriptor id for the managed FTelemetrySinkActor type. */
-constexpr MicroWorld::FTypeId TelemetrySinkActorTypeId{0x00180002u};
+constexpr MicroWorld::Engine::FTypeId TelemetrySinkActorTypeId{0x00180002u};
 
 /** Stable descriptor id for the managed FCommanderActor type. */
-constexpr MicroWorld::FTypeId CommanderActorTypeId{0x00180003u};
+constexpr MicroWorld::Engine::FTypeId CommanderActorTypeId{0x00180003u};
 
 /** Sizes the one TNetworking for two links, two router channels, and the example's existing 96-byte messages. */
 struct FWorldNetworkingTraits : MicroWorld::FDefaultNetworkingTraits
@@ -111,7 +111,7 @@ struct FWorldNetworkingTraits : MicroWorld::FDefaultNetworkingTraits
 using FWorldNetworking = MicroWorld::TNetworking<FWorldNetworkingTraits>;
 
 /** The engine both roles compose; sized for one world with a couple of small actors using direct component storage. */
-using FWorldEngine = MicroWorld::TEngine<>;
+using FWorldEngine = MicroWorld::Engine::TEngine<>;
 
 /** Builds a board's UART device configuration from the fixed pins and baud. */
 inline MicroWorld::FEsp32UartConfig MakeUartConfig(const std::uint8_t NodeId) noexcept

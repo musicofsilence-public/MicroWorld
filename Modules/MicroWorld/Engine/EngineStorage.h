@@ -6,7 +6,7 @@
 #include <array>
 #include <cstddef>
 
-namespace MicroWorld
+namespace MicroWorld::Engine
 {
 
 /**
@@ -81,4 +81,4 @@ private:
 	bool bReferenceMade{false};
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Engine

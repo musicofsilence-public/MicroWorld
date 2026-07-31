@@ -5,7 +5,7 @@
 
 #include <cstddef>
 
-namespace MicroWorld
+namespace MicroWorld::Engine
 {
 
 /**
@@ -148,4 +148,4 @@ private:
 	std::size_t Count{0};
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Engine

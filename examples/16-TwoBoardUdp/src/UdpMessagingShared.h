@@ -46,7 +46,7 @@ constexpr int MaxSpawns = 2;
 constexpr std::uint8_t ProtocolVersion = 1;
 
 /** Stable descriptor id for the actor the server spawns on a client request. */
-constexpr MicroWorld::FTypeId DemoSpawnedActorTypeId{0x00080001u};
+constexpr MicroWorld::Engine::FTypeId DemoSpawnedActorTypeId{0x00080001u};
 
 /** Poll pace for both boards; far faster than the exchange so the watchdog idle task runs. */
 constexpr unsigned PollPacingMilliseconds = 20;
