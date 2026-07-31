@@ -142,7 +142,7 @@ model {
             }
             metadata {
                 contract 'TMessageRouter (an IPlaySystem), channel bindings, and the delivery mode a binding declares'
-                standalone 'Usable with no networking at all. Its contract names neither actors nor transports, so Core plus this system is already a working stack, and Core + Engine + this is local actor messaging with no Transport, no Networking and no driver. A binding may still declare reliable delivery there - locally the call itself satisfies it, which is why declaring a mode drags in no machinery'
+                standalone 'Usable with no networking at all. Its contract names neither actors nor transports, so Core plus this system is already a working stack, and Core + Engine + this is local actor messaging with no Transport, no Networking and no device. A binding may still declare reliable delivery there - locally the call itself satisfies it, which is why declaring a mode drags in no machinery'
                 boundary 'That independence is the whole reason it is its own system. Folding it into Networking would assert that a message between two actors on one board travels through networking, which is false'
             }
         }
@@ -241,9 +241,9 @@ model {
                 icon ./icon-networking.svg
             }
             metadata {
-                contract 'TNetSystem, an IPlaySystem that owns net drivers and channels, plus the sequencing, acknowledgement and retransmit behind a channel that asked for reliable delivery, and the splitting of a message too large for the device carrying it'
+                contract 'TNetworking, an IPlaySystem that owns devices and channels, plus the sequencing, acknowledgement and retransmit behind a channel that asked for reliable delivery, and the splitting of a message too large for the device carrying it'
                 standalone 'Core, Messaging and Transport are its whole closure, so a networked messaging stack needs no world, no actors and no Object. It cannot drive itself though - something must call its turn points each frame'
-                boundary 'Merged with Transport, one element would own both the byte contract and the message types, and nothing would then forbid a driver from knowing a message type. Kept apart, a driver stays reusable with no messaging, messaging stays usable with no driver, and adding a transport touches neither. A separation needs two elements to state it. Reliability lands here for the same kind of reason: it only means something when a wire can drop things, and Messaging must stay usable with no wire at all'
+                boundary 'Merged with Transport, one element would own both the byte contract and the message types, and nothing would then forbid a device from knowing a message type. Kept apart, a device stays reusable with no messaging, messaging stays usable with no device, and adding a transport touches neither. A separation needs two elements to state it. Reliability lands here for the same kind of reason: it only means something when a wire can drop things, and Messaging must stay usable with no wire at all'
             }
         }
     }

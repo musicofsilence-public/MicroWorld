@@ -131,8 +131,8 @@ Recorded because they are the decisions someone will otherwise re-litigate:
 | Subject | Verdict | Reason |
 | --- | --- | --- |
 | `Object` + `Engine` | **one** system, titled Engine | Object owns identity, Engine owns the lifetime built on it; neither is a responsibility anything wants alone |
-| `Net` + every medium | **one** system, titled Transport | it sits below the engine; a named medium — Wi-Fi, a wire, a radio — only *satisfies* the driver contract and declares nothing outward, which makes it an implementation |
-| `Transport` + `Networking` | **two** systems | merged, one element would own both the byte contract and the message types, and nothing would forbid a driver from knowing a message type. Asked and re-decided once already — the reason to merge came from the old names, not from the structure |
+| `Net` + every medium | **one** system, titled Transport | it sits below the engine; a named medium — Wi-Fi, a wire, a radio — only *satisfies* the device contract and declares nothing outward, which makes it an implementation |
+| `Transport` + `Networking` | **two** systems | merged, one element would own both the byte contract and the message types, and nothing would forbid a device from knowing a message type. Asked and re-decided once already — the reason to merge came from the old names, not from the structure |
 | `Messaging System` | **own** system | it is **usable with no networking at all** — a message between two actors on one board must not travel through a transport, so its contract names neither actors nor transports. Folding it into Networking would assert the opposite |
 | `Core` + `Engine` | **two** systems | Core is the shared vocabulary that lets independent systems interoperate. Merge it and Transport → Core becomes Transport → Engine, collapsing the graph |
 | `Platform*` | **outside the product** | not ours to own, so position says so; they are elements at C3 Transport, drawn outside the `microworld` boundary. An earlier verdict kept them out of the model entirely and named them in subtitles instead — overruled, see below |
@@ -217,7 +217,7 @@ framing is needed at all:
 
 The two devices with **no** edge to the frame codec are the most useful thing the
 view says, so the rule is written into the `c3Transport` description. An earlier
-revision drew framing *above* the driver, as `Transport Host -> Frame Codec`. That
+revision drew framing *above* the device, as `Transport Host -> Frame Codec`. That
 was false in both directions: nothing above a device frames, and UDP never frames
 at all.
 
