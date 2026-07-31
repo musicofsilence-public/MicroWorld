@@ -120,27 +120,32 @@ public:
 		{
 			return FActorSpawnRequest{EActorSpawnRequestResult::FactoryTooLarge, {}};
 		}
+		// The else branch is load-bearing: an over-aligned factory takes the return above, which
+		// leaves everything after it unreachable for that instantiation. Discarding the branch
+		// instead of instantiating dead statements is what keeps the warning from firing.
 		if constexpr (alignof(TFactory) > alignof(std::max_align_t))
 		{
 			return FActorSpawnRequest{EActorSpawnRequestResult::FactoryAlignmentUnsupported, {}};
 		}
-
-		const FActorSpawnHandle SpawnHandle = DeferredSpawns.Reserve();
-		void* const FactoryStorage = DeferredSpawns.GetFactoryStorage(SpawnHandle);
-		if (FactoryStorage == nullptr)
+		else
 		{
-			return FActorSpawnRequest{EActorSpawnRequestResult::CapacityExceeded, {}};
+			const FActorSpawnHandle SpawnHandle = DeferredSpawns.Reserve();
+			void* const FactoryStorage = DeferredSpawns.GetFactoryStorage(SpawnHandle);
+			if (FactoryStorage == nullptr)
+			{
+				return FActorSpawnRequest{EActorSpawnRequestResult::CapacityExceeded, {}};
+			}
+			::new (FactoryStorage) TFactory(std::forward<TArguments>(InArguments)...);
+			DeferredSpawns.Activate(
+				SpawnHandle,
+				FFactoryOperations{
+					&TFactory::Invoke,
+					&TFactory::Destroy,
+					&TFactory::VisitReferences,
+					&TFactory::ResolveDescriptor,
+				});
+			return FActorSpawnRequest{EActorSpawnRequestResult::Queued, SpawnHandle};
 		}
-		::new (FactoryStorage) TFactory(std::forward<TArguments>(InArguments)...);
-		DeferredSpawns.Activate(
-			SpawnHandle,
-			FFactoryOperations{
-				&TFactory::Invoke,
-				&TFactory::Destroy,
-				&TFactory::VisitReferences,
-				&TFactory::ResolveDescriptor,
-			});
-		return FActorSpawnRequest{EActorSpawnRequestResult::Queued, SpawnHandle};
 	}
 
 	/** Returns deferred typed-spawn completion state without exposing storage internals. */
