@@ -32,7 +32,7 @@ MW_TEST_CASE(LoraPayloadRegressionUsesExactPayloadBoundaries)
 MW_TEST_CASE(LoraPayloadRegressionFillsCanonicalMaximumBytes)
 {
 	// Arrange
-	std::uint8_t Payload[MicroWorld::E32MaxPayloadBytes]{};
+	std::uint8_t Payload[MicroWorld::Transport::E32MaxPayloadBytes]{};
 
 	// Act
 	MicroWorld::Example17::FillCanonicalPayload(MicroWorld::Example17::EPayloadRegressionCase::Maximum, Payload);
@@ -53,7 +53,7 @@ MW_TEST_CASE(LoraPayloadRegressionFillsCanonicalMaximumBytes)
 MW_TEST_CASE(LoraPayloadRegressionAcceptsIntactMaximumPayload)
 {
 	// Arrange
-	std::uint8_t Payload[MicroWorld::E32MaxPayloadBytes]{};
+	std::uint8_t Payload[MicroWorld::Transport::E32MaxPayloadBytes]{};
 	MicroWorld::Example17::FillCanonicalPayload(MicroWorld::Example17::EPayloadRegressionCase::Maximum, Payload);
 
 	// Act
@@ -85,7 +85,7 @@ MW_TEST_CASE(LoraPayloadRegressionRejectsCanonicalPayloadsWithMismatchedLengths)
 		{MicroWorld::Example17::EPayloadRegressionCase::Typical, std::size_t{6}, "Six-byte typical payload must fail canonical validation"},
 		{MicroWorld::Example17::EPayloadRegressionCase::Maximum, std::size_t{57}, "57-byte maximum payload must fail canonical validation"},
 	};
-	std::uint8_t Payload[MicroWorld::E32MaxPayloadBytes]{};
+	std::uint8_t Payload[MicroWorld::Transport::E32MaxPayloadBytes]{};
 
 	for (const FLengthMismatchCase& LengthMismatchCase : LengthMismatchCases)
 	{
@@ -108,7 +108,7 @@ MW_TEST_CASE(LoraPayloadRegressionRejectsCanonicalPayloadsWithMismatchedLengths)
 MW_TEST_CASE(LoraPayloadRegressionRejectsCorruptedMaximumPayload)
 {
 	// Arrange
-	std::uint8_t Payload[MicroWorld::E32MaxPayloadBytes]{};
+	std::uint8_t Payload[MicroWorld::Transport::E32MaxPayloadBytes]{};
 	MicroWorld::Example17::FillCanonicalPayload(MicroWorld::Example17::EPayloadRegressionCase::Maximum, Payload);
 	Payload[29] ^= std::uint8_t{0x01};
 

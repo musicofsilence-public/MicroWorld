@@ -42,17 +42,17 @@ constexpr unsigned PollPacingMilliseconds = 10;
 constexpr std::size_t VolleyPayloadBytes = 5;
 
 /** Renders one device outcome as a short label so the serial trace reads plainly. */
-const char* ToText(const MicroWorld::ETransportResult Result) noexcept
+const char* ToText(const MicroWorld::Transport::ETransportResult Result) noexcept
 {
 	switch (Result)
 	{
-		case MicroWorld::ETransportResult::Success:
+		case MicroWorld::Transport::ETransportResult::Success:
 			return "Success";
-		case MicroWorld::ETransportResult::Full:
+		case MicroWorld::Transport::ETransportResult::Full:
 			return "Full";
-		case MicroWorld::ETransportResult::Invalid:
+		case MicroWorld::Transport::ETransportResult::Invalid:
 			return "Invalid";
-		case MicroWorld::ETransportResult::Unavailable:
+		case MicroWorld::Transport::ETransportResult::Unavailable:
 			return "Unavailable";
 		default:
 			return "unknown";
@@ -119,10 +119,10 @@ void RunMaster() noexcept
 		{
 			std::uint8_t Payload[VolleyPayloadBytes];
 			WriteVolleyPayload(Payload, MasterNodeId, NextCounter);
-			const MicroWorld::ETransportResult TxResult =
+			const MicroWorld::Transport::ETransportResult TxResult =
 				Device.TrySend(MicroWorld::MakeI2cAddress(SlaveNodeId), MicroWorld::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
 			MW_LOG(Log, "ex20", "tx n=%u result=%s", static_cast<unsigned>(NextCounter), ToText(TxResult));
-			if (TxResult == MicroWorld::ETransportResult::Success)
+			if (TxResult == MicroWorld::Transport::ETransportResult::Success)
 			{
 				bAwaitingReply = true;
 			}
@@ -131,11 +131,11 @@ void RunMaster() noexcept
 		// Only the master clocks the bus, so it must poll reads to harvest the slave's staged reply.
 		if (bAwaitingReply)
 		{
-			MicroWorld::FDeviceAddress From{};
-			MicroWorld::FReceiveResult Received{};
-			const MicroWorld::ETransportResult RxResult =
+			MicroWorld::Transport::Address::FDeviceAddress From{};
+			MicroWorld::Transport::Device::FReceiveResult Received{};
+			const MicroWorld::Transport::ETransportResult RxResult =
 				Device.TryReceive(From, MicroWorld::TSpan<std::uint8_t>(RxBuffer, sizeof(RxBuffer)), Received);
-			if (RxResult == MicroWorld::ETransportResult::Success && Received.BytesReceived == VolleyPayloadBytes)
+			if (RxResult == MicroWorld::Transport::ETransportResult::Success && Received.BytesReceived == VolleyPayloadBytes)
 			{
 				const std::uint32_t Counter = ReadVolleyCounter(RxBuffer);
 				const std::uint8_t FromId = MicroWorld::I2cAddressNodeId(From);
@@ -178,10 +178,11 @@ void RunSlave() noexcept
 
 	for (;;)
 	{
-		MicroWorld::FDeviceAddress From{};
-		MicroWorld::FReceiveResult Received{};
-		const MicroWorld::ETransportResult RxResult = Device.TryReceive(From, MicroWorld::TSpan<std::uint8_t>(RxBuffer, sizeof(RxBuffer)), Received);
-		if (RxResult == MicroWorld::ETransportResult::Success && Received.BytesReceived == VolleyPayloadBytes)
+		MicroWorld::Transport::Address::FDeviceAddress From{};
+		MicroWorld::Transport::Device::FReceiveResult Received{};
+		const MicroWorld::Transport::ETransportResult RxResult =
+			Device.TryReceive(From, MicroWorld::TSpan<std::uint8_t>(RxBuffer, sizeof(RxBuffer)), Received);
+		if (RxResult == MicroWorld::Transport::ETransportResult::Success && Received.BytesReceived == VolleyPayloadBytes)
 		{
 			const std::uint32_t Counter = ReadVolleyCounter(RxBuffer);
 			const std::uint8_t FromId = MicroWorld::I2cAddressNodeId(From);
@@ -190,7 +191,7 @@ void RunSlave() noexcept
 			// Stage the reply (counter + 1) for the master's next read; the master clocks it out.
 			std::uint8_t Payload[VolleyPayloadBytes];
 			WriteVolleyPayload(Payload, SlaveNodeId, Counter + 1);
-			const MicroWorld::ETransportResult TxResult =
+			const MicroWorld::Transport::ETransportResult TxResult =
 				Device.TrySend(MicroWorld::MakeI2cAddress(MasterNodeId), MicroWorld::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
 			MW_LOG(Log, "ex20", "tx n=%u result=%s", static_cast<unsigned>(Counter + 1), ToText(TxResult));
 		}

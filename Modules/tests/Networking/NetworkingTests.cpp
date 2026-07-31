@@ -22,7 +22,7 @@ namespace
 {
 
 	/** Provides two deterministic ports so systems exchange packets without a platform transport. */
-	using FLoopback = MicroWorld::THostLoopback<2, 8, 256>;
+	using FLoopback = MicroWorld::Transport::THostLoopback<2, 8, 256>;
 
 	/** Uses the default two-device and four-channel profile for normal composition tests. */
 	using FSystem = MicroWorld::Networking::TNetworking<>;
@@ -56,9 +56,9 @@ namespace
 	constexpr std::uint8_t CrossSystemPayloadByte{0x7A};
 
 	/** Builds a host configuration accepted by both loopback roles. */
-	MicroWorld::FTransportHostConfig MakeConfig() noexcept
+	MicroWorld::Transport::FTransportHostConfig MakeConfig() noexcept
 	{
-		return MicroWorld::FTransportHostConfig{};
+		return MicroWorld::Transport::FTransportHostConfig{};
 	}
 
 	/** Supplies a shared monotonic order source so each device's first pump is directly observable. */
@@ -96,20 +96,21 @@ namespace
 	};
 
 	/** Provides a deterministic client transport whose observable operations reveal TNetworking's device pump order. */
-	class FRecordingDevice final : public MicroWorld::IDevice
+	class FRecordingDevice final : public MicroWorld::Transport::Device::IDevice
 	{
 	public:
 		/** Binds the device to caller-owned observability and a deterministic logical-send outcome. */
 		FRecordingDevice(
 			FDevicePumpRecord& InRecord,
 			FDevicePumpSequence& InSequence,
-			const MicroWorld::ETransportResult InSendResult = MicroWorld::ETransportResult::Success) noexcept
+			const MicroWorld::Transport::ETransportResult InSendResult = MicroWorld::Transport::ETransportResult::Success) noexcept
 			: Record(InRecord), Sequence(InSequence), SendResult(InSendResult)
 		{
 		}
 
 		/** Records each outbound transport attempt and accepts it without a real network. */
-		MicroWorld::ETransportResult TrySend(const MicroWorld::FDeviceAddress&, MicroWorld::TSpan<const std::uint8_t>) noexcept override
+		MicroWorld::Transport::ETransportResult TrySend(
+			const MicroWorld::Transport::Address::FDeviceAddress&, MicroWorld::TSpan<const std::uint8_t>) noexcept override
 		{
 			++Record.SendCount;
 			if (Record.FirstSendOrder == 0)
@@ -120,15 +121,17 @@ namespace
 		}
 
 		/** Records each inbound transport attempt and reports the deterministic empty state. */
-		MicroWorld::ETransportResult TryReceive(
-			MicroWorld::FDeviceAddress&, MicroWorld::TSpan<std::uint8_t>, MicroWorld::FReceiveResult&) noexcept override
+		MicroWorld::Transport::ETransportResult TryReceive(
+			MicroWorld::Transport::Address::FDeviceAddress&,
+			MicroWorld::TSpan<std::uint8_t>,
+			MicroWorld::Transport::Device::FReceiveResult&) noexcept override
 		{
 			++Record.ReceiveCount;
 			if (Record.FirstReceiveOrder == 0)
 			{
 				Record.FirstReceiveOrder = Sequence.Next();
 			}
-			return MicroWorld::ETransportResult::Unavailable;
+			return MicroWorld::Transport::ETransportResult::Unavailable;
 		}
 
 		/** Records one bounded physical-transmit advancement after the host's logical outbound drain. */
@@ -152,7 +155,7 @@ namespace
 		FDevicePumpSequence& Sequence;
 
 		/** Makes full-device lifecycle progress observable without a real transport. */
-		MicroWorld::ETransportResult SendResult;
+		MicroWorld::Transport::ETransportResult SendResult;
 	};
 
 } // namespace
@@ -166,11 +169,13 @@ MW_TEST_CASE(Networking_AddDeviceAcceptsTwoDevices)
 	// Arrange
 	FLoopback Loopback;
 	FSystem System;
-	const MicroWorld::FTransportHostConfig Config = MakeConfig();
+	const MicroWorld::Transport::FTransportHostConfig Config = MakeConfig();
 
 	// Act
-	const MicroWorld::Networking::FDeviceHandle FirstDevice = System.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::Standalone, Config);
-	const MicroWorld::Networking::FDeviceHandle SecondDevice = System.AddDevice(Loopback.Port(1), MicroWorld::ENetworkMode::Standalone, Config);
+	const MicroWorld::Networking::FDeviceHandle FirstDevice =
+		System.AddDevice(Loopback.Port(0), MicroWorld::Transport::ENetworkMode::Standalone, Config);
+	const MicroWorld::Networking::FDeviceHandle SecondDevice =
+		System.AddDevice(Loopback.Port(1), MicroWorld::Transport::ENetworkMode::Standalone, Config);
 	const bool bFirstDeviceValid = FirstDevice.IsValid();
 	const bool bSecondDeviceValid = SecondDevice.IsValid();
 	const bool bDistinctSlots = FirstDevice.Index != SecondDevice.Index;
@@ -190,8 +195,8 @@ MW_TEST_CASE(Networking_AddChannelAcceptsBestEffortAndGuaranteedOnOneDevice)
 	// Arrange
 	FLoopback Loopback;
 	FSystem System;
-	const MicroWorld::FTransportHostConfig Config = MakeConfig();
-	const MicroWorld::Networking::FDeviceHandle Device = System.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::Standalone, Config);
+	const MicroWorld::Transport::FTransportHostConfig Config = MakeConfig();
+	const MicroWorld::Networking::FDeviceHandle Device = System.AddDevice(Loopback.Port(0), MicroWorld::Transport::ENetworkMode::Standalone, Config);
 
 	// Act
 	const MicroWorld::Networking::FChannelHandle BestEffort =
@@ -217,8 +222,8 @@ MW_TEST_CASE(Networking_AddChannelRejectsForgedDeviceGeneration)
 	// Arrange
 	FLoopback Loopback;
 	FSystem System;
-	const MicroWorld::FTransportHostConfig Config = MakeConfig();
-	const MicroWorld::Networking::FDeviceHandle Device = System.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::Standalone, Config);
+	const MicroWorld::Transport::FTransportHostConfig Config = MakeConfig();
+	const MicroWorld::Networking::FDeviceHandle Device = System.AddDevice(Loopback.Port(0), MicroWorld::Transport::ENetworkMode::Standalone, Config);
 	const MicroWorld::Networking::FDeviceHandle StaleDevice{Device.Index, static_cast<std::uint8_t>(Device.Generation + 1)};
 
 	// Act
@@ -245,11 +250,13 @@ MW_TEST_CASE(Networking_AddDeviceRejectsCapacityExhaustion)
 	// Arrange
 	FLoopback Loopback;
 	MicroWorld::Networking::TNetworking<FOneDeviceTraits> System;
-	const MicroWorld::FTransportHostConfig Config = MakeConfig();
+	const MicroWorld::Transport::FTransportHostConfig Config = MakeConfig();
 
 	// Act
-	const MicroWorld::Networking::FDeviceHandle AcceptedDevice = System.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::Standalone, Config);
-	const MicroWorld::Networking::FDeviceHandle RejectedDevice = System.AddDevice(Loopback.Port(1), MicroWorld::ENetworkMode::Standalone, Config);
+	const MicroWorld::Networking::FDeviceHandle AcceptedDevice =
+		System.AddDevice(Loopback.Port(0), MicroWorld::Transport::ENetworkMode::Standalone, Config);
+	const MicroWorld::Networking::FDeviceHandle RejectedDevice =
+		System.AddDevice(Loopback.Port(1), MicroWorld::Transport::ENetworkMode::Standalone, Config);
 	const bool bAcceptedDeviceValid = AcceptedDevice.IsValid();
 	const bool bRejectedDeviceValid = RejectedDevice.IsValid();
 
@@ -267,8 +274,8 @@ MW_TEST_CASE(Networking_AddChannelRejectsCapacityExhaustion)
 	// Arrange
 	FLoopback Loopback;
 	MicroWorld::Networking::TNetworking<FOneChannelTraits> System;
-	const MicroWorld::FTransportHostConfig Config = MakeConfig();
-	const MicroWorld::Networking::FDeviceHandle Device = System.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::Standalone, Config);
+	const MicroWorld::Transport::FTransportHostConfig Config = MakeConfig();
+	const MicroWorld::Networking::FDeviceHandle Device = System.AddDevice(Loopback.Port(0), MicroWorld::Transport::ENetworkMode::Standalone, Config);
 
 	// Act
 	const MicroWorld::Networking::FChannelHandle AcceptedChannel =
@@ -294,9 +301,10 @@ MW_TEST_CASE(Networking_BeginPlayFinalizesCompositionAndDefersHostStart)
 	// Arrange
 	FLoopback Loopback;
 	FSystem System;
-	MicroWorld::FTransportHostConfig ClientConfig = MakeConfig();
-	ClientConfig.ServerAddress = MicroWorld::MakeLoopbackAddress(1);
-	const MicroWorld::Networking::FDeviceHandle Device = System.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::Client, ClientConfig);
+	MicroWorld::Transport::FTransportHostConfig ClientConfig = MakeConfig();
+	ClientConfig.ServerAddress = MicroWorld::Transport::Address::MakeLoopbackAddress(1);
+	const MicroWorld::Networking::FDeviceHandle Device =
+		System.AddDevice(Loopback.Port(0), MicroWorld::Transport::ENetworkMode::Client, ClientConfig);
 	const MicroWorld::Networking::FChannelHandle InitialChannel =
 		System.AddChannel(Device, MicroWorld::Messaging::FMessageChannelId{1}, MicroWorld::Networking::EChannelReliability::BestEffort);
 
@@ -309,7 +317,8 @@ MW_TEST_CASE(Networking_BeginPlayFinalizesCompositionAndDefersHostStart)
 	System.BeginPlay(20);
 	const MicroWorld::Networking::FChannelHandle LateChannel =
 		System.AddChannel(Device, MicroWorld::Messaging::FMessageChannelId{2}, MicroWorld::Networking::EChannelReliability::BestEffort);
-	const MicroWorld::Networking::FDeviceHandle LateDevice = System.AddDevice(Loopback.Port(1), MicroWorld::ENetworkMode::Standalone, MakeConfig());
+	const MicroWorld::Networking::FDeviceHandle LateDevice =
+		System.AddDevice(Loopback.Port(1), MicroWorld::Transport::ENetworkMode::Standalone, MakeConfig());
 	System.PostAdvance(20);
 	const bool bPacketQueuedAfterBeginPlay = !Loopback.IsEmpty(1);
 	const bool bDeviceValid = Device.IsValid();
@@ -339,11 +348,11 @@ MW_TEST_CASE(Networking_CoreLifecyclePumpsDevicesInForwardAndReverseOrder)
 	FRecordingDevice FirstDevice{FirstRecord, Sequence};
 	FRecordingDevice SecondDevice{SecondRecord, Sequence};
 	FSystem System;
-	MicroWorld::FTransportHostConfig Config = MakeConfig();
-	Config.ServerAddress = MicroWorld::MakeLoopbackAddress(0);
+	MicroWorld::Transport::FTransportHostConfig Config = MakeConfig();
+	Config.ServerAddress = MicroWorld::Transport::Address::MakeLoopbackAddress(0);
 
-	const MicroWorld::Networking::FDeviceHandle FirstHandle = System.AddDevice(FirstDevice, MicroWorld::ENetworkMode::Client, Config);
-	const MicroWorld::Networking::FDeviceHandle SecondHandle = System.AddDevice(SecondDevice, MicroWorld::ENetworkMode::Client, Config);
+	const MicroWorld::Networking::FDeviceHandle FirstHandle = System.AddDevice(FirstDevice, MicroWorld::Transport::ENetworkMode::Client, Config);
+	const MicroWorld::Networking::FDeviceHandle SecondHandle = System.AddDevice(SecondDevice, MicroWorld::Transport::ENetworkMode::Client, Config);
 	MicroWorld::IPlaySystem& Lifecycle = System;
 
 	// Act: one BeginPlay plus one PreAdvance/PostAdvance cycle pumps every recording device.
@@ -392,13 +401,14 @@ MW_TEST_CASE(Networking_PostAdvanceAdvancesIdleAndFullDevices)
 	FDevicePumpRecord IdleRecord{};
 	FDevicePumpRecord FullRecord{};
 	FRecordingDevice IdleDevice{IdleRecord, Sequence};
-	FRecordingDevice FullDevice{FullRecord, Sequence, MicroWorld::ETransportResult::Full};
+	FRecordingDevice FullDevice{FullRecord, Sequence, MicroWorld::Transport::ETransportResult::Full};
 	FSystem System;
-	MicroWorld::FTransportHostConfig ClientConfig = MakeConfig();
-	ClientConfig.ServerAddress = MicroWorld::MakeLoopbackAddress(0);
+	MicroWorld::Transport::FTransportHostConfig ClientConfig = MakeConfig();
+	ClientConfig.ServerAddress = MicroWorld::Transport::Address::MakeLoopbackAddress(0);
 
-	const MicroWorld::Networking::FDeviceHandle IdleHandle = System.AddDevice(IdleDevice, MicroWorld::ENetworkMode::DedicatedServer, MakeConfig());
-	const MicroWorld::Networking::FDeviceHandle FullHandle = System.AddDevice(FullDevice, MicroWorld::ENetworkMode::Client, ClientConfig);
+	const MicroWorld::Networking::FDeviceHandle IdleHandle =
+		System.AddDevice(IdleDevice, MicroWorld::Transport::ENetworkMode::DedicatedServer, MakeConfig());
+	const MicroWorld::Networking::FDeviceHandle FullHandle = System.AddDevice(FullDevice, MicroWorld::Transport::ENetworkMode::Client, ClientConfig);
 
 	// Act: one BeginPlay plus one PostAdvance exposes both the idle and full-device pump paths.
 	System.BeginPlay(0);
@@ -479,9 +489,9 @@ MW_TEST_CASE(Networking_EndPlayStopsClientBeforeFuturePostAdvance)
 	FDevicePumpRecord Record{};
 	FRecordingDevice Device{Record, Sequence};
 	FSystem System;
-	MicroWorld::FTransportHostConfig Config = MakeConfig();
-	Config.ServerAddress = MicroWorld::MakeLoopbackAddress(0);
-	const MicroWorld::Networking::FDeviceHandle DeviceHandle = System.AddDevice(Device, MicroWorld::ENetworkMode::Client, Config);
+	MicroWorld::Transport::FTransportHostConfig Config = MakeConfig();
+	Config.ServerAddress = MicroWorld::Transport::Address::MakeLoopbackAddress(0);
+	const MicroWorld::Networking::FDeviceHandle DeviceHandle = System.AddDevice(Device, MicroWorld::Transport::ENetworkMode::Client, Config);
 	MicroWorld::IPlaySystem& Lifecycle = System;
 
 	// Act: BeginPlay and one PostAdvance flush the initial connection hello.
@@ -510,13 +520,13 @@ MW_TEST_CASE(Networking_PreAdvanceAndPostAdvancePumpRoutedMessageInOrder)
 	FLoopback Loopback;
 	FSystem ServerSystem;
 	FSystem ClientSystem;
-	const MicroWorld::FTransportHostConfig ServerConfig = MakeConfig();
-	MicroWorld::FTransportHostConfig ClientConfig = MakeConfig();
-	ClientConfig.ServerAddress = MicroWorld::MakeLoopbackAddress(0);
+	const MicroWorld::Transport::FTransportHostConfig ServerConfig = MakeConfig();
+	MicroWorld::Transport::FTransportHostConfig ClientConfig = MakeConfig();
+	ClientConfig.ServerAddress = MicroWorld::Transport::Address::MakeLoopbackAddress(0);
 	const MicroWorld::Networking::FDeviceHandle ServerDevice =
-		ServerSystem.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::DedicatedServer, ServerConfig);
+		ServerSystem.AddDevice(Loopback.Port(0), MicroWorld::Transport::ENetworkMode::DedicatedServer, ServerConfig);
 	const MicroWorld::Networking::FDeviceHandle ClientDevice =
-		ClientSystem.AddDevice(Loopback.Port(1), MicroWorld::ENetworkMode::Client, ClientConfig);
+		ClientSystem.AddDevice(Loopback.Port(1), MicroWorld::Transport::ENetworkMode::Client, ClientConfig);
 	const MicroWorld::Networking::FChannelHandle ServerChannel =
 		ServerSystem.AddChannel(ServerDevice, MicroWorld::Messaging::FMessageChannelId{1}, MicroWorld::Networking::EChannelReliability::BestEffort);
 	const MicroWorld::Networking::FChannelHandle ClientChannel =

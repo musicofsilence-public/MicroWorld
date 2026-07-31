@@ -10,7 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace MicroWorld
+namespace MicroWorld::Transport
 {
 
 /**
@@ -53,7 +53,8 @@ public:
 	 * transmit slot.
 	 * @return Outcome of the acceptance attempt.
 	 */
-	ETransportResult TryQueueFrame(std::uint8_t InLocalNodeId, const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept;
+	ETransportResult TryQueueFrame(
+		std::uint8_t InLocalNodeId, const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept;
 
 	/**
 	 * Reads the next queued transmit byte without advancing state.
@@ -80,7 +81,7 @@ public:
 	 * @param InByte Next byte received from the E32 UART stream.
 	 * @return Decoder event produced by this byte, or `FrameReady` when a prior frame is still held.
 	 */
-	EFrameEvent PushReceivedByte(std::uint8_t InByte) noexcept;
+	::MicroWorld::Transport::FrameCodec::EFrameEvent PushReceivedByte(std::uint8_t InByte) noexcept;
 
 	/** Reports whether a CRC-valid receive frame is held for delivery. */
 	bool HasReceivedFrame() const noexcept;
@@ -97,14 +98,17 @@ public:
 	 * @param OutResult Filled with the delivered byte count only on `Success`.
 	 * @return Outcome of the delivery attempt.
 	 */
-	ETransportResult TryDeliverReceivedFrame(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept;
+	ETransportResult TryDeliverReceivedFrame(
+		::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
+		TSpan<std::uint8_t> InDestination,
+		::MicroWorld::Transport::Device::FReceiveResult& OutResult) noexcept;
 
 private:
 	/** Owns bounded receive assembly and retains one complete frame across a `Full` retry. */
-	TFrameDecoder<E32MaxPayloadBytes> Decoder{};
+	::MicroWorld::Transport::FrameCodec::TFrameDecoder<E32MaxPayloadBytes> Decoder{};
 
 	/** Holds one complete encoded frame until the UART accepts every byte. */
-	std::uint8_t TransmitFrame[E32MaxPayloadBytes + FrameOverheadBytes]{};
+	std::uint8_t TransmitFrame[E32MaxPayloadBytes + ::MicroWorld::Transport::FrameCodec::FrameOverheadBytes]{};
 
 	/** Counts meaningful bytes in `TransmitFrame`; zero means the transmit slot is free. */
 	std::size_t TransmitFrameLength{0};
@@ -113,4 +117,4 @@ private:
 	std::size_t NextTransmitByteIndex{0};
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Transport

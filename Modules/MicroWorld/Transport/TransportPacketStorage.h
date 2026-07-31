@@ -6,7 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace MicroWorld
+namespace MicroWorld::Transport
 {
 
 template<std::size_t MaxPackets, std::size_t MaxPacketBytes>
@@ -61,7 +61,7 @@ private:
 	std::array<std::size_t, MaxPackets> PacketLengths{};
 
 	/** Records the destination address queued with each packet so AdvanceSend routes it correctly. */
-	std::array<FDeviceAddress, MaxPackets> Destinations{};
+	std::array<::MicroWorld::Transport::Address::FDeviceAddress, MaxPackets> Destinations{};
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Transport

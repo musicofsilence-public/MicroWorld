@@ -12,6 +12,11 @@
 namespace MicroWorld
 {
 
+using namespace ::MicroWorld::Transport;
+using namespace ::MicroWorld::Transport::Address;
+using namespace ::MicroWorld::Transport::Device;
+using namespace ::MicroWorld::Transport::FrameCodec;
+
 /**
  * Largest single-transmission payload one wired I2C frame carries.
  *

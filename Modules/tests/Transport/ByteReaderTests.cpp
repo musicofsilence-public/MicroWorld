@@ -10,9 +10,9 @@
 namespace
 {
 
-using MicroWorld::ETransportResult;
-using MicroWorld::FByteReader;
 using MicroWorld::TSpan;
+using MicroWorld::Transport::ETransportResult;
+using MicroWorld::Transport::FByteReader;
 
 /** Pre-fill marker written into every destination byte before a read, so a write is observable. */
 constexpr std::uint8_t DestinationPrefillByte = 0xFF;

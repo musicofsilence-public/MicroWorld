@@ -10,9 +10,9 @@
 namespace
 {
 
-using MicroWorld::ETransportResult;
-using MicroWorld::FByteWriter;
 using MicroWorld::TSpan;
+using MicroWorld::Transport::ETransportResult;
+using MicroWorld::Transport::FByteWriter;
 
 /** Value the value-initialized storage bytes hold before any write, so a write is observable. */
 constexpr std::uint8_t UntouchedStorageByte = 0x00;

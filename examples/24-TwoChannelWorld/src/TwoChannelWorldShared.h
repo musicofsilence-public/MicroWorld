@@ -126,9 +126,9 @@ inline MicroWorld::FEsp32UartConfig MakeUartConfig(const std::uint8_t NodeId) no
 }
 
 /** Builds the shared session config; heartbeats keep each point-to-point peer alive between sends. */
-inline MicroWorld::FTransportHostConfig MakeHostConfig() noexcept
+inline MicroWorld::Transport::FTransportHostConfig MakeHostConfig() noexcept
 {
-	MicroWorld::FTransportHostConfig Config{};
+	MicroWorld::Transport::FTransportHostConfig Config{};
 	Config.HeartbeatIntervalMilliseconds = 1000;
 	Config.PeerTimeoutMilliseconds = 5000;
 	Config.ProtocolVersion = ProtocolVersion;

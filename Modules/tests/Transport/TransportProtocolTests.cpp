@@ -11,19 +11,19 @@
 namespace
 {
 
-using MicroWorld::ControlChannel;
-using MicroWorld::EControlMessageType;
-using MicroWorld::ETransportResult;
-using MicroWorld::FByteWriter;
-using MicroWorld::FControlMessage;
-using MicroWorld::FMessageHeader;
-using MicroWorld::MaxControlPayloadBytes;
-using MicroWorld::MessageHeaderBytes;
-using MicroWorld::ReadControlMessage;
-using MicroWorld::ReadMessage;
 using MicroWorld::TSpan;
-using MicroWorld::WriteControlMessage;
-using MicroWorld::WriteMessage;
+using MicroWorld::Transport::ControlChannel;
+using MicroWorld::Transport::EControlMessageType;
+using MicroWorld::Transport::ETransportResult;
+using MicroWorld::Transport::FByteWriter;
+using MicroWorld::Transport::FControlMessage;
+using MicroWorld::Transport::FMessageHeader;
+using MicroWorld::Transport::MaxControlPayloadBytes;
+using MicroWorld::Transport::MessageHeaderBytes;
+using MicroWorld::Transport::ReadControlMessage;
+using MicroWorld::Transport::ReadMessage;
+using MicroWorld::Transport::WriteControlMessage;
+using MicroWorld::Transport::WriteMessage;
 
 /** Channel byte the round-trip and control cases encode as the message channel. */
 constexpr std::uint8_t ApplicationChannel = 7;

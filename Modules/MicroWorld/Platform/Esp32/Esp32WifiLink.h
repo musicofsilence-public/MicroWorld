@@ -8,6 +8,8 @@
 namespace MicroWorld
 {
 
+using namespace ::MicroWorld::Transport;
+
 /** Settings for hosting a SoftAP network (board is the access point). */
 struct FEsp32AccessPointConfig
 {

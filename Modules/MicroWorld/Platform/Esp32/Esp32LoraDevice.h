@@ -9,6 +9,10 @@
 namespace MicroWorld
 {
 
+using namespace ::MicroWorld::Transport;
+using namespace ::MicroWorld::Transport::Address;
+using namespace ::MicroWorld::Transport::Device;
+
 /**
  * Construction parameters for one ESP32 E32 LoRa compatibility facade.
  *

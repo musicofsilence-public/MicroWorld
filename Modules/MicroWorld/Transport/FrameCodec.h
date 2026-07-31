@@ -10,7 +10,7 @@
 #include <cstdint>
 #include <cstring>
 
-namespace MicroWorld
+namespace MicroWorld::Transport::FrameCodec
 {
 
 /** Single-byte sentinel that marks the start of every framed message on the wire. */
@@ -404,4 +404,4 @@ private:
 	std::uint8_t PayloadStorage[MaxPayloadBytes]{};
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Transport::FrameCodec

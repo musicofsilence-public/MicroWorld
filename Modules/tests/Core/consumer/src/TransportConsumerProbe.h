@@ -98,7 +98,7 @@ inline int RunTransportConsumerProbe() noexcept
 
 	// Byte writer: fill, observe Full past capacity, prove accepted bytes survive.
 	std::uint8_t WriterStorage[MicroWorldConsumer::SmallWriterByteCount]{};
-	MicroWorld::FByteWriter Writer(TSpan<std::uint8_t>(WriterStorage, MicroWorldConsumer::SmallWriterByteCount));
+	MicroWorld::Transport::FByteWriter Writer(TSpan<std::uint8_t>(WriterStorage, MicroWorldConsumer::SmallWriterByteCount));
 	const bool bAllWritesAccepted = Writer.WriteByte(MicroWorldConsumer::ByteValue01) == ETransportResult::Success
 		&& Writer.WriteByte(MicroWorldConsumer::ByteValue02) == ETransportResult::Success
 		&& Writer.WriteByte(MicroWorldConsumer::ByteValue03) == ETransportResult::Success
@@ -121,7 +121,7 @@ inline int RunTransportConsumerProbe() noexcept
 	// Byte reader: consume, observe Unavailable past source, prove output untouched on failure.
 	const std::uint8_t ReaderSource[MicroWorldConsumer::SmallWriterByteCount] = {
 		MicroWorldConsumer::ByteValue10, MicroWorldConsumer::ByteValue20, MicroWorldConsumer::ByteValue30, MicroWorldConsumer::ByteValue40};
-	MicroWorld::FByteReader Reader(TSpan<const std::uint8_t>(ReaderSource, MicroWorldConsumer::SmallWriterByteCount));
+	MicroWorld::Transport::FByteReader Reader(TSpan<const std::uint8_t>(ReaderSource, MicroWorldConsumer::SmallWriterByteCount));
 	std::uint8_t ReadDestination[MicroWorldConsumer::SmallWriterByteCount]{};
 	const ETransportResult ReadResult = Reader.Read(TSpan<std::uint8_t>(ReadDestination, MicroWorldConsumer::SmallWriterByteCount));
 	if (ReadResult != ETransportResult::Success)
@@ -213,7 +213,7 @@ inline int RunTransportConsumerProbe() noexcept
 	}
 
 	// Manager: queue, advance once (success), observe backpressure retention, recover, receive.
-	MicroWorld::TTransportPacketStorage<2, 4> ManagerStorage;
+	MicroWorld::Transport::TTransportPacketStorage<2, 4> ManagerStorage;
 	TTransportManager<2, 4> Manager(Loopback.Port(0), ManagerStorage);
 	const std::uint8_t QueuePacket[MicroWorldConsumer::QueuePacketByteCount] = {
 		MicroWorldConsumer::ByteValue01, MicroWorldConsumer::ByteValue02, MicroWorldConsumer::ByteValue03};
@@ -230,7 +230,7 @@ inline int RunTransportConsumerProbe() noexcept
 
 	// Backpressure: fill the device, then observe the manager retain its head across a Full advance.
 	THostLoopback<2, 1, 4> BackpressureDevice;
-	MicroWorld::TTransportPacketStorage<1, 4> BackpressureStorage;
+	MicroWorld::Transport::TTransportPacketStorage<1, 4> BackpressureStorage;
 	TTransportManager<1, 4> BackpressureManager(BackpressureDevice.Port(0), BackpressureStorage);
 	const std::uint8_t BackpressurePacket[MicroWorldConsumer::SmallPacketByteCount] = {
 		MicroWorldConsumer::ByteValue55, MicroWorldConsumer::ByteValue66};

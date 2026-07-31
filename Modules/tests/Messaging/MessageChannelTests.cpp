@@ -25,22 +25,14 @@ namespace
 {
 using MicroWorld::DurationMilliseconds;
 using MicroWorld::EEngineResult;
-using MicroWorld::ENetworkMode;
 using MicroWorld::ERuntimeResult;
-using MicroWorld::ETransportHostState;
-using MicroWorld::ETransportResult;
 using MicroWorld::FDefaultEngineTraits;
 using MicroWorld::FGarbageCollectionBudget;
-using MicroWorld::FPacketDropDevice;
-using MicroWorld::FTransportHostConfig;
-using MicroWorld::MakeLoopbackAddress;
 using MicroWorld::TEngine;
-using MicroWorld::THostLoopback;
 using MicroWorld::THostPlaySystem;
 using MicroWorld::TimePointMilliseconds;
 using MicroWorld::TPlaySystemSet;
 using MicroWorld::TSpan;
-using MicroWorld::TTransportHost;
 using MicroWorld::Messaging::BroadcastActorId;
 using MicroWorld::Messaging::EChannelSendTarget;
 using MicroWorld::Messaging::EMessageResult;
@@ -57,6 +49,14 @@ using MicroWorld::Messaging::ReliableHeaderBytes;
 using MicroWorld::Messaging::TMessageChannelBinding;
 using MicroWorld::Messaging::TMessageRouter;
 using MicroWorld::Messaging::TReliableChannel;
+using MicroWorld::Transport::ENetworkMode;
+using MicroWorld::Transport::ETransportHostState;
+using MicroWorld::Transport::ETransportResult;
+using MicroWorld::Transport::FPacketDropDevice;
+using MicroWorld::Transport::FTransportHostConfig;
+using MicroWorld::Transport::THostLoopback;
+using MicroWorld::Transport::TTransportHost;
+using MicroWorld::Transport::Address::MakeLoopbackAddress;
 
 /** Asserts a messaging operation returned Success without discarding the result. */
 #define MW_EXPECT_SUCCESS(TestContext, Result, Message) MW_EXPECT_EQ(TestContext, EMessageResult::Success, Result, Message)

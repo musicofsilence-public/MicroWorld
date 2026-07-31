@@ -7,16 +7,16 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace MicroWorld
+namespace MicroWorld::Transport
 {
 
 /**
- * Fixed-capacity, non-blocking E32 LoRa `IDevice` over a platform-provided UART byte stream.
+ * Fixed-capacity, non-blocking E32 LoRa `::MicroWorld::Transport::Device::IDevice` over a platform-provided UART byte stream.
  *
  * Construction and initialization perform no I/O. Platform adapters own UART configuration and lifetime, while this
  * device owns portable framing, bounded physical progress, and transactional delivery over the borrowed byte stream.
  */
-class FE32LoraDevice final : public IDevice
+class FE32LoraDevice final : public ::MicroWorld::Transport::Device::IDevice
 {
 public:
 	/** Creates an inert device that borrows a byte stream the platform adapter keeps alive. */
@@ -43,7 +43,7 @@ public:
 	 * and queue.
 	 * @return Outcome of the acceptance attempt.
 	 */
-	ETransportResult TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override;
+	ETransportResult TrySend(const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
 	 * Pumps a bounded number of UART bytes and transactionally delivers at most one decoded frame.
@@ -55,9 +55,12 @@ public:
 	 * @param OutFrom Filled with the sender's E32 address only on `Success`.
 	 * @param InDestination Destination for one decoded payload.
 	 * @param OutResult Filled with the delivered byte count only on `Success`.
-	 * @return `Success`, `Unavailable`, `Full`, or `Invalid` under the shared `IDevice` contract.
+	 * @return `Success`, `Unavailable`, `Full`, or `Invalid` under the shared `::MicroWorld::Transport::Device::IDevice` contract.
 	 */
-	ETransportResult TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept override;
+	ETransportResult TryReceive(
+		::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
+		TSpan<std::uint8_t> InDestination,
+		::MicroWorld::Transport::Device::FReceiveResult& OutResult) noexcept override;
 
 	/** Reports the shared E32 payload capacity, excluding framing overhead. */
 	std::size_t MaxPacketBytes() const noexcept override;
@@ -87,4 +90,4 @@ private:
 	bool bInitialized{false};
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Transport

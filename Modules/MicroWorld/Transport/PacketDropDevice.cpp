@@ -1,9 +1,9 @@
 #include <MicroWorld/Transport/PacketDropDevice.h>
 
-namespace MicroWorld
+namespace MicroWorld::Transport
 {
 
-FPacketDropDevice::FPacketDropDevice(IDevice& InInnerDevice, const std::uint32_t InDropEveryNthSend) noexcept
+FPacketDropDevice::FPacketDropDevice(::MicroWorld::Transport::Device::IDevice& InInnerDevice, const std::uint32_t InDropEveryNthSend) noexcept
 	: InnerDevice(InInnerDevice), DropEveryNthSend(InDropEveryNthSend)
 {
 }
@@ -11,7 +11,7 @@ FPacketDropDevice::FPacketDropDevice(IDevice& InInnerDevice, const std::uint32_t
 /** Defines the destructor out of line so one vtable entry lives in the Transport archive. */
 FPacketDropDevice::~FPacketDropDevice() noexcept = default;
 
-ETransportResult FPacketDropDevice::TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
+ETransportResult FPacketDropDevice::TrySend(const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
 {
 	++SendCallCount;
 	if (DropEveryNthSend != 0 && (SendCallCount % DropEveryNthSend == 0))
@@ -23,7 +23,10 @@ ETransportResult FPacketDropDevice::TrySend(const FDeviceAddress& InTo, TSpan<co
 	return InnerDevice.TrySend(InTo, InPacket);
 }
 
-ETransportResult FPacketDropDevice::TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
+ETransportResult FPacketDropDevice::TryReceive(
+	::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
+	TSpan<std::uint8_t> InDestination,
+	::MicroWorld::Transport::Device::FReceiveResult& OutResult) noexcept
 {
 	return InnerDevice.TryReceive(OutFrom, InDestination, OutResult);
 }
@@ -38,4 +41,4 @@ std::uint32_t FPacketDropDevice::DroppedSendCount() const noexcept
 	return DroppedSendTotal;
 }
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Transport

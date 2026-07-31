@@ -8,7 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace MicroWorld
+namespace MicroWorld::Transport
 {
 
 /**
@@ -16,11 +16,11 @@ namespace MicroWorld
  * A dropped send returns `Success` without touching the inner device or inspecting the packet,
  * modeling a packet that left the wire and was lost; receives and `MaxPacketBytes` always pass through.
  */
-class FPacketDropDevice final : public IDevice
+class FPacketDropDevice final : public ::MicroWorld::Transport::Device::IDevice
 {
 public:
 	/** Binds the device to wrap and the drop interval; `DropEveryNthSend == 0` disables dropping. */
-	FPacketDropDevice(IDevice& InInnerDevice, std::uint32_t InDropEveryNthSend) noexcept;
+	FPacketDropDevice(::MicroWorld::Transport::Device::IDevice& InInnerDevice, std::uint32_t InDropEveryNthSend) noexcept;
 
 	/** Deleted: this device holds `InnerDevice` by reference and is itself held by reference, so copying would risk dangling. */
 	FPacketDropDevice(const FPacketDropDevice&) = delete;
@@ -34,17 +34,20 @@ public:
 	/** Deleted: this device holds `InnerDevice` by reference and is itself held by reference, so relocating it would risk dangling. */
 	FPacketDropDevice& operator=(FPacketDropDevice&&) = delete;
 
-	/** Anchors the vtable in one translation unit, matching `IDevice`'s out-of-line destructor rule. */
+	/** Anchors the vtable in one translation unit, matching `::MicroWorld::Transport::Device::IDevice`'s out-of-line destructor rule. */
 	~FPacketDropDevice() noexcept override;
 
 	/**
 	 * Counts this call and, on every `DropEveryNthSend`-th call, drops the packet by returning
 	 * `Success` without forwarding it; every other call forwards verbatim to the inner device.
 	 */
-	ETransportResult TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override;
+	ETransportResult TrySend(const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/** Forwards verbatim to the inner device; receives are never counted or dropped. */
-	ETransportResult TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept override;
+	ETransportResult TryReceive(
+		::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
+		TSpan<std::uint8_t> InDestination,
+		::MicroWorld::Transport::Device::FReceiveResult& OutResult) noexcept override;
 
 	/** Forwards bounded physical transmit progress so wrapped staged devices cannot stall behind loss injection. */
 	void AdvanceTransmit() noexcept override { InnerDevice.AdvanceTransmit(); }
@@ -57,7 +60,7 @@ public:
 
 private:
 	/** The wrapped device every non-dropped send and every receive forwards to. */
-	IDevice& InnerDevice;
+	::MicroWorld::Transport::Device::IDevice& InnerDevice;
 
 	/** Every `DropEveryNthSend`-th send is dropped; zero disables dropping entirely. */
 	const std::uint32_t DropEveryNthSend;
@@ -69,4 +72,4 @@ private:
 	std::uint32_t DroppedSendTotal{0};
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Transport

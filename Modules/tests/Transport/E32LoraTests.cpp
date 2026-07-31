@@ -19,11 +19,11 @@ MW_TEST_CASE(E32LoraAddressRoundTripsNodeId)
 	constexpr std::uint8_t NodeId = 42;
 
 	// Act
-	const MicroWorld::FDeviceAddress Address = MicroWorld::MakeLoraAddress(NodeId);
+	const MicroWorld::Transport::Address::FDeviceAddress Address = MicroWorld::Transport::MakeLoraAddress(NodeId);
 
 	// Assert
-	MW_EXPECT_TRUE(Test, MicroWorld::IsLoraAddress(Address), "Encoded E32 address must use the one-byte shape");
-	MW_EXPECT_EQ(Test, NodeId, MicroWorld::LoraAddressNodeId(Address), "Encoded E32 address must preserve the node id");
+	MW_EXPECT_TRUE(Test, MicroWorld::Transport::IsLoraAddress(Address), "Encoded E32 address must use the one-byte shape");
+	MW_EXPECT_EQ(Test, NodeId, MicroWorld::Transport::LoraAddressNodeId(Address), "Encoded E32 address must preserve the node id");
 }
 
 /**
@@ -33,12 +33,12 @@ MW_TEST_CASE(E32LoraAddressRoundTripsNodeId)
 MW_TEST_CASE(E32LoraAddressPreservesBoundaryNodeIds)
 {
 	// Arrange
-	const MicroWorld::FDeviceAddress LowestAddress = MicroWorld::MakeLoraAddress(std::uint8_t{0});
-	const MicroWorld::FDeviceAddress HighestAddress = MicroWorld::MakeLoraAddress(std::uint8_t{255});
+	const MicroWorld::Transport::Address::FDeviceAddress LowestAddress = MicroWorld::Transport::MakeLoraAddress(std::uint8_t{0});
+	const MicroWorld::Transport::Address::FDeviceAddress HighestAddress = MicroWorld::Transport::MakeLoraAddress(std::uint8_t{255});
 
 	// Assert
-	MW_EXPECT_EQ(Test, std::uint8_t{0}, MicroWorld::LoraAddressNodeId(LowestAddress), "Node id zero must round-trip");
-	MW_EXPECT_EQ(Test, std::uint8_t{255}, MicroWorld::LoraAddressNodeId(HighestAddress), "Node id 255 must round-trip");
+	MW_EXPECT_EQ(Test, std::uint8_t{0}, MicroWorld::Transport::LoraAddressNodeId(LowestAddress), "Node id zero must round-trip");
+	MW_EXPECT_EQ(Test, std::uint8_t{255}, MicroWorld::Transport::LoraAddressNodeId(HighestAddress), "Node id 255 must round-trip");
 }
 
 /**
@@ -48,13 +48,13 @@ MW_TEST_CASE(E32LoraAddressPreservesBoundaryNodeIds)
 MW_TEST_CASE(E32LoraAddressRejectsOtherActiveLengths)
 {
 	// Arrange
-	MicroWorld::FDeviceAddress EmptyAddress{};
-	MicroWorld::FDeviceAddress TwoByteAddress{};
+	MicroWorld::Transport::Address::FDeviceAddress EmptyAddress{};
+	MicroWorld::Transport::Address::FDeviceAddress TwoByteAddress{};
 	TwoByteAddress.Size = 2;
 
 	// Assert
-	MW_EXPECT_TRUE(Test, !MicroWorld::IsLoraAddress(EmptyAddress), "An empty address must not match the E32 shape");
-	MW_EXPECT_TRUE(Test, !MicroWorld::IsLoraAddress(TwoByteAddress), "A two-byte address must not match the E32 shape");
+	MW_EXPECT_TRUE(Test, !MicroWorld::Transport::IsLoraAddress(EmptyAddress), "An empty address must not match the E32 shape");
+	MW_EXPECT_TRUE(Test, !MicroWorld::Transport::IsLoraAddress(TwoByteAddress), "A two-byte address must not match the E32 shape");
 }
 
 /**
@@ -70,7 +70,7 @@ MW_TEST_CASE(E32LoraPayloadBoundMatchesTransparentFrame)
 	MW_EXPECT_EQ(
 		Test,
 		E32TransparentFrameBytes,
-		MicroWorld::E32MaxPayloadBytes + MicroWorld::FrameOverheadBytes,
+		MicroWorld::Transport::E32MaxPayloadBytes + MicroWorld::Transport::FrameCodec::FrameOverheadBytes,
 		"E32 payload plus MicroWorld framing must fit one transparent frame");
 }
 

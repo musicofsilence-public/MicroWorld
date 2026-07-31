@@ -42,7 +42,7 @@ struct FPicoE32LoraConfig
  * portable framing. `TrySend(Success)` queues one complete frame for `AdvanceTransmit`, while transparent-mode
  * destination addresses remain shape-checked metadata rather than on-air routing.
  */
-class FPicoLoraDevice final : public IDevice
+class FPicoLoraDevice final : public ::MicroWorld::Transport::Device::IDevice
 {
 public:
 	/** Creates a closed device that borrows the production Pico SDK UART binding. */
@@ -75,7 +75,7 @@ public:
 	 * @param InConfig UART identity, GPIO routing, baud rate, and local node id.
 	 * @return Outcome of the initialization attempt.
 	 */
-	ETransportResult Initialize(const FPicoE32LoraConfig& InConfig) noexcept;
+	::MicroWorld::Transport::ETransportResult Initialize(const FPicoE32LoraConfig& InConfig) noexcept;
 
 	/**
 	 * Transactionally accepts one complete packet into the delegated fixed transmit slot.
@@ -89,7 +89,8 @@ public:
 	 * and queue.
 	 * @return Outcome of the acceptance attempt.
 	 */
-	ETransportResult TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override;
+	::MicroWorld::Transport::ETransportResult TrySend(
+		const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
 	 * Pumps a bounded number of UART bytes and transactionally delivers at most one frame.
@@ -102,7 +103,10 @@ public:
 	 * @param OutResult Filled with the delivered byte count only on `Success`.
 	 * @return `Success`, `Unavailable`, `Full`, or `Invalid` under the shared `IDevice` contract.
 	 */
-	ETransportResult TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept override;
+	::MicroWorld::Transport::ETransportResult TryReceive(
+		::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
+		TSpan<std::uint8_t> InDestination,
+		::MicroWorld::Transport::Device::FReceiveResult& OutResult) noexcept override;
 
 	/** Reports the delegated shared E32 payload capacity, excluding framing overhead. */
 	std::size_t MaxPacketBytes() const noexcept override;
@@ -118,7 +122,7 @@ private:
 	FPicoUartByteStream ByteStream{};
 
 	/** Owns portable E32 framing while borrowing the preceding byte stream for its full facade lifetime. */
-	FE32LoraDevice RadioDevice{ByteStream};
+	::MicroWorld::Transport::FE32LoraDevice RadioDevice{ByteStream};
 };
 
 } // namespace MicroWorld

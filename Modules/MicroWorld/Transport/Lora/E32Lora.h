@@ -5,7 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace MicroWorld
+namespace MicroWorld::Transport
 {
 
 /**
@@ -17,7 +17,7 @@ namespace MicroWorld
 constexpr std::size_t E32MaxPayloadBytes = 58;
 
 /**
- * Encodes an E32 node id into an opaque one-byte `FDeviceAddress`.
+ * Encodes an E32 node id into an opaque one-byte `::MicroWorld::Transport::Address::FDeviceAddress`.
  *
  * The byte names the sender carried by a received MicroWorld frame. Transparent-mode E32 transmission is broadcast,
  * so a destination address is device-relative metadata rather than an on-air routing command.
@@ -25,9 +25,9 @@ constexpr std::size_t E32MaxPayloadBytes = 58;
  * @param InNodeId Node id this address names.
  * @return One-byte address carrying the node id.
  */
-constexpr FDeviceAddress MakeLoraAddress(const std::uint8_t InNodeId) noexcept
+constexpr ::MicroWorld::Transport::Address::FDeviceAddress MakeLoraAddress(const std::uint8_t InNodeId) noexcept
 {
-	FDeviceAddress Address{};
+	::MicroWorld::Transport::Address::FDeviceAddress Address{};
 	Address.Bytes[0] = InNodeId;
 	Address.Size = 1;
 	return Address;
@@ -42,7 +42,7 @@ constexpr FDeviceAddress MakeLoraAddress(const std::uint8_t InNodeId) noexcept
  * @param InAddress Address whose active length to test.
  * @return True when the active length is exactly one byte.
  */
-constexpr bool IsLoraAddress(const FDeviceAddress& InAddress) noexcept
+constexpr bool IsLoraAddress(const ::MicroWorld::Transport::Address::FDeviceAddress& InAddress) noexcept
 {
 	return InAddress.Size == 1;
 }
@@ -56,9 +56,9 @@ constexpr bool IsLoraAddress(const FDeviceAddress& InAddress) noexcept
  * @param InAddress Validated one-byte E32 address.
  * @return Node id carried by the address.
  */
-constexpr std::uint8_t LoraAddressNodeId(const FDeviceAddress& InAddress) noexcept
+constexpr std::uint8_t LoraAddressNodeId(const ::MicroWorld::Transport::Address::FDeviceAddress& InAddress) noexcept
 {
 	return InAddress.Bytes[0];
 }
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Transport

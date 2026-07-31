@@ -7,6 +7,8 @@
 namespace MicroWorld
 {
 
+using namespace ::MicroWorld::Transport::Address;
+
 /**
  * Encodes an SPI node id into an opaque one-byte `FDeviceAddress`.
  *

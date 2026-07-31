@@ -126,7 +126,7 @@ class TNetworking final : public IPlaySystem
 
 private:
 	/** Names the concrete host type every device slot stores. */
-	using FTransportHost = TTransportHost<TTraits::MaxPeers, TTraits::MaxPacketBytes>;
+	using FTransportHost = ::MicroWorld::Transport::TTransportHost<TTraits::MaxPeers, TTraits::MaxPacketBytes>;
 
 	/** Names the binding that connects one host wire channel to the shared router. */
 	using FChannelBinding = ::MicroWorld::Messaging::TMessageChannelBinding<FTransportHost>;
@@ -169,7 +169,10 @@ public:
 	 * @return A generation-checked device handle, or an invalid handle on closed composition,
 	 *         exhausted capacity, or a rejected host configuration.
 	 */
-	FDeviceHandle AddDevice(IDevice& InDevice, ENetworkMode InMode, const FTransportHostConfig& InConfig) noexcept
+	FDeviceHandle AddDevice(
+		::MicroWorld::Transport::Device::IDevice& InDevice,
+		::MicroWorld::Transport::ENetworkMode InMode,
+		const ::MicroWorld::Transport::FTransportHostConfig& InConfig) noexcept
 	{
 		if (bCompositionClosed)
 		{
@@ -181,7 +184,7 @@ public:
 		{
 			return {};
 		}
-		if (Slot->Host->Configure(InMode, InConfig) != ETransportResult::Success)
+		if (Slot->Host->Configure(InMode, InConfig) != ::MicroWorld::Transport::ETransportResult::Success)
 		{
 			ReleaseDeviceSlot(*Slot);
 			return {};
@@ -338,7 +341,7 @@ private:
 		bool bLive{false};
 
 		/** Configured host role, retained so AddChannel can derive its outbound peer target. */
-		ENetworkMode Mode{ENetworkMode::Standalone};
+		::MicroWorld::Transport::ENetworkMode Mode{::MicroWorld::Transport::ENetworkMode::Standalone};
 
 		/** Storage for the host, whose address must remain fixed while bindings reference it. */
 		alignas(FTransportHost) std::byte HostStorage[sizeof(FTransportHost)]{};
@@ -374,7 +377,7 @@ private:
 #endif
 
 	/** Constructs a host in the first free slot, or returns null when device capacity is exhausted. */
-	FDeviceSlot* AcquireDeviceSlot(IDevice& InDevice) noexcept
+	FDeviceSlot* AcquireDeviceSlot(::MicroWorld::Transport::Device::IDevice& InDevice) noexcept
 	{
 		for (FDeviceSlot& Slot : DeviceSlots)
 		{
@@ -452,10 +455,10 @@ private:
 	}
 
 	/** Maps the configured role to the only valid outbound target for its bindings. */
-	static constexpr ::MicroWorld::Messaging::EChannelSendTarget GetSendTarget(ENetworkMode InMode) noexcept
+	static constexpr ::MicroWorld::Messaging::EChannelSendTarget GetSendTarget(::MicroWorld::Transport::ENetworkMode InMode) noexcept
 	{
-		return InMode == ENetworkMode::Client ? ::MicroWorld::Messaging::EChannelSendTarget::Server
-											  : ::MicroWorld::Messaging::EChannelSendTarget::AllPeers;
+		return InMode == ::MicroWorld::Transport::ENetworkMode::Client ? ::MicroWorld::Messaging::EChannelSendTarget::Server
+																	   : ::MicroWorld::Messaging::EChannelSendTarget::AllPeers;
 	}
 
 	/** Creates a guaranteed wrapper before router registration, or registers a best-effort binding directly. */

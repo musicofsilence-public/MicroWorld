@@ -7,7 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace MicroWorld
+namespace MicroWorld::Transport::Device
 {
 
 /**
@@ -48,7 +48,7 @@ public:
 	 * destination address the device cannot route. A non-success result leaves
 	 * the transport state unchanged.
 	 */
-	virtual ETransportResult TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept = 0;
+	virtual ETransportResult TrySend(const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept = 0;
 
 	/**
 	 * Receives at most one packet into the caller-owned destination.
@@ -59,7 +59,8 @@ public:
 	 * no packet is ready, `Full` when the destination is too small for the queued
 	 * head packet, and `Invalid` for a null destination with nonzero length.
 	 */
-	virtual ETransportResult TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept = 0;
+	virtual ETransportResult TryReceive(
+		::MicroWorld::Transport::Address::FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept = 0;
 
 	/**
 	 * Advances one bounded unit of pending outbound transport work.
@@ -88,4 +89,4 @@ protected:
 	IDevice() noexcept = default;
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Transport::Device

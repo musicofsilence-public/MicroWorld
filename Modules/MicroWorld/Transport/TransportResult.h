@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-namespace MicroWorld
+namespace MicroWorld::Transport
 {
 
 /**
@@ -41,4 +41,4 @@ enum class ETransportResult : std::uint8_t
 	Unavailable,
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Transport

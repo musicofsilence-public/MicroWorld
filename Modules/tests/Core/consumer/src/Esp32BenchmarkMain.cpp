@@ -149,7 +149,7 @@ struct FBenchmarkHostTraits : MicroWorld::FDefaultEngineTraits
 using FBenchmarkHost = MicroWorld::TEngine<FBenchmarkHostTraits>;
 
 /** Dedicated server transport host sized identically to the PlatformEsp32Main proof. */
-using FBenchmarkTransport = MicroWorld::TTransportHost<4, 256>;
+using FBenchmarkTransport = MicroWorld::Transport::TTransportHost<4, 256>;
 
 /** Delegate type matching the host's timer manager so Schedule accepts a bound callback. */
 using FBenchTimerDelegate = MicroWorld::TDelegate<void(), 64>;

@@ -8,7 +8,7 @@
 #include <cstdint>
 #include <cstring>
 
-namespace MicroWorld
+namespace MicroWorld::Transport
 {
 
 /**
@@ -177,4 +177,4 @@ inline void WriteUint16LittleEndian(const std::uint16_t InValue, std::uint8_t* c
 	OutBytes[1] = static_cast<std::uint8_t>(InValue >> HighByteShift);
 }
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Transport

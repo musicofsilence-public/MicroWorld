@@ -14,13 +14,13 @@
 namespace
 {
 
-using MicroWorld::ETransportResult;
-using MicroWorld::FDeviceAddress;
-using MicroWorld::FPacketDropDevice;
-using MicroWorld::FReceiveResult;
-using MicroWorld::MakeLoopbackAddress;
-using MicroWorld::THostLoopback;
 using MicroWorld::TSpan;
+using MicroWorld::Transport::ETransportResult;
+using MicroWorld::Transport::FPacketDropDevice;
+using MicroWorld::Transport::THostLoopback;
+using MicroWorld::Transport::Address::FDeviceAddress;
+using MicroWorld::Transport::Address::MakeLoopbackAddress;
+using MicroWorld::Transport::Device::FReceiveResult;
 
 /** Loopback template parameters every packet-drop case binds: two ports, deep enough mailboxes, one-word packets. */
 constexpr std::size_t LoopbackPortCount = 2;
@@ -61,7 +61,7 @@ constexpr std::uint8_t DroppedSendPayloadByte = 0x42;
 constexpr std::uint8_t PassthroughPacketBytes[2] = {0xAA, 0xBB};
 
 /** Records transport progress without requiring a real transport, isolating the decorator forwarding contract. */
-class FAdvanceRecordingDevice final : public MicroWorld::IDevice
+class FAdvanceRecordingDevice final : public MicroWorld::Transport::Device::IDevice
 {
 public:
 	/** Records the bounded progress command that a wrapping decorator must preserve. */

@@ -37,6 +37,7 @@ namespace
 {
 
 using namespace MicroWorld;
+using namespace MicroWorld::Transport;
 
 /** Loopback IPv4 octets shared by every endpoint address in the demo. */
 constexpr std::uint8_t LoopbackIpv4Octets[4] = {127, 0, 0, 1};

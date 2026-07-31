@@ -14,15 +14,15 @@
 namespace
 {
 
-using MicroWorld::E32MaxPayloadBytes;
-using MicroWorld::ETransportResult;
 using MicroWorld::FPicoE32LoraConfig;
 using MicroWorld::FPicoLoraDevice;
-using MicroWorld::FrameOverheadBytes;
 using MicroWorld::IPicoE32LoraPlatform;
 using MicroWorld::IPicoUartPlatform;
-using MicroWorld::MakeLoraAddress;
 using MicroWorld::TSpan;
+using MicroWorld::Transport::E32MaxPayloadBytes;
+using MicroWorld::Transport::ETransportResult;
+using MicroWorld::Transport::MakeLoraAddress;
+using MicroWorld::Transport::FrameCodec::FrameOverheadBytes;
 
 /** Exact UART rate returned by a successful fake platform open. */
 constexpr std::uint32_t ExpectedBaudRate = 9600;
@@ -289,7 +289,7 @@ MW_TEST_CASE(PicoE32FacadeAdvanceTransmitDelegatesBoundedFrameBurst)
 	FFakePicoUartPlatform Platform;
 	FPicoLoraDevice Device(Platform);
 	const FPicoE32LoraConfig Config = MakeValidConfig();
-	const MicroWorld::FDeviceAddress Destination = MakeLoraAddress(PeerNodeId);
+	const MicroWorld::Transport::Address::FDeviceAddress Destination = MakeLoraAddress(PeerNodeId);
 	const std::uint8_t Payload[] = {0xA5};
 	const ETransportResult InitializeResult = Device.Initialize(Config);
 	const ETransportResult FirstSendResult = Device.TrySend(Destination, TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
@@ -318,12 +318,12 @@ MW_TEST_CASE(PicoE32FacadeEmitsEmptyFrameAndReleasesTransmitSlot)
 	FFakePicoUartPlatform Platform;
 	FPicoLoraDevice Device(Platform);
 	const FPicoE32LoraConfig Config = MakeValidConfig();
-	const MicroWorld::FDeviceAddress Destination = MakeLoraAddress(PeerNodeId);
+	const MicroWorld::Transport::Address::FDeviceAddress Destination = MakeLoraAddress(PeerNodeId);
 	const TSpan<const std::uint8_t> EmptyPayload(nullptr, 0);
 	std::uint8_t ExpectedFrame[EncodedFrameCapacity]{};
 	std::size_t ExpectedFrameBytes = 0;
-	const ETransportResult EncodeResult =
-		MicroWorld::EncodeFrame(LocalNodeId, EmptyPayload, TSpan<std::uint8_t>(ExpectedFrame, sizeof(ExpectedFrame)), ExpectedFrameBytes);
+	const ETransportResult EncodeResult = MicroWorld::Transport::FrameCodec::EncodeFrame(
+		LocalNodeId, EmptyPayload, TSpan<std::uint8_t>(ExpectedFrame, sizeof(ExpectedFrame)), ExpectedFrameBytes);
 
 	// Act
 	const ETransportResult InitializeResult = Device.Initialize(Config);

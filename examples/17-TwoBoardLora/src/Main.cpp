@@ -56,17 +56,17 @@ constexpr std::size_t VolleyPayloadBytes = 5;
 #endif
 
 /** Renders one device outcome as a short label so the serial trace reads plainly. */
-const char* ToText(const MicroWorld::ETransportResult Result) noexcept
+const char* ToText(const MicroWorld::Transport::ETransportResult Result) noexcept
 {
 	switch (Result)
 	{
-		case MicroWorld::ETransportResult::Success:
+		case MicroWorld::Transport::ETransportResult::Success:
 			return "Success";
-		case MicroWorld::ETransportResult::Full:
+		case MicroWorld::Transport::ETransportResult::Full:
 			return "Full";
-		case MicroWorld::ETransportResult::Invalid:
+		case MicroWorld::Transport::ETransportResult::Invalid:
 			return "Invalid";
-		case MicroWorld::ETransportResult::Unavailable:
+		case MicroWorld::Transport::ETransportResult::Unavailable:
 			return "Unavailable";
 		default:
 			return "unknown";
@@ -191,13 +191,13 @@ void HandlePayloadRegressionTimeout(FPayloadRegressionContext& OutContext, const
 /** Validates one completed peer frame before moving the state machine, using source identity because empty payloads have no sender byte. */
 void HandlePayloadRegressionReceive(
 	FPayloadRegressionContext& OutContext,
-	const MicroWorld::FDeviceAddress& InFrom,
-	const MicroWorld::FReceiveResult& InReceived,
+	const MicroWorld::Transport::Address::FDeviceAddress& InFrom,
+	const MicroWorld::Transport::Device::FReceiveResult& InReceived,
 	const std::uint8_t* const InPayload,
 	const std::uint64_t InNowMilliseconds) noexcept
 {
 	const MicroWorld::Example17::EPayloadRegressionCase ExpectedCase = ExpectedPayloadRegressionCase(OutContext.State);
-	const std::uint8_t FromNodeId = MicroWorld::LoraAddressNodeId(InFrom);
+	const std::uint8_t FromNodeId = MicroWorld::Transport::LoraAddressNodeId(InFrom);
 	const bool bRepeatedEmpty = OutContext.State == EPayloadRegressionState::AwaitTypical && FromNodeId == PeerNodeId
 		&& MicroWorld::Example17::IsCanonicalPayload(MicroWorld::Example17::EPayloadRegressionCase::Empty, InPayload, InReceived.BytesReceived);
 	if (bRepeatedEmpty)
@@ -275,16 +275,16 @@ void ReceivePayloadRegressionFrame(
 	std::uint8_t* const InOutRxBuffer,
 	const std::uint64_t InNowMilliseconds) noexcept
 {
-	MicroWorld::FDeviceAddress From{};
-	MicroWorld::FReceiveResult Received{};
-	const MicroWorld::ETransportResult RxResult =
-		InDevice.TryReceive(From, MicroWorld::TSpan<std::uint8_t>(InOutRxBuffer, MicroWorld::E32MaxPayloadBytes), Received);
-	if (RxResult == MicroWorld::ETransportResult::Success)
+	MicroWorld::Transport::Address::FDeviceAddress From{};
+	MicroWorld::Transport::Device::FReceiveResult Received{};
+	const MicroWorld::Transport::ETransportResult RxResult =
+		InDevice.TryReceive(From, MicroWorld::TSpan<std::uint8_t>(InOutRxBuffer, MicroWorld::Transport::E32MaxPayloadBytes), Received);
+	if (RxResult == MicroWorld::Transport::ETransportResult::Success)
 	{
 		HandlePayloadRegressionReceive(OutContext, From, Received, InOutRxBuffer, InNowMilliseconds);
 		return;
 	}
-	if (RxResult != MicroWorld::ETransportResult::Unavailable)
+	if (RxResult != MicroWorld::Transport::ETransportResult::Unavailable)
 	{
 		MW_LOG(Error, "ex17", "reg FAIL receive result=%s", ToText(RxResult));
 		OutContext.State = EPayloadRegressionState::Failed;
@@ -295,14 +295,14 @@ void ReceivePayloadRegressionFrame(
 void QueuePayloadRegressionFrame(
 	MicroWorld::FEsp32LoraDevice& InDevice,
 	FPayloadRegressionContext& OutContext,
-	std::uint8_t (&InOutTxBuffer)[MicroWorld::E32MaxPayloadBytes],
+	std::uint8_t (&InOutTxBuffer)[MicroWorld::Transport::E32MaxPayloadBytes],
 	const MicroWorld::Example17::EPayloadRegressionCase InCase,
 	const std::uint64_t InNowMilliseconds) noexcept
 {
 	MicroWorld::Example17::FillCanonicalPayload(InCase, InOutTxBuffer);
 	const std::size_t PayloadBytes = MicroWorld::Example17::PayloadRegressionByteCount(InCase);
-	const MicroWorld::ETransportResult TxResult =
-		InDevice.TrySend(MicroWorld::MakeLoraAddress(PeerNodeId), MicroWorld::TSpan<const std::uint8_t>(InOutTxBuffer, PayloadBytes));
+	const MicroWorld::Transport::ETransportResult TxResult =
+		InDevice.TrySend(MicroWorld::Transport::MakeLoraAddress(PeerNodeId), MicroWorld::TSpan<const std::uint8_t>(InOutTxBuffer, PayloadBytes));
 	if (InCase == MicroWorld::Example17::EPayloadRegressionCase::Maximum)
 	{
 		MW_LOG(
@@ -325,7 +325,7 @@ void QueuePayloadRegressionFrame(
 			static_cast<unsigned>(PeerNodeId),
 			ToText(TxResult));
 	}
-	if (TxResult != MicroWorld::ETransportResult::Success)
+	if (TxResult != MicroWorld::Transport::ETransportResult::Success)
 	{
 		return;
 	}
@@ -359,7 +359,7 @@ void QueuePayloadRegressionFrame(
 void SendPayloadRegressionFrame(
 	MicroWorld::FEsp32LoraDevice& InDevice,
 	FPayloadRegressionContext& OutContext,
-	std::uint8_t (&InOutTxBuffer)[MicroWorld::E32MaxPayloadBytes],
+	std::uint8_t (&InOutTxBuffer)[MicroWorld::Transport::E32MaxPayloadBytes],
 	const std::uint64_t InNowMilliseconds) noexcept
 {
 	if (OutContext.State == EPayloadRegressionState::ScheduleMaximum && InNowMilliseconds >= OutContext.MaximumSendDueMilliseconds)
@@ -388,7 +388,7 @@ void AdvancePayloadRegression(
 	MicroWorld::FEsp32LoraDevice& InDevice,
 	FPayloadRegressionContext& OutContext,
 	std::uint8_t* const InOutRxBuffer,
-	std::uint8_t (&InOutTxBuffer)[MicroWorld::E32MaxPayloadBytes],
+	std::uint8_t (&InOutTxBuffer)[MicroWorld::Transport::E32MaxPayloadBytes],
 	const std::uint64_t InNowMilliseconds) noexcept
 {
 	if (IsPayloadRegressionTerminal(OutContext.State))
@@ -428,11 +428,11 @@ extern "C" void app_main(void)
 		return;
 	}
 
-	static std::uint8_t RxBuffer[MicroWorld::E32MaxPayloadBytes];
+	static std::uint8_t RxBuffer[MicroWorld::Transport::E32MaxPayloadBytes];
 
 #if defined(MICROWORLD_LORA_PAYLOAD_REGRESSION)
 	// The fixed buffers protect the example's main task stack while the helper owns bounded protocol state.
-	static std::uint8_t TxBuffer[MicroWorld::E32MaxPayloadBytes];
+	static std::uint8_t TxBuffer[MicroWorld::Transport::E32MaxPayloadBytes];
 	FPayloadRegressionContext Context{};
 	Context.StateDeadlineMilliseconds = GTimeSource.Now() + RegressionStepTimeoutMilliseconds;
 
@@ -454,13 +454,14 @@ extern "C" void app_main(void)
 		const std::uint64_t Now = GTimeSource.Now();
 
 		// Receive at most one frame; a completed volley schedules the reply (counter + 1).
-		MicroWorld::FDeviceAddress From{};
-		MicroWorld::FReceiveResult Received{};
-		const MicroWorld::ETransportResult RxResult = Device.TryReceive(From, MicroWorld::TSpan<std::uint8_t>(RxBuffer, sizeof(RxBuffer)), Received);
-		if (RxResult == MicroWorld::ETransportResult::Success && Received.BytesReceived == VolleyPayloadBytes)
+		MicroWorld::Transport::Address::FDeviceAddress From{};
+		MicroWorld::Transport::Device::FReceiveResult Received{};
+		const MicroWorld::Transport::ETransportResult RxResult =
+			Device.TryReceive(From, MicroWorld::TSpan<std::uint8_t>(RxBuffer, sizeof(RxBuffer)), Received);
+		if (RxResult == MicroWorld::Transport::ETransportResult::Success && Received.BytesReceived == VolleyPayloadBytes)
 		{
 			const std::uint32_t Counter = ReadVolleyCounter(RxBuffer);
-			const std::uint8_t FromId = MicroWorld::LoraAddressNodeId(From);
+			const std::uint8_t FromId = MicroWorld::Transport::LoraAddressNodeId(From);
 			MW_LOG(Log, "ex17", "rx n=%u from=%u", static_cast<unsigned>(Counter), static_cast<unsigned>(FromId));
 			bHasPendingTx = true;
 			PendingCounter = Counter + 1;
@@ -472,10 +473,10 @@ extern "C" void app_main(void)
 		{
 			std::uint8_t Payload[VolleyPayloadBytes];
 			WriteVolleyPayload(Payload, LocalNodeId, PendingCounter);
-			const MicroWorld::ETransportResult TxResult =
-				Device.TrySend(MicroWorld::MakeLoraAddress(PeerNodeId), MicroWorld::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
+			const MicroWorld::Transport::ETransportResult TxResult =
+				Device.TrySend(MicroWorld::Transport::MakeLoraAddress(PeerNodeId), MicroWorld::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
 			MW_LOG(Log, "ex17", "tx n=%u result=%s", static_cast<unsigned>(PendingCounter), ToText(TxResult));
-			if (TxResult == MicroWorld::ETransportResult::Success)
+			if (TxResult == MicroWorld::Transport::ETransportResult::Success)
 			{
 				bHasPendingTx = false;
 			}

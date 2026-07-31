@@ -27,27 +27,27 @@ namespace
 {
 using MicroWorld::AActor;
 using MicroWorld::EEngineResult;
-using MicroWorld::ENetworkMode;
 using MicroWorld::EObjectResult;
 using MicroWorld::ERuntimeResult;
-using MicroWorld::ETransportHostState;
-using MicroWorld::ETransportResult;
 using MicroWorld::FDefaultEngineTraits;
 using MicroWorld::FDelegateHandle;
 using MicroWorld::FGarbageCollectionBudget;
-using MicroWorld::FPeerId;
-using MicroWorld::FTransportHostConfig;
 using MicroWorld::IPlaySystem;
-using MicroWorld::MakeLoopbackAddress;
 using MicroWorld::TEngine;
-using MicroWorld::THostLoopback;
 using MicroWorld::THostPlaySystem;
 using MicroWorld::TimePointMilliseconds;
 using MicroWorld::TObjectCreationResult;
 using MicroWorld::TObjectPtr;
 using MicroWorld::TSpan;
-using MicroWorld::TTransportHost;
 using MicroWorld::UWorld;
+using MicroWorld::Transport::ENetworkMode;
+using MicroWorld::Transport::ETransportHostState;
+using MicroWorld::Transport::ETransportResult;
+using MicroWorld::Transport::FPeerId;
+using MicroWorld::Transport::FTransportHostConfig;
+using MicroWorld::Transport::THostLoopback;
+using MicroWorld::Transport::TTransportHost;
+using MicroWorld::Transport::Address::MakeLoopbackAddress;
 
 /** Carries the exact capacities FHost sized before the traits refactor, so the test store is unchanged. */
 struct FHostTraits : FDefaultEngineTraits

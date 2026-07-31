@@ -13,13 +13,13 @@
 namespace
 {
 
-using MicroWorld::ETransportResult;
-using MicroWorld::FDeviceAddress;
-using MicroWorld::FReceiveResult;
-using MicroWorld::IDevice;
 using MicroWorld::TSpan;
-using MicroWorld::TTransportManager;
-using MicroWorld::TTransportPacketStorage;
+using MicroWorld::Transport::ETransportResult;
+using MicroWorld::Transport::TTransportManager;
+using MicroWorld::Transport::TTransportPacketStorage;
+using MicroWorld::Transport::Address::FDeviceAddress;
+using MicroWorld::Transport::Device::FReceiveResult;
+using MicroWorld::Transport::Device::IDevice;
 
 /** Sentinel address byte that proves a receive call did not overwrite the caller's address. */
 constexpr std::uint8_t UntouchedAddressByte = 0x42;
@@ -96,7 +96,7 @@ constexpr std::uint8_t RoutedPacketC[TwoBytePacketLength] = {0xC0, 0xC1};
 /** Builds a 1-byte destination address whose single byte is `InIndex`; keeps queue call sites concise. */
 constexpr FDeviceAddress MakeDest(const std::uint8_t InIndex) noexcept
 {
-	return MicroWorld::MakeLoopbackAddress(InIndex);
+	return MicroWorld::Transport::Address::MakeLoopbackAddress(InIndex);
 }
 
 /**

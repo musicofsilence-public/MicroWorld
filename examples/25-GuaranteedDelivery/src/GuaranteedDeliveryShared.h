@@ -79,7 +79,7 @@ constexpr MicroWorld::FTypeId CounterActorTypeId{0x00190001u};
 constexpr MicroWorld::FTypeId LedgerActorTypeId{0x00190002u};
 
 /** The one WiFi-backed network host both roles compose (256-byte packet, matching example 16/24). */
-using FWorldTransport = MicroWorld::TTransportHost<2, 256>;
+using FWorldTransport = MicroWorld::Transport::TTransportHost<2, 256>;
 
 /** The one local actor-message router both roles compose, sized for this example's two channels. */
 using FWorldRouter = MicroWorld::Messaging::TMessageRouter<16, 8, 96, 2>;
@@ -100,9 +100,9 @@ using FWorldFrameSet = MicroWorld::TPlaySystemSet<3>;
 using FWorldEngine = MicroWorld::TEngine<>;
 
 /** Builds the shared session config; heartbeats keep the point-to-point peer alive between sends. */
-inline MicroWorld::FTransportHostConfig MakeHostConfig() noexcept
+inline MicroWorld::Transport::FTransportHostConfig MakeHostConfig() noexcept
 {
-	MicroWorld::FTransportHostConfig Config{};
+	MicroWorld::Transport::FTransportHostConfig Config{};
 	Config.HeartbeatIntervalMilliseconds = 1000;
 	Config.PeerTimeoutMilliseconds = 5000;
 	Config.ProtocolVersion = ProtocolVersion;

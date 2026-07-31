@@ -18,25 +18,25 @@
 namespace
 {
 
-using MicroWorld::EControlMessageType;
-using MicroWorld::ETransportResult;
-using MicroWorld::FByteReader;
-using MicroWorld::FByteWriter;
-using MicroWorld::FControlMessage;
-using MicroWorld::FDeviceAddress;
-using MicroWorld::FMessageHeader;
-using MicroWorld::FReceiveResult;
-using MicroWorld::IDevice;
-using MicroWorld::MakeLoopbackAddress;
-using MicroWorld::ReadControlMessage;
-using MicroWorld::ReadMessage;
-using MicroWorld::THostLoopback;
 using MicroWorld::TSpan;
-using MicroWorld::TTransportManager;
-using MicroWorld::TTransportPacketStorage;
-using MicroWorld::WriteControlMessage;
-using MicroWorld::WriteMessage;
 using MicroWorld::Tests::GlobalAllocationCount;
+using MicroWorld::Transport::EControlMessageType;
+using MicroWorld::Transport::ETransportResult;
+using MicroWorld::Transport::FByteReader;
+using MicroWorld::Transport::FByteWriter;
+using MicroWorld::Transport::FControlMessage;
+using MicroWorld::Transport::FMessageHeader;
+using MicroWorld::Transport::ReadControlMessage;
+using MicroWorld::Transport::ReadMessage;
+using MicroWorld::Transport::THostLoopback;
+using MicroWorld::Transport::TTransportManager;
+using MicroWorld::Transport::TTransportPacketStorage;
+using MicroWorld::Transport::WriteControlMessage;
+using MicroWorld::Transport::WriteMessage;
+using MicroWorld::Transport::Address::FDeviceAddress;
+using MicroWorld::Transport::Address::MakeLoopbackAddress;
+using MicroWorld::Transport::Device::FReceiveResult;
+using MicroWorld::Transport::Device::IDevice;
 
 /** Per-buffer byte capacity of the writer/reader storage exercised by the allocation test. */
 constexpr std::size_t BufferByteCount = 8;

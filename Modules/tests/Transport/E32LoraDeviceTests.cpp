@@ -13,16 +13,16 @@
 namespace
 {
 
-using MicroWorld::E32MaxPayloadBytes;
-using MicroWorld::ETransportResult;
 using MicroWorld::EUartByteStreamResult;
-using MicroWorld::FDeviceAddress;
-using MicroWorld::FE32LoraDevice;
-using MicroWorld::FrameOverheadBytes;
-using MicroWorld::FReceiveResult;
 using MicroWorld::IUartByteStream;
-using MicroWorld::MakeLoraAddress;
 using MicroWorld::TSpan;
+using MicroWorld::Transport::E32MaxPayloadBytes;
+using MicroWorld::Transport::ETransportResult;
+using MicroWorld::Transport::FE32LoraDevice;
+using MicroWorld::Transport::MakeLoraAddress;
+using MicroWorld::Transport::Address::FDeviceAddress;
+using MicroWorld::Transport::Device::FReceiveResult;
+using MicroWorld::Transport::FrameCodec::FrameOverheadBytes;
 
 /** Fixed encoded E32 frame capacity used by transmit and receive test fixtures. */
 constexpr std::size_t EncodedFrameCapacity = E32MaxPayloadBytes + FrameOverheadBytes;
@@ -181,7 +181,7 @@ ETransportResult EncodePeerFrame(
 	std::uint8_t (&OutFrame)[EncodedFrameCapacity],
 	std::size_t& OutFrameBytes) noexcept
 {
-	return MicroWorld::EncodeFrame(
+	return MicroWorld::Transport::FrameCodec::EncodeFrame(
 		PeerNodeId, TSpan<const std::uint8_t>(InPayload, InPayloadSize), TSpan<std::uint8_t>(OutFrame, sizeof(OutFrame)), OutFrameBytes);
 }
 
@@ -358,7 +358,7 @@ MW_TEST_CASE(E32LoraDeviceRetainsCurrentByteWhenWriteIsUnavailable)
 	const FDeviceAddress DestinationAddress = MakeLoraAddress(PeerNodeId);
 	std::uint8_t ExpectedFrame[EncodedFrameCapacity] = {};
 	std::size_t ExpectedFrameBytes = 0;
-	const ETransportResult EncodeResult = MicroWorld::EncodeFrame(
+	const ETransportResult EncodeResult = MicroWorld::Transport::FrameCodec::EncodeFrame(
 		LocalNodeId,
 		TSpan<const std::uint8_t>(Payload, sizeof(Payload)),
 		TSpan<std::uint8_t>(ExpectedFrame, sizeof(ExpectedFrame)),

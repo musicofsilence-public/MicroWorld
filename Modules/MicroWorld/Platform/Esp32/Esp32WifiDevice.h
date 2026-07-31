@@ -12,6 +12,10 @@
 namespace MicroWorld
 {
 
+using namespace ::MicroWorld::Transport;
+using namespace ::MicroWorld::Transport::Address;
+using namespace ::MicroWorld::Transport::Device;
+
 /**
  * Non-blocking UDP `IDevice` that carries traffic over one real lwIP socket.
  *

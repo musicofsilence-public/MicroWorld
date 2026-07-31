@@ -69,9 +69,9 @@ inline MicroWorld::FEsp32E32LoraConfig MakeLoraConfig(const std::uint8_t NodeId)
 
 /** Builds the shared session config; the D8 LoRa airtime profile relaxes the heartbeat and
  *  timeout so the channel isn't congested (the wired example's 1000 ms / 5000 ms would). */
-inline MicroWorld::FTransportHostConfig MakeHostConfig() noexcept
+inline MicroWorld::Transport::FTransportHostConfig MakeHostConfig() noexcept
 {
-	MicroWorld::FTransportHostConfig Config{};
+	MicroWorld::Transport::FTransportHostConfig Config{};
 	Config.HeartbeatIntervalMilliseconds = 3000;
 	Config.PeerTimeoutMilliseconds = 15000;
 	Config.ProtocolVersion = ProtocolVersion;

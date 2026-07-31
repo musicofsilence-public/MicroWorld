@@ -12,14 +12,14 @@
 namespace
 {
 
-using MicroWorld::ComputeCrc16Ccitt;
-using MicroWorld::EFrameEvent;
-using MicroWorld::EncodeFrame;
-using MicroWorld::ETransportResult;
-using MicroWorld::FrameMagicByte;
-using MicroWorld::FrameOverheadBytes;
-using MicroWorld::TFrameDecoder;
 using MicroWorld::TSpan;
+using MicroWorld::Transport::ETransportResult;
+using MicroWorld::Transport::FrameCodec::ComputeCrc16Ccitt;
+using MicroWorld::Transport::FrameCodec::EFrameEvent;
+using MicroWorld::Transport::FrameCodec::EncodeFrame;
+using MicroWorld::Transport::FrameCodec::FrameMagicByte;
+using MicroWorld::Transport::FrameCodec::FrameOverheadBytes;
+using MicroWorld::Transport::FrameCodec::TFrameDecoder;
 
 /** Decoder payload capacity shared by every case so a declared length of nine exercises the oversize path. */
 constexpr std::size_t DecoderMaxPayload = 8;

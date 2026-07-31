@@ -10,13 +10,13 @@
 #include <cstdint>
 #include <cstring>
 
-namespace MicroWorld
+namespace MicroWorld::Transport
 {
 
 /**
  * Deterministic in-process multi-port loopback network for host tests.
  *
- * Owns N mailboxes and N embedded per-port `IDevice`s; `Port(index)` hands out
+ * Owns N mailboxes and N embedded per-port `::MicroWorld::Transport::Device::IDevice`s; `Port(index)` hands out
  * the device bound to the 1-byte loopback address equal to `index`. Two hosts
  * share one `THostLoopback` and each drive their own `Port(i)`; the ports live
  * inside the network, so their lifetimes track it automatically.
@@ -50,7 +50,10 @@ class THostLoopback final
 		 * `To` must be a 1-byte address whose value is a valid port index, else `Invalid`.
 		 * Then applies the same null/oversized/full validation as the single-link loopback.
 		 */
-		ETransportResult Deliver(const FDeviceAddress& InTo, const FDeviceAddress& InFrom, TSpan<const std::uint8_t> InPacket) noexcept
+		ETransportResult Deliver(
+			const ::MicroWorld::Transport::Address::FDeviceAddress& InTo,
+			const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom,
+			TSpan<const std::uint8_t> InPacket) noexcept
 		{
 			const ETransportResult AddressResult = ValidateDeliverAddress(InTo);
 			if (AddressResult != ETransportResult::Success)
@@ -83,7 +86,10 @@ class THostLoopback final
 		 * OutFrom UNCHANGED. Same null-dest / empty / too-small rules as the single link.
 		 */
 		ETransportResult Receive(
-			const std::uint8_t InLocalPort, FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
+			const std::uint8_t InLocalPort,
+			::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
+			TSpan<std::uint8_t> InDestination,
+			::MicroWorld::Transport::Device::FReceiveResult& OutResult) noexcept
 		{
 			const ETransportResult DestinationResult = ValidateReceiveDestination(InDestination);
 			if (DestinationResult != ETransportResult::Success)
@@ -147,7 +153,7 @@ class THostLoopback final
 			std::array<std::size_t, MailboxCapacity> PacketLengths{};
 
 			/** Records the sender address stamped on each queued packet so receive can report it. */
-			std::array<FDeviceAddress, MailboxCapacity> SenderAddresses{};
+			std::array<::MicroWorld::Transport::Address::FDeviceAddress, MailboxCapacity> SenderAddresses{};
 
 			/** Indexes the next packet to receive so the FIFO order is preserved. */
 			std::size_t HeadIndex{0};
@@ -160,7 +166,7 @@ class THostLoopback final
 		};
 
 		/** Validates a loopback destination: it must be exactly one byte naming a valid port. */
-		static ETransportResult ValidateDeliverAddress(const FDeviceAddress& InTo) noexcept
+		static ETransportResult ValidateDeliverAddress(const ::MicroWorld::Transport::Address::FDeviceAddress& InTo) noexcept
 		{
 			if (InTo.Size != LoopbackPortAddressBytes || InTo.Bytes[0] >= MaxPorts)
 			{
@@ -170,7 +176,8 @@ class THostLoopback final
 		}
 
 		/** Enqueues one already-validated packet at the tail, or `Full` when the mailbox has no free slot. */
-		static ETransportResult EnqueuePacket(FMailbox& InTarget, const FDeviceAddress& InFrom, TSpan<const std::uint8_t> InPacket) noexcept
+		static ETransportResult EnqueuePacket(
+			FMailbox& InTarget, const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom, TSpan<const std::uint8_t> InPacket) noexcept
 		{
 			if (InTarget.QueuedCount >= MailboxCapacity)
 			{
@@ -213,9 +220,9 @@ class THostLoopback final
 		static void PopHeadInto(
 			FMailbox& InMailbox,
 			const std::size_t InHeadSize,
-			FDeviceAddress& OutFrom,
+			::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
 			TSpan<std::uint8_t> InDestination,
-			FReceiveResult& OutResult) noexcept
+			::MicroWorld::Transport::Device::FReceiveResult& OutResult) noexcept
 		{
 			if (InHeadSize > 0)
 			{
@@ -233,7 +240,7 @@ class THostLoopback final
 		static void StorePacketAt(
 			FMailbox& InMailbox,
 			const std::size_t InIndex,
-			const FDeviceAddress& InFrom,
+			const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom,
 			TSpan<const std::uint8_t> InPacket,
 			const std::size_t InPacketSize) noexcept
 		{
@@ -257,7 +264,7 @@ class THostLoopback final
 	};
 
 	/** One port's device view: forwards send/receive to the shared mailboxes using its bound index. */
-	class FPort final : public IDevice
+	class FPort final : public ::MicroWorld::Transport::Device::IDevice
 	{
 	public:
 		/** Default-constructed then bound by the enclosing network's constructor. */
@@ -274,13 +281,16 @@ class THostLoopback final
 		}
 
 		/** Delivers one packet to `InTo`'s mailbox stamped with this port's address. */
-		ETransportResult TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override
+		ETransportResult TrySend(const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override
 		{
-			return Mailboxes->Deliver(InTo, MakeLoopbackAddress(LocalIndex), InPacket);
+			return Mailboxes->Deliver(InTo, ::MicroWorld::Transport::Address::MakeLoopbackAddress(LocalIndex), InPacket);
 		}
 
 		/** Pops one packet from this port's mailbox, reporting the sender via OutFrom. */
-		ETransportResult TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept override
+		ETransportResult TryReceive(
+			::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
+			TSpan<std::uint8_t> InDestination,
+			::MicroWorld::Transport::Device::FReceiveResult& OutResult) noexcept override
 		{
 			return Mailboxes->Receive(LocalIndex, OutFrom, InDestination, OutResult);
 		}
@@ -316,7 +326,7 @@ public:
 	~THostLoopback() noexcept = default;
 
 	/** Returns the device bound to `InIndex`; `InIndex` must be < MaxPorts (caller contract). */
-	IDevice& Port(const std::uint8_t InIndex) noexcept { return Ports[InIndex]; }
+	::MicroWorld::Transport::Device::IDevice& Port(const std::uint8_t InIndex) noexcept { return Ports[InIndex]; }
 
 	/** Reports the fixed number of ports this network exposes. */
 	static constexpr std::size_t PortCount() noexcept { return MaxPorts; }
@@ -350,4 +360,4 @@ private:
 	std::array<FPort, MaxPorts> Ports{};
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Transport

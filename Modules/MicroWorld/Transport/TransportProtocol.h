@@ -10,7 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace MicroWorld
+namespace MicroWorld::Transport
 {
 
 /** Fixed length of the message header that precedes every payload, in bytes. */
@@ -305,4 +305,4 @@ inline ETransportResult ReadControlMessage(TSpan<const std::uint8_t> InPayload, 
 	return ETransportResult::Success;
 }
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Transport

@@ -18,7 +18,7 @@
 #include <limits>
 #include <utility>
 
-namespace MicroWorld
+namespace MicroWorld::Transport
 {
 
 /** The UE5-style role this host plays; selects which session traffic it originates and accepts. */
@@ -72,7 +72,7 @@ struct FTransportHostConfig
 	DurationMilliseconds PeerTimeoutMilliseconds{DefaultPeerTimeoutMilliseconds};
 
 	/** Address the client greets with `Hello`; ignored by every non-client mode. */
-	FDeviceAddress ServerAddress{};
+	::MicroWorld::Transport::Address::FDeviceAddress ServerAddress{};
 
 	/** Protocol version advertised in `Hello`/`Welcome`; a mismatch is ignored, not admitted. */
 	std::uint8_t ProtocolVersion{DefaultProtocolVersion};
@@ -107,7 +107,7 @@ constexpr bool operator!=(const FPeerId InLeft, const FPeerId InRight) noexcept
 }
 
 /**
- * Bounded session host over one `IDevice`, delivering the UE5 dedicated/listen/client roles.
+ * Bounded session host over one `::MicroWorld::Transport::Device::IDevice`, delivering the UE5 dedicated/listen/client roles.
  *
  * Owns a fixed peer table, an outbound FIFO, and one message handler; drives the
  * protocol only through explicit `PumpReceive`/`PumpSend` ticks so it samples no
@@ -162,7 +162,10 @@ public:
 	using FMessageHandlerBinding = TDelegate<void(FPeerId, std::uint8_t, TSpan<const std::uint8_t>), MessageHandlerInlineBytes>;
 
 	/** Binds the host to one externally owned device; mode and config follow via `Configure`. */
-	explicit TTransportHost(IDevice& InDevice) noexcept : Device(InDevice), OutboundManager(InDevice, OutboundStorage) {}
+	explicit TTransportHost(::MicroWorld::Transport::Device::IDevice& InDevice) noexcept
+		: Device(InDevice), OutboundManager(InDevice, OutboundStorage)
+	{
+	}
 
 	/** Prevents copying so one host value binds one device, table, and handler. */
 	TTransportHost(const TTransportHost&) = delete;
@@ -385,7 +388,7 @@ private:
 	struct FTransportPeerSlot
 	{
 		/** Transport address to reach this peer; empty while the slot is free. */
-		FDeviceAddress Address{};
+		::MicroWorld::Transport::Address::FDeviceAddress Address{};
 
 		/** Time of the last packet received from this peer; drives timeout eviction. */
 		TimePointMilliseconds LastReceiveMilliseconds{0};
@@ -431,7 +434,7 @@ private:
 	constexpr bool IsServer() const noexcept { return Mode == ENetworkMode::ListenServer || Mode == ENetworkMode::DedicatedServer; }
 
 	/** Finds the active peer at `InAddress`, or `MaxPeers` when none matches. */
-	std::size_t FindActivePeerIndexByAddress(const FDeviceAddress& InAddress) const noexcept
+	std::size_t FindActivePeerIndexByAddress(const ::MicroWorld::Transport::Address::FDeviceAddress& InAddress) const noexcept
 	{
 		for (std::size_t Index = 0; Index < MaxPeers; ++Index)
 		{
@@ -483,7 +486,7 @@ private:
 		// id from exactly 256 evictions ago would re-match -- an accepted,
 		// practically-unreachable window.
 		Slot.Generation = static_cast<std::uint8_t>(Slot.Generation + 1);
-		Slot.Address = FDeviceAddress{};
+		Slot.Address = ::MicroWorld::Transport::Address::FDeviceAddress{};
 	}
 
 	/** Returns a disconnected client to `Connecting` so it re-greets the server on the next send. */
@@ -516,7 +519,10 @@ private:
 	}
 
 	/** Parses one inbound packet, routing control internally and application messages to the handler. */
-	void HandleInboundPacket(const FDeviceAddress& InFrom, TSpan<const std::uint8_t> InPacket, const TimePointMilliseconds InNowMilliseconds) noexcept
+	void HandleInboundPacket(
+		const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom,
+		TSpan<const std::uint8_t> InPacket,
+		const TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		FMessageHeader Header{};
 		TSpan<const std::uint8_t> Payload{};
@@ -542,7 +548,9 @@ private:
 
 	/** Decodes one channel-0 control payload and dispatches it by type. */
 	void HandleControlMessage(
-		const FDeviceAddress& InFrom, TSpan<const std::uint8_t> InPayload, const TimePointMilliseconds InNowMilliseconds) noexcept
+		const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom,
+		TSpan<const std::uint8_t> InPayload,
+		const TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		FControlMessage Control{};
 		if (ReadControlMessage(InPayload, Control) != ETransportResult::Success)
@@ -568,7 +576,10 @@ private:
 	}
 
 	/** Admits a client on `Hello` (idempotent per address), or ignores it on wrong version or a full table. */
-	void HandleHello(const FDeviceAddress& InFrom, const FControlMessage& InControl, const TimePointMilliseconds InNowMilliseconds) noexcept
+	void HandleHello(
+		const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom,
+		const FControlMessage& InControl,
+		const TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		if (!IsServer())
 		{
@@ -593,7 +604,10 @@ private:
 	}
 
 	/** Records the server as a connected client's single peer and enters `Connected`. */
-	void HandleWelcome(const FDeviceAddress& InFrom, const FControlMessage& InControl, const TimePointMilliseconds InNowMilliseconds) noexcept
+	void HandleWelcome(
+		const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom,
+		const FControlMessage& InControl,
+		const TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		if (Mode != ENetworkMode::Client)
 		{
@@ -619,7 +633,7 @@ private:
 	}
 
 	/** Refreshes a known peer's liveness on `Heartbeat`; ignores heartbeats from strangers. */
-	void HandleHeartbeat(const FDeviceAddress& InFrom, const TimePointMilliseconds InNowMilliseconds) noexcept
+	void HandleHeartbeat(const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom, const TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		const std::size_t Index = FindActivePeerIndexByAddress(InFrom);
 		if (Index == MaxPeers)
@@ -631,7 +645,7 @@ private:
 	}
 
 	/** Evicts a peer on `Bye`; a client whose server departs returns to `Connecting`. */
-	void HandleBye(const FDeviceAddress& InFrom) noexcept
+	void HandleBye(const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom) noexcept
 	{
 		const std::size_t Index = FindActivePeerIndexByAddress(InFrom);
 		if (Index == MaxPeers)
@@ -643,7 +657,7 @@ private:
 	}
 
 	/** Queues a `Welcome` carrying the assigned index and generation to a newly admitted client. */
-	void SendWelcome(const std::size_t InPeerIndex, const FDeviceAddress& InTo) noexcept
+	void SendWelcome(const std::size_t InPeerIndex, const ::MicroWorld::Transport::Address::FDeviceAddress& InTo) noexcept
 	{
 		FControlMessage Welcome{};
 		Welcome.Type = EControlMessageType::Welcome;
@@ -669,7 +683,7 @@ private:
 	}
 
 	/** Frames one control message and queues it to `InTo`; returns the framing or queue result. */
-	ETransportResult QueueControl(const FDeviceAddress& InTo, const FControlMessage& InControl) noexcept
+	ETransportResult QueueControl(const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, const FControlMessage& InControl) noexcept
 	{
 		std::array<std::uint8_t, MessageHeaderBytes + MaxControlPayloadBytes> FrameBuffer{};
 		FByteWriter Writer(TSpan<std::uint8_t>(FrameBuffer.data(), FrameBuffer.size()));
@@ -682,7 +696,8 @@ private:
 	}
 
 	/** Frames one application message and queues it to `InTo`; returns the framing or queue result. */
-	ETransportResult QueueAppMessage(const FDeviceAddress& InTo, const std::uint8_t InChannel, TSpan<const std::uint8_t> InPayload) noexcept
+	ETransportResult QueueAppMessage(
+		const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, const std::uint8_t InChannel, TSpan<const std::uint8_t> InPayload) noexcept
 	{
 		std::array<std::uint8_t, MaxPacketBytes> FrameBuffer{};
 		FByteWriter Writer(TSpan<std::uint8_t>(FrameBuffer.data(), FrameBuffer.size()));
@@ -720,8 +735,8 @@ private:
 		const std::size_t MaxReceives = MaxPeers + PumpSlackPackets;
 		for (std::size_t Count = 0; Count < MaxReceives; ++Count)
 		{
-			FDeviceAddress From{};
-			FReceiveResult Result{};
+			::MicroWorld::Transport::Address::FDeviceAddress From{};
+			::MicroWorld::Transport::Device::FReceiveResult Result{};
 			const ETransportResult ReceiveResult =
 				OutboundManager.Receive(From, TSpan<std::uint8_t>(ReceiveBuffer.data(), ReceiveBuffer.size()), Result);
 			if (ReceiveResult != ETransportResult::Success)
@@ -807,7 +822,7 @@ private:
 	}
 
 	/** Finds this address's peer or allocates a free slot, refreshing liveness; returns `MaxPeers` when the table is full. */
-	std::size_t AdmitPeer(const FDeviceAddress& InFrom, const TimePointMilliseconds InNowMilliseconds) noexcept
+	std::size_t AdmitPeer(const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom, const TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		std::size_t Index = FindActivePeerIndexByAddress(InFrom);
 		if (Index == MaxPeers)
@@ -832,7 +847,7 @@ private:
 	}
 
 	/** Device borrowed for one host lifetime; progresses pending physical transmission after each outbound pump. */
-	IDevice& Device;
+	::MicroWorld::Transport::Device::IDevice& Device;
 
 	/** Owns the outbound packet bytes, lengths, and destinations for the FIFO. */
 	TTransportPacketStorage<SendQueueDepth, MaxPacketBytes> OutboundStorage{};
@@ -865,4 +880,4 @@ private:
 	bool bHelloDue{false};
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Transport

@@ -9,11 +9,11 @@
 #include <cstdint>
 #include <cstring>
 
-namespace MicroWorld
+namespace MicroWorld::Transport
 {
 
 /**
- * Fixed-capacity outbound queue and direct receive over one externally referenced `IDevice`.
+ * Fixed-capacity outbound queue and direct receive over one externally referenced `::MicroWorld::Transport::Device::IDevice`.
  *
  * The manager holds one device and one `TTransportPacketStorage` by reference; the
  * caller owns both. `QueueSend` copies a complete accepted packet into the
@@ -29,7 +29,7 @@ class TTransportManager final
 
 public:
 	/** Binds the manager to one externally referenced device and caller-owned packet storage. */
-	TTransportManager(IDevice& InDevice, TTransportPacketStorage<MaxPackets, MaxPacketBytes>& InStorage) noexcept
+	TTransportManager(::MicroWorld::Transport::Device::IDevice& InDevice, TTransportPacketStorage<MaxPackets, MaxPacketBytes>& InStorage) noexcept
 		: Device(InDevice), Storage(InStorage)
 	{
 	}
@@ -50,7 +50,7 @@ public:
 	 * (it can never fit). Returns `Full` when the FIFO has no free slot. A non-success
 	 * result leaves the FIFO contents and order unchanged.
 	 */
-	ETransportResult QueueSend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
+	ETransportResult QueueSend(const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
 	{
 		const std::size_t PacketSize = InPacket.Size();
 		if (PacketSize == 0)
@@ -102,7 +102,10 @@ public:
 	 * destination, `OutResult.BytesReceived`, and `OutFrom` are unchanged. The
 	 * manager never queues inbound packets.
 	 */
-	ETransportResult Receive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
+	ETransportResult Receive(
+		::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
+		TSpan<std::uint8_t> InDestination,
+		::MicroWorld::Transport::Device::FReceiveResult& OutResult) noexcept
 	{
 		return Device.TryReceive(OutFrom, InDestination, OutResult);
 	}
@@ -124,7 +127,7 @@ public:
 
 private:
 	/** Copies one already-validated packet into the FIFO tail, or `Full` when no slot is free. */
-	ETransportResult EnqueuePacket(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
+	ETransportResult EnqueuePacket(const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
 	{
 		if (QueuedPacketCount >= MaxPackets)
 		{
@@ -137,7 +140,10 @@ private:
 
 	/** Copies one accepted packet, its length, and its destination address into the slot at `InIndex`. */
 	void StorePacketAt(
-		const std::size_t InIndex, const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket, const std::size_t InPacketSize) noexcept
+		const std::size_t InIndex,
+		const ::MicroWorld::Transport::Address::FDeviceAddress& InTo,
+		TSpan<const std::uint8_t> InPacket,
+		const std::size_t InPacketSize) noexcept
 	{
 		if (InPacketSize > 0)
 		{
@@ -155,7 +161,7 @@ private:
 	}
 
 	/** Holds the externally referenced device; the caller owns its lifetime. */
-	IDevice& Device;
+	::MicroWorld::Transport::Device::IDevice& Device;
 
 	/** Holds the externally referenced caller-owned packet storage. */
 	TTransportPacketStorage<MaxPackets, MaxPacketBytes>& Storage;
@@ -170,4 +176,4 @@ private:
 	std::size_t QueuedPacketCount{0};
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Transport

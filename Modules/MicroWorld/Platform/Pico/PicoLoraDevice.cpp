@@ -7,21 +7,21 @@ FPicoLoraDevice::FPicoLoraDevice(IPicoE32LoraPlatform& InPlatform) noexcept : By
 
 FPicoLoraDevice::~FPicoLoraDevice() noexcept = default;
 
-ETransportResult FPicoLoraDevice::Initialize(const FPicoE32LoraConfig& InConfig) noexcept
+::MicroWorld::Transport::ETransportResult FPicoLoraDevice::Initialize(const FPicoE32LoraConfig& InConfig) noexcept
 {
 	if (IsOpen())
 	{
-		return ETransportResult::Unavailable;
+		return ::MicroWorld::Transport::ETransportResult::Unavailable;
 	}
 
 	const FPicoUartConfig UartConfig{InConfig.UartIndex, InConfig.TxGpio, InConfig.RxGpio, InConfig.BaudRate};
 	if (!ByteStream.Open(UartConfig))
 	{
-		return ETransportResult::Invalid;
+		return ::MicroWorld::Transport::ETransportResult::Invalid;
 	}
 
-	const ETransportResult InitializeResult = RadioDevice.Initialize(InConfig.LocalNodeId);
-	if (InitializeResult != ETransportResult::Success)
+	const ::MicroWorld::Transport::ETransportResult InitializeResult = RadioDevice.Initialize(InConfig.LocalNodeId);
+	if (InitializeResult != ::MicroWorld::Transport::ETransportResult::Success)
 	{
 		ByteStream.Close();
 	}
@@ -29,12 +29,16 @@ ETransportResult FPicoLoraDevice::Initialize(const FPicoE32LoraConfig& InConfig)
 	return InitializeResult;
 }
 
-ETransportResult FPicoLoraDevice::TrySend(const FDeviceAddress& InTo, const TSpan<const std::uint8_t> InPacket) noexcept
+::MicroWorld::Transport::ETransportResult FPicoLoraDevice::TrySend(
+	const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, const TSpan<const std::uint8_t> InPacket) noexcept
 {
 	return RadioDevice.TrySend(InTo, InPacket);
 }
 
-ETransportResult FPicoLoraDevice::TryReceive(FDeviceAddress& OutFrom, const TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
+::MicroWorld::Transport::ETransportResult FPicoLoraDevice::TryReceive(
+	::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
+	const TSpan<std::uint8_t> InDestination,
+	::MicroWorld::Transport::Device::FReceiveResult& OutResult) noexcept
 {
 	return RadioDevice.TryReceive(OutFrom, InDestination, OutResult);
 }

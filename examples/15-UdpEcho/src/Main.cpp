@@ -13,6 +13,9 @@
 #include <cstdint>
 
 using namespace MicroWorld;
+using namespace MicroWorld::Transport;
+using namespace MicroWorld::Transport::Address;
+using namespace MicroWorld::Transport::Device;
 using namespace Ex15;
 
 namespace

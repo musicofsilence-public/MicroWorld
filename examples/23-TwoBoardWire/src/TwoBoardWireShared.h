@@ -73,7 +73,7 @@ constexpr MicroWorld::FTypeId DisplayActorTypeId{0x00170002u};
 constexpr MicroWorld::FTypeId SwitchActorTypeId{0x00170003u};
 
 /** The wired network host both roles compose their board's UART link through. */
-using FWireTransport = MicroWorld::TTransportHost<2, 120>;
+using FWireTransport = MicroWorld::Transport::TTransportHost<2, 120>;
 
 /** The local actor-message router both roles compose, sized for this example's one channel and few handlers. */
 using FWireRouter = MicroWorld::Messaging::TMessageRouter<16, 8, 96, 1>;
@@ -100,9 +100,9 @@ inline MicroWorld::FEsp32UartConfig MakeUartConfig(const std::uint8_t NodeId) no
 }
 
 /** Builds the shared session config; heartbeats keep the point-to-point peer alive between sends. */
-inline MicroWorld::FTransportHostConfig MakeHostConfig() noexcept
+inline MicroWorld::Transport::FTransportHostConfig MakeHostConfig() noexcept
 {
-	MicroWorld::FTransportHostConfig Config{};
+	MicroWorld::Transport::FTransportHostConfig Config{};
 	Config.HeartbeatIntervalMilliseconds = 1000;
 	Config.PeerTimeoutMilliseconds = 5000;
 	Config.ProtocolVersion = ProtocolVersion;

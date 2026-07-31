@@ -24,6 +24,7 @@
 #include <cstdint>
 
 using namespace MicroWorld;
+using namespace MicroWorld::Transport;
 using namespace MicroWorld::Messaging;
 using namespace Ex23;
 

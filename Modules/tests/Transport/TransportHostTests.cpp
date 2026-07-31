@@ -15,21 +15,21 @@
 namespace
 {
 
-using MicroWorld::ENetworkMode;
-using MicroWorld::ETransportHostState;
-using MicroWorld::ETransportResult;
 using MicroWorld::FDelegateHandle;
-using MicroWorld::FDeviceAddress;
-using MicroWorld::FPeerId;
-using MicroWorld::FReceiveResult;
-using MicroWorld::FTransportHostConfig;
-using MicroWorld::IDevice;
-using MicroWorld::MakeLoopbackAddress;
-using MicroWorld::THostLoopback;
 using MicroWorld::TimePointMilliseconds;
 using MicroWorld::TSpan;
-using MicroWorld::TTransportHost;
 using MicroWorld::Tests::GlobalAllocationCount;
+using MicroWorld::Transport::ENetworkMode;
+using MicroWorld::Transport::ETransportHostState;
+using MicroWorld::Transport::ETransportResult;
+using MicroWorld::Transport::FPeerId;
+using MicroWorld::Transport::FTransportHostConfig;
+using MicroWorld::Transport::THostLoopback;
+using MicroWorld::Transport::TTransportHost;
+using MicroWorld::Transport::Address::FDeviceAddress;
+using MicroWorld::Transport::Address::MakeLoopbackAddress;
+using MicroWorld::Transport::Device::FReceiveResult;
+using MicroWorld::Transport::Device::IDevice;
 
 /** Heartbeat interval (ms) the deterministic host config stamps so timed cases advance in fixed steps. */
 constexpr TimePointMilliseconds HeartbeatIntervalMs = 100;

@@ -52,9 +52,9 @@ constexpr MicroWorld::FTypeId DemoSpawnedActorTypeId{0x00080001u};
 constexpr unsigned PollPacingMilliseconds = 20;
 
 /** Builds the shared session config; heartbeats keep the peer alive between explicit sends. */
-inline MicroWorld::FTransportHostConfig MakeHostConfig() noexcept
+inline MicroWorld::Transport::FTransportHostConfig MakeHostConfig() noexcept
 {
-	MicroWorld::FTransportHostConfig Config{};
+	MicroWorld::Transport::FTransportHostConfig Config{};
 	Config.HeartbeatIntervalMilliseconds = 1000;
 	Config.PeerTimeoutMilliseconds = 5000;
 	Config.ProtocolVersion = ProtocolVersion;

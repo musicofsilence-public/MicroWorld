@@ -12,13 +12,13 @@
 namespace
 {
 
-using MicroWorld::ETransportResult;
-using MicroWorld::FDeviceAddress;
-using MicroWorld::FReceiveResult;
-using MicroWorld::IDevice;
-using MicroWorld::MakeLoopbackAddress;
-using MicroWorld::THostLoopback;
 using MicroWorld::TSpan;
+using MicroWorld::Transport::ETransportResult;
+using MicroWorld::Transport::THostLoopback;
+using MicroWorld::Transport::Address::FDeviceAddress;
+using MicroWorld::Transport::Address::MakeLoopbackAddress;
+using MicroWorld::Transport::Device::FReceiveResult;
+using MicroWorld::Transport::Device::IDevice;
 
 /** Sentinel address byte that proves a receive call did not overwrite the caller's address. */
 constexpr std::uint8_t UntouchedAddressByte = 0x42;

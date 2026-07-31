@@ -6,17 +6,17 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace MicroWorld
+namespace MicroWorld::Transport
 {
 
 namespace
 {
 
 	/** Limits receive work so a UART flood cannot monopolize one caller iteration. */
-	constexpr std::size_t ReceivePumpByteCap = 2u * (E32MaxPayloadBytes + FrameOverheadBytes);
+	constexpr std::size_t ReceivePumpByteCap = 2u * (E32MaxPayloadBytes + ::MicroWorld::Transport::FrameCodec::FrameOverheadBytes);
 
 	/** Bounds one transmit progress call to one fixed encoded E32 frame. */
-	constexpr std::size_t TransmitProgressByteCap = E32MaxPayloadBytes + FrameOverheadBytes;
+	constexpr std::size_t TransmitProgressByteCap = E32MaxPayloadBytes + ::MicroWorld::Transport::FrameCodec::FrameOverheadBytes;
 
 } // namespace
 
@@ -34,7 +34,8 @@ ETransportResult FE32LoraDevice::Initialize(const std::uint8_t InLocalNodeId) no
 	return ETransportResult::Success;
 }
 
-ETransportResult FE32LoraDevice::TrySend(const FDeviceAddress& InTo, const TSpan<const std::uint8_t> InPacket) noexcept
+ETransportResult FE32LoraDevice::TrySend(
+	const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, const TSpan<const std::uint8_t> InPacket) noexcept
 {
 	if (!bInitialized)
 	{
@@ -44,7 +45,10 @@ ETransportResult FE32LoraDevice::TrySend(const FDeviceAddress& InTo, const TSpan
 	return TransportState.TryQueueFrame(LocalNodeIdValue, InTo, InPacket);
 }
 
-ETransportResult FE32LoraDevice::TryReceive(FDeviceAddress& OutFrom, const TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
+ETransportResult FE32LoraDevice::TryReceive(
+	::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
+	const TSpan<std::uint8_t> InDestination,
+	::MicroWorld::Transport::Device::FReceiveResult& OutResult) noexcept
 {
 	if (InDestination.Size() != 0 && InDestination.Data() == nullptr)
 	{
@@ -72,8 +76,8 @@ ETransportResult FE32LoraDevice::TryReceive(FDeviceAddress& OutFrom, const TSpan
 			return ETransportResult::Invalid;
 		}
 
-		const EFrameEvent Event = TransportState.PushReceivedByte(ReceivedByte);
-		if (Event == EFrameEvent::FrameReady)
+		const ::MicroWorld::Transport::FrameCodec::EFrameEvent Event = TransportState.PushReceivedByte(ReceivedByte);
+		if (Event == ::MicroWorld::Transport::FrameCodec::EFrameEvent::FrameReady)
 		{
 			return TransportState.TryDeliverReceivedFrame(OutFrom, InDestination, OutResult);
 		}
@@ -122,4 +126,4 @@ bool FE32LoraDevice::IsInitialized() const noexcept
 	return bInitialized;
 }
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Transport

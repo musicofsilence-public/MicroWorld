@@ -4,7 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace MicroWorld
+namespace MicroWorld::Transport::Address
 {
 
 /**
@@ -59,4 +59,4 @@ constexpr FDeviceAddress MakeLoopbackAddress(const std::uint8_t InPortIndex) noe
 	return Address;
 }
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Transport::Address

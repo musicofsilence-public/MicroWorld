@@ -32,7 +32,7 @@ constexpr std::size_t PayloadRegressionByteCount(const EPayloadRegressionCase In
 		case EPayloadRegressionCase::Typical:
 			return TypicalPayloadBytes;
 		case EPayloadRegressionCase::Maximum:
-			return E32MaxPayloadBytes;
+			return MicroWorld::Transport::E32MaxPayloadBytes;
 		default:
 			return 0;
 	}
@@ -70,7 +70,7 @@ constexpr std::uint8_t CanonicalPayloadByte(const EPayloadRegressionCase InCase,
 }
 
 /** Fills a fixed E32-sized buffer, preventing the regression payload from allocating or exceeding the radio contract. */
-inline void FillCanonicalPayload(const EPayloadRegressionCase InCase, std::uint8_t (&OutPayload)[E32MaxPayloadBytes]) noexcept
+inline void FillCanonicalPayload(const EPayloadRegressionCase InCase, std::uint8_t (&OutPayload)[MicroWorld::Transport::E32MaxPayloadBytes]) noexcept
 {
 	const std::size_t PayloadBytes = PayloadRegressionByteCount(InCase);
 	for (std::size_t Index = 0; Index < PayloadBytes; ++Index)
