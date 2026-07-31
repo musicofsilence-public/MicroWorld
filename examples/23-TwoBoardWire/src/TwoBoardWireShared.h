@@ -12,82 +12,84 @@
 #include <cstdint>
 
 /**
- * Shared protocol ids, config builders, and composition-type aliases for example
- * 23's two roles.
- *
- * Both role translation units (ServerMain.cpp, ClientMain.cpp) include this so the
- * message ids, actor ids, node ids, UART/session configuration, and the
- * TTransportHost/TMessageRouter/TEngine shapes are defined exactly once — DRY within
- * this one example (mirrors 19-UartMessaging's UartMessagingShared.h).
+ * Motivation: Holds the shared protocol ids, config builders, and composition-type aliases for
+ *   example 23's two roles, so both translation units (ServerMain.cpp, ClientMain.cpp) define the
+ *   message ids, actor ids, node ids, UART/session configuration, and the TTransportHost/TMessageRouter/
+ *   TEngine shapes exactly once (DRY).
  */
 namespace Ex23
 {
-/** Targeted message id: switch actor -> lamp actor, 1-byte payload (0 = off, 1 = on). */
+/** Motivation: Targeted message id: switch actor -> lamp actor, 1-byte payload (0 = off, 1 = on). */
 inline constexpr MicroWorld::Messaging::FMessageTypeId SetLampStateMessageId = 1;
 
-/** Broadcast message id: switch actor -> every subscriber, 1-byte heartbeat counter. */
+/** Motivation: Broadcast message id: switch actor -> every subscriber, 1-byte heartbeat counter. */
 inline constexpr MicroWorld::Messaging::FMessageTypeId HeartbeatCountMessageId = 2;
 
-/** Actor id FLampActor registers its SetLampState handler under and the switch targets. */
+/** Motivation: Actor id FLampActor registers its SetLampState handler under and the switch targets. */
 inline constexpr MicroWorld::Messaging::FMessageActorId LampActorId = 10;
 
-/** Actor id recorded as the switch actor's sender on every message it sends. */
+/** Motivation: Actor id recorded as the switch actor's sender on every message it sends. */
 inline constexpr MicroWorld::Messaging::FMessageActorId SwitchActorId = 11;
 
-/** Actor id recorded as the display actor's sender; nothing ever targets a send at it. */
+/** Motivation: Actor id recorded as the display actor's sender; nothing ever targets a send at it. */
 inline constexpr MicroWorld::Messaging::FMessageActorId DisplayActorId = 12;
 
-/** Router-facing channel id both roles register their TMessageChannelBinding under. */
+/** Motivation: Router-facing channel id both roles register their TMessageChannelBinding under. */
 inline constexpr MicroWorld::Messaging::FMessageChannelId AppChannelId = 1;
 
-/** TTransportHost wire-level channel byte the binding reads and writes (channel 0 is reserved control). */
+/** Motivation: TTransportHost wire-level channel byte the binding reads and writes (channel 0 is reserved control). */
 inline constexpr std::uint8_t AppWireChannelByte = 1;
 
-/** Server stamps frames with node id 1; the client greets that id as its server. */
+/** Motivation: Server stamps frames with node id 1; the client greets that id as its server. */
 constexpr std::uint8_t ServerNodeId = 1;
 
-/** Client stamps frames with node id 2; the point-to-point wire never routes either id. */
+/** Motivation: Client stamps frames with node id 2; the point-to-point wire never routes either id. */
 constexpr std::uint8_t ClientNodeId = 2;
 
-/** Fixed UART port and the two crossover data GPIOs, identical to examples 18 and 19. */
+/** Motivation: Fixed UART port and the two crossover data GPIOs, identical to examples 18 and 19. */
 constexpr std::int32_t UartPortNumber = 1;
 constexpr std::int32_t TxGpioNumber = 17;
 constexpr std::int32_t RxGpioNumber = 18;
 
-/** A wire is fast, so 115200 baud. */
+/** Motivation: A wire is fast, so 115200 baud. */
 constexpr std::uint32_t UartBaudRate = 115200;
 
-/** Protocol version both hosts advertise in Hello/Welcome. */
+/** Motivation: Protocol version both hosts advertise in Hello/Welcome. */
 constexpr std::uint8_t ProtocolVersion = 1;
 
-/** Poll pace for both boards; far faster than the 2 s switch cadence so the watchdog idle task runs. */
+/** Motivation: Poll pace for both boards; far faster than the 2 s switch cadence so the watchdog idle task runs. */
 constexpr unsigned PollPacingMilliseconds = 20;
 
-/** Stable descriptor id for the managed FLampActor type (0x0017 == example 23). */
+/** Motivation: Stable descriptor id for the managed FLampActor type (0x0017 == example 23). */
 constexpr MicroWorld::Engine::FTypeId LampActorTypeId{0x00170001u};
 
-/** Stable descriptor id for the managed FDisplayActor type. */
+/** Motivation: Stable descriptor id for the managed FDisplayActor type. */
 constexpr MicroWorld::Engine::FTypeId DisplayActorTypeId{0x00170002u};
 
-/** Stable descriptor id for the managed FSwitchActor type. */
+/** Motivation: Stable descriptor id for the managed FSwitchActor type. */
 constexpr MicroWorld::Engine::FTypeId SwitchActorTypeId{0x00170003u};
 
-/** The wired network host both roles compose their board's UART link through. */
+/** Motivation: The wired network host both roles compose their board's UART link through. */
 using FWireTransport = MicroWorld::Transport::TTransportHost<2, 120>;
 
-/** The local actor-message router both roles compose, sized for this example's one channel and few handlers. */
+/** Motivation: The local actor-message router both roles compose, sized for this example's one channel and few handlers. */
 using FWireRouter = MicroWorld::Messaging::TMessageRouter<16, 8, 96, 1>;
 
-/** Adapts FWireTransport to the engine's per-frame network slot (only PreAdvance/PostAdvance; the router is pumped separately, see §4). */
+/** Motivation: Adapts FWireTransport to the engine's per-frame network slot (only PreAdvance/PostAdvance; the router is pumped separately, see §4).
+ */
 using FWireFrame = MicroWorld::Engine::THostPlaySystem<FWireTransport>;
 
-/** Two-way adapter binding one FWireTransport wire channel to the local FWireRouter. */
+/** Motivation: Two-way adapter binding one FWireTransport wire channel to the local FWireRouter. */
 using FWireBinding = MicroWorld::Messaging::TMessageChannelBinding<FWireTransport>;
 
-/** The engine both roles compose; sized for one world with a couple of small actors using direct component storage. */
+/** Motivation: The engine both roles compose; sized for one world with a couple of small actors using direct component storage. */
 using FWireEngine = MicroWorld::Engine::TEngine<>;
 
-/** Builds a board's UART device configuration from the fixed pins and baud. */
+/**
+ * Motivation: Lets both roles build a board's UART device configuration from one source, so the fixed
+ *   pins and baud are never restated.
+ * Responsibilities: Fill the UART config with the shared port, GPIO, baud, and node id values.
+ */
 inline MicroWorld::Platform::Esp32::FEsp32UartConfig MakeUartConfig(const std::uint8_t NodeId) noexcept
 {
 	MicroWorld::Platform::Esp32::FEsp32UartConfig Config;
@@ -99,7 +101,11 @@ inline MicroWorld::Platform::Esp32::FEsp32UartConfig MakeUartConfig(const std::u
 	return Config;
 }
 
-/** Builds the shared session config; heartbeats keep the point-to-point peer alive between sends. */
+/**
+ * Motivation: Lets both roles build the same session configuration from one source, so heartbeats keep
+ *   the point-to-point peer alive between sends without each role restating the values.
+ * Responsibilities: Return a config carrying the shared heartbeat, timeout, and protocol version.
+ */
 inline MicroWorld::Transport::FTransportHostConfig MakeHostConfig() noexcept
 {
 	MicroWorld::Transport::FTransportHostConfig Config{};
@@ -110,13 +116,9 @@ inline MicroWorld::Transport::FTransportHostConfig MakeHostConfig() noexcept
 }
 
 /**
- * Runs one board's manual per-frame router pump, identical on both roles.
- *
- * Manual frame composition (Phase 4.1 folds this into TPlaySystemSet): flushes Router's outbound
- * queue to the wire before the engine tick, then dispatches its inbound queue after -- the same order
- * EngineMessageChannelTests.cpp's PumpSide proved correct. TEngine holds exactly one
- * IPlaySystem (the bound THostPlaySystem), so the router itself is pumped here rather than through
- * the engine.
+ * Motivation: Runs one board's manual per-frame router pump, so both roles flush the router's outbound
+ *   queue before the tick and dispatch its inbound queue after, in the order the link proved correct.
+ * Responsibilities: Call PostAdvance, tick the engine, then PreAdvance, in that order each frame.
  */
 inline void PumpOneFrame(FWireRouter& Router, FWireEngine& Engine, const MicroWorld::Core::TimePointMilliseconds NowMilliseconds) noexcept
 {

@@ -12,18 +12,11 @@
 namespace MicroWorld::Platform::Esp32
 {
 
-/**
- * Largest single-transmission payload one wired SPI frame carries.
- *
- * Kept equal to `UartMaxPayloadBytes` so every wired transport carries the same message size and only the
- * device construction differs.
- */
+/** Motivation: Sizes one wired SPI frame payload to match UartMaxPayloadBytes so every wired transport carries the same message size. */
 constexpr std::size_t SpiMaxPayloadBytes = 120;
 
-/**
- * Bytes clocked in one full-duplex SPI transaction: one maximum frame padded up so the DMA rules
- * (rx buffer word-aligned, length a multiple of four) are met; the pad bytes are filler the decoder discards.
- */
+/** Motivation: Sizes one full-duplex SPI transaction so the DMA rules (rx buffer word-aligned, length a multiple of four) are met; pad bytes are
+ * filler the decoder discards. */
 constexpr std::size_t SpiTransactionWindowBytes = 128;
 
 static_assert(
@@ -31,288 +24,310 @@ static_assert(
 	"SpiTransactionWindowBytes must hold one whole frame (payload plus framing overhead).");
 static_assert(SpiTransactionWindowBytes % 4 == 0, "SPI DMA requires the transaction length to be a multiple of four bytes.");
 
-/**
- * Bytes of opaque storage the slave device reserves for one persistent ESP-IDF transaction descriptor.
- *
- * A queued SPI-slave transaction must outlive the queue/harvest cycle, so its descriptor cannot be a stack
- * local; the source file places the real ESP-IDF type in this buffer and `static_assert`s that it fits.
- */
+/** Motivation: Reserves opaque storage for one persistent ESP-IDF transaction descriptor that must outlive the slave's queue/harvest cycle. */
 constexpr std::size_t SpiSlaveTransactionStorageBytes = 40;
 
 /**
- * Construction parameters for the wired SPI master device.
- *
- * Holds plain-integer bus parameters so the public header stays free of the ESP-IDF SPI enum types; the
- * platform-implementation header reinterprets them on the ESP32 side.
+ * Motivation: Carries the plain-integer bus parameters one wired SPI master needs at construction so the public
+ *   header stays free of the ESP-IDF SPI enum types.
+ * Responsibilities: Hold SPI host, MOSI/MISO/SCLK/CS GPIO, clock frequency, and local node id as plain integers.
+ * Example:
+ *   FEsp32SpiMasterConfig Config;
+ *   Config.ClockHz = 1000000;
  */
 struct FEsp32SpiMasterConfig
 {
-	/** SPI host number (ESP-IDF `spi_host_device_t`, e.g. SPI2_HOST == 1) passed as a plain integer. */
+	/** Motivation: SPI host number (ESP-IDF spi_host_device_t, e.g. SPI2_HOST == 1) passed as a plain integer. */
 	std::int32_t SpiHost{1};
 
-	/** MOSI GPIO number shared with the slave's MOSI pin, passed as a plain integer. */
+	/** Motivation: MOSI GPIO number shared with the slave's MOSI pin, passed as a plain integer. */
 	std::int32_t MosiGpio{0};
 
-	/** MISO GPIO number shared with the slave's MISO pin, passed as a plain integer. */
+	/** Motivation: MISO GPIO number shared with the slave's MISO pin, passed as a plain integer. */
 	std::int32_t MisoGpio{0};
 
-	/** SCLK GPIO number shared with the slave's SCLK pin, passed as a plain integer. */
+	/** Motivation: SCLK GPIO number shared with the slave's SCLK pin, passed as a plain integer. */
 	std::int32_t SclkGpio{0};
 
-	/** CS GPIO number shared with the slave's CS pin, passed as a plain integer. */
+	/** Motivation: CS GPIO number shared with the slave's CS pin, passed as a plain integer. */
 	std::int32_t CsGpio{0};
 
-	/** SPI clock (SCLK) frequency in hertz (1 MHz is reliable over short jumper wires). */
+	/** Motivation: SPI clock (SCLK) frequency in hertz (1 MHz is reliable over short jumper wires). */
 	std::uint32_t ClockHz{1000000};
 
-	/** Local node id stamped on every outgoing frame's source node id byte. */
+	/** Motivation: Local node id stamped on every outgoing frame's source node id byte. */
 	std::uint8_t LocalNodeId{0};
 };
 
 /**
- * Construction parameters for the wired SPI slave device.
- *
- * Holds plain-integer bus parameters so the public header stays free of the ESP-IDF SPI enum types; the
- * slave is clocked by the master, so it carries no clock frequency.
+ * Motivation: Carries the plain-integer bus parameters one wired SPI slave needs at construction so the public
+ *   header stays free of the ESP-IDF SPI enum types; the slave is clocked by the master so it carries no frequency.
+ * Responsibilities: Hold SPI host, MOSI/MISO/SCLK/CS GPIO, and local node id as plain integers.
+ * Example:
+ *   FEsp32SpiSlaveConfig Config;
+ *   Config.SpiHost = 1;
  */
 struct FEsp32SpiSlaveConfig
 {
-	/** SPI host number (ESP-IDF `spi_host_device_t`, e.g. SPI2_HOST == 1) passed as a plain integer. */
+	/** Motivation: SPI host number (ESP-IDF spi_host_device_t, e.g. SPI2_HOST == 1) passed as a plain integer. */
 	std::int32_t SpiHost{1};
 
-	/** MOSI GPIO number shared with the master's MOSI pin, passed as a plain integer. */
+	/** Motivation: MOSI GPIO number shared with the master's MOSI pin, passed as a plain integer. */
 	std::int32_t MosiGpio{0};
 
-	/** MISO GPIO number shared with the master's MISO pin, passed as a plain integer. */
+	/** Motivation: MISO GPIO number shared with the master's MISO pin, passed as a plain integer. */
 	std::int32_t MisoGpio{0};
 
-	/** SCLK GPIO number shared with the master's SCLK pin, passed as a plain integer. */
+	/** Motivation: SCLK GPIO number shared with the master's SCLK pin, passed as a plain integer. */
 	std::int32_t SclkGpio{0};
 
-	/** CS GPIO number shared with the master's CS pin, passed as a plain integer. */
+	/** Motivation: CS GPIO number shared with the master's CS pin, passed as a plain integer. */
 	std::int32_t CsGpio{0};
 
-	/** Local node id stamped on every outgoing frame's source node id byte. */
+	/** Motivation: Local node id stamped on every outgoing frame's source node id byte. */
 	std::uint8_t LocalNodeId{0};
 };
 
 /**
- * Non-blocking wired `IDevice` for the master side of a point-to-point SPI link.
- *
- * It clocks the bus with fixed-size full-duplex transactions: because every transaction moves both
- * directions, both `TrySend` and `TryReceive` feed the received window into a bounded `TFrameDecoder`, and
- * `TryReceive` delivers completed frames. It validates every argument before any syscall, leaves caller
- * outputs unchanged on any non-`Success` result, and exercises no bus traffic until example 21's hardware
- * checkpoint passes (§1.2).
+ * Motivation: Gives one composition root a non-blocking wired IDevice for the master side of a point-to-point SPI
+ *   link that clocks the bus with fixed-size full-duplex transactions.
+ * Responsibilities: Feed every received window into a bounded TFrameDecoder so full-duplex traffic is never
+ *   discarded, validate every argument before any syscall, leave caller outputs unchanged on any non-Success
+ *   result, and never split a frame across transactions.
+ * Example:
+ *   FEsp32SpiMasterDevice Master(Config);
+ *   if (Master.IsOpen()) { Master.TryReceive(From, Dest, Result); }
  */
 class FEsp32SpiMasterDevice final : public Transport::Device::IDevice
 {
 public:
 	/**
-	 * Initializes the SPI bus and adds the slave as its device.
-	 *
-	 * Initializes `SpiHost` on the given MOSI/MISO/SCLK/CS GPIOs at `ClockHz` in SPI mode 0 with DMA. On any
-	 * failure the constructor rolls back and leaves `IsOpen() == false`; it never throws. The local node id is
-	 * stamped on every outgoing frame.
-	 *
-	 * @param InConfig Host, GPIO, clock, and local node id parameters.
+	 * Motivation: Initializes the SPI bus and adds the slave as its device before any traffic flows.
+	 * Responsibilities: Initialize SpiHost on the given GPIOs at ClockHz in SPI mode 0 with DMA; on any failure
+	 *   roll back and leave IsOpen false; never throw.
 	 */
 	explicit FEsp32SpiMasterDevice(const FEsp32SpiMasterConfig& InConfig) noexcept;
 
-	/** Removes the device and frees the SPI bus opened by construction. */
+	/**
+	 * Motivation: Releases the bus and device so construction-allocated ESP-IDF resources never leak.
+	 * Responsibilities: Remove the device and free the SPI bus opened by construction.
+	 */
 	~FEsp32SpiMasterDevice() noexcept override;
 
-	/** Prevents copying so one device value owns exactly one bus identity. */
+	/**
+	 * Motivation: Keeps one device value owning exactly one bus identity so the device handle never aliases.
+	 * Responsibilities: Reject copy construction so the master stays the single owner of its bus.
+	 */
 	FEsp32SpiMasterDevice(const FEsp32SpiMasterDevice&) = delete;
 
-	/** Prevents copying so one device value owns exactly one bus identity. */
+	/**
+	 * Motivation: Keeps one device value owning exactly one bus identity so the device handle never aliases.
+	 * Responsibilities: Reject copy assignment so the master stays the single owner of its bus.
+	 */
 	FEsp32SpiMasterDevice& operator=(const FEsp32SpiMasterDevice&) = delete;
 
-	/** Prevents moving so the owned device handle and DMA buffers stay fixed. */
+	/**
+	 * Motivation: Keeps the owned device handle and DMA buffers fixed at one address for the link's lifetime.
+	 * Responsibilities: Reject move construction so the word-aligned DMA buffers never relocate.
+	 */
 	FEsp32SpiMasterDevice(FEsp32SpiMasterDevice&&) = delete;
 
-	/** Prevents moving so the owned device handle and DMA buffers stay fixed. */
+	/**
+	 * Motivation: Keeps the owned device handle and DMA buffers fixed at one address for the link's lifetime.
+	 * Responsibilities: Reject move assignment so the word-aligned DMA buffers never relocate.
+	 */
 	FEsp32SpiMasterDevice& operator=(FEsp32SpiMasterDevice&&) = delete;
 
 	/**
-	 * Sends one complete framed message to the slave in a single full-duplex transaction, transactionally.
-	 *
-	 * Returns `Invalid` for a destination that is not an SPI encoding, an oversize packet, or a null span with
-	 * nonzero length; `Full` when the transaction times out; and `Success` only when the whole frame was
-	 * clocked out. The bytes the slave clocks back during the same transaction are fed to the decoder (SPI is
-	 * full-duplex), so a send never discards a pending reply.
-	 *
-	 * @param InTo Destination whose single byte must be an SPI node id (validated; the wire is point-to-point).
-	 * @param InPacket Caller-owned payload bytes framed and sent as one message.
-	 * @return Normalized outcome of the single send attempt.
+	 * Motivation: Sends one complete framed message to the slave in a single full-duplex transaction, transactionally.
+	 * Responsibilities: Return Invalid for a non-SPI destination, oversize packet, or null span with nonzero length,
+	 *   Full when the transaction times out, and Success only after the whole frame is clocked out; feed the bytes the
+	 *   slave clocks back into the decoder so a send never discards a pending reply.
 	 */
 	Transport::ETransportResult TrySend(const Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
-	 * Receives at most one framed message by clocking one idle full-duplex transaction, transactionally.
-	 *
-	 * Clocks a window with an idle transmit and pumps the received bytes through the decoder; `Unavailable`
-	 * when the window holds no frame, `Full` when the held frame exceeds the destination (kept held for a
-	 * larger retry), `Invalid` for a null destination with nonzero length, and `Success` after a complete
-	 * frame copies its payload, byte count, and sender node id into `OutFrom`.
-	 *
-	 * @param OutFrom Filled with the sender's SPI address only on `Success`.
-	 * @param InDestination Caller-owned buffer for the received payload bytes.
-	 * @param OutResult Filled with the received byte count only on `Success`.
-	 * @return Normalized outcome of the single receive attempt.
+	 * Motivation: Receives at most one framed message by clocking one idle full-duplex transaction, transactionally.
+	 * Responsibilities: Pump the received bytes through the decoder and report Unavailable when the window holds no
+	 *   frame, Full (frame held for a larger retry), Invalid (null destination with nonzero length), or Success after
+	 *   a complete frame copies payload, byte count, and sender node id into OutFrom; leave outputs unchanged on any
+	 *   non-success result.
 	 */
 	Transport::ETransportResult TryReceive(
 		Transport::Address::FDeviceAddress& OutFrom,
 		Core::TSpan<std::uint8_t> InDestination,
 		Transport::Device::FReceiveResult& OutResult) noexcept override;
 
-	/** Reports the largest payload, in bytes, one send accepts (excludes framing overhead). */
+	/**
+	 * Motivation: Lets a caller size a packet against the transport's capacity without a magic number.
+	 * Responsibilities: Report the largest payload, in bytes, one send accepts, excluding framing overhead.
+	 */
 	std::size_t MaxPacketBytes() const noexcept override;
 
-	/** Reports whether the constructor opened a usable SPI master bus. */
+	/**
+	 * Motivation: Lets a caller gate every op on whether construction opened a usable master bus.
+	 * Responsibilities: Report the open flag set at construction and never mutated afterward except by destruction.
+	 */
 	bool IsOpen() const noexcept;
 
 private:
-	/** Runs one full-duplex transaction with the given transmit window and pumps the received window into
-	 * the decoder (only while no frame is already held); returns the transaction's send outcome. */
+	/**
+	 * Motivation: Unifies the full-duplex exchange and the decoder feed so TrySend and TryReceive share one path.
+	 * Responsibilities: Run one full-duplex transaction with the given transmit window, pump the received window into
+	 *   the decoder only while no frame is already held, and return the transaction's send outcome.
+	 */
 	Transport::ETransportResult ExchangeAndPump(const std::uint8_t* InTransmitWindow) noexcept;
 
-	/** Bounded RX deframer held by value; its capacity matches `SpiMaxPayloadBytes`. */
+	/** Motivation: Bounded RX deframer held by value; its capacity matches SpiMaxPayloadBytes. */
 	Transport::FrameCodec::TFrameDecoder<SpiMaxPayloadBytes> Decoder{};
 
-	/** Transmit window (encoded frame plus idle padding); word-aligned for DMA. */
+	/** Motivation: Transmit window (encoded frame plus idle padding); word-aligned for DMA. */
 	alignas(4) std::uint8_t TransmitWindow[SpiTransactionWindowBytes]{};
 
-	/** Receive window filled by each transaction; word-aligned for DMA. */
+	/** Motivation: Receive window filled by each transaction; word-aligned for DMA. */
 	alignas(4) std::uint8_t ReceiveWindow[SpiTransactionWindowBytes]{};
 
-	/** All-idle window used as the transmit side of a receive-only transaction; word-aligned for DMA. */
+	/** Motivation: All-idle window used as the transmit side of a receive-only transaction; word-aligned for DMA. */
 	alignas(4) std::uint8_t IdleWindow[SpiTransactionWindowBytes]{};
 
-	/** ESP-IDF `spi_device_handle_t` stored opaquely; reinterpreted only in the source file. */
+	/** Motivation: ESP-IDF spi_device_handle_t stored opaquely; reinterpreted only in the source file. */
 	void* DeviceHandle{nullptr};
 
-	/** SPI host number reinterpreted to its ESP-IDF type only in the source file. */
+	/** Motivation: SPI host number reinterpreted to its ESP-IDF type only in the source file. */
 	std::int32_t SpiHostValue{0};
 
-	/** Local node id stamped on every outgoing frame's source node id byte. */
+	/** Motivation: Local node id stamped on every outgoing frame's source node id byte. */
 	std::uint8_t LocalNodeIdValue{0};
 
-	/** Remains false when construction failed, so every op short-circuits safely. */
+	/** Motivation: Remains false when construction failed, so every op short-circuits safely. */
 	bool bOpen{false};
 };
 
 /**
- * Non-blocking wired `IDevice` for the slave side of a point-to-point SPI link.
- *
- * The master clocks every transfer, so `TrySend` stages one framed packet for the next queued transaction
- * and `TryReceive` harvests a completed transaction and drains its received window through a bounded
- * `TFrameDecoder`, keeping one transaction always queued. It validates every argument before any syscall,
- * leaves caller outputs unchanged on any non-`Success` result, and exercises no bus traffic until example
- * 21's hardware checkpoint passes (§1.2).
+ * Motivation: Gives one composition root a non-blocking wired IDevice for the slave side of a point-to-point SPI link
+ *   that the master clocks.
+ * Responsibilities: Stage one framed packet per TrySend for the next queued transaction, harvest a completed
+ *   transaction per TryReceive and drain its received window through a bounded TFrameDecoder, and keep one
+ *   transaction always queued; validate every argument before any syscall and leave caller outputs unchanged on
+ *   any non-Success result.
+ * Example:
+ *   FEsp32SpiSlaveDevice Slave(Config);
+ *   if (Slave.IsOpen()) { Slave.TrySend(To, Packet); }
  */
 class FEsp32SpiSlaveDevice final : public Transport::Device::IDevice
 {
 public:
 	/**
-	 * Initializes the SPI bus as a slave and queues the first transaction.
-	 *
-	 * Initializes `SpiHost` as a slave on the given MOSI/MISO/SCLK/CS GPIOs in SPI mode 0 with DMA and queues
-	 * one idle transaction so the master's first clock finds a buffer. On any failure the constructor rolls
-	 * back and leaves `IsOpen() == false`; it never throws. The local node id is stamped on every outgoing frame.
-	 *
-	 * @param InConfig Host, GPIO, and local node id parameters.
+	 * Motivation: Initializes the SPI bus as a slave and queues the first transaction so the master's first clock
+	 *   finds a buffer instead of garbage.
+	 * Responsibilities: Initialize SpiHost as a slave on the given GPIOs in SPI mode 0 with DMA and queue one idle
+	 *   transaction; on any failure roll back and leave IsOpen false; never throw.
 	 */
 	explicit FEsp32SpiSlaveDevice(const FEsp32SpiSlaveConfig& InConfig) noexcept;
 
-	/** Frees the SPI slave bus opened by construction. */
+	/**
+	 * Motivation: Releases the slave bus so construction-allocated ESP-IDF resources never leak.
+	 * Responsibilities: Free the SPI slave bus opened by construction.
+	 */
 	~FEsp32SpiSlaveDevice() noexcept override;
 
-	/** Prevents copying so one device value owns exactly one bus identity. */
+	/**
+	 * Motivation: Keeps one device value owning exactly one bus identity so the device handle never aliases.
+	 * Responsibilities: Reject copy construction so the slave stays the single owner of its bus.
+	 */
 	FEsp32SpiSlaveDevice(const FEsp32SpiSlaveDevice&) = delete;
 
-	/** Prevents copying so one device value owns exactly one bus identity. */
+	/**
+	 * Motivation: Keeps one device value owning exactly one bus identity so the device handle never aliases.
+	 * Responsibilities: Reject copy assignment so the slave stays the single owner of its bus.
+	 */
 	FEsp32SpiSlaveDevice& operator=(const FEsp32SpiSlaveDevice&) = delete;
 
-	/** Prevents moving so the owned buffers and transaction descriptor stay fixed. */
+	/**
+	 * Motivation: Keeps the owned buffers and persistent transaction descriptor fixed at one address for the link's
+	 *   lifetime.
+	 * Responsibilities: Reject move construction so the queued transaction's pointers never dangle.
+	 */
 	FEsp32SpiSlaveDevice(FEsp32SpiSlaveDevice&&) = delete;
 
-	/** Prevents moving so the owned buffers and transaction descriptor stay fixed. */
+	/**
+	 * Motivation: Keeps the owned buffers and persistent transaction descriptor fixed at one address for the link's
+	 *   lifetime.
+	 * Responsibilities: Reject move assignment so the queued transaction's pointers never dangle.
+	 */
 	FEsp32SpiSlaveDevice& operator=(FEsp32SpiSlaveDevice&&) = delete;
 
 	/**
-	 * Stages one complete framed message for the master's next read, transactionally.
-	 *
-	 * Returns `Invalid` for a destination that is not an SPI encoding, an oversize packet, or a null span with
-	 * nonzero length; `Full` when a previously staged frame has not yet been queued; and `Success` when the
-	 * whole frame was staged. The staged frame is sent on the next transaction the master clocks.
-	 *
-	 * @param InTo Destination whose single byte must be an SPI node id (validated; the wire is point-to-point).
-	 * @param InPacket Caller-owned payload bytes framed and staged as one message.
-	 * @return Normalized outcome of the single send attempt.
+	 * Motivation: Stages one complete framed message for the master's next read, transactionally.
+	 * Responsibilities: Return Invalid for a non-SPI destination, oversize packet, or null span with nonzero length,
+	 *   Full when a previously staged frame has not yet been queued, and Success once the whole frame is staged; the
+	 *   staged frame is sent on the next transaction the master clocks.
 	 */
 	Transport::ETransportResult TrySend(const Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
-	 * Receives at most one framed message by harvesting a completed transaction, transactionally.
-	 *
-	 * Harvests one completed transaction, pumps its received window through the decoder, and re-queues so a
-	 * transaction is always ready; `Unavailable` when none completed or the window held no frame, `Full` when
-	 * the held frame exceeds the destination, `Invalid` for a null destination with nonzero length, and
-	 * `Success` after a complete frame copies its payload, byte count, and sender node id into `OutFrom`.
-	 *
-	 * @param OutFrom Filled with the sender's SPI address only on `Success`.
-	 * @param InDestination Caller-owned buffer for the received payload bytes.
-	 * @param OutResult Filled with the received byte count only on `Success`.
-	 * @return Normalized outcome of the single receive attempt.
+	 * Motivation: Receives at most one framed message by harvesting a completed transaction, transactionally.
+	 * Responsibilities: Harvest one completed transaction, pump its received window through the decoder, and re-queue
+	 *   so a transaction is always ready; report Unavailable when none completed or the window held no frame, Full
+	 *   (frame held for a larger retry), Invalid (null destination with nonzero length), or Success after a complete
+	 *   frame copies payload, byte count, and sender node id into OutFrom.
 	 */
 	Transport::ETransportResult TryReceive(
 		Transport::Address::FDeviceAddress& OutFrom,
 		Core::TSpan<std::uint8_t> InDestination,
 		Transport::Device::FReceiveResult& OutResult) noexcept override;
 
-	/** Reports the largest payload, in bytes, one send accepts (excludes framing overhead). */
+	/**
+	 * Motivation: Lets a caller size a packet against the transport's capacity without a magic number.
+	 * Responsibilities: Report the largest payload, in bytes, one send accepts, excluding framing overhead.
+	 */
 	std::size_t MaxPacketBytes() const noexcept override;
 
-	/** Reports whether the constructor opened a usable SPI slave bus. */
+	/**
+	 * Motivation: Lets a caller gate every op on whether construction opened a usable slave bus.
+	 * Responsibilities: Report the open flag set at construction and never mutated afterward except by destruction.
+	 */
 	bool IsOpen() const noexcept;
 
 private:
-	/** Fills the transmit window (from the staged frame or idle) and queues one transaction so the master
-	 * always finds a buffer to clock; records whether the queue call succeeded. */
+	/**
+	 * Motivation: Keeps one transaction always queued so the master always finds a buffer to clock.
+	 * Responsibilities: Fill the transmit window (from the staged frame or idle) and queue one transaction, recording
+	 *   whether the queue call succeeded.
+	 */
 	void QueueNextTransaction() noexcept;
 
-	/** Bounded RX deframer held by value; its capacity matches `SpiMaxPayloadBytes`. */
+	/** Motivation: Bounded RX deframer held by value; its capacity matches SpiMaxPayloadBytes. */
 	Transport::FrameCodec::TFrameDecoder<SpiMaxPayloadBytes> Decoder{};
 
-	/** Receive window filled by each completed transaction; word-aligned for DMA. */
+	/** Motivation: Receive window filled by each completed transaction; word-aligned for DMA. */
 	alignas(4) std::uint8_t ReceiveWindow[SpiTransactionWindowBytes]{};
 
-	/** Transmit window owned by the device while a transaction is queued; word-aligned for DMA. */
+	/** Motivation: Transmit window owned by the device while a transaction is queued; word-aligned for DMA. */
 	alignas(4) std::uint8_t TransmitWindow[SpiTransactionWindowBytes]{};
 
-	/** Staging buffer written by `TrySend`; copied into the transmit window at the next queue. */
+	/** Motivation: Staging buffer written by TrySend; copied into the transmit window at the next queue. */
 	std::uint8_t StagedFrame[SpiTransactionWindowBytes]{};
 
-	/** Opaque storage for the persistent ESP-IDF transaction descriptor; constructed in the source file. */
+	/** Motivation: Opaque storage for the persistent ESP-IDF transaction descriptor; constructed in the source file. */
 	alignas(8) unsigned char TransactionStorage[SpiSlaveTransactionStorageBytes]{};
 
-	/** Points into `TransactionStorage` at the constructed descriptor; set in the source file. */
+	/** Motivation: Points into TransactionStorage at the constructed descriptor; set in the source file. */
 	void* TransactionPtr{nullptr};
 
-	/** SPI host number reinterpreted to its ESP-IDF type only in the source file. */
+	/** Motivation: SPI host number reinterpreted to its ESP-IDF type only in the source file. */
 	std::int32_t SpiHostValue{0};
 
-	/** Local node id stamped on every outgoing frame's source node id byte. */
+	/** Motivation: Local node id stamped on every outgoing frame's source node id byte. */
 	std::uint8_t LocalNodeIdValue{0};
 
-	/** True when a frame is staged in `StagedFrame` awaiting its next queue. */
+	/** Motivation: True when a frame is staged in StagedFrame awaiting its next queue. */
 	bool bFrameStaged{false};
 
-	/** True while one transaction is queued with the device; drives recovery re-queues. */
+	/** Motivation: True while one transaction is queued with the device; drives recovery re-queues. */
 	bool bTransactionQueued{false};
 
-	/** Remains false when construction failed, so every op short-circuits safely. */
+	/** Motivation: Remains false when construction failed, so every op short-circuits safely. */
 	bool bOpen{false};
 };
 

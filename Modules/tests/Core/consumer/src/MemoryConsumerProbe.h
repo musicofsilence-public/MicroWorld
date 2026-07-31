@@ -23,36 +23,44 @@ static_assert(std::is_nothrow_destructible_v<MicroWorld::Core::TUniquePtr<std::u
 namespace MicroWorldConsumer
 {
 
-/** Stable exit codes for the Core memory public-API probe; 0 reports full success. */
+/**
+ * Motivation: Stable exit codes for the Core memory public-API probe; 0 reports full success.
+ * Responsibilities: Name each distinct memory-API failure so the probe reports the exact broken step.
+ * Example:
+ *   EMemoryConsumerExitCode Code = EMemoryConsumerExitCode::Success;
+ */
 enum class EMemoryConsumerExitCode : int
 {
-	Success = 0,
-	UniquePointerConstructionFailed = 1,
-	SharedPointerConstructionFailed = 2,
-	WeakAcquireFailed = 3,
-	StaticVectorAddFailed = 4,
-	DelegateBindFailed = 5,
-	MulticastAddOrBroadcastFailed = 6,
-	ProbeOutcomeMismatch = 7,
+	Success = 0,						 ///< Motivation: Reports the probe observed every memory API succeeding.
+	UniquePointerConstructionFailed = 1, ///< Motivation: Names a unique-pointer construction that did not return a live value.
+	SharedPointerConstructionFailed = 2, ///< Motivation: Names a shared-pointer construction that did not return a live value.
+	WeakAcquireFailed = 3,				 ///< Motivation: Names a weak-pointer acquire that did not observe a live referent.
+	StaticVectorAddFailed = 4,			 ///< Motivation: Names a static-vector add that did not accept both values.
+	DelegateBindFailed = 5,				 ///< Motivation: Names a delegate bind that did not return success.
+	MulticastAddOrBroadcastFailed = 6,	 ///< Motivation: Names a multicast add or broadcast that did not deliver.
+	ProbeOutcomeMismatch = 7,			 ///< Motivation: Names a final outcome check that did not match the expected state.
 };
 
-/** Fixed arena byte capacity exercised by the probe. */
+/** Motivation: Fixed arena byte capacity exercised by the probe. */
 inline constexpr std::size_t ProbeArenaBytes = 256;
 
-/** Distinct u32 values the probe threads through each Core container type. */
+/** Motivation: Distinct u32 values the probe threads through each Core container type. */
 inline constexpr std::uint32_t UniqueProbeValue = 11U;
 inline constexpr std::uint32_t SharedProbeValue = 13U;
 inline constexpr std::uint32_t FirstStaticVectorValue = 17U;
 inline constexpr std::uint32_t SecondStaticVectorValue = 19U;
 
-/** Bounded element count and inline callable bytes used by the probe's containers and delegates. */
+/** Motivation: Bounded element count and inline callable bytes used by the probe's containers and delegates. */
 inline constexpr std::size_t StaticVectorCapacity = 2;
 inline constexpr std::size_t DelegateInlineBytes = 32;
 inline constexpr std::size_t MulticastHandlerCount = 1;
 
 } // namespace MicroWorldConsumer
 
-/** Exercises representative Core memory public APIs without platform dependencies. */
+/**
+ * Motivation: Exercises representative Core memory public APIs without platform dependencies.
+ * Responsibilities: Construct, use, and reclaim each memory container and report the first failure code.
+ */
 inline int RunMemoryConsumerProbe() noexcept
 {
 	using namespace MicroWorld::Core;

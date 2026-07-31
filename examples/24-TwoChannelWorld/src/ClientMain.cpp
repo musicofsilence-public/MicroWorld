@@ -34,27 +34,37 @@ using namespace Ex24;
 
 namespace
 {
-/** Single real-time source for the client board. */
+/** Motivation: Single real-time source for the client board. */
 FEsp32TimeSource GTimeSource{};
 
 /**
- * Every reporting interval (starting at BaseReportingIntervalMilliseconds), broadcasts a 2-byte
- * synthetic reading over the telemetry (UDP) channel; re-times its own cadence when the server
- * commands a new rate over the commands (UART) channel.
- *
- * Takes the router by constructor injection (D9); this actor owns no components (AActor).
+ * Motivation: Every reporting interval, broadcasts a 2-byte synthetic reading over the telemetry (UDP)
+ *   channel, and re-times its own cadence when the server commands a new rate over the commands (UART)
+ *   channel. Takes the router by constructor injection and owns no components.
+ * Responsibilities: Subscribe to SetReportingRate on play, tick on the reporting cadence, and broadcast
+ *   the current reading; re-time the cadence on command.
+ * Example:
+ *   auto Sensor = Engine.CreateObject<FSensorActor>(SensorActorTypeId, Networking.GetRouter()).Object;
+ *   Engine.GetWorld().RegisterActor(TObjectPtr<AActor>{Sensor});
  */
 class FSensorActor final : public AActor
 {
 public:
-	/** Aligns this actor's own tick to the base reporting cadence and stores the injected router. */
+	/**
+	 * Motivation: Aligns this actor's own tick to the base reporting cadence and stores the injected router.
+	 * Responsibilities: Construct on the base cadence and capture the router reference.
+	 */
 	explicit FSensorActor(IMessageRouter& InRouter) noexcept
 		: AActor(FTickConfiguration::EnabledEvery(BaseReportingIntervalMilliseconds)), Router(InRouter)
 	{
 	}
 
 protected:
-	/** Subscribes to SetReportingRateMessageId targeted at this actor's own SensorActorId. */
+	/**
+	 * Motivation: Subscribes to SetReportingRateMessageId targeted at this actor's own SensorActorId, so a
+	 *   later command can re-time this sensor.
+	 * Responsibilities: Bind and register the reporting-rate handler under the sensor's actor id.
+	 */
 	void BeginPlay() noexcept override
 	{
 		FMessageHandlerBinding Handler;
@@ -74,7 +84,11 @@ protected:
 		}
 	}
 
-	/** Bumps the synthetic reading counter and broadcasts it as a 2-byte LE telemetry message. */
+	/**
+	 * Motivation: Bumps the synthetic reading counter and broadcasts it, so the server receives one
+	 *   telemetry reading per cadence tick.
+	 * Responsibilities: Increment the reading, encode it little-endian, and broadcast it on the telemetry channel.
+	 */
 	void Tick(const FTickContext&) noexcept override
 	{
 		++NextReading;
@@ -93,13 +107,9 @@ protected:
 
 private:
 	/**
-	 * Decodes the commanded 2-byte LE interval and re-times this actor's own reporting cadence.
-	 *
-	 * SetTickInterval is called from inside this handler, which runs during the engine's inbound
-	 * network dispatch step -- before the world advance step ticks this same actor (TEngine::Tick's
-	 * fixed frame order, EngineHost.h) -- so the new interval is already in effect the moment this
-	 * frame's Tick would fire. FTickFunction::SetInterval (TickFunction.cpp) is a plain state mutation
-	 * with no dispatch lock, so calling it mid-handler is safe.
+	 * Motivation: Decodes the commanded 2-byte LE interval and re-times this actor's own reporting cadence,
+	 *   so a mid-frame command is in effect before this frame's Tick fires.
+	 * Responsibilities: Validate the payload, decode the interval, and apply it via SetTickInterval.
 	 */
 	void OnReportingRateReceived(const FMessageView& View) noexcept
 	{
@@ -118,17 +128,19 @@ private:
 		MW_LOG(Log, "ex24", "sensor reporting rate -> %u ms", static_cast<unsigned>(Interval));
 	}
 
-	/** Router this actor sends and listens through; injected at construction (D9), never a global. */
+	/** Motivation: Router this actor sends and listens through; injected at construction, never a global. */
 	IMessageRouter& Router;
 
-	/** Synthetic reading counter (ADR 0003 -- no GPIO/sensor peripheral); wraps at 65536, accepted for this demo. */
+	/** Motivation: Synthetic reading counter (ADR 0003 -- no GPIO/sensor peripheral); wraps at 65536, accepted for this demo. */
 	std::uint16_t NextReading{0};
 };
 } // namespace
 
 /**
- * Client board: joins the WiFi SoftAP and runs FSensorActor over the shared router owned by one
- * TNetworking. Its two client devices carry UDP telemetry and UART commands.
+ * Motivation: Lets Board B join the WiFi SoftAP and run FSensorActor over the shared router owned by one
+ *   TNetworking, so the two-channel client (UDP telemetry + UART commands) composes in one place.
+ * Responsibilities: Join the SoftAP, open the two devices, register them and their channels, spawn the
+ *   sensor, start as a client, and tick the engine in an unbounded loop.
  */
 void RunClient() noexcept
 {

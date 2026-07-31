@@ -27,71 +27,87 @@ namespace
 
 // ---- Message and managed-type ids (roadmap section 4.5) ------------------
 
-/** Identifies the thermometer's broadcast reading message. */
+/** Motivation: Identifies the thermometer's broadcast reading message. */
 inline constexpr MicroWorld::Messaging::FMessageTypeId TemperatureReadingMessageId = 1;
 
-/** Identifies the display's targeted calibrate message. */
+/** Motivation: Identifies the display's targeted calibrate message. */
 inline constexpr MicroWorld::Messaging::FMessageTypeId CalibrateMessageId = 2;
 
-/** Actor id the display targets its calibrate send at, and the thermometer
+/** Motivation: Actor id the display targets its calibrate send at, and the thermometer
  *  registers its calibrate handler under. */
 inline constexpr MicroWorld::Messaging::FMessageActorId ThermometerActorId = 10;
 
-/** Actor id recorded as the sender of the calibrate message; not currently
+/** Motivation: Actor id recorded as the sender of the calibrate message; not currently
  *  used as anyone's listener id, since the thermometer never messages it back. */
 inline constexpr MicroWorld::Messaging::FMessageActorId DisplayActorId = 11;
 
-/** Stable descriptor id for the managed FThermometerActor type (0x0016 == example 22). */
+/** Motivation: Stable descriptor id for the managed FThermometerActor type (0x0016 == example 22). */
 constexpr MicroWorld::Engine::FTypeId ThermometerActorTypeId{0x00160001u};
 
-/** Stable descriptor id for the managed FReadingSensorComponent type. */
+/** Motivation: Stable descriptor id for the managed FReadingSensorComponent type. */
 constexpr MicroWorld::Engine::FTypeId ReadingSensorComponentTypeId{0x00160003u};
 
 // ---- Shared cadence and bounds ---------------------------------------------
 
 /**
- * Cadence shared by the sensor's tick config and the thermometer actor's own
- * tick config, so the two schedules can never drift apart (one named constant
- * instead of two copies of "500" that a future edit could desync). See
- * FThermometerActor::Tick for why same-cadence alignment matters.
+ * Motivation: Cadence shared by the sensor's tick config and the thermometer actor's own tick
+ *   config, so the two schedules can never drift apart (one named constant instead of two copies of
+ *   "500" that a future edit could desync).
+ * Responsibilities: Hold the single 500 ms cadence both schedules read.
  */
 constexpr MicroWorld::Core::DurationMilliseconds ReadingCadenceMilliseconds = 500;
 
-/** Number of readings the display waits for before it sends the one calibrate message. */
+/** Motivation: Number of readings the display waits for before it sends the one calibrate message. */
 constexpr std::uint32_t CalibrateAfterReadingCount = 5;
 
-/** Bounds the run: the loop stops once the display has logged this many readings --
+/** Motivation: Bounds the run: the loop stops once the display has logged this many readings --
  *  5 to trigger calibrate, then a couple more to show the reset counter climbing again. */
 constexpr std::uint32_t TargetDisplayedReadingCount = 7;
 
-/** Byte width of the little-endian uint16 reading payload packed and decoded below. */
+/** Motivation: Byte width of the little-endian uint16 reading payload packed and decoded below. */
 constexpr std::size_t ReadingPayloadBytes = 2;
 
 /**
- * Produces a deterministic synthetic temperature reading every 500 ms.
- *
- * No peripheral is read (ADR 0003 keeps device buses out of engine-first
- * examples) and no RNG is used (unavailable under this engine's constraints,
- * and non-deterministic anyway) -- the reading is a named base plus a bounded
- * ramp, so the trace is byte-for-byte reproducible run to run.
+ * Motivation: Produces a deterministic synthetic temperature reading every 500 ms, so the trace is
+ *   byte-for-byte reproducible run to run without reading a peripheral or using an RNG.
+ * Responsibilities: Advance a reading counter on each tick and derive one bounded reading from it.
+ * Example:
+ *   FReadingSensorComponent Sensor;
+ *   const std::uint16_t Value = Sensor.GetLatestReading();
  */
 class FReadingSensorComponent final : public MicroWorld::Engine::UActorComponent
 {
 public:
-	/** Selects the 500 ms reading cadence the thermometer actor's own tick is aligned to. */
+	/**
+	 * Motivation: Selects the 500 ms reading cadence the thermometer actor's own tick is aligned to.
+	 * Responsibilities: Construct the component on the shared reading cadence.
+	 */
 	FReadingSensorComponent() noexcept : UActorComponent(MicroWorld::Core::FTickConfiguration::EnabledEvery(ReadingCadenceMilliseconds)) {}
 
-	/** Returns the most recently produced reading; the owning actor packs this into its broadcast. */
+	/**
+	 * Motivation: Lets the owning actor read the latest reading to pack into its broadcast.
+	 * Responsibilities: Report the most recently produced reading and nothing else.
+	 */
 	std::uint16_t GetLatestReading() const noexcept { return LatestReading; }
 
-	/** Returns how many readings have been produced since construction or the last calibrate reset. */
+	/**
+	 * Motivation: Lets the owning actor report how many readings have been produced for the trace.
+	 * Responsibilities: Report the count since construction or the last calibrate reset.
+	 */
 	std::uint32_t GetReadingCount() const noexcept { return ReadingCount; }
 
-	/** Resets the reading counter; called by the thermometer's calibrate handler. */
+	/**
+	 * Motivation: Lets the thermometer's calibrate handler reset the reading counter.
+	 * Responsibilities: Zero the reading count and change nothing else.
+	 */
 	void ResetReadingCount() noexcept { ReadingCount = 0; }
 
 protected:
-	/** Advances the counter and derives this frame's reading from it -- see the class comment for why. */
+	/**
+	 * Motivation: Advances the counter and derives this frame's reading from it, so the synthetic
+	 *   reading stays deterministic and bounded.
+	 * Responsibilities: Increment the counter and set the latest reading from the base-plus-ramp.
+	 */
 	void TickComponent(const MicroWorld::Core::FTickContext&) noexcept override
 	{
 		++ReadingCount;
@@ -99,33 +115,35 @@ protected:
 	}
 
 private:
-	/** Offset so the synthetic reading reads like a plausible tenths-of-a-degree value, not a raw counter. */
+	/** Motivation: Offset so the synthetic reading reads like a plausible tenths-of-a-degree value, not a raw counter. */
 	static constexpr std::uint16_t BaseReadingValue = 200;
 
-	/** Bounds the ramp so the synthetic reading cycles instead of growing without limit. */
+	/** Motivation: Bounds the ramp so the synthetic reading cycles instead of growing without limit. */
 	static constexpr std::uint16_t ReadingSpan = 50;
 
-	/** Counts readings since construction or the last calibrate reset; also the "reading N" trace value. */
+	/** Motivation: Counts readings since construction or the last calibrate reset; also the "reading N" trace value. */
 	std::uint32_t ReadingCount{0};
 
-	/** Holds the most recent synthetic reading for the owning actor to read and broadcast. */
+	/** Motivation: Holds the most recent synthetic reading for the owning actor to read and broadcast. */
 	std::uint16_t LatestReading{0};
 };
 
 /**
- * Owns the reading sensor and broadcasts its value once per frame; also accepts a
- * targeted calibrate message that resets the sensor's reading counter.
- *
- * Takes the router and its sensor by constructor injection (D9) instead of
- * reaching into a global -- see the constructor below.
+ * Motivation: Owns the reading sensor and broadcasts its value once per frame, and accepts a targeted
+ *   calibrate message that resets the sensor's reading counter. Takes the router and sensor by
+ *   constructor injection instead of reaching into a global.
+ * Responsibilities: Subscribe to calibrate on play, and broadcast the current reading each tick.
+ * Example:
+ *   auto Therm = Engine.CreateObject<FThermometerActor>(ThermometerActorTypeId, Router, Sensor).Object;
+ *   Engine.GetWorld().RegisterActor(TObjectPtr<AActor>{Therm});
  */
 class FThermometerActor final : public MicroWorld::Engine::AActor
 {
 public:
 	/**
-	 * Aligns this actor's own tick to the sensor's 500 ms cadence (see Tick's comment
-	 * for why the alignment matters) and stores the router and sensor this actor was
-	 * composed with.
+	 * Motivation: Aligns this actor's own tick to the sensor's 500 ms cadence so the two schedules stay
+	 *   in lockstep, and stores the router and sensor this actor was composed with.
+	 * Responsibilities: Construct on the shared cadence and capture the router and sensor references.
 	 */
 	FThermometerActor(MicroWorld::Messaging::IMessageRouter& InRouter, MicroWorld::Engine::TObjectPtr<FReadingSensorComponent> InSensor) noexcept
 		: AActor(MicroWorld::Core::FTickConfiguration::EnabledEvery(ReadingCadenceMilliseconds)), Router(InRouter), Sensor(InSensor)
@@ -133,7 +151,11 @@ public:
 	}
 
 protected:
-	/** Subscribes to a calibrate message targeted at this actor's own id. */
+	/**
+	 * Motivation: Subscribes to a calibrate message targeted at this actor's own id, so a later calibrate
+	 *   send can reset its sensor.
+	 * Responsibilities: Bind and register the calibrate handler under the thermometer's actor id.
+	 */
 	void BeginPlay() noexcept override
 	{
 		MicroWorld::Messaging::FMessageHandlerBinding Handler;
@@ -157,15 +179,9 @@ protected:
 	}
 
 	/**
-	 * Broadcasts the current reading.
-	 *
-	 * Reading Sensor's latest value here is always safe: this actor's Tick runs
-	 * after its own components tick within the same Advance (see Actor.h -- "Runs
-	 * ... after this actor's components have ticked"), and both the sensor and this
-	 * actor's primary tick share the identical ReadingCadenceMilliseconds schedule
-	 * started from the same BootTime, so they are due on exactly the same frames.
-	 * The sensor has therefore already produced this frame's reading by the time
-	 * this runs.
+	 * Motivation: Broadcasts the current reading each frame, relying on the sensor sharing this actor's
+	 *   cadence so the latest value is already produced by the time this runs.
+	 * Responsibilities: Pack the sensor's latest reading little-endian and broadcast it to the router.
 	 */
 	void Tick(const MicroWorld::Core::FTickContext&) noexcept override
 	{
@@ -197,44 +213,62 @@ protected:
 	}
 
 private:
-	/** Logs receipt and resets the sensor's reading counter; this is the calibrate handler bound in BeginPlay. */
+	/**
+	 * Motivation: Logs receipt and resets the sensor's reading counter; this is the calibrate handler
+	 *   bound in BeginPlay.
+	 * Responsibilities: Reset the sensor's reading count and log that calibration occurred.
+	 */
 	void OnCalibrateReceived(const MicroWorld::Messaging::FMessageView&) noexcept
 	{
 		MW_LOG(Log, "ex22", "thermometer calibrated (reset reading counter)");
 		Sensor.Get()->ResetReadingCount();
 	}
 
-	/** Router this actor sends and subscribes through; injected at construction (D9), never a global. */
+	/** Motivation: Router this actor sends and subscribes through; injected at construction, never a global. */
 	MicroWorld::Messaging::IMessageRouter& Router;
 
-	/** Sensor this actor owns and reads each tick; registered as this actor's one inline component slot. */
+	/** Motivation: Sensor this actor owns and reads each tick; registered as this actor's one inline component slot. */
 	MicroWorld::Engine::TObjectPtr<FReadingSensorComponent> Sensor;
 };
 
 /**
- * Purely reactive: logs every broadcast reading and, after enough of them, sends
- * one targeted calibrate back to the thermometer to demonstrate SendMessageToActor.
- *
- * Uses AActor directly: it reserves bounded component slots but registers
- * none, which keeps this display-only actor deliberately simple.
+ * Motivation: Purely reactive display that logs every broadcast reading and, after enough of them,
+ *   sends one targeted calibrate back to the thermometer to demonstrate SendMessageToActor. Uses AActor
+ *   directly so this display-only actor stays deliberately simple.
+ * Responsibilities: Subscribe to broadcasts on play, count received readings, and send one calibrate.
+ * Example:
+ *   auto Req = World.SpawnActor<FDisplayActor>(std::ref(Router));
+ *   while (!static_cast<FDisplayActor*>(Req...)->IsDone()) { Engine.Tick(Now); }
  */
 class FDisplayActor final : public MicroWorld::Engine::AActor
 {
 public:
-	/** Stores the injected router (D9); this actor never ticks on its own (see the disabled tick config below). */
+	/**
+	 * Motivation: Stores the injected router; this actor never ticks on its own, so its tick is disabled.
+	 * Responsibilities: Construct with tick disabled and capture the router reference.
+	 */
 	explicit FDisplayActor(MicroWorld::Messaging::IMessageRouter& InRouter) noexcept
 		: AActor({/*bCanEverTick*/ false, /*bStartWithTickEnabled*/ false, /*TickIntervalMilliseconds*/ 0}), Router(InRouter)
 	{
 	}
 
-	/** Reports whether the bounded run loop can stop: true once every target reading has been logged. Pure query. */
+	/**
+	 * Motivation: Lets the bounded run loop stop once every target reading has been logged, as a pure query.
+	 * Responsibilities: Report whether the received count has reached the target.
+	 */
 	bool IsDone() const noexcept { return ReceivedReadingCount >= TargetDisplayedReadingCount; }
 
-	/** Reports how many readings this actor has logged since BeginPlay; used only for the final trace line. */
+	/**
+	 * Motivation: Reports how many readings this actor has logged since BeginPlay, for the final trace line.
+	 * Responsibilities: Report the received reading count and nothing else.
+	 */
 	std::uint32_t GetReceivedReadingCount() const noexcept { return ReceivedReadingCount; }
 
 protected:
-	/** Subscribes to every broadcast reading (ListenerActorId = BroadcastActorId receives broadcasts). */
+	/**
+	 * Motivation: Subscribes to every broadcast reading so this reactive actor receives them all.
+	 * Responsibilities: Bind and register the reading handler under the broadcast listener id.
+	 */
 	void BeginPlay() noexcept override
 	{
 		MicroWorld::Messaging::FMessageHandlerBinding Handler;
@@ -258,7 +292,11 @@ protected:
 	}
 
 private:
-	/** Decodes, logs, and counts one reading; triggers the one-time calibrate once CalibrateAfterReadingCount is reached. */
+	/**
+	 * Motivation: Decodes, logs, and counts one reading, triggering the one-time calibrate once enough
+	 *   readings have arrived.
+	 * Responsibilities: Validate the payload, count the reading, and fire the calibrate send at the threshold.
+	 */
 	void OnReadingReceived(const MicroWorld::Messaging::FMessageView& View) noexcept
 	{
 		if (View.Payload.Size() < ReadingPayloadBytes)
@@ -283,11 +321,10 @@ private:
 	}
 
 	/**
-	 * Sends the targeted calibrate exactly once.
-	 *
-	 * Sending from inside this handler is legal (D5): it appends to the outbound
-	 * queue and is delivered to the thermometer next frame, exactly like any other
-	 * send. bCalibrateSent guards against resending on readings 6, 7, ...
+	 * Motivation: Sends the targeted calibrate exactly once, so the display triggers the thermometer's
+	 *   reset a single time. Sending from inside a handler is legal because it appends to the outbound
+	 *   queue and is delivered next frame.
+	 * Responsibilities: Send one calibrate and set the guard so it is never resent.
 	 */
 	void SendCalibrate() noexcept
 	{
@@ -307,29 +344,30 @@ private:
 		MW_LOG(Log, "ex22", "display sent calibrate to thermometer");
 	}
 
-	/** Router this actor listens and sends through; injected at construction (D9), never a global. */
+	/** Motivation: Router this actor listens and sends through; injected at construction, never a global. */
 	MicroWorld::Messaging::IMessageRouter& Router;
 
-	/** Counts every reading received since BeginPlay; drives both the calibrate trigger and IsDone. */
+	/** Motivation: Counts every reading received since BeginPlay; drives both the calibrate trigger and IsDone. */
 	std::uint32_t ReceivedReadingCount{0};
 
-	/** Guards against resending calibrate once it has already been sent. */
+	/** Motivation: Guards against resending calibrate once it has already been sent. */
 	bool bCalibrateSent{false};
 };
 
-/** Single real-time source; every MicroWorld deadline in this example reads it. */
+/** Motivation: Single real-time source; every MicroWorld deadline in this example reads it. */
 MicroWorld::Platform::Esp32::FEsp32TimeSource GTimeSource{};
 
-/** Poll far faster than any schedule so the FreeRTOS idle task (and its watchdog)
+/** Motivation: Poll far faster than any schedule so the FreeRTOS idle task (and its watchdog)
  *  always runs; the engine's tick schedules, not this delay, decide what fires. */
 constexpr unsigned PollPacingMilliseconds = 10;
 
 } // namespace
 
 /**
- * Composition root: wires one router, one engine, one sensor, and two actors,
- * then drives a bounded run that demonstrates local actor messaging end to end --
- * a broadcast reading, a display that counts them, and a targeted calibrate reply.
+ * Motivation: Composition root for example 22, so the single ESP32 entry point owns the one place
+ *   that wires a router, engine, sensor, and two actors into a bounded local-messaging run.
+ * Responsibilities: Wire the router and engine, register and spawn the actors, then drive a bounded
+ *   run demonstrating a broadcast reading, a counting display, and a targeted calibrate reply.
  */
 extern "C" void app_main(void)
 {

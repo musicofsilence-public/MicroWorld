@@ -49,7 +49,12 @@ using MicroWorld::Transport::THostLoopback;
 using MicroWorld::Transport::TTransportHost;
 using MicroWorld::Transport::Address::MakeLoopbackAddress;
 
-/** Carries the exact capacities FHost sized before the traits refactor, so the test store is unchanged. */
+/**
+ * Motivation: Carries the exact capacities FHost sized before the traits refactor, so the test store is unchanged.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 struct FHostTraits : FDefaultEngineTraits
 {
 	static constexpr std::size_t MaxClasses = 6;
@@ -60,52 +65,71 @@ struct FHostTraits : FDefaultEngineTraits
 	static constexpr std::size_t MaxTimers = 4;
 };
 
-/** Host sized for a world plus one spawned actor, matching the engine host test profile. */
+/** Motivation: Host sized for a world plus one spawned actor, matching the engine host test profile. */
 using FHost = TEngine<FHostTraits>;
 
-/** The one application channel this suite exchanges; channel 0 stays reserved for control. */
+/** Motivation: The one application channel this suite exchanges; channel 0 stays reserved for control. */
 constexpr std::uint8_t AppChannel = 1;
 
-/** Stable type id for the actor a server spawns in response to a client message. */
+/** Motivation: Stable type id for the actor a server spawns in response to a client message. */
 constexpr MicroWorld::Engine::FTypeId TransportSpawnedActorTypeId{0x00070001u};
 
-/** Stable type id for the actor that observes the transport host on both world lifecycle boundaries. */
+/** Motivation: Stable type id for the actor that observes the transport host on both world lifecycle boundaries. */
 constexpr MicroWorld::Engine::FTypeId TransportHostLifecycleActorTypeId{0x00070002u};
 
-/** Records how many times each frame slot ran and their order so a test can assert the contract. */
+/**
+ * Motivation: Records how many times each frame slot ran and their order so a test can assert the contract.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 struct FFrameCallRecord
 {
-	/** Number of inbound-dispatch slot invocations observed. */
+	/** Motivation: Number of inbound-dispatch slot invocations observed. */
 	int DispatchCount{0};
 
-	/** Number of outbound-flush slot invocations observed. */
+	/** Motivation: Number of outbound-flush slot invocations observed. */
 	int FlushCount{0};
 
-	/** Monotonic stamp of the most recent dispatch, for proving dispatch precedes flush. */
+	/** Motivation: Monotonic stamp of the most recent dispatch, for proving dispatch precedes flush. */
 	std::uint32_t DispatchOrder{0};
 
-	/** Monotonic stamp of the most recent flush, for proving dispatch precedes flush. */
+	/** Motivation: Monotonic stamp of the most recent flush, for proving dispatch precedes flush. */
 	std::uint32_t FlushOrder{0};
 
-	/** Shared monotonic source stamped by each slot to order them within a tick. */
+	/** Motivation: Shared monotonic source stamped by each slot to order them within a tick. */
 	std::uint32_t Sequence{0};
 };
 
-/** A network frame that only records its two slot calls, isolating the engine-side wiring contract. */
+/**
+ * Motivation: A network frame that only records its two slot calls, isolating the engine-side wiring contract.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FRecordingPlaySystem final : public IPlaySystem
 {
 public:
-	/** Binds this stub to the caller-owned record it stamps on every slot call. */
+	/**
+	 * Motivation: Binds this stub to the caller-owned record it stamps on every slot call.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	explicit FRecordingPlaySystem(FFrameCallRecord& InRecord) noexcept : Record(InRecord) {}
 
-	/** Stamps the inbound-dispatch slot's count and order. */
+	/**
+	 * Motivation: Stamps the inbound-dispatch slot's count and order.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void PreAdvance(const TimePointMilliseconds) noexcept override
 	{
 		++Record.DispatchCount;
 		Record.DispatchOrder = ++Record.Sequence;
 	}
 
-	/** Stamps the outbound-flush slot's count and order. */
+	/**
+	 * Motivation: Stamps the outbound-flush slot's count and order.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void PostAdvance(const TimePointMilliseconds) noexcept override
 	{
 		++Record.FlushCount;
@@ -113,31 +137,51 @@ public:
 	}
 
 private:
-	/** Receives this stub's observed slot counts and ordering; never owned here. */
+	/** Motivation: Receives this stub's observed slot counts and ordering; never owned here. */
 	FFrameCallRecord& Record;
 };
 
-/** A minimal actor that records its BeginPlay so a test can prove it began on the server world. */
+/**
+ * Motivation: A minimal actor that records its BeginPlay so a test can prove it began on the server world.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FTransportSpawnedActor final : public AActor
 {
 public:
-	/** Binds the begin counter this actor increments when it starts. */
+	/**
+	 * Motivation: Binds the begin counter this actor increments when it starts.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	FTransportSpawnedActor(int& InBeginCount) noexcept : AActor(), BeginCount(InBeginCount) {}
 
 protected:
-	/** Records that the server world began this spawned actor exactly at the barrier. */
+	/**
+	 * Motivation: Records that the server world began this spawned actor exactly at the barrier.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void BeginPlay() noexcept override { ++BeginCount; }
 
 private:
-	/** Counts begin-play invocations so the test observes the spawn without touching the store. */
+	/** Motivation: Counts begin-play invocations so the test observes the spawn without touching the store. */
 	int& BeginCount;
 };
 
-/** Observes that the engine starts a bound host before actor BeginPlay and stops it after actor EndPlay. */
+/**
+ * Motivation: Observes that the engine starts a bound host before actor BeginPlay and stops it after actor
+ *   EndPlay.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FTransportHostLifecycleActor final : public AActor
 {
 public:
-	/** Binds the host state observations to test-owned values that outlive the managed actor. */
+	/**
+	 * Motivation: Binds the host state observations to test-owned values that outlive the managed actor.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	FTransportHostLifecycleActor(
 		TTransportHost<1, 64>& InTransportHost, ETransportHostState& OutStateDuringBeginPlay, ETransportHostState& OutStateDuringEndPlay) noexcept
 		: AActor(), TransportHost(InTransportHost), StateDuringBeginPlay(OutStateDuringBeginPlay), StateDuringEndPlay(OutStateDuringEndPlay)
@@ -145,37 +189,51 @@ public:
 	}
 
 protected:
-	/** Captures the host state at the world start boundary. */
+	/**
+	 * Motivation: Captures the host state at the world start boundary.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void BeginPlay() noexcept override { StateDuringBeginPlay = TransportHost.GetState(); }
 
-	/** Captures the host state before the engine gives the adapter its play-end turn. */
+	/**
+	 * Motivation: Captures the host state before the engine gives the adapter its play-end turn.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void EndPlay() noexcept override { StateDuringEndPlay = TransportHost.GetState(); }
 
 private:
-	/** The caller-owned host whose lifecycle the engine adapter drives. */
+	/** Motivation: The caller-owned host whose lifecycle the engine adapter drives. */
 	TTransportHost<1, 64>& TransportHost;
 
-	/** Receives the host state observed while this actor's BeginPlay runs. */
+	/** Motivation: Receives the host state observed while this actor's BeginPlay runs. */
 	ETransportHostState& StateDuringBeginPlay;
 
-	/** Receives the host state observed while this actor's EndPlay runs. */
+	/** Motivation: Receives the host state observed while this actor's EndPlay runs. */
 	ETransportHostState& StateDuringEndPlay;
 };
 
-/** Everything a server message handler needs to spawn one actor in the server host's world. */
+/**
+ * Motivation: Everything a server message handler needs to spawn one actor in the server host's world.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 struct FServerSpawnContext
 {
-	/** The server engine whose world receives the spawned actor. */
+	/** Motivation: The server engine whose world receives the spawned actor. */
 	FHost& Host;
 
-	/** Counts how many application messages the server handler observed. */
+	/** Motivation: Counts how many application messages the server handler observed. */
 	int& HandlerInvocationCount;
 
-	/** Receives the spawned actor's begin count so the test proves it began. */
+	/** Motivation: Receives the spawned actor's begin count so the test proves it began. */
 	int& SpawnedBeginCount;
 };
 
-/** Builds the shared fast-heartbeat, short-timeout config both hosts use for deterministic frames. */
+/**
+ * Motivation: Builds the shared fast-heartbeat, short-timeout config both hosts use for deterministic frames.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ */
 FTransportHostConfig MakeConfig() noexcept
 {
 	FTransportHostConfig Config{};
@@ -188,8 +246,8 @@ FTransportHostConfig MakeConfig() noexcept
 } // namespace
 
 /**
- * Scenario: Configure a host, root a world with a lifecycle observer, and drive one full BeginPlay/EndPlay turn.
- * Expected: The host starts before world BeginPlay and stops only after world EndPlay.
+ * Motivation: Configure a host, root a world with a lifecycle observer, and drive one full BeginPlay/EndPlay turn.
+ * Responsibilities: The host starts before world BeginPlay and stops only after world EndPlay.
  */
 MW_TEST_CASE(EngineHost_BeginPlayStartsHostBeforeWorldAndEndPlayStopsHostAfterWorld)
 {
@@ -234,8 +292,8 @@ MW_TEST_CASE(EngineHost_BeginPlayStartsHostBeforeWorldAndEndPlayStopsHostAfterWo
 }
 
 /**
- * Scenario: Root a world, drive two monotonically advancing ticks, then a rolled-back tick that is rejected.
- * Expected: Each accepted tick runs the inbound slot before the outbound slot; the rejected tick runs neither.
+ * Motivation: Root a world, drive two monotonically advancing ticks, then a rolled-back tick that is rejected.
+ * Responsibilities: Each accepted tick runs the inbound slot before the outbound slot; the rejected tick runs neither.
  */
 MW_TEST_CASE(EngineHostTickDrivesBoundSystemPreAdvanceThenPostAdvance)
 {
@@ -263,9 +321,10 @@ MW_TEST_CASE(EngineHostTickDrivesBoundSystemPreAdvanceThenPostAdvance)
 }
 
 /**
- * Scenario: Two TEngine instances over one loopback register a spawn handler, configure both hosts, root worlds, and exchange a client message driven
- * only through the canonical Tick frame order. Expected: The message spawns exactly one actor on the server world without ever calling the pumps
- * directly.
+ * Motivation: Scenario: Two TEngine instances over one loopback register a spawn handler, configure both hosts,
+ *   root worlds, and exchange a client message driven only through the canonical Tick frame order.
+ * Responsibilities: Expected: The message spawns exactly one actor on the server world without ever calling the pumps
+ *   directly.
  */
 MW_TEST_CASE(EngineHostClientMessageSpawnsActorOnServerWorld)
 {

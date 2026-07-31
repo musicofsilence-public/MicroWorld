@@ -8,7 +8,10 @@ FPacketDropDevice::FPacketDropDevice(::MicroWorld::Transport::Device::IDevice& I
 {
 }
 
-/** Defines the destructor out of line so one vtable entry lives in the Transport archive. */
+/**
+ * Motivation: Anchors the FPacketDropDevice vtable in one translation unit so its destructor entry lives in the Transport archive.
+ * Responsibilities: Emit one out-of-line virtual destructor definition without side effects.
+ */
 FPacketDropDevice::~FPacketDropDevice() noexcept = default;
 
 ETransportResult FPacketDropDevice::TrySend(

@@ -20,18 +20,23 @@ using namespace Ex16;
 
 namespace
 {
-/** Single real-time source for the client board. */
+/** Motivation: Single real-time source for the client board. */
 FEsp32TimeSource GTimeSource{};
 
-/** Client session host; one peer slot holds the single server. 256-byte packet
+/** Motivation: Client session host; one peer slot holds the single server. 256-byte packet
  *  capacity matches the server and the host TwoNodeDemo. */
 using FClientTransport = TTransportHost<1, 256>;
 
-/** Most recent actor count decoded from a server broadcast; -1 before the first. */
+/** Motivation: Most recent actor count decoded from a server broadcast; -1 before the first. */
 int GLastServerActors = -1;
 } // namespace
 
-/** Client board: a bare TTransportHost (Client) over one UDP socket, no engine. */
+/**
+ * Motivation: Lets one board act as the bare client half of example 16 over a single UDP socket,
+ *   so the client-side transport can be reasoned about without an engine.
+ * Responsibilities: Join the demo SoftAP, run a TTransportHost client, issue spawn requests, and
+ *   observe the server's broadcast state until the expected actor count appears.
+ */
 void RunClient() noexcept
 {
 	static FEsp32WifiLink WifiLink;

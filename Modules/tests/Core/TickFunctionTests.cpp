@@ -7,18 +7,18 @@
 namespace MicroWorld::Tests
 {
 
-/** Fast cadence shared by the multi-test tick interval scenarios. */
+/** Motivation: Fast cadence shared by the multi-test tick interval scenarios. */
 constexpr DurationMilliseconds FastTickInterval{10};
 
-/** Slow cadence shared by the late-arrival and sibling-tickable scenarios. */
+/** Motivation: Slow cadence shared by the late-arrival and sibling-tickable scenarios. */
 constexpr DurationMilliseconds SlowTickInterval{25};
 
-/** Cadence the live interval-change test switches to so the new deadline is observable. */
+/** Motivation: Cadence the live interval-change test switches to so the new deadline is observable. */
 constexpr DurationMilliseconds ChangedTickInterval{20};
 
 /**
- * Scenario: Begin an enabled tick function and advance at the same timestamp for the first time.
- * Expected: The first advance succeeds, ticks once, reports the dispatcher time, and uses a zero delta.
+ * Motivation: Begin an enabled tick function and advance at the same timestamp for the first time.
+ * Responsibilities: The first advance succeeds, ticks once, reports the dispatcher time, and uses a zero delta.
  */
 MW_TEST_CASE(Tick_FirstAdvanceTicksWithZeroDelta)
 {
@@ -43,8 +43,8 @@ MW_TEST_CASE(Tick_FirstAdvanceTicksWithZeroDelta)
 }
 
 /**
- * Scenario: Enable a tick-capable function that was constructed disabled and read its interval.
- * Expected: Enabling succeeds and leaves the configured interval unchanged.
+ * Motivation: Enable a tick-capable function that was constructed disabled and read its interval.
+ * Responsibilities: Enabling succeeds and leaves the configured interval unchanged.
  */
 MW_TEST_CASE(Tick_EnablingDisabledTickPreservesInterval)
 {
@@ -65,8 +65,9 @@ MW_TEST_CASE(Tick_EnablingDisabledTickPreservesInterval)
 }
 
 /**
- * Scenario: Begin and advance an enabled tick, disable and advance it, then re-enable and advance again.
- * Expected: The disabled advance does not tick; the first re-enabled advance ticks with a zero delta and the original interval is preserved.
+ * Motivation: Begin and advance an enabled tick, disable and advance it, then re-enable and advance again.
+ * Responsibilities: The disabled advance does not tick; the first re-enabled advance ticks with a zero delta and the
+ *   original interval is preserved.
  */
 MW_TEST_CASE(Tick_ReenabledTickUsesFreshZeroDeltaSchedule)
 {
@@ -101,8 +102,9 @@ MW_TEST_CASE(Tick_ReenabledTickUsesFreshZeroDeltaSchedule)
 }
 
 /**
- * Scenario: Begin a zero-interval tick function and advance it three consecutive times.
- * Expected: Each advance ticks once, with the first using a zero delta and later advances using the elapsed time.
+ * Motivation: Begin a zero-interval tick function and advance it three consecutive times.
+ * Responsibilities: Each advance ticks once, with the first using a zero delta and later advances using the elapsed
+ *   time.
  */
 MW_TEST_CASE(Tick_ZeroIntervalTicksOnEveryAdvance)
 {
@@ -133,9 +135,10 @@ MW_TEST_CASE(Tick_ZeroIntervalTicksOnEveryAdvance)
 }
 
 /**
- * Scenario: Advance an interval tick far past its deadline, then at the same timestamp, before the next due point, and at it.
- * Expected: The late advance ticks once with full elapsed time; it does not leave catch-up work, and the next tick waits from the actual execution
- * time.
+ * Motivation: Advance an interval tick far past its deadline, then at the same timestamp, before the next due
+ *   point, and at it.
+ * Responsibilities: The late advance ticks once with full elapsed time; it does not leave catch-up work, and the next
+ *   tick waits from the actual execution.
  */
 MW_TEST_CASE(Tick_LateIntervalTickDoesNotCatchUp)
 {
@@ -170,8 +173,10 @@ MW_TEST_CASE(Tick_LateIntervalTickDoesNotCatchUp)
 }
 
 /**
- * Scenario: Run a fast and a slow sibling tick function from a shared clock, advancing each on its own cadence including a late observation.
- * Expected: Each sibling computes its delta from its own execution history; the late fast delta ignores the slow tick history.
+ * Motivation: Run a fast and a slow sibling tick function from a shared clock, advancing each on its own cadence
+ *   including a late observation.
+ * Responsibilities: Each sibling computes its delta from its own execution history; the late fast delta ignores the slow
+ *   tick history.
  */
 MW_TEST_CASE(Tick_DeltaBelongsToIndividualTickFunction)
 {
@@ -214,8 +219,9 @@ MW_TEST_CASE(Tick_DeltaBelongsToIndividualTickFunction)
 }
 
 /**
- * Scenario: Change the interval of a tick-capable function constructed disabled, then advance it.
- * Expected: The interval change succeeds and stores the new value without enabling the tick, so the advance does not tick.
+ * Motivation: Change the interval of a tick-capable function constructed disabled, then advance it.
+ * Responsibilities: The interval change succeeds and stores the new value without enabling the tick, so the advance does
+ *   not tick.
  */
 MW_TEST_CASE(Tick_IntervalChangeDoesNotEnableTick)
 {
@@ -242,9 +248,10 @@ MW_TEST_CASE(Tick_IntervalChangeDoesNotEnableTick)
 }
 
 /**
- * Scenario: After an early non-ticking advance on an enabled tick, change its interval, then advance at the reset time, before, and at the new
- * deadline. Expected: The change succeeds and the next advance starts a fresh zero-delta schedule that ticks at the new deadline with the new
- * interval.
+ * Motivation: Scenario: After an early non-ticking advance on an enabled tick, change its interval, then advance
+ *   at the reset time, before, and at the new deadline.
+ * Responsibilities: Expected: The change succeeds and the next advance starts a fresh zero-delta schedule that ticks at
+ *   the new deadline with the new interval.
  */
 MW_TEST_CASE(Tick_EnabledIntervalChangeResetsNextAdvance)
 {
@@ -281,8 +288,8 @@ MW_TEST_CASE(Tick_EnabledIntervalChangeResetsNextAdvance)
 }
 
 /**
- * Scenario: Attempt to enable a cannot-ever-tick function, then advance it.
- * Expected: The enable is rejected, the function stays disabled, and the advance remains valid without ticking.
+ * Motivation: Attempt to enable a cannot-ever-tick function, then advance it.
+ * Responsibilities: The enable is rejected, the function stays disabled, and the advance remains valid without ticking.
  */
 MW_TEST_CASE(Tick_CannotEverTickRejectsEnable)
 {
@@ -307,8 +314,9 @@ MW_TEST_CASE(Tick_CannotEverTickRejectsEnable)
 }
 
 /**
- * Scenario: Advance backward after an established schedule, then forward to the original deadline.
- * Expected: The backward advance is rejected and does not tick; the later valid deadline still ticks with the original delta preserved.
+ * Motivation: Advance backward after an established schedule, then forward to the original deadline.
+ * Responsibilities: The backward advance is rejected and does not tick; the later valid deadline still ticks with the
+ *   original delta preserved.
  */
 MW_TEST_CASE(Tick_BackwardTimePreservesSchedule)
 {
@@ -340,8 +348,9 @@ MW_TEST_CASE(Tick_BackwardTimePreservesSchedule)
 }
 
 /**
- * Scenario: Advance a zero-interval tick from an established history to a time whose delta exceeds the duration representation.
- * Expected: The advance remains valid, ticks, and the unrepresentable delta saturates at the maximum duration.
+ * Motivation: Advance a zero-interval tick from an established history to a time whose delta exceeds the duration
+ *   representation.
+ * Responsibilities: The advance remains valid, ticks, and the unrepresentable delta saturates at the maximum duration.
  */
 MW_TEST_CASE(Tick_UnrepresentableDeltaSaturatesAtMaximum)
 {
@@ -370,8 +379,9 @@ MW_TEST_CASE(Tick_UnrepresentableDeltaSaturatesAtMaximum)
 }
 
 /**
- * Scenario: Begin a tick near the maximum time point and advance just before, then at, the maximum.
- * Expected: The saturated deadline does not wrap early; the maximum-time advance remains valid, ticks, and reports the elapsed duration.
+ * Motivation: Begin a tick near the maximum time point and advance just before, then at, the maximum.
+ * Responsibilities: The saturated deadline does not wrap early; the maximum-time advance remains valid, ticks, and
+ *   reports the elapsed duration.
  */
 MW_TEST_CASE(Tick_NextDueSaturatesAtMaximumTime)
 {
@@ -403,8 +413,10 @@ MW_TEST_CASE(Tick_NextDueSaturatesAtMaximumTime)
 }
 
 /**
- * Scenario: Bring a positive-interval tick to its saturated deadline, then advance again at the same maximum timestamp.
- * Expected: The saturated deadline ticks once; the repeated same-timestamp advance remains valid but does not tick again.
+ * Motivation: Bring a positive-interval tick to its saturated deadline, then advance again at the same maximum
+ *   timestamp.
+ * Responsibilities: The saturated deadline ticks once; the repeated same-timestamp advance remains valid but does not
+ *   tick again.
  */
 MW_TEST_CASE(Tick_SaturatedDeadlineDoesNotRepeatWithoutElapsedTime)
 {
@@ -429,8 +441,8 @@ MW_TEST_CASE(Tick_SaturatedDeadlineDoesNotRepeatWithoutElapsedTime)
 }
 
 /**
- * Scenario: Advance the tick before BeginPlay, then BeginPlay, EndPlay, and advance again.
- * Expected: Advances outside the play lifecycle are rejected and never tick.
+ * Motivation: Advance the tick before BeginPlay, then BeginPlay, EndPlay, and advance again.
+ * Responsibilities: Advances outside the play lifecycle are rejected and never tick.
  */
 MW_TEST_CASE(Tick_AdvanceOutsidePlayIsRejected)
 {

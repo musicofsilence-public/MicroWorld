@@ -53,54 +53,71 @@ using MicroWorld::Tests::FComponentEventState;
 using MicroWorld::Tests::FSequenceCounter;
 using MicroWorld::Tests::TEngineEnvironment;
 
-/** Tick configuration that lets ordering types tick on every advance. */
+/** Motivation: Tick configuration that lets ordering types tick on every advance. */
 constexpr FTickConfiguration OrderingTickConfiguration{true, true, DurationMilliseconds{0}};
 
-/** Test-local type ids for the ordering, plain, and component descriptors. */
+/** Motivation: Test-local type ids for the ordering, plain, and component descriptors. */
 constexpr MicroWorld::Engine::FTypeId OrderingActorTypeId{0x00040001u};
 constexpr MicroWorld::Engine::FTypeId OrderingComponentTypeId{0x00040002u};
 constexpr MicroWorld::Engine::FTypeId PlainActorTypeId{0x00040003u};
 constexpr MicroWorld::Engine::FTypeId PlainComponentTypeId{0x00040004u};
 
-/** Canonical monotonic baseline every BeginPlay call uses as its starting world time. */
+/** Motivation: Canonical monotonic baseline every BeginPlay call uses as its starting world time. */
 constexpr MicroWorld::Core::TimePointMilliseconds BaselineTimeMilliseconds{0};
 
-/** World time at which ApplyPending flushes the queued spawn/destroy barrier in these tests. */
+/** Motivation: World time at which ApplyPending flushes the queued spawn/destroy barrier in these tests. */
 constexpr MicroWorld::Core::TimePointMilliseconds BarrierTimeMilliseconds{10};
 
-/** World time used to advance survivors after a destroy barrier in the order-preservation tests. */
+/** Motivation: World time used to advance survivors after a destroy barrier in the order-preservation tests. */
 constexpr MicroWorld::Core::TimePointMilliseconds SurvivorAdvanceTimeMilliseconds{20};
 
-/** Fixed capacity of the GC fixture worklist, large enough for every reachable object in these tests. */
+/** Motivation: Fixed capacity of the GC fixture worklist, large enough for every reachable object in these tests. */
 constexpr std::uint32_t CollectorWorklistCapacity = 16;
 
-/** Per-call upper bound on objects the store destruction barrier reclaims in one call. */
+/** Motivation: Per-call upper bound on objects the store destruction barrier reclaims in one call. */
 constexpr std::uint32_t MaxObjectsReclaimedPerBarrier = 16;
 
-/** A component that records begin/tick/end ordering into per-instance state. */
+/**
+ * Motivation: A component that records begin/tick/end ordering into per-instance state.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FOrderingComponent final : public UActorComponent
 {
 public:
-	/** Binds this component to the shared sequence and its own observed event record. */
+	/**
+	 * Motivation: Binds this component to the shared sequence and its own observed event record.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	FOrderingComponent(FSequenceCounter& InSequence, FComponentEventState& InEvents) noexcept
 		: UActorComponent(OrderingTickConfiguration), Sequence(InSequence), Events(InEvents)
 	{
 	}
 
 protected:
-	/** Records the sequence value and count of this component's begin hook. */
+	/**
+	 * Motivation: Records the sequence value and count of this component's begin hook.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void BeginPlay() noexcept override
 	{
 		Events.BeginOrder = Sequence.Next();
 		++Events.BeginCount;
 	}
-	/** Records the sequence value and count of this component's tick hook. */
+	/**
+	 * Motivation: Records the sequence value and count of this component's tick hook.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void TickComponent(const FTickContext&) noexcept override
 	{
 		Events.TickOrder = Sequence.Next();
 		++Events.TickCount;
 	}
-	/** Records the sequence value and count of this component's end hook. */
+	/**
+	 * Motivation: Records the sequence value and count of this component's end hook.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void EndPlay() noexcept override
 	{
 		Events.EndOrder = Sequence.Next();
@@ -108,36 +125,53 @@ protected:
 	}
 
 private:
-	/** Shares one monotonic order source with every observed type in the test. */
+	/** Motivation: Shares one monotonic order source with every observed type in the test. */
 	FSequenceCounter& Sequence;
-	/** Receives this component's observed begin/tick/end ordering and counts. */
+	/** Motivation: Receives this component's observed begin/tick/end ordering and counts. */
 	FComponentEventState& Events;
 };
 
-/** An actor that records begin/tick/end ordering into per-instance state. */
+/**
+ * Motivation: An actor that records begin/tick/end ordering into per-instance state.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FOrderingActor final : public AActor
 {
 public:
-	/** Binds this actor to the shared sequence and its event record. */
+	/**
+	 * Motivation: Binds this actor to the shared sequence and its event record.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	FOrderingActor(FSequenceCounter& InSequence, FActorEventState& InEvents) noexcept
 		: AActor(OrderingTickConfiguration), Sequence(InSequence), Events(InEvents)
 	{
 	}
 
 protected:
-	/** Records the sequence value and count of this actor's begin hook. */
+	/**
+	 * Motivation: Records the sequence value and count of this actor's begin hook.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void BeginPlay() noexcept override
 	{
 		Events.BeginOrder = Sequence.Next();
 		++Events.BeginCount;
 	}
-	/** Records the sequence value and count of this actor's tick hook. */
+	/**
+	 * Motivation: Records the sequence value and count of this actor's tick hook.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void Tick(const FTickContext&) noexcept override
 	{
 		Events.TickOrder = Sequence.Next();
 		++Events.TickCount;
 	}
-	/** Records the sequence value and count of this actor's end hook. */
+	/**
+	 * Motivation: Records the sequence value and count of this actor's end hook.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void EndPlay() noexcept override
 	{
 		Events.EndOrder = Sequence.Next();
@@ -145,72 +179,116 @@ protected:
 	}
 
 private:
-	/** Shares one monotonic order source with every observed type in the test. */
+	/** Motivation: Shares one monotonic order source with every observed type in the test. */
 	FSequenceCounter& Sequence;
-	/** Receives this actor's observed begin/tick/end ordering and counts. */
+	/** Motivation: Receives this actor's observed begin/tick/end ordering and counts. */
 	FActorEventState& Events;
 };
 
-/** A minimal component used where lifetime ordering does not need observing. */
+/**
+ * Motivation: A minimal component used where lifetime ordering does not need observing.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FPlainComponent final : public UActorComponent
 {
 public:
-	/** Constructs a component with the default (non-ticking) configuration. */
+	/**
+	 * Motivation: Constructs a component with the default (non-ticking) configuration.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	FPlainComponent() noexcept : UActorComponent() {}
 };
 
-/** A minimal actor used where lifetime ordering does not need observing. */
+/**
+ * Motivation: A minimal actor used where lifetime ordering does not need observing.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FPlainActor final : public AActor
 {
 public:
-	/** Constructs a plain actor with direct fixed component storage. */
+	/**
+	 * Motivation: Constructs a plain actor with direct fixed component storage.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	explicit FPlainActor() noexcept : AActor() {}
 };
 
-/** Environment sized for spawn/destroy tests with room for several actors and components. */
+/** Motivation: Environment sized for spawn/destroy tests with room for several actors and components. */
 using FSpawnDestroyEnvironment = TEngineEnvironment<256, 16, 16, 4>;
 
-/** Builds one ordering actor through its derived descriptor in the environment. */
+/**
+ * Motivation: Builds one ordering actor through its derived descriptor in the environment.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ */
 TObjectPtr<FOrderingActor> MakeOrderingActor(FSpawnDestroyEnvironment& InEnv, FSequenceCounter& InSequence, FActorEventState& InEvents) noexcept
 {
 	return InEnv.CreateDerivedObject<FOrderingActor>(OrderingActorTypeId, "OrderingActor", InSequence, InEvents);
 }
 
-/** Builds one ordering component through its derived descriptor in the environment. */
+/**
+ * Motivation: Builds one ordering component through its derived descriptor in the environment.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ */
 TObjectPtr<FOrderingComponent> MakeOrderingComponent(
 	FSpawnDestroyEnvironment& InEnv, FSequenceCounter& InSequence, FComponentEventState& InEvents) noexcept
 {
 	return InEnv.CreateDerivedObject<FOrderingComponent>(OrderingComponentTypeId, "OrderingComponent", InSequence, InEvents);
 }
 
-/** Builds one plain actor through its derived descriptor in the environment. */
+/**
+ * Motivation: Builds one plain actor through its derived descriptor in the environment.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ */
 TObjectPtr<FPlainActor> MakePlainActor(FSpawnDestroyEnvironment& InEnv) noexcept
 {
 	return InEnv.CreateDerivedObject<FPlainActor>(PlainActorTypeId, "PlainActor");
 }
 
-/** Owns a fixed worklist and collector bound to an environment's store for GC assertions. */
+/**
+ * Motivation: Owns a fixed worklist and collector bound to an environment's store for GC assertions.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FCollectorFixture final
 {
 public:
-	/** Binds a collector to the store using this fixture's caller-owned worklist storage. */
+	/**
+	 * Motivation: Binds a collector to the store using this fixture's caller-owned worklist storage.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	explicit FCollectorFixture(FObjectStore& InStore) noexcept : Collector(InStore, FGarbageCollectorStorage{Worklist, CollectorWorklistCapacity}) {}
 
-	/** Exposes the collector so tests can run a full cycle and read its stats. */
+	/**
+	 * Motivation: Tests can run a full cycle and read its stats.
+	 * Responsibilities: Exposes the collector.
+	 */
 	FGarbageCollector& GetCollector() noexcept { return Collector; }
 
 private:
-	/** Backs the collector's reachable-object queue without heap storage. */
+	/** Motivation: Backs the collector's reachable-object queue without heap storage. */
 	FObjectHandle Worklist[CollectorWorklistCapacity]{};
-	/** Owns the collector bound to this fixture's worklist for the test's lifetime. */
+	/** Motivation: Owns the collector bound to this fixture's worklist for the test's lifetime. */
 	FGarbageCollector Collector;
 };
 
-/** Builds a fresh standalone store so cross-store tests can use a foreign owner. */
+/**
+ * Motivation: Builds a fresh standalone store so cross-store tests can use a foreign owner.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FSecondStore final
 {
 public:
-	/** Registers the engine base and plain test descriptors into this store's registry. */
+	/**
+	 * Motivation: Registers the engine base and plain test descriptors into this store's registry.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	FSecondStore() noexcept : Store(MakeStorage(), MakeClassRegistryView(Registry))
 	{
 		(void)Registry.Register(UActorComponent::StaticClassDescriptor());
@@ -225,39 +303,49 @@ public:
 			&MicroWorld::Engine::TraceManagedObjectReferences));
 	}
 
-	/** Returns the foreign store used to mint cross-store references. */
+	/**
+	 * Motivation: Returns the foreign store used to mint cross-store references.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	FObjectStore& GetStore() noexcept { return Store; }
 
-	/** Returns the foreign registry so tests can find its plain-actor descriptor. */
+	/**
+	 * Motivation: Tests can find its plain-actor descriptor.
+	 * Responsibilities: Returns the foreign registry.
+	 */
 	TClassRegistry<8>& GetRegistry() noexcept { return Registry; }
 
 private:
-	/** Describes this foreign store's complete caller-owned storage. */
+	/**
+	 * Motivation: Describes this foreign store's complete caller-owned storage.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	FObjectStoreStorage MakeStorage() noexcept
 	{
 		return FObjectStoreStorage{SlotBytes.data(), SlotBytes.size(), Slots.data(), SlotCount, 256, 16, Roots.data(), RootCapacity};
 	}
 
-	/** Fixes the foreign store's object-slot count. */
+	/** Motivation: Fixes the foreign store's object-slot count. */
 	static constexpr std::uint32_t SlotCount{4};
-	/** Fixes the foreign store's root-table capacity. */
+	/** Motivation: Fixes the foreign store's root-table capacity. */
 	static constexpr std::uint32_t RootCapacity{4};
-	/** Keeps every foreign slot aligned for placement construction. */
+	/** Motivation: Keeps every foreign slot aligned for placement construction. */
 	alignas(16) std::array<std::byte, 256 * SlotCount> SlotBytes{};
-	/** Gives the foreign store one lifecycle record per slot. */
+	/** Motivation: Gives the foreign store one lifecycle record per slot. */
 	std::array<FObjectSlotMetadata, SlotCount> Slots{};
-	/** Gives the foreign store its independent root entries. */
+	/** Motivation: Gives the foreign store its independent root entries. */
 	std::array<FObjectRootEntry, RootCapacity> Roots{};
-	/** Owns the foreign class registry. */
+	/** Motivation: Owns the foreign class registry. */
 	TClassRegistry<8> Registry;
-	/** Owns the foreign managed lifetimes for the test's duration. */
+	/** Motivation: Owns the foreign managed lifetimes for the test's duration. */
 	FObjectStore Store;
 };
 
 /**
- * Scenario: Begin an empty world, queue a SpawnActor, read the inert queue state, then run ApplyPending and Advance.
- * Expected: SpawnActor only queues while playing; the queued actor receives its BeginPlay at the next ApplyPending barrier, never at the SpawnActor
- * call.
+ * Motivation: Begin an empty world, queue a SpawnActor, read the inert queue state, then run ApplyPending and
+ *   Advance.
+ * Responsibilities: SpawnActor only queues while playing; the queued actor receives its BeginPlay at the next
+ *   ApplyPending barrier, never at the SpawnActor.
  */
 MW_TEST_CASE(EngineSpawnActorBeginsAtNextBarrierNotImmediately)
 {
@@ -301,9 +389,9 @@ MW_TEST_CASE(EngineSpawnActorBeginsAtNextBarrierNotImmediately)
 }
 
 /**
- * Scenario: Register an actor with two components, queue a DestroyActor, then run ApplyPending.
- * Expected: DestroyActor only queues while playing; the queued actor ends at the barrier, with its own EndPlay before its components end in reverse
- * order.
+ * Motivation: Register an actor with two components, queue a DestroyActor, then run ApplyPending.
+ * Responsibilities: DestroyActor only queues while playing; the queued actor ends at the barrier, with its own EndPlay
+ *   before its components end in reverse.
  */
 MW_TEST_CASE(EngineDestroyActorEndsAtBarrierWithReverseComponentShutdown)
 {
@@ -347,8 +435,10 @@ MW_TEST_CASE(EngineDestroyActorEndsAtBarrierWithReverseComponentShutdown)
 }
 
 /**
- * Scenario: Pre-register one actor, queue a spawn that reaches capacity, then run ApplyPending and attempt another spawn.
- * Expected: Spawn capacity counts live plus pending-spawn actors together, before the barrier applies the queue and after it fills the live registry.
+ * Motivation: Pre-register one actor, queue a spawn that reaches capacity, then run ApplyPending and attempt
+ *   another spawn.
+ * Responsibilities: Spawn capacity counts live plus pending-spawn actors together, before the barrier applies the queue
+ *   and after it fills the live registry.
  */
 MW_TEST_CASE(EngineSpawnCapacityCountsLiveAndPending)
 {
@@ -383,8 +473,10 @@ MW_TEST_CASE(EngineSpawnCapacityCountsLiveAndPending)
 }
 
 /**
- * Scenario: Queue a spawn, repeat it while pending, run the barrier, then repeat it again while the actor is live.
- * Expected: A repeated spawn request is rejected as a duplicate both while the first request is pending and after the barrier makes the actor live.
+ * Motivation: Queue a spawn, repeat it while pending, run the barrier, then repeat it again while the actor is
+ *   live.
+ * Responsibilities: A repeated spawn request is rejected as a duplicate both while the first request is pending and
+ *   after the barrier makes the actor live.
  */
 MW_TEST_CASE(EngineDuplicateSpawnRejected)
 {
@@ -412,8 +504,9 @@ MW_TEST_CASE(EngineDuplicateSpawnRejected)
 }
 
 /**
- * Scenario: Register and begin one actor, then attempt to DestroyActor a never-registered stranger actor.
- * Expected: Destroying an actor that was never registered with this world is rejected as an invalid reference and leaves the destroy queue unchanged.
+ * Motivation: Register and begin one actor, then attempt to DestroyActor a never-registered stranger actor.
+ * Responsibilities: Destroying an actor that was never registered with this world is rejected as an invalid reference
+ *   and leaves the destroy queue unchanged.
  */
 MW_TEST_CASE(EngineDestroyOfNeverRegisteredActorRejected)
 {
@@ -436,9 +529,9 @@ MW_TEST_CASE(EngineDestroyOfNeverRegisteredActorRejected)
 }
 
 /**
- * Scenario: Attempt SpawnActor and DestroyActor on a constructed (never-begun) world and on an ended world.
- * Expected: Spawn and destroy are lifecycle-locked outside the playing state; a constructed world and an ended world both reject them without
- * queueing.
+ * Motivation: Attempt SpawnActor and DestroyActor on a constructed (never-begun) world and on an ended world.
+ * Responsibilities: Spawn and destroy are lifecycle-locked outside the playing state; a constructed world and an ended
+ *   world both reject them without.
  */
 MW_TEST_CASE(EngineSpawnAndDestroyRejectedOutsidePlayingLifecycle)
 {
@@ -480,9 +573,9 @@ MW_TEST_CASE(EngineSpawnAndDestroyRejectedOutsidePlayingLifecycle)
 }
 
 /**
- * Scenario: Begin a world and attempt SpawnActor with empty, cross-store, and already-owned references.
- * Expected: Every SpawnActor reference rejection (empty, cross-store, already-owned) returns its exact code, leaving the pending queue and candidate
- * unchanged.
+ * Motivation: Begin a world and attempt SpawnActor with empty, cross-store, and already-owned references.
+ * Responsibilities: Every SpawnActor reference rejection (empty, cross-store, already-owned) returns its exact code,
+ *   leaving the pending queue and candidate.
  */
 MW_TEST_CASE(EngineSpawnReferenceRejectionsLeaveStateUnchanged)
 {
@@ -514,8 +607,9 @@ MW_TEST_CASE(EngineSpawnReferenceRejectionsLeaveStateUnchanged)
 }
 
 /**
- * Scenario: Begin a world and attempt DestroyActor with empty, cross-store, first, and repeated references.
- * Expected: Every DestroyActor reference rejection (empty, cross-store, repeated) returns its exact code, leaving the pending-destroy queue accurate.
+ * Motivation: Begin a world and attempt DestroyActor with empty, cross-store, first, and repeated references.
+ * Responsibilities: Every DestroyActor reference rejection (empty, cross-store, repeated) returns its exact code,
+ *   leaving the pending-destroy queue accurate.
  */
 MW_TEST_CASE(EngineDestroyReferenceRejectionsLeaveStateUnchanged)
 {
@@ -546,9 +640,9 @@ MW_TEST_CASE(EngineDestroyReferenceRejectionsLeaveStateUnchanged)
 }
 
 /**
- * Scenario: Register three actors, destroy the middle one at the barrier, then Advance the survivors.
- * Expected: Removing a middle actor at the barrier preserves the registration order of the survivors, so their next tick dispatch stays in
- * registration order.
+ * Motivation: Register three actors, destroy the middle one at the barrier, then Advance the survivors.
+ * Responsibilities: Removing a middle actor at the barrier preserves the registration order of the survivors, so their
+ *   next tick dispatch stays in.
  */
 MW_TEST_CASE(EngineSurvivorDispatchOrderPreservedAfterMidListRemoval)
 {
@@ -586,9 +680,10 @@ MW_TEST_CASE(EngineSurvivorDispatchOrderPreservedAfterMidListRemoval)
 }
 
 /**
- * Scenario: In one frame, queue a SpawnActor and then DestroyActor the same still-pending actor, then run the barrier.
- * Expected: Destroying an actor still queued to spawn is rejected as invalid (it is not yet registered); the spawn still applies; destroy does not
- * cancel a spawn.
+ * Motivation: In one frame, queue a SpawnActor and then DestroyActor the same still-pending actor, then run the
+ *   barrier.
+ * Responsibilities: Destroying an actor still queued to spawn is rejected as invalid (it is not yet registered); the
+ *   spawn still applies; destroy does not.
  */
 MW_TEST_CASE(EngineSpawnThenDestroySameActorInOneFrame)
 {
@@ -622,9 +717,10 @@ MW_TEST_CASE(EngineSpawnThenDestroySameActorInOneFrame)
 }
 
 /**
- * Scenario: Destroy an actor at the barrier, then run the store's destruction barrier and construct a replacement in the reclaimed slot.
- * Expected: The destroyed actor's handle is hidden at the barrier and stales after reclamation; the slot is reused with a fresh generation that never
- * re-resolves the original handle.
+ * Motivation: Destroy an actor at the barrier, then run the store's destruction barrier and construct a
+ *   replacement in the reclaimed slot.
+ * Responsibilities: The destroyed actor's handle is hidden at the barrier and stales after reclamation; the slot is
+ *   reused with a fresh generation that never.
  */
 MW_TEST_CASE(EngineDestroyedActorHandleGoesStaleAfterReclamation)
 {
@@ -665,9 +761,10 @@ MW_TEST_CASE(EngineDestroyedActorHandleGoesStaleAfterReclamation)
 }
 
 /**
- * Scenario: Destroy a two-component actor at the barrier, run a full collection over the rooted world, then run the store destruction barrier.
- * Expected: After the destroy barrier a full collection accounts every root and keeps the worklist within capacity while correctly leaving the
- * pending-destroy actor and its components to the store's destruction barrier, which reclaims exactly the actor and both components.
+ * Motivation: Destroy a two-component actor at the barrier, run a full collection over the rooted world, then run
+ *   the store destruction barrier.
+ * Responsibilities: After the destroy barrier a full collection accounts every root and keeps the worklist within
+ *   capacity while correctly leaving the.
  */
 MW_TEST_CASE(EngineDestroyReclaimsActorAndComponentsWithRootsAndWorklistAccounted)
 {

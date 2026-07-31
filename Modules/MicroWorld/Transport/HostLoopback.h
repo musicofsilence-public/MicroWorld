@@ -14,12 +14,15 @@ namespace MicroWorld::Transport
 {
 
 /**
- * Deterministic in-process multi-port loopback network for host tests.
- *
- * Owns N mailboxes and N embedded per-port `::MicroWorld::Transport::Device::IDevice`s; `Port(index)` hands out
- * the device bound to the 1-byte loopback address equal to `index`. Two hosts
- * share one `THostLoopback` and each drive their own `Port(i)`; the ports live
- * inside the network, so their lifetimes track it automatically.
+ * Motivation: Provides one deterministic in-process multi-port loopback network for host tests so two hosts exchange
+ *   packets without a physical transport.
+ * Responsibilities: Own N mailboxes and N embedded per-port IDevice values, hand out the device bound to the 1-byte
+ *   loopback address equal to its index via Port(index), and keep the ports' lifetimes tracked by the network.
+ * Example:
+ *   THostLoopback<2, 4, 64> Net;
+ *   IDevice& A = Net.Port(0);
+ *   IDevice& B = Net.Port(1);
+ *   A.TrySend(MakeLoopbackAddress(1), Packet);
  */
 template<std::size_t MaxPorts, std::size_t MailboxCapacity, std::size_t PacketBytes>
 class THostLoopback final
@@ -29,10 +32,12 @@ class THostLoopback final
 	static_assert(PacketBytes > 0, "THostLoopback requires a nonzero per-packet byte capacity.");
 
 	/**
-	 * Owns the N per-port inbound mailboxes and the address-keyed routing for one
-	 * in-process loopback network. Each mailbox is a bounded FIFO of packets carrying
-	 * the sender's address; delivery and receive are transactional exactly like the
-	 * single-link loopback they generalize.
+	 * Motivation: Owns the N per-port inbound mailboxes and address-keyed routing so one loopback network generalizes the
+	 *   single-link loopback to many ports.
+	 * Responsibilities: Hold one bounded FIFO mailbox per port where each queued packet carries its sender address, and keep
+	 *   delivery and receive transactional exactly like the single-link loopback.
+	 * Example:
+	 *   // Internal: driven through the per-port FPort devices, not directly.
 	 */
 	template<std::size_t MaxPorts, std::size_t MailboxCapacity, std::size_t PacketBytes>
 	class TLoopbackMailboxes final
@@ -42,13 +47,17 @@ class THostLoopback final
 		static_assert(PacketBytes > 0, "TLoopbackMailboxes requires a nonzero per-packet byte capacity.");
 
 	public:
-		/** Defaulted so the network can live in automatic or static storage without side effects. */
+		/**
+		 * Motivation: Lets the network live in automatic or static storage without side effects.
+		 * Responsibilities: Default-construct fixed storage with all mailboxes empty.
+		 */
 		TLoopbackMailboxes() noexcept = default;
 
 		/**
-		 * Enqueues one packet into the destination port's mailbox, stamped with the sender.
-		 * `To` must be a 1-byte address whose value is a valid port index, else `Invalid`.
-		 * Then applies the same null/oversized/full validation as the single-link loopback.
+		 * Motivation: Routes one packet to a destination port's mailbox stamped with its sender, mirroring a real send.
+		 * Responsibilities: Require a 1-byte destination whose value is a valid port index (else Invalid), accept a zero-length
+		 *   packet as a valid enqueue, reject a null-with-nonzero-length or oversize packet with Invalid, and report Full when
+		 *   no slot remains.
 		 */
 		ETransportResult Deliver(
 			const ::MicroWorld::Transport::Address::FDeviceAddress& InTo,
@@ -80,10 +89,9 @@ class THostLoopback final
 		}
 
 		/**
-		 * Pops one packet from `InLocalPort`'s mailbox into the caller destination.
-		 * On Success writes the head bytes, `OutResult.BytesReceived`, AND `OutFrom` (the
-		 * stored sender). On Full/Invalid/Unavailable leaves destination, OutResult, and
-		 * OutFrom UNCHANGED. Same null-dest / empty / too-small rules as the single link.
+		 * Motivation: Pops one packet from a port's mailbox transactionally so a failed receive never reports a partial delivery.
+		 * Responsibilities: On Success write the head bytes, OutResult.BytesReceived, and OutFrom (the stored sender); on
+		 *   Full, Invalid, or Unavailable leave destination, OutResult, and OutFrom unchanged.
 		 */
 		ETransportResult Receive(
 			const std::uint8_t InLocalPort,
@@ -111,16 +119,28 @@ class THostLoopback final
 			return ETransportResult::Success;
 		}
 
-		/** Distinguishes an empty mailbox without inspecting packet storage. */
+		/**
+		 * Motivation: Lets a test distinguish an empty mailbox without inspecting packet storage.
+		 * Responsibilities: Report whether the named port's mailbox has no queued packet.
+		 */
 		bool IsEmpty(const std::uint8_t InPort) const noexcept { return Mailboxes[InPort].QueuedCount == 0; }
 
-		/** Distinguishes a full mailbox so a caller can observe backpressure. */
+		/**
+		 * Motivation: Lets a test observe backpressure before a deliver would report Full.
+		 * Responsibilities: Report whether the named port's mailbox has reached its slot capacity.
+		 */
 		bool IsFull(const std::uint8_t InPort) const noexcept { return Mailboxes[InPort].QueuedCount >= MailboxCapacity; }
 
-		/** Reports how many packets are currently queued for receive on `InPort`. */
+		/**
+		 * Motivation: Lets a test observe pending work on a port.
+		 * Responsibilities: Report how many packets are queued for receive on the named port.
+		 */
 		std::size_t QueuedCount(const std::uint8_t InPort) const noexcept { return Mailboxes[InPort].QueuedCount; }
 
-		/** Drops every queued packet on `InPort` so that mailbox's capacity can be reused deterministically. */
+		/**
+		 * Motivation: Lets a test reuse one mailbox's capacity deterministically between scenarios.
+		 * Responsibilities: Drop every queued packet on the named port and reset its FIFO indices.
+		 */
 		void Drain(const std::uint8_t InPort) noexcept
 		{
 			FMailbox& Mailbox = Mailboxes[InPort];
@@ -130,7 +150,10 @@ class THostLoopback final
 			Mailbox.QueuedCount = 0;
 		}
 
-		/** Drops every queued packet on every port so the whole network can be reused deterministically. */
+		/**
+		 * Motivation: Lets a test reuse the whole network deterministically between scenarios.
+		 * Responsibilities: Drop every queued packet on every port.
+		 */
 		void DrainAll() noexcept
 		{
 			for (std::uint8_t Port = 0; Port < MaxPorts; ++Port)
@@ -140,32 +163,40 @@ class THostLoopback final
 		}
 
 	private:
-		/** Active byte count of a loopback port address: one byte naming the destination port index. */
+		/** Motivation: Fixes the active byte count of a loopback port address that names the destination port index. */
 		static constexpr std::uint8_t LoopbackPortAddressBytes = 1;
 
-		/** One bounded FIFO mailbox: fixed byte storage, per-slot length, per-slot sender, indices. */
+		/**
+		 * Motivation: Holds one bounded FIFO mailbox so a loopback port queues packets with their sender addresses.
+		 * Responsibilities: Carry fixed per-packet byte storage, per-slot lengths, per-slot senders, and head/tail indices.
+		 * Example:
+		 *   // Internal value type owned by TLoopbackMailboxes.
+		 */
 		struct FMailbox
 		{
-			/** Fixed per-packet byte storage; only the leading `PacketLengths[i]` bytes are valid. */
+			/** Motivation: Provides fixed per-packet byte storage where only the leading PacketLengths[i] bytes are valid. */
 			std::array<std::array<std::uint8_t, PacketBytes>, MailboxCapacity> PacketStorage{};
 
-			/** Records the valid byte length of each queued packet so receives stay exact. */
+			/** Motivation: Records the valid byte length of each queued packet so receives stay exact. */
 			std::array<std::size_t, MailboxCapacity> PacketLengths{};
 
-			/** Records the sender address stamped on each queued packet so receive can report it. */
+			/** Motivation: Records the sender address stamped on each queued packet so receive can report it. */
 			std::array<::MicroWorld::Transport::Address::FDeviceAddress, MailboxCapacity> SenderAddresses{};
 
-			/** Indexes the next packet to receive so the FIFO order is preserved. */
+			/** Motivation: Indexes the next packet to receive so the FIFO order is preserved. */
 			std::size_t HeadIndex{0};
 
-			/** Indexes the next free slot so delivers append without overwriting the head. */
+			/** Motivation: Indexes the next free slot so delivers append without overwriting the head. */
 			std::size_t TailIndex{0};
 
-			/** Tracks occupancy so full and empty states are observable without wrap arithmetic. */
+			/** Motivation: Tracks occupancy so full and empty states are observable without wrap arithmetic. */
 			std::size_t QueuedCount{0};
 		};
 
-		/** Validates a loopback destination: it must be exactly one byte naming a valid port. */
+		/**
+		 * Motivation: Guards delivery against a destination that names no port before any mailbox state is consulted.
+		 * Responsibilities: Return Success only when the destination is exactly one byte naming a valid port index, else Invalid.
+		 */
 		static ETransportResult ValidateDeliverAddress(const ::MicroWorld::Transport::Address::FDeviceAddress& InTo) noexcept
 		{
 			if (InTo.Size != LoopbackPortAddressBytes || InTo.Bytes[0] >= MaxPorts)
@@ -175,7 +206,10 @@ class THostLoopback final
 			return ETransportResult::Success;
 		}
 
-		/** Enqueues one already-validated packet at the tail, or `Full` when the mailbox has no free slot. */
+		/**
+		 * Motivation: Appends one validated packet at the tail so the FIFO order survives concurrent delivers.
+		 * Responsibilities: Return Full when no slot is free, otherwise store the packet and advance the tail.
+		 */
 		static ETransportResult EnqueuePacket(
 			FMailbox& InTarget, const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom, Core::TSpan<const std::uint8_t> InPacket) noexcept
 		{
@@ -188,7 +222,10 @@ class THostLoopback final
 			return ETransportResult::Success;
 		}
 
-		/** Rejects a null destination with nonzero length before the mailbox state is consulted. */
+		/**
+		 * Motivation: Rejects a null destination with nonzero length before mailbox state is consulted.
+		 * Responsibilities: Return Invalid for a null destination with nonzero length independent of mailbox state, else Success.
+		 */
 		static ETransportResult ValidateReceiveDestination(Core::TSpan<std::uint8_t> InDestination) noexcept
 		{
 			// A null destination with nonzero length is an invalid request independent of the
@@ -201,7 +238,11 @@ class THostLoopback final
 			return ETransportResult::Success;
 		}
 
-		/** Reports whether the head packet fits the caller destination; false means the caller must retry larger. */
+		/**
+		 * Motivation: Decides whether a receive can succeed without dropping the head packet.
+		 * Responsibilities: Return false (so the caller retries larger) when the head does not fit, including a nonzero head
+		 *   into an empty destination that could not otherwise signal delivery.
+		 */
 		static bool HeadFitsDestination(const std::size_t InHeadSize, const std::size_t InDestinationSize) noexcept
 		{
 			if (InDestinationSize == 0)
@@ -216,7 +257,11 @@ class THostLoopback final
 			return InHeadSize <= InDestinationSize;
 		}
 
-		/** Copies the head packet into the destination, stamps the sender and byte count, and advances the FIFO head. */
+		/**
+		 * Motivation: Completes a successful receive by copying the head packet and advancing the FIFO.
+		 * Responsibilities: Copy the head bytes, stamp the sender and byte count on the success path, and advance the head
+		 *   past the delivered slot.
+		 */
 		static void PopHeadInto(
 			FMailbox& InMailbox,
 			const std::size_t InHeadSize,
@@ -236,7 +281,10 @@ class THostLoopback final
 			--InMailbox.QueuedCount;
 		}
 
-		/** Copies one accepted packet, its length, and its sender into the slot at `InIndex`. */
+		/**
+		 * Motivation: Writes one accepted packet, its length, and its sender into a named slot.
+		 * Responsibilities: Copy the bytes (if any), record the length, and stamp the sender address.
+		 */
 		static void StorePacketAt(
 			FMailbox& InMailbox,
 			const std::size_t InIndex,
@@ -252,42 +300,66 @@ class THostLoopback final
 			InMailbox.SenderAddresses[InIndex] = InFrom;
 		}
 
-		/** Advances the tail and count after one accepted packet. */
+		/**
+		 * Motivation: Completes one enqueue by moving the tail and count forward.
+		 * Responsibilities: Advance the tail index with wraparound and increment occupancy.
+		 */
 		static void AdvanceTail(FMailbox& InMailbox) noexcept
 		{
 			InMailbox.TailIndex = (InMailbox.TailIndex + 1) % MailboxCapacity;
 			++InMailbox.QueuedCount;
 		}
 
-		/** The N caller-owned mailboxes, indexed by port. */
+		/** Motivation: Holds the N caller-owned mailboxes indexed by port. */
 		std::array<FMailbox, MaxPorts> Mailboxes{};
 	};
 
-	/** One port's device view: forwards send/receive to the shared mailboxes using its bound index. */
+	/**
+	 * Motivation: Adapts one port's index to the IDevice interface so each host drives its own device backed by shared mailboxes.
+	 * Responsibilities: Forward send and receive to the shared mailboxes using the bound port index, and report the network's
+	 *   per-packet byte capacity.
+	 * Example:
+	 *   // Returned by THostLoopback::Port(index); not constructed directly.
+	 */
 	class FPort final : public ::MicroWorld::Transport::Device::IDevice
 	{
 	public:
-		/** Default-constructed then bound by the enclosing network's constructor. */
+		/**
+		 * Motivation: Allows the enclosing network to default-construct each port before binding it.
+		 * Responsibilities: Construct an inert port bound to nothing until Bind is called.
+		 */
 		FPort() noexcept = default;
 
-		/** Defaulted so an embedded port destructs without side effects. */
+		/**
+		 * Motivation: Keeps an embedded port side-effect free on destruction.
+		 * Responsibilities: Default the destructor since the port owns no resource.
+		 */
 		~FPort() noexcept override = default;
 
-		/** Binds this port to the shared mailboxes and its own 1-byte address; called once at construction. */
+		/**
+		 * Motivation: Wires a port to the shared mailboxes and its own 1-byte address once at construction.
+		 * Responsibilities: Store the mailbox pointer and the port index.
+		 */
 		void Bind(TLoopbackMailboxes<MaxPorts, MailboxCapacity, PacketBytes>* InMailboxes, const std::uint8_t InLocalIndex) noexcept
 		{
 			Mailboxes = InMailboxes;
 			LocalIndex = InLocalIndex;
 		}
 
-		/** Delivers one packet to `InTo`'s mailbox stamped with this port's address. */
+		/**
+		 * Motivation: Implements the device send contract by routing to the destination port's mailbox.
+		 * Responsibilities: Deliver one packet stamped with this port's address to the shared mailboxes.
+		 */
 		ETransportResult TrySend(
 			const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override
 		{
 			return Mailboxes->Deliver(InTo, ::MicroWorld::Transport::Address::MakeLoopbackAddress(LocalIndex), InPacket);
 		}
 
-		/** Pops one packet from this port's mailbox, reporting the sender via OutFrom. */
+		/**
+		 * Motivation: Implements the device receive contract by popping from this port's mailbox.
+		 * Responsibilities: Pop one packet from this port's mailbox and report its sender via OutFrom.
+		 */
 		ETransportResult TryReceive(
 			::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
 			Core::TSpan<std::uint8_t> InDestination,
@@ -296,19 +368,25 @@ class THostLoopback final
 			return Mailboxes->Receive(LocalIndex, OutFrom, InDestination, OutResult);
 		}
 
-		/** Reports the per-packet byte capacity of this loopback network. */
+		/**
+		 * Motivation: Implements the device capacity query so callers bound sends to the loopback's packet size.
+		 * Responsibilities: Report the per-packet byte capacity of this loopback network.
+		 */
 		std::size_t MaxPacketBytes() const noexcept override { return PacketBytes; }
 
 	private:
-		/** Shared mailboxes owned by the enclosing network; never owned here. */
+		/** Motivation: References the shared mailboxes owned by the enclosing network. */
 		TLoopbackMailboxes<MaxPorts, MailboxCapacity, PacketBytes>* Mailboxes{nullptr};
 
-		/** This port's 1-byte loopback address value. */
+		/** Motivation: Holds this port's 1-byte loopback address value. */
 		std::uint8_t LocalIndex{0};
 	};
 
 public:
-	/** Constructs N mailboxes and binds each embedded port to its own index. */
+	/**
+	 * Motivation: Builds the network ready to use by constructing its mailboxes and binding each embedded port.
+	 * Responsibilities: Construct N mailboxes and bind each port to its own index.
+	 */
 	THostLoopback() noexcept
 	{
 		for (std::uint8_t Index = 0; Index < MaxPorts; ++Index)
@@ -317,47 +395,83 @@ public:
 		}
 	}
 
-	/** Prevents copying so one network value owns its fixed mailbox storage and ports. */
+	/**
+	 * Motivation: Prevents copying so one network value owns its fixed mailbox storage and ports.
+	 * Responsibilities: Reject copy construction so two networks never alias one set of mailboxes.
+	 */
 	THostLoopback(const THostLoopback&) = delete;
 
-	/** Prevents copying so one network value owns its fixed mailbox storage and ports. */
+	/**
+	 * Motivation: Prevents copying so one network value owns its fixed mailbox storage and ports.
+	 * Responsibilities: Reject copy assignment so two networks never alias one set of mailboxes.
+	 */
 	THostLoopback& operator=(const THostLoopback&) = delete;
 
-	/** Defaulted so a network with automatic storage destructs without side effects. */
+	/**
+	 * Motivation: Keeps a network with automatic storage side-effect free on destruction.
+	 * Responsibilities: Default the destructor since the network owns only fixed value storage.
+	 */
 	~THostLoopback() noexcept = default;
 
-	/** Returns the device bound to `InIndex`; `InIndex` must be < MaxPorts (caller contract). */
+	/**
+	 * Motivation: Hands hosts the device bound to a port so each drives its own loopback endpoint.
+	 * Responsibilities: Return the device at InIndex, which must be below MaxPorts by caller contract.
+	 */
 	::MicroWorld::Transport::Device::IDevice& Port(const std::uint8_t InIndex) noexcept { return Ports[InIndex]; }
 
-	/** Reports the fixed number of ports this network exposes. */
+	/**
+	 * Motivation: Lets a caller observe the fixed port count without magic numbers.
+	 * Responsibilities: Report the fixed number of ports this network exposes.
+	 */
 	static constexpr std::size_t PortCount() noexcept { return MaxPorts; }
 
-	/** Reports the fixed packet-slot capacity of every port's mailbox. */
+	/**
+	 * Motivation: Lets a caller observe the fixed mailbox depth without magic numbers.
+	 * Responsibilities: Report the fixed packet-slot capacity of every port's mailbox.
+	 */
 	static constexpr std::size_t MailboxCapacityValue() noexcept { return MailboxCapacity; }
 
-	/** Reports the maximum byte length accepted per packet. */
+	/**
+	 * Motivation: Lets a caller observe the per-packet byte ceiling without magic numbers.
+	 * Responsibilities: Report the maximum byte length accepted per packet.
+	 */
 	static constexpr std::size_t MaximumPacketBytes() noexcept { return PacketBytes; }
 
-	/** Distinguishes an empty mailbox on `InPort` without inspecting packet storage. */
+	/**
+	 * Motivation: Exposes a port's empty state without inspecting packet storage.
+	 * Responsibilities: Delegate IsEmpty to the shared mailboxes for the named port.
+	 */
 	bool IsEmpty(const std::uint8_t InPort) const noexcept { return Mailboxes.IsEmpty(InPort); }
 
-	/** Distinguishes a full mailbox on `InPort` so a caller can observe backpressure. */
+	/**
+	 * Motivation: Exposes a port's full state so a caller can observe backpressure.
+	 * Responsibilities: Delegate IsFull to the shared mailboxes for the named port.
+	 */
 	bool IsFull(const std::uint8_t InPort) const noexcept { return Mailboxes.IsFull(InPort); }
 
-	/** Reports how many packets are currently queued for receive on `InPort`. */
+	/**
+	 * Motivation: Exposes a port's queued count so a test can assert pending work.
+	 * Responsibilities: Delegate QueuedCount to the shared mailboxes for the named port.
+	 */
 	std::size_t QueuedCount(const std::uint8_t InPort) const noexcept { return Mailboxes.QueuedCount(InPort); }
 
-	/** Drops every queued packet on `InPort` so that mailbox's capacity can be reused deterministically. */
+	/**
+	 * Motivation: Lets a test reuse one port's mailbox deterministically between scenarios.
+	 * Responsibilities: Delegate Drain to the shared mailboxes for the named port.
+	 */
 	void Drain(const std::uint8_t InPort) noexcept { Mailboxes.Drain(InPort); }
 
-	/** Drops every queued packet on every port so the whole network can be reused deterministically. */
+	/**
+	 * Motivation: Lets a test reuse the whole network deterministically between scenarios.
+	 * Responsibilities: Delegate DrainAll to the shared mailboxes.
+	 */
 	void DrainAll() noexcept { Mailboxes.DrainAll(); }
 
 private:
-	/** The shared mailboxes; declared before Ports so it is fully constructed when ports bind. */
+	/** Motivation: Owns the shared mailboxes, declared before Ports so it is fully constructed when ports bind. */
 	TLoopbackMailboxes<MaxPorts, MailboxCapacity, PacketBytes> Mailboxes{};
 
-	/** The N embedded per-port devices handed out by Port(). */
+	/** Motivation: Holds the N embedded per-port devices handed out by Port(). */
 	std::array<FPort, MaxPorts> Ports{};
 };
 

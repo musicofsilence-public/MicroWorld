@@ -9,14 +9,25 @@ namespace MicroWorld::Tests
 
 using namespace ::MicroWorld::Core;
 
-/** Records assertion failures for one named test without dynamic storage. */
+/**
+ * Motivation: Records assertion failures for one named test without dynamic storage.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FTestContext final
 {
 public:
-	/** Associates every failure with one behavior-oriented test name. */
+	/**
+	 * Motivation: Associates every failure with one behavior-oriented test name.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	explicit FTestContext(const char* const InTestName) noexcept : Name(InTestName) {}
 
-	/** Records only unequal outcomes so successful assertions remain allocation-free. */
+	/**
+	 * Motivation: Successful assertions remain allocation-free.
+	 * Responsibilities: Records only unequal outcomes.
+	 */
 	template<typename ExpectedType, typename ActualType>
 	void ExpectEqual(
 		const ExpectedType& InExpected, const ActualType& InActual, const char* const InMessage, const char* const InFile, const int InLine) noexcept
@@ -29,7 +40,10 @@ public:
 		RecordFailure(InMessage, InFile, InLine);
 	}
 
-	/** Records a failed predicate with caller location for actionable diagnostics. */
+	/**
+	 * Motivation: Records a failed predicate with caller location for actionable diagnostics.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void ExpectTrue(const bool bInCondition, const char* const InMessage, const char* const InFile, const int InLine) noexcept
 	{
 		if (bInCondition)
@@ -40,69 +54,98 @@ public:
 		RecordFailure(InMessage, InFile, InLine);
 	}
 
-	/** Lets the runner classify the test without exposing mutable failure state. */
+	/**
+	 * Motivation: Lets the runner classify the test without exposing mutable failure state.
+	 * Responsibilities: Return the stored value and touch nothing else.
+	 */
 	bool HasFailures() const noexcept { return FailureCount != 0; }
 
 private:
-	/** Centralizes bounded failure reporting so assertion helpers stay consistent. */
+	/**
+	 * Motivation: Assertion helpers stay consistent.
+	 * Responsibilities: Centralizes bounded failure reporting.
+	 */
 	void RecordFailure(const char* const InMessage, const char* const InFile, const int InLine) noexcept
 	{
 		++FailureCount;
 		std::printf("[ASSERT] %s: %s (%s:%d)\n", Name, InMessage, InFile, InLine);
 	}
 
-	/** Keeps diagnostics tied to the behavior contract selected at registration. */
+	/** Motivation: Keeps diagnostics tied to the behavior contract selected at registration. */
 	const char* Name;
 
-	/** Avoids dynamic failure collections while preserving aggregate pass/fail status. */
+	/** Motivation: Avoids dynamic failure collections while preserving aggregate pass/fail status. */
 	int FailureCount{0};
 };
 
-/** Gives the static registry one uniform, non-throwing test function shape. */
+/** Motivation: Gives the static registry one uniform, non-throwing test function shape. */
 using FTestFunction = void (*)(FTestContext&) noexcept;
 
 class FTestRegistration;
 
-/** Uses function-local initialization so the registry head is valid before registrations. */
+/**
+ * Motivation: The registry head is valid before registrations.
+ * Responsibilities: Uses function-local initialization.
+ */
 inline FTestRegistration*& GetTestRegistrationHead() noexcept
 {
-	/** Avoids cross-translation-unit initialization order dependencies. */
+	/** Motivation: Avoids cross-translation-unit initialization order dependencies. */
 	static FTestRegistration* Head = nullptr;
 	return Head;
 }
 
-/** Adds one statically declared test to the allocation-free test registry. */
+/**
+ * Motivation: Adds one statically declared test to the allocation-free test registry.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FTestRegistration final
 {
 public:
-	/** Prepends one static test without heap allocation or external registration code. */
+	/**
+	 * Motivation: Prepends one static test without heap allocation or external registration code.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	FTestRegistration(const char* const InTestName, const FTestFunction InTestFunction) noexcept
 		: Name(InTestName), Function(InTestFunction), Next(GetTestRegistrationHead())
 	{
 		GetTestRegistrationHead() = this;
 	}
 
-	/** Gives runner diagnostics the behavior-oriented registration name. */
+	/**
+	 * Motivation: Gives runner diagnostics the behavior-oriented registration name.
+	 * Responsibilities: Return the stored value and touch nothing else.
+	 */
 	const char* GetName() const noexcept { return Name; }
 
-	/** Gives the runner the test body without exposing registry mutation. */
+	/**
+	 * Motivation: Gives the runner the test body without exposing registry mutation.
+	 * Responsibilities: Return the stored value and touch nothing else.
+	 */
 	FTestFunction GetFunction() const noexcept { return Function; }
 
-	/** Lets the runner traverse the allocation-free intrusive registry. */
+	/**
+	 * Motivation: Lets the runner traverse the allocation-free intrusive registry.
+	 * Responsibilities: Return the stored value and touch nothing else.
+	 */
 	FTestRegistration* GetNext() const noexcept { return Next; }
 
 private:
-	/** Retains the static string used for pass/fail output. */
+	/** Motivation: Retains the static string used for pass/fail output. */
 	const char* Name;
 
-	/** Retains the behavior body registered by the declaration macro. */
+	/** Motivation: Retains the behavior body registered by the declaration macro. */
 	FTestFunction Function;
 
-	/** Forms the intrusive list without a dynamic container. */
+	/** Motivation: Forms the intrusive list without a dynamic container. */
 	FTestRegistration* Next;
 };
 
-/** Executes every statically registered test and returns one process-level result. */
+/**
+ * Motivation: Executes every statically registered test and returns one process-level result.
+ * Responsibilities: Aggregate every registered result and return non-zero on any failure.
+ */
 inline int RunAllTests() noexcept
 {
 	int TestCount = 0;

@@ -22,7 +22,12 @@ using MicroWorld::Engine::FGarbageCollectionBudget;
 using MicroWorld::Engine::TEngine;
 using MicroWorld::Engine::TPlaySystemSet;
 
-/** Carries the exact capacities FHost sized before the traits refactor, so the test store is unchanged. */
+/**
+ * Motivation: Carries the exact capacities FHost sized before the traits refactor, so the test store is unchanged.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 struct FHostTraits : FDefaultEngineTraits
 {
 	static constexpr std::size_t MaxClasses = 6;
@@ -33,78 +38,114 @@ struct FHostTraits : FDefaultEngineTraits
 	static constexpr std::size_t MaxTimers = 4;
 };
 
-/** Engine profile sized for a bare rooted world, matching EngineMessageChannelTests.cpp's profile; this suite never spawns actors. */
+/** Motivation: Engine profile sized for a bare rooted world, matching EngineMessageChannelTests.cpp's profile; this suite never spawns actors. */
 using FHost = TEngine<FHostTraits>;
 
-/** Monotonic call-order source every recording frame in a test stamps from, so several frames' relative order is observable. */
+/**
+ * Motivation: Monotonic call-order source every recording frame in a test stamps from, so several frames' relative
+ *   order is observable.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FSharedFrameSequence final
 {
 public:
-	/** Returns the next stamp, incrementing so no two calls across every sharing frame return the same value. */
+	/**
+	 * Motivation: No two calls across every sharing frame return the same value.
+	 * Responsibilities: Returns the next stamp, incrementing.
+	 */
 	std::uint32_t Next() noexcept { return ++Counter; }
 
 private:
-	/** Backing counter; only Next() may advance it. */
+	/** Motivation: Backing counter; only Next() may advance it. */
 	std::uint32_t Counter{0};
 };
 
-/** Records how many times one frame's two slots ran and their stamps from a shared sequence. */
+/**
+ * Motivation: Records how many times one frame's two slots ran and their stamps from a shared sequence.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 struct FFrameCallRecord
 {
-	/** Number of play-start lifecycle invocations observed. */
+	/** Motivation: Number of play-start lifecycle invocations observed. */
 	int BeginCount{0};
 
-	/** Number of play-end lifecycle invocations observed. */
+	/** Motivation: Number of play-end lifecycle invocations observed. */
 	int EndCount{0};
 
-	/** Number of inbound-dispatch slot invocations observed. */
+	/** Motivation: Number of inbound-dispatch slot invocations observed. */
 	int DispatchCount{0};
 
-	/** Number of outbound-flush slot invocations observed. */
+	/** Motivation: Number of outbound-flush slot invocations observed. */
 	int FlushCount{0};
 
-	/** This frame's stamp from the shared sequence at its most recent dispatch. */
+	/** Motivation: This frame's stamp from the shared sequence at its most recent dispatch. */
 	std::uint32_t DispatchOrder{0};
 
-	/** This frame's stamp from the shared sequence at its most recent flush. */
+	/** Motivation: This frame's stamp from the shared sequence at its most recent flush. */
 	std::uint32_t FlushOrder{0};
 
-	/** This frame's stamp from the shared sequence at its most recent play start. */
+	/** Motivation: This frame's stamp from the shared sequence at its most recent play start. */
 	std::uint32_t BeginOrder{0};
 
-	/** This frame's stamp from the shared sequence at its most recent play end. */
+	/** Motivation: This frame's stamp from the shared sequence at its most recent play end. */
 	std::uint32_t EndOrder{0};
 };
 
-/** A network frame that only records its two slot calls, isolating TPlaySystemSet's pump order from any real transport. */
+/**
+ * Motivation: A network frame that only records its two slot calls, isolating TPlaySystemSet's pump order from any
+ *   real transport.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FRecordingPlaySystem final : public IPlaySystem
 {
 public:
-	/** Binds this stub to the caller-owned record it stamps and the sequence every recording frame in the test shares. */
+	/**
+	 * Motivation: Binds this stub to the caller-owned record it stamps and the sequence every recording frame in the
+	 *   test shares.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	FRecordingPlaySystem(FFrameCallRecord& InRecord, FSharedFrameSequence& InSequence) noexcept : Record(InRecord), Sequence(InSequence) {}
 
-	/** Stamps the play-start turn so lifecycle add-order is observable. */
+	/**
+	 * Motivation: Lifecycle add-order is observable.
+	 * Responsibilities: Stamps the play-start turn.
+	 */
 	void BeginPlay(const TimePointMilliseconds) noexcept override
 	{
 		++Record.BeginCount;
 		Record.BeginOrder = Sequence.Next();
 	}
 
-	/** Stamps the inbound-dispatch slot's count and shared-sequence order. */
+	/**
+	 * Motivation: Stamps the inbound-dispatch slot's count and shared-sequence order.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void PreAdvance(const TimePointMilliseconds) noexcept override
 	{
 		++Record.DispatchCount;
 		Record.DispatchOrder = Sequence.Next();
 	}
 
-	/** Stamps the outbound-flush slot's count and shared-sequence order. */
+	/**
+	 * Motivation: Stamps the outbound-flush slot's count and shared-sequence order.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void PostAdvance(const TimePointMilliseconds) noexcept override
 	{
 		++Record.FlushCount;
 		Record.FlushOrder = Sequence.Next();
 	}
 
-	/** Stamps the play-end turn so lifecycle reverse add-order is observable. */
+	/**
+	 * Motivation: Lifecycle reverse add-order is observable.
+	 * Responsibilities: Stamps the play-end turn.
+	 */
 	void EndPlay() noexcept override
 	{
 		++Record.EndCount;
@@ -112,18 +153,18 @@ public:
 	}
 
 private:
-	/** Receives this stub's observed slot counts and ordering; never owned here. */
+	/** Motivation: Receives this stub's observed slot counts and ordering; never owned here. */
 	FFrameCallRecord& Record;
 
-	/** Shared monotonic source every recording frame in the owning test stamps from; never owned here. */
+	/** Motivation: Shared monotonic source every recording frame in the owning test stamps from; never owned here. */
 	FSharedFrameSequence& Sequence;
 };
 
 } // namespace
 
 /**
- * Scenario: Add three recording frames to a system set, then run BeginPlay and EndPlay.
- * Expected: Lifecycle turns preserve add-order at begin and reverse add-order at end.
+ * Motivation: Add three recording frames to a system set, then run BeginPlay and EndPlay.
+ * Responsibilities: Lifecycle turns preserve add-order at begin and reverse add-order at end.
  */
 MW_TEST_CASE(PlaySystemSet_BeginPlayRunsAddOrderAndEndPlayRunsReverseOrder)
 {
@@ -162,8 +203,9 @@ MW_TEST_CASE(PlaySystemSet_BeginPlayRunsAddOrderAndEndPlayRunsReverseOrder)
 }
 
 /**
- * Scenario: Add three recording frames to a system set, then call PreAdvance and PostAdvance directly.
- * Expected: TPlaySystemSet's PreAdvance runs its frames in add-order and PostAdvance runs them in reverse add-order, called directly.
+ * Motivation: Add three recording frames to a system set, then call PreAdvance and PostAdvance directly.
+ * Responsibilities: TPlaySystemSet's PreAdvance runs its frames in add-order and PostAdvance runs them in reverse
+ *   add-order, called directly.
  */
 MW_TEST_CASE(PlaySystemSet_PreAdvanceRunsAddOrderPostAdvanceRunsReverseOrder)
 {
@@ -196,8 +238,10 @@ MW_TEST_CASE(PlaySystemSet_PreAdvanceRunsAddOrderPostAdvanceRunsReverseOrder)
 }
 
 /**
- * Scenario: Add two recording frames to a system set, bind it to a host, create the world, begin play, and run a single tick.
- * Expected: TEngine::Tick pumps a bound TPlaySystemSet at its step 1 (dispatch, add-order) and step 7 (flush, reverse add-order).
+ * Motivation: Add two recording frames to a system set, bind it to a host, create the world, begin play, and run a
+ *   single tick.
+ * Responsibilities: TEngine::Tick pumps a bound TPlaySystemSet at its step 1 (dispatch, add-order) and step 7 (flush,
+ *   reverse add-order).
  */
 MW_TEST_CASE(PlaySystemSet_TEngineTickPumpsBoundSetAtPreAdvanceAndPostAdvanceSteps)
 {
@@ -240,8 +284,8 @@ MW_TEST_CASE(PlaySystemSet_TEngineTickPumpsBoundSetAtPreAdvanceAndPostAdvanceSte
 }
 
 /**
- * Scenario: Add two frames under a capacity-two set, then attempt a third Add past capacity.
- * Expected: An Add past a set's fixed capacity must report CapacityExceeded and leave FrameCount unchanged.
+ * Motivation: Add two frames under a capacity-two set, then attempt a third Add past capacity.
+ * Responsibilities: An Add past a set's fixed capacity must report CapacityExceeded and leave FrameCount unchanged.
  */
 MW_TEST_CASE(PlaySystemSet_AddPastCapacityReportsCapacityExceededAndLeavesFrameCountUnchanged)
 {
@@ -266,8 +310,9 @@ MW_TEST_CASE(PlaySystemSet_AddPastCapacityReportsCapacityExceededAndLeavesFrameC
 }
 
 /**
- * Scenario: Add one frame to a set, then add the same frame pointer again.
- * Expected: Adding the same frame pointer twice must report Duplicate on the second call and count the frame only once.
+ * Motivation: Add one frame to a set, then add the same frame pointer again.
+ * Responsibilities: Adding the same frame pointer twice must report Duplicate on the second call and count the frame
+ *   only once.
  */
 MW_TEST_CASE(PlaySystemSet_AddSameFramePointerTwiceReportsDuplicateAndCountsItOnce)
 {
@@ -287,8 +332,8 @@ MW_TEST_CASE(PlaySystemSet_AddSameFramePointerTwiceReportsDuplicateAndCountsItOn
 }
 
 /**
- * Scenario: Construct an empty system set, then call PreAdvance and PostAdvance on it.
- * Expected: An empty set's PreAdvance and PostAdvance must both be inert: no crash, and FrameCount stays zero.
+ * Motivation: Construct an empty system set, then call PreAdvance and PostAdvance on it.
+ * Responsibilities: An empty set's PreAdvance and PostAdvance must both be inert: no crash, and FrameCount stays zero.
  */
 MW_TEST_CASE(PlaySystemSet_EmptySetTicksInertly)
 {

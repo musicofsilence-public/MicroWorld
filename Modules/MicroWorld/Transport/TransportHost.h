@@ -21,98 +21,127 @@
 namespace MicroWorld::Transport
 {
 
-/** The UE5-style role this host plays; selects which session traffic it originates and accepts. */
+/**
+ * Motivation: Names the UE5-style role this host plays so session traffic it originates and accepts reads as one value.
+ * Responsibilities: Distinguish standalone, client, listen server, and dedicated server roles.
+ * Example:
+ *   if (Host.GetMode() == ENetworkMode::ListenServer) { Admit(); }
+ */
 enum class ENetworkMode : std::uint8_t
 {
-	/** Runs no device traffic; every send reports `Unavailable`. */
-	Standalone,
+	Standalone, ///< Motivation: Runs no device traffic; every send reports Unavailable.
 
-	/** Holds exactly one peer (the server) and sends `Hello` until admitted. */
-	Client,
+	Client, ///< Motivation: Holds exactly one peer (the server) and sends Hello until admitted.
 
-	/** Admits remote peers and additionally owns a directly dispatched local peer. */
-	ListenServer,
+	ListenServer, ///< Motivation: Admits remote peers and additionally owns a directly dispatched local peer.
 
-	/** Admits remote peers with no local peer of its own. */
-	DedicatedServer,
+	DedicatedServer, ///< Motivation: Admits remote peers with no local peer of its own.
 };
 
-/** Observable session state, primarily meaningful to a `Client` tracking admission. */
+/**
+ * Motivation: Names the observable session state so a client can track admission and a server can report readiness.
+ * Responsibilities: Distinguish idle, connecting, connected, and listening states.
+ * Example:
+ *   if (Host.GetState() == ETransportHostState::Connected) { Send(); }
+ */
 enum class ETransportHostState : std::uint8_t
 {
-	/** Not started, standalone, or stopped; no session is in progress. */
-	Idle,
+	Idle, ///< Motivation: Marks that no session is in progress (not started, standalone, or stopped).
 
-	/** A client has sent `Hello` and is awaiting `Welcome`. */
-	Connecting,
+	Connecting, ///< Motivation: Marks that a client has sent Hello and is awaiting Welcome.
 
-	/** A client has been admitted and heartbeats are flowing. */
-	Connected,
+	Connected, ///< Motivation: Marks that a client has been admitted and heartbeats are flowing.
 
-	/** A server is started and accepting `Hello` up to its peer capacity. */
-	Listening,
+	Listening, ///< Motivation: Marks that a server is started and accepting Hello up to its peer capacity.
 };
 
-/** Default heartbeat cadence used when a caller does not override `FTransportHostConfig`. */
+/** Motivation: Supplies the default heartbeat cadence when a caller does not override FTransportHostConfig. */
 inline constexpr Core::DurationMilliseconds DefaultHeartbeatIntervalMilliseconds = 1000;
 
-/** Default peer eviction window used when a caller does not override `FTransportHostConfig`. */
+/** Motivation: Supplies the default peer eviction window when a caller does not override FTransportHostConfig. */
 inline constexpr Core::DurationMilliseconds DefaultPeerTimeoutMilliseconds = 5000;
 
-/** Default protocol version advertised in `Hello`/`Welcome` when a caller does not override it. */
+/** Motivation: Supplies the default protocol version advertised in Hello/Welcome when a caller does not override it. */
 inline constexpr std::uint8_t DefaultProtocolVersion = 1;
 
-/** Session timing and identity supplied once before `Start`. */
+/**
+ * Motivation: Bundles the session timing and identity a host needs so it can be supplied once before Start.
+ * Responsibilities: Carry the heartbeat interval, peer timeout, server address, and protocol version as one value.
+ * Example:
+ *   FTransportHostConfig Config;
+ *   Config.ServerAddress = MakeUdpAddress(192, 168, 1, 10, 1234);
+ *   Host.Configure(ENetworkMode::Client, Config);
+ */
 struct FTransportHostConfig
 {
-	/** Interval between outgoing heartbeats (and client `Hello` retries while connecting). */
+	/** Motivation: Paces outgoing heartbeats (and client Hello retries while connecting). */
 	Core::DurationMilliseconds HeartbeatIntervalMilliseconds{DefaultHeartbeatIntervalMilliseconds};
 
-	/** Silence window after which a peer is evicted; must exceed the heartbeat interval. */
+	/** Motivation: Defines the silence window after which a peer is evicted; must exceed the heartbeat interval. */
 	Core::DurationMilliseconds PeerTimeoutMilliseconds{DefaultPeerTimeoutMilliseconds};
 
-	/** Address the client greets with `Hello`; ignored by every non-client mode. */
+	/** Motivation: Names the server a client greets with Hello; ignored by every non-client mode. */
 	::MicroWorld::Transport::Address::FDeviceAddress ServerAddress{};
 
-	/** Protocol version advertised in `Hello`/`Welcome`; a mismatch is ignored, not admitted. */
+	/** Motivation: Pins the protocol version advertised in Hello/Welcome; a mismatch is ignored, not admitted. */
 	std::uint8_t ProtocolVersion{DefaultProtocolVersion};
 };
 
-/** Generation-checked identity of one peer, so a reused slot never answers to a stale id. */
+/**
+ * Motivation: Carries one peer's generation-checked identity so a reused slot never answers to a stale id.
+ * Responsibilities: Pair a slot index with a generation and report validity; a handle is local to the host that issued it.
+ * Example:
+ *   FPeerId Peer = Host.GetServerPeer();
+ *   if (Peer.IsValid()) { Host.SendTo(Peer, Channel, Payload); }
+ */
 struct FPeerId
 {
-	/** Reserved index that names no peer; the default identity is deliberately invalid. */
+	/** Motivation: Reserves the index that names no peer so the default identity is deliberately invalid. */
 	static constexpr std::uint8_t InvalidIndex = 0xFF;
 
-	/** Peer slot index, or `InvalidIndex`; the host also reserves `0xFE` for a local peer. */
+	/** Motivation: Holds the peer slot index, or InvalidIndex; the host also reserves 0xFE for a local peer. */
 	std::uint8_t Index{InvalidIndex};
 
-	/** Slot generation at the time of issue; a later eviction bumps it so this id goes stale. */
+	/** Motivation: Holds the slot generation at issue time; a later eviction bumps it so this id goes stale. */
 	std::uint8_t Generation{0};
 
-	/** Reports whether the identity names a routable peer rather than the invalid default. */
+	/**
+	 * Motivation: Lets a caller reject a default or stale value before consulting its host.
+	 * Responsibilities: Report whether the identity names a routable peer rather than the invalid default.
+	 */
 	constexpr bool IsValid() const noexcept { return Index != InvalidIndex; }
 };
 
-/** Compares the complete generation-checked peer identity. */
+/**
+ * Motivation: Lets containers compare two peer ids by complete stable identity.
+ * Responsibilities: Return true only when both index and generation match.
+ */
 constexpr bool operator==(const FPeerId InLeft, const FPeerId InRight) noexcept
 {
 	return InLeft.Index == InRight.Index && InLeft.Generation == InRight.Generation;
 }
 
-/** Negates `operator==` so callers can test peer inequality directly. */
+/**
+ * Motivation: Lets callers test peer inequality directly rather than negating operator== by hand.
+ * Responsibilities: Return the negation of operator==.
+ */
 constexpr bool operator!=(const FPeerId InLeft, const FPeerId InRight) noexcept
 {
 	return !(InLeft == InRight);
 }
 
 /**
- * Bounded session host over one `::MicroWorld::Transport::Device::IDevice`, delivering the UE5 dedicated/listen/client roles.
- *
- * Owns a fixed peer table, an outbound FIFO, and one message handler; drives the
- * protocol only through explicit `PumpReceive`/`PumpSend` ticks so it samples no
- * clock and allocates nothing. Channel 0 is handled internally (admission,
- * heartbeats, timeout eviction); channels 1..255 dispatch to the registered handler.
+ * Motivation: Delivers the UE5 dedicated/listen/client roles over one bounded session host so an application runs a networked
+ *   session without its own protocol code.
+ * Responsibilities: Own a fixed peer table, an outbound FIFO, and one message handler; drive the protocol only through explicit
+ *   PumpReceive/PumpSend ticks so the host samples no clock and allocates nothing; handle channel 0 internally (admission,
+ *   heartbeats, timeout eviction); and dispatch channels 1..255 to the registered handler.
+ * Example:
+ *   TTransportHost<4, 64> Host(Device);
+ *   Host.Configure(ENetworkMode::ListenServer, Config);
+ *   Host.Start(Now);
+ *   Host.PumpReceive(Now);
+ *   Host.PumpSend(Now);
  */
 template<std::size_t MaxPeers, std::size_t MaxPacketBytes>
 class TTransportHost final
@@ -124,69 +153,85 @@ class TTransportHost final
 		"TTransportHost packets must fit the largest control frame (header + Welcome).");
 
 public:
-	/** Number of packets one full peer broadcast occupies in the outbound FIFO. */
+	/** Motivation: Counts the packets one full peer broadcast occupies in the outbound FIFO. */
 	static constexpr std::size_t BroadcastPacketsPerPeer = 1;
 
-	/** Packets reserved per peer for heartbeats and replies between pumps. */
+	/** Motivation: Reserves per-peer packets for heartbeats and replies between pumps. */
 	static constexpr std::size_t HeartbeatPacketsPerPeer = 1;
 
-	/** Extra outbound/inbound packet headroom so a burst of control traffic between pumps is not dropped. */
+	/** Motivation: Adds outbound/inbound packet headroom so a burst of control traffic between pumps is not dropped. */
 	static constexpr std::size_t PumpSlackPackets = 4;
 
-	/** Outbound FIFO depth: one full broadcast plus pending heartbeats plus slack. */
+	/** Motivation: Fixes the outbound FIFO depth as one full broadcast plus pending heartbeats plus slack. */
 	static constexpr std::size_t SendQueueDepth = (BroadcastPacketsPerPeer + HeartbeatPacketsPerPeer) * MaxPeers + PumpSlackPackets;
 
-	/** Fixed number of message-handler bindings; small because one dispatcher usually suffices. */
+	/** Motivation: Bounds the message-handler bindings to a small fixed count since one dispatcher usually suffices. */
 	static constexpr std::size_t MaxMessageHandlers = 4;
 
-	/** Inline bytes reserved per handler callable, sized for a small capture. */
+	/** Motivation: Reserves inline bytes per handler callable, sized for a small capture. */
 	static constexpr std::size_t MessageHandlerInlineBytes = 32;
 
-	/** Largest encoded message one packet can carry: the packet budget minus the
-	 *  4-byte message header. A channel binding exposes this as its send ceiling. */
+	/** Motivation: Fixes the largest encoded message one packet can carry (packet budget minus the four-byte header). */
 	static constexpr std::size_t MaxMessageBytes = MaxPacketBytes - MessageHeaderBytes;
 
-	/** Reserved peer index that routes a message to the listen server's local peer. */
+	/** Motivation: Reserves the peer index that routes a message to the listen server's local peer. */
 	static constexpr std::uint8_t LocalPeerIndex = 0xFE;
 
-	/** The listen server's local peer is never evicted, so its generation never advances past this initial value. */
+	/** Motivation: Pins the local peer's generation, which never advances since the local peer is never evicted. */
 	static constexpr std::uint8_t LocalPeerGeneration = 1;
 
-	/** A client keeps exactly one peer — the server — in slot 0; this index is only meaningful in Client mode. */
+	/** Motivation: Names the slot a client keeps for its single server peer; meaningful only in Client mode. */
 	static constexpr std::uint8_t ServerPeerSlotIndex = 0;
 
-	/** Multicast dispatcher type for application (channel >= 1) messages. */
+	/** Motivation: Names the multicast dispatcher type for application (channel >= 1) messages. */
 	using FMessageHandler =
 		Core::TMulticastDelegate<void(FPeerId, std::uint8_t, Core::TSpan<const std::uint8_t>), MaxMessageHandlers, MessageHandlerInlineBytes>;
 
-	/** One bindable handler callable matching `FMessageHandler`'s signature. */
+	/** Motivation: Names the bindable handler callable type matching FMessageHandler's signature. */
 	using FMessageHandlerBinding = Core::TDelegate<void(FPeerId, std::uint8_t, Core::TSpan<const std::uint8_t>), MessageHandlerInlineBytes>;
 
-	/** Binds the host to one externally owned device; mode and config follow via `Configure`. */
+	/**
+	 * Motivation: Binds the host to one externally owned device at construction, with mode and config following via Configure.
+	 * Responsibilities: Store the device reference and construct the outbound manager over the device and its storage.
+	 */
 	explicit TTransportHost(::MicroWorld::Transport::Device::IDevice& InDevice) noexcept
 		: Device(InDevice), OutboundManager(InDevice, OutboundStorage)
 	{
 	}
 
-	/** Prevents copying so one host value binds one device, table, and handler. */
+	/**
+	 * Motivation: Prevents copying so one host value binds one device, table, and handler.
+	 * Responsibilities: Reject copy construction so the host stays a single owner.
+	 */
 	TTransportHost(const TTransportHost&) = delete;
 
-	/** Prevents copying so one host value binds one device, table, and handler. */
+	/**
+	 * Motivation: Prevents copying so one host value binds one device, table, and handler.
+	 * Responsibilities: Reject copy assignment so the host stays a single owner.
+	 */
 	TTransportHost& operator=(const TTransportHost&) = delete;
 
-	/** Prevents moving so the owned manager's device reference and handler slots stay fixed. */
+	/**
+	 * Motivation: Prevents moving so the owned manager's device reference and handler slots stay fixed.
+	 * Responsibilities: Reject move construction so embedded references and slots do not relocate.
+	 */
 	TTransportHost(TTransportHost&&) = delete;
 
-	/** Prevents moving so the owned manager's device reference and handler slots stay fixed. */
+	/**
+	 * Motivation: Prevents moving so the owned manager's device reference and handler slots stay fixed.
+	 * Responsibilities: Reject move assignment so embedded references and slots do not relocate.
+	 */
 	TTransportHost& operator=(TTransportHost&&) = delete;
 
-	/** Defaulted; the host holds only fixed inline storage and no external resource. */
+	/**
+	 * Motivation: Keeps the host side-effect free on destruction since it holds only fixed inline storage.
+	 * Responsibilities: Default the destructor because the host owns no external resource.
+	 */
 	~TTransportHost() noexcept = default;
 
 	/**
-	 * Sets the role and session parameters before the host starts.
-	 * Returns `Invalid` without changing anything when the host is not `Idle`, so a
-	 * running session cannot be silently reconfigured.
+	 * Motivation: Sets the role and session parameters before the host starts so a running session cannot be silently reconfigured.
+	 * Responsibilities: Return Invalid without changing anything when the host is not Idle; otherwise store the mode and config.
 	 */
 	ETransportResult Configure(const ENetworkMode InMode, const FTransportHostConfig& InConfig) noexcept
 	{
@@ -200,8 +245,9 @@ public:
 	}
 
 	/**
-	 * Begins the session: a client enters `Connecting` (and greets on the next `PumpSend`),
-	 * a server enters `Listening`, standalone stays `Idle`. Returns `Invalid` when already started.
+	 * Motivation: Begins the session in the configured role so traffic starts only after an explicit call.
+	 * Responsibilities: Move a client to Connecting (greeting on the next PumpSend), a server to Listening, leave standalone Idle,
+	 *   and return Invalid when already started.
 	 */
 	ETransportResult Start(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
@@ -227,13 +273,9 @@ public:
 	}
 
 	/**
-	 * Ends the session: best-effort `Bye` queueing to every active peer, then evicts all and returns to `Idle`.
-	 *
-	 * This operation never waits
-	 * for a physical transport drain; a caller that needs one must keep pumping before
-	 * destroying the externally owned device.
-	 * The
-	 * generation of each evicted slot is bumped so any outstanding `FPeerId` goes stale.
+	 * Motivation: Ends the session cleanly so outstanding peer ids go stale and the host returns to Idle.
+	 * Responsibilities: Best-effort queue a Bye to every active peer, evict all peers (bumping each generation), and return to
+	 *   Idle without waiting for a physical transport drain.
 	 */
 	void Stop() noexcept
 	{
@@ -244,9 +286,9 @@ public:
 	}
 
 	/**
-	 * Drains inbound packets (at most `MaxPeers + 4`), handling control internally and
-	 * dispatching application messages, then evicts peers past the timeout window.
-	 * A standalone host does no device traffic and returns immediately.
+	 * Motivation: Drains inbound traffic and reaps dead peers in one bounded tick so the host needs no background thread.
+	 * Responsibilities: Receive at most MaxPeers + 4 packets (handling control internally and dispatching application messages),
+	 *   evict peers past the timeout window, and return immediately for a standalone host.
 	 */
 	ETransportResult PumpReceive(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
@@ -260,8 +302,9 @@ public:
 	}
 
 	/**
-	 * Emits due heartbeats (and client `Hello` retries), then drains the outbound FIFO.
-	 * A standalone host does no device traffic and returns immediately.
+	 * Motivation: Emits due heartbeats and drains the outbound FIFO in one bounded tick so the host needs no background thread.
+	 * Responsibilities: Send client Hello retries and due heartbeats, drain the outbound FIFO, advance the device's transmit
+	 *   progress, and return immediately for a standalone host.
 	 */
 	ETransportResult PumpSend(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
@@ -277,10 +320,9 @@ public:
 	}
 
 	/**
-	 * Queues one application message (channel 1..255) to a single peer.
-	 * A message to the listen server's local peer dispatches directly to the handler
-	 * without the device. Returns `Unavailable` for a standalone host, `Invalid` for
-	 * channel 0 or an unresolved peer, or the framing/queue result otherwise.
+	 * Motivation: Sends one application message to a single peer, routing the listen server's local peer directly without the device.
+	 * Responsibilities: Return Unavailable for a standalone host, Invalid for channel 0 or an unresolved peer, and otherwise the
+	 *   framing or queue result.
 	 */
 	ETransportResult SendTo(const FPeerId InPeer, const std::uint8_t InChannel, Core::TSpan<const std::uint8_t> InPayload) noexcept
 	{
@@ -305,9 +347,9 @@ public:
 	}
 
 	/**
-	 * Queues one application message (channel 1..255) to every active peer.
-	 * A listen server also dispatches to its local peer directly. Best-effort: returns
-	 * `Success` when every active peer queued, otherwise the first failure result.
+	 * Motivation: Sends one application message to every active peer so a host can fan out without per-peer calls.
+	 * Responsibilities: Best-effort queue to each active peer (a listen server also dispatches to its local peer directly),
+	 *   return Success when every active peer queued, and otherwise the first failure result.
 	 */
 	ETransportResult Broadcast(const std::uint8_t InChannel, Core::TSpan<const std::uint8_t> InPayload) noexcept
 	{
@@ -339,25 +381,43 @@ public:
 		return Outcome;
 	}
 
-	/** Registers one message handler; forwards the multicast delegate's own result. */
+	/**
+	 * Motivation: Lets an application register one handler for application messages.
+	 * Responsibilities: Forward the binding to the multicast delegate and return its result.
+	 */
 	Core::EDelegateResult AddMessageHandler(FMessageHandlerBinding&& InBinding, Core::FDelegateHandle& OutHandle) noexcept
 	{
 		return MessageHandler.Add(std::move(InBinding), OutHandle);
 	}
 
-	/** Removes a previously registered message handler by its generation-checked handle. */
+	/**
+	 * Motivation: Lets an application remove a previously registered handler.
+	 * Responsibilities: Forward the generation-checked handle to the multicast delegate and return its result.
+	 */
 	Core::EDelegateResult RemoveMessageHandler(const Core::FDelegateHandle InHandle) noexcept { return MessageHandler.Remove(InHandle); }
 
-	/** Reports the observable session state. */
+	/**
+	 * Motivation: Lets a caller branch on the observable session state.
+	 * Responsibilities: Report the stored state.
+	 */
 	ETransportHostState GetState() const noexcept { return State; }
 
-	/** Reports the configured role. */
+	/**
+	 * Motivation: Lets a caller branch on the configured role.
+	 * Responsibilities: Report the stored mode.
+	 */
 	ENetworkMode GetMode() const noexcept { return Mode; }
 
-	/** Reports the listen server's local-peer identity; only meaningful in `ListenServer` mode. */
+	/**
+	 * Motivation: Gives a caller the listen server's local-peer identity for direct dispatch.
+	 * Responsibilities: Report the local peer identity, meaningful only in ListenServer mode.
+	 */
 	constexpr FPeerId GetLocalPeer() const noexcept { return FPeerId{LocalPeerIndex, LocalPeerGeneration}; }
 
-	/** Reports a connected client's server-peer identity, or an invalid id when not connected. */
+	/**
+	 * Motivation: Lets a connected client address its server peer.
+	 * Responsibilities: Report the server-peer identity when connected, or an invalid id otherwise.
+	 */
 	FPeerId GetServerPeer() const noexcept
 	{
 		if (Mode != ENetworkMode::Client || State != ETransportHostState::Connected)
@@ -367,10 +427,16 @@ public:
 		return FPeerId{ServerPeerSlotIndex, Peers[ServerPeerSlotIndex].Generation};
 	}
 
-	/** Reports the identity a `Welcome` assigned to this client within the server's table. */
+	/**
+	 * Motivation: Lets a client learn the identity a Welcome assigned it within the server's table.
+	 * Responsibilities: Report the assigned peer identity.
+	 */
 	FPeerId GetAssignedPeer() const noexcept { return AssignedPeer; }
 
-	/** Reports how many remote peer slots are currently active. */
+	/**
+	 * Motivation: Lets a caller observe how many remote peers are active.
+	 * Responsibilities: Count and report active peer slots.
+	 */
 	std::size_t ActivePeerCount() const noexcept
 	{
 		std::size_t ActiveCount = 0;
@@ -385,26 +451,35 @@ public:
 	}
 
 private:
-	/** One remote peer's address, liveness timestamps, and reuse generation. */
+	/**
+	 * Motivation: Holds one remote peer's address, liveness timestamps, and reuse generation so the table can evict and reuse slots.
+	 * Responsibilities: Carry the peer address, last receive and send times, generation, and active flag.
+	 * Example:
+	 *   // Internal slot type owned by the host's peer table.
+	 */
 	struct FTransportPeerSlot
 	{
-		/** Transport address to reach this peer; empty while the slot is free. */
+		/** Motivation: Holds the transport address to reach this peer; empty while the slot is free. */
 		::MicroWorld::Transport::Address::FDeviceAddress Address{};
 
-		/** Time of the last packet received from this peer; drives timeout eviction. */
+		/** Motivation: Records the last packet received from this peer; drives timeout eviction. */
 		Core::TimePointMilliseconds LastReceiveMilliseconds{0};
 
-		/** Time of the last packet sent to this peer; paces outgoing heartbeats. */
+		/** Motivation: Records the last packet sent to this peer; paces outgoing heartbeats. */
 		Core::TimePointMilliseconds LastSendMilliseconds{0};
 
-		/** Reuse counter bumped on eviction so a stale `FPeerId` cannot match a later occupant. */
+		/** Motivation: Bumps the reuse counter on eviction so a stale FPeerId cannot match a later occupant. */
 		std::uint8_t Generation{0};
 
-		/** Distinguishes a live peer from a free, reusable slot. */
+		/** Motivation: Distinguishes a live peer from a free, reusable slot. */
 		bool bActive{false};
 	};
 
-	/** Returns monotonic elapsed milliseconds, clamped so a backward clock reads as zero elapsed. */
+	/**
+	 * Motivation: Computes elapsed time without overflowing when a wide gap narrows into DurationMilliseconds.
+	 * Responsibilities: Return monotonic elapsed milliseconds, clamped so a backward clock reads as zero elapsed and a gap wider
+	 *   than DurationMilliseconds max saturates at that ceiling.
+	 */
 	static constexpr Core::DurationMilliseconds ElapsedSince(
 		const Core::TimePointMilliseconds InNowMilliseconds, const Core::TimePointMilliseconds InPastMilliseconds) noexcept
 	{
@@ -419,22 +494,34 @@ private:
 		return Delta > MaxDuration ? static_cast<Core::DurationMilliseconds>(MaxDuration) : static_cast<Core::DurationMilliseconds>(Delta);
 	}
 
-	/** Reports whether an active peer has been silent past the configured eviction window. */
+	/**
+	 * Motivation: Decides whether a peer should be evicted for silence.
+	 * Responsibilities: Report whether an active peer's last receive is older than the configured eviction window.
+	 */
 	bool IsPeerTimedOut(const FTransportPeerSlot& InSlot, const Core::TimePointMilliseconds InNowMilliseconds) const noexcept
 	{
 		return ElapsedSince(InNowMilliseconds, InSlot.LastReceiveMilliseconds) > Config.PeerTimeoutMilliseconds;
 	}
 
-	/** Reports whether a peer's last send is older than the heartbeat cadence. */
+	/**
+	 * Motivation: Decides whether a peer is due a heartbeat.
+	 * Responsibilities: Report whether a peer's last send is older than the heartbeat cadence.
+	 */
 	bool IsHeartbeatDue(const FTransportPeerSlot& InSlot, const Core::TimePointMilliseconds InNowMilliseconds) const noexcept
 	{
 		return ElapsedSince(InNowMilliseconds, InSlot.LastSendMilliseconds) >= Config.HeartbeatIntervalMilliseconds;
 	}
 
-	/** Reports whether this host admits remote peers. */
+	/**
+	 * Motivation: Lets internal callers branch on whether this host admits remote peers.
+	 * Responsibilities: Report true for the ListenServer and DedicatedServer roles.
+	 */
 	constexpr bool IsServer() const noexcept { return Mode == ENetworkMode::ListenServer || Mode == ENetworkMode::DedicatedServer; }
 
-	/** Finds the active peer at `InAddress`, or `MaxPeers` when none matches. */
+	/**
+	 * Motivation: Locates an active peer by address for admission and dispatch.
+	 * Responsibilities: Return the active peer index at the address, or MaxPeers when none matches.
+	 */
 	std::size_t FindActivePeerIndexByAddress(const ::MicroWorld::Transport::Address::FDeviceAddress& InAddress) const noexcept
 	{
 		for (std::size_t Index = 0; Index < MaxPeers; ++Index)
@@ -447,7 +534,10 @@ private:
 		return MaxPeers;
 	}
 
-	/** Finds the lowest free peer slot, or `MaxPeers` when the table is full. */
+	/**
+	 * Motivation: Locates a reusable slot for a new peer.
+	 * Responsibilities: Return the lowest free peer slot, or MaxPeers when the table is full.
+	 */
 	std::size_t FindFreePeerSlot() const noexcept
 	{
 		for (std::size_t Index = 0; Index < MaxPeers; ++Index)
@@ -460,10 +550,16 @@ private:
 		return MaxPeers;
 	}
 
-	/** Builds the current generation-checked identity of the peer at `InIndex`. */
+	/**
+	 * Motivation: Builds the generation-checked identity a caller holds for a slot.
+	 * Responsibilities: Pair the index with its current generation into an FPeerId.
+	 */
 	FPeerId MakePeerId(const std::size_t InIndex) const noexcept { return FPeerId{static_cast<std::uint8_t>(InIndex), Peers[InIndex].Generation}; }
 
-	/** Resolves a remote peer id to its live slot, or `nullptr` when unknown or stale. */
+	/**
+	 * Motivation: Validates a caller-supplied peer id against live slot state before use.
+	 * Responsibilities: Return the matching live slot, or nullptr for an unknown or stale id.
+	 */
 	const FTransportPeerSlot* ResolvePeer(const FPeerId InPeer) const noexcept
 	{
 		if (InPeer.Index >= MaxPeers)
@@ -478,7 +574,10 @@ private:
 		return &Slot;
 	}
 
-	/** Frees the slot at `InIndex` and bumps its generation so outstanding ids go stale. */
+	/**
+	 * Motivation: Frees a slot and invalidates outstanding ids in one step.
+	 * Responsibilities: Mark the slot inactive, bump its generation, and clear its address.
+	 */
 	void EvictPeer(const std::size_t InIndex) noexcept
 	{
 		FTransportPeerSlot& Slot = Peers[InIndex];
@@ -490,7 +589,10 @@ private:
 		Slot.Address = ::MicroWorld::Transport::Address::FDeviceAddress{};
 	}
 
-	/** Returns a disconnected client to `Connecting` so it re-greets the server on the next send. */
+	/**
+	 * Motivation: Restores a client to the connecting state when its server peer is lost.
+	 * Responsibilities: Move a client whose server slot was lost back to Connecting and force the next greet.
+	 */
 	void OnPeerLost(const std::size_t InIndex) noexcept
 	{
 		if (Mode == ENetworkMode::Client && InIndex == ServerPeerSlotIndex)
@@ -500,7 +602,10 @@ private:
 		}
 	}
 
-	/** Evicts every active peer whose last receive is older than the timeout window. */
+	/**
+	 * Motivation: Reaps dead peers each receive pump so liveness stays bounded to the timeout window.
+	 * Responsibilities: Evict every active peer whose last receive is older than the timeout window and notify loss.
+	 */
 	void EvictTimedOutPeers(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		for (std::size_t Index = 0; Index < MaxPeers; ++Index)
@@ -519,7 +624,11 @@ private:
 		}
 	}
 
-	/** Parses one inbound packet, routing control internally and application messages to the handler. */
+	/**
+	 * Motivation: Routes one inbound packet by channel, keeping control internal and dispatching application messages.
+	 * Responsibilities: Drop a malformed packet or an application message from an unknown peer, refresh the sender's liveness, and
+	 *   dispatch recognized application messages to the handler.
+	 */
 	void HandleInboundPacket(
 		const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom,
 		Core::TSpan<const std::uint8_t> InPacket,
@@ -547,7 +656,10 @@ private:
 		DispatchToHandler(MakePeerId(Index), Header.Channel, Payload);
 	}
 
-	/** Decodes one channel-0 control payload and dispatches it by type. */
+	/**
+	 * Motivation: Decodes a control payload and routes it to its handler by type.
+	 * Responsibilities: Drop an unknown or malformed control message and dispatch Hello, Welcome, Heartbeat, and Bye.
+	 */
 	void HandleControlMessage(
 		const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom,
 		Core::TSpan<const std::uint8_t> InPayload,
@@ -576,7 +688,11 @@ private:
 		}
 	}
 
-	/** Admits a client on `Hello` (idempotent per address), or ignores it on wrong version or a full table. */
+	/**
+	 * Motivation: Admits a client that greets the server.
+	 * Responsibilities: Act only as a server, ignore a wrong-version Hello, admit or refresh the peer idempotently per address,
+	 *   and reply with Welcome unless the table is full.
+	 */
 	void HandleHello(
 		const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom,
 		const FControlMessage& InControl,
@@ -604,7 +720,11 @@ private:
 		SendWelcome(Index, InFrom);
 	}
 
-	/** Records the server as a connected client's single peer and enters `Connected`. */
+	/**
+	 * Motivation: Completes a client's admission on receiving its assigned identity.
+	 * Responsibilities: Act only as a client, ignore a wrong-version Welcome, record the server as the single peer, store the
+	 *   assigned identity, and enter Connected.
+	 */
 	void HandleWelcome(
 		const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom,
 		const FControlMessage& InControl,
@@ -633,7 +753,10 @@ private:
 		State = ETransportHostState::Connected;
 	}
 
-	/** Refreshes a known peer's liveness on `Heartbeat`; ignores heartbeats from strangers. */
+	/**
+	 * Motivation: Keeps a known peer alive on Heartbeat.
+	 * Responsibilities: Refresh a known peer's liveness and ignore heartbeats from strangers.
+	 */
 	void HandleHeartbeat(const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom, const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		const std::size_t Index = FindActivePeerIndexByAddress(InFrom);
@@ -645,7 +768,10 @@ private:
 		Peers[Index].LastReceiveMilliseconds = InNowMilliseconds;
 	}
 
-	/** Evicts a peer on `Bye`; a client whose server departs returns to `Connecting`. */
+	/**
+	 * Motivation: Removes a peer on Bye and returns a client to connecting if its server departed.
+	 * Responsibilities: Evict the matching peer and notify loss.
+	 */
 	void HandleBye(const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom) noexcept
 	{
 		const std::size_t Index = FindActivePeerIndexByAddress(InFrom);
@@ -657,7 +783,10 @@ private:
 		OnPeerLost(Index);
 	}
 
-	/** Queues a `Welcome` carrying the assigned index and generation to a newly admitted client. */
+	/**
+	 * Motivation: Replies to an admitted client with the identity it must use.
+	 * Responsibilities: Queue a Welcome carrying the assigned index and generation, logging if the queue is full.
+	 */
 	void SendWelcome(const std::size_t InPeerIndex, const ::MicroWorld::Transport::Address::FDeviceAddress& InTo) noexcept
 	{
 		FControlMessage Welcome{};
@@ -671,7 +800,10 @@ private:
 		}
 	}
 
-	/** Queues a client `Hello` to the configured server address. */
+	/**
+	 * Motivation: Greets the configured server during connection.
+	 * Responsibilities: Queue a Hello to the configured server address, logging if the queue is full.
+	 */
 	void QueueHello() noexcept
 	{
 		FControlMessage Hello{};
@@ -683,7 +815,10 @@ private:
 		}
 	}
 
-	/** Frames one control message and queues it to `InTo`; returns the framing or queue result. */
+	/**
+	 * Motivation: Frames and queues a control message in one step so callers avoid the writer directly.
+	 * Responsibilities: Encode the control message into a fixed buffer and queue it to InTo; return the framing or queue result.
+	 */
 	ETransportResult QueueControl(const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, const FControlMessage& InControl) noexcept
 	{
 		std::array<std::uint8_t, MessageHeaderBytes + MaxControlPayloadBytes> FrameBuffer{};
@@ -696,7 +831,10 @@ private:
 		return OutboundManager.QueueSend(InTo, Writer.WrittenBytes());
 	}
 
-	/** Frames one application message and queues it to `InTo`; returns the framing or queue result. */
+	/**
+	 * Motivation: Frames and queues an application message in one step so callers avoid the writer directly.
+	 * Responsibilities: Encode the message into a fixed buffer and queue it to InTo; return the framing or queue result.
+	 */
 	ETransportResult QueueAppMessage(
 		const ::MicroWorld::Transport::Address::FDeviceAddress& InTo,
 		const std::uint8_t InChannel,
@@ -712,13 +850,19 @@ private:
 		return OutboundManager.QueueSend(InTo, Writer.WrittenBytes());
 	}
 
-	/** Delivers one application message to every registered handler; a dispatch failure is best-effort ignored. */
+	/**
+	 * Motivation: Delivers one application message to every registered handler.
+	 * Responsibilities: Broadcast to the multicast delegate and best-effort ignore a dispatch failure.
+	 */
 	void DispatchToHandler(const FPeerId InFrom, const std::uint8_t InChannel, Core::TSpan<const std::uint8_t> InPayload) noexcept
 	{
 		(void)MessageHandler.Broadcast(InFrom, InChannel, InPayload);
 	}
 
-	/** Sends outbound FIFO entries until it empties or the device stops accepting; bounded by depth. */
+	/**
+	 * Motivation: Drains queued packets in one bounded pass so a pump cannot loop forever.
+	 * Responsibilities: Send FIFO entries until it empties or the device stops accepting, bounded by SendQueueDepth.
+	 */
 	void DrainOutbound() noexcept
 	{
 		for (std::size_t Count = 0; Count < SendQueueDepth; ++Count)
@@ -731,7 +875,10 @@ private:
 		}
 	}
 
-	/** Receives up to `MaxPeers + PumpSlackPackets` packets this pump, routing each to `HandleInboundPacket`. */
+	/**
+	 * Motivation: Bounds inbound work per receive pump so a flood cannot monopolize one tick.
+	 * Responsibilities: Receive up to MaxPeers + PumpSlackPackets packets this pump, routing each to HandleInboundPacket.
+	 */
 	void DrainInboundPackets(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		std::array<std::uint8_t, MaxPacketBytes> ReceiveBuffer{};
@@ -751,7 +898,10 @@ private:
 		}
 	}
 
-	/** Client-only: greets the server on the first connecting pump and on each heartbeat interval afterward. */
+	/**
+	 * Motivation: Paces client Hello retries so a connecting client re-greets on a fixed cadence.
+	 * Responsibilities: Greet on the first connecting pump and on each heartbeat interval afterward.
+	 */
 	void SendClientHelloIfDue(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		if (Mode != ENetworkMode::Client || State != ETransportHostState::Connecting)
@@ -766,7 +916,10 @@ private:
 		}
 	}
 
-	/** Queues a heartbeat to every active peer whose last send is older than the heartbeat interval. */
+	/**
+	 * Motivation: Keeps every active peer alive on a fixed cadence.
+	 * Responsibilities: Queue a heartbeat to every active peer whose last send is older than the heartbeat interval.
+	 */
 	void SendDueHeartbeats(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		for (std::size_t Index = 0; Index < MaxPeers; ++Index)
@@ -782,7 +935,11 @@ private:
 		}
 	}
 
-	/** Best-effort `Bye` to every active peer, then drains the outbound FIFO without waiting for physical transmission. */
+	/**
+	 * Motivation: Notifies peers of shutdown so they can evict promptly.
+	 * Responsibilities: Best-effort queue a Bye to every active peer, then drain the outbound FIFO without waiting for physical
+	 *   transmission.
+	 */
 	void SendByeToAllActivePeers() noexcept
 	{
 		if (Mode == ENetworkMode::Standalone)
@@ -801,7 +958,10 @@ private:
 		DrainOutbound();
 	}
 
-	/** Evicts every active peer so each outstanding `FPeerId` goes stale. */
+	/**
+	 * Motivation: Tears down every peer so outstanding ids go stale on shutdown.
+	 * Responsibilities: Evict every active peer, bumping each generation.
+	 */
 	void EvictAllPeers() noexcept
 	{
 		for (std::size_t Index = 0; Index < MaxPeers; ++Index)
@@ -813,7 +973,10 @@ private:
 		}
 	}
 
-	/** Dispatches an application message directly to the listen server's local peer; `Invalid` in any other mode. */
+	/**
+	 * Motivation: Short-circuits a send to the listen server's local peer so it skips the device entirely.
+	 * Responsibilities: Dispatch directly to the handler in ListenServer mode and return Invalid in any other.
+	 */
 	ETransportResult SendToLocalPeer(const std::uint8_t InChannel, Core::TSpan<const std::uint8_t> InPayload) noexcept
 	{
 		if (Mode != ENetworkMode::ListenServer)
@@ -824,7 +987,10 @@ private:
 		return ETransportResult::Success;
 	}
 
-	/** Finds this address's peer or allocates a free slot, refreshing liveness; returns `MaxPeers` when the table is full. */
+	/**
+	 * Motivation: Adds or refreshes a peer on Hello so admission is idempotent per address.
+	 * Responsibilities: Find this address's peer or allocate a free slot, refresh liveness, and return MaxPeers when the table is full.
+	 */
 	std::size_t AdmitPeer(
 		const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom, const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
@@ -850,37 +1016,37 @@ private:
 		return Index;
 	}
 
-	/** Device borrowed for one host lifetime; progresses pending physical transmission after each outbound pump. */
+	/** Motivation: Borrows the device for one host lifetime; pending physical transmission progresses after each outbound pump. */
 	::MicroWorld::Transport::Device::IDevice& Device;
 
-	/** Owns the outbound packet bytes, lengths, and destinations for the FIFO. */
+	/** Motivation: Owns the outbound packet bytes, lengths, and destinations for the FIFO. */
 	TTransportPacketStorage<SendQueueDepth, MaxPacketBytes> OutboundStorage{};
 
-	/** Owns the outbound FIFO over the device; reused rather than re-implementing queue mechanics. */
+	/** Motivation: Owns the outbound FIFO over the device, reused rather than re-implementing queue mechanics. */
 	TTransportManager<SendQueueDepth, MaxPacketBytes> OutboundManager;
 
-	/** Dispatches application messages to every registered handler. */
+	/** Motivation: Dispatches application messages to every registered handler. */
 	FMessageHandler MessageHandler{};
 
-	/** Fixed table of remote peer slots. */
+	/** Motivation: Holds the fixed table of remote peer slots. */
 	std::array<FTransportPeerSlot, MaxPeers> Peers{};
 
-	/** Session timing and identity set by `Configure`. */
+	/** Motivation: Carries the session timing and identity set by Configure. */
 	FTransportHostConfig Config{};
 
-	/** Configured role. */
+	/** Motivation: Stores the configured role. */
 	ENetworkMode Mode{ENetworkMode::Standalone};
 
-	/** Observable session state. */
+	/** Motivation: Stores the observable session state. */
 	ETransportHostState State{ETransportHostState::Idle};
 
-	/** Identity a `Welcome` assigned to this client within the server's table. */
+	/** Motivation: Stores the identity a Welcome assigned to this client within the server's table. */
 	FPeerId AssignedPeer{};
 
-	/** Time the client last sent `Hello`; paces connecting retries. */
+	/** Motivation: Records the time the client last sent Hello; paces connecting retries. */
 	Core::TimePointMilliseconds LastHelloSendMilliseconds{0};
 
-	/** Forces the next connecting `PumpSend` to greet immediately after start or reconnect. */
+	/** Motivation: Forces the next connecting PumpSend to greet immediately after start or reconnect. */
 	bool bHelloDue{false};
 };
 

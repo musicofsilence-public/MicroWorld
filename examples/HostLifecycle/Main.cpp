@@ -12,21 +12,37 @@
 namespace
 {
 
-/** The sensor samples every 100 ms; the demo's tick times straddle this cadence. */
+/** Motivation: The sensor samples every 100 ms; the demo's tick times straddle this cadence. */
 constexpr MicroWorld::Core::DurationMilliseconds SensorCadenceMilliseconds = 100;
 
-/** Samples a host value at its own 100 ms cadence in the managed lifecycle example. */
+/**
+ * Motivation: Samples a host value at its own 100 ms cadence in the managed lifecycle example, so the
+ *   trace shows a component ticking on its own schedule independent of its actor.
+ * Responsibilities: Print begin/end markers and a canonical per-tick time and delta line.
+ * Example:
+ *   FSensorComponent Sensor;
+ *   Sensor.TickComponent(Context);
+ */
 class FSensorComponent final : public MicroWorld::Engine::UActorComponent
 {
 public:
-	/** Selects a 100 ms schedule so the trace includes due and not-due updates. */
+	/**
+	 * Motivation: Selects a 100 ms schedule so the trace includes both due and not-due updates.
+	 * Responsibilities: Construct the component on the shared 100 ms cadence.
+	 */
 	FSensorComponent() noexcept : UActorComponent(MicroWorld::Core::FTickConfiguration::EnabledEvery(SensorCadenceMilliseconds)) {}
 
 protected:
-	/** Marks Component startup so its order relative to the Actor is visible. */
+	/**
+	 * Motivation: Marks Component startup so its order relative to the Actor is visible in the trace.
+	 * Responsibilities: Print the sensor begin marker and do nothing else.
+	 */
 	void BeginPlay() noexcept override { std::printf("sensor begin\n"); }
 
-	/** Prints canonical time and per-Component delta to demonstrate schedule ownership. */
+	/**
+	 * Motivation: Prints canonical time and per-Component delta to demonstrate schedule ownership.
+	 * Responsibilities: Print the now time and delta on each due tick.
+	 */
 	void TickComponent(const MicroWorld::Core::FTickContext& InContext) noexcept override
 	{
 		std::printf(
@@ -35,35 +51,63 @@ protected:
 			static_cast<unsigned>(InContext.DeltaMilliseconds));
 	}
 
-	/** Marks Component shutdown so reverse lifecycle order is visible. */
+	/**
+	 * Motivation: Marks Component shutdown so reverse lifecycle order is visible in the trace.
+	 * Responsibilities: Print the sensor end marker and do nothing else.
+	 */
 	void EndPlay() noexcept override { std::printf("sensor end\n"); }
 };
 
-/** Aggregates component state through the actor's fixed component slots. */
+/**
+ * Motivation: Aggregates component state through the actor's fixed component slots, with its own
+ *   primary schedule disabled so component independence is observable.
+ * Responsibilities: Print begin/tick/end markers that bracket the component's lifecycle.
+ * Example:
+ *   FDeviceActor Device;
+ *   Device.BeginPlay();
+ */
 class FDeviceActor final : public MicroWorld::Engine::AActor
 {
 public:
-	/** Disables only the Actor schedule so Component independence is observable. */
+	/**
+	 * Motivation: Disables only the Actor schedule so Component independence is observable.
+	 * Responsibilities: Construct the actor tickable but with tick start disabled.
+	 */
 	FDeviceActor() noexcept : AActor({/*bCanEverTick*/ true, /*bStartWithTickEnabled*/ false, /*TickIntervalMilliseconds*/ 0}) {}
 
 protected:
-	/** Marks Actor startup after the Component begin hook. */
+	/**
+	 * Motivation: Marks Actor startup after the Component begin hook.
+	 * Responsibilities: Print the actor begin marker and do nothing else.
+	 */
 	void BeginPlay() noexcept override { std::printf("actor begin (primary tick disabled)\n"); }
 
-	/** Would expose an incorrect Actor execution if disabled scheduling regressed. */
+	/**
+	 * Motivation: Would expose an incorrect Actor execution if disabled scheduling regressed.
+	 * Responsibilities: Print the actor tick marker only if its schedule ever runs.
+	 */
 	void Tick(const MicroWorld::Core::FTickContext&) noexcept override { std::printf("actor tick\n"); }
 
-	/** Marks Actor shutdown before the Component end hook. */
+	/**
+	 * Motivation: Marks Actor shutdown before the Component end hook.
+	 * Responsibilities: Print the actor end marker and do nothing else.
+	 */
 	void EndPlay() noexcept override { std::printf("actor end\n"); }
 };
 
-/** Stable type id for the example's user-derived managed actor descriptor. */
+/** Motivation: Stable type id for the example's user-derived managed actor descriptor. */
 constexpr MicroWorld::Engine::FTypeId DeviceActorTypeId{0x00010001u};
 
-/** Stable type id for the example's user-derived managed component descriptor. */
+/** Motivation: Stable type id for the example's user-derived managed component descriptor. */
 constexpr MicroWorld::Engine::FTypeId SensorComponentTypeId{0x00010002u};
 
-/** Carries the exact capacities FDeviceHost sized before the traits refactor, so the demo store is unchanged. */
+/**
+ * Motivation: Carries the exact capacities FDeviceHost sized before the traits refactor, so the demo
+ *   store is unchanged.
+ * Responsibilities: Name the class, object, root, actor, timer, and inline-callback capacities the demo uses.
+ * Example:
+ *   using FDeviceHost = TEngine<FDeviceHostTraits>;
+ */
 struct FDeviceHostTraits : MicroWorld::Engine::FDefaultEngineTraits
 {
 	static constexpr std::size_t MaxClasses = 5;
@@ -76,7 +120,12 @@ struct FDeviceHostTraits : MicroWorld::Engine::FDefaultEngineTraits
 
 } // namespace
 
-/** Builds a managed composition through TEngine and prints deterministic lifecycle evidence. */
+/**
+ * Motivation: Composition root for the HostLifecycle demo, so the single entry point owns the one
+ *   place that builds a managed TEngine composition and prints deterministic lifecycle evidence.
+ * Responsibilities: Register the actor and component, register the component on the actor, begin play,
+ *   tick a straddling schedule, then end play in reverse order.
+ */
 int main()
 {
 	using namespace MicroWorld::Core;

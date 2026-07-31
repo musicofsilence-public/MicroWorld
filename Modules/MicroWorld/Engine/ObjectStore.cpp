@@ -8,13 +8,19 @@ namespace MicroWorld::Engine
 namespace
 {
 
-	/** Confirms that a fixed alignment is non-zero and power-of-two. */
+	/**
+	 * Motivation: Confirms that a fixed alignment is non-zero and power-of-two before it is used for slot placement.
+	 * Responsibilities: Return true only for a positive, power-of-two alignment value.
+	 */
 	bool IsValidAlignment(const std::size_t InAlignmentBytes) noexcept
 	{
 		return InAlignmentBytes > 0 && (InAlignmentBytes & (InAlignmentBytes - 1U)) == 0;
 	}
 
-	/** Confirms multiplication cannot wrap the storage extent calculation. */
+	/**
+	 * Motivation: Confirms multiplication cannot wrap the storage extent calculation before slot bytes are sized.
+	 * Responsibilities: Return true when InLeft times InRight fits in std::size_t.
+	 */
 	bool MultiplicationFitsSizeType(const std::size_t InLeft, const std::size_t InRight) noexcept
 	{
 		return InRight == 0 || InLeft <= std::numeric_limits<std::size_t>::max() / InRight;

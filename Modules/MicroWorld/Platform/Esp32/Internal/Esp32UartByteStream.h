@@ -8,81 +8,114 @@ namespace MicroWorld::Platform::Esp32
 {
 
 /**
- * Plain-integer configuration for one ESP-IDF UART byte stream.
- *
- * Platform composition owns the selected UART exclusively and supplies all pin and baud policy before opening the
- * stream; this Detail type stays free of ESP-IDF enum types so RadioE32 can depend only on Core's `Core::IUartByteStream` interface.
+ * Motivation: Carries the plain-integer UART parameters one ESP-IDF byte stream needs at open time so this Detail
+ *   type stays free of ESP-IDF enum types and RadioE32 depends only on Core's IUartByteStream interface.
+ * Responsibilities: Hold UART port, TX/RX GPIO, and baud rate as plain integers.
+ * Example:
+ *   FEsp32UartByteStreamConfig Config;
+ *   Config.BaudRate = 9600;
  */
 struct FEsp32UartByteStreamConfig
 {
-	/** ESP-IDF UART port number stored as a plain integer outside private implementation code. */
+	/** Motivation: ESP-IDF UART port number stored as a plain integer outside private implementation code. */
 	std::int32_t UartPort{0};
 
-	/** GPIO wired from the UART TX signal to the attached device RX pin. */
+	/** Motivation: GPIO wired from the UART TX signal to the attached device RX pin. */
 	std::int32_t TxGpio{0};
 
-	/** GPIO wired from the attached device TX pin to the UART RX signal. */
+	/** Motivation: GPIO wired from the attached device TX pin to the UART RX signal. */
 	std::int32_t RxGpio{0};
 
-	/** Baud rate shared with the attached device; zero lets the platform open attempt reject configuration. */
+	/** Motivation: Baud rate shared with the attached device; zero lets the platform open attempt reject configuration. */
 	std::uint32_t BaudRate{0};
 };
 
 /**
- * Unsupported ESP-IDF implementation of Core's non-blocking UART byte-stream contract.
- *
- * This adapter owns one configured UART installation for its lifetime while callers retain all device configuration
- * policy. It is a platform Detail type for compatibility facades, not a supported direct-composition API.
+ * Motivation: Adapts Core's non-blocking UART byte-stream contract to the ESP-IDF UART driver so a compatibility
+ *   facade can drive a portable radio without exposing SDK types.
+ * Responsibilities: Own one configured UART installation for its lifetime while callers retain all device
+ *   configuration policy; stay a platform Detail type for compatibility facades, not a supported direct-composition API.
+ * Example:
+ *   FEsp32UartByteStream Stream;
+ *   if (Stream.Open(Config)) { Stream.TryWriteByte(Byte); }
  */
 class FEsp32UartByteStream final : public Core::IUartByteStream
 {
 public:
-	/** Creates an inert stream that owns no UART until one successful Open call. */
+	/**
+	 * Motivation: Creates an inert stream that owns no UART until one successful Open call.
+	 * Responsibilities: Default-construct with bOpen false.
+	 */
 	FEsp32UartByteStream() noexcept = default;
 
-	/** Releases the exclusively owned UART installation when it is open. */
+	/**
+	 * Motivation: Releases the exclusively owned UART installation when it is open so an adapter destruction never
+	 *   leaks the driver.
+	 * Responsibilities: Close the owned UART installation if it is open.
+	 */
 	~FEsp32UartByteStream() noexcept override;
 
-	/** Prevents copying so one stream value owns exactly one ESP-IDF UART installation. */
+	/**
+	 * Motivation: Keeps one stream value owning exactly one ESP-IDF UART installation so the driver handle never aliases.
+	 * Responsibilities: Reject copy construction so UART ownership and close responsibility remain unique.
+	 */
 	FEsp32UartByteStream(const FEsp32UartByteStream&) = delete;
 
-	/** Prevents copying so UART ownership and close responsibility remain unique. */
+	/**
+	 * Motivation: Keeps one stream value owning exactly one ESP-IDF UART installation so the driver handle never aliases.
+	 * Responsibilities: Reject copy assignment so UART ownership and close responsibility remain unique.
+	 */
 	FEsp32UartByteStream& operator=(const FEsp32UartByteStream&) = delete;
 
-	/** Prevents moving so the owned UART identity remains stable until Close or destruction. */
+	/**
+	 * Motivation: Keeps the owned UART identity stable until Close or destruction so the platform handle never relocates.
+	 * Responsibilities: Reject move construction so the owned UART identity stays fixed.
+	 */
 	FEsp32UartByteStream(FEsp32UartByteStream&&) = delete;
 
-	/** Prevents moving so a pending close cannot transfer between adapter values. */
+	/**
+	 * Motivation: Keeps the owned UART identity stable until Close or destruction so a pending close cannot transfer.
+	 * Responsibilities: Reject move assignment so the close responsibility cannot transfer between adapter values.
+	 */
 	FEsp32UartByteStream& operator=(FEsp32UartByteStream&&) = delete;
 
 	/**
-	 * Configures and exclusively opens one 8N1 ESP-IDF UART byte stream.
-	 *
-	 * Returns false when already open or when the private ESP-IDF setup fails; success installs the shared bounded
-	 * ring-buffer configuration without exposing SDK types.
-	 *
-	 * @param InConfig Plain UART port, pin, and baud settings selected by the platform composition root.
-	 * @return True only when the stream owns a configured UART installation.
+	 * Motivation: Configures and exclusively opens one 8N1 ESP-IDF UART byte stream so callers retain all device
+	 *   configuration policy.
+	 * Responsibilities: Return false when already open or when the private ESP-IDF setup fails; on success install the
+	 *   shared bounded ring-buffer configuration without exposing SDK types.
 	 */
 	bool Open(const FEsp32UartByteStreamConfig& InConfig) noexcept;
 
-	/** Releases the owned UART installation and makes later reads and writes report Error until another Open call. */
+	/**
+	 * Motivation: Releases the owned UART installation so the stream can be reopened or destroyed cleanly.
+	 * Responsibilities: Release the owned installation and make later reads and writes report Error until another Open call.
+	 */
 	void Close() noexcept;
 
-	/** Reports whether this stream currently owns a usable configured UART installation. */
+	/**
+	 * Motivation: Lets a caller gate every op on whether the stream currently owns a usable installation.
+	 * Responsibilities: Report the open flag set by Open and cleared by Close.
+	 */
 	bool IsOpen() const noexcept;
 
-	/** Attempts one non-blocking UART write and maps sent, blocked, and failed outcomes to the Core contract. */
+	/**
+	 * Motivation: Attempts one non-blocking UART write behind the Core contract so callers stay free of ESP-IDF codes.
+	 * Responsibilities: Map sent, blocked, and failed outcomes to the Core contract.
+	 */
 	Core::EUartByteStreamResult TryWriteByte(std::uint8_t InByte) noexcept override;
 
-	/** Attempts one non-blocking UART read and changes OutByte only after the ESP-IDF read succeeds. */
+	/**
+	 * Motivation: Attempts one non-blocking UART read behind the Core contract so callers stay free of ESP-IDF codes.
+	 * Responsibilities: Change OutByte only after the ESP-IDF read succeeds.
+	 */
 	Core::EUartByteStreamResult TryReadByte(std::uint8_t& OutByte) noexcept override;
 
 private:
-	/** Stores the open UART identity as a plain integer until private source code converts it for ESP-IDF calls. */
+	/** Motivation: Stores the open UART identity as a plain integer until private source code converts it for ESP-IDF calls. */
 	std::int32_t UartPortNumber{0};
 
-	/** Prevents I/O and duplicate installation before Open succeeds or after Close completes. */
+	/** Motivation: Prevents I/O and duplicate installation before Open succeeds or after Close completes. */
 	bool bOpen{false};
 };
 

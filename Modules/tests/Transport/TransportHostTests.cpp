@@ -31,114 +31,121 @@ using MicroWorld::Transport::Address::MakeLoopbackAddress;
 using MicroWorld::Transport::Device::FReceiveResult;
 using MicroWorld::Transport::Device::IDevice;
 
-/** Heartbeat interval (ms) the deterministic host config stamps so timed cases advance in fixed steps. */
+/** Motivation: Heartbeat interval (ms) the deterministic host config stamps so timed cases advance in fixed steps. */
 constexpr TimePointMilliseconds HeartbeatIntervalMs = 100;
-/** Peer timeout window (ms) after which a silent peer is evicted. */
+/** Motivation: Peer timeout window (ms) after which a silent peer is evicted. */
 constexpr TimePointMilliseconds PeerTimeoutMs = 500;
-/** Last heartbeat instant before the timeout window the keep-alive case reaches. */
+/** Motivation: Last heartbeat instant before the timeout window the keep-alive case reaches. */
 constexpr TimePointMilliseconds KeepAliveWindowEndMs = 800;
-/** Instant past the timeout window where a silent peer is evicted. */
+/** Motivation: Instant past the timeout window where a silent peer is evicted. */
 constexpr TimePointMilliseconds EvictionTimeoutMs = 1000;
-/** Instant at which the generation-bump case evicts the first client. */
+/** Motivation: Instant at which the generation-bump case evicts the first client. */
 constexpr TimePointMilliseconds GenerationBumpEvictMs = 2000;
-/** Instant past the client-side timeout window where the server is treated as gone. */
+/** Motivation: Instant past the client-side timeout window where the server is treated as gone. */
 constexpr TimePointMilliseconds ClientServerTimeoutMs = 2000;
-/** Instant at which the repeated-Hello case re-greets after the first admission. */
+/** Motivation: Instant at which the repeated-Hello case re-greets after the first admission. */
 constexpr TimePointMilliseconds RepeatedHelloResendMs = 100;
-/** Send timestamp (ms) for the single-session and broadcast cases. */
+/** Motivation: Send timestamp (ms) for the single-session and broadcast cases. */
 constexpr TimePointMilliseconds SessionPumpMs = 100;
 
-/** Loopback template parameter: server port index. */
+/** Motivation: Loopback template parameter: server port index. */
 constexpr std::uint8_t ServerPortIndex = 0;
-/** Loopback template parameter: first client port index. */
+/** Motivation: Loopback template parameter: first client port index. */
 constexpr std::uint8_t FirstClientPortIndex = 1;
-/** Loopback template parameter: second client port index. */
+/** Motivation: Loopback template parameter: second client port index. */
 constexpr std::uint8_t SecondClientPortIndex = 2;
-/** Loopback template parameter: third client port index. */
+/** Motivation: Loopback template parameter: third client port index. */
 constexpr std::uint8_t ThirdClientPortIndex = 3;
-/** FFloodDevice sender port index stamped into OutFrom. */
+/** Motivation: FFloodDevice sender port index stamped into OutFrom. */
 constexpr std::uint8_t FloodSenderPortIndex = 9;
-/** Channel the host-to-host send cases address. */
+/** Motivation: Channel the host-to-host send cases address. */
 constexpr std::uint8_t SendChannel = 1;
-/** Channel the broadcast cases address. */
+/** Motivation: Channel the broadcast cases address. */
 constexpr std::uint8_t BroadcastChannel = 1;
-/** Channel the SendTo single-target case addresses. */
+/** Motivation: Channel the SendTo single-target case addresses. */
 constexpr std::uint8_t SendToChannel = 2;
-/** Channel the local-peer dispatch case addresses. */
+/** Motivation: Channel the local-peer dispatch case addresses. */
 constexpr std::uint8_t LocalDispatchChannel = 3;
-/** Protocol version the matched-protocol handshake cases use. */
+/** Motivation: Protocol version the matched-protocol handshake cases use. */
 constexpr std::uint8_t MatchedProtocolVersion = 1;
-/** Protocol version the mismatched-Hello case uses on the client side. */
+/** Motivation: Protocol version the mismatched-Hello case uses on the client side. */
 constexpr std::uint8_t MismatchedProtocolVersion = 2;
-/** Welcome protocol version the allocation case sets. */
+/** Motivation: Welcome protocol version the allocation case sets. */
 constexpr std::uint8_t WelcomeProtocolVersion = 1;
-/** Welcome peer index the allocation case sets. */
+/** Motivation: Welcome peer index the allocation case sets. */
 constexpr std::uint8_t WelcomePeerIndex = 2;
-/** Welcome peer generation the allocation case sets. */
+/** Motivation: Welcome peer generation the allocation case sets. */
 constexpr std::uint8_t WelcomePeerGeneration = 3;
-/** Loopback mailbox depth every host config case uses. */
+/** Motivation: Loopback mailbox depth every host config case uses. */
 constexpr std::size_t LoopbackMailboxDepth = 8;
-/** Loopback per-packet byte capacity every host config case uses. */
+/** Motivation: Loopback per-packet byte capacity every host config case uses. */
 constexpr std::size_t LoopbackPacketBytes = 64;
-/** Per-host packet byte capacity every TTransportHost instantiation uses. */
+/** Motivation: Per-host packet byte capacity every TTransportHost instantiation uses. */
 constexpr std::size_t HostPacketBytes = 64;
-/** Number of remote peers the rejection-when-full case admits (matches MaxPeers). */
+/** Motivation: Number of remote peers the rejection-when-full case admits (matches MaxPeers). */
 constexpr std::size_t FullPeerCount = 2;
-/** Peer count reported by the single-peer cases after a successful handshake. */
+/** Motivation: Peer count reported by the single-peer cases after a successful handshake. */
 constexpr std::size_t AdmittedPeerCount = 1;
-/** Peer count reported by the no-peer cases. */
+/** Motivation: Peer count reported by the no-peer cases. */
 constexpr std::size_t EmptyPeerCount = 0;
-/** Peer count reported by the broadcast case after both clients connect. */
+/** Motivation: Peer count reported by the broadcast case after both clients connect. */
 constexpr std::size_t BroadcastPeerCount = 2;
-/** Number of receives one bounded pump is permitted to call under flood. */
+/** Motivation: Number of receives one bounded pump is permitted to call under flood. */
 constexpr std::size_t BoundedPumpReceiveCount = 7;
-/** Byte value the FFloodDevice writes into every header byte of its empty control frame. */
+/** Motivation: Byte value the FFloodDevice writes into every header byte of its empty control frame. */
 constexpr std::uint8_t EmptyControlFrameByte = 0;
-/** Byte count the FFloodDevice reports as received per call. */
+/** Motivation: Byte count the FFloodDevice reports as received per call. */
 constexpr std::size_t FloodReceivedByteCount = 4;
 
-/** Sentinel payload byte the generation-bump case sends to a stale and a fresh peer id. */
+/** Motivation: Sentinel payload byte the generation-bump case sends to a stale and a fresh peer id. */
 constexpr std::uint8_t GenerationBumpPayloadByte = 0x42;
-/** Broadcast payload byte the broadcast case delivers to every connected peer. */
+/** Motivation: Broadcast payload byte the broadcast case delivers to every connected peer. */
 constexpr std::uint8_t BroadcastPayloadByte = 0x5A;
-/** Single-byte payload the SendTo single-target case delivers. */
+/** Motivation: Single-byte payload the SendTo single-target case delivers. */
 constexpr std::uint8_t SendToPayloadByte = 0x33;
-/** Single-byte payload the local-peer dispatch case delivers synchronously. */
+/** Motivation: Single-byte payload the local-peer dispatch case delivers synchronously. */
 constexpr std::uint8_t LocalDispatchPayloadByte = 0x77;
-/** First byte of the three-byte session payload the allocation case broadcasts. */
+/** Motivation: First byte of the three-byte session payload the allocation case broadcasts. */
 constexpr std::uint8_t SessionPayloadFirstByte = 0x01;
-/** Second byte of the three-byte session payload the allocation case broadcasts. */
+/** Motivation: Second byte of the three-byte session payload the allocation case broadcasts. */
 constexpr std::uint8_t SessionPayloadSecondByte = 0x02;
-/** Third byte of the three-byte session payload the allocation case broadcasts. */
+/** Motivation: Third byte of the three-byte session payload the allocation case broadcasts. */
 constexpr std::uint8_t SessionPayloadThirdByte = 0x03;
-/** Single-byte payload the standalone send-attempt case threads through SendTo/Broadcast. */
+/** Motivation: Single-byte payload the standalone send-attempt case threads through SendTo/Broadcast. */
 constexpr std::uint8_t StandalonePayloadByte = 0x01;
-/** Single-byte payload the dedicated-server local-dispatch case rejects. */
+/** Motivation: Single-byte payload the dedicated-server local-dispatch case rejects. */
 constexpr std::uint8_t DedicatedServerLocalPayloadByte = 0x11;
 
-/**
- * Hand-assembled control frame whose payload byte names an undefined control type (0x09):
- * channel 0, zero flags, declared payload length 1, and the single payload byte 0x09.
+/** Motivation: Hand-assembled control frame whose payload byte names an undefined control type (0x09): channel 0,
+ *   zero flags, declared payload length 1, and the single payload byte 0x09.
  */
 constexpr std::uint8_t UnknownControlTypeFrame[5] = {0x00, 0x00, 0x01, 0x00, 0x09};
 
-/** Records the last message a handler observed so a test can assert delivery. */
+/**
+ * Motivation: Records the last message a handler observed so a test can assert delivery.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 struct FHandlerCapture
 {
-	/** Number of messages the handler has observed; zero means it never ran. */
+	/** Motivation: Number of messages the handler has observed; zero means it never ran. */
 	std::size_t Count{0};
 
-	/** Sender identity from the most recent dispatch. */
+	/** Motivation: Sender identity from the most recent dispatch. */
 	FPeerId From{};
 
-	/** Channel from the most recent dispatch. */
+	/** Motivation: Channel from the most recent dispatch. */
 	std::uint8_t Channel{0};
 
-	/** First payload byte from the most recent dispatch, or zero for an empty payload. */
+	/** Motivation: First payload byte from the most recent dispatch, or zero for an empty payload. */
 	std::uint8_t FirstByte{0};
 };
 
-/** Builds a fast-heartbeat host config with a short timeout window for deterministic tests. */
+/**
+ * Motivation: Builds a fast-heartbeat host config with a short timeout window for deterministic tests.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ */
 FTransportHostConfig MakeHostConfig(const std::uint8_t InProtocolVersion) noexcept
 {
 	FTransportHostConfig Config{};
@@ -148,7 +155,10 @@ FTransportHostConfig MakeHostConfig(const std::uint8_t InProtocolVersion) noexce
 	return Config;
 }
 
-/** Builds a client config that greets the loopback port `InServerPort`. */
+/**
+ * Motivation: Builds a client config that greets the loopback port `InServerPort`.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ */
 FTransportHostConfig MakeClientConfig(const std::uint8_t InProtocolVersion, const std::uint8_t InServerPort) noexcept
 {
 	FTransportHostConfig Config = MakeHostConfig(InProtocolVersion);
@@ -156,7 +166,10 @@ FTransportHostConfig MakeClientConfig(const std::uint8_t InProtocolVersion, cons
 	return Config;
 }
 
-/** Binds one capturing handler into a host and returns its removal handle. */
+/**
+ * Motivation: Binds one capturing handler into a host and returns its removal handle.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ */
 template<typename HostType>
 FDelegateHandle InstallCapture(HostType& InHost, FHandlerCapture& InCapture) noexcept
 {
@@ -174,7 +187,10 @@ FDelegateHandle InstallCapture(HostType& InHost, FHandlerCapture& InCapture) noe
 	return Handle;
 }
 
-/** Runs one full Hello->Welcome handshake round at `InNowMilliseconds`. */
+/**
+ * Motivation: Runs one full Hello->Welcome handshake round at `InNowMilliseconds`.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ */
 template<typename ServerType, typename ClientType>
 void RunHandshake(ServerType& InServer, ClientType& InClient, const TimePointMilliseconds InNowMilliseconds) noexcept
 {
@@ -185,8 +201,9 @@ void RunHandshake(ServerType& InServer, ClientType& InClient, const TimePointMil
 }
 
 /**
- * Scenario: Drive one Hello from the client to a started server, then have the server send Welcome back.
- * Expected: The server admits one peer on the Hello and the client reaches Connected once it receives the Welcome.
+ * Motivation: Drive one Hello from the client to a started server, then have the server send Welcome back.
+ * Responsibilities: The server admits one peer on the Hello and the client reaches Connected once it receives the
+ *   Welcome.
  */
 MW_TEST_CASE(TransportHostServerAdmitsClientOnHello)
 {
@@ -213,8 +230,8 @@ MW_TEST_CASE(TransportHostServerAdmitsClientOnHello)
 }
 
 /**
- * Scenario: Configure a client but leave it unstarted, then start it, then run the handshake.
- * Expected: The client state advances Idle to Connecting on Start and reaches Connected after the handshake.
+ * Motivation: Configure a client but leave it unstarted, then start it, then run the handshake.
+ * Responsibilities: The client state advances Idle to Connecting on Start and reaches Connected after the handshake.
  */
 MW_TEST_CASE(TransportHostClientAdvancesThroughConnectingToConnected)
 {
@@ -239,8 +256,8 @@ MW_TEST_CASE(TransportHostClientAdvancesThroughConnectingToConnected)
 }
 
 /**
- * Scenario: Start three clients against a two-peer-capacity server and have each client send Hello.
- * Expected: The server admits exactly its peer capacity and rejects the overflow Hello.
+ * Motivation: Start three clients against a two-peer-capacity server and have each client send Hello.
+ * Responsibilities: The server admits exactly its peer capacity and rejects the overflow Hello.
  */
 MW_TEST_CASE(TransportHostRejectsHelloWhenPeerTableFull)
 {
@@ -270,8 +287,8 @@ MW_TEST_CASE(TransportHostRejectsHelloWhenPeerTableFull)
 }
 
 /**
- * Scenario: Complete a handshake, then drive client heartbeats every interval well past the timeout window.
- * Expected: Heartbeats received within the window keep the peer alive beyond the timeout.
+ * Motivation: Complete a handshake, then drive client heartbeats every interval well past the timeout window.
+ * Responsibilities: Heartbeats received within the window keep the peer alive beyond the timeout.
  */
 MW_TEST_CASE(TransportHostHeartbeatKeepsPeerAlive)
 {
@@ -297,8 +314,9 @@ MW_TEST_CASE(TransportHostHeartbeatKeepsPeerAlive)
 }
 
 /**
- * Scenario: Complete a handshake, then send no further client traffic while advancing the server past the timeout window.
- * Expected: The peer is evicted after missing heartbeats past the timeout.
+ * Motivation: Complete a handshake, then send no further client traffic while advancing the server past the
+ *   timeout window.
+ * Responsibilities: The peer is evicted after missing heartbeats past the timeout.
  */
 MW_TEST_CASE(TransportHostEvictsPeerAfterTimeout)
 {
@@ -320,8 +338,10 @@ MW_TEST_CASE(TransportHostEvictsPeerAfterTimeout)
 }
 
 /**
- * Scenario: Admit a first client, evict it by timeout, then admit a second client into the freed slot and send to both the stale and fresh peer ids.
- * Expected: Eviction bumps the slot generation; the stale id fails to send while the freshly assigned id resolves the reused slot.
+ * Motivation: Admit a first client, evict it by timeout, then admit a second client into the freed slot and send
+ *   to both the stale and fresh peer ids.
+ * Responsibilities: Eviction bumps the slot generation; the stale id fails to send while the freshly assigned id
+ *   resolves the reused slot.
  */
 MW_TEST_CASE(TransportHostBumpsGenerationSoStaleIdFailsAfterReadmission)
 {
@@ -364,8 +384,8 @@ MW_TEST_CASE(TransportHostBumpsGenerationSoStaleIdFailsAfterReadmission)
 }
 
 /**
- * Scenario: Connect two clients, broadcast a payload from the server, and pump delivery to both.
- * Expected: Each connected client receives the broadcast exactly once with the broadcast payload byte.
+ * Motivation: Connect two clients, broadcast a payload from the server, and pump delivery to both.
+ * Responsibilities: Each connected client receives the broadcast exactly once with the broadcast payload byte.
  */
 MW_TEST_CASE(TransportHostBroadcastReachesEveryConnectedPeer)
 {
@@ -409,8 +429,8 @@ MW_TEST_CASE(TransportHostBroadcastReachesEveryConnectedPeer)
 }
 
 /**
- * Scenario: Connect a client, send a payload to its peer id on a chosen channel, and pump delivery.
- * Expected: The addressed peer receives exactly one message on the requested channel carrying the sent payload.
+ * Motivation: Connect a client, send a payload to its peer id on a chosen channel, and pump delivery.
+ * Responsibilities: The addressed peer receives exactly one message on the requested channel carrying the sent payload.
  */
 MW_TEST_CASE(TransportHostSendToDeliversToTheAddressedPeer)
 {
@@ -445,9 +465,9 @@ MW_TEST_CASE(TransportHostSendToDeliversToTheAddressedPeer)
 }
 
 /**
- * Scenario: Configure and start a listen server, then SendTo the local peer.
- * Expected: The local-peer message dispatches synchronously to the handler with no device pump, attributed to the local peer id with its channel and
- * payload.
+ * Motivation: Configure and start a listen server, then SendTo the local peer.
+ * Responsibilities: The local-peer message dispatches synchronously to the handler with no device pump, attributed to
+ *   the local peer id with its channel and.
  */
 MW_TEST_CASE(TransportHostListenServerDispatchesToLocalPeerWithoutDevice)
 {
@@ -474,8 +494,9 @@ MW_TEST_CASE(TransportHostListenServerDispatchesToLocalPeerWithoutDevice)
 }
 
 /**
- * Scenario: Complete a handshake, then leave the server silent while advancing the client past its timeout window.
- * Expected: The client returns to Connecting when the server times out.
+ * Motivation: Complete a handshake, then leave the server silent while advancing the client past its timeout
+ *   window.
+ * Responsibilities: The client returns to Connecting when the server times out.
  */
 MW_TEST_CASE(TransportHostClientReturnsToConnectingOnServerTimeout)
 {
@@ -497,8 +518,9 @@ MW_TEST_CASE(TransportHostClientReturnsToConnectingOnServerTimeout)
 }
 
 /**
- * Scenario: Admit a client with a first Hello, then send a second Hello from the same address without consuming the Welcome.
- * Expected: The repeated Hello re-welcomes the client and reuses the same slot instead of allocating another.
+ * Motivation: Admit a client with a first Hello, then send a second Hello from the same address without consuming
+ *   the Welcome.
+ * Responsibilities: The repeated Hello re-welcomes the client and reuses the same slot instead of allocating another.
  */
 MW_TEST_CASE(TransportHostRepeatedHelloReusesTheSameSlot)
 {
@@ -525,8 +547,8 @@ MW_TEST_CASE(TransportHostRepeatedHelloReusesTheSameSlot)
 }
 
 /**
- * Scenario: Complete a handshake, stop the client to send a Bye, then have the server process it.
- * Expected: The Bye frees the peer's slot.
+ * Motivation: Complete a handshake, stop the client to send a Bye, then have the server process it.
+ * Responsibilities: The Bye frees the peer's slot.
  */
 MW_TEST_CASE(TransportHostByeEvictsPeer)
 {
@@ -549,8 +571,9 @@ MW_TEST_CASE(TransportHostByeEvictsPeer)
 }
 
 /**
- * Scenario: Have a client with a mismatched protocol version send Hello to the server, then pump both directions.
- * Expected: The server ignores the version-mismatched Hello and the rejected client never leaves Connecting.
+ * Motivation: Have a client with a mismatched protocol version send Hello to the server, then pump both
+ *   directions.
+ * Responsibilities: The server ignores the version-mismatched Hello and the rejected client never leaves Connecting.
  */
 MW_TEST_CASE(TransportHostIgnoresHelloWithWrongProtocolVersion)
 {
@@ -575,8 +598,8 @@ MW_TEST_CASE(TransportHostIgnoresHelloWithWrongProtocolVersion)
 }
 
 /**
- * Scenario: Deliver a control frame whose payload byte names an undefined control type to a started server.
- * Expected: The unknown control message is dropped and no peer is admitted.
+ * Motivation: Deliver a control frame whose payload byte names an undefined control type to a started server.
+ * Responsibilities: The unknown control message is dropped and no peer is admitted.
  */
 MW_TEST_CASE(TransportHostDropsUnknownControlMessage)
 {
@@ -596,8 +619,8 @@ MW_TEST_CASE(TransportHostDropsUnknownControlMessage)
 }
 
 /**
- * Scenario: Configure and start a standalone host, then attempt SendTo and Broadcast.
- * Expected: Both sends return Unavailable and the host stays Idle after Start.
+ * Motivation: Configure and start a standalone host, then attempt SendTo and Broadcast.
+ * Responsibilities: Both sends return Unavailable and the host stays Idle after Start.
  */
 MW_TEST_CASE(TransportHostStandaloneReportsUnavailableOnSend)
 {
@@ -623,8 +646,9 @@ MW_TEST_CASE(TransportHostStandaloneReportsUnavailableOnSend)
 }
 
 /**
- * Scenario: Capture the allocation counter after construction, then run a full handshake plus unicast and broadcast round trips.
- * Expected: The full client/server session performs no observable heap allocation.
+ * Motivation: Capture the allocation counter after construction, then run a full handshake plus unicast and
+ *   broadcast round trips.
+ * Responsibilities: The full client/server session performs no observable heap allocation.
  */
 MW_TEST_CASE(TransportHostSessionPerformsNoObservableAllocation)
 {
@@ -659,8 +683,9 @@ MW_TEST_CASE(TransportHostSessionPerformsNoObservableAllocation)
 }
 
 /**
- * Scenario: Configure and start a dedicated server, then attempt a local SendTo and a Broadcast with no peers.
- * Expected: A dedicated server rejects a send to the local peer as Invalid, succeeds with Broadcast, and dispatches nothing locally.
+ * Motivation: Configure and start a dedicated server, then attempt a local SendTo and a Broadcast with no peers.
+ * Responsibilities: A dedicated server rejects a send to the local peer as Invalid, succeeds with Broadcast, and
+ *   dispatches nothing locally.
  */
 MW_TEST_CASE(TransportHostDedicatedServerHasNoLocalDispatch)
 {
@@ -689,18 +714,26 @@ MW_TEST_CASE(TransportHostDedicatedServerHasNoLocalDispatch)
 }
 
 /**
- * Always-ready device that counts receive calls, so a test can prove one pump is bounded.
- *
- * Every `TryReceive` delivers a minimal empty control frame and reports `Success`, so a
- * `PumpReceive` would loop forever were it not bounded; `TrySend` is a no-op success.
+ * Motivation: Always-ready device that counts receive calls, so a test can prove one pump is bounded. Every
+ *   `TryReceive` delivers a minimal empty control frame and reports `Success`, so a `PumpReceive` would
+ *   loop forever were it not bounded; `TrySend` is a no-op success.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
  */
 class FFloodDevice final : public IDevice
 {
 public:
-	/** Accepts and discards every send. */
+	/**
+	 * Motivation: Accepts and discards every send.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	ETransportResult TrySend(const FDeviceAddress&, TSpan<const std::uint8_t>) noexcept override { return ETransportResult::Success; }
 
-	/** Delivers one empty control frame per call and counts the call. */
+	/**
+	 * Motivation: Delivers one empty control frame per call and counts the call.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	ETransportResult TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept override
 	{
 		if (InDestination.Size() < FloodReceivedByteCount)
@@ -717,16 +750,19 @@ public:
 		return ETransportResult::Success;
 	}
 
-	/** Reports the fixed maximum packet size. */
+	/**
+	 * Motivation: Reports the fixed maximum packet size.
+	 * Responsibilities: Return the stored value and touch nothing else.
+	 */
 	std::size_t MaxPacketBytes() const noexcept override { return LoopbackPacketBytes; }
 
-	/** Counts how many receives one or more pumps have requested. */
+	/** Motivation: Counts how many receives one or more pumps have requested. */
 	std::size_t ReceiveCallCount{0};
 };
 
 /**
- * Scenario: Pump a started server whose device never runs dry of empty control frames.
- * Expected: One pump is bounded to MaxPeers plus four receives, so a flood cannot starve the frame.
+ * Motivation: Pump a started server whose device never runs dry of empty control frames.
+ * Responsibilities: One pump is bounded to MaxPeers plus four receives, so a flood cannot starve the frame.
  */
 MW_TEST_CASE(TransportHostPumpReceiveIsBoundedUnderFlood)
 {

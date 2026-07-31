@@ -12,59 +12,72 @@ namespace MicroWorld::Engine
 class FReferenceCollector;
 class UObject;
 
-/** Identifies one explicitly registered managed class without C++ RTTI. */
+/** Motivation: Identifies one explicitly registered managed class without C++ RTTI. */
 using FTypeId = std::uint32_t;
 
 /**
- * Provides one writable zero-initialized byte for each exact managed C++ type.
- *
- * Writable objects cannot be merged by identical-code folding, so their
- * addresses remain valid process-local type tokens in optimized builds.
+ * Motivation: Provides one writable zero-initialized byte for each exact managed C++ type so identical-code folding
+ *   cannot merge their addresses in optimized builds.
+ * Responsibilities: Hold a process-local address that stays a valid per-type token.
+ * Example:
+ *   const void* Token = ManagedObjectTypeToken<FMyType>();
  */
 template<typename T>
 inline std::uint8_t ManagedObjectTypeTokenStorage = 0;
 
-/** Returns exact process-local C++ type identity without RTTI or initialization. */
+/**
+ * Motivation: Returns exact process-local C++ type identity without RTTI or initialization.
+ * Responsibilities: Return the address of the per-type writable token storage.
+ */
 template<typename T>
 const void* ManagedObjectTypeToken() noexcept
 {
 	return &ManagedObjectTypeTokenStorage<T>;
 }
 
-/** Visits every traced outgoing reference owned by one managed object. */
+/** Motivation: Visits every traced outgoing reference owned by one managed object. */
 using FTraceObjectReferences = void (*)(UObject&, FReferenceCollector&) noexcept;
 
-/** Invokes the exact managed object's destructor without public delete access. */
+/** Motivation: Invokes the exact managed object's destructor without public delete access. */
 using FDestroyManagedObject = void (*)(UObject&) noexcept;
 
-/** Describes construction layout, ancestry, tracing, and exact destruction. */
+/**
+ * Motivation: Describes construction layout, ancestry, tracing, and exact destruction for a managed class without RTTI.
+ * Responsibilities: Carry a stable type id, parent, layout, tracer, and destructor; answer finite ancestry queries; and
+ *   detect a cyclic parent chain without trusting caller-supplied structure.
+ * Example:
+ *   if (Descriptor.IsChildOf(ActorDescriptor)) { TreatAsActor(); }
+ */
 struct FClassDescriptor
 {
-	/** Provides stable local class identity within one explicit registry. */
+	/** Motivation: Provides stable local class identity within one explicit registry. */
 	FTypeId TypeId{0};
 
-	/** Supports diagnostics only and never acts as a stable or wire identifier. */
+	/** Motivation: Supports diagnostics only and never acts as a stable or wire identifier. */
 	const char* DiagnosticName{nullptr};
 
-	/** Defines explicit no-RTTI ancestry and must already be registered. */
+	/** Motivation: Defines explicit no-RTTI ancestry and must already be registered. */
 	const FClassDescriptor* Parent{nullptr};
 
-	/** Defines the exact placement-construction extent required by this class. */
+	/** Motivation: Defines the exact placement-construction extent required by this class. */
 	std::size_t SizeBytes{0};
 
-	/** Defines the power-of-two alignment required by this class. */
+	/** Motivation: Defines the power-of-two alignment required by this class. */
 	std::size_t AlignmentBytes{0};
 
-	/** Enumerates outgoing managed references; null means the class owns none. */
+	/** Motivation: Enumerates outgoing managed references; null means the class owns none. */
 	FTraceObjectReferences TraceReferences{nullptr};
 
-	/** Provides exact destruction and is mandatory for every registered class. */
+	/** Motivation: Provides exact destruction and is mandatory for every registered class. */
 	FDestroyManagedObject Destroy{nullptr};
 
-	/** Binds layout and callbacks to one exact C++ type without RTTI. */
+	/** Motivation: Binds layout and callbacks to one exact C++ type without RTTI. */
 	const void* TypeToken{nullptr};
 
-	/** Tests finite explicit descriptor ancestry without C++ RTTI or cyclic traversal. */
+	/**
+	 * Motivation: Lets a caller test finite explicit descriptor ancestry without C++ RTTI or cyclic traversal.
+	 * Responsibilities: Reject an acyclic but absent relationship, returning false rather than following a cyclic chain.
+	 */
 	bool IsChildOf(const FClassDescriptor& InCandidateParent) const noexcept
 	{
 		if (!HasAcyclicAncestry())
@@ -74,7 +87,10 @@ struct FClassDescriptor
 		return AncestryContains(InCandidateParent);
 	}
 
-	/** Reports whether the Parent chain is loop-free so the ancestry walk always terminates without RTTI. */
+	/**
+	 * Motivation: Lets a caller confirm the Parent chain is loop-free so the ancestry walk always terminates without RTTI.
+	 * Responsibilities: Run a Floyd cycle check and report false when the two probes meet.
+	 */
 	bool HasAcyclicAncestry() const noexcept
 	{
 		// Floyd cycle check: AncestryProbe advances one link, CycleDetectorProbe
@@ -93,7 +109,10 @@ struct FClassDescriptor
 		return true;
 	}
 
-	/** Walks the finite Parent chain and reports whether it reaches the candidate ancestor. */
+	/**
+	 * Motivation: Lets IsChildOf walk the finite Parent chain to test for a candidate ancestor.
+	 * Responsibilities: Report true only when the chain reaches the candidate parent.
+	 */
 	bool AncestryContains(const FClassDescriptor& InCandidateParent) const noexcept
 	{
 		const FClassDescriptor* CurrentDescriptor = this;
@@ -109,29 +128,56 @@ struct FClassDescriptor
 	}
 };
 
-/** Stores a fixed explicit class set owned by the application composition root. */
+/**
+ * Motivation: Stores a fixed explicit class set owned by the application composition root with stable descriptor addresses.
+ * Responsibilities: Validate and store descriptors without allocation or partial mutation, keep owned addresses stable so
+ *   parent pointers and registry views survive, and reserve a low-id range for application descriptors.
+ * Example:
+ *   TClassRegistry<8> Registry;
+ *   if (Registry.Register(Descriptor) == EObjectResult::Success) { Build(); }
+ */
 template<std::size_t MaxClasses>
 class TClassRegistry final
 {
 public:
-	/** Reserves low IDs for application-authored explicit descriptors. */
+	/** Motivation: Reserves low IDs for application-authored explicit descriptors by starting automatic IDs in a named range. */
 	static constexpr FTypeId FirstAutomaticTypeId = 0x80000000U;
-	/** Creates an empty registry whose owned descriptor addresses remain stable. */
+
+	/**
+	 * Motivation: Creates an empty registry whose owned descriptor addresses remain stable for the registry's lifetime.
+	 * Responsibilities: Default-construct the storage without any registered descriptor.
+	 */
 	TClassRegistry() noexcept = default;
 
-	/** Preserves owned descriptor and parent addresses retained by registry views. */
+	/**
+	 * Motivation: Preserves owned descriptor and parent addresses retained by registry views.
+	 * Responsibilities: Reject copy construction so descriptor addresses never move.
+	 */
 	TClassRegistry(const TClassRegistry&) = delete;
 
-	/** Prevents reassigning descriptor identity behind existing stores and views. */
+	/**
+	 * Motivation: Prevents reassigning descriptor identity behind existing stores and views.
+	 * Responsibilities: Reject copy assignment so descriptor addresses never move.
+	 */
 	TClassRegistry& operator=(const TClassRegistry&) = delete;
 
-	/** Preserves owned descriptor addresses retained by registered child parents. */
+	/**
+	 * Motivation: Preserves owned descriptor addresses retained by registered child parents.
+	 * Responsibilities: Reject move construction so descriptor addresses never move.
+	 */
 	TClassRegistry(TClassRegistry&&) = delete;
 
-	/** Prevents moving descriptor identity behind existing stores and views. */
+	/**
+	 * Motivation: Prevents moving descriptor identity behind existing stores and views.
+	 * Responsibilities: Reject move assignment so descriptor addresses never move.
+	 */
 	TClassRegistry& operator=(TClassRegistry&&) = delete;
 
-	/** Registers one fully validated descriptor without allocation or partial mutation. */
+	/**
+	 * Motivation: Lets a caller register one fully validated descriptor without allocation or partial mutation.
+	 * Responsibilities: Reject a malformed descriptor, a duplicate id, an unregistered or cyclic parent, and a full
+	 *   registry, leaving state unchanged in every failure case.
+	 */
 	EObjectResult Register(const FClassDescriptor& InDescriptor) noexcept
 	{
 		if (!HasExplicitDescriptorIdentity(InDescriptor))
@@ -156,7 +202,10 @@ public:
 		return EObjectResult::Success;
 	}
 
-	/** Finds a registered descriptor by local type identifier without changing registry state. */
+	/**
+	 * Motivation: Lets a caller find a registered descriptor by local type identifier without changing registry state.
+	 * Responsibilities: Return the matching descriptor's address or null.
+	 */
 	const FClassDescriptor* Find(const FTypeId InTypeId) const noexcept
 	{
 		for (std::size_t Index = 0; Index < RegisteredClassCount; ++Index)
@@ -169,7 +218,10 @@ public:
 		return nullptr;
 	}
 
-	/** Finds a canonical descriptor by exact no-RTTI C++ type identity. */
+	/**
+	 * Motivation: Lets a caller find a canonical descriptor by exact no-RTTI C++ type identity.
+	 * Responsibilities: Return the matching descriptor's address or null for a null or unknown token.
+	 */
 	const FClassDescriptor* FindByTypeToken(const void* const InTypeToken) const noexcept
 	{
 		if (InTypeToken == nullptr)
@@ -186,7 +238,11 @@ public:
 		return nullptr;
 	}
 
-	/** Registers a direct descriptor with a bounded local ID and returns its stable owned address. */
+	/**
+	 * Motivation: Lets a caller register a direct descriptor with a bounded local ID and receive its stable owned address.
+	 * Responsibilities: Return an existing descriptor for a known type token, else assign a fresh automatic id and return
+	 *   the new stable address, rejecting a malformed candidate, an unregistered parent, or a full registry.
+	 */
 	EObjectResult RegisterAutomatic(FClassDescriptor InCandidate, const FClassDescriptor*& OutDescriptor) noexcept
 	{
 		OutDescriptor = nullptr;
@@ -220,11 +276,17 @@ public:
 		return EObjectResult::Success;
 	}
 
-	/** Reports fixed registry occupancy for capacity planning and tests. */
+	/**
+	 * Motivation: Lets a caller report fixed registry occupancy for capacity planning and tests.
+	 * Responsibilities: Return the count of successfully registered descriptors.
+	 */
 	std::size_t ClassCount() const noexcept { return RegisteredClassCount; }
 
 private:
-	/** Finds an unused non-zero local automatic ID with at most MaxClasses probes. */
+	/**
+	 * Motivation: Lets RegisterAutomatic find an unused non-zero local automatic ID with at most MaxClasses probes.
+	 * Responsibilities: Advance the next-id cursor, skip wrap-to-zero and collisions, and return zero when exhausted.
+	 */
 	FTypeId AllocateAutomaticTypeId() noexcept
 	{
 		for (std::size_t Probe = 0; Probe < MaxClasses; ++Probe)
@@ -242,14 +304,21 @@ private:
 		}
 		return 0;
 	}
-	/** Rejects zero and non-power-of-two layout requirements before registration. */
+
+	/**
+	 * Motivation: Lets registration reject zero and non-power-of-two layout requirements before registry state changes.
+	 * Responsibilities: Report true only when size and alignment are positive and alignment is a power of two.
+	 */
 	static bool HasValidLayout(const FClassDescriptor& InDescriptor) noexcept
 	{
 		return InDescriptor.SizeBytes > 0 && InDescriptor.AlignmentBytes > 0
 			&& (InDescriptor.AlignmentBytes & (InDescriptor.AlignmentBytes - 1U)) == 0;
 	}
 
-	/** Reports whether a descriptor carries the non-zero id, layout, and callables an explicit Register requires. */
+	/**
+	 * Motivation: Reports whether a descriptor carries the non-zero id, layout, and callables an explicit Register requires.
+	 * Responsibilities: Check valid layout, a non-zero id, a destructor, and a type token together.
+	 */
 	static bool HasExplicitDescriptorIdentity(const FClassDescriptor& InDescriptor) noexcept
 	{
 		const bool bHasValidId = InDescriptor.TypeId != 0;
@@ -258,7 +327,10 @@ private:
 		return HasValidLayout(InDescriptor) && bHasValidId && bHasDestructor && bHasTypeToken;
 	}
 
-	/** Reports whether a candidate is well-formed and carries no caller-assigned id (so automatic allocation may assign one). */
+	/**
+	 * Motivation: Reports whether a candidate is well-formed and carries no caller-assigned id so automatic allocation may assign one.
+	 * Responsibilities: Check a zero id alongside valid layout, a destructor, and a type token.
+	 */
 	static bool HasUnassignedAutomaticIdentity(const FClassDescriptor& InDescriptor) noexcept
 	{
 		const bool bIdUnassigned = InDescriptor.TypeId == 0;
@@ -267,7 +339,11 @@ private:
 		return bIdUnassigned && HasValidLayout(InDescriptor) && bHasDestructor && bHasTypeToken;
 	}
 
-	/** Requires an already registered, finite parent chain that cannot include the candidate. */
+	/**
+	 * Motivation: Lets registration reject a parent chain that is unregistered, cyclic, or self-referential.
+	 * Responsibilities: Confirm the parent is the registry's own copy and that the chain terminates within the registry
+	 *   without revisiting the candidate.
+	 */
 	bool HasValidParentChain(const FClassDescriptor& InDescriptor) const noexcept
 	{
 		if (InDescriptor.Parent == nullptr)
@@ -296,13 +372,13 @@ private:
 		return true;
 	}
 
-	/** Owns validated descriptors with fixed capacity and stable process-local addresses. */
+	/** Motivation: Owns validated descriptors with fixed capacity and stable process-local addresses. */
 	std::array<FClassDescriptor, MaxClasses> RegisteredClasses{};
 
-	/** Bounds registry scans to descriptors accepted by successful registration. */
+	/** Motivation: Bounds registry scans to descriptors accepted by successful registration. */
 	std::size_t RegisteredClassCount{0};
 
-	/** Starts automatic IDs in a named range while collision probes preserve local uniqueness. */
+	/** Motivation: Starts automatic IDs in a named range while collision probes preserve local uniqueness. */
 	FTypeId NextAutomaticTypeId{FirstAutomaticTypeId};
 };
 

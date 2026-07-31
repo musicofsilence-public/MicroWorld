@@ -13,14 +13,13 @@ template<std::size_t MaxPackets, std::size_t MaxPacketBytes>
 class TTransportManager;
 
 /**
- * Fixed-capacity backing storage for one `TTransportManager` outbound FIFO.
- *
- * The manager never owns packet storage: the caller constructs one
- * `TTransportPacketStorage` with the exact packet count and per-packet byte capacity
- * the application needs, then lends it to the manager by reference, and only
- * the matching `TTransportManager` specialization observes the private packet arrays.
- * Both template capacities must be nonzero; a zero-packet or zero-byte FIFO has
- * no useful contract and is rejected at compile time.
+ * Motivation: Provides fixed-capacity backing storage for one TTransportManager outbound FIFO so the manager never owns packet
+ *   bytes and storage stays caller-owned.
+ * Responsibilities: Hold the exact packet count and per-packet byte capacity the application selects, expose its slots only to
+ *   the matching TTransportManager specialization, and reject a zero-packet or zero-byte configuration at compile time.
+ * Example:
+ *   TTransportPacketStorage<4, 64> Storage;
+ *   TTransportManager<4, 64> Manager(Device, Storage);
  */
 template<std::size_t MaxPackets, std::size_t MaxPacketBytes>
 class TTransportPacketStorage final
@@ -29,38 +28,56 @@ class TTransportPacketStorage final
 	static_assert(MaxPacketBytes > 0, "TTransportPacketStorage requires a nonzero per-packet byte capacity.");
 
 public:
-	/** Defaulted so the storage can live in automatic or static storage without side effects. */
+	/**
+	 * Motivation: Lets the storage live in automatic or static storage without side effects.
+	 * Responsibilities: Default-construct fixed storage with all slots empty.
+	 */
 	TTransportPacketStorage() noexcept = default;
 
-	/** Prevents copying so one storage instance backs exactly one manager FIFO. */
+	/**
+	 * Motivation: Prevents copying so one storage instance backs exactly one manager FIFO.
+	 * Responsibilities: Reject copy construction so two managers never alias one FIFO's slots.
+	 */
 	TTransportPacketStorage(const TTransportPacketStorage&) = delete;
 
-	/** Prevents copying so one storage instance backs exactly one manager FIFO. */
+	/**
+	 * Motivation: Prevents copying so one storage instance backs exactly one manager FIFO.
+	 * Responsibilities: Reject copy assignment so two managers never alias one FIFO's slots.
+	 */
 	TTransportPacketStorage& operator=(const TTransportPacketStorage&) = delete;
 
-	/** Defaulted so storage with automatic storage destructs without side effects. */
+	/**
+	 * Motivation: Keeps storage with automatic storage side-effect free on destruction.
+	 * Responsibilities: Default the destructor since the storage owns only fixed value bytes.
+	 */
 	~TTransportPacketStorage() noexcept = default;
 
-	/** Reports the fixed packet-slot capacity of this storage. */
+	/**
+	 * Motivation: Lets a caller observe the fixed slot count without magic numbers.
+	 * Responsibilities: Report the fixed packet-slot capacity of this storage.
+	 */
 	static constexpr std::size_t Capacity() noexcept { return MaxPackets; }
 
-	/** Reports the maximum byte length accepted per packet. */
+	/**
+	 * Motivation: Lets a caller observe the per-packet byte ceiling without magic numbers.
+	 * Responsibilities: Report the maximum byte length accepted per packet.
+	 */
 	static constexpr std::size_t MaximumPacketBytes() noexcept { return MaxPacketBytes; }
 
 private:
 	// Storage and manager are deliberately separate types: caller-owned storage is the
 	// repo-wide pattern, and keeping the FIFO mechanics in TTransportManager lets one manager
 	// implementation be reused over any caller-provided backing (D8).
-	/** Grants the manager holding the same template parameters exclusive access to its FIFO slots. */
+	/** Motivation: Grants the matching TTransportManager exclusive access to this storage's FIFO slots. */
 	friend class TTransportManager<MaxPackets, MaxPacketBytes>;
 
-	/** Fixed per-packet byte storage; only the leading `PacketLengths[i]` bytes are valid. */
+	/** Motivation: Provides fixed per-packet byte storage where only the leading PacketLengths[i] bytes are valid. */
 	std::array<std::array<std::uint8_t, MaxPacketBytes>, MaxPackets> PacketBytes{};
 
-	/** Records the valid byte length of each queued packet so sends and receives stay exact. */
+	/** Motivation: Records the valid byte length of each queued packet so sends and receives stay exact. */
 	std::array<std::size_t, MaxPackets> PacketLengths{};
 
-	/** Records the destination address queued with each packet so AdvanceSend routes it correctly. */
+	/** Motivation: Records the destination address queued with each packet so AdvanceSend routes it correctly. */
 	std::array<::MicroWorld::Transport::Address::FDeviceAddress, MaxPackets> Destinations{};
 };
 

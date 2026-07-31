@@ -11,117 +11,135 @@ namespace MicroWorld::Platform::Pico
 {
 
 /**
- * Describes one RP2040 UART connection to an E32 module without exposing Pico SDK types.
- *
- * The composition root must give the device exclusive ownership of the selected UART; sharing it with another device
- * or UART-backed stdio is
- * unsupported.
+ * Motivation: Describes one RP2040 UART connection to an E32 module without leaking Pico SDK types into device callers.
+ * Responsibilities: Hold UART index, TX/RX GPIO routing, baud rate, and local node id for the composition root to pass
+ *   into Initialize; the device takes the UART exclusively and never shares it.
+ * Example:
+ *   FPicoE32LoraConfig Config{0, 0, 1, 115200, 0x42};
+ *   Device.Initialize(Config);
  */
 struct FPicoE32LoraConfig
 {
-	/** UART hardware index: `0` for UART0 or `1` for UART1. */
+	/** Motivation: Selects the RP2040 UART hardware block: 0 for UART0 or 1 for UART1. */
 	std::uint8_t UartIndex{0};
 
-	/** RP2040 GPIO routed from UART TX to the E32 RXD pin. */
+	/** Motivation: Names the RP2040 GPIO routed from UART TX to the E32 RXD pin. */
 	unsigned int TxGpio{0};
 
-	/** RP2040 GPIO routed from the E32 TXD pin to UART RX. */
+	/** Motivation: Names the RP2040 GPIO routed from the E32 TXD pin to UART RX. */
 	unsigned int RxGpio{1};
 
-	/** Exact UART baud rate configured on the E32; zero is invalid. */
+	/** Motivation: Pins the exact baud rate configured on the E32; zero is treated as invalid. */
 	std::uint32_t BaudRate{0};
 
-	/** Source node id stamped into every outgoing MicroWorld frame. */
+	/** Motivation: Carries the source node id stamped into every outgoing MicroWorld frame. */
 	std::uint8_t LocalNodeId{0};
 };
 
 /**
- * Released RP2040 Pico compatibility facade over the portable RadioE32 device.
- *
- * Construction is inert so static storage is safe before `main`; `Initialize` opens one exclusive UART and initializes
- * portable framing. `TrySend(Success)` queues one complete frame for `AdvanceTransmit`, while transparent-mode
- * destination addresses remain shape-checked metadata rather than on-air routing.
+ * Motivation: Gives RP2040 Pico code a thin entry point into the portable RadioE32 transport without entangling it
+ *   with UART wiring.
+ * Responsibilities: Borrow the SDK UART through a byte stream and delegate framing to RadioE32; construction is inert
+ *   so static storage is safe before main, Initialize opens one exclusive UART, and transparent-mode destination
+ *   addresses stay shape-checked metadata rather than on-air routing.
+ * Example:
+ *   static FPicoLoraDevice Device;
+ *   if (Device.Initialize(Config) == ETransportResult::Success) { Device.AdvanceTransmit(); }
  */
 class FPicoLoraDevice final : public ::MicroWorld::Transport::Device::IDevice
 {
 public:
-	/** Creates a closed device that borrows the production Pico SDK UART binding. */
+	/**
+	 * Motivation: Lets one device live in static storage safe before main, borrowing the production SDK binding.
+	 * Responsibilities: Start closed and defer all UART and framing work to Initialize.
+	 */
 	FPicoLoraDevice() noexcept;
 
-	/** Creates a closed device that borrows the supplied binding for host policy tests or alternate Pico wiring. */
+	/**
+	 * Motivation: Lets host policy tests or alternate Pico wiring inject their own UART binding.
+	 * Responsibilities: Start closed against the supplied binding and defer framing to Initialize.
+	 */
 	explicit FPicoLoraDevice(IPicoE32LoraPlatform& InPlatform) noexcept;
 
-	/** Releases the delegated byte stream, which deinitializes the exclusively owned UART when initialization succeeded. */
+	/**
+	 * Motivation: Guarantees the exclusively owned UART is released when a device value ends.
+	 * Responsibilities: Let the delegated byte stream deinitialize the UART when initialization succeeded.
+	 */
 	~FPicoLoraDevice() noexcept override;
 
-	/** Prevents copying so one facade owns exactly one UART byte stream and delegated transport state. */
+	/**
+	 * Motivation: Keeps one facade the sole owner of its byte stream and delegated transport state.
+	 * Responsibilities: Reject copy construction so UART ownership stays with one facade.
+	 */
 	FPicoLoraDevice(const FPicoLoraDevice&) = delete;
 
-	/** Prevents copying so one facade owns exactly one UART byte stream and delegated transport state. */
+	/**
+	 * Motivation: Keeps the byte stream and delegated transport state owned by one facade after construction.
+	 * Responsibilities: Reject copy assignment so UART ownership cannot split across two values.
+	 */
 	FPicoLoraDevice& operator=(const FPicoLoraDevice&) = delete;
 
-	/** Prevents moving so byte-stream ownership and the delegated transport reference remain stable. */
+	/**
+	 * Motivation: Keeps byte-stream ownership and the delegated transport reference stable across the facade lifetime.
+	 * Responsibilities: Reject move construction so the borrowed UART and transport reference cannot relocate.
+	 */
 	FPicoLoraDevice(FPicoLoraDevice&&) = delete;
 
-	/** Prevents moving so byte-stream ownership and the delegated transport reference remain stable. */
+	/**
+	 * Motivation: Keeps the borrowed UART and transport reference tied to the value that holds them.
+	 * Responsibilities: Reject move assignment so byte-stream ownership cannot transfer between facades.
+	 */
 	FPicoLoraDevice& operator=(FPicoLoraDevice&&) = delete;
 
 	/**
-	 * Validates and configures one exclusive RP2040 UART, then initializes portable E32 framing.
-	 *
-	 * Returns `Unavailable` when already open, `Invalid` for an unsupported index/pin mapping, zero baud, or a baud
-	 * the SDK cannot produce exactly, and the delegated RadioE32 initialization result after opening the UART.
-	 *
-	 * @param InConfig UART identity, GPIO routing, baud rate, and local node id.
-	 * @return Outcome of the initialization attempt.
+	 * Motivation: Lets a caller bring one Pico device online behind a single validated entry point.
+	 * Responsibilities: Refuse a second open with Unavailable, reject an unsupported index/pin mapping, zero baud, or an
+	 *   unmatchable baud with Invalid, then return the delegated RadioE32 initialization result and roll back the UART
+	 *   when framing fails.
 	 */
 	::MicroWorld::Transport::ETransportResult Initialize(const FPicoE32LoraConfig& InConfig) noexcept;
 
 	/**
-	 * Transactionally accepts one complete packet into the delegated fixed transmit slot.
-	 *
-	 * Returns `Unavailable` while closed, `Invalid` for a malformed address/span or oversize packet, `Full` while a
-	 * prior frame remains queued, and `Success` once the delegated device queued the complete encoded frame for later
-	 * physical progress.
-	 *
-	 * @param InTo Device-relative one-byte destination metadata; transparent mode does not route it on air.
-	 * @param InPacket Payload to frame
-	 * and queue.
-	 * @return Outcome of the acceptance attempt.
+	 * Motivation: Lets a caller queue one outgoing packet for later physical progress without partial sends.
+	 * Responsibilities: Return Unavailable while closed, Invalid for a malformed address/span or oversize packet, Full
+	 *   while a prior frame remains queued, and Success once the complete encoded frame is queued for AdvanceTransmit.
 	 */
 	::MicroWorld::Transport::ETransportResult TrySend(
 		const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
-	 * Pumps a bounded number of UART bytes and transactionally delivers at most one frame.
-	 *
-	 * Every non-success result preserves the destination, sender address, and result. A `Full` result retains the
-	 * decoded frame for a later retry with a larger destination.
-	 *
-	 * @param OutFrom Filled with the sender's E32 address only on `Success`.
-	 * @param InDestination Destination for one decoded payload.
-	 * @param OutResult Filled with the delivered byte count only on `Success`.
-	 * @return `Success`, `Unavailable`, `Full`, or `Invalid` under the shared `IDevice` contract.
+	 * Motivation: Lets a caller pump one bounded receive step and get at most one whole frame back.
+	 * Responsibilities: Advance the delegated device transactionally, preserving destination, sender address, and result
+	 *   on every non-success outcome and retaining the decoded frame on Full for a later retry with a larger destination.
 	 */
 	::MicroWorld::Transport::ETransportResult TryReceive(
 		::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
 		Core::TSpan<std::uint8_t> InDestination,
 		::MicroWorld::Transport::Device::FReceiveResult& OutResult) noexcept override;
 
-	/** Reports the delegated shared E32 payload capacity, excluding framing overhead. */
+	/**
+	 * Motivation: Lets a caller size outgoing packets against the shared transport limit without framing surprises.
+	 * Responsibilities: Report the delegated shared E32 payload capacity excluding framing overhead.
+	 */
 	std::size_t MaxPacketBytes() const noexcept override;
 
-	/** Advances a bounded burst of up to one complete encoded frame's capacity when UART bytes are writable. */
+	/**
+	 * Motivation: Lets the runtime drain queued bytes toward the radio in bounded steps instead of blocking loops.
+	 * Responsibilities: Advance up to one complete encoded frame's worth of bytes when the UART is writable.
+	 */
 	void AdvanceTransmit() noexcept override;
 
-	/** Reports whether both the byte stream is open and the delegated RadioE32 device is initialized. */
+	/**
+	 * Motivation: Lets a caller gate send, receive, and teardown logic on a single live check.
+	 * Responsibilities: Report true only when the byte stream is open and the delegated RadioE32 device is initialized.
+	 */
 	bool IsOpen() const noexcept;
 
 private:
-	/** Owns the configured RP2040 UART lifetime and provides bounded SDK-free byte operations to RadioE32. */
+	/** Motivation: Owns the configured RP2040 UART lifetime and gives RadioE32 bounded SDK-free byte operations. */
 	FPicoUartByteStream ByteStream{};
 
-	/** Owns portable E32 framing while borrowing the preceding byte stream for its full facade lifetime. */
+	/** Motivation: Owns portable E32 framing while borrowing the preceding byte stream for its full facade lifetime. */
 	::MicroWorld::Transport::FE32LoraDevice RadioDevice{ByteStream};
 };
 

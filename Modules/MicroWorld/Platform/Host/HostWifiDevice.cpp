@@ -11,11 +11,10 @@ namespace
 {
 
 	/**
-	 * File-local refcount backing the shared `FWinSockScope` socket-stack lifetime.
-	 *
-	 * The engine drives the host on one deterministic thread, so this is a plain
-	 * scalar rather than an atomic; it exists in this translation unit so the
-	 * `FWinSockScope` header stays free of both OS headers and data members.
+	 * Motivation: Backs the shared FWinSockScope socket-stack lifetime from this translation unit so the header stays
+	 *   free of OS headers and data members.
+	 * Responsibilities: Hold the live scope count as a plain scalar because the engine drives the host on one
+	 *   deterministic thread, never as an atomic.
 	 */
 	int GWinSockReferenceCount = 0;
 
@@ -106,12 +105,10 @@ namespace
 {
 
 	/**
-	 * Sizes the head datagram and folds every pre-consume verdict into one result.
-	 *
-	 * Returns `Unavailable` when nothing is queued, `Invalid` on a socket error,
-	 * and `Full` when the head datagram cannot fit the caller's capacity (the
-	 * datagram is left unconsumed so the receive stays transactional). `Success`
-	 * means a datagram is ready and fits, so the caller should consume it next.
+	 * Motivation: Folds every pre-consume verdict into one result so TryReceive branches on a single signal.
+	 * Responsibilities: Probe the head datagram to size it without consuming and report Unavailable when nothing is
+	 *   queued, Invalid on a socket error, Full when the datagram cannot fit the caller's capacity (left unconsumed),
+	 *   and Success only when a datagram is ready and fits so the caller should consume it next.
 	 */
 	Transport::ETransportResult ProbeAndClassify(const FSocketHandle InSocket, const std::size_t InCapacity) noexcept
 	{

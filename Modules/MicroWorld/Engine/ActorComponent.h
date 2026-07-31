@@ -16,96 +16,163 @@ struct FClassDescriptor;
 class FReferenceCollector;
 
 /**
- * The smallest managed component anchored on UObject and Core's tick mix-in.
- *
- * The application creates one UActorComponent (or a user-derived class) inside
- * an FObjectStore, then registers it with exactly one AActor before BeginPlay.
- * UActorComponent holds only a weak reference to its owning actor so the
- * parent-child graph stays acyclic for the iterative collector.
+ * Motivation: Provides the smallest managed component anchored on UObject and Core's tick mix-in so applications can
+ *   compose actor behavior without coupling actors to each behavior.
+ * Responsibilities: Hold only a weak reference to its owning actor so the parent-child graph stays acyclic for the
+ *   iterative collector, and drive a forward-only BeginPlay/Tick/EndPlay lifecycle.
+ * Example:
+ *   UActorComponent& Comp = *Store.NewObject<UActorComponent>().Object.Get();
+ *   (void)Actor.RegisterComponent(Comp);
+ *   (void)World.BeginPlay(Now);
  */
 class UActorComponent : public UObject, private Core::FTickable
 {
 public:
-	/** Copying or moving would duplicate a managed object's slot identity; each
-	 * lives and dies in one object-store slot. */
+	/**
+	 * Motivation: Prevents copying or moving from duplicating a managed object's slot identity.
+	 * Responsibilities: Reject copy construction so each component lives and dies in one store slot.
+	 */
 	UActorComponent(const UActorComponent&) = delete;
+
+	/**
+	 * Motivation: Prevents copy assignment from duplicating a managed object's slot identity.
+	 * Responsibilities: Reject copy assignment so each component keeps one slot identity.
+	 */
 	UActorComponent& operator=(const UActorComponent&) = delete;
+
+	/**
+	 * Motivation: Prevents moving a managed object away from its stable slot.
+	 * Responsibilities: Reject move construction so each component keeps one slot identity.
+	 */
 	UActorComponent(UActorComponent&&) = delete;
+
+	/**
+	 * Motivation: Prevents moving another identity into this managed object's stable slot.
+	 * Responsibilities: Reject move assignment so each component keeps one slot identity.
+	 */
 	UActorComponent& operator=(UActorComponent&&) = delete;
 
-	/** Returns the stable descriptor that lets the store construct and trace this type. */
+	/**
+	 * Motivation: Returns the stable descriptor that lets the store construct and trace this type.
+	 * Responsibilities: Return the canonical UActorComponent class descriptor registered into the registry.
+	 */
 	static const FClassDescriptor& StaticClassDescriptor() noexcept;
 
-	/** Captures the consumer-selected tick capability and cadence at construction. */
+	/**
+	 * Motivation: Captures the consumer-selected tick capability and cadence at construction.
+	 * Responsibilities: Construct the component with the given primary tick configuration.
+	 */
 	explicit UActorComponent(Core::FTickConfiguration InTickConfiguration = {}) noexcept;
 
-	/** Keeps exact derived destruction behind the descriptor/store boundary. */
+	/**
+	 * Motivation: Keeps exact derived destruction behind the descriptor/store boundary.
+	 * Responsibilities: Override the destructor so the registered exact destructor runs derived teardown.
+	 */
 	~UActorComponent() noexcept override;
 
-	/** Forwards tick enablement to the primary tick function. */
+	/**
+	 * Motivation: Forwards tick enablement to the primary tick function.
+	 * Responsibilities: Apply the enabled flag to the primary tick function.
+	 */
 	Core::ERuntimeResult SetTickEnabled(bool bInEnabled) noexcept { return Core::FTickable::SetTickEnabled(bInEnabled); }
 
-	/** Forwards the minimum tick interval to the primary tick function. */
+	/**
+	 * Motivation: Forwards the minimum tick interval to the primary tick function.
+	 * Responsibilities: Apply the interval to the primary tick function's cadence.
+	 */
 	Core::ERuntimeResult SetTickInterval(Core::DurationMilliseconds InIntervalMilliseconds) noexcept
 	{
 		return Core::FTickable::SetTickInterval(InIntervalMilliseconds);
 	}
 
-	/** Exposes tick enablement using the primary tick function's representation. */
+	/**
+	 * Motivation: Exposes tick enablement using the primary tick function's representation.
+	 * Responsibilities: Report whether the primary tick function is enabled.
+	 */
 	bool IsTickEnabled() const noexcept { return Core::FTickable::IsTickEnabled(); }
 
-	/** Exposes the minimum tick interval using the primary tick function's cadence. */
+	/**
+	 * Motivation: Exposes the minimum tick interval using the primary tick function's cadence.
+	 * Responsibilities: Return the primary tick function's minimum interval.
+	 */
 	Core::DurationMilliseconds GetTickInterval() const noexcept { return Core::FTickable::GetTickInterval(); }
 
 	/**
-	 * Reports whether this component was assigned an actor identity, even when
-	 * that weak identity has since expired.
+	 * Motivation: Lets a caller branch on whether this component was ever assigned an actor identity.
+	 * Responsibilities: Report true when an owner handle was assigned, even after the weak link has expired.
 	 */
 	bool HasAssignedActor() const noexcept { return OwnerObjectHandle.IsValid(); }
 
 	/**
-	 * Returns the owning actor while its weak parent link is still live, or null
-	 * once the actor has been reclaimed (so the parent reference expires rather
-	 * than dangling). The returned pointer is an observation, not an owning
-	 * reference; the caller must not retain it across mutation barriers.
+	 * Motivation: Lets a caller read the owning actor while its weak parent link is live, returning null once the actor
+	 *   is reclaimed so the parent reference expires rather than dangling.
+	 * Responsibilities: Resolve the weak owner handle each call; the returned pointer is an observation, not an owning
+	 *   reference, and must not be retained across mutation barriers.
 	 */
 	AActor* GetOwnerActor() const noexcept;
 
 protected:
-	/** Runs once after this component enters play, before its owning actor's hook. */
+	/**
+	 * Motivation: Lets a derived component run once after it enters play, before its owning actor's hook.
+	 * Responsibilities: Override to perform BeginPlay work; the default does nothing.
+	 */
 	virtual void BeginPlay() {}
 
-	/** Runs at most once per Advance when the primary tick function is due. */
+	/**
+	 * Motivation: Lets a derived component run at most once per Advance when the primary tick function is due.
+	 * Responsibilities: Override to perform per-frame work; the default does nothing.
+	 */
 	virtual void TickComponent(const Core::FTickContext&) {}
 
-	/** Runs once before this component leaves play, after its owning actor's hook. */
+	/**
+	 * Motivation: Lets a derived component run once before it leaves play, after its owning actor's hook.
+	 * Responsibilities: Override to perform EndPlay work; the default does nothing.
+	 */
 	virtual void EndPlay() {}
 
 private:
 	friend class AActor;
 
-	/** Begins this component's lifecycle, primary tick, and consumer hook. */
+	/**
+	 * Motivation: Begins this component's lifecycle, primary tick, and consumer hook.
+	 * Responsibilities: Move the component lifecycle forward and begin the primary tick and consumer hook.
+	 */
 	Core::ERuntimeResult DispatchBeginPlay(Core::TimePointMilliseconds InNowMilliseconds) noexcept;
 
-	/** Advances this component's primary tick for one dispatcher step. */
+	/**
+	 * Motivation: Advances this component's primary tick for one dispatcher step.
+	 * Responsibilities: Advance the primary tick and run the consumer hook when due.
+	 */
 	Core::ERuntimeResult DispatchAdvance(Core::TimePointMilliseconds InNowMilliseconds) noexcept;
 
-	/** Ends this component's consumer hook and primary tick; idempotent after success. */
+	/**
+	 * Motivation: Ends this component's consumer hook and primary tick; idempotent after success.
+	 * Responsibilities: End the component and stay idempotent after a successful first call.
+	 */
 	Core::ERuntimeResult DispatchEndPlay() noexcept;
 
-	/** Binds one weak actor handle after same-store registration validation. */
+	/**
+	 * Motivation: Binds one weak actor handle after same-store registration validation.
+	 * Responsibilities: Record the owner handle without rooting the actor.
+	 */
 	void AssignOwner(FObjectHandle InOwner) noexcept;
 
-	/** Reports whether registration into a new owner is still permitted. */
+	/**
+	 * Motivation: Reports whether registration into a new owner is still permitted.
+	 * Responsibilities: Return true only while the component lifecycle is still Constructed.
+	 */
 	bool IsRegistrationOpen() const noexcept { return Lifecycle.GetState() == Core::ELifecycleState::Constructed; }
 
-	/** UActorComponent holds no traced outgoing references; only a weak parent link. */
+	/**
+	 * Motivation: Confirms UActorComponent holds no traced outgoing references, only a weak parent link.
+	 * Responsibilities: Present no references to the collector.
+	 */
 	void VisitReferences(FReferenceCollector&) noexcept override {}
 
-	/** Carries the weak owner identity without keeping the actor reachable. */
+	/** Motivation: Carries the weak owner identity without keeping the actor reachable. */
 	FObjectHandle OwnerObjectHandle{};
 
-	/** Guards the forward-only component lifecycle without scattering boolean flags. */
+	/** Motivation: Guards the forward-only component lifecycle without scattering boolean flags. */
 	Core::FLifecycleGuard Lifecycle;
 };
 

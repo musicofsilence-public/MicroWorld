@@ -12,64 +12,99 @@ namespace MicroWorld::Transport
 {
 
 /**
- * Wraps another device and silently drops every Nth outgoing send.
- * A dropped send returns `Success` without touching the inner device or inspecting the packet,
- * modeling a packet that left the wire and was lost; receives and `MaxPacketBytes` always pass through.
+ * Motivation: Wraps another device to inject deterministic packet loss so a host test can exercise retransmit and reliability paths.
+ * Responsibilities: Drop every Nth outgoing send by returning Success without touching the inner device or inspecting the
+ *   packet (modeling a packet that left the wire and was lost), and pass receives and MaxPacketBytes through unchanged.
+ * Example:
+ *   FPacketDropDevice Lossy(Inner, 3);
+ *   Lossy.TrySend(To, Packet);
+ *   if (Lossy.DroppedSendCount() > 0) { Retried(); }
  */
 class FPacketDropDevice final : public ::MicroWorld::Transport::Device::IDevice
 {
 public:
-	/** Binds the device to wrap and the drop interval; `DropEveryNthSend == 0` disables dropping. */
+	/**
+	 * Motivation: Binds the wrapped device and the drop interval at construction.
+	 * Responsibilities: Store the inner device reference and the drop interval (zero disables dropping).
+	 */
 	FPacketDropDevice(::MicroWorld::Transport::Device::IDevice& InInnerDevice, std::uint32_t InDropEveryNthSend) noexcept;
 
-	/** Deleted: this device holds `InnerDevice` by reference and is itself held by reference, so copying would risk dangling. */
+	/**
+	 * Motivation: Prevents copying since this device holds InnerDevice by reference and is itself held by reference.
+	 * Responsibilities: Reject copy construction so relocation cannot dangle the inner reference.
+	 */
 	FPacketDropDevice(const FPacketDropDevice&) = delete;
 
-	/** Deleted: this device holds `InnerDevice` by reference and is itself held by reference, so copying would risk dangling. */
+	/**
+	 * Motivation: Prevents copying since this device holds InnerDevice by reference and is itself held by reference.
+	 * Responsibilities: Reject copy assignment so relocation cannot dangle the inner reference.
+	 */
 	FPacketDropDevice& operator=(const FPacketDropDevice&) = delete;
 
-	/** Deleted: this device holds `InnerDevice` by reference and is itself held by reference, so relocating it would risk dangling. */
+	/**
+	 * Motivation: Prevents moving since this device holds InnerDevice by reference and is itself held by reference.
+	 * Responsibilities: Reject move construction so relocation cannot dangle the inner reference.
+	 */
 	FPacketDropDevice(FPacketDropDevice&&) = delete;
 
-	/** Deleted: this device holds `InnerDevice` by reference and is itself held by reference, so relocating it would risk dangling. */
+	/**
+	 * Motivation: Prevents moving since this device holds InnerDevice by reference and is itself held by reference.
+	 * Responsibilities: Reject move assignment so relocation cannot dangle the inner reference.
+	 */
 	FPacketDropDevice& operator=(FPacketDropDevice&&) = delete;
 
-	/** Anchors the vtable in one translation unit, matching `::MicroWorld::Transport::Device::IDevice`'s out-of-line destructor rule. */
+	/**
+	 * Motivation: Anchors the vtable in one translation unit matching the IDevice out-of-line destructor rule.
+	 * Responsibilities: Define one out-of-line virtual destructor without side effects.
+	 */
 	~FPacketDropDevice() noexcept override;
 
 	/**
-	 * Counts this call and, on every `DropEveryNthSend`-th call, drops the packet by returning
-	 * `Success` without forwarding it; every other call forwards verbatim to the inner device.
+	 * Motivation: Injects loss on a fixed cadence so a test drives reliability code predictably.
+	 * Responsibilities: Count each call, drop every DropEveryNthSend-th send by returning Success without forwarding, and forward
+	 *   every other call verbatim to the inner device.
 	 */
 	ETransportResult TrySend(
 		const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
 
-	/** Forwards verbatim to the inner device; receives are never counted or dropped. */
+	/**
+	 * Motivation: Keeps receive behavior untouched so loss injection affects only the send path.
+	 * Responsibilities: Forward verbatim to the inner device without counting or dropping.
+	 */
 	ETransportResult TryReceive(
 		::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
 		Core::TSpan<std::uint8_t> InDestination,
 		::MicroWorld::Transport::Device::FReceiveResult& OutResult) noexcept override;
 
-	/** Forwards bounded physical transmit progress so wrapped staged devices cannot stall behind loss injection. */
+	/**
+	 * Motivation: Keeps staged transmit progress working so a wrapped staged device cannot stall behind loss injection.
+	 * Responsibilities: Forward bounded physical transmit progress to the inner device.
+	 */
 	void AdvanceTransmit() noexcept override { InnerDevice.AdvanceTransmit(); }
 
-	/** Forwards verbatim to the inner device. */
+	/**
+	 * Motivation: Keeps the capacity query consistent with the wrapped device.
+	 * Responsibilities: Forward MaxPacketBytes verbatim to the inner device.
+	 */
 	std::size_t MaxPacketBytes() const noexcept override;
 
-	/** Reports how many sends this device has dropped so far. */
+	/**
+	 * Motivation: Lets a test assert how much loss was injected.
+	 * Responsibilities: Report how many sends this device has dropped so far.
+	 */
 	std::uint32_t DroppedSendCount() const noexcept;
 
 private:
-	/** The wrapped device every non-dropped send and every receive forwards to. */
+	/** Motivation: References the wrapped device that every non-dropped send and every receive forwards to. */
 	::MicroWorld::Transport::Device::IDevice& InnerDevice;
 
-	/** Every `DropEveryNthSend`-th send is dropped; zero disables dropping entirely. */
+	/** Motivation: Fixes the drop cadence; zero disables dropping entirely. */
 	const std::uint32_t DropEveryNthSend;
 
-	/** Counts total `TrySend` calls; wraps after 2^32 sends, accepted for a test/demo loss injector. */
+	/** Motivation: Counts total TrySend calls; wraps after 2^32 sends, accepted for a test/demo loss injector. */
 	std::uint32_t SendCallCount{0};
 
-	/** Counts dropped sends; wraps after 2^32 sends, accepted for a test/demo loss injector. */
+	/** Motivation: Counts dropped sends; wraps after 2^32 sends, accepted for a test/demo loss injector. */
 	std::uint32_t DroppedSendTotal{0};
 };
 

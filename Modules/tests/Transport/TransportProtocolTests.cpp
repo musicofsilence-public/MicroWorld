@@ -25,87 +25,88 @@ using MicroWorld::Transport::ReadMessage;
 using MicroWorld::Transport::WriteControlMessage;
 using MicroWorld::Transport::WriteMessage;
 
-/** Channel byte the round-trip and control cases encode as the message channel. */
+/** Motivation: Channel byte the round-trip and control cases encode as the message channel. */
 constexpr std::uint8_t ApplicationChannel = 7;
-/** Channel byte the multi-byte round-trip case encodes, distinct from the standard channel. */
+/** Motivation: Channel byte the multi-byte round-trip case encodes, distinct from the standard channel. */
 constexpr std::uint8_t DistinctChannel = 42;
 
-/** Capacity for a buffer holding a header plus one payload byte. */
+/** Motivation: Capacity for a buffer holding a header plus one payload byte. */
 constexpr std::size_t HeaderPlusOneByteCapacity = MessageHeaderBytes + 1;
-/** Capacity for a buffer holding a header plus two payload bytes. */
+/** Motivation: Capacity for a buffer holding a header plus two payload bytes. */
 constexpr std::size_t HeaderPlusTwoByteCapacity = MessageHeaderBytes + 2;
-/** Capacity for a buffer holding a header plus four payload bytes. */
+/** Motivation: Capacity for a buffer holding a header plus four payload bytes. */
 constexpr std::size_t HeaderPlusFourByteCapacity = MessageHeaderBytes + 4;
-/** Capacity for a header-only buffer used by the empty-payload round-trip case. */
+/** Motivation: Capacity for a header-only buffer used by the empty-payload round-trip case. */
 constexpr std::size_t HeaderOnlyBufferCapacity = MessageHeaderBytes;
-/** Capacity for a four-byte buffer too small for a header plus a two-byte payload. */
+/** Motivation: Capacity for a four-byte buffer too small for a header plus a two-byte payload. */
 constexpr std::size_t UndersizedBufferCapacity = 4;
-/** Capacity for the single-byte header byte plus no payload used by the truncated-header case. */
+/** Motivation: Capacity for the single-byte header byte plus no payload used by the truncated-header case. */
 constexpr std::size_t TruncatedHeaderBufferCapacity = 3;
-/** Capacity for a one-byte bogus payload storage the oversize case pairs with a huge declared length. */
+/** Motivation: Capacity for a one-byte bogus payload storage the oversize case pairs with a huge declared length. */
 constexpr std::size_t SingleByteStorageCapacity = 1;
-/** Capacity for a one-byte payload the single-byte round-trip case delivers. */
+/** Motivation: Capacity for a one-byte payload the single-byte round-trip case delivers. */
 constexpr std::size_t SingleBytePayloadCapacity = 1;
-/** Capacity for a two-byte payload the Full-buffer case pairs with an undersized buffer. */
+/** Motivation: Capacity for a two-byte payload the Full-buffer case pairs with an undersized buffer. */
 constexpr std::size_t TwoBytePayloadCapacity = 2;
-/** Capacity for a four-byte payload the multi-byte round-trip case delivers. */
+/** Motivation: Capacity for a four-byte payload the multi-byte round-trip case delivers. */
 constexpr std::size_t FourBytePayloadCapacity = 4;
-/** Capacity for a three-byte bogus payload the overlong-Hello case appends to the type byte. */
+/** Motivation: Capacity for a three-byte bogus payload the overlong-Hello case appends to the type byte. */
 constexpr std::size_t OverlongHelloPayloadCapacity = 3;
-/** Capacity for an eight-byte buffer the oversize-payload case rejects before any write. */
+/** Motivation: Capacity for an eight-byte buffer the oversize-payload case rejects before any write. */
 constexpr std::size_t OversizeRejectBufferCapacity = 8;
-/** Capacity for the maximum-size control message buffer the unknown-type case writes into. */
+/** Motivation: Capacity for the maximum-size control message buffer the unknown-type case writes into. */
 constexpr std::size_t ControlMessageBufferCapacity = MessageHeaderBytes + MaxControlPayloadBytes;
-/** Declared length that exceeds the u16 length field so the oversize case rejects it before any read. */
+/** Motivation: Declared length that exceeds the u16 length field so the oversize case rejects it before any read. */
 constexpr std::size_t OversizeDeclaredLength = 0x10000;
 
-/** Sentinel channel byte pre-loaded into the header so an unchanged failed read is observable. */
+/** Motivation: Sentinel channel byte pre-loaded into the header so an unchanged failed read is observable. */
 constexpr std::uint8_t UntouchedChannelByte = 0xEE;
-/** Sentinel payload bytes value pre-loaded into the header so an unchanged failed read is observable. */
+/** Motivation: Sentinel payload bytes value pre-loaded into the header so an unchanged failed read is observable. */
 constexpr std::uint16_t UntouchedPayloadBytes = 0xEEEE;
-/** Payload byte value the single-byte round-trip case delivers. */
+/** Motivation: Payload byte value the single-byte round-trip case delivers. */
 constexpr std::uint8_t SingleBytePayloadValue = 0xAB;
-/** Trailing version byte the overlong-Hello case appends to force a rejection. */
+/** Motivation: Trailing version byte the overlong-Hello case appends to force a rejection. */
 constexpr std::uint8_t OverlongHelloTrailingByteA = 0x01;
-/** Trailing second byte the overlong-Hello case appends to force a rejection. */
+/** Motivation: Trailing second byte the overlong-Hello case appends to force a rejection. */
 constexpr std::uint8_t OverlongHelloTrailingByteB = 0x02;
-/** Two payload bytes the truncated-header case hands to ReadMessage, shorter than a header. */
+/** Motivation: Two payload bytes the truncated-header case hands to ReadMessage, shorter than a header. */
 constexpr std::uint8_t TruncatedHeaderMessage[TruncatedHeaderBufferCapacity] = {0x07, 0x00, 0x01};
-/** Four payload bytes the nonzero-flags case hands to ReadMessage, with the flags byte at offset one. */
+/** Motivation: Four payload bytes the nonzero-flags case hands to ReadMessage, with the flags byte at offset one. */
 constexpr std::uint8_t NonzeroFlagsMessage[HeaderOnlyBufferCapacity] = {0x07, 0x01, 0x00, 0x00};
-/** Six bytes declaring PayloadBytes=5 but supplying only two payload bytes (size mismatch). */
+/** Motivation: Six bytes declaring PayloadBytes=5 but supplying only two payload bytes (size mismatch). */
 constexpr std::uint8_t SizeMismatchMessage[HeaderPlusTwoByteCapacity] = {0x07, 0x00, 0x05, 0x00, 0xAA, 0xBB};
-/** Single-byte payload the unknown-control-type case hands to ReadControlMessage. */
+/** Motivation: Single-byte payload the unknown-control-type case hands to ReadControlMessage. */
 constexpr std::uint8_t UnknownControlTypePayload[SingleBytePayloadCapacity] = {0x07};
-/** Three bytes: Hello type byte, version, and an unexpected trailing byte (overlong). */
+/** Motivation: Three bytes: Hello type byte, version, and an unexpected trailing byte (overlong). */
 constexpr std::uint8_t OverlongHelloPayload[OverlongHelloPayloadCapacity] = {
 	static_cast<std::uint8_t>(EControlMessageType::Hello), OverlongHelloTrailingByteA, OverlongHelloTrailingByteB};
-/** Three bytes: Welcome type byte plus two of the three fields (truncated Welcome). */
+/** Motivation: Three bytes: Welcome type byte plus two of the three fields (truncated Welcome). */
 constexpr std::uint8_t TruncatedWelcomePayload[3] = {static_cast<std::uint8_t>(EControlMessageType::Welcome), 0x01, 0x02};
-/** Single-byte payload: Hello type byte with no version byte (truncated Hello). */
+/** Motivation: Single-byte payload: Hello type byte with no version byte (truncated Hello). */
 constexpr std::uint8_t TruncatedHelloPayload[SingleBytePayloadCapacity] = {static_cast<std::uint8_t>(EControlMessageType::Hello)};
-/** Single-byte payload value the single-byte round-trip case writes. */
+/** Motivation: Single-byte payload value the single-byte round-trip case writes. */
 constexpr std::uint8_t SingleBytePayloadBytes[SingleBytePayloadCapacity] = {SingleBytePayloadValue};
-/** Two payload bytes the Full-buffer case pairs with an undersized destination buffer. */
+/** Motivation: Two payload bytes the Full-buffer case pairs with an undersized destination buffer. */
 constexpr std::uint8_t FullBufferPayloadBytes[TwoBytePayloadCapacity] = {0xAA, 0xBB};
-/** Four payload bytes the multi-byte round-trip case delivers in order. */
+/** Motivation: Four payload bytes the multi-byte round-trip case delivers in order. */
 constexpr std::uint8_t MultiBytePayloadBytes[FourBytePayloadCapacity] = {0x01, 0x02, 0x03, 0x04};
-/** Single-byte bogus payload storage the oversize case pairs with a huge declared length. */
+/** Motivation: Single-byte bogus payload storage the oversize case pairs with a huge declared length. */
 constexpr std::uint8_t SmallPayloadStorage[SingleByteStorageCapacity] = {0x00};
-/** Unknown control type byte (no defined message) the unknown-type case writes. */
+/** Motivation: Unknown control type byte (no defined message) the unknown-type case writes. */
 constexpr std::uint8_t UnknownControlTypeByte = 0x09;
-/** Hello protocol version the Hello round-trip case encodes and decodes. */
+/** Motivation: Hello protocol version the Hello round-trip case encodes and decodes. */
 constexpr std::uint8_t HelloProtocolVersion = 5;
-/** Welcome protocol version the Welcome round-trip case encodes and decodes. */
+/** Motivation: Welcome protocol version the Welcome round-trip case encodes and decodes. */
 constexpr std::uint8_t WelcomeProtocolVersion = 9;
-/** Welcome peer index the Welcome round-trip case encodes and decodes. */
+/** Motivation: Welcome peer index the Welcome round-trip case encodes and decodes. */
 constexpr std::uint8_t WelcomePeerIndex = 3;
-/** Welcome peer generation the Welcome round-trip case encodes and decodes. */
+/** Motivation: Welcome peer generation the Welcome round-trip case encodes and decodes. */
 constexpr std::uint8_t WelcomePeerGeneration = 7;
 
 /**
- * Scenario: Write an application message with an empty payload, then read it back.
- * Expected: The round trip preserves the channel byte, reports zero flags, zero payload bytes, and an empty payload view.
+ * Motivation: Write an application message with an empty payload, then read it back.
+ * Responsibilities: The round trip preserves the channel byte, reports zero flags, zero payload bytes, and an empty
+ *   payload view.
  */
 MW_TEST_CASE(TransportProtocolRoundTripsApplicationMessageWithEmptyPayload)
 {
@@ -132,8 +133,9 @@ MW_TEST_CASE(TransportProtocolRoundTripsApplicationMessageWithEmptyPayload)
 }
 
 /**
- * Scenario: Write an application message with a single-byte payload, then read it back.
- * Expected: The round trip preserves the channel byte, reports one payload byte, and preserves the payload byte value.
+ * Motivation: Write an application message with a single-byte payload, then read it back.
+ * Responsibilities: The round trip preserves the channel byte, reports one payload byte, and preserves the payload byte
+ *   value.
  */
 MW_TEST_CASE(TransportProtocolRoundTripsApplicationMessageWithOneBytePayload)
 {
@@ -159,8 +161,9 @@ MW_TEST_CASE(TransportProtocolRoundTripsApplicationMessageWithOneBytePayload)
 }
 
 /**
- * Scenario: Write an application message with a four-byte payload, then read it back.
- * Expected: The round trip preserves the channel byte, reports four payload bytes, and preserves every payload byte in order.
+ * Motivation: Write an application message with a four-byte payload, then read it back.
+ * Responsibilities: The round trip preserves the channel byte, reports four payload bytes, and preserves every payload
+ *   byte in order.
  */
 MW_TEST_CASE(TransportProtocolRoundTripsApplicationMessageWithMultiBytePayload)
 {
@@ -189,8 +192,8 @@ MW_TEST_CASE(TransportProtocolRoundTripsApplicationMessageWithMultiBytePayload)
 }
 
 /**
- * Scenario: Attempt to write a header plus a two-byte payload into a four-byte buffer.
- * Expected: The write returns Full and does not advance the cursor.
+ * Motivation: Attempt to write a header plus a two-byte payload into a four-byte buffer.
+ * Responsibilities: The write returns Full and does not advance the cursor.
  */
 MW_TEST_CASE(TransportProtocolWriteMessageFullLeavesWriterUntouched)
 {
@@ -208,8 +211,8 @@ MW_TEST_CASE(TransportProtocolWriteMessageFullLeavesWriterUntouched)
 }
 
 /**
- * Scenario: Attempt to write a payload whose declared length exceeds the u16 length field.
- * Expected: The write returns Invalid before any read and does not advance the cursor.
+ * Motivation: Attempt to write a payload whose declared length exceeds the u16 length field.
+ * Responsibilities: The write returns Invalid before any read and does not advance the cursor.
  */
 MW_TEST_CASE(TransportProtocolWriteMessageRejectsOversizedPayload)
 {
@@ -225,8 +228,8 @@ MW_TEST_CASE(TransportProtocolWriteMessageRejectsOversizedPayload)
 }
 
 /**
- * Scenario: Attempt to read a message shorter than a header with sentinel-loaded outputs.
- * Expected: The read returns Invalid and leaves OutHeader and OutPayload untouched.
+ * Motivation: Attempt to read a message shorter than a header with sentinel-loaded outputs.
+ * Responsibilities: The read returns Invalid and leaves OutHeader and OutPayload untouched.
  */
 MW_TEST_CASE(TransportProtocolReadMessageRejectsTruncatedHeader)
 {
@@ -243,8 +246,8 @@ MW_TEST_CASE(TransportProtocolReadMessageRejectsTruncatedHeader)
 }
 
 /**
- * Scenario: Attempt to read a message whose declared length disagrees with the actual payload bytes that follow.
- * Expected: The read returns Invalid.
+ * Motivation: Attempt to read a message whose declared length disagrees with the actual payload bytes that follow.
+ * Responsibilities: The read returns Invalid.
  */
 MW_TEST_CASE(TransportProtocolReadMessageRejectsPayloadSizeMismatch)
 {
@@ -260,8 +263,8 @@ MW_TEST_CASE(TransportProtocolReadMessageRejectsPayloadSizeMismatch)
 }
 
 /**
- * Scenario: Attempt to read an otherwise valid empty-payload message whose Flags byte is nonzero.
- * Expected: The read returns Invalid.
+ * Motivation: Attempt to read an otherwise valid empty-payload message whose Flags byte is nonzero.
+ * Responsibilities: The read returns Invalid.
  */
 MW_TEST_CASE(TransportProtocolReadMessageRejectsNonzeroFlags)
 {
@@ -277,8 +280,9 @@ MW_TEST_CASE(TransportProtocolReadMessageRejectsNonzeroFlags)
 }
 
 /**
- * Scenario: Write a Hello control message, read it back as a message, then decode its control payload.
- * Expected: The frame rides on the control channel and decodes back to the Hello type with the matching protocol version.
+ * Motivation: Write a Hello control message, read it back as a message, then decode its control payload.
+ * Responsibilities: The frame rides on the control channel and decodes back to the Hello type with the matching protocol
+ *   version.
  */
 MW_TEST_CASE(TransportProtocolRoundTripsHelloControlMessage)
 {
@@ -306,9 +310,9 @@ MW_TEST_CASE(TransportProtocolRoundTripsHelloControlMessage)
 }
 
 /**
- * Scenario: Write a Welcome control message, read it back as a message, then decode its control payload.
- * Expected: The frame rides on the control channel and decodes back to the Welcome type with the matching protocol version, peer index, and peer
- * generation.
+ * Motivation: Write a Welcome control message, read it back as a message, then decode its control payload.
+ * Responsibilities: The frame rides on the control channel and decodes back to the Welcome type with the matching
+ *   protocol version, peer index, and peer.
  */
 MW_TEST_CASE(TransportProtocolRoundTripsWelcomeControlMessage)
 {
@@ -340,8 +344,8 @@ MW_TEST_CASE(TransportProtocolRoundTripsWelcomeControlMessage)
 }
 
 /**
- * Scenario: Write a Heartbeat control message, read it back as a message, then decode its control payload.
- * Expected: The frame rides on the control channel and decodes back to the Heartbeat type.
+ * Motivation: Write a Heartbeat control message, read it back as a message, then decode its control payload.
+ * Responsibilities: The frame rides on the control channel and decodes back to the Heartbeat type.
  */
 MW_TEST_CASE(TransportProtocolRoundTripsHeartbeatControlMessage)
 {
@@ -367,8 +371,8 @@ MW_TEST_CASE(TransportProtocolRoundTripsHeartbeatControlMessage)
 }
 
 /**
- * Scenario: Write a Bye control message, read it back as a message, then decode its control payload.
- * Expected: The frame rides on the control channel and decodes back to the Bye type.
+ * Motivation: Write a Bye control message, read it back as a message, then decode its control payload.
+ * Responsibilities: The frame rides on the control channel and decodes back to the Bye type.
  */
 MW_TEST_CASE(TransportProtocolRoundTripsByeControlMessage)
 {
@@ -394,8 +398,8 @@ MW_TEST_CASE(TransportProtocolRoundTripsByeControlMessage)
 }
 
 /**
- * Scenario: Attempt to decode a payload whose type byte names no defined control message.
- * Expected: The decode returns Invalid and leaves OutMessage unchanged.
+ * Motivation: Attempt to decode a payload whose type byte names no defined control message.
+ * Responsibilities: The decode returns Invalid and leaves OutMessage unchanged.
  */
 MW_TEST_CASE(TransportProtocolReadControlMessageRejectsUnknownType)
 {
@@ -412,8 +416,8 @@ MW_TEST_CASE(TransportProtocolReadControlMessageRejectsUnknownType)
 }
 
 /**
- * Scenario: Attempt to decode a Hello payload whose version byte is missing.
- * Expected: The decode returns Invalid.
+ * Motivation: Attempt to decode a Hello payload whose version byte is missing.
+ * Responsibilities: The decode returns Invalid.
  */
 MW_TEST_CASE(TransportProtocolReadControlMessageRejectsTruncatedHello)
 {
@@ -428,8 +432,8 @@ MW_TEST_CASE(TransportProtocolReadControlMessageRejectsTruncatedHello)
 }
 
 /**
- * Scenario: Attempt to decode a Hello payload carrying an unexpected trailing byte after the version.
- * Expected: The decode returns Invalid.
+ * Motivation: Attempt to decode a Hello payload carrying an unexpected trailing byte after the version.
+ * Responsibilities: The decode returns Invalid.
  */
 MW_TEST_CASE(TransportProtocolReadControlMessageRejectsOverlongHello)
 {
@@ -444,8 +448,8 @@ MW_TEST_CASE(TransportProtocolReadControlMessageRejectsOverlongHello)
 }
 
 /**
- * Scenario: Attempt to decode a Welcome payload missing one of its three fields bytes.
- * Expected: The decode returns Invalid.
+ * Motivation: Attempt to decode a Welcome payload missing one of its three fields bytes.
+ * Responsibilities: The decode returns Invalid.
  */
 MW_TEST_CASE(TransportProtocolReadControlMessageRejectsTruncatedWelcome)
 {
@@ -460,8 +464,8 @@ MW_TEST_CASE(TransportProtocolReadControlMessageRejectsTruncatedWelcome)
 }
 
 /**
- * Scenario: Attempt to decode an empty control payload.
- * Expected: The decode returns Invalid and leaves OutMessage unchanged.
+ * Motivation: Attempt to decode an empty control payload.
+ * Responsibilities: The decode returns Invalid and leaves OutMessage unchanged.
  */
 MW_TEST_CASE(TransportProtocolReadControlMessageRejectsEmptyPayload)
 {
@@ -478,8 +482,8 @@ MW_TEST_CASE(TransportProtocolReadControlMessageRejectsEmptyPayload)
 }
 
 /**
- * Scenario: Attempt to write a control message with an unknown type byte.
- * Expected: The write returns Invalid and does not advance the cursor.
+ * Motivation: Attempt to write a control message with an unknown type byte.
+ * Responsibilities: The write returns Invalid and does not advance the cursor.
  */
 MW_TEST_CASE(TransportProtocolWriteControlMessageRejectsUnknownType)
 {

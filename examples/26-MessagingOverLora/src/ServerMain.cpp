@@ -29,13 +29,17 @@ using namespace Ex26;
 
 namespace
 {
-/** Single real-time source for the server board. */
+/** Motivation: Single real-time source for the server board. */
 FEsp32TimeSource GTimeSource{};
 
-/** Server engine traits: carries the exact capacities FServerEngine sized before the
- *  traits refactor, so the server store is unchanged. Bounds tuned so one GC slice
- *  {1,4,8} finishes a full cycle each tick, so a spawn arriving mid-tick never fails
- *  LifecycleLocked (the proven EngineHostTests / two-node-demo profile). */
+/**
+ * Motivation: Carries the exact capacities FServerEngine sized before the traits refactor, so the
+ *   server store is unchanged. Bounds tuned so one GC slice {1,4,8} finishes a full cycle each
+ *   tick, so a spawn arriving mid-tick never fails LifecycleLocked (the proven two-node-demo profile).
+ * Responsibilities: Name the class, object, slot, root, actor, and timer capacities the server uses.
+ * Example:
+ *   using FServerEngine = TEngine<FServerEngineTraits>;
+ */
 struct FServerEngineTraits : FDefaultEngineTraits
 {
 	static constexpr std::size_t MaxClasses = 6;
@@ -47,30 +51,51 @@ struct FServerEngineTraits : FDefaultEngineTraits
 };
 using FServerEngine = TEngine<FServerEngineTraits>;
 
-/** Server session host; two peer slots leave headroom above the single LoRa client. */
+/** Motivation: Server session host; two peer slots leave headroom above the single LoRa client. */
 using FServerTransport = TTransportHost<2, 58>;
 
-/** Minimal actor spawned on demand so a remote input event visibly changes the world. */
+/**
+ * Motivation: Minimal actor spawned on demand so a remote input event visibly changes the world,
+ *   keeping the demo's "client request produces a server-side actor" loop observable.
+ * Responsibilities: Bump one begin counter when play begins, and stay descriptor-destroyable.
+ * Example:
+ *   auto Creation = ServerHost.CreateObject<FDemoSpawnedActor>(DemoSpawnedActorTypeId, Count);
+ *   ServerHost.GetWorld().SpawnActor(TObjectPtr<AActor>{Creation.Object});
+ */
 class FDemoSpawnedActor final : public AActor
 {
 public:
-	/** Binds the begin counter this actor bumps on play. */
+	/**
+	 * Motivation: Binds the begin counter this actor bumps on play, so the run loop can observe spawns.
+	 * Responsibilities: Store the counter reference and forward to the actor base.
+	 */
 	FDemoSpawnedActor(int& InBeginCount) noexcept : AActor(), BeginCount(InBeginCount) {}
 
-	/** Keeps exact descriptor-driven destruction publicly instantiable. */
+	/**
+	 * Motivation: Keeps exact descriptor-driven destruction publicly instantiable.
+	 * Responsibilities: Default the destructor so descriptor-driven teardown stays available.
+	 */
 	~FDemoSpawnedActor() noexcept override = default;
 
 protected:
-	/** Records that this spawned actor began on the server world exactly once. */
+	/**
+	 * Motivation: Records that this spawned actor began on the server world exactly once.
+	 * Responsibilities: Bump the bound begin counter on play and do nothing else.
+	 */
 	void BeginPlay() noexcept override { ++BeginCount; }
 
 private:
-	/** Begin-count reference owned by the run loop; not owned by this actor. */
+	/** Motivation: Begin-count reference owned by the run loop; not owned by this actor. */
 	int& BeginCount;
 };
 } // namespace
 
-/** Server board: engine + host play system + transport host (DedicatedServer) over one E32 LoRa radio. */
+/**
+ * Motivation: Lets one board act as the dedicated server half of example 26 over a single E32 LoRa radio,
+ *   so the engine plus transport composition can be reasoned about in one place.
+ * Responsibilities: Open the radio, run the engine and a TTransportHost dedicated server, spawn actors
+ *   on client requests, and broadcast world state at the airtime-paced period each cycle.
+ */
 void RunServer() noexcept
 {
 	static FEsp32LoraDevice Device{MakeLoraConfig(ServerNodeId)};

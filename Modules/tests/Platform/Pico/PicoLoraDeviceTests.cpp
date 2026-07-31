@@ -24,28 +24,33 @@ using MicroWorld::Transport::ETransportResult;
 using MicroWorld::Transport::MakeLoraAddress;
 using MicroWorld::Transport::FrameCodec::FrameOverheadBytes;
 
-/** Exact UART rate returned by a successful fake platform open. */
+/** Motivation: Exact UART rate returned by a successful fake platform open. */
 constexpr std::uint32_t ExpectedBaudRate = 9600;
 
-/** Source node id used by every facade initialization fixture. */
+/** Motivation: Source node id used by every facade initialization fixture. */
 constexpr std::uint8_t LocalNodeId = 7;
 
-/** Destination node id needed to queue a public E32 send through the facade. */
+/** Motivation: Destination node id needed to queue a public E32 send through the facade. */
 constexpr std::uint8_t PeerNodeId = 9;
 
-/** Largest complete encoded E32 frame the facade can delegate in one transmit advance. */
+/** Motivation: Largest complete encoded E32 frame the facade can delegate in one transmit advance. */
 constexpr std::size_t EncodedFrameCapacity = E32MaxPayloadBytes + FrameOverheadBytes;
 
 /**
- * Narrow Pico UART fake that exposes only facade-owned platform behavior.
- *
- * Protocol framing stays in RadioE32 tests; this fake records UART lifetime,
- * configuration, and physical byte-progress delegation without SDK access.
+ * Motivation: Narrow Pico UART fake that exposes only facade-owned platform behavior. Protocol framing stays in
+ *   RadioE32 tests; this fake records UART lifetime, configuration, and physical byte-progress
+ *   delegation without SDK access.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
  */
 class FFakePicoUartPlatform final : public IPicoE32LoraPlatform
 {
 public:
-	/** Records one requested UART configuration and returns the controlled achieved baud rate. */
+	/**
+	 * Motivation: Records one requested UART configuration and returns the controlled achieved baud rate.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	std::uint32_t OpenUart(
 		const std::uint8_t InUartIndex, const unsigned int InTxGpio, const unsigned int InRxGpio, const std::uint32_t InBaudRate) noexcept override
 	{
@@ -57,21 +62,30 @@ public:
 		return AchievedBaudRate;
 	}
 
-	/** Records each facade-driven UART release. */
+	/**
+	 * Motivation: Records each facade-driven UART release.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void CloseUart(const std::uint8_t InUartIndex) noexcept override
 	{
 		++CloseCallCount;
 		LastClosedUartIndex = InUartIndex;
 	}
 
-	/** Reports writable capacity so the facade can delegate a bounded transmit burst. */
+	/**
+	 * Motivation: The facade can delegate a bounded transmit burst.
+	 * Responsibilities: Reports writable capacity.
+	 */
 	bool IsUartWritable(const std::uint8_t InUartIndex) noexcept override
 	{
 		LastWritableUartIndex = InUartIndex;
 		return true;
 	}
 
-	/** Counts every byte RadioE32 delegates through the Pico byte stream. */
+	/**
+	 * Motivation: Counts every byte RadioE32 delegates through the Pico byte stream.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void WriteUartByte(const std::uint8_t InUartIndex, const std::uint8_t InByte) noexcept override
 	{
 		LastWrittenUartIndex = InUartIndex;
@@ -79,7 +93,10 @@ public:
 		++WrittenByteCount;
 	}
 
-	/** Supplies no receive bytes because protocol decoding belongs to RadioE32 tests. */
+	/**
+	 * Motivation: Protocol decoding belongs to RadioE32 tests.
+	 * Responsibilities: Supplies no receive bytes.
+	 */
 	bool TryReadUartByte(const std::uint8_t InUartIndex, std::uint8_t& OutByte) noexcept override
 	{
 		(void)InUartIndex;
@@ -87,44 +104,47 @@ public:
 		return false;
 	}
 
-	/** Controls the reported exact baud rate for success and rollback fixtures. */
+	/** Motivation: Controls the reported exact baud rate for success and rollback fixtures. */
 	std::uint32_t AchievedBaudRate{ExpectedBaudRate};
 
-	/** Counts each facade open request. */
+	/** Motivation: Counts each facade open request. */
 	std::size_t OpenCallCount{0};
 
-	/** Counts each rollback or destruction release. */
+	/** Motivation: Counts each rollback or destruction release. */
 	std::size_t CloseCallCount{0};
 
-	/** Records the latest UART identity requested for opening. */
+	/** Motivation: Records the latest UART identity requested for opening. */
 	std::uint8_t LastOpenedUartIndex{0};
 
-	/** Records the latest TX GPIO requested for opening. */
+	/** Motivation: Records the latest TX GPIO requested for opening. */
 	unsigned int LastOpenedTxGpio{0};
 
-	/** Records the latest RX GPIO requested for opening. */
+	/** Motivation: Records the latest RX GPIO requested for opening. */
 	unsigned int LastOpenedRxGpio{0};
 
-	/** Records the latest baud rate requested for opening. */
+	/** Motivation: Records the latest baud rate requested for opening. */
 	std::uint32_t LastRequestedBaudRate{0};
 
-	/** Records the latest UART identity passed to a release. */
+	/** Motivation: Records the latest UART identity passed to a release. */
 	std::uint8_t LastClosedUartIndex{0};
 
-	/** Records the UART identity used for the latest writable query. */
+	/** Motivation: Records the UART identity used for the latest writable query. */
 	std::uint8_t LastWritableUartIndex{0};
 
-	/** Records the UART identity used for the latest delegated write. */
+	/** Motivation: Records the UART identity used for the latest delegated write. */
 	std::uint8_t LastWrittenUartIndex{0};
 
-	/** Counts bytes accepted during delegated physical transmit progress. */
+	/** Motivation: Counts bytes accepted during delegated physical transmit progress. */
 	std::size_t WrittenByteCount{0};
 
-	/** Retains the one complete encoded frame emitted by the facade during a test. */
+	/** Motivation: Retains the one complete encoded frame emitted by the facade during a test. */
 	std::uint8_t WrittenBytes[EncodedFrameCapacity]{};
 };
 
-/** Supplies a supported UART0 configuration for successful facade initialization. */
+/**
+ * Motivation: Supplies a supported UART0 configuration for successful facade initialization.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ */
 FPicoE32LoraConfig MakeValidConfig() noexcept
 {
 	FPicoE32LoraConfig Config{};
@@ -141,8 +161,8 @@ static_assert(
 	"The released E32 platform type must remain the generic Pico UART compatibility alias.");
 
 /**
- * Scenario: Initialize the facade with an unsupported UART TX routing.
- * Expected: The byte stream rejects the configuration before the platform receives an open request.
+ * Motivation: Initialize the facade with an unsupported UART TX routing.
+ * Responsibilities: The byte stream rejects the configuration before the platform receives an open request.
  */
 MW_TEST_CASE(PicoE32FacadeRejectsInvalidConfigBeforeOpeningUart)
 {
@@ -163,8 +183,9 @@ MW_TEST_CASE(PicoE32FacadeRejectsInvalidConfigBeforeOpeningUart)
 }
 
 /**
- * Scenario: Initialize the facade with a supported UART1 configuration.
- * Expected: The facade delegates the exact index, pins, and baud rate to the generic `IPicoUartPlatform` interface.
+ * Motivation: Initialize the facade with a supported UART1 configuration.
+ * Responsibilities: The facade delegates the exact index, pins, and baud rate to the generic `IPicoUartPlatform`
+ *   interface.
  */
 MW_TEST_CASE(PicoE32FacadeDelegatesExactUartOpenConfiguration)
 {
@@ -192,8 +213,8 @@ MW_TEST_CASE(PicoE32FacadeDelegatesExactUartOpenConfiguration)
 }
 
 /**
- * Scenario: The platform opens a valid UART but reports an inexact achieved baud rate.
- * Expected: The byte stream rolls the UART back and the facade remains closed.
+ * Motivation: The platform opens a valid UART but reports an inexact achieved baud rate.
+ * Responsibilities: The byte stream rolls the UART back and the facade remains closed.
  */
 MW_TEST_CASE(PicoE32FacadeRollsBackMismatchedBaudRate)
 {
@@ -215,8 +236,8 @@ MW_TEST_CASE(PicoE32FacadeRollsBackMismatchedBaudRate)
 }
 
 /**
- * Scenario: Initialize a facade twice with the same valid configuration.
- * Expected: The second call is rejected without opening or closing the already-owned UART.
+ * Motivation: Initialize a facade twice with the same valid configuration.
+ * Responsibilities: The second call is rejected without opening or closing the already-owned UART.
  */
 MW_TEST_CASE(PicoE32FacadeRejectsDoubleInitializationWithoutReopening)
 {
@@ -238,8 +259,8 @@ MW_TEST_CASE(PicoE32FacadeRejectsDoubleInitializationWithoutReopening)
 }
 
 /**
- * Scenario: Initialize a facade successfully, then let it leave scope.
- * Expected: Byte-stream destruction releases the one UART acquired by the facade.
+ * Motivation: Initialize a facade successfully, then let it leave scope.
+ * Responsibilities: Byte-stream destruction releases the one UART acquired by the facade.
  */
 MW_TEST_CASE(PicoE32FacadeClosesOpenedUartOnDestruction)
 {
@@ -262,8 +283,8 @@ MW_TEST_CASE(PicoE32FacadeClosesOpenedUartOnDestruction)
 }
 
 /**
- * Scenario: Use the released E32 platform type spelling with the new generic Pico UART interface.
- * Expected: A fake binding is usable through both names without an adapter or SDK dependency.
+ * Motivation: Use the released E32 platform type spelling with the new generic Pico UART interface.
+ * Responsibilities: A fake binding is usable through both names without an adapter or SDK dependency.
  */
 MW_TEST_CASE(PicoE32FacadeRetainsLegacyPlatformAliasCompatibility)
 {
@@ -280,8 +301,8 @@ MW_TEST_CASE(PicoE32FacadeRetainsLegacyPlatformAliasCompatibility)
 }
 
 /**
- * Scenario: Queue a packet through the facade and advance transmit once while the fake UART remains writable.
- * Expected: The delegated RadioE32 progress emits a bounded multi-byte burst and frees the transmit slot.
+ * Motivation: Queue a packet through the facade and advance transmit once while the fake UART remains writable.
+ * Responsibilities: The delegated RadioE32 progress emits a bounded multi-byte burst and frees the transmit slot.
  */
 MW_TEST_CASE(PicoE32FacadeAdvanceTransmitDelegatesBoundedFrameBurst)
 {
@@ -309,8 +330,9 @@ MW_TEST_CASE(PicoE32FacadeAdvanceTransmitDelegatesBoundedFrameBurst)
 }
 
 /**
- * Scenario: Queue an empty packet through the facade, then advance transmit once with a writable UART.
- * Expected: The complete encoded empty frame reaches the platform byte stream and frees the one-frame transmit slot.
+ * Motivation: Queue an empty packet through the facade, then advance transmit once with a writable UART.
+ * Responsibilities: The complete encoded empty frame reaches the platform byte stream and frees the one-frame transmit
+ *   slot.
  */
 MW_TEST_CASE(PicoE32FacadeEmitsEmptyFrameAndReleasesTransmitSlot)
 {

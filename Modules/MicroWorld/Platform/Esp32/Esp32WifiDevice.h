@@ -13,109 +13,109 @@ namespace MicroWorld::Platform::Esp32
 {
 
 /**
- * Non-blocking UDP `IDevice` that carries traffic over one real lwIP socket.
- *
- * Owns a single `SOCK_DGRAM` socket bound to an IPv4 port and maps each lwIP
- * outcome to the shared `ETransportResult` so callers poll without blocking. It
- * validates every argument before any syscall and leaves caller-owned outputs
- * unchanged on any non-`Success` result, and is the ESP32 sibling of the host
- * adapter shipped in Phase 5.1.
+ * Motivation: Gives one composition root a non-blocking UDP IDevice that carries traffic over one real lwIP socket,
+ *   the ESP32 sibling of the host adapter.
+ * Responsibilities: Own one SOCK_DGRAM socket bound to an IPv4 port, map each lwIP outcome to the shared
+ *   ETransportResult so callers poll without blocking, validate every argument before any syscall, and leave
+ *   caller-owned outputs unchanged on any non-Success result.
+ * Example:
+ *   FEsp32WifiDevice Wifi(8888);
+ *   if (Wifi.IsOpen()) { Wifi.TrySend(To, Packet); }
  */
 class FEsp32WifiDevice final : public Transport::Device::IDevice
 {
 public:
-	/** Largest UDP payload one send accepts and one receive destination may exceed. */
+	/** Motivation: Largest UDP payload one send accepts and one receive destination may exceed. */
 	static constexpr std::size_t UdpMaxPacketBytes = 1200;
 
 	/**
-	 * Opens one non-blocking UDP socket bound to `INADDR_ANY:InBindPort`.
-	 *
-	 * An `InBindPort` of zero asks lwIP for an ephemeral port, readable through
-	 * `BoundPort()`. On any syscall failure the constructor closes what it opened
-	 * and leaves the device with `IsOpen() == false`; it never throws. No netif
-	 * or WiFi is initialized here; a real deployment brings those up first.
-	 *
-	 * @param InBindPort Host-order UDP port to bind, or zero for an ephemeral port.
+	 * Motivation: Opens one non-blocking UDP socket bound to INADDR_ANY:InBindPort before any traffic flows.
+	 * Responsibilities: On any syscall failure close what was opened and leave IsOpen false; never throw and never
+	 *   initialize netif or WiFi (a real deployment brings those up first).
 	 */
 	explicit FEsp32WifiDevice(std::uint16_t InBindPort) noexcept;
 
-	/** Closes the owned socket. */
+	/**
+	 * Motivation: Closes the owned socket so construction-allocated lwIP resources never leak.
+	 * Responsibilities: Close the socket opened by construction.
+	 */
 	~FEsp32WifiDevice() noexcept override;
 
-	/** Prevents copying so one device value owns exactly one socket identity. */
+	/**
+	 * Motivation: Keeps one device value owning exactly one socket identity so the handle never aliases.
+	 * Responsibilities: Reject copy construction so the device stays the single owner of its socket.
+	 */
 	FEsp32WifiDevice(const FEsp32WifiDevice&) = delete;
 
-	/** Prevents copying so one device value owns exactly one socket identity. */
+	/**
+	 * Motivation: Keeps one device value owning exactly one socket identity so the handle never aliases.
+	 * Responsibilities: Reject copy assignment so the device stays the single owner of its socket.
+	 */
 	FEsp32WifiDevice& operator=(const FEsp32WifiDevice&) = delete;
 
-	/** Prevents moving so the owned socket handle and interface identity stay fixed. */
+	/**
+	 * Motivation: Keeps the owned socket handle and interface identity fixed at one address for the link's lifetime.
+	 * Responsibilities: Reject move construction so the opaque handle never relocates.
+	 */
 	FEsp32WifiDevice(FEsp32WifiDevice&&) = delete;
 
-	/** Prevents moving so the owned socket handle and interface identity stay fixed. */
+	/**
+	 * Motivation: Keeps the owned socket handle and interface identity fixed at one address for the link's lifetime.
+	 * Responsibilities: Reject move assignment so the opaque handle never relocates.
+	 */
 	FEsp32WifiDevice& operator=(FEsp32WifiDevice&&) = delete;
 
 	/**
-	 * Sends one complete datagram to a UDP-encoded `InTo` address, transactionally.
-	 *
-	 * Returns `Invalid` for an address that is not a UDP encoding, an oversize
-	 * packet, or a null span with nonzero length; `Full` when the send would
-	 * block; and `Success` only when the whole datagram was accepted. A
-	 * non-success result leaves the socket state unchanged.
-	 *
-	 * @param InTo Destination whose bytes encode IPv4 octets and a port.
-	 * @param InPacket Caller-owned bytes to deliver as one complete datagram.
-	 * @return Normalized outcome of the single send attempt.
+	 * Motivation: Sends one complete datagram to a UDP-encoded address, transactionally.
+	 * Responsibilities: Return Invalid for a non-UDP address, oversize packet, or null span with nonzero length,
+	 *   Full when the send would block, and Success only after the whole datagram is accepted; leave socket state
+	 *   unchanged on any non-success result.
 	 */
 	Transport::ETransportResult TrySend(const Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
-	 * Receives at most one datagram into the caller-owned destination, transactionally.
-	 *
-	 * Peeks the head datagram to size it without consuming: `Unavailable` when no
-	 * datagram is ready, `Full` when the destination is too small (the datagram
-	 * stays queued), `Invalid` for a null destination with nonzero length, and
-	 * `Success` after a consuming read writes the bytes, the count, and the
-	 * sender address into `OutFrom`.
-	 *
-	 * @param OutFrom Filled with the sender's UDP address only on `Success`.
-	 * @param InDestination Caller-owned buffer for the received bytes.
-	 * @param OutResult Filled with the received byte count only on `Success`.
-	 * @return Normalized outcome of the single receive attempt.
+	 * Motivation: Receives at most one datagram into the caller-owned destination, transactionally.
+	 * Responsibilities: Peek the head datagram to size it without consuming; report Unavailable when no datagram is
+	 *   ready, Full when the destination is too small (the datagram stays queued), Invalid for a null destination
+	 *   with nonzero length, or Success after a consuming read writes bytes, count, and sender address into OutFrom.
 	 */
 	Transport::ETransportResult TryReceive(
 		Transport::Address::FDeviceAddress& OutFrom,
 		Core::TSpan<std::uint8_t> InDestination,
 		Transport::Device::FReceiveResult& OutResult) noexcept override;
 
-	/** Reports the largest datagram, in bytes, one send accepts. */
+	/**
+	 * Motivation: Lets a caller size a datagram against the transport's capacity without a magic number.
+	 * Responsibilities: Report the largest datagram, in bytes, one send accepts.
+	 */
 	std::size_t MaxPacketBytes() const noexcept override;
 
-	/** Reports whether the constructor opened a usable socket. */
+	/**
+	 * Motivation: Lets a caller gate every op on whether construction opened a usable socket.
+	 * Responsibilities: Report the open flag set at construction and never mutated afterward except by destruction.
+	 */
 	bool IsOpen() const noexcept;
 
-	/** Reports the actual host-order port the socket bound, post-construction. */
+	/**
+	 * Motivation: Lets a caller read the actual port the OS bound (including an ephemeral zero bind).
+	 * Responsibilities: Report the host-order port captured from getsockname at construction.
+	 */
 	std::uint16_t BoundPort() const noexcept;
 
 	/**
-	 * Waits up to `InTimeoutMilliseconds` for a datagram to be readable on the socket.
-	 *
-	 * Uses lwIP `select()` with a bounded timeout so ESP32 demos can wait for
-	 * readiness deterministically without sleeping in a poll loop. A true return
-	 * means a subsequent `TryReceive` has data to consume.
-	 *
-	 * @param InTimeoutMilliseconds Upper bound on the readiness wait.
-	 * @return True when the socket is readable within the timeout.
+	 * Motivation: Lets an ESP32 demo wait for inbound readiness deterministically without a sleep-poll loop.
+	 * Responsibilities: Use lwIP select() with a bounded timeout and return true only when the socket is readable.
 	 */
 	bool PollReadable(Core::DurationMilliseconds InTimeoutMilliseconds) const noexcept;
 
 private:
-	/** Opaque OS socket handle reinterpreted to its lwIP type only in the source file. */
+	/** Motivation: Opaque OS socket handle reinterpreted to its lwIP type only in the source file. */
 	std::uintptr_t SocketHandle{0};
 
-	/** Host-order port captured from `getsockname` so callers can address this socket. */
+	/** Motivation: Host-order port captured from getsockname so callers can address this socket. */
 	std::uint16_t BoundPortValue{0};
 
-	/** Remains false when construction failed, so every op short-circuits safely. */
+	/** Motivation: Remains false when construction failed, so every op short-circuits safely. */
 	bool bOpen{false};
 };
 

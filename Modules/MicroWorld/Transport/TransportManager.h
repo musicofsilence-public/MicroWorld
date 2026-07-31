@@ -13,13 +13,16 @@ namespace MicroWorld::Transport
 {
 
 /**
- * Fixed-capacity outbound queue and direct receive over one externally referenced `::MicroWorld::Transport::Device::IDevice`.
- *
- * The manager holds one device and one `TTransportPacketStorage` by reference; the
- * caller owns both. `QueueSend` copies a complete accepted packet into the
- * caller-owned FIFO tail, one `AdvanceSend` attempts at most the head (retaining
- * it on any device failure), and `Receive` performs at most one direct device
- * receive without building an inbound queue.
+ * Motivation: Provides one fixed-capacity outbound FIFO and direct receive over an externally referenced device so a host
+ *   batches sends and drains receives without allocating.
+ * Responsibilities: Hold one device and one TTransportPacketStorage by reference (both caller-owned), copy a complete accepted
+ *   packet into the FIFO tail on QueueSend, attempt at most the head on AdvanceSend while retaining it on any device failure,
+ *   and perform at most one direct device receive without building an inbound queue.
+ * Example:
+ *   TTransportPacketStorage<4, 64> Storage;
+ *   TTransportManager<4, 64> Manager(Device, Storage);
+ *   Manager.QueueSend(To, Packet);
+ *   Manager.AdvanceSend();
  */
 template<std::size_t MaxPackets, std::size_t MaxPacketBytes>
 class TTransportManager final
@@ -28,27 +31,38 @@ class TTransportManager final
 	static_assert(MaxPacketBytes > 0, "TTransportManager requires a nonzero per-packet byte capacity.");
 
 public:
-	/** Binds the manager to one externally referenced device and caller-owned packet storage. */
+	/**
+	 * Motivation: Binds the manager to the device and caller-owned storage it will drive.
+	 * Responsibilities: Store references to the externally owned device and storage.
+	 */
 	TTransportManager(::MicroWorld::Transport::Device::IDevice& InDevice, TTransportPacketStorage<MaxPackets, MaxPacketBytes>& InStorage) noexcept
 		: Device(InDevice), Storage(InStorage)
 	{
 	}
 
-	/** Prevents copying so one manager value binds one device and one storage instance. */
+	/**
+	 * Motivation: Prevents copying so one manager value binds one device and one storage instance.
+	 * Responsibilities: Reject copy construction so the device and storage references stay single-owner.
+	 */
 	TTransportManager(const TTransportManager&) = delete;
 
-	/** Prevents copying so one manager value binds one device and one storage instance. */
+	/**
+	 * Motivation: Prevents copying so one manager value binds one device and one storage instance.
+	 * Responsibilities: Reject copy assignment so the device and storage references stay single-owner.
+	 */
 	TTransportManager& operator=(const TTransportManager&) = delete;
 
-	/** Defaulted so a manager with automatic storage destructs without side effects. */
+	/**
+	 * Motivation: Keeps a manager with automatic storage side-effect free on destruction.
+	 * Responsibilities: Default the destructor since the manager owns no resource.
+	 */
 	~TTransportManager() noexcept = default;
 
 	/**
-	 * Copies one complete packet with its destination address into the outbound FIFO tail.
-	 * The address is opaque to the manager; the device validates it. Returns `Invalid`
-	 * for a null packet with nonzero length or a packet larger than `MaxPacketBytes`
-	 * (it can never fit). Returns `Full` when the FIFO has no free slot. A non-success
-	 * result leaves the FIFO contents and order unchanged.
+	 * Motivation: Queues one packet transactionally so a malformed or full request never disturbs FIFO contents or order.
+	 * Responsibilities: Treat the address as opaque (the device validates it), return Invalid for a null packet with nonzero
+	 *   length or a packet larger than MaxPacketBytes, return Full when the FIFO has no free slot, and otherwise copy the
+	 *   packet into the tail.
 	 */
 	ETransportResult QueueSend(const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept
 	{
@@ -70,12 +84,9 @@ public:
 	}
 
 	/**
-	 * Attempts to send the FIFO head through the device to its stored destination.
-	 * Performs at most one device send. On `Success` the head packet is removed.
-	 * On `Full`, `Unavailable`, or `Invalid` from the device, the head packet is
-	 * retained and FIFO order is preserved so the next advance can retry it.
-	 * Returns `Unavailable` when the FIFO is empty, so a caller can distinguish
-	 * "nothing to send" from a transient device rejection.
+	 * Motivation: Drains the outbound FIFO one device send at a time so a transient device rejection never loses a packet.
+	 * Responsibilities: Perform at most one device send, remove the head on Success, and retain the head and preserve order on
+	 *   Full, Unavailable, or Invalid; return Unavailable when the FIFO is empty so "nothing to send" is distinguishable.
 	 */
 	ETransportResult AdvanceSend() noexcept
 	{
@@ -97,10 +108,9 @@ public:
 	}
 
 	/**
-	 * Performs at most one direct device receive into caller storage.
-	 * The operation is transactional: on `Full`, `Invalid`, or `Unavailable` the
-	 * destination, `OutResult.BytesReceived`, and `OutFrom` are unchanged. The
-	 * manager never queues inbound packets.
+	 * Motivation: Performs one direct device receive so inbound packets never accumulate in the manager.
+	 * Responsibilities: Delegate to the device transactionally, leaving the destination, OutResult.BytesReceived, and OutFrom
+	 *   unchanged on Full, Invalid, or Unavailable.
 	 */
 	ETransportResult Receive(
 		::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
@@ -110,23 +120,41 @@ public:
 		return Device.TryReceive(OutFrom, InDestination, OutResult);
 	}
 
-	/** Reports the fixed packet-slot capacity of this manager's outbound FIFO. */
+	/**
+	 * Motivation: Lets a caller observe the fixed FIFO depth without magic numbers.
+	 * Responsibilities: Report the fixed packet-slot capacity of this manager's outbound FIFO.
+	 */
 	static constexpr std::size_t QueueCapacity() noexcept { return MaxPackets; }
 
-	/** Reports the maximum byte length accepted per queued packet. */
+	/**
+	 * Motivation: Lets a caller observe the per-packet byte ceiling without magic numbers.
+	 * Responsibilities: Report the maximum byte length accepted per queued packet.
+	 */
 	static constexpr std::size_t MaximumPacketBytes() noexcept { return MaxPacketBytes; }
 
-	/** Reports how many packets are currently queued for send. */
+	/**
+	 * Motivation: Lets a caller observe pending outbound work.
+	 * Responsibilities: Report how many packets are currently queued for send.
+	 */
 	constexpr std::size_t QueuedCount() const noexcept { return QueuedPacketCount; }
 
-	/** Distinguishes an empty FIFO so a caller can skip `AdvanceSend`. */
+	/**
+	 * Motivation: Lets a caller skip AdvanceSend when there is nothing to drain.
+	 * Responsibilities: Report whether the FIFO is empty.
+	 */
 	constexpr bool IsEmpty() const noexcept { return QueuedPacketCount == 0; }
 
-	/** Distinguishes a full FIFO so a caller can observe backpressure. */
+	/**
+	 * Motivation: Lets a caller observe backpressure before a QueueSend reports Full.
+	 * Responsibilities: Report whether the FIFO is full.
+	 */
 	constexpr bool IsFull() const noexcept { return QueuedPacketCount >= MaxPackets; }
 
 private:
-	/** Copies one already-validated packet into the FIFO tail, or `Full` when no slot is free. */
+	/**
+	 * Motivation: Completes a validated queue by appending to the FIFO tail.
+	 * Responsibilities: Return Full when no slot is free, otherwise store the packet and advance the tail.
+	 */
 	ETransportResult EnqueuePacket(const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept
 	{
 		if (QueuedPacketCount >= MaxPackets)
@@ -138,7 +166,10 @@ private:
 		return ETransportResult::Success;
 	}
 
-	/** Copies one accepted packet, its length, and its destination address into the slot at `InIndex`. */
+	/**
+	 * Motivation: Persists one accepted packet into a named slot so send can read it back later.
+	 * Responsibilities: Copy the bytes (if any), record the length, and store the destination address.
+	 */
 	void StorePacketAt(
 		const std::size_t InIndex,
 		const ::MicroWorld::Transport::Address::FDeviceAddress& InTo,
@@ -153,26 +184,29 @@ private:
 		Storage.Destinations[InIndex] = InTo;
 	}
 
-	/** Advances the tail and count after one accepted packet. */
+	/**
+	 * Motivation: Completes one enqueue by moving the tail and count forward.
+	 * Responsibilities: Advance the tail index with wraparound and increment occupancy.
+	 */
 	void AdvanceTail() noexcept
 	{
 		TailIndex = (TailIndex + 1) % MaxPackets;
 		++QueuedPacketCount;
 	}
 
-	/** Holds the externally referenced device; the caller owns its lifetime. */
+	/** Motivation: References the externally owned device whose lifetime the caller controls. */
 	::MicroWorld::Transport::Device::IDevice& Device;
 
-	/** Holds the externally referenced caller-owned packet storage. */
+	/** Motivation: References the caller-owned packet storage the manager reads and writes. */
 	TTransportPacketStorage<MaxPackets, MaxPacketBytes>& Storage;
 
-	/** Indexes the next packet to send so the FIFO order is preserved. */
+	/** Motivation: Indexes the next packet to send so the FIFO order is preserved. */
 	std::size_t HeadIndex{0};
 
-	/** Indexes the next free slot so queues append without overwriting the head. */
+	/** Motivation: Indexes the next free slot so queues append without overwriting the head. */
 	std::size_t TailIndex{0};
 
-	/** Tracks occupancy so full and empty states are observable without wrap arithmetic. */
+	/** Motivation: Tracks occupancy so full and empty states are observable without wrap arithmetic. */
 	std::size_t QueuedPacketCount{0};
 };
 

@@ -35,26 +35,36 @@ using namespace Ex25;
 
 namespace
 {
-/** Single real-time source for the server board. */
+/** Motivation: Single real-time source for the server board. */
 FEsp32TimeSource GTimeSource{};
 
 /**
- * Subscribes to both counter message ids and logs one line per arrival, one column per channel:
- * `rx best-effort n=` for BestEffortCounterMessageId, `rx guaranteed n=` for GuaranteedCounterMessageId.
- *
- * Takes the router by constructor injection (D9); never ticks, since it only reacts to messages.
+ * Motivation: Subscribes to both counter message ids and logs one line per arrival, one column per
+ *   channel, so the demo's best-effort gaps and guaranteed completeness are visible side by side. Takes
+ *   the router by constructor injection and never ticks.
+ * Responsibilities: Register one handler per channel on play and log each arrival on its column.
+ * Example:
+ *   auto Ledger = Engine.CreateObject<FLedgerActor>(LedgerActorTypeId, Router).Object;
+ *   Engine.GetWorld().RegisterActor(TObjectPtr<AActor>{Ledger});
  */
 class FLedgerActor final : public AActor
 {
 public:
-	/** Stores the injected router; this actor's tick is disabled, matching example 24's sink actor. */
+	/**
+	 * Motivation: Stores the injected router; this actor's tick is disabled because it only reacts to messages.
+	 * Responsibilities: Construct with tick disabled and capture the router reference.
+	 */
 	explicit FLedgerActor(IMessageRouter& InRouter) noexcept
 		: AActor({/*bCanEverTick*/ false, /*bStartWithTickEnabled*/ false, /*TickIntervalMilliseconds*/ 0}), Router(InRouter)
 	{
 	}
 
 protected:
-	/** Registers one handler per channel, both targeted at this actor's own LedgerActorId. */
+	/**
+	 * Motivation: Registers one handler per channel, both targeted at this actor's own LedgerActorId, so both
+	 *   delivery paths are observable.
+	 * Responsibilities: Bind and register the best-effort and guaranteed handlers.
+	 */
 	void BeginPlay() noexcept override
 	{
 		FMessageHandlerBinding BestEffortHandler;
@@ -94,7 +104,10 @@ protected:
 	}
 
 private:
-	/** Logs one arrival on the best-effort column; this column is expected to show gaps. */
+	/**
+	 * Motivation: Logs one arrival on the best-effort column, where gaps are expected under injected loss.
+	 * Responsibilities: Validate the payload and log the best-effort counter value.
+	 */
 	void OnBestEffort(const FMessageView& View) noexcept
 	{
 		if (View.Payload.Size() < 1)
@@ -105,7 +118,10 @@ private:
 		MW_LOG(Log, "ex25", "rx best-effort n=%u", static_cast<unsigned>(View.Payload.Data()[0]));
 	}
 
-	/** Logs one arrival on the guaranteed column; this column is expected to be complete. */
+	/**
+	 * Motivation: Logs one arrival on the guaranteed column, where the sequence is expected to be complete.
+	 * Responsibilities: Validate the payload and log the guaranteed counter value.
+	 */
 	void OnGuaranteed(const FMessageView& View) noexcept
 	{
 		if (View.Payload.Size() < 1)
@@ -116,17 +132,18 @@ private:
 		MW_LOG(Log, "ex25", "rx guaranteed n=%u", static_cast<unsigned>(View.Payload.Data()[0]));
 	}
 
-	/** Router this actor listens through; injected at construction (D9), never a global. */
+	/** Motivation: Router this actor listens through; injected at construction, never a global. */
 	IMessageRouter& Router;
 };
 } // namespace
 
 /**
- * Server board: hosts the WiFi SoftAP and runs FLedgerActor over one TMessageRouter wired to ONE
- * UDP transport through TWO TMessageChannelBinding -- best-effort straight to the router, guaranteed
- * wrapped in TReliableChannel -- with the engine holding the host play system, the reliable channel, and
- * the router behind one TPlaySystemSet<3>. The server's own device is never wrapped in
- * FPacketDropDevice: only the client injects loss (§0 of the roadmap brief).
+ * Motivation: Lets Board A host the WiFi SoftAP and run FLedgerActor over one router wired to one UDP
+ *   transport through two bindings -- best-effort straight to the router, guaranteed wrapped in
+ *   TReliableChannel -- behind one TPlaySystemSet. The server's own device is never wrapped in
+ *   FPacketDropDevice; only the client injects loss.
+ * Responsibilities: Host the SoftAP, wire the transport, both bindings, the reliable channel, the frame
+ *   set, and the engine, spawn the ledger, start as a dedicated server, and tick the engine in an unbounded loop.
  */
 void RunServer() noexcept
 {

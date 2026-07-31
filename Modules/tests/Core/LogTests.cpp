@@ -14,35 +14,43 @@ namespace MicroWorld::Tests
 namespace
 {
 
-	/** Capacity of the bounded captured-message copy in bytes. */
+	/** Motivation: Capacity of the bounded captured-message copy in bytes. */
 	constexpr std::size_t CapturedMessageByteCount = 64;
 
-	/** Marker value the evaluated-integer probe returns, so the formatted-message test can assert it. */
+	/** Motivation: Marker value the evaluated-integer probe returns, so the formatted-message test can assert it. */
 	constexpr int EvaluatedIntegerMarker = 42;
 
-	/** Captures the last record the output device received without dynamic storage. */
+	/**
+	 * Motivation: Captures the last record the output device received without dynamic storage.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 * Example:
+	 *   // Construct and exercise the type in one behavior test.
+	 */
 	struct FLogCapture
 	{
-		/** Counts output device invocations so stripped or dropped calls are observable. */
+		/** Motivation: Counts output device invocations so stripped or dropped calls are observable. */
 		int CallCount{0};
 
-		/** Records the level of the most recent routed record. */
+		/** Motivation: Records the level of the most recent routed record. */
 		ELogLevel Level{ELogLevel::Log};
 
-		/** Records the category pointer of the most recent routed record. */
+		/** Motivation: Records the category pointer of the most recent routed record. */
 		const char* Category{nullptr};
 
-		/** Owns a bounded copy of the message, since formatting buffers are transient. */
+		/** Motivation: Owns a bounded copy of the message, since formatting buffers are transient. */
 		char Message[CapturedMessageByteCount]{};
 	};
 
-	/** Holds the single capture the function-pointer output device writes into. */
+	/** Motivation: Holds the single capture the function-pointer output device writes into. */
 	FLogCapture GCapture{};
 
-	/** Counts side effects in log arguments so stripped calls prove non-evaluation. */
+	/** Motivation: Counts side effects in log arguments so stripped calls prove non-evaluation. */
 	int GArgumentEvaluations{0};
 
-	/** Records one routed log record into the shared capture. */
+	/**
+	 * Motivation: Records one routed log record into the shared capture.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void CaptureLogRecord(ELogLevel InLevel, const char* InCategory, const char* InMessage)
 	{
 		++GCapture.CallCount;
@@ -51,21 +59,30 @@ namespace
 		std::snprintf(GCapture.Message, sizeof(GCapture.Message), "%s", InMessage);
 	}
 
-	/** Returns a marker integer while recording that the argument was evaluated. */
+	/**
+	 * Motivation: Returns a marker integer while recording that the argument was evaluated.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	int EvaluatedInteger()
 	{
 		++GArgumentEvaluations;
 		return EvaluatedIntegerMarker;
 	}
 
-	/** Returns a marker string while recording that the argument was evaluated. */
+	/**
+	 * Motivation: Returns a marker string while recording that the argument was evaluated.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	const char* EvaluatedMessage()
 	{
 		++GArgumentEvaluations;
 		return "probe";
 	}
 
-	/** Clears shared capture and evaluation counters before one test observes them. */
+	/**
+	 * Motivation: Clears shared capture and evaluation counters before one test observes them.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void ResetCapture() noexcept
 	{
 		GCapture = FLogCapture{};
@@ -75,8 +92,8 @@ namespace
 } // namespace
 
 /**
- * Scenario: Route a message-only Warning record through the installed output device.
- * Expected: The device receives the call once, with the matching level, category, and unchanged text.
+ * Motivation: Route a message-only Warning record through the installed output device.
+ * Responsibilities: The device receives the call once, with the matching level, category, and unchanged text.
  */
 MW_TEST_CASE(Log_MessageOnlyOutputDeviceReceivesLevelCategoryAndText)
 {
@@ -97,8 +114,8 @@ MW_TEST_CASE(Log_MessageOnlyOutputDeviceReceivesLevelCategoryAndText)
 }
 
 /**
- * Scenario: Route a printf-style Warning call carrying one unsigned argument through the output device.
- * Expected: The device receives one record with the argument expanded into the formatted message.
+ * Motivation: Route a printf-style Warning call carrying one unsigned argument through the output device.
+ * Responsibilities: The device receives one record with the argument expanded into the formatted message.
  */
 MW_TEST_CASE(Log_FormattedRecordExpandsPrintfArguments)
 {
@@ -116,8 +133,9 @@ MW_TEST_CASE(Log_FormattedRecordExpandsPrintfArguments)
 }
 
 /**
- * Scenario: Log under a null output device, then reinstall a capturing device and log again.
- * Expected: The null device drops both records without crashing; the reinstalled device routes the kept record once.
+ * Motivation: Log under a null output device, then reinstall a capturing device and log again.
+ * Responsibilities: The null device drops both records without crashing; the reinstalled device routes the kept record
+ *   once.
  */
 MW_TEST_CASE(Log_NullOutputDeviceDropsRecordsThenReinstallRoutes)
 {
@@ -143,8 +161,10 @@ MW_TEST_CASE(Log_NullOutputDeviceDropsRecordsThenReinstallRoutes)
 }
 
 /**
- * Scenario: Issue a below-floor formatted call and then an at-floor formatted call, both using a side-effecting argument.
- * Expected: The below-floor call is stripped and evaluates nothing; the at-floor call evaluates its argument once and routes the formatted record.
+ * Motivation: Issue a below-floor formatted call and then an at-floor formatted call, both using a side-effecting
+ *   argument.
+ * Responsibilities: The below-floor call is stripped and evaluates nothing; the at-floor call evaluates its argument
+ *   once and routes the formatted record.
  */
 MW_TEST_CASE(Log_BelowFloorFormattedCallStripsArgumentEvaluation)
 {
@@ -170,8 +190,10 @@ MW_TEST_CASE(Log_BelowFloorFormattedCallStripsArgumentEvaluation)
 }
 
 /**
- * Scenario: Issue a below-floor message call and then an at-floor message call, both using a side-effecting argument.
- * Expected: The below-floor call is stripped and evaluates nothing; the at-floor call evaluates its argument once and routes the evaluated string.
+ * Motivation: Issue a below-floor message call and then an at-floor message call, both using a side-effecting
+ *   argument.
+ * Responsibilities: The below-floor call is stripped and evaluates nothing; the at-floor call evaluates its argument
+ *   once and routes the evaluated string.
  */
 MW_TEST_CASE(Log_BelowFloorMessageCallStripsArgumentEvaluation)
 {
@@ -197,8 +219,8 @@ MW_TEST_CASE(Log_BelowFloorMessageCallStripsArgumentEvaluation)
 }
 
 /**
- * Scenario: Log at Error, Warning, Log, and Verbose levels in sequence under the compile-time floor.
- * Expected: The at-or-above-floor levels route once each and the below-floor Verbose level is stripped.
+ * Motivation: Log at Error, Warning, Log, and Verbose levels in sequence under the compile-time floor.
+ * Responsibilities: The at-or-above-floor levels route once each and the below-floor Verbose level is stripped.
  */
 MW_TEST_CASE(Log_FloorRoutesImportantLevelsAndStripsVerbose)
 {

@@ -30,52 +30,76 @@ static_assert(__cplusplus >= 201703L);
 namespace MicroWorldConsumer
 {
 
-/** Stable process exit codes that identify the exact public-API probe failure. */
+/**
+ * Motivation: Stable process exit codes that identify the exact public-API probe failure.
+ * Responsibilities: Name each distinct engine-API failure so the probe reports the exact broken step.
+ * Example:
+ *   EEngineConsumerExitCode Code = EEngineConsumerExitCode::Success;
+ */
 enum class EEngineConsumerExitCode : int
 {
-	Success = 0,
-	ComponentBaseRegistrationFailed = 1,
-	ActorBaseRegistrationFailed = 2,
-	WorldBaseRegistrationFailed = 3,
-	DerivedRegistrationFailed = 4,
-	StoreConfigurationFailed = 5,
-	ObjectCreationFailed = 6,
-	ComponentRegistrationFailed = 7,
-	ActorRegistrationFailed = 8,
-	WorldRootFailed = 9,
-	BeginPlayFailed = 10,
-	AdvanceFailed = 11,
-	EndPlayFailed = 12,
-	RootedCollectionFailed = 13,
-	UnrootedCollectionFailed = 14,
-	TimerScheduleFailed = 15,
-	TimerAdvanceFailed = 16,
-	TimerDidNotFireOnce = 17,
-	TimerFiredAfterCompletion = 18,
-	TimerStaleCancelFailed = 19,
-	ObjectProfileFailureOffset = 100,
+	Success = 0,						 ///< Motivation: Reports the probe observed every engine API succeeding.
+	ComponentBaseRegistrationFailed = 1, ///< Motivation: Names a base component descriptor the registry rejected.
+	ActorBaseRegistrationFailed = 2,	 ///< Motivation: Names a base actor descriptor the registry rejected.
+	WorldBaseRegistrationFailed = 3,	 ///< Motivation: Names a base world descriptor the registry rejected.
+	DerivedRegistrationFailed = 4,		 ///< Motivation: Names a derived actor or component descriptor the registry rejected.
+	StoreConfigurationFailed = 5,		 ///< Motivation: Names an object store that rejected its caller-owned storage.
+	ObjectCreationFailed = 6,			 ///< Motivation: Names an object construction that did not return a live pointer.
+	ComponentRegistrationFailed = 7,	 ///< Motivation: Names a component an actor refused to register.
+	ActorRegistrationFailed = 8,		 ///< Motivation: Names an actor the world refused to register.
+	WorldRootFailed = 9,				 ///< Motivation: Names a world strong-root acquire that did not return a live pointer.
+	BeginPlayFailed = 10,				 ///< Motivation: Names a BeginPlay call the world rejected.
+	AdvanceFailed = 11,					 ///< Motivation: Names an Advance call the world rejected.
+	EndPlayFailed = 12,					 ///< Motivation: Names an EndPlay call the world rejected.
+	RootedCollectionFailed = 13,		 ///< Motivation: Names a rooted collection that reclaimed a still-referenced object.
+	UnrootedCollectionFailed = 14,		 ///< Motivation: Names an unrooted collection that did not reclaim all objects.
+	TimerScheduleFailed = 15,			 ///< Motivation: Names a timer schedule that did not return success.
+	TimerAdvanceFailed = 16,			 ///< Motivation: Names a timer advance that did not return success.
+	TimerDidNotFireOnce = 17,			 ///< Motivation: Names a one-shot timer that did not fire exactly once.
+	TimerFiredAfterCompletion = 18,		 ///< Motivation: Names a completed timer that fired an extra time.
+	TimerStaleCancelFailed = 19,		 ///< Motivation: Names a stale-handle cancel that did not report StaleHandle.
+	ObjectProfileFailureOffset = 100,	 ///< Motivation: Offsets the nested object-probe failure codes out of the engine range.
 };
 
-/** A concrete component proving the engine component base is constructible. */
+/**
+ * Motivation: A concrete component proving the engine component base is constructible.
+ * Responsibilities: Derive UActorComponent so a descriptor can construct and destroy one user component.
+ * Example:
+ *   const FClassDescriptor D = MakeClassDescriptor<FConsumerComponent>(Id, "ConsumerComponent", Base);
+ */
 class FConsumerComponent final : public MicroWorld::Engine::UActorComponent
 {
 public:
-	/** Keeps exact descriptor-driven destruction publicly instantiable. */
+	/**
+	 * Motivation: Keeps exact descriptor-driven destruction publicly instantiable.
+	 * Responsibilities: Keep the destructor defaulted so the descriptor's destroy path can call it.
+	 */
 	~FConsumerComponent() noexcept override = default;
 };
 
-/** A concrete actor proving the engine actor base is constructible. */
+/**
+ * Motivation: A concrete actor proving the engine actor base is constructible.
+ * Responsibilities: Derive AActor so a descriptor can construct and destroy one user actor with component slots.
+ * Example:
+ *   const FClassDescriptor D = MakeClassDescriptor<FConsumerActor>(Id, "ConsumerActor", Base);
+ */
 class FConsumerActor final : public MicroWorld::Engine::AActor
 {
 public:
-	/** Initializes the managed actor base, which owns its bounded component slots. */
+	/**
+	 * Motivation: Initializes the managed actor base, which owns its bounded component slots.
+	 * Responsibilities: Forward to the actor base so its component slots are ready before registration.
+	 */
 	explicit FConsumerActor() noexcept : AActor() {}
 
-	/** Keeps exact descriptor-driven destruction publicly instantiable. */
+	/**
+	 * Motivation: Keeps exact descriptor-driven destruction publicly instantiable.
+	 * Responsibilities: Keep the destructor defaulted so the descriptor's destroy path can call it.
+	 */
 	~FConsumerActor() noexcept override = default;
 };
 
-/** Object-store and registry capacities the engine probe exercises. */
+/** Motivation: Object-store and registry capacities the engine probe exercises. */
 inline constexpr std::uint32_t EngineProbeSlotCount = 4;
 inline constexpr std::uint32_t EngineProbeRootCapacity = 2;
 inline constexpr std::size_t EngineProbeSlotSizeBytes = 256;
@@ -85,23 +109,26 @@ inline constexpr std::size_t EngineProbeWorldActorCapacity = 1;
 inline constexpr std::size_t EngineProbeTimerCapacity = 4;
 inline constexpr std::size_t EngineProbeTimerInlineBytes = 32;
 
-/** Type ids assigned to the probe's derived actor and component classes. */
+/** Motivation: Type ids assigned to the probe's derived actor and component classes. */
 inline constexpr MicroWorld::Engine::FTypeId ConsumerActorTypeId{0x00040001u};
 inline constexpr MicroWorld::Engine::FTypeId ConsumerComponentTypeId{0x00040002u};
 
-/** Number of managed objects the unrooted collection is expected to reclaim (world, actor, component). */
+/** Motivation: Number of managed objects the unrooted collection is expected to reclaim (world, actor, component). */
 inline constexpr std::uint32_t EngineProbeExpectedReclaimedObjectCount = 3;
 
-/** Timer probe inputs: a base clock reading and the one-shot fire delay. */
+/** Motivation: Timer probe inputs: a base clock reading and the one-shot fire delay. */
 inline constexpr MicroWorld::Core::TimePointMilliseconds EngineProbeTimerInitialNow = 1000;
 inline constexpr MicroWorld::Core::DurationMilliseconds EngineProbeTimerDuration = 100;
 
-/** Expected timer fire count after exactly one one-shot schedule has elapsed. */
+/** Motivation: Expected timer fire count after exactly one one-shot schedule has elapsed. */
 inline constexpr std::uint32_t EngineProbeExpectedTimerFireCount = 1;
 
 } // namespace MicroWorldConsumer
 
-/** Exercises representative Core+Object+Engine public APIs without platform I/O. */
+/**
+ * Motivation: Exercises representative Core+Object+Engine public APIs without platform I/O.
+ * Responsibilities: Register, create, play, collect, and time engine objects and report the first failure code.
+ */
 inline int RunEngineConsumerProbe() noexcept
 {
 	using namespace MicroWorld::Core;

@@ -4,8 +4,9 @@
 #include <cstdint>
 
 /**
- * Scenario: Advance the example across an initial tick, an early poll before the deadline, and a deadline poll.
- * Expected: The early poll does not tick; only the initial and deadline polls consume ticks.
+ * Motivation: Confirms an early poll before the deadline does not steal a tick from the cadence.
+ * Responsibilities: Drive an initial tick, an early poll, and a deadline poll, then assert only the
+ *   initial and deadline polls consume ticks.
  */
 MW_TEST_CASE(CoreTickExampleIgnoresEarlyPolls)
 {
@@ -28,8 +29,9 @@ MW_TEST_CASE(CoreTickExampleIgnoresEarlyPolls)
 }
 
 /**
- * Scenario: Drive the example through four due ticks, then a fifth, then a post-completion poll.
- * Expected: The fifth due tick finishes the trace; later calls cannot tick again.
+ * Motivation: Confirms the trace ends exactly on the fifth due tick and cannot be advanced afterward.
+ * Responsibilities: Drive four due ticks then a fifth, poll after completion, and assert the fifth
+ *   finishes the trace while later calls cannot tick again.
  */
 MW_TEST_CASE(CoreTickExampleFinishesOnTheFifthDueTick)
 {

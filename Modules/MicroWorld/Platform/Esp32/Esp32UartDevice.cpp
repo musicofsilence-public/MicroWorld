@@ -38,7 +38,11 @@ FEsp32UartDevice::~FEsp32UartDevice() noexcept
 namespace
 {
 
-	/** Maps one UART write outcome to the shared device result. */
+	/**
+	 * Motivation: Translates one ESP-IDF-normalized UART write outcome into the shared device result so the device
+	 *   body never inspects platform codes.
+	 * Responsibilities: Map Sent to Success, WouldBlock to Full, and anything else to Invalid.
+	 */
 	Transport::ETransportResult MapUartWriteOutcome(const EUartWriteOutcome InOutcome) noexcept
 	{
 		switch (InOutcome)

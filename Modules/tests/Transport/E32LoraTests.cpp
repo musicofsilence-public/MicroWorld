@@ -10,8 +10,8 @@ namespace
 {
 
 /**
- * Scenario: Encode a normal node id into the shared E32 address shape.
- * Expected: The encoded address uses the one-byte shape and preserves the original node id.
+ * Motivation: Encode a normal node id into the shared E32 address shape.
+ * Responsibilities: The encoded address uses the one-byte shape and preserves the original node id.
  */
 MW_TEST_CASE(E32LoraAddressRoundTripsNodeId)
 {
@@ -27,8 +27,8 @@ MW_TEST_CASE(E32LoraAddressRoundTripsNodeId)
 }
 
 /**
- * Scenario: Encode both uint8 node-id boundaries (zero and 255) into the one-byte shape.
- * Expected: Each boundary node id round-trips through the encoding unchanged.
+ * Motivation: Encode both uint8 node-id boundaries (zero and 255) into the one-byte shape.
+ * Responsibilities: Each boundary node id round-trips through the encoding unchanged.
  */
 MW_TEST_CASE(E32LoraAddressPreservesBoundaryNodeIds)
 {
@@ -42,8 +42,8 @@ MW_TEST_CASE(E32LoraAddressPreservesBoundaryNodeIds)
 }
 
 /**
- * Scenario: Offer both an empty address and a two-byte address to the E32 address recognizer.
- * Expected: Neither address matches the E32 device's one-byte shape.
+ * Motivation: Offer both an empty address and a two-byte address to the E32 address recognizer.
+ * Responsibilities: Neither address matches the E32 device's one-byte shape.
  */
 MW_TEST_CASE(E32LoraAddressRejectsOtherActiveLengths)
 {
@@ -58,8 +58,8 @@ MW_TEST_CASE(E32LoraAddressRejectsOtherActiveLengths)
 }
 
 /**
- * Scenario: Sum the E32 maximum payload bytes and the MicroWorld frame overhead.
- * Expected: The total exactly fills one 64-byte transparent frame.
+ * Motivation: Sum the E32 maximum payload bytes and the MicroWorld frame overhead.
+ * Responsibilities: The total exactly fills one 64-byte transparent frame.
  */
 MW_TEST_CASE(E32LoraPayloadBoundMatchesTransparentFrame)
 {

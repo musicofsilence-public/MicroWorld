@@ -9,15 +9,20 @@
 
 namespace
 {
-/** Single real-time source; every MicroWorld deadline in this example reads it. */
+/** Motivation: Single real-time source; every MicroWorld deadline in this example reads it. */
 MicroWorld::Platform::Esp32::FEsp32TimeSource GTimeSource{};
 
-/** Poll far faster than the cadence so the FreeRTOS idle task (and its watchdog)
+/** Motivation: Poll far faster than the cadence so the FreeRTOS idle task (and its watchdog)
  *  always runs; the tick function, not this delay, decides when a tick is due. */
 constexpr unsigned PollPacingMilliseconds = 10;
 } // namespace
 
-/** Composition root: drives one 500 ms tick schedule off real time for five ticks. */
+/**
+ * Motivation: Composition root that drives one 500 ms tick schedule off real time for five ticks,
+ *   so the platform adapter stays a thin shell around the shared bounded behavior.
+ * Responsibilities: Start the schedule from the real clock, poll on a fast pace, log each due tick,
+ *   and stop when the shared behavior reports completion.
+ */
 extern "C" void app_main(void)
 {
 	MicroWorld::Core::SetOutputDevice(&MicroWorld::Platform::Esp32::WriteEsp32LogRecord);

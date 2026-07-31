@@ -21,7 +21,11 @@ static_assert(alignof(spi_slave_transaction_t) <= 8, "TransactionStorage alignme
 namespace
 {
 
-	/** Maps one SPI transmit outcome to the shared device result (mirrors the UART/I2C devices' mapping). */
+	/**
+	 * Motivation: Translates one ESP-IDF-normalized SPI transmit outcome into the shared device result so the
+	 *   device body never inspects platform codes.
+	 * Responsibilities: Map Sent to Success, WouldBlock to Full, and anything else to Invalid.
+	 */
 	Transport::ETransportResult MapSpiTransmitOutcome(const ESpiTransmitOutcome InOutcome) noexcept
 	{
 		switch (InOutcome)
@@ -36,7 +40,11 @@ namespace
 		}
 	}
 
-	/** Reports the first reason an outgoing packet cannot be framed and sent, or `Success`. */
+	/**
+	 * Motivation: Guards a send against a malformed address, oversize packet, or null span before any syscall so
+	 *   a rejection is truly transactional.
+	 * Responsibilities: Return the first reason an outgoing packet cannot be framed and sent, or Success.
+	 */
 	Transport::ETransportResult ValidateOutgoingSpiPacket(
 		const Transport::Address::FDeviceAddress& InTo, const Core::TSpan<const std::uint8_t> InPacket) noexcept
 	{
@@ -57,8 +65,12 @@ namespace
 		return Transport::ETransportResult::Success;
 	}
 
-	/** Copies the decoder's held frame into the destination and clears it, or returns `Full`
-	 * (leaving the frame held) when the payload exceeds the destination. */
+	/**
+	 * Motivation: Moves the decoder's held frame into the caller's destination so a completed frame is delivered
+	 *   in one transactional step.
+	 * Responsibilities: Copy the payload, byte count, and sender node id and clear the held frame, or return Full
+	 *   (leaving the frame held) when the payload exceeds the destination.
+	 */
 	Transport::ETransportResult DeliverFrameFromDecoder(
 		Transport::FrameCodec::TFrameDecoder<SpiMaxPayloadBytes>& InDecoder,
 		Core::TSpan<std::uint8_t> InDestination,
@@ -79,8 +91,12 @@ namespace
 		return Transport::ETransportResult::Success;
 	}
 
-	/** Pushes a whole received window through the decoder, stopping at the first completed frame; the
-	 * caller must ensure the decoder holds no frame before calling. */
+	/**
+	 * Motivation: Drains one full-duplex received window into the decoder so every received byte is processed until
+	 *   a frame completes.
+	 * Responsibilities: Push bytes until the first completed frame appears, then stop; the caller must ensure the
+	 *   decoder holds no frame before calling.
+	 */
 	void PumpWindowIntoDecoder(
 		Transport::FrameCodec::TFrameDecoder<SpiMaxPayloadBytes>& InDecoder, const std::uint8_t* const InWindow, const std::size_t InLength) noexcept
 	{

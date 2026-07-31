@@ -53,88 +53,108 @@
 namespace
 {
 
-/** ESP-IDF log tag printed with every harness measurement line. */
+/** Motivation: ESP-IDF log tag printed with every harness measurement line. */
 constexpr const char* BenchmarkTag = "mwbench";
 
-/** Stable type id for the benchmark's user-derived managed actor descriptor. */
+/** Motivation: Stable type id for the benchmark's user-derived managed actor descriptor. */
 constexpr MicroWorld::Engine::FTypeId BenchActorTypeId{0x00060010u};
 
-/** Stable type id for the benchmark's user-derived managed component descriptor. */
+/** Motivation: Stable type id for the benchmark's user-derived managed component descriptor. */
 constexpr MicroWorld::Engine::FTypeId BenchComponentTypeId{0x00060011u};
 
-/** Stable type id for the standalone GC probe's unrooted garbage object descriptor. */
+/** Motivation: Stable type id for the standalone GC probe's unrooted garbage object descriptor. */
 constexpr MicroWorld::Engine::FTypeId GcProbeObjectTypeId{0x00060012u};
 
-/** Representative world profile: actors tick every frame, components tick every frame. */
+/** Motivation: Representative world profile: actors tick every frame, components tick every frame. */
 constexpr MicroWorld::Core::FTickConfiguration BenchTickConfiguration{true, true, MicroWorld::Core::DurationMilliseconds{0}};
 
-/** Representative actor count the roadmap names for the runtime-margin profile. */
+/** Motivation: Representative actor count the roadmap names for the runtime-margin profile. */
 constexpr std::size_t RepresentativeActorCount = 8;
 
-/** Representative component count (two per actor) the roadmap names for the profile. */
+/** Motivation: Representative component count (two per actor) the roadmap names for the profile. */
 constexpr std::size_t RepresentativeComponentCount = 16;
 
-/** Representative timer count the roadmap names for the profile. */
+/** Motivation: Representative timer count the roadmap names for the profile. */
 constexpr std::size_t RepresentativeTimerCount = 8;
 
-/** Iterations timed for the steady-state tick measurement (labeled on every result line). */
+/** Motivation: Iterations timed for the steady-state tick measurement (labeled on every result line). */
 constexpr std::uint32_t TickMeasurementIterations = 1000;
 
-/** Warm-up ticks before timing so caches and branch prediction settle. */
+/** Motivation: Warm-up ticks before timing so caches and branch prediction settle. */
 constexpr std::uint32_t TickWarmupIterations = 100;
 
-/** Iterations timed for the no-traffic transport pump measurement. */
+/** Motivation: Iterations timed for the no-traffic transport pump measurement. */
 constexpr std::uint32_t TransportPumpMeasurementIterations = 1000;
 
-/** Warm-up pump cycles before timing so the device and host settle. */
+/** Motivation: Warm-up pump cycles before timing so the device and host settle. */
 constexpr std::uint32_t TransportPumpWarmupIterations = 100;
 
 /**
- * Concrete managed component representative of steady-state per-frame component work.
- *
- * Carries a zero-interval tick configuration so every frame produces one
- * TickComponent call across the representative component population.
+ * Motivation: Concrete managed component representative of steady-state per-frame component work.
+ * Responsibilities: Carry a zero-interval tick so every frame ticks the representative component population.
+ * Example:
+ *   Host.RegisterClass<FBenchComponent>(BenchComponentTypeId, "BenchComponent");
  */
 class FBenchComponent final : public MicroWorld::Engine::UActorComponent
 {
 public:
-	/** Adopts the representative always-tick schedule so each frame exercises the component. */
+	/**
+	 * Motivation: Adopts the representative always-tick schedule so each frame exercises the component.
+	 * Responsibilities: Forward the always-tick configuration to the component base.
+	 */
 	FBenchComponent() noexcept : UActorComponent(BenchTickConfiguration) {}
 
-	/** Keeps exact descriptor-driven destruction publicly instantiable. */
+	/**
+	 * Motivation: Keeps exact descriptor-driven destruction publicly instantiable.
+	 * Responsibilities: Keep the destructor defaulted so the descriptor's destroy path can call it.
+	 */
 	~FBenchComponent() noexcept override = default;
 };
 
 /**
- * Concrete managed actor representative of steady-state per-frame actor work.
- *
- * Owns bounded component slots directly, mirroring the proven PlatformEsp32Main
- * composition.
+ * Motivation: Concrete managed actor representative of steady-state per-frame actor work.
+ * Responsibilities: Own bounded component slots directly, mirroring the proven PlatformEsp32Main composition.
+ * Example:
+ *   Host.RegisterClass<FBenchActor>(BenchActorTypeId, "BenchActor");
  */
 class FBenchActor final : public MicroWorld::Engine::AActor
 {
 public:
-	/** Initializes the managed actor base, which owns its bounded component slots. */
+	/**
+	 * Motivation: Initializes the managed actor base, which owns its bounded component slots.
+	 * Responsibilities: Forward to the actor base so its component slots are ready before registration.
+	 */
 	explicit FBenchActor() noexcept : AActor() {}
 
-	/** Keeps exact descriptor-driven destruction publicly instantiable. */
+	/**
+	 * Motivation: Keeps exact descriptor-driven destruction publicly instantiable.
+	 * Responsibilities: Keep the destructor defaulted so the descriptor's destroy path can call it.
+	 */
 	~FBenchActor() noexcept override = default;
 };
 
 /**
- * Concrete managed object used as unrooted garbage in the standalone GC probe.
- *
- * Constructed into every probe slot, rooted exactly once, then left unreferenced
- * so the collector's sweep phase reclaims the rest across multiple bounded slices.
+ * Motivation: Concrete managed object used as unrooted garbage in the standalone GC probe.
+ * Responsibilities: Construct into every probe slot so the collector reclaims all but the one rooted survivor across multiple bounded slices.
+ * Example:
+ *   Host.RegisterClass<FGcProbeObject>(GcProbeObjectTypeId, "GcProbeObject");
  */
 class FGcProbeObject final : public MicroWorld::Engine::UObject
 {
 public:
-	/** Keeps exact descriptor-driven destruction publicly instantiable. */
+	/**
+	 * Motivation: Keeps exact descriptor-driven destruction publicly instantiable.
+	 * Responsibilities: Keep the destructor defaulted so the descriptor's destroy path can call it.
+	 */
 	~FGcProbeObject() noexcept override = default;
 };
 
-/** Carries the exact capacities FBenchmarkHost sized before the traits refactor, so the benchmark store is unchanged. */
+/**
+ * Motivation: Carries the exact capacities FBenchmarkHost sized before the traits refactor, so the benchmark store is unchanged.
+ * Responsibilities: Override the trait constants the engine template sizes its fixed storage from.
+ * Example:
+ *   using FBenchmarkHost = MicroWorld::Engine::TEngine<FBenchmarkHostTraits>;
+ */
 struct FBenchmarkHostTraits : MicroWorld::Engine::FDefaultEngineTraits
 {
 	static constexpr std::size_t MaxClasses = 6;					   // UWorld + AActor + UActorComponent + 2 user types + 1 spare.
@@ -145,39 +165,43 @@ struct FBenchmarkHostTraits : MicroWorld::Engine::FDefaultEngineTraits
 	static constexpr std::size_t MaxTimers = RepresentativeTimerCount; // the representative timer count.
 };
 
-/** Sizes the engine to hold the representative world with bounded headroom. */
+/** Motivation: Sizes the engine to hold the representative world with bounded headroom. */
 using FBenchmarkHost = MicroWorld::Engine::TEngine<FBenchmarkHostTraits>;
 
-/** Dedicated server transport host sized identically to the PlatformEsp32Main proof. */
+/** Motivation: Dedicated server transport host sized identically to the PlatformEsp32Main proof. */
 using FBenchmarkTransport = MicroWorld::Transport::TTransportHost<4, 256>;
 
-/** Delegate type matching the host's timer manager so Schedule accepts a bound callback. */
+/** Motivation: Delegate type matching the host's timer manager so Schedule accepts a bound callback. */
 using FBenchTimerDelegate = MicroWorld::Core::TDelegate<void(), 64>;
 
 /**
- * Accumulates min/mean/max across one timed operation's repeated samples.
- *
- * Stores only fixed scalars so the measurement loop allocates nothing; the sum
- * is accumulated as uint64 microseconds so 1000 iterations cannot overflow.
+ * Motivation: Accumulates min/mean/max across one timed operation's repeated samples.
+ * Responsibilities: Store only fixed scalars and accumulate the sum so 1000 iterations cannot overflow.
+ * Example:
+ *   FBenchStats Stats;
+ *   Stats.Record(End - Begin);
  */
 struct FBenchStats
 {
-	/** Smallest single-sample duration observed, or zero before the first sample. */
+	/** Motivation: Smallest single-sample duration observed, or zero before the first sample. */
 	std::int64_t MinMicroseconds{0};
 
-	/** Largest single-sample duration observed, or zero before the first sample. */
+	/** Motivation: Largest single-sample duration observed, or zero before the first sample. */
 	std::int64_t MaxMicroseconds{0};
 
-	/** Running sum of all sample durations, divided by Count for the mean. */
+	/** Motivation: Running sum of all sample durations, divided by Count for the mean. */
 	std::uint64_t SumMicroseconds{0};
 
-	/** Number of samples accumulated; drives the mean denominator. */
+	/** Motivation: Number of samples accumulated; drives the mean denominator. */
 	std::uint32_t Count{0};
 
-	/** True once at least one sample has set Min and Max away from their zero initial state. */
+	/** Motivation: True once at least one sample has set Min and Max away from their zero initial state. */
 	bool bSeeded{false};
 
-	/** Records one sample and updates min/sum/count, seeding min/max on the first call. */
+	/**
+	 * Motivation: Records one sample and updates min/sum/count, seeding min/max on the first call.
+	 * Responsibilities: Fold the sample into the running min/max/sum/count without allocating.
+	 */
 	void Record(const std::int64_t Microseconds) noexcept
 	{
 		SumMicroseconds += static_cast<std::uint64_t>(Microseconds);
@@ -201,43 +225,46 @@ struct FBenchStats
 		}
 	}
 
-	/** Returns the arithmetic mean, or zero when no samples were recorded. */
+	/**
+	 * Motivation: Returns the arithmetic mean, or zero when no samples were recorded.
+	 * Responsibilities: Divide the accumulated sum by the sample count, or report zero with no samples.
+	 */
 	std::int64_t MeanMicroseconds() const noexcept { return Count == 0 ? 0 : static_cast<std::int64_t>(SumMicroseconds / Count); }
 };
 
-/** Retains the harness outcome so optimization cannot erase the representative calls. */
+/** Motivation: Retains the harness outcome so optimization cannot erase the representative calls. */
 volatile int BenchmarkSinkResult = -1;
 
 /**
- * Standalone bounded store plus collector used to isolate one GC Advance slice.
- *
- * Sized so MaxSweepOperations(8) is below the slot count(32), forcing a
- * multi-slice cycle: each Advance call is one measurable pause rather than a
- * whole cycle completing in a single call. One object is rooted; the rest are
- * unreferenced garbage the sweep phase reclaims slice by slice; the store and
- * collector are non-movable, so like ObjectConsumerProbe.h this probe declares
- * the backing storage as members and constructs the store/collector eagerly in
- * the member-init list in declaration order.
+ * Motivation: Standalone bounded store plus collector used to isolate one GC Advance slice.
+ * Responsibilities: Force a multi-slice cycle (sweep budget below slot count) so each Advance call is one measurable pause, with one rooted survivor
+ * and the rest reclaimed slice by slice, declaring backing storage as members and constructing the store/collector eagerly in declaration order.
+ * Example:
+ *   static FGcProbe GcProbe;
+ *   GcProbe.AdvanceOneSlice(bCycleComplete);
  */
 class FGcProbe final
 {
 public:
-	/** Slot count chosen to force a multi-slice sweep at the probe's budget. */
+	/** Motivation: Slot count chosen to force a multi-slice sweep at the probe's budget. */
 	static constexpr std::uint32_t SlotCount = 32;
 
-	/** Root capacity for the single rooted object that survives the cycle. */
+	/** Motivation: Root capacity for the single rooted object that survives the cycle. */
 	static constexpr std::uint32_t RootCapacity = 1;
 
-	/** Probe budget: a sweep budget below SlotCount produces measurable per-slice pauses. */
+	/** Motivation: Probe budget: a sweep budget below SlotCount produces measurable per-slice pauses. */
 	static constexpr MicroWorld::Engine::FGarbageCollectionBudget ProbeBudget{1, 1, 8};
 
-	/** Slot extent matching the largest probe object, rounded to the slot alignment. */
+	/** Motivation: Slot extent matching the largest probe object, rounded to the slot alignment. */
 	static constexpr std::size_t SlotSizeBytes = 128;
 
-	/** Power-of-two slot alignment matching the probe object's requirement. */
+	/** Motivation: Power-of-two slot alignment matching the probe object's requirement. */
 	static constexpr std::size_t SlotAlignmentBytes = 16;
 
-	/** Builds the registry, store, collector, and rooted survivor the timing loop traces. */
+	/**
+	 * Motivation: Builds the registry, store, collector, and rooted survivor the timing loop traces.
+	 * Responsibilities: Populate every slot, root exactly one, and reach a ready-to-measure state or leave bReady false.
+	 */
 	FGcProbe() noexcept
 		: Store(MakeStorage(), MicroWorld::Engine::MakeClassRegistryView(Registry))
 		, Collector(Store, MicroWorld::Engine::FGarbageCollectorStorage{Worklist.data(), SlotCount})
@@ -278,18 +305,33 @@ public:
 		bReady = true;
 	}
 
-	/** Prevents copying the fixed storage arrays and the single store identity. */
+	/**
+	 * Motivation: Prevents copying the fixed storage arrays and the single store identity.
+	 * Responsibilities: Delete the copy constructor so two probes cannot alias the same store.
+	 */
 	FGcProbe(const FGcProbe&) = delete;
-	/** Prevents assigning the fixed storage arrays and the single store identity. */
+	/**
+	 * Motivation: Prevents assigning the fixed storage arrays and the single store identity.
+	 * Responsibilities: Delete the copy-assignment operator so a probe cannot be reassigned over another store.
+	 */
 	FGcProbe& operator=(const FGcProbe&) = delete;
 
-	/** Reports whether construction populated the store, collector, and rooted survivor. */
+	/**
+	 * Motivation: Reports whether construction populated the store, collector, and rooted survivor.
+	 * Responsibilities: Return the ready flag set only when construction fully succeeded.
+	 */
 	bool IsReady() const noexcept { return bReady; }
 
-	/** Begins a fresh collection cycle so the timing loop starts from a known state. */
+	/**
+	 * Motivation: Begins a fresh collection cycle so the timing loop starts from a known state.
+	 * Responsibilities: Request a collection cycle and report whether the collector accepted it.
+	 */
 	bool StartCycle() noexcept { return Collector.RequestCollection() == MicroWorld::Core::ERuntimeResult::Success; }
 
-	/** Advances one bounded slice and reports whether that slice completed the cycle. */
+	/**
+	 * Motivation: Advances one bounded slice and reports whether that slice completed the cycle.
+	 * Responsibilities: Run one Advance at the probe budget and surface both its success and cycle completion.
+	 */
 	bool AdvanceOneSlice(bool& bCycleComplete) noexcept
 	{
 		const MicroWorld::Engine::FGarbageCollectionResult Result = Collector.Advance(ProbeBudget);
@@ -298,7 +340,10 @@ public:
 	}
 
 private:
-	/** Describes this probe's complete caller-owned store storage for the store constructor. */
+	/**
+	 * Motivation: Describes this probe's complete caller-owned store storage for the store constructor.
+	 * Responsibilities: Return one FObjectStoreStorage aggregating every fixed backing array and capacity.
+	 */
 	MicroWorld::Engine::FObjectStoreStorage MakeStorage() noexcept
 	{
 		return MicroWorld::Engine::FObjectStoreStorage{
@@ -313,42 +358,40 @@ private:
 		};
 	}
 
-	/** Owns the descriptor the probe's single managed type is constructed against. */
+	/** Motivation: Owns the descriptor the probe's single managed type is constructed against. */
 	MicroWorld::Engine::TClassRegistry<2> Registry;
 
-	/** Backing bytes for the equal-size, non-moving object slots. */
+	/** Motivation: Backing bytes for the equal-size, non-moving object slots. */
 	alignas(SlotAlignmentBytes) std::array<std::byte, SlotSizeBytes * SlotCount> SlotStorage{};
 
-	/** One lifecycle record per object slot, owned by the application. */
+	/** Motivation: One lifecycle record per object slot, owned by the application. */
 	std::array<MicroWorld::Engine::FObjectSlotMetadata, SlotCount> Slots{};
 
-	/** Backing entries for the independent explicit-root table. */
+	/** Motivation: Backing entries for the independent explicit-root table. */
 	std::array<MicroWorld::Engine::FObjectRootEntry, RootCapacity> Roots{};
 
-	/** Owns every managed lifetime over this probe's caller-owned storage. */
+	/** Motivation: Owns every managed lifetime over this probe's caller-owned storage. */
 	MicroWorld::Engine::FObjectStore Store;
 
-	/** Backing handles for the collector's reachable-object worklist. */
+	/** Motivation: Backing handles for the collector's reachable-object worklist. */
 	std::array<MicroWorld::Engine::FObjectHandle, SlotCount> Worklist{};
 
-	/** Performs bounded incremental mark/sweep over the probe store. */
+	/** Motivation: Performs bounded incremental mark/sweep over the probe store. */
 	MicroWorld::Engine::FGarbageCollector Collector;
 
-	/** Holds the single root token that keeps the survivor alive across the cycle. */
+	/** Motivation: Holds the single root token that keeps the survivor alive across the cycle. */
 	MicroWorld::Engine::TStrongObjectPtr<FGcProbeObject> Root;
 
-	/** Records whether construction reached a ready-to-measure state. */
+	/** Motivation: Records whether construction reached a ready-to-measure state. */
 	bool bReady{false};
 };
 
 } // namespace
 
 /**
- * Builds the representative world, the GC probe, and the transport host, then prints measurements.
- *
- * This is the COMPILE-ONLY proof: no netif/WiFi is brought up, the UDP device
- * is constructed but never linked, and no flash or radio operation is performed.
- * Part B flashes and captures the printed numbers under explicit authorization.
+ * Motivation: Builds the representative world, the GC probe, and the transport host, then prints measurements.
+ * Responsibilities: Run the compile-only proof that brings up no WiFi, performs no flash or radio operation, and prints the labeled measurement lines
+ * Part B captures under explicit authorization.
  */
 extern "C" void app_main()
 {

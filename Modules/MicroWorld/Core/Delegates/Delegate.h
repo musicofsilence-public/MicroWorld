@@ -11,88 +11,140 @@
 namespace MicroWorld::Core
 {
 
-/** Reports every bounded delegate operation without borrowing unrelated lifecycle errors. */
+/**
+ * Motivation: Gives every bounded delegate operation one result vocabulary that does not borrow
+ *   unrelated lifecycle errors.
+ * Responsibilities: Distinguish success from capacity, callable-fit, handle, and dispatch conflicts.
+ * Example:
+ *   EDelegateResult Result = Delegate.Execute();
+ *   if (Result != EDelegateResult::Success) { Recover(); }
+ */
 enum class EDelegateResult : std::uint8_t
 {
-	/** Confirms that the requested delegate operation completed. */
+	/** Motivation: Confirms that the requested delegate operation completed. */
 	Success,
 
-	/** Reports that no reusable multicast slot remains. */
+	/** Motivation: Reports that no reusable multicast slot remains. */
 	CapacityExceeded,
 
-	/** Rejects a callable whose object representation exceeds the declared inline capacity. */
+	/** Motivation: Rejects a callable whose object representation exceeds the declared inline capacity. */
 	CallableTooLarge,
 
-	/** Rejects a callable whose alignment exceeds the delegate's inline storage guarantee. */
+	/** Motivation: Rejects a callable whose alignment exceeds the delegate's inline storage guarantee. */
 	CallableAlignmentUnsupported,
 
-	/** Rejects an unbound delegate or a structurally invalid handle. */
+	/** Motivation: Rejects an unbound delegate or a structurally invalid handle. */
 	InvalidHandle,
 
-	/** Rejects a handle whose binding was removed or whose slot generation has changed. */
+	/** Motivation: Rejects a handle whose binding was removed or whose slot generation has changed. */
 	StaleHandle,
 
-	/** Prevents mutation or nested dispatch from changing an active broadcast iteration. */
+	/** Motivation: Prevents mutation or nested dispatch from changing an active broadcast iteration. */
 	BroadcastLocked,
 };
 
-/** Identifies one multicast binding without exposing storage or extending callable lifetime. */
+/**
+ * Motivation: Lets a caller carry one multicast binding identity without exposing storage or
+ *   extending the callable's lifetime.
+ * Responsibilities: Pair a slot index with a generation and never mutate on its own.
+ * Example:
+ *   FDelegateHandle Handle;
+ *   if (Handle.IsValid()) { Delegate.Remove(Handle); }
+ */
 struct FDelegateHandle final
 {
-	/** Reserves the maximum index as an invalid sentinel independent of delegate capacity. */
+	/** Motivation: Reserves the maximum index as an invalid sentinel independent of delegate capacity. */
 	static constexpr std::uint16_t InvalidIndex = std::numeric_limits<std::uint16_t>::max();
 
-	/** Selects the fixed slot while preserving an explicit invalid sentinel. */
+	/** Motivation: Selects the fixed slot while preserving an explicit invalid sentinel. */
 	std::uint16_t Index{InvalidIndex};
 
-	/** Distinguishes successive bindings that occupy the same slot. */
+	/** Motivation: Distinguishes successive bindings that occupy the same slot. */
 	std::uint32_t Generation{0};
 
-	/** Reports whether the value can identify a binding before consulting its owning delegate. */
+	/**
+	 * Motivation: Lets a caller reject a default or stale value before consulting its owning delegate.
+	 * Responsibilities: Report true only when the index and generation together look like a live binding.
+	 */
 	constexpr bool IsValid() const noexcept { return Index != InvalidIndex && Generation != 0; }
 
-	/** Compares the complete stable binding identity. */
+	/**
+	 * Motivation: Lets containers compare two handles by complete stable identity.
+	 * Responsibilities: Return true only when both index and generation match.
+	 */
 	friend constexpr bool operator==(const FDelegateHandle Left, const FDelegateHandle Right) noexcept
 	{
 		return Left.Index == Right.Index && Left.Generation == Right.Generation;
 	}
 
-	/** Distinguishes handles whose slot or generation identity differs. */
+	/**
+	 * Motivation: Lets a caller tell two handles apart by stable identity.
+	 * Responsibilities: Return true whenever the slot or generation identity differs.
+	 */
 	friend constexpr bool operator!=(const FDelegateHandle Left, const FDelegateHandle Right) noexcept { return !(Left == Right); }
 };
 
 /**
- * Owns one callable entirely inside fixed inline storage.
- *
- * Only `void` signatures are supported in this release. Callable construction,
- * invocation, movement, and destruction must all be non-throwing.
+ * Motivation: Lets an owner hold one callable entirely inside fixed inline storage, so binding
+ *   never heap-allocates on a constrained target.
+ * Responsibilities: Erase the concrete callable behind one supported void signature and keep
+ *   construction, invocation, movement, and destruction non-throwing.
+ * Example:
+ *   TDelegate<void(), 32> Delegate;
+ *   Delegate.Bind([]() noexcept {});
+ *   Delegate.Execute();
  */
 template<typename Signature, std::size_t InlineCallableBytes>
 class TDelegate;
 
-/** Specializes fixed inline callable erasure for the supported `void` signature family. */
+/**
+ * Motivation: Specializes the inline callable erasure for the supported void signature family.
+ * Responsibilities: Bind, invoke, move, and destroy one concrete callable without allocating.
+ * Example:
+ *   TDelegate<void(int), 16> Delegate;
+ *   Delegate.Bind([](int) noexcept {});
+ *   Delegate.Execute(7);
+ */
 template<std::size_t InlineCallableBytes, typename... ArgumentTypes>
 class TDelegate<void(ArgumentTypes...), InlineCallableBytes> final
 {
 	static_assert(InlineCallableBytes > 0, "A delegate must reserve at least one inline callable byte.");
 
 public:
-	/** Creates an unbound delegate without constructing a callable or allocating storage. */
+	/**
+	 * Motivation: Lets an owner declare a delegate with no callable bound yet.
+	 * Responsibilities: Produce an unbound delegate without constructing a callable or allocating storage.
+	 */
 	TDelegate() noexcept = default;
 
-	/** Destroys the currently bound callable exactly once. */
+	/**
+	 * Motivation: Ensures no bound callable outlives the delegate that owns its storage.
+	 * Responsibilities: Destroy the currently bound callable exactly once.
+	 */
 	~TDelegate() noexcept { Reset(); }
 
-	/** Prevents copying from duplicating ownership of one inline callable lifetime. */
+	/**
+	 * Motivation: Prevents copying from duplicating ownership of one inline callable lifetime.
+	 * Responsibilities: Reject copy construction so the inline callable stays uniquely owned.
+	 */
 	TDelegate(const TDelegate&) = delete;
 
-	/** Prevents copy assignment from duplicating ownership of one inline callable lifetime. */
+	/**
+	 * Motivation: Prevents copy assignment from duplicating ownership of one inline callable lifetime.
+	 * Responsibilities: Reject copy assignment so the inline callable stays uniquely owned.
+	 */
 	TDelegate& operator=(const TDelegate&) = delete;
 
-	/** Transfers a bound callable into this delegate and leaves the source unbound. */
+	/**
+	 * Motivation: Lets an owner transfer a bound callable into this delegate in one non-throwing move.
+	 * Responsibilities: Move the callable and erasure operations into this delegate and leave the source unbound.
+	 */
 	TDelegate(TDelegate&& Other) noexcept { MoveFrom(Other); }
 
-	/** Replaces this callable with the source callable and leaves the source unbound. */
+	/**
+	 * Motivation: Lets an owner replace this delegate's callable with another owner's callable.
+	 * Responsibilities: Release the current binding, then transfer the source callable and leave the source unbound.
+	 */
 	TDelegate& operator=(TDelegate&& Other) noexcept
 	{
 		if (this == &Other)
@@ -106,10 +158,9 @@ public:
 	}
 
 	/**
-	 * Replaces the current binding when the callable fits the declared inline layout.
-	 *
-	 * Unsupported size or alignment is reported before either callable is
-	 * constructed or the current binding is changed.
+	 * Motivation: Lets a caller replace the current binding when the callable fits the inline layout.
+	 * Responsibilities: Reject unsupported size or alignment before either callable is constructed or the
+	 *   current binding is changed, and on success install the erased operations.
 	 */
 	template<typename CallableType>
 	EDelegateResult Bind(CallableType&& InCallable) noexcept
@@ -142,7 +193,10 @@ public:
 		}
 	}
 
-	/** Destroys the current callable, if any, and restores the unbound state. */
+	/**
+	 * Motivation: Lets an owner release the current callable without destroying the delegate.
+	 * Responsibilities: Destroy the current callable if any and restore the unbound state.
+	 */
 	void Reset() noexcept
 	{
 		if (Operations.Destroy == nullptr)
@@ -154,10 +208,16 @@ public:
 		ClearFunctions();
 	}
 
-	/** Reports whether invocation currently has a live callable target. */
+	/**
+	 * Motivation: Lets a caller guard an Execute behind a single cheap check.
+	 * Responsibilities: Report whether invocation currently has a live callable target.
+	 */
 	bool IsBound() const noexcept { return Operations.Invoke != nullptr; }
 
-	/** Invokes the bound callable once or reports that no target is present. */
+	/**
+	 * Motivation: Lets a caller fire the bound callable once with forwarded arguments.
+	 * Responsibilities: Invoke the bound callable once or report that no target is present.
+	 */
 	EDelegateResult Execute(ArgumentTypes... Arguments) noexcept
 	{
 		if (Operations.Invoke == nullptr)
@@ -170,22 +230,24 @@ public:
 	}
 
 private:
-	/** Gives all supported inline callables a portable fundamental alignment guarantee. */
+	/** Motivation: Gives all supported inline callables a portable fundamental alignment guarantee. */
 	static constexpr std::size_t InlineStorageAlignment = alignof(std::max_align_t);
 
-	/** Dispatches the erased invocation to the live callable object. */
+	/** Motivation: Names the erased invocation signature dispatched to the live callable object. */
 	using FInvokeFunction = void (*)(void*, ArgumentTypes...) noexcept;
 
-	/** Transfers one erased callable lifetime between delegate storage blocks. */
+	/** Motivation: Names the erased move signature that transfers one callable between storage blocks. */
 	using FMoveFunction = void (*)(void*, void*) noexcept;
 
-	/** Ends one erased callable lifetime without knowing its concrete type. */
+	/** Motivation: Names the erased destroy signature that ends one callable without its concrete type. */
 	using FDestroyFunction = void (*)(void*) noexcept;
 
 	/**
-	 * Bundles the invoke, move, and destroy operations for one erased callable.
-	 * Not std::function -- that heap-allocates; these fixed pointers keep every
-	 * binding inline and allocation-free.
+	 * Motivation: Bundles the invoke, move, and destroy operations for one erased callable.
+	 * Responsibilities: Hold three fixed function pointers that keep every binding inline and allocation-free.
+	 * Example:
+	 *   FErasedCallableOperations Ops;
+	 *   Ops.Invoke = &Invoke<FStoredCallable>;
 	 */
 	struct FErasedCallableOperations
 	{
@@ -194,21 +256,30 @@ private:
 		FDestroyFunction Destroy{nullptr};
 	};
 
-	/** Resolves the live callable after placement construction established its concrete type. */
+	/**
+	 * Motivation: Lets the lifetime helpers reach the live callable after placement construction.
+	 * Responsibilities: Resolve a laundered pointer to the concrete callable in the given storage.
+	 */
 	template<typename CallableType>
 	static CallableType* CallableAt(void* const InStorage) noexcept
 	{
 		return RawStorage::LaunderedPointer<CallableType>(InStorage);
 	}
 
-	/** Invokes one concrete callable while preserving the declared single-cast argument categories. */
+	/**
+	 * Motivation: Lets the erased invoke entry reach one concrete callable.
+	 * Responsibilities: Forward the arguments with their declared single-cast categories.
+	 */
 	template<typename CallableType>
 	static void Invoke(void* const InStorage, ArgumentTypes... Arguments) noexcept
 	{
 		(*CallableAt<CallableType>(InStorage))(std::forward<ArgumentTypes>(Arguments)...);
 	}
 
-	/** Move-constructs one callable in destination storage and ends its source lifetime. */
+	/**
+	 * Motivation: Lets move construction transfer one erased callable between storage blocks.
+	 * Responsibilities: Move-construct the callable in destination storage and end its source lifetime.
+	 */
 	template<typename CallableType>
 	static void Move(void* const InDestinationStorage, void* const InSourceStorage) noexcept
 	{
@@ -217,14 +288,20 @@ private:
 		RawStorage::DestroyAt(SourceCallable);
 	}
 
-	/** Destroys one concrete callable held by this delegate. */
+	/**
+	 * Motivation: Lets Reset end one concrete callable held by this delegate.
+	 * Responsibilities: Run the callable's destructor once through its laundered pointer.
+	 */
 	template<typename CallableType>
 	static void Destroy(void* const InStorage) noexcept
 	{
 		RawStorage::DestroyAt(CallableAt<CallableType>(InStorage));
 	}
 
-	/** Points the erased operations at the concrete callable's invoke/move/destroy. */
+	/**
+	 * Motivation: Lets Bind point the erased operations at the concrete callable's invoke/move/destroy.
+	 * Responsibilities: Assign the three operation pointers for the newly bound callable type.
+	 */
 	template<typename StoredCallable>
 	void InstallErasedOperations() noexcept
 	{
@@ -233,10 +310,16 @@ private:
 		Operations.Destroy = &Destroy<StoredCallable>;
 	}
 
-	/** Exposes erased storage only to this delegate's lifetime operations. */
+	/**
+	 * Motivation: Gives the lifetime helpers the raw address of the inline storage.
+	 * Responsibilities: Expose the erased storage address only to this delegate's operations.
+	 */
 	void* StorageAddress() noexcept { return static_cast<void*>(&InlineStorage); }
 
-	/** Transfers the live callable and erasure operations without duplicating ownership. */
+	/**
+	 * Motivation: Lets move construction transfer the callable without duplicating ownership.
+	 * Responsibilities: Copy the erasure operations, move the callable into this storage, and clear the source.
+	 */
 	void MoveFrom(TDelegate& InOther) noexcept
 	{
 		if (!InOther.IsBound())
@@ -249,31 +332,43 @@ private:
 		InOther.ClearFunctions();
 	}
 
-	/** Clears erased operations only after the associated callable lifetime has ended or moved. */
+	/**
+	 * Motivation: Lets Reset leave a clean unbound state after the callable is gone.
+	 * Responsibilities: Reset the erasure operations to their inert defaults.
+	 */
 	void ClearFunctions() noexcept { Operations = {}; }
 
 	/**
-	 * Retains one callable inline without beginning any concrete object lifetime by default.
-	 *
-	 * Spelled with alignas rather than std::aligned_storage, which C++23 deprecates and
-	 * the ESP32 toolchain's libstdc++ diagnoses.
+	 * Motivation: Retains one callable inline without beginning any concrete object lifetime by default.
+	 * Responsibilities: Hold one callable's worth of aligned bytes without starting a concrete object lifetime.
 	 */
 	alignas(InlineStorageAlignment) unsigned char InlineStorage[InlineCallableBytes];
 
-	/** Selects the concrete invoke/move/destroy operations for the currently bound callable. */
+	/** Motivation: Selects the concrete invoke/move/destroy operations for the currently bound callable. */
 	FErasedCallableOperations Operations;
 };
 
 /**
- * Owns a fixed number of insertion-ordered `void` delegate bindings.
- *
- * Active broadcast rejects mutation and nested broadcast so every binding
- * present at dispatch start executes at most once in stable insertion order.
+ * Motivation: Lets an owner keep a fixed number of insertion-ordered void delegate bindings and
+ *   broadcast to all of them without heap allocation.
+ * Responsibilities: Hold the bindings in stable insertion order and let active broadcast reject
+ *   mutation and nested broadcast so every binding present at dispatch start runs at most once.
+ * Example:
+ *   TMulticastDelegate<void(), 4, 16> Bus;
+ *   Bus.Add(std::move(A), Handle);
+ *   Bus.Broadcast();
  */
 template<typename Signature, std::size_t MaxBindings, std::size_t InlineCallableBytes>
 class TMulticastDelegate;
 
-/** Specializes bounded multicast dispatch for the supported `void` signature family. */
+/**
+ * Motivation: Specializes bounded multicast dispatch for the supported void signature family.
+ * Responsibilities: Add, remove, and broadcast insertion-ordered bindings, rejecting mutation and
+ *   reentrant dispatch while a broadcast is active.
+ * Example:
+ *   TMulticastDelegate<void(int), 8, 16> Bus;
+ *   Bus.Broadcast(7);
+ */
 template<std::size_t MaxBindings, std::size_t InlineCallableBytes, typename... ArgumentTypes>
 class TMulticastDelegate<void(ArgumentTypes...), MaxBindings, InlineCallableBytes> final
 {
@@ -287,25 +382,41 @@ class TMulticastDelegate<void(ArgumentTypes...), MaxBindings, InlineCallableByte
 		"Every multicast value argument must be nothrow copy constructible for noexcept delivery to each binding.");
 
 public:
-	/** Creates an empty delegate with reusable generation-one slots and no active broadcast. */
+	/**
+	 * Motivation: Lets an owner declare an empty multicast delegate with no bindings.
+	 * Responsibilities: Produce reusable generation-one slots and no active broadcast.
+	 */
 	TMulticastDelegate() noexcept = default;
 
-	/** Prevents copying fixed slots and their uniquely owned inline callables. */
+	/**
+	 * Motivation: Prevents copying fixed slots and their uniquely owned inline callables.
+	 * Responsibilities: Reject copy construction so each inline callable stays uniquely owned.
+	 */
 	TMulticastDelegate(const TMulticastDelegate&) = delete;
 
-	/** Prevents copy assignment from duplicating binding identities and callable ownership. */
+	/**
+	 * Motivation: Prevents copy assignment from duplicating binding identities and callable ownership.
+	 * Responsibilities: Reject copy assignment so binding identities stay unique.
+	 */
 	TMulticastDelegate& operator=(const TMulticastDelegate&) = delete;
 
-	/** Keeps this multicast object's slot addresses and handle ownership stable. */
+	/**
+	 * Motivation: Keeps this multicast object's slot addresses and handle ownership stable.
+	 * Responsibilities: Reject move construction so registered slot addresses never relocate.
+	 */
 	TMulticastDelegate(TMulticastDelegate&&) = delete;
 
-	/** Keeps this multicast object's slot addresses and handle ownership stable. */
+	/**
+	 * Motivation: Keeps this multicast object's slot addresses and handle ownership stable.
+	 * Responsibilities: Reject move assignment so registered slot addresses never relocate.
+	 */
 	TMulticastDelegate& operator=(TMulticastDelegate&&) = delete;
 
 	/**
-	 * Transfers one bound delegate into the next insertion position.
-	 *
-	 * Failure leaves `InBinding` bound and clears `OutHandle`.
+	 * Motivation: Lets a caller register one bound delegate at the next insertion position.
+	 * Responsibilities: Reject mutation during broadcast and an unbound binding, then move InBinding
+	 *   into a reusable slot and publish a generation-checked handle; on failure leave InBinding bound
+	 *   and clear OutHandle.
 	 */
 	EDelegateResult Add(TDelegate<void(ArgumentTypes...), InlineCallableBytes>&& InBinding, FDelegateHandle& OutHandle) noexcept
 	{
@@ -330,7 +441,10 @@ public:
 		return EDelegateResult::Success;
 	}
 
-	/** Removes exactly the binding identified by a current generation-checked handle. */
+	/**
+	 * Motivation: Lets a caller unregister one binding by its current generation-checked handle.
+	 * Responsibilities: Reject mutation during broadcast and remove exactly the identified binding.
+	 */
 	EDelegateResult Remove(const FDelegateHandle InHandle) noexcept
 	{
 		if (bBroadcastActive)
@@ -348,10 +462,9 @@ public:
 	}
 
 	/**
-	 * Invokes the bindings present at broadcast start once in insertion order.
-	 *
-	 * Value arguments are copied independently for each binding; references
-	 * continue to refer to the caller's object.
+	 * Motivation: Lets a caller fire every binding present at broadcast start once, in order.
+	 * Responsibilities: Reject reentrant broadcast, then invoke the snapshotted bindings in insertion
+	 *   order, copying value arguments per binding while references refer to the caller's object.
 	 */
 	EDelegateResult Broadcast(ArgumentTypes... Arguments) noexcept
 	{
@@ -374,41 +487,74 @@ public:
 		return EDelegateResult::Success;
 	}
 
-	/** Reports the exact number of bindings that the next successful broadcast will visit. */
+	/**
+	 * Motivation: Lets a caller report how many bindings the next successful broadcast visits.
+	 * Responsibilities: Return the exact count of live bindings.
+	 */
 	std::size_t BindingCount() const noexcept { return ActiveBindingCount; }
 
-	/** Reports the compile-time upper bound on live bindings and broadcast work. */
+	/**
+	 * Motivation: Lets a caller test capacity against the fixed limit without magic numbers.
+	 * Responsibilities: Report the compile-time upper bound on live bindings and broadcast work.
+	 */
 	static constexpr std::size_t Capacity() noexcept { return MaxBindings; }
 
 private:
-	/** Owns one reusable inline binding and the identity state guarding slot reuse. */
+	/**
+	 * Motivation: Holds one reusable inline binding and the identity state that guards slot reuse.
+	 * Responsibilities: Own the callable while occupied and carry the generation and retirement flags
+	 *   that make a reused slot reject stale handles.
+	 * Example:
+	 *   FBindingSlot Slot;
+	 *   Slot.Generation = 2;
+	 */
 	struct FBindingSlot final
 	{
-		/** Owns the callable only while this slot is occupied. */
+		/** Motivation: Owns the callable only while this slot is occupied. */
 		TDelegate<void(ArgumentTypes...), InlineCallableBytes> Binding;
 
-		/** Changes after removal so an old handle cannot identify a later binding. */
+		/** Motivation: Changes after removal so an old handle cannot identify a later binding. */
 		std::uint32_t Generation{1};
 
-		/** Distinguishes a live binding from reusable unconstructed slot state. */
+		/** Motivation: Distinguishes a live binding from reusable unconstructed slot state. */
 		bool bOccupied{false};
 
-		/** Permanently removes a slot whose generation can no longer advance safely. */
+		/** Motivation: Permanently removes a slot whose generation can no longer advance safely. */
 		bool bRetired{false};
 	};
 
-	/** Sets the broadcast-active flag for one dispatch and clears it on every exit path. */
+	/**
+	 * Motivation: Gives Broadcast a flag it can set for one dispatch and reliably clear on exit.
+	 * Responsibilities: Set the flag on construction and clear it on every exit path, including exceptions.
+	 * Example:
+	 *   bool Active = false;
+	 *   FScopedBroadcastGuard Guard{Active};
+	 */
 	struct FScopedBroadcastGuard final
 	{
 		explicit FScopedBroadcastGuard(bool& InFlag) noexcept : ActiveFlag(InFlag) { ActiveFlag = true; }
 		~FScopedBroadcastGuard() noexcept { ActiveFlag = false; }
+
+		/**
+		 * Motivation: Prevents a second guard instance from racing one flag.
+		 * Responsibilities: Reject copy construction so exactly one scope owns the flag reset.
+		 */
 		FScopedBroadcastGuard(const FScopedBroadcastGuard&) = delete;
+
+		/**
+		 * Motivation: Prevents reassigning the flag one guard resets on destruction.
+		 * Responsibilities: Reject copy assignment so each guard keeps one bound flag.
+		 */
 		FScopedBroadcastGuard& operator=(const FScopedBroadcastGuard&) = delete;
 
+		/** Motivation: Names the broadcast-active flag this guard sets and clears. */
 		bool& ActiveFlag;
 	};
 
-	/** Finds the lowest reusable slot while insertion order remains separately recorded. */
+	/**
+	 * Motivation: Lets Add locate the next slot without disturbing the separately recorded order.
+	 * Responsibilities: Return the lowest unoccupied, unretired slot, or null when none remains.
+	 */
 	FBindingSlot* FindAvailableSlot() noexcept
 	{
 		for (std::size_t SlotIndex = 0; SlotIndex < MaxBindings; ++SlotIndex)
@@ -422,7 +568,10 @@ private:
 		return nullptr;
 	}
 
-	/** Moves a bound delegate into a reusable slot and returns its generation-checked handle. */
+	/**
+	 * Motivation: Lets Add claim one reusable slot for a new binding.
+	 * Responsibilities: Move the bound delegate into the slot, mark it occupied, and return its handle.
+	 */
 	FDelegateHandle OccupySlot(const std::size_t InSlotIndex, TDelegate<void(ArgumentTypes...), InlineCallableBytes>&& InBinding) noexcept
 	{
 		FBindingSlot& Slot = BindingSlots[InSlotIndex];
@@ -434,14 +583,20 @@ private:
 		};
 	}
 
-	/** Appends a handle to the insertion-order table the next broadcast will follow. */
+	/**
+	 * Motivation: Lets Add record where each binding sits for the next broadcast.
+	 * Responsibilities: Append the handle to the insertion-order table and advance the binding count.
+	 */
 	void RecordBroadcastOrder(const FDelegateHandle InHandle) noexcept
 	{
 		BroadcastOrder[ActiveBindingCount] = InHandle;
 		++ActiveBindingCount;
 	}
 
-	/** Finds one live handle in the insertion-order table without trusting slot state alone. */
+	/**
+	 * Motivation: Lets validation locate one handle in insertion order without trusting slot state alone.
+	 * Responsibilities: Return the handle's order index, or the active count when it is not present.
+	 */
 	std::size_t FindOrderIndex(const FDelegateHandle InHandle) const noexcept
 	{
 		for (std::size_t OrderIndex = 0; OrderIndex < ActiveBindingCount; ++OrderIndex)
@@ -454,7 +609,10 @@ private:
 		return ActiveBindingCount;
 	}
 
-	/** Confirms a handle still identifies a live binding and reports its insertion-order index. */
+	/**
+	 * Motivation: Lets Remove trust one handle as identifying a current live binding.
+	 * Responsibilities: Reject invalid or stale handles and report the binding's insertion-order index.
+	 */
 	EDelegateResult ValidateLiveHandle(const FDelegateHandle InHandle, std::size_t& OutOrderIndex) const noexcept
 	{
 		OutOrderIndex = ActiveBindingCount;
@@ -476,7 +634,10 @@ private:
 		return EDelegateResult::Success;
 	}
 
-	/** Clears a removed binding, advances its slot identity, and compacts insertion order. */
+	/**
+	 * Motivation: Lets Remove tear down one binding without leaving the order table inconsistent.
+	 * Responsibilities: Reset the binding, advance its slot identity, compact insertion order, and drop the count.
+	 */
 	void RetireSlotAndCompactOrder(const std::size_t InSlotIndex, const std::size_t InOrderIndex) noexcept
 	{
 		FBindingSlot& Slot = BindingSlots[InSlotIndex];
@@ -487,7 +648,10 @@ private:
 		--ActiveBindingCount;
 	}
 
-	/** Advances a reusable slot identity or retires it before generation wrap can cause ABA. */
+	/**
+	 * Motivation: Keeps a reused slot from matching an old handle as generations approach wrap.
+	 * Responsibilities: Advance the generation, or permanently retire the slot before it can wrap.
+	 */
 	static void AdvanceGenerationOrRetire(FBindingSlot& InSlot) noexcept
 	{
 		if (InSlot.Generation == std::numeric_limits<std::uint32_t>::max())
@@ -498,7 +662,10 @@ private:
 		++InSlot.Generation;
 	}
 
-	/** Compacts insertion order after removal without changing any remaining slot identity. */
+	/**
+	 * Motivation: Lets Remove close the gap left by a removed binding in insertion order.
+	 * Responsibilities: Shift later entries down without changing any remaining slot identity.
+	 */
 	void RemoveOrderAt(const std::size_t InRemovedOrderIndex) noexcept
 	{
 		for (std::size_t OrderIndex = InRemovedOrderIndex; OrderIndex + 1U < ActiveBindingCount; ++OrderIndex)
@@ -508,18 +675,18 @@ private:
 		BroadcastOrder[ActiveBindingCount - 1U] = {};
 	}
 
-	/** Owns all bounded callable storage independently of insertion order. */
+	/** Motivation: Owns all bounded callable storage independently of insertion order. */
 	// C++ forbids zero-length arrays; one dummy slot keeps a zero-binding
 	// (MaxBindings == 0) instantiation well-formed.
 	FBindingSlot BindingSlots[MaxBindings == 0 ? 1 : MaxBindings];
 
-	/** Preserves deterministic insertion order while slots are removed and reused. */
+	/** Motivation: Preserves deterministic insertion order while slots are removed and reused. */
 	FDelegateHandle BroadcastOrder[MaxBindings == 0 ? 1 : MaxBindings];
 
-	/** Bounds order-table traversal and makes current registration count observable. */
+	/** Motivation: Bounds order-table traversal and makes current registration count observable. */
 	std::size_t ActiveBindingCount{0};
 
-	/** Rejects mutation and reentrant dispatch while broadcast iteration is active. */
+	/** Motivation: Rejects mutation and reentrant dispatch while broadcast iteration is active. */
 	bool bBroadcastActive{false};
 };
 

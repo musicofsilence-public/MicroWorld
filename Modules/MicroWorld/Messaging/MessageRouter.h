@@ -13,10 +13,15 @@ namespace MicroWorld::Messaging
 {
 
 /**
- * Routes actor messages between handlers and channels.
- * Implements IPlaySystem so TEngine pumps it like any play system:
- * PreAdvance delivers queued inbound messages to matching handlers;
- * PostAdvance hands queued outbound messages to their channels.
+ * Motivation: Routes actor messages between handlers and channels, so actors hold one IMessageRouter& instead of
+ *   touching transports and TEngine pumps it like any play system.
+ * Responsibilities: Deliver queued inbound messages to matching handlers in PreAdvance, hand queued outbound messages
+ *   to their channels in PostAdvance, and keep non-copyable handler callbacks and slot identity behind a fixed
+ *   application-owned lifetime.
+ * Example:
+ *   TMessageRouter<8, 16, 64, 4> Router;
+ *   Router.AddMessageHandler(TypeId, Actor, std::move(Handler), Handle);
+ *   Router.SendMessageToActor(LocalChannelId, TypeId, TargetActor, SenderActor, Payload);
  */
 template<std::size_t MaxHandlers, std::size_t MaxQueuedMessages, std::size_t MaxMessageBytes, std::size_t MaxChannels>
 class TMessageRouter final : public IMessageRouter, public Core::IPlaySystem
@@ -25,32 +30,43 @@ class TMessageRouter final : public IMessageRouter, public Core::IPlaySystem
 	static_assert(MaxMessageBytes >= ActorMessageHeaderBytes, "A message router's per-message byte budget must be able to hold at least a header.");
 
 public:
-	/** Creates a router with no registered handlers, channels, or queued messages. */
+	/**
+	 * Motivation: Gives the router a clean starting state a caller can construct directly.
+	 * Responsibilities: Produce a router with no registered handlers, channels, or queued messages.
+	 */
 	TMessageRouter() noexcept = default;
 
-	/** Prevents copying: the router uniquely owns non-copyable inline handler callbacks and slot identity. */
+	/**
+	 * Motivation: Stops copy construction from duplicating uniquely owned inline handler callbacks and slot identity.
+	 * Responsibilities: Reject copy construction outright so the router stays the single owner of its slots.
+	 */
 	TMessageRouter(const TMessageRouter&) = delete;
 
-	/** Prevents copy assignment: it would duplicate uniquely owned callback and slot identity. */
+	/**
+	 * Motivation: Stops copy assignment from duplicating uniquely owned callback and slot identity.
+	 * Responsibilities: Reject copy assignment outright so the router stays the single owner of its slots.
+	 */
 	TMessageRouter& operator=(const TMessageRouter&) = delete;
 
 	/**
-	 * Prevents moving so the router keeps one deliberately simple application-owned lifetime and
-	 * identity. Actors hold it as IMessageRouter& and TEngine pumps it as IPlaySystem*, and
-	 * relocation would not mechanically rewrite those references; forbidding move keeps the ownership
-	 * boundary explicit, matching TTimerManager.
+	 * Motivation: Keeps the router at one deliberately simple application-owned lifetime and identity, matching
+	 *   TTimerManager, since actors hold it as IMessageRouter& and TEngine pumps it as IPlaySystem*.
+	 * Responsibilities: Reject move construction outright so handles and references are never carried across a
+	 *   relocation the language would not mechanically rewrite.
 	 */
 	TMessageRouter(TMessageRouter&&) = delete;
 
-	/** Prevents move assignment for the same application-owned lifetime/identity reason as the deleted move ctor. */
+	/**
+	 * Motivation: Stops move assignment for the same application-owned lifetime and identity reason as the deleted move ctor.
+	 * Responsibilities: Reject move assignment outright so the router keeps one fixed identity.
+	 */
 	TMessageRouter& operator=(TMessageRouter&&) = delete;
 
 	/**
-	 * Registers a callback for one message type.
-	 *
-	 * Rejects an unbound Handler as InvalidHandler and a full handler table as
-	 * CapacityExceeded, both leaving Handler bound to the caller and OutHandle
-	 * cleared; rejects every mutation while a dispatch pass is active as DispatchLocked.
+	 * Motivation: Lets an actor register one callback for a message type it wants to receive.
+	 * Responsibilities: Reject an unbound Handler as InvalidHandler, a full handler table as CapacityExceeded, and any
+	 *   mutation during a dispatch pass as DispatchLocked, leaving Handler bound and OutHandle cleared on failure; on
+	 *   success publish a fresh generation-checked handle.
 	 */
 	EMessageResult AddMessageHandler(
 		const FMessageTypeId InMessageTypeId,
@@ -88,11 +104,10 @@ public:
 	}
 
 	/**
-	 * Removes one previously registered callback.
-	 *
-	 * Rejects a structurally invalid handle as InvalidHandler and a handle whose
-	 * slot is free or holds another generation as StaleHandle; rejects every
-	 * mutation while a dispatch pass is active as DispatchLocked.
+	 * Motivation: Lets an actor retire one callback it no longer needs.
+	 * Responsibilities: Reject a structurally invalid handle as InvalidHandler, a handle whose slot is free or holds
+	 *   another generation as StaleHandle, and any mutation during a dispatch pass as DispatchLocked; on success remove
+	 *   exactly that registration and advance its slot identity.
 	 */
 	EMessageResult RemoveMessageHandler(const FMessageHandlerHandle InHandle) noexcept override
 	{
@@ -120,11 +135,9 @@ public:
 	}
 
 	/**
-	 * Queues one message for a specific target actor on the given channel.
-	 *
-	 * Validates in order (InvalidType, InvalidChannel, PayloadTooLarge,
-	 * CapacityExceeded), encodes once into the outbound queue's tail entry, and
-	 * enqueues; every rejection leaves the outbound queue exactly as it was.
+	 * Motivation: Lets an actor queue one message for a specific target actor on a channel for later delivery or send.
+	 * Responsibilities: Validate in order as InvalidType, InvalidChannel, PayloadTooLarge, then CapacityExceeded, encode
+	 *   once into the outbound queue's tail entry, and enqueue, leaving the queue exactly as it was on any rejection.
 	 */
 	EMessageResult SendMessageToActor(
 		const FMessageChannelId InChannelId,
@@ -181,7 +194,11 @@ public:
 		return EMessageResult::Success;
 	}
 
-	/** Queues one message for every subscriber of the type on the given channel, using BroadcastActorId as the target. */
+	/**
+	 * Motivation: Lets an actor queue one message for every subscriber of a type without naming each target.
+	 * Responsibilities: Delegate to SendMessageToActor with BroadcastActorId as the target, inheriting its validation
+	 *   and transactional enqueue behavior.
+	 */
 	EMessageResult BroadcastMessage(
 		const FMessageChannelId InChannelId,
 		const FMessageTypeId InMessageTypeId,
@@ -192,11 +209,9 @@ public:
 	}
 
 	/**
-	 * Queues one encoded message that arrived on the given channel.
-	 *
-	 * Rejects a length outside [ActorMessageHeaderBytes, MaxMessageBytes] as
-	 * PayloadTooLarge; on a full inbound queue increments DroppedInboundCount
-	 * and returns CapacityExceeded while leaving the queue unchanged.
+	 * Motivation: Lets a channel hand one inbound encoded message to the router for later delivery in PreAdvance.
+	 * Responsibilities: Reject a length outside [ActorMessageHeaderBytes, MaxMessageBytes] as PayloadTooLarge; on a full
+	 *   inbound queue increment DroppedInboundCount and return CapacityExceeded while leaving the queue unchanged.
 	 */
 	EMessageResult ReceiveEncodedMessage(
 		const FMessageChannelId InArrivedOnChannelId, const Core::TSpan<const std::uint8_t> InEncoded) noexcept override
@@ -215,8 +230,9 @@ public:
 	}
 
 	/**
-	 * Delivers exactly the inbound messages queued at entry, oldest first, to their matching handlers.
-	 * Messages enqueued during this pass (including from a handler's own send) wait for the next PreAdvance.
+	 * Motivation: Lets TEngine deliver queued inbound messages to matching handlers as one framed pump step.
+	 * Responsibilities: Deliver exactly the messages queued at entry, oldest first, and lock handler mutation for the
+	 *   whole pass so messages enqueued during it (including from a handler's own send) wait for the next PreAdvance.
 	 */
 	void PreAdvance(const Core::TimePointMilliseconds InNowMilliseconds) noexcept override
 	{
@@ -232,11 +248,11 @@ public:
 	}
 
 	/**
-	 * Flushes outbound messages from the head, in order: a LocalChannelId entry moves to the inbound
-	 * queue; a wired entry is handed to its channel. On any failure (inbound full, or the channel
-	 * returning non-Success) the head entry is retained and flushing stops for this tick, so a
-	 * stalled channel also holds back every later entry queued for a different channel (accepted v1
-	 * head-of-line behavior, matching TTransportManager::AdvanceSend's retained-head discipline).
+	 * Motivation: Lets TEngine flush queued outbound messages to their channels or back to the inbound queue as one
+	 *   framed pump step.
+	 * Responsibilities: Drain from the head in order, moving a LocalChannelId entry to the inbound queue and handing a
+	 *   wired entry to its channel, and stop on any failure so a stalled channel also holds back every later entry
+	 *   queued for a different channel.
 	 */
 	void PostAdvance(const Core::TimePointMilliseconds InNowMilliseconds) noexcept override
 	{
@@ -276,7 +292,11 @@ public:
 		}
 	}
 
-	/** Registers one outbound channel under its id; rejects LocalChannelId, a duplicate id, and a full channel table. */
+	/**
+	 * Motivation: Lets a caller register one outbound wired channel so the router can route sends to it.
+	 * Responsibilities: Reject LocalChannelId, a duplicate id, and a full channel table before storing the channel in
+	 *   the first free slot.
+	 */
 	EMessageResult AddChannel(IMessageChannel& InChannel) noexcept
 	{
 		const FMessageChannelId ChannelId = InChannel.GetChannelId();
@@ -301,68 +321,100 @@ public:
 		return EMessageResult::Success;
 	}
 
-	/** Reports how many messages are currently queued for PreAdvance to deliver. */
+	/**
+	 * Motivation: Lets a caller observe how many messages the next PreAdvance pass will deliver.
+	 * Responsibilities: Report the exact current inbound queue occupancy.
+	 */
 	std::size_t QueuedInboundCount() const noexcept { return InboundCount; }
 
-	/** Reports how many messages are currently queued for PostAdvance to send or deliver locally. */
+	/**
+	 * Motivation: Lets a caller observe how many messages the next PostAdvance pass will send or deliver locally.
+	 * Responsibilities: Report the exact current outbound queue occupancy.
+	 */
 	std::size_t QueuedOutboundCount() const noexcept { return OutboundCount; }
 
-	/** Reports the exact number of handlers that the next PreAdvance pass may match against. */
+	/**
+	 * Motivation: Lets a caller observe the number of handlers the next PreAdvance pass may match against.
+	 * Responsibilities: Report the exact count of currently registered handlers.
+	 */
 	std::size_t HandlerCount() const noexcept { return ActiveHandlerCount; }
 
-	/** Reports how many ReceiveEncodedMessage calls were rejected because the inbound queue was full. */
+	/**
+	 * Motivation: Lets a caller observe inbound pressure from a congested source.
+	 * Responsibilities: Report how many ReceiveEncodedMessage calls were rejected because the inbound queue was full.
+	 */
 	std::uint32_t DroppedInboundCount() const noexcept { return DroppedInboundMessageCount; }
 
 private:
-	/** One registered message handler slot, matched by type and optionally by listener actor. */
+	/**
+	 * Motivation: Owns one registered message handler's match keys and callback in one reusable slot.
+	 * Responsibilities: Hold the type id, listener actor id, delegate, and generation-checked identity that decide
+	 *   whether a message reaches this handler.
+	 * Example:
+	 *   FHandlerSlot Slot;
+	 *   Slot.TypeId = TypeId; Slot.Delegate = std::move(Handler); Slot.bActive = true;
+	 */
 	struct FHandlerSlot final
 	{
-		/** Message type this slot's delegate is invoked for while active. */
+		/** Motivation: Holds the message type this slot's delegate is invoked for while active. */
 		FMessageTypeId TypeId{0};
 
-		/** Actor id this slot matches against a targeted message's TargetActorId; BroadcastActorId means broadcasts only. */
+		/** Motivation: Holds the actor id this slot matches against a targeted message's TargetActorId. */
 		FMessageActorId ListenerActorId{BroadcastActorId};
 
-		/** Callback invoked for every message that matches this slot while active. */
+		/** Motivation: Holds the callback invoked for every message that matches this slot while active. */
 		FMessageHandlerBinding Delegate;
 
-		/** Distinguishes successive registrations that occupy this slot. */
+		/** Motivation: Distinguishes successive registrations that occupy this slot. */
 		std::uint32_t Generation{1};
 
-		/** Distinguishes a live handler from reusable unoccupied slot state. */
+		/** Motivation: Distinguishes a live handler from reusable unoccupied slot state. */
 		bool bActive{false};
 
-		/** Permanently removes this slot once its generation space is exhausted. */
+		/** Motivation: Permanently removes this slot once its generation space is exhausted. */
 		bool bRetired{false};
 	};
 
-	/** One queued message copied into fixed-size storage for later local delivery or channel transmission. */
+	/**
+	 * Motivation: Holds one queued message copied into fixed-size storage for later local delivery or channel send.
+	 * Responsibilities: Store the channel id, encoded length, and bytes for one message without referencing caller storage.
+	 * Example:
+	 *   FQueuedMessage Entry; Entry.ChannelId = LocalChannelId; Entry.LengthBytes = Written;
+	 */
 	struct FQueuedMessage final
 	{
-		/** Channel this message arrived on (inbound) or is destined for (outbound). */
+		/** Motivation: Holds the channel this message arrived on (inbound) or is destined for (outbound). */
 		FMessageChannelId ChannelId{LocalChannelId};
 
-		/** Number of valid encoded bytes at the front of Bytes. */
+		/** Motivation: Holds the count of valid encoded bytes at the front of Bytes. */
 		std::uint16_t LengthBytes{0};
 
-		/** Fixed backing storage for one encoded actor message. */
+		/** Motivation: Provides the fixed backing storage for one encoded actor message. */
 		std::uint8_t Bytes[MaxMessageBytes == 0 ? 1 : MaxMessageBytes]{};
 	};
 
-	/** One configured outbound channel binding, keyed by the channel's own id. */
+	/**
+	 * Motivation: Holds one configured outbound channel binding keyed by the channel's own id.
+	 * Responsibilities: Store the channel id and pointer together with an occupancy flag so lookups and reuse stay simple.
+	 * Example:
+	 *   FChannelSlot Slot; Slot.ChannelId = Id; Slot.ChannelPtr = &Channel; Slot.bOccupied = true;
+	 */
 	struct FChannelSlot final
 	{
-		/** Configured channel's id; meaningful only while bOccupied is true. */
+		/** Motivation: Holds the configured channel's id, meaningful only while bOccupied is true. */
 		FMessageChannelId ChannelId{LocalChannelId};
 
-		/** Externally owned channel this slot forwards to; never owned here. */
+		/** Motivation: Holds the externally owned channel this slot forwards to. */
 		IMessageChannel* ChannelPtr{nullptr};
 
-		/** Distinguishes a configured channel from reusable unoccupied slot state. */
+		/** Motivation: Distinguishes a configured channel from reusable unoccupied slot state. */
 		bool bOccupied{false};
 	};
 
-	/** Finds the lowest reusable handler slot while insertion order remains separately recorded. */
+	/**
+	 * Motivation: Lets AddMessageHandler claim the next free slot without disturbing insertion order.
+	 * Responsibilities: Return the lowest unoccupied, unretired handler slot, or null when none remains.
+	 */
 	FHandlerSlot* FindAvailableHandlerSlot() noexcept
 	{
 		for (std::size_t Index = 0; Index < MaxHandlers; ++Index)
@@ -376,7 +428,10 @@ private:
 		return nullptr;
 	}
 
-	/** Advances a reusable handler slot's identity or retires it before generation wrap can cause ABA. */
+	/**
+	 * Motivation: Keeps a reused handler slot from matching an old handle as its generation approaches wrap.
+	 * Responsibilities: Advance the generation, or permanently retire the slot before it can wrap.
+	 */
 	static void AdvanceHandlerGenerationOrRetire(FHandlerSlot& Slot) noexcept
 	{
 		if (Slot.Generation == std::numeric_limits<std::uint32_t>::max())
@@ -387,7 +442,11 @@ private:
 		++Slot.Generation;
 	}
 
-	/** Compacts HandlerOrder after a removal without changing any remaining slot identity or relative order. */
+	/**
+	 * Motivation: Lets RemoveMessageHandler close the gap a removal leaves in insertion order.
+	 * Responsibilities: Shift later handler-order entries down without changing any remaining slot identity or
+	 *   relative order.
+	 */
 	void RemoveHandlerFromOrder(const FMessageHandlerHandle InRemovedHandle) noexcept
 	{
 		std::size_t OrderIndex = ActiveHandlerCount;
@@ -411,9 +470,9 @@ private:
 	}
 
 	/**
-	 * Decodes and delivers the current inbound head entry to every matching handler, then pops it.
-	 * A decode failure (malformed bytes from a channel) silently drops the message: it is popped
-	 * without invoking any handler, since DecodeActorMessage leaves no usable header to match against.
+	 * Motivation: Lets PreAdvance drive one queued inbound message through decode and delivery.
+	 * Responsibilities: Decode the inbound head, dispatch it to matching handlers if it is well-formed, and pop it
+	 *   regardless, silently dropping a message whose bytes leave no usable header to match against.
 	 */
 	void DispatchOneQueuedInboundMessage() noexcept
 	{
@@ -432,10 +491,9 @@ private:
 	}
 
 	/**
-	 * Invokes every handler whose TypeId matches the view in registration order.
-	 * BroadcastActorId targets every matching-type handler; any other target reaches only the
-	 * handler whose ListenerActorId equals it. Add/RemoveMessageHandler are locked out for the
-	 * whole pass, so HandlerOrder cannot change underneath this loop.
+	 * Motivation: Lets PreAdvance reach every handler interested in one delivered message.
+	 * Responsibilities: Invoke each handler whose TypeId matches the view in registration order, applying a broadcast
+	 *   target to every match and any other target only to the handler whose ListenerActorId equals it.
 	 */
 	void InvokeMatchingHandlers(const FMessageView& InView) noexcept
 	{
@@ -455,19 +513,28 @@ private:
 		}
 	}
 
-	/** Reports whether an encoded payload length fits this router's accepted [header, max] window. */
+	/**
+	 * Motivation: Lets ReceiveEncodedMessage and send validation agree on one accepted length window.
+	 * Responsibilities: Report whether a length lies within [ActorMessageHeaderBytes, MaxMessageBytes].
+	 */
 	static bool IsEncodedSizeAccepted(const std::size_t InEncodedSize) noexcept
 	{
 		return InEncodedSize >= ActorMessageHeaderBytes && InEncodedSize <= MaxMessageBytes;
 	}
 
-	/** Reports whether a wired channel exists and rejects the encoded size as too large. */
+	/**
+	 * Motivation: Lets SendMessageToActor reject a payload before queuing that a wired channel could not send.
+	 * Responsibilities: Report whether a non-null channel exists and rejects the encoded size as too large.
+	 */
 	static bool ExceedsWiredChannelCapacity(const IMessageChannel* const InChannel, const std::size_t InEncodedSize) noexcept
 	{
 		return InChannel != nullptr && InEncodedSize > InChannel->MaxEncodedMessageBytes();
 	}
 
-	/** Finds the channel currently registered under ChannelId, or nullptr when none is configured. */
+	/**
+	 * Motivation: Lets send and flush look up the wired channel registered under one id.
+	 * Responsibilities: Return the channel pointer for the occupied matching slot, or null when none is configured.
+	 */
 	IMessageChannel* FindChannel(const FMessageChannelId InChannelId) noexcept
 	{
 		for (std::size_t Index = 0; Index < MaxChannels; ++Index)
@@ -481,7 +548,10 @@ private:
 		return nullptr;
 	}
 
-	/** Finds the lowest unoccupied channel slot, or nullptr when the channel table is full. */
+	/**
+	 * Motivation: Lets AddChannel claim the next free channel slot.
+	 * Responsibilities: Return the lowest unoccupied channel slot, or null when the table is full.
+	 */
 	FChannelSlot* FindAvailableChannelSlot() noexcept
 	{
 		for (std::size_t Index = 0; Index < MaxChannels; ++Index)
@@ -495,8 +565,9 @@ private:
 	}
 
 	/**
-	 * Copies ChannelId, Length, and Bytes into the tail of a fixed-capacity ring queue.
-	 * Returns false without touching the queue when Count has already reached MaxQueuedMessages.
+	 * Motivation: Lets inbound receive and local outbound flush share one bounded ring-append step.
+	 * Responsibilities: Copy ChannelId, Length, and Bytes into the tail entry, advance the tail index and count, and
+	 *   return false without touching the queue when it is already full.
 	 */
 	bool EnqueueRawMessage(
 		FQueuedMessage (&InOutEntries)[MaxQueuedMessages == 0 ? 1 : MaxQueuedMessages],
@@ -527,46 +598,46 @@ private:
 	// C++ forbids zero-length arrays; the "== 0 ? 1" guard on the arrays below keeps a
 	// zero-capacity router (MaxHandlers/MaxQueuedMessages/MaxChannels == 0) well-formed.
 
-	/** Owns all bounded handler callback storage independently of registration order. */
+	/** Motivation: Owns all bounded handler callback storage independently of registration order. */
 	FHandlerSlot HandlerSlots[MaxHandlers == 0 ? 1 : MaxHandlers];
 
-	/** Preserves deterministic registration order while handler slots are removed and reused. */
+	/** Motivation: Preserves deterministic registration order while handler slots are removed and reused. */
 	FMessageHandlerHandle HandlerOrder[MaxHandlers == 0 ? 1 : MaxHandlers];
 
-	/** Bounds HandlerOrder traversal and makes the current handler count observable. */
+	/** Motivation: Bounds HandlerOrder traversal and makes the current handler count observable. */
 	std::size_t ActiveHandlerCount{0};
 
-	/** Rejects AddMessageHandler and RemoveMessageHandler while a PreAdvance pass is active. */
+	/** Motivation: Rejects AddMessageHandler and RemoveMessageHandler while a PreAdvance pass is active. */
 	bool bDispatchActive{false};
 
-	/** Backing ring storage for messages awaiting the next PreAdvance. */
+	/** Motivation: Backing ring storage for messages awaiting the next PreAdvance. */
 	FQueuedMessage InboundEntries[MaxQueuedMessages == 0 ? 1 : MaxQueuedMessages];
 
-	/** Indexes the next inbound message PreAdvance will deliver. */
+	/** Motivation: Indexes the next inbound message PreAdvance will deliver. */
 	std::size_t InboundHeadIndex{0};
 
-	/** Indexes the next free inbound slot so enqueues append without overwriting the head. */
+	/** Motivation: Indexes the next free inbound slot so enqueues append without overwriting the head. */
 	std::size_t InboundTailIndex{0};
 
-	/** Tracks inbound occupancy so full and empty states are observable without wrap arithmetic. */
+	/** Motivation: Tracks inbound occupancy so full and empty states are observable without wrap arithmetic. */
 	std::size_t InboundCount{0};
 
-	/** Counts ReceiveEncodedMessage calls rejected because the inbound queue was full. */
+	/** Motivation: Counts ReceiveEncodedMessage calls rejected because the inbound queue was full. */
 	std::uint32_t DroppedInboundMessageCount{0};
 
-	/** Backing ring storage for messages awaiting the next PostAdvance. */
+	/** Motivation: Backing ring storage for messages awaiting the next PostAdvance. */
 	FQueuedMessage OutboundEntries[MaxQueuedMessages == 0 ? 1 : MaxQueuedMessages];
 
-	/** Indexes the next outbound message PostAdvance will attempt to send or deliver locally. */
+	/** Motivation: Indexes the next outbound message PostAdvance will attempt to send or deliver locally. */
 	std::size_t OutboundHeadIndex{0};
 
-	/** Indexes the next free outbound slot so enqueues append without overwriting the head. */
+	/** Motivation: Indexes the next free outbound slot so enqueues append without overwriting the head. */
 	std::size_t OutboundTailIndex{0};
 
-	/** Tracks outbound occupancy so full and empty states are observable without wrap arithmetic. */
+	/** Motivation: Tracks outbound occupancy so full and empty states are observable without wrap arithmetic. */
 	std::size_t OutboundCount{0};
 
-	/** Owns the configured wired-channel bindings, keyed by each channel's own id. */
+	/** Motivation: Owns the configured wired-channel bindings, keyed by each channel's own id. */
 	FChannelSlot ChannelSlots[MaxChannels == 0 ? 1 : MaxChannels];
 };
 

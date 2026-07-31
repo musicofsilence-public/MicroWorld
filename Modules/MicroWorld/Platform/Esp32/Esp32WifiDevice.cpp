@@ -69,12 +69,10 @@ namespace
 {
 
 	/**
-	 * Sizes the head datagram and folds every pre-consume verdict into one result.
-	 *
-	 * Returns `Unavailable` when nothing is queued, `Invalid` on a socket error,
-	 * and `Full` when the head datagram cannot fit the caller's capacity (the
-	 * datagram is left unconsumed so the receive stays transactional). `Success`
-	 * means a datagram is ready and fits, so the caller should consume it next.
+	 * Motivation: Sizes the head datagram and folds every pre-consume verdict into one result so the consuming
+	 *   read stays transactional.
+	 * Responsibilities: Return Unavailable when nothing is queued, Invalid on a socket error, Full when the head
+	 *   datagram cannot fit the caller's capacity (left unconsumed), or Success when a datagram is ready and fits.
 	 */
 	Transport::ETransportResult ProbeAndClassify(const FSocketHandle InSocket, const std::size_t InCapacity) noexcept
 	{

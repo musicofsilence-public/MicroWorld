@@ -1,13 +1,8 @@
 /**
- * @file Main.cpp
- * @brief Phase 6.1 two-node UDP acceptance demo.
- *
- * One host executable hosts TWO independent MicroWorld nodes — a dedicated
- * server built on a full TEngine and a bare TTransportHost client — talking over
- * real localhost UDP. A client input event spawns an actor in the server's
- * world; the server broadcasts world state each step. The two nodes live in one
- * process and are driven in one deterministic interleaved loop so the printed
- * trace is byte-identical across runs.
+ * Motivation: One host executable hosts TWO independent MicroWorld nodes -- a dedicated server built on
+ *   a full TEngine and a bare TTransportHost client -- talking over real localhost UDP. A client input
+ *   event spawns an actor in the server's world; the server broadcasts world state each step. The two
+ *   nodes are driven in one deterministic interleaved loop so the printed trace is byte-identical.
  */
 
 #include <MicroWorld/Core/Containers/Span.h>
@@ -42,43 +37,41 @@ using namespace MicroWorld::Transport;
 using MicroWorld::Platform::Host::FHostWifiDevice;
 using MicroWorld::Transport::MakeUdpAddress;
 
-/** Loopback IPv4 octets shared by every endpoint address in the demo. */
+/** Motivation: Loopback IPv4 octets shared by every endpoint address in the demo. */
 constexpr std::uint8_t LoopbackIpv4Octets[4] = {127, 0, 0, 1};
 
-/** Fixed logical-clock advance per sub-action; the trace prints no wall time. */
+/** Motivation: Fixed logical-clock advance per sub-action; the trace prints no wall time. */
 constexpr TimePointMilliseconds LogicalClockStepMilliseconds = 10;
 
-/** Upper bound on the interleaved handshake loop; bounded work, no spin. */
+/** Motivation: Upper bound on the interleaved handshake loop; bounded work, no spin. */
 constexpr int HandshakeIterationCap = 32;
 
-/** Upper bound on the select() readiness wait so delivery is deterministic without a busy poll. */
+/** Motivation: Upper bound on the select() readiness wait so delivery is deterministic without a busy poll. */
 constexpr DurationMilliseconds ReadinessWaitMilliseconds = 500;
 
-/** Application channel that carries the client's spawn request to the server (channel 0 is reserved). */
+/** Motivation: Application channel that carries the client's spawn request to the server (channel 0 is reserved). */
 constexpr std::uint8_t InputEventChannel = 1;
 
-/** Application channel the server uses to broadcast world state to connected peers. */
+/** Motivation: Application channel the server uses to broadcast world state to connected peers. */
 constexpr std::uint8_t StateBroadcastChannel = 2;
 
-/** Opcode the client sends as its one-byte input-event payload to request a spawn. */
+/** Motivation: Opcode the client sends as its one-byte input-event payload to request a spawn. */
 constexpr std::uint8_t SpawnRequestOpcode = 0x42;
 
-/** Channel-1 input opcode count that maps to the number of pre-allocated spawn registries. */
+/** Motivation: Channel-1 input opcode count that maps to the number of pre-allocated spawn registries. */
 constexpr int MaxSpawns = 2;
 
-/** Stable descriptor id for the actor the server spawns in response to a client input event. */
+/** Motivation: Stable descriptor id for the actor the server spawns in response to a client input event. */
 constexpr FTypeId DemoSpawnedActorTypeId{0x00080001u};
 
 /**
- * The server engine profile. Bounds are deliberately small, fixed, and
- * tuned so one bounded GC slice {1,4,8} completes a full mark/sweep cycle every
- * tick: MaxRoots(1) <= MaxRootOperations(1) and MaxObjects(8) <=
- * MaxSweepOperations(8). Without that invariant the store stays mid-cycle
- * (ActiveCollector set) across ticks, and a spawn arriving in that window fails
- * CreateObject under LifecycleLocked. This mirrors the proven EngineHostTests
- * profile; MaxActors leaves headroom above the demo's two spawns.
+ * Motivation: Carries the server engine profile -- bounds deliberately small and tuned so one bounded GC
+ *   slice {1,4,8} completes a full mark/sweep cycle every tick, so a spawn arriving mid-cycle never fails
+ *   CreateObject under LifecycleLocked (the proven EngineHostTests profile).
+ * Responsibilities: Name the class, object, slot, root, actor, and timer capacities the server uses.
+ * Example:
+ *   using FServerEngine = TEngine<FServerEngineTraits>;
  */
-/** Server engine traits: carries the exact capacities FServerEngine sized before the traits refactor. */
 struct FServerEngineTraits : FDefaultEngineTraits
 {
 	static constexpr std::size_t MaxClasses = 6;
@@ -90,71 +83,88 @@ struct FServerEngineTraits : FDefaultEngineTraits
 };
 using FServerEngine = TEngine<FServerEngineTraits>;
 
-/** Server network host bound to one UDP device; capacity fits one client peer. */
+/** Motivation: Server network host bound to one UDP device; capacity fits one client peer. */
 using FServerTransport = TTransportHost<2 /*MaxPeers*/, 256 /*MaxPacketBytes*/>;
 
-/** Client network host bound to its own UDP device; capacity fits one server peer. */
+/** Motivation: Client network host bound to its own UDP device; capacity fits one server peer. */
 using FClientTransport = TTransportHost<1 /*MaxPeers*/, 256 /*MaxPacketBytes*/>;
 
 /**
- * A minimal actor the server spawns on demand to prove a remote input event
- * changes server world contents. It bumps an external begin counter so the
- * spawn is observable without reaching into the object store.
+ * Motivation: A minimal actor the server spawns on demand to prove a remote input event changes server
+ *   world contents, bumping an external begin counter so the spawn is observable without reaching into
+ *   the object store.
+ * Responsibilities: Bump one begin counter when play begins, and stay descriptor-destroyable.
+ * Example:
+ *   auto Creation = ServerHost.CreateObject<FDemoSpawnedActor>(DemoSpawnedActorTypeId, BeginCount);
+ *   ServerHost.GetWorld().SpawnActor(TObjectPtr<AActor>{Creation.Object});
  */
 class FDemoSpawnedActor final : public AActor
 {
 public:
-	/** Binds the begin counter the actor bumps on play. */
+	/**
+	 * Motivation: Binds the begin counter the actor bumps on play, so the demo can observe spawns.
+	 * Responsibilities: Store the counter reference and forward to the actor base.
+	 */
 	FDemoSpawnedActor(int& InBeginCount) noexcept : AActor(), BeginCount(InBeginCount) {}
 
-	/** Keeps exact descriptor-driven destruction publicly instantiable. */
+	/**
+	 * Motivation: Keeps exact descriptor-driven destruction publicly instantiable.
+	 * Responsibilities: Default the destructor so descriptor-driven teardown stays available.
+	 */
 	~FDemoSpawnedActor() noexcept override = default;
 
 protected:
-	/** Records that this spawned actor began on the server world exactly once. */
+	/**
+	 * Motivation: Records that this spawned actor began on the server world exactly once.
+	 * Responsibilities: Bump the bound begin counter on play and do nothing else.
+	 */
 	void BeginPlay() noexcept override { ++BeginCount; }
 
 private:
-	/** Receives the begin-count reference owned by the demo; not held by this actor. */
+	/** Motivation: Receives the begin-count reference owned by the demo; not held by this actor. */
 	int& BeginCount;
 };
 
 /**
- * Everything the server's channel-1 handler needs to spawn one actor into the
- * server world on each input event. A monotonic sequence bounds accepted
- * requests and gives each accepted request a stable position.
+ * Motivation: Bundles everything the server's channel-1 handler needs to spawn one actor per input event,
+ *   so the handler can run inside a no-capture lambda by naming this context directly.
+ * Responsibilities: Hold the engine plus the spawn sequence and world actor count it mutates.
+ * Example:
+ *   FDemoSpawnContext SpawnContext{ServerHost, SpawnSequence, WorldActorCount};
  */
 struct FDemoSpawnContext
 {
-	/** The server engine whose world receives the spawned actor. */
+	/** Motivation: The server engine whose world receives the spawned actor. */
 	FServerEngine& Host;
 
-	/** Monotonic count of input events handled; enforces the bounded spawn limit. */
+	/** Motivation: Monotonic count of input events handled; enforces the bounded spawn limit. */
 	int& SpawnSequence;
 
-	/** Live actor count the server reports each step; bumped exactly once per accepted spawn. */
+	/** Motivation: Live actor count the server reports each step; bumped exactly once per accepted spawn. */
 	int& WorldActorCount;
 };
 
 /**
- * The state the client's channel-2 handler decodes from each server broadcast.
- * Held by reference so the main loop prints decoded payload values rather than
- * loop indices, keeping the trace invariant across runs.
+ * Motivation: Holds the state the client's channel-2 handler decodes from each server broadcast, so the
+ *   main loop prints decoded payload values rather than loop indices and the trace stays invariant.
+ * Responsibilities: Hold the last decoded tick and actor count.
+ * Example:
+ *   FDemoStateCapture StateCapture;
+ *   HandleServerStateBroadcast(StateCapture, Payload);
  */
 struct FDemoStateCapture
 {
-	/** Most recent logical state tick decoded from a broadcast payload. */
+	/** Motivation: Most recent logical state tick decoded from a broadcast payload. */
 	int LastTick{0};
 
-	/** Most recent world actor count decoded from a broadcast payload. */
+	/** Motivation: Most recent world actor count decoded from a broadcast payload. */
 	int LastActors{0};
 };
 
 /**
- * Builds the shared heartbeat/timeout config both hosts use. The intervals are
- * deliberately long relative to the demo's logical time so no spontaneous
- * heartbeat datagram fires and the only wire traffic is the two explicit input
- * events and the three broadcasts.
+ * Motivation: Lets both hosts build the shared heartbeat/timeout config from one source, with intervals
+ *   long enough that no spontaneous heartbeat fires, so the only wire traffic is the explicit exchanges.
+ * Responsibilities: Return a config carrying the long heartbeat, long timeout, and protocol version.
  */
 FTransportHostConfig MakeDemoConfig() noexcept
 {
@@ -166,10 +176,9 @@ FTransportHostConfig MakeDemoConfig() noexcept
 }
 
 /**
- * Drives the Hello/Welcome handshake over real localhost UDP, advancing the
- * logical clock a fixed step per iteration. The server advances only through
- * its engine Tick (its frame runs PumpReceive at step 1 and PumpSend at step
- * 7); the bare client uses explicit pumps.
+ * Motivation: Drives the Hello/Welcome handshake over real localhost UDP, advancing the logical clock a
+ *   fixed step per iteration, so the two nodes connect before the demo loop runs.
+ * Responsibilities: Pump client and server a bounded number of times until connected, then report success.
  */
 bool RunHandshake(
 	FHostWifiDevice& ServerDevice,
@@ -199,9 +208,9 @@ bool RunHandshake(
 }
 
 /**
- * Decodes the two-byte state payload the server broadcasts each step. Returns
- * false on any malformed payload so the caller can fail closed rather than print
- * an underdetermined count.
+ * Motivation: Lets the caller decode the two-byte state payload the server broadcasts each step, so a
+ *   malformed payload can fail closed rather than print an underdetermined count.
+ * Responsibilities: Validate the size and write the tick and actor count on success.
  */
 bool DecodeStatePayload(const TSpan<const std::uint8_t> Payload, int& OutTick, int& OutActors) noexcept
 {
@@ -215,9 +224,9 @@ bool DecodeStatePayload(const TSpan<const std::uint8_t> Payload, int& OutTick, i
 }
 
 /**
- * Checks whether both loopback UDP sockets bound successfully. FHostWifiDevice
- * opens its socket in its constructor and cannot be moved, so this is a query
- * over already-constructed devices, not a command that opens them.
+ * Motivation: Lets main check whether both loopback UDP sockets bound successfully, as a pure query over
+ *   already-constructed devices (FHostWifiDevice opens its socket in its constructor).
+ * Responsibilities: Report whether both devices are open and nothing else.
  */
 bool BothLoopbackDevicesOpen(const FHostWifiDevice& ServerDevice, const FHostWifiDevice& ClientDevice) noexcept
 {
@@ -225,9 +234,9 @@ bool BothLoopbackDevicesOpen(const FHostWifiDevice& ServerDevice, const FHostWif
 }
 
 /**
- * Registers the demo's one spawnable actor class and creates the server's
- * world. Returns false on the first failing step so main can abort before any
- * handler or session work depends on a half-built engine.
+ * Motivation: Lets main register the demo's one spawnable actor class and create the server's world, so
+ *   later steps run against a fully-built engine.
+ * Responsibilities: Register the class and create the world, returning false on the first failing step.
  */
 bool RegisterDemoWorld(FServerEngine& ServerHost) noexcept
 {
@@ -243,9 +252,9 @@ bool RegisterDemoWorld(FServerEngine& ServerHost) noexcept
 }
 
 /**
- * Spawns one server-world actor in response to a client input event. Does
- * nothing once MaxSpawns requests have already been handled, keeping the
- * demonstration's world usage bounded.
+ * Motivation: Spawns one server-world actor in response to a client input event, keeping the demo's
+ *   world usage bounded.
+ * Responsibilities: Honor the spawn limit, create the actor, spawn it into the world, and bump the count.
  */
 void HandleClientSpawnRequest(FDemoSpawnContext& SpawnContext, int& SpawnedBeginCount) noexcept
 {
@@ -272,10 +281,9 @@ void HandleClientSpawnRequest(FDemoSpawnContext& SpawnContext, int& SpawnedBegin
 }
 
 /**
- * Builds the server's channel-1 spawn-request handler binding and registers it
- * with the server transport host. The bound lambda only forwards to
- * HandleClientSpawnRequest, keeping the capture list separate from the handler
- * logic it invokes.
+ * Motivation: Lets the server register its channel-1 spawn-request handler in one place, so the bound
+ *   lambda stays a thin forwarder into HandleClientSpawnRequest.
+ * Responsibilities: Build the binding, register it, and report whether registration succeeded.
  */
 bool InstallServerSpawnHandler(
 	FServerTransport& ServerTransport, FDemoSpawnContext& SpawnContext, int& SpawnedBeginCount, FDelegateHandle& OutHandle) noexcept
@@ -287,9 +295,9 @@ bool InstallServerSpawnHandler(
 }
 
 /**
- * Decodes a server state broadcast payload into the client's capture state and
- * prints the received-state trace line. Does nothing on a malformed payload so
- * a corrupt broadcast cannot overwrite the client's last-known state.
+ * Motivation: Decodes a server state broadcast payload into the client's capture state and prints the
+ *   received-state trace line, ignoring malformed payloads so they cannot overwrite last-known state.
+ * Responsibilities: Decode, store, and print one broadcast; do nothing on a malformed payload.
  */
 void HandleServerStateBroadcast(FDemoStateCapture& StateCapture, TSpan<const std::uint8_t> Payload) noexcept
 {
@@ -305,10 +313,9 @@ void HandleServerStateBroadcast(FDemoStateCapture& StateCapture, TSpan<const std
 }
 
 /**
- * Builds the client's channel-2 state-broadcast handler binding and registers
- * it with the client transport host. The bound lambda only forwards to
- * HandleServerStateBroadcast, keeping the capture list separate from the
- * handler logic it invokes.
+ * Motivation: Lets the client register its channel-2 state-broadcast handler in one place, so the bound
+ *   lambda stays a thin forwarder into HandleServerStateBroadcast.
+ * Responsibilities: Build the binding, register it, and report whether registration succeeded.
  */
 bool InstallClientStateHandler(FClientTransport& ClientTransport, FDemoStateCapture& StateCapture, FDelegateHandle& OutHandle) noexcept
 {
@@ -319,10 +326,9 @@ bool InstallClientStateHandler(FClientTransport& ClientTransport, FDemoStateCapt
 }
 
 /**
- * Builds the client's server address from the server device's bound loopback
- * port, configures both transport hosts, starts both, and prints the two startup
- * trace lines. Returns false on the first failing step so main can abort
- * before BeginPlay runs against a half-started session.
+ * Motivation: Lets main configure and start both transport hosts in one ordered step, so BeginPlay never
+ *   runs against a half-started session.
+ * Responsibilities: Build the client server address, configure and start both hosts, and print the startup lines.
  */
 bool ConfigureAndStartHosts(FServerTransport& ServerTransport, FClientTransport& ClientTransport, const FHostWifiDevice& ServerDevice) noexcept
 {
@@ -351,10 +357,9 @@ bool ConfigureAndStartHosts(FServerTransport& ServerTransport, FClientTransport&
 }
 
 /**
- * Reports whether the given state tick should also send a client spawn
- * request. The demo issues exactly two spawn requests (bounded by MaxSpawns ==
- * 2 pre-allocated per-actor registries), on the first and last of the three
- * state ticks, so the middle tick demonstrates a broadcast with no new spawn.
+ * Motivation: Reports whether a given state tick should also send a client spawn request, so the demo
+ *   issues exactly two requests (first and last tick) and leaves the middle tick as a no-spawn broadcast.
+ * Responsibilities: Return true only on the ticks that should issue a spawn request.
  */
 bool IsSpawnRequestDue(int StateTick) noexcept
 {
@@ -362,10 +367,9 @@ bool IsSpawnRequestDue(int StateTick) noexcept
 }
 
 /**
- * Sends the client's one-byte spawn-request opcode when due, then always
- * pumps the client's send queue and advances the logical clock. The pump runs
- * every tick, not only when a request was sent, so the logical clock and wire
- * state stay in lockstep regardless of whether this tick issued a request.
+ * Motivation: Sends the client's one-byte spawn-request opcode when due, then always pumps the client's
+ *   send queue and advances the logical clock, so clock and wire state stay in lockstep every tick.
+ * Responsibilities: Send the request when due, advance the clock, and pump the send queue each call.
  */
 bool SendSpawnRequestIfDue(FClientTransport& ClientTransport, bool bSpawnRequestDue, TimePointMilliseconds& LogicalClockMilliseconds) noexcept
 {
@@ -385,9 +389,9 @@ bool SendSpawnRequestIfDue(FClientTransport& ClientTransport, bool bSpawnRequest
 }
 
 /**
- * Polls the server socket for the spawn-request datagram when one is due,
- * then advances the logical clock and ticks the server engine. This tick's
- * PumpReceive step delivers the input event, which fires the spawn handler.
+ * Motivation: Advances one server frame, polling the socket for a due spawn-request datagram and ticking
+ *   the engine so this tick's PumpReceive step delivers the input event to the spawn handler.
+ * Responsibilities: Poll when due, advance the clock, and tick the server engine.
  */
 bool AdvanceServerFrame(
 	FServerEngine& ServerHost, FHostWifiDevice& ServerDevice, bool bSpawnRequestDue, TimePointMilliseconds& LogicalClockMilliseconds) noexcept
@@ -401,10 +405,9 @@ bool AdvanceServerFrame(
 }
 
 /**
- * Broadcasts the current tick and world actor count to connected peers,
- * prints the heartbeat trace line, then advances the logical clock and ticks
- * the server engine again. This second tick's PumpSend step flushes the
- * broadcast onto the wire.
+ * Motivation: Broadcasts the current tick and world actor count to peers, then ticks the engine again so
+ *   this second tick's PumpSend step flushes the broadcast onto the wire.
+ * Responsibilities: Broadcast the state payload, print the heartbeat line, advance the clock, and tick.
  */
 bool BroadcastServerState(
 	FServerTransport& ServerTransport,
@@ -424,10 +427,9 @@ bool BroadcastServerState(
 }
 
 /**
- * Polls the client socket for the broadcast datagram, advances the logical
- * clock, then pumps the client's receive queue. The pump delivers the
- * broadcast to the client's state handler, which prints the received-state
- * trace line.
+ * Motivation: Delivers one broadcast to the client, polling its socket, advancing the clock, and pumping
+ *   the receive queue so the state handler prints the received-state trace line.
+ * Responsibilities: Poll the client socket, advance the clock, and pump the receive queue.
  */
 void DeliverToClient(FClientTransport& ClientTransport, FHostWifiDevice& ClientDevice, TimePointMilliseconds& LogicalClockMilliseconds) noexcept
 {
@@ -437,10 +439,10 @@ void DeliverToClient(FClientTransport& ClientTransport, FHostWifiDevice& ClientD
 }
 
 /**
- * Drives the three-tick state-broadcast loop: each tick optionally sends a
- * client spawn request, advances the server frame, broadcasts server state,
- * and delivers that state to the client, all under one shared logical clock.
- * Returns false on the first step that reports a hard failure.
+ * Motivation: Drives the three-tick state-broadcast loop under one shared logical clock, so the demo's
+ *   spawn-and-broadcast exchange runs deterministically each tick.
+ * Responsibilities: For each tick, send a spawn request if due, advance the server frame, broadcast
+ *   state, and deliver it to the client; return false on the first hard failure.
  */
 bool RunStateBroadcastLoop(
 	FClientTransport& ClientTransport,
@@ -475,9 +477,10 @@ bool RunStateBroadcastLoop(
 } // namespace
 
 /**
- * Composes the server engine and bare client transport host over real localhost
- * UDP, drives them through one deterministic interleaved loop, and prints a
- * byte-identical trace across runs. Returns 0 on success and 1 on any failure.
+ * Motivation: Composition root for the TwoNodeDemo, so the single entry point owns the one place that
+ *   composes the server engine and bare client over real localhost UDP and drives a byte-identical trace.
+ * Responsibilities: Construct and wire both nodes, run the handshake and the state-broadcast loop, and
+ *   return 0 on success or 1 on any failure.
  */
 int main()
 {

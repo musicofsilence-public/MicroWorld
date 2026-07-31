@@ -14,51 +14,67 @@ using MicroWorld::Core::FDelegateHandle;
 using MicroWorld::Core::TDelegate;
 using MicroWorld::Core::TMulticastDelegate;
 
-/** Inline storage the small-capacity delegates and bindings share across the layout tests. */
+/** Motivation: Inline storage the small-capacity delegates and bindings share across the layout tests. */
 constexpr std::size_t SmallInlineBytes = 32;
 
-/** Inline storage the value-argument and large-layout delegates use across the broadcast tests. */
+/** Motivation: Inline storage the value-argument and large-layout delegates use across the broadcast tests. */
 constexpr std::size_t StandardInlineBytes = 64;
 
-/** Inline storage large enough that only alignment, not size, can reject the over-aligned probe. */
+/** Motivation: Inline storage large enough that only alignment, not size, can reject the over-aligned probe. */
 constexpr std::size_t LargeInlineBytes = 128;
 
-/** Byte count of the oversized probe payload, sized to exceed the small delegate's inline capacity. */
+/** Motivation: Byte count of the oversized probe payload, sized to exceed the small delegate's inline capacity. */
 constexpr std::size_t OversizedPayloadByteCount = 128;
 
-/** Multicast slot count the insertion-order and value-copy tests exercise below capacity. */
+/** Motivation: Multicast slot count the insertion-order and value-copy tests exercise below capacity. */
 constexpr std::size_t SmallMulticastCapacity = 2;
 
-/** Multicast slot count the active-broadcast mutation test fills so iteration order is observable. */
+/** Motivation: Multicast slot count the active-broadcast mutation test fills so iteration order is observable. */
 constexpr std::size_t LargeMulticastCapacity = 4;
 
-/** Multicast slot count the zero-capacity test uses to prove Add rejection and empty broadcast. */
+/** Motivation: Multicast slot count the zero-capacity test uses to prove Add rejection and empty broadcast. */
 constexpr std::size_t ZeroMulticastCapacity = 0;
 
-/** Records callable movement, invocation, and owned-lifetime destruction per test. */
+/**
+ * Motivation: Records callable movement, invocation, and owned-lifetime destruction per test.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 struct FCallableState final
 {
-	/** Proves supported bindings construct only through explicit moves. */
+	/** Motivation: Proves supported bindings construct only through explicit moves. */
 	std::size_t MoveCount{0};
 
-	/** Proves Execute and Broadcast invoke the expected number of bindings. */
+	/** Motivation: Proves Execute and Broadcast invoke the expected number of bindings. */
 	std::size_t InvocationCount{0};
 
-	/** Proves the stored callable lifetime ends exactly once. */
+	/** Motivation: Proves the stored callable lifetime ends exactly once. */
 	std::size_t OwnedDestructionCount{0};
 
-	/** Preserves the latest delivered value for direct Execute assertions. */
+	/** Motivation: Preserves the latest delivered value for direct Execute assertions. */
 	int LastValue{0};
 };
 
-/** Transfers one observable callable lifetime without counting moved-from destruction. */
+/**
+ * Motivation: Transfers one observable callable lifetime without counting moved-from destruction.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FTrackedCallable final
 {
 public:
-	/** Begins the caller-owned source lifetime without claiming a stored move yet. */
+	/**
+	 * Motivation: Begins the caller-owned source lifetime without claiming a stored move yet.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	explicit FTrackedCallable(FCallableState& InState) noexcept : State(&InState) {}
 
-	/** Transfers observation ownership so only the final stored callable counts destruction. */
+	/**
+	 * Motivation: Only the final stored callable counts destruction.
+	 * Responsibilities: Transfers observation ownership.
+	 */
 	FTrackedCallable(FTrackedCallable&& Other) noexcept : State(Other.State), bOwnsObservation(Other.bOwnsObservation)
 	{
 		Other.bOwnsObservation = false;
@@ -68,16 +84,28 @@ public:
 		}
 	}
 
-	/** Keeps one inline callable lifetime uniquely owned. */
+	/**
+	 * Motivation: Keeps one inline callable lifetime uniquely owned.
+	 * Responsibilities: Remain deleted so the documented guarantee cannot be violated by copy or assignment.
+	 */
 	FTrackedCallable& operator=(FTrackedCallable&&) = delete;
 
-	/** Prevents tests from accidentally duplicating the tracked callable. */
+	/**
+	 * Motivation: Prevents tests from accidentally duplicating the tracked callable.
+	 * Responsibilities: Remain deleted so the documented guarantee cannot be violated by copy or assignment.
+	 */
 	FTrackedCallable(const FTrackedCallable&) = delete;
 
-	/** Prevents tests from accidentally duplicating observation ownership. */
+	/**
+	 * Motivation: Prevents tests from accidentally duplicating observation ownership.
+	 * Responsibilities: Remain deleted so the documented guarantee cannot be violated by copy or assignment.
+	 */
 	FTrackedCallable& operator=(const FTrackedCallable&) = delete;
 
-	/** Counts only destruction of the final observation-owning callable. */
+	/**
+	 * Motivation: Counts only destruction of the final observation-owning callable.
+	 * Responsibilities: Release the documented observation exactly once and leave no leak behind.
+	 */
 	~FTrackedCallable() noexcept
 	{
 		if (bOwnsObservation && State != nullptr)
@@ -86,7 +114,10 @@ public:
 		}
 	}
 
-	/** Records one delivered value through the public delegate execution path. */
+	/**
+	 * Motivation: Records one delivered value through the public delegate execution path.
+	 * Responsibilities: Implement only the documented operation and own no side effects beyond it.
+	 */
 	void operator()(const int InValue) noexcept
 	{
 		++State->InvocationCount;
@@ -94,23 +125,31 @@ public:
 	}
 
 private:
-	/** Shares only the fresh per-test observation counters. */
+	/** Motivation: Shares only the fresh per-test observation counters. */
 	FCallableState* State{nullptr};
 
-	/** Ensures moves do not make source destruction look like stored destruction. */
+	/** Motivation: Ensures moves do not make source destruction look like stored destruction. */
 	bool bOwnsObservation{true};
 };
 
-/** Makes a callable exceed a small delegate's byte capacity without side effects. */
+/**
+ * Motivation: Makes a callable exceed a small delegate's byte capacity without side effects.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 struct FOversizedCallable final
 {
-	/** Shares counters that prove rejection occurs before a stored move. */
+	/** Motivation: Shares counters that prove rejection occurs before a stored move. */
 	FCallableState* State{nullptr};
 
-	/** Forces the callable object above the tested inline capacity. */
+	/** Motivation: Forces the callable object above the tested inline capacity. */
 	std::byte Payload[OversizedPayloadByteCount]{};
 
-	/** Records any unexpected attempt to construct a stored callable by moving. */
+	/**
+	 * Motivation: Records any unexpected attempt to construct a stored callable by moving.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	FOversizedCallable(FOversizedCallable&& Other) noexcept : State(Other.State)
 	{
 		for (std::size_t Index = 0; Index < OversizedPayloadByteCount; ++Index)
@@ -120,53 +159,99 @@ struct FOversizedCallable final
 		++State->MoveCount;
 	}
 
-	/** Begins one caller-owned source callable for layout rejection. */
+	/**
+	 * Motivation: Begins one caller-owned source callable for layout rejection.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	explicit FOversizedCallable(FCallableState& InState) noexcept : State(&InState) {}
 
-	/** Keeps the rejection probe move-only like production inline callables. */
+	/**
+	 * Motivation: Keeps the rejection probe move-only like production inline callables.
+	 * Responsibilities: Remain deleted so the documented guarantee cannot be violated by copy or assignment.
+	 */
 	FOversizedCallable(const FOversizedCallable&) = delete;
 
-	/** Keeps the rejection probe free of unrelated assignment behavior. */
+	/**
+	 * Motivation: Keeps the rejection probe free of unrelated assignment behavior.
+	 * Responsibilities: Remain deleted so the documented guarantee cannot be violated by copy or assignment.
+	 */
 	FOversizedCallable& operator=(const FOversizedCallable&) = delete;
 
-	/** Keeps the rejection probe free of unrelated assignment behavior. */
+	/**
+	 * Motivation: Keeps the rejection probe free of unrelated assignment behavior.
+	 * Responsibilities: Remain deleted so the documented guarantee cannot be violated by copy or assignment.
+	 */
 	FOversizedCallable& operator=(FOversizedCallable&&) = delete;
 
-	/** Supplies the declared signature if the layout were accepted. */
+	/**
+	 * Motivation: Supplies the declared signature if the layout were accepted.
+	 * Responsibilities: Implement only the documented operation and own no side effects beyond it.
+	 */
 	void operator()() noexcept { ++State->InvocationCount; }
 };
 
-/** Makes alignment, rather than size, the unsupported callable property. */
+/**
+ * Motivation: Makes alignment, rather than size, the unsupported callable property.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 struct alignas(64) FOverAlignedCallable final
 {
-	/** Begins one caller-owned source callable for alignment rejection. */
+	/**
+	 * Motivation: Begins one caller-owned source callable for alignment rejection.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	explicit FOverAlignedCallable(FCallableState& InState) noexcept : State(&InState) {}
 
-	/** Records any unexpected attempt to construct a stored callable by moving. */
+	/**
+	 * Motivation: Records any unexpected attempt to construct a stored callable by moving.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	FOverAlignedCallable(FOverAlignedCallable&& Other) noexcept : State(Other.State) { ++State->MoveCount; }
 
-	/** Keeps the rejection probe move-only like production inline callables. */
+	/**
+	 * Motivation: Keeps the rejection probe move-only like production inline callables.
+	 * Responsibilities: Remain deleted so the documented guarantee cannot be violated by copy or assignment.
+	 */
 	FOverAlignedCallable(const FOverAlignedCallable&) = delete;
 
-	/** Keeps the rejection probe free of unrelated assignment behavior. */
+	/**
+	 * Motivation: Keeps the rejection probe free of unrelated assignment behavior.
+	 * Responsibilities: Remain deleted so the documented guarantee cannot be violated by copy or assignment.
+	 */
 	FOverAlignedCallable& operator=(const FOverAlignedCallable&) = delete;
 
-	/** Keeps the rejection probe free of unrelated assignment behavior. */
+	/**
+	 * Motivation: Keeps the rejection probe free of unrelated assignment behavior.
+	 * Responsibilities: Remain deleted so the documented guarantee cannot be violated by copy or assignment.
+	 */
 	FOverAlignedCallable& operator=(FOverAlignedCallable&&) = delete;
 
-	/** Supplies the declared signature if the layout were accepted. */
+	/**
+	 * Motivation: Supplies the declared signature if the layout were accepted.
+	 * Responsibilities: Implement only the documented operation and own no side effects beyond it.
+	 */
 	void operator()() noexcept { ++State->InvocationCount; }
 
-	/** Shares only fresh counters used to prove early rejection. */
+	/** Motivation: Shares only fresh counters used to prove early rejection. */
 	FCallableState* State{nullptr};
 };
 
-/** Records bounded callback order without allocating or exposing delegate slots. */
+/**
+ * Motivation: Records bounded callback order without allocating or exposing delegate slots.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 template<std::size_t Capacity>
 class TIntEventLog final
 {
 public:
-	/** Appends one event only within the caller-selected observation bound. */
+	/**
+	 * Motivation: Appends one event only within the caller-selected observation bound.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void Add(const int InEvent) noexcept
 	{
 		if (EventCount < Capacity)
@@ -176,68 +261,98 @@ public:
 		}
 	}
 
-	/** Starts a fresh broadcast observation phase in the same test. */
+	/**
+	 * Motivation: Starts a fresh broadcast observation phase in the same test.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void Clear() noexcept { EventCount = 0; }
 
-	/** Reports how many callbacks were publicly observed. */
+	/**
+	 * Motivation: Reports how many callbacks were publicly observed.
+	 * Responsibilities: Return the stored value and touch nothing else.
+	 */
 	std::size_t Size() const noexcept { return EventCount; }
 
-	/** Exposes one observed callback identity in broadcast order. */
+	/**
+	 * Motivation: Exposes one observed callback identity in broadcast order.
+	 * Responsibilities: Return the stored value and touch nothing else.
+	 */
 	int At(const std::size_t InIndex) const noexcept { return Events[InIndex]; }
 
 private:
-	/** Retains only the bounded event sequence needed by the current test. */
+	/** Motivation: Retains only the bounded event sequence needed by the current test. */
 	int Events[Capacity]{};
 
-	/** Separates initialized observations from unused fixed capacity. */
+	/** Motivation: Separates initialized observations from unused fixed capacity. */
 	std::size_t EventCount{0};
 };
 
-/** Carries active-broadcast operation results outside the inline callback. */
+/**
+ * Motivation: Carries active-broadcast operation results outside the inline callback.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 struct FBroadcastMutationState final
 {
-	/** Selects the multicast whose active iteration must remain unchanged. */
+	/** Motivation: Selects the multicast whose active iteration must remain unchanged. */
 	TMulticastDelegate<void(), LargeMulticastCapacity, LargeInlineBytes>* Multicast{nullptr};
 
-	/** Supplies a binding whose rejected Add must retain ownership. */
+	/** Motivation: Supplies a binding whose rejected Add must retain ownership. */
 	TDelegate<void(), LargeInlineBytes>* PendingBinding{nullptr};
 
-	/** Identifies a live callback whose rejected Remove must leave it active. */
+	/** Motivation: Identifies a live callback whose rejected Remove must leave it active. */
 	FDelegateHandle HandleToRemove{};
 
-	/** Records the attempted Add result from inside a callback. */
+	/** Motivation: Records the attempted Add result from inside a callback. */
 	EDelegateResult AddResult{EDelegateResult::InvalidHandle};
 
-	/** Records the attempted Remove result from inside a callback. */
+	/** Motivation: Records the attempted Remove result from inside a callback. */
 	EDelegateResult RemoveResult{EDelegateResult::InvalidHandle};
 
-	/** Records the nested Broadcast result from inside a callback. */
+	/** Motivation: Records the nested Broadcast result from inside a callback. */
 	EDelegateResult NestedBroadcastResult{EDelegateResult::InvalidHandle};
 
-	/** Captures binding count while all active-broadcast operations are rejected. */
+	/** Motivation: Captures binding count while all active-broadcast operations are rejected. */
 	std::size_t BindingCountDuringCallback{0};
 
-	/** Receives the handle only if an unexpected callback-time Add succeeds. */
+	/** Motivation: Receives the handle only if an unexpected callback-time Add succeeds. */
 	FDelegateHandle UnexpectedAddedHandle{};
 
-	/** Shares the fresh bounded trace used to prove active iteration order. */
+	/** Motivation: Shares the fresh bounded trace used to prove active iteration order. */
 	TIntEventLog<8>* Events{nullptr};
 };
 
-/** Gives value-argument tests one mutable payload whose copies are distinguishable. */
+/**
+ * Motivation: Gives value-argument tests one mutable payload whose copies are distinguishable.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 struct FMutableValue final
 {
-	/** Carries the value each binding should receive independently. */
+	/** Motivation: Carries the value each binding should receive independently. */
 	int Value{0};
 };
 
-/** Models a value that cannot satisfy multicast's noexcept repeat-delivery contract. */
+/**
+ * Motivation: Models a value that cannot satisfy multicast's noexcept repeat-delivery contract.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 struct FPotentiallyThrowingCopyValue final
 {
-	/** Creates the unused compile-time contract probe. */
+	/**
+	 * Motivation: Creates the unused compile-time contract probe.
+	 * Responsibilities: Remain defaulted so the documented contract is satisfied without added behaviour.
+	 */
 	FPotentiallyThrowingCopyValue() noexcept = default;
 
-	/** Makes the copy operation observably incompatible with noexcept broadcast. */
+	/**
+	 * Motivation: Makes the copy operation observably incompatible with noexcept broadcast.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	FPotentiallyThrowingCopyValue(const FPotentiallyThrowingCopyValue&) noexcept(false) {}
 };
 
@@ -247,8 +362,9 @@ static_assert(
 	"A potentially throwing copy must remain distinguishable from supported multicast values.");
 
 /**
- * Scenario: Bind a tracked callable, move the delegate, execute it, then reset the destination twice.
- * Expected: Bind, move, execute, and reset transfer one callable lifetime exactly once, delivering the caller value once.
+ * Motivation: Bind a tracked callable, move the delegate, execute it, then reset the destination twice.
+ * Responsibilities: Bind, move, execute, and reset transfer one callable lifetime exactly once, delivering the caller
+ *   value once.
  */
 MW_TEST_CASE(DelegateBindExecuteMoveAndResetOwnCallableExactlyOnce)
 {
@@ -288,8 +404,8 @@ MW_TEST_CASE(DelegateBindExecuteMoveAndResetOwnCallableExactlyOnce)
 }
 
 /**
- * Scenario: Execute a freshly constructed unbound delegate.
- * Expected: Execute returns InvalidHandle without beginning callable behavior and leaves the delegate unbound.
+ * Motivation: Execute a freshly constructed unbound delegate.
+ * Responsibilities: Execute returns InvalidHandle without beginning callable behavior and leaves the delegate unbound.
  */
 MW_TEST_CASE(UnboundDelegateExecuteReturnsInvalidHandle)
 {
@@ -307,8 +423,9 @@ MW_TEST_CASE(UnboundDelegateExecuteReturnsInvalidHandle)
 }
 
 /**
- * Scenario: Bind an oversized callable to a small delegate and an over-aligned callable to a large delegate.
- * Expected: Both unsupported layouts are rejected before stored construction, leaving the delegates unbound and recording no stored move.
+ * Motivation: Bind an oversized callable to a small delegate and an over-aligned callable to a large delegate.
+ * Responsibilities: Both unsupported layouts are rejected before stored construction, leaving the delegates unbound and
+ *   recording no stored move.
  */
 MW_TEST_CASE(DelegateRejectsUnsupportedCallableLayoutsBeforeConstruction)
 {
@@ -343,9 +460,9 @@ MW_TEST_CASE(DelegateRejectsUnsupportedCallableLayoutsBeforeConstruction)
 }
 
 /**
- * Scenario: Add two bindings to a multicast at capacity, attempt a capacity-plus-one add, then broadcast.
- * Expected: The excess add is rejected atomically, clears its handle and retains caller ownership; broadcast invokes the accepted bindings in
- * insertion order.
+ * Motivation: Add two bindings to a multicast at capacity, attempt a capacity-plus-one add, then broadcast.
+ * Responsibilities: The excess add is rejected atomically, clears its handle and retains caller ownership; broadcast
+ *   invokes the accepted bindings in.
  */
 MW_TEST_CASE(MulticastPreservesInsertionOrderAndRejectsCapacityPlusOne)
 {
@@ -394,9 +511,10 @@ MW_TEST_CASE(MulticastPreservesInsertionOrderAndRejectsCapacityPlusOne)
 }
 
 /**
- * Scenario: Remove a binding, add a replacement that reuses the freed slot, attempt a stale removal of the retired handle, then broadcast.
- * Expected: The reused slot publishes a new generation so the stale handle is rejected; the new binding stays and broadcasts at its later insertion
- * position.
+ * Motivation: Remove a binding, add a replacement that reuses the freed slot, attempt a stale removal of the
+ *   retired handle, then broadcast.
+ * Responsibilities: The reused slot publishes a new generation so the stale handle is rejected; the new binding stays
+ *   and broadcasts at its later insertion.
  */
 MW_TEST_CASE(MulticastReusedSlotRejectsStaleHandleAndKeepsNewBinding)
 {
@@ -449,9 +567,10 @@ MW_TEST_CASE(MulticastReusedSlotRejectsStaleHandleAndKeepsNewBinding)
 }
 
 /**
- * Scenario: During an active broadcast, have a callback attempt Add, Remove, and nested Broadcast, then add, remove, and broadcast again afterward.
- * Expected: Callback mutation and reentry are reported as broadcast-locked and leave the active order and count unchanged; the same operations
- * succeed after the broadcast ends.
+ * Motivation: During an active broadcast, have a callback attempt Add, Remove, and nested Broadcast, then add,
+ *   remove, and broadcast again afterward.
+ * Responsibilities: Callback mutation and reentry are reported as broadcast-locked and leave the active order and count
+ *   unchanged; the same operations.
  */
 MW_TEST_CASE(MulticastRejectsMutationAndNestedBroadcastDuringActiveBroadcast)
 {
@@ -544,8 +663,9 @@ MW_TEST_CASE(MulticastRejectsMutationAndNestedBroadcastDuringActiveBroadcast)
 }
 
 /**
- * Scenario: Broadcast a value argument to two bindings where the first mutates its received copy.
- * Expected: Each binding receives an independent copy of the argument and the caller's original value is not mutated.
+ * Motivation: Broadcast a value argument to two bindings where the first mutates its received copy.
+ * Responsibilities: Each binding receives an independent copy of the argument and the caller's original value is not
+ *   mutated.
  */
 MW_TEST_CASE(MulticastCopiesValueArgumentForEveryBinding)
 {
@@ -585,9 +705,9 @@ MW_TEST_CASE(MulticastCopiesValueArgumentForEveryBinding)
 }
 
 /**
- * Scenario: Attempt Add on a zero-capacity multicast with a bound callback, then Broadcast and attempt Remove.
- * Expected: Add is rejected while retaining caller ownership and clearing the handle; empty Broadcast succeeds with no invocation, and Remove returns
- * InvalidHandle.
+ * Motivation: Attempt Add on a zero-capacity multicast with a bound callback, then Broadcast and attempt Remove.
+ * Responsibilities: Add is rejected while retaining caller ownership and clearing the handle; empty Broadcast succeeds
+ *   with no invocation, and Remove returns.
  */
 MW_TEST_CASE(ZeroCapacityMulticastRejectsAddAndBroadcastsEmptySet)
 {

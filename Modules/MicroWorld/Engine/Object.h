@@ -11,54 +11,97 @@ class FObjectStore;
 class FReferenceCollector;
 class UObject;
 
-/** Dispatches the managed object's protected virtual reference visitor for a descriptor callback. */
+/**
+ * Motivation: Lets the default class descriptor dispatch a managed object's protected reference visitor to the collector.
+ * Responsibilities: Call the object's VisitReferences through the tracer signature the descriptor stores.
+ */
 void TraceManagedObjectReferences(UObject& InObject, FReferenceCollector& InCollector) noexcept;
 
 /**
- * Provides store-owned identity, tracing, and deferred destruction to managed objects.
- *
- * Applications never delete a UObject. The owning FObjectStore invokes
- * BeginDestroy once and then uses the registered descriptor to call the exact
- * derived destructor at an explicit mutation barrier.
+ * Motivation: Gives every managed object store-owned identity, tracing, and deferred destruction so applications never
+ *   delete a UObject directly.
+ * Responsibilities: Hold store, handle, and descriptor identity stamped on publish, expose reference visiting and
+ *   BeginDestroy for the store and collector, and keep deletion behind the descriptor/store boundary.
+ * Example:
+ *   UObject& Object = *Store.Resolve(Handle);
+ *   if (Object.IsPendingDestroy()) { Skip(); }
  */
 class UObject
 {
 public:
-	/** Prevents copying store identity into storage that the store does not own. */
+	/**
+	 * Motivation: Prevents copying store identity into storage the store does not own.
+	 * Responsibilities: Reject copy construction so each identity stays with its slot.
+	 */
 	UObject(const UObject&) = delete;
 
-	/** Prevents replacing one published store identity with another. */
+	/**
+	 * Motivation: Prevents replacing one published store identity with another.
+	 * Responsibilities: Reject copy assignment so each identity stays with its slot.
+	 */
 	UObject& operator=(const UObject&) = delete;
 
-	/** Prevents moving a managed object away from its stable slot. */
+	/**
+	 * Motivation: Prevents moving a managed object away from its stable slot.
+	 * Responsibilities: Reject move construction so slot identity stays fixed.
+	 */
 	UObject(UObject&&) = delete;
 
-	/** Prevents moving another identity into this managed object's stable slot. */
+	/**
+	 * Motivation: Prevents moving another identity into this managed object's stable slot.
+	 * Responsibilities: Reject move assignment so slot identity stays fixed.
+	 */
 	UObject& operator=(UObject&&) = delete;
 
-	/** Returns the generation-checked local identity assigned after construction. */
+	/**
+	 * Motivation: Lets a caller read the generation-checked local identity assigned after construction.
+	 * Responsibilities: Return the stored handle without resolving or mutating state.
+	 */
 	FObjectHandle GetObjectHandle() const noexcept { return Handle; }
 
-	/** Returns the explicit no-RTTI descriptor that owns tracing and destruction. */
+	/**
+	 * Motivation: Lets a caller read the explicit no-RTTI descriptor that owns tracing and destruction.
+	 * Responsibilities: Return the descriptor stamped at publish.
+	 */
 	const FClassDescriptor& GetClassDescriptor() const noexcept { return *Descriptor; }
 
-	/** Reports whether the explicit destruction barrier has made this object unreachable. */
+	/**
+	 * Motivation: Lets a caller branch on whether the destruction barrier has made this object unreachable.
+	 * Responsibilities: Report the pending-destroy flag and nothing else.
+	 */
 	bool IsPendingDestroy() const noexcept { return bPendingDestroy; }
 
 protected:
-	/** Allows only derived managed classes to construct inside store-selected storage. */
+	/**
+	 * Motivation: Allows only derived managed classes to construct inside store-selected storage.
+	 * Responsibilities: Default-construct with null identity until the store publishes it.
+	 */
 	UObject() noexcept = default;
 
-	/** Keeps deletion behind the descriptor/store boundary while supporting exact derived destruction. */
+	/**
+	 * Motivation: Keeps deletion behind the descriptor/store boundary while supporting exact derived destruction.
+	 * Responsibilities: Default the virtual destructor so the store's exact destructor pointer runs derived teardown.
+	 */
 	virtual ~UObject() noexcept = default;
 
-	/** Returns the canonical store assigned after publication, or null during unmanaged construction. */
+	/**
+	 * Motivation: Lets a derived object reach the canonical store assigned after publication, or null during unmanaged
+	 *   construction.
+	 * Responsibilities: Return the stored store pointer without resolving handles.
+	 */
 	FObjectStore* GetObjectStore() const noexcept { return Store; }
 
-	/** Exposes outgoing managed references to the iterative collector without reflection. */
+	/**
+	 * Motivation: Exposes outgoing managed references to the iterative collector without reflection.
+	 * Responsibilities: Override to register each traced reference with the collector; default owns none.
+	 */
 	virtual void VisitReferences(FReferenceCollector&) noexcept {}
 
-	/** Releases non-managed resources once before exact destruction at the mutation barrier. */
+	/**
+	 * Motivation: Lets a derived object release non-managed resources once before exact destruction at the mutation
+	 *   barrier.
+	 * Responsibilities: Override to release resources; the store invokes it exactly once.
+	 */
 	virtual void BeginDestroy() noexcept {}
 
 private:
@@ -70,16 +113,16 @@ private:
 	// this object's managed references to the collector during a mark cycle.
 	friend void TraceManagedObjectReferences(UObject& InObject, FReferenceCollector& InCollector) noexcept;
 
-	/** Identifies the only store allowed to resolve and destroy this object. */
+	/** Motivation: Identifies the only store allowed to resolve and destroy this object. */
 	FObjectStore* Store{nullptr};
 
-	/** Retains stable local identity without exposing the slot address. */
+	/** Motivation: Retains stable local identity without exposing the slot address. */
 	FObjectHandle Handle{};
 
-	/** Selects exact tracing, ancestry, layout, and destructor behavior without RTTI. */
+	/** Motivation: Selects exact tracing, ancestry, layout, and destructor behavior without RTTI. */
 	const FClassDescriptor* Descriptor{nullptr};
 
-	/** Prevents tracing, rooting, or repeating BeginDestroy after destruction is requested. */
+	/** Motivation: Prevents tracing, rooting, or repeating BeginDestroy after destruction is requested. */
 	bool bPendingDestroy{false};
 };
 

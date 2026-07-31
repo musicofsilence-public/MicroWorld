@@ -36,28 +36,37 @@ using namespace Ex25;
 
 namespace
 {
-/** Single real-time source for the client board. */
+/** Motivation: Single real-time source for the client board. */
 FEsp32TimeSource GTimeSource{};
 
 /**
- * Every CounterIntervalMilliseconds, sends the next value in 1..LastCounterValue to the server's
- * FLedgerActor on BOTH the best-effort and the guaranteed channel, then idles once all 30 are sent.
- *
- * Takes the router by constructor injection (D9); this actor owns no components (AActor)
- * and has no handlers -- it only sends, and acknowledgements are consumed entirely inside the
- * guaranteed channel's own wrapper, never surfaced as an actor message.
+ * Motivation: Every CounterIntervalMilliseconds, sends the next value in 1..LastCounterValue to the
+ *   server's FLedgerActor on BOTH the best-effort and the guaranteed channel, then idles once all are
+ *   sent. Takes the router by constructor injection, owns no components, and has no handlers -- it only
+ *   sends, and acknowledgements are consumed inside the guaranteed channel's wrapper.
+ * Responsibilities: Tick on the counter cadence, send one value on both channels, then idle once done.
+ * Example:
+ *   auto Counter = Engine.CreateObject<FCounterActor>(CounterActorTypeId, Router).Object;
+ *   Engine.GetWorld().RegisterActor(TObjectPtr<AActor>{Counter});
  */
 class FCounterActor final : public AActor
 {
 public:
-	/** Aligns this actor's own tick to the counter cadence and stores the injected router. */
+	/**
+	 * Motivation: Aligns this actor's own tick to the counter cadence and stores the injected router.
+	 * Responsibilities: Construct on the counter cadence and capture the router reference.
+	 */
 	explicit FCounterActor(IMessageRouter& InRouter) noexcept
 		: AActor(FTickConfiguration::EnabledEvery(CounterIntervalMilliseconds)), Router(InRouter)
 	{
 	}
 
 protected:
-	/** Sends the next counter value on both channels; stops sending (but keeps idling) once all 30 are out. */
+	/**
+	 * Motivation: Sends the next counter value on both channels so the demo's lossy link exercises both
+	 *   paths, idling once all values are out.
+	 * Responsibilities: Send one value on the best-effort and guaranteed channels, then advance the counter.
+	 */
 	void Tick(const FTickContext&) noexcept override
 	{
 		if (NextValue > LastCounterValue)
@@ -91,21 +100,21 @@ protected:
 	}
 
 private:
-	/** Router this actor sends through; injected at construction (D9), never a global. */
+	/** Motivation: Router this actor sends through; injected at construction, never a global. */
 	IMessageRouter& Router;
 
-	/** Next counter value to send; once past LastCounterValue, Tick idles without sending. */
+	/** Motivation: Next counter value to send; once past LastCounterValue, Tick idles without sending. */
 	std::uint8_t NextValue{FirstCounterValue};
 };
 } // namespace
 
 /**
- * Client board: joins the WiFi SoftAP and runs FCounterActor over one TMessageRouter wired to ONE
- * UDP transport through TWO TMessageChannelBinding -- best-effort straight to the router, guaranteed
- * wrapped in TReliableChannel -- with the engine holding the host play system, the reliable channel, and
- * the router behind one TPlaySystemSet<3>. The UDP device is itself wrapped in FPacketDropDevice
- * so every third outgoing packet, of any kind, is
- * silently dropped -- the whole point of the demo.
+ * Motivation: Lets Board B join the WiFi SoftAP and run FCounterActor over one router wired to one UDP
+ *   transport through two bindings -- best-effort straight to the router, guaranteed wrapped in
+ *   TReliableChannel -- behind one TPlaySystemSet, with the UDP device wrapped in FPacketDropDevice so
+ *   every third outgoing packet is dropped (the point of the demo).
+ * Responsibilities: Join the SoftAP, wire the drop device, transport, both bindings, the reliable channel,
+ *   the frame set, and the engine, spawn the counter, start as a client, and tick the engine in an unbounded loop.
  */
 void RunClient() noexcept
 {

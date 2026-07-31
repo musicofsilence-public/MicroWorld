@@ -10,28 +10,50 @@ namespace MicroWorld::Engine
 namespace
 {
 
-	/** Resets one reentry flag on every explicit or early return from a bounded call. */
+	/**
+	 * Motivation: Resets one reentry flag on every explicit or early return from a bounded call so a caller cannot
+	 *   forget to clear it.
+	 * Responsibilities: Set the flag on construction and clear it exactly once on destruction.
+	 * Example:
+	 *   FScopedReentryGuard Guard(bAdvanceActive);
+	 *   RunBoundedWork();
+	 */
 	class FScopedReentryGuard final
 	{
 	public:
-		/** Marks the protected operation active for this lexical scope. */
+		/**
+		 * Motivation: Marks the protected operation active for this lexical scope.
+		 * Responsibilities: Set the referenced flag true and remember it for cleanup.
+		 */
 		explicit FScopedReentryGuard(bool& InFlag) noexcept : Flag(InFlag) { Flag = true; }
 
-		/** Makes the protected operation callable again after every return path. */
+		/**
+		 * Motivation: Makes the protected operation callable again after every return path.
+		 * Responsibilities: Set the referenced flag false exactly once.
+		 */
 		~FScopedReentryGuard() noexcept { Flag = false; }
 
-		/** Preserves unique responsibility for resetting one referenced flag. */
+		/**
+		 * Motivation: Preserves unique responsibility for resetting one referenced flag.
+		 * Responsibilities: Reject copy construction so two owners never clear the same flag.
+		 */
 		FScopedReentryGuard(const FScopedReentryGuard&) = delete;
 
-		/** Prevents changing the referenced flag behind this guard. */
+		/**
+		 * Motivation: Prevents changing the referenced flag behind this guard via assignment.
+		 * Responsibilities: Reject copy assignment so the guard keeps one owner.
+		 */
 		FScopedReentryGuard& operator=(const FScopedReentryGuard&) = delete;
 
 	private:
-		/** Identifies the caller-owned flag that must be reset at scope exit. */
+		/** Motivation: Identifies the caller-owned flag that must be reset at scope exit. */
 		bool& Flag;
 	};
 
-	/** Increments a diagnostic counter without allowing long-running wraparound. */
+	/**
+	 * Motivation: Increments a diagnostic counter without allowing long-running wraparound.
+	 * Responsibilities: Increment only while the counter is below its maximum.
+	 */
 	void IncrementSaturated(std::uint32_t& InOutCounter) noexcept
 	{
 		if (InOutCounter < std::numeric_limits<std::uint32_t>::max())
@@ -40,7 +62,10 @@ namespace
 		}
 	}
 
-	/** Adds bounded work to one aggregate without allowing diagnostic wraparound. */
+	/**
+	 * Motivation: Adds bounded work to one aggregate without allowing diagnostic wraparound.
+	 * Responsibilities: Add the amount or saturate at the counter maximum.
+	 */
 	void AddSaturated(std::uint32_t& InOutCounter, const std::uint32_t InAmount) noexcept
 	{
 		const std::uint32_t Remaining = std::numeric_limits<std::uint32_t>::max() - InOutCounter;

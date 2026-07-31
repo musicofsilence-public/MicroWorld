@@ -19,17 +19,22 @@ using namespace Ex19;
 
 namespace
 {
-/** Single real-time source for the client board. */
+/** Motivation: Single real-time source for the client board. */
 FEsp32TimeSource GTimeSource{};
 
-/** Client session host; one peer slot holds the single server. */
+/** Motivation: Client session host; one peer slot holds the single server. */
 using FClientTransport = TTransportHost<1, 120>;
 
-/** Most recent actor count decoded from a server broadcast; -1 before the first. */
+/** Motivation: Most recent actor count decoded from a server broadcast; -1 before the first. */
 int GLastServerActors = -1;
 } // namespace
 
-/** Client board: a bare TTransportHost (Client) over one UART, no engine, no WiFi. */
+/**
+ * Motivation: Lets one board act as the bare client half of example 19 over a single UART, so the
+ *   client-side transport can be reasoned about with no engine and no WiFi.
+ * Responsibilities: Open the UART, run a TTransportHost client, issue spawn requests, and observe
+ *   the server's broadcast state until the expected actor count appears.
+ */
 void RunClient() noexcept
 {
 	static FEsp32UartDevice Device{MakeUartConfig(ClientNodeId)};

@@ -24,68 +24,88 @@ namespace MicroWorld::Tests
 using namespace ::MicroWorld::Engine;
 
 /**
- * Shares one monotonic event sequence across every observed object in a test so
- * begin/tick/end ordering is recorded without per-object clocks.
+ * Motivation: Shares one monotonic event sequence across every observed object in a test so begin/tick/end
+ *   ordering is recorded without per-object clocks.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
  */
 class FSequenceCounter final
 {
 public:
-	/** Returns the next sequence value so callers can record relative ordering. */
+	/**
+	 * Motivation: Callers can record relative ordering.
+	 * Responsibilities: Returns the next sequence value.
+	 */
 	std::uint32_t Next() noexcept { return ++Value; }
 
 private:
-	/** Tracks the highest sequence value handed out in this test. */
+	/** Motivation: Tracks the highest sequence value handed out in this test. */
 	std::uint32_t Value{0};
 };
 
-/** Records the begin/tick/end sequence values observed by one actor. */
+/**
+ * Motivation: Records the begin/tick/end sequence values observed by one actor.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 struct FActorEventState final
 {
-	/** Sequence value of this actor's BeginPlay hook. */
+	/** Motivation: Sequence value of this actor's BeginPlay hook. */
 	std::uint32_t BeginOrder{0};
-	/** Counts BeginPlay hook invocations so repeated lifecycle calls are observable. */
+	/** Motivation: Counts BeginPlay hook invocations so repeated lifecycle calls are observable. */
 	std::uint32_t BeginCount{0};
-	/** Sequence value of this actor's Tick hook. */
+	/** Motivation: Sequence value of this actor's Tick hook. */
 	std::uint32_t TickOrder{0};
-	/** Sequence value of this actor's EndPlay hook. */
+	/** Motivation: Sequence value of this actor's EndPlay hook. */
 	std::uint32_t EndOrder{0};
-	/** Counts EndPlay hook invocations so repeated shutdown is observable. */
+	/** Motivation: Counts EndPlay hook invocations so repeated shutdown is observable. */
 	std::uint32_t EndCount{0};
-	/** Counts Tick hook invocations so interval tests can bound ticks per advance. */
-	std::uint32_t TickCount{0};
-};
-
-/** Records the begin/tick/end sequence values observed by one component. */
-struct FComponentEventState final
-{
-	/** Sequence value of this component's BeginPlay hook. */
-	std::uint32_t BeginOrder{0};
-	/** Counts BeginPlay hook invocations so repeated lifecycle calls are observable. */
-	std::uint32_t BeginCount{0};
-	/** Sequence value of this component's TickComponent hook. */
-	std::uint32_t TickOrder{0};
-	/** Sequence value of this component's EndPlay hook. */
-	std::uint32_t EndOrder{0};
-	/** Counts EndPlay hook invocations so repeated shutdown is observable. */
-	std::uint32_t EndCount{0};
-	/** Counts TickComponent hook invocations so interval tests can bound ticks per advance. */
+	/** Motivation: Counts Tick hook invocations so interval tests can bound ticks per advance. */
 	std::uint32_t TickCount{0};
 };
 
 /**
- * Owns all fixed object-store, root, worklist, and class-registry storage for
- * one isolated engine behavior test.
- *
- * The fixture registers the three engine base descriptors so the base types are
- * constructible through their StaticClassDescriptor overloads. User-derived test
- * types call RegisterDerivedClass before CreateObject so their explicit
- * descriptors participate in store validation.
+ * Motivation: Records the begin/tick/end sequence values observed by one component.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
+struct FComponentEventState final
+{
+	/** Motivation: Sequence value of this component's BeginPlay hook. */
+	std::uint32_t BeginOrder{0};
+	/** Motivation: Counts BeginPlay hook invocations so repeated lifecycle calls are observable. */
+	std::uint32_t BeginCount{0};
+	/** Motivation: Sequence value of this component's TickComponent hook. */
+	std::uint32_t TickOrder{0};
+	/** Motivation: Sequence value of this component's EndPlay hook. */
+	std::uint32_t EndOrder{0};
+	/** Motivation: Counts EndPlay hook invocations so repeated shutdown is observable. */
+	std::uint32_t EndCount{0};
+	/** Motivation: Counts TickComponent hook invocations so interval tests can bound ticks per advance. */
+	std::uint32_t TickCount{0};
+};
+
+/**
+ * Motivation: Owns all fixed object-store, root, worklist, and class-registry storage for one isolated engine
+ *   behavior test. The fixture registers the three engine base descriptors so the base types are
+ *   constructible through their StaticClassDescriptor overloads. User-derived test types call
+ *   RegisterDerivedClass before CreateObject so their explicit descriptors participate in store
+ *   validation.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
  */
 template<std::size_t SlotSizeBytes, std::size_t SlotAlignmentBytes, std::uint32_t SlotCount, std::uint32_t RootCapacity>
 class TEngineEnvironment final
 {
 public:
-	/** Builds the store with this environment's storage and base classes registered. */
+	/**
+	 * Motivation: Builds the store with this environment's storage and base classes registered.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	TEngineEnvironment() noexcept : Store(MakeStorage(), MakeClassRegistryView(Registry)) { RegisterBaseClasses(); }
 
 	TEngineEnvironment(const TEngineEnvironment&) = delete;
@@ -93,18 +113,28 @@ public:
 	TEngineEnvironment(TEngineEnvironment&&) = delete;
 	TEngineEnvironment& operator=(TEngineEnvironment&&) = delete;
 
-	/** Returns the public store backed by this environment's caller-owned storage. */
+	/**
+	 * Motivation: Returns the public store backed by this environment's caller-owned storage.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	FObjectStore& GetStore() noexcept { return Store; }
 
-	/** Returns the class registry so tests can register user-derived descriptors. */
+	/**
+	 * Motivation: Tests can register user-derived descriptors.
+	 * Responsibilities: Returns the class registry.
+	 */
 	TClassRegistry<8>& GetRegistry() noexcept { return Registry; }
 
-	/** Returns the registry-owned descriptor for one engine base type id. */
+	/**
+	 * Motivation: Returns the registry-owned descriptor for one engine base type id.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	const FClassDescriptor* FindDescriptor(const FTypeId InTypeId) noexcept { return Registry.Find(InTypeId); }
 
 	/**
-	 * Constructs one base engine object (UWorld, AActor, or UActorComponent) in
-	 * this environment's store using its registry-owned descriptor.
+	 * Motivation: Constructs one base engine object (UWorld, AActor, or UActorComponent) in this environment's store
+	 *   using its registry-owned descriptor.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
 	 */
 	template<typename T, typename... TArguments>
 	TObjectPtr<T> CreateObject(const FTypeId InTypeId, TArguments&&... Arguments) noexcept
@@ -115,8 +145,9 @@ public:
 	}
 
 	/**
-	 * Registers one user-derived descriptor under a stable type id and constructs
-	 * an instance of the derived type through that descriptor.
+	 * Motivation: Registers one user-derived descriptor under a stable type id and constructs an instance of the
+	 *   derived type through that descriptor.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
 	 */
 	template<typename T, typename... TArguments>
 	TObjectPtr<T> CreateDerivedObject(const FTypeId InTypeId, const char* const InName, TArguments&&... Arguments) noexcept
@@ -127,7 +158,10 @@ public:
 		return Result.Object;
 	}
 
-	/** Registers one user-derived descriptor using the shared managed tracer. */
+	/**
+	 * Motivation: Registers one user-derived descriptor using the shared managed tracer.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	template<typename T>
 	EObjectResult RegisterDerivedClass(const FTypeId InTypeId, const char* const InName) noexcept
 	{
@@ -148,7 +182,10 @@ public:
 		return Registry.Register(Candidate);
 	}
 
-	/** Roots one traced reference using this environment's root capacity. */
+	/**
+	 * Motivation: Roots one traced reference using this environment's root capacity.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	template<typename T>
 	TStrongObjectPtr<T> MakeRoot(const TObjectPtr<T> InObject) noexcept
 	{
@@ -160,7 +197,10 @@ private:
 	static_assert(SlotCount > 0, "Engine tests require at least one object slot.");
 	static_assert(SlotSizeBytes % SlotAlignmentBytes == 0, "Slot stride must preserve alignment.");
 
-	/** Registers the three engine base descriptors so the store accepts them. */
+	/**
+	 * Motivation: The store accepts them.
+	 * Responsibilities: Registers the three engine base descriptors.
+	 */
 	void RegisterBaseClasses() noexcept
 	{
 		(void)Registry.Register(UActorComponent::StaticClassDescriptor());
@@ -168,7 +208,10 @@ private:
 		(void)Registry.Register(UWorld::StaticClassDescriptor());
 	}
 
-	/** Describes this environment's complete caller-owned store storage. */
+	/**
+	 * Motivation: Describes this environment's complete caller-owned store storage.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	FObjectStoreStorage MakeStorage() noexcept
 	{
 		return FObjectStoreStorage{
@@ -183,19 +226,19 @@ private:
 		};
 	}
 
-	/** Keeps every equal-size slot correctly aligned for placement construction. */
+	/** Motivation: Keeps every equal-size slot correctly aligned for placement construction. */
 	alignas(SlotAlignmentBytes) std::array<std::byte, SlotSizeBytes * SlotCount> SlotBytes{};
 
-	/** Gives the store one lifecycle record per fixed object slot. */
+	/** Motivation: Gives the store one lifecycle record per fixed object slot. */
 	std::array<FObjectSlotMetadata, SlotCount> Slots{};
 
-	/** Gives each successful strong pointer one independently reusable token entry. */
+	/** Motivation: Gives each successful strong pointer one independently reusable token entry. */
 	std::array<FObjectRootEntry, RootCapacity> Roots{};
 
-	/** Owns the class registry used to validate construction and tracing. */
+	/** Motivation: Owns the class registry used to validate construction and tracing. */
 	TClassRegistry<8> Registry;
 
-	/** Owns all managed lifetimes while the environment remains alive. */
+	/** Motivation: Owns all managed lifetimes while the environment remains alive. */
 	FObjectStore Store;
 };
 

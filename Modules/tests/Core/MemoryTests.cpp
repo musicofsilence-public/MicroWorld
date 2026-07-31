@@ -34,60 +34,92 @@ using MicroWorld::Core::TUniquePtr;
 using MicroWorld::Core::TWeakPointerResult;
 using MicroWorld::Core::TWeakPtr;
 
-/** Records value construction and destruction without sharing state between tests. */
+/**
+ * Motivation: Records value construction and destruction without sharing state between tests.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 struct FLifetimeState final
 {
-	/** Proves failed factories never begin a value lifetime. */
+	/** Motivation: Proves failed factories never begin a value lifetime. */
 	std::size_t ConstructionCount{0};
 
-	/** Proves each successful ownership path ends its value lifetime once. */
+	/** Motivation: Proves each successful ownership path ends its value lifetime once. */
 	std::size_t DestructionCount{0};
 };
 
-/** Exposes value lifetime through caller-owned counters while remaining nothrow. */
+/**
+ * Motivation: Exposes value lifetime through caller-owned counters while remaining nothrow.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FTrackedValue final
 {
 public:
-	/** Begins one observable value lifetime only after its resource allocation succeeds. */
+	/**
+	 * Motivation: Begins one observable value lifetime only after its resource allocation succeeds.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	explicit FTrackedValue(FLifetimeState& InState, const int InValue = 0) noexcept : Value(InValue), State(InState) { ++State.ConstructionCount; }
 
-	/** Ends one observable lifetime so ownership tests can reject leaks and double destruction. */
+	/**
+	 * Motivation: Ownership tests can reject leaks and double destruction.
+	 * Responsibilities: Ends one observable lifetime.
+	 */
 	~FTrackedValue() noexcept { ++State.DestructionCount; }
 
-	/** Carries one public value used to prove acquired owners resolve the same live object. */
+	/** Motivation: Carries one public value used to prove acquired owners resolve the same live object. */
 	int Value{0};
 
 private:
-	/** Shares only the fresh per-test observation state selected by the caller. */
-	FLifetimeState& State;
-};
-
-/** Forces a layout beyond the small arena's alignment guarantee before construction can begin. */
-class alignas(64) FOverAlignedTrackedValue final
-{
-public:
-	/** Would expose an invalid construction if alignment rejection occurred too late. */
-	explicit FOverAlignedTrackedValue(FLifetimeState& InState) noexcept : State(InState) { ++State.ConstructionCount; }
-
-	/** Balances construction only when the resource accepted the layout. */
-	~FOverAlignedTrackedValue() noexcept { ++State.DestructionCount; }
-
-private:
-	/** Shares only the fresh observation state for the alignment test. */
+	/** Motivation: Shares only the fresh per-test observation state selected by the caller. */
 	FLifetimeState& State;
 };
 
 /**
- * Records public resource traffic while delegating storage policy to a fixed arena.
- *
- * The wrapper proves allocation count, exact block identity, and resource reuse
- * without inspecting ownership-control internals.
+ * Motivation: Forces a layout beyond the small arena's alignment guarantee before construction can begin.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
+class alignas(64) FOverAlignedTrackedValue final
+{
+public:
+	/**
+	 * Motivation: Would expose an invalid construction if alignment rejection occurred too late.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
+	explicit FOverAlignedTrackedValue(FLifetimeState& InState) noexcept : State(InState) { ++State.ConstructionCount; }
+
+	/**
+	 * Motivation: Balances construction only when the resource accepted the layout.
+	 * Responsibilities: Release the documented observation exactly once and leave no leak behind.
+	 */
+	~FOverAlignedTrackedValue() noexcept { ++State.DestructionCount; }
+
+private:
+	/** Motivation: Shares only the fresh observation state for the alignment test. */
+	FLifetimeState& State;
+};
+
+/**
+ * Motivation: Records public resource traffic while delegating storage policy to a fixed arena. The wrapper proves
+ *   allocation count, exact block identity, and resource reuse without inspecting ownership-control
+ *   internals.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
  */
 template<std::size_t Bytes, std::size_t Alignment>
 class TTrackingMemoryResource final : public IMemoryResource
 {
 public:
-	/** Records one public allocation request and the exact successful block. */
+	/**
+	 * Motivation: Records one public allocation request and the exact successful block.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	EMemoryResult TryAllocate(const std::size_t InSizeBytes, const std::size_t InAlignmentBytes, FMemoryBlock& OutBlock) noexcept override
 	{
 		++AllocationRequestCount;
@@ -101,7 +133,10 @@ public:
 		return Result;
 	}
 
-	/** Records the exact block returned through the public deallocation boundary. */
+	/**
+	 * Motivation: Records the exact block returned through the public deallocation boundary.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	EMemoryResult Deallocate(const FMemoryBlock InBlock) noexcept override
 	{
 		++DeallocationRequestCount;
@@ -109,91 +144,130 @@ public:
 		return Arena.Deallocate(InBlock);
 	}
 
-	/** Preserves the wrapped arena's public caller-usable capacity. */
+	/**
+	 * Motivation: Preserves the wrapped arena's public caller-usable capacity.
+	 * Responsibilities: Return the stored value and touch nothing else.
+	 */
 	std::size_t CapacityBytes() const noexcept override { return Arena.CapacityBytes(); }
 
-	/** Preserves the wrapped arena's public active-byte diagnostic. */
+	/**
+	 * Motivation: Preserves the wrapped arena's public active-byte diagnostic.
+	 * Responsibilities: Return the stored value and touch nothing else.
+	 */
 	std::size_t UsedBytes() const noexcept override { return Arena.UsedBytes(); }
 
-	/** Counts all factory allocation attempts made through this exact resource. */
+	/** Motivation: Counts all factory allocation attempts made through this exact resource. */
 	std::size_t AllocationRequestCount{0};
 
-	/** Counts only allocations that returned a live block. */
+	/** Motivation: Counts only allocations that returned a live block. */
 	std::size_t SuccessfulAllocationCount{0};
 
-	/** Counts all ownership deallocation attempts made through this exact resource. */
+	/** Motivation: Counts all ownership deallocation attempts made through this exact resource. */
 	std::size_t DeallocationRequestCount{0};
 
-	/** Preserves the exact latest successful allocation identity. */
+	/** Motivation: Preserves the exact latest successful allocation identity. */
 	FMemoryBlock LastAllocatedBlock{};
 
-	/** Preserves the exact block later returned by an owner. */
+	/** Motivation: Preserves the exact block later returned by an owner. */
 	FMemoryBlock LastDeallocatedBlock{};
 
 private:
-	/** Supplies bounded caller-owned storage while the wrapper observes only public calls. */
+	/** Motivation: Supplies bounded caller-owned storage while the wrapper observes only public calls. */
 	TFixedArena<Bytes, Alignment> Arena;
 };
 
-/** Owns a weak observer to itself so final-weak release occurs during value destruction. */
+/**
+ * Motivation: Owns a weak observer to itself so final-weak release occurs during value destruction.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FSelfObservingValue final
 {
 public:
-	/** Exposes construction and destruction around the self-observer regression. */
+	/**
+	 * Motivation: Exposes construction and destruction around the self-observer regression.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	explicit FSelfObservingValue(FLifetimeState& InState) noexcept : State(InState) { ++State.ConstructionCount; }
 
-	/** Marks the destructor body before the member weak observer releases its final count. */
+	/**
+	 * Motivation: Marks the destructor body before the member weak observer releases its final count.
+	 * Responsibilities: Release the documented observation exactly once and leave no leak behind.
+	 */
 	~FSelfObservingValue() noexcept { ++State.DestructionCount; }
 
-	/** Transfers one already-counted self observer into the value's destruction path. */
+	/**
+	 * Motivation: Transfers one already-counted self observer into the value's destruction path.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void AdoptSelfObserver(TWeakPtr<FSelfObservingValue>&& InObserver) noexcept { SelfObserver = std::move(InObserver); }
 
 private:
-	/** Shares only the fresh counters selected for this regression test. */
+	/** Motivation: Shares only the fresh counters selected for this regression test. */
 	FLifetimeState& State;
 
-	/** Exercises final weak release while the containing value destructor is active. */
+	/** Motivation: Exercises final weak release while the containing value destructor is active. */
 	TWeakPtr<FSelfObservingValue> SelfObserver;
 };
 
-/** Records fixed-vector lifetime and reverse destruction order in caller-owned state. */
+/**
+ * Motivation: Records fixed-vector lifetime and reverse destruction order in caller-owned state.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 struct FVectorLifetimeState final
 {
-	/** Proves capacity rejection occurs before element construction. */
+	/** Motivation: Proves capacity rejection occurs before element construction. */
 	std::size_t ConstructionCount{0};
 
-	/** Proves clear and scope exit destroy only live elements. */
+	/** Motivation: Proves clear and scope exit destroy only live elements. */
 	std::size_t DestructionCount{0};
 
-	/** Preserves destruction order without dynamic storage. */
+	/** Motivation: Preserves destruction order without dynamic storage. */
 	std::array<int, 4> DestructionOrder{};
 };
 
-/** Gives vector tests one nothrow element with externally observable lifetime. */
+/**
+ * Motivation: Gives vector tests one nothrow element with externally observable lifetime.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FVectorTrackedValue final
 {
 public:
-	/** Starts one element lifetime carrying an insertion identity. */
+	/**
+	 * Motivation: Starts one element lifetime carrying an insertion identity.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	FVectorTrackedValue(FVectorLifetimeState& InState, const int InIdentity) noexcept : State(InState), Identity(InIdentity)
 	{
 		++State.ConstructionCount;
 	}
 
-	/** Appends this element's identity to the fresh bounded destruction trace. */
+	/**
+	 * Motivation: Appends this element's identity to the fresh bounded destruction trace.
+	 * Responsibilities: Release the documented observation exactly once and leave no leak behind.
+	 */
 	~FVectorTrackedValue() noexcept
 	{
 		State.DestructionOrder[State.DestructionCount] = Identity;
 		++State.DestructionCount;
 	}
 
-	/** Exposes insertion identity for deterministic iteration assertions. */
+	/**
+	 * Motivation: Exposes insertion identity for deterministic iteration assertions.
+	 * Responsibilities: Return the stored value and touch nothing else.
+	 */
 	int GetIdentity() const noexcept { return Identity; }
 
 private:
-	/** Shares only the observation state owned by the current test. */
+	/** Motivation: Shares only the observation state owned by the current test. */
 	FVectorLifetimeState& State;
 
-	/** Distinguishes elements without relying on their storage addresses. */
+	/** Motivation: Distinguishes elements without relying on their storage addresses. */
 	int Identity{0};
 };
 
@@ -209,8 +283,9 @@ static_assert(std::is_constructible<TSpan<const int>, TSpan<int>>::value);
 static_assert(!std::is_constructible<TSpan<int>, TSpan<const int>>::value);
 
 /**
- * Scenario: Allocate a small aligned block from a fresh arena, then deallocate it.
- * Expected: The aligned in-capacity allocation returns an exact block with diagnostics, and deallocation restores zero usage.
+ * Motivation: Allocate a small aligned block from a fresh arena, then deallocate it.
+ * Responsibilities: The aligned in-capacity allocation returns an exact block with diagnostics, and deallocation
+ *   restores zero usage.
  */
 MW_TEST_CASE(FixedArenaAcceptsAlignedAllocationAndReportsExactUsage)
 {
@@ -248,8 +323,8 @@ MW_TEST_CASE(FixedArenaAcceptsAlignedAllocationAndReportsExactUsage)
 }
 
 /**
- * Scenario: Attempt allocation with zero, non-power-of-two, and excess alignments.
- * Expected: Each invalid alignment is rejected atomically, clears the output block, and leaves usage unchanged.
+ * Motivation: Attempt allocation with zero, non-power-of-two, and excess alignments.
+ * Responsibilities: Each invalid alignment is rejected atomically, clears the output block, and leaves usage unchanged.
  */
 MW_TEST_CASE(FixedArenaRejectsZeroNonPowerAndExcessAlignmentAtomically)
 {
@@ -284,8 +359,8 @@ MW_TEST_CASE(FixedArenaRejectsZeroNonPowerAndExcessAlignmentAtomically)
 }
 
 /**
- * Scenario: Allocate at exact capacity, then attempt zero, oversized, exhausted, and maximum-size requests.
- * Expected: Each failing request is rejected, clears the output block, and leaves usage unchanged.
+ * Motivation: Allocate at exact capacity, then attempt zero, oversized, exhausted, and maximum-size requests.
+ * Responsibilities: Each failing request is rejected, clears the output block, and leaves usage unchanged.
  */
 MW_TEST_CASE(FixedArenaRejectsZeroOversizeExhaustedAndMaximumRequests)
 {
@@ -326,8 +401,8 @@ MW_TEST_CASE(FixedArenaRejectsZeroOversizeExhaustedAndMaximumRequests)
 }
 
 /**
- * Scenario: Deallocation foreign, interior, wrong-size, and double-freed blocks after one valid allocation.
- * Expected: Each malformed deallocation is rejected and preserves usage; only the exact original block releases.
+ * Motivation: Deallocation foreign, interior, wrong-size, and double-freed blocks after one valid allocation.
+ * Responsibilities: Each malformed deallocation is rejected and preserves usage; only the exact original block releases.
  */
 MW_TEST_CASE(FixedArenaRejectsForeignInteriorWrongSizeAndDoubleFreeAtomically)
 {
@@ -374,8 +449,9 @@ MW_TEST_CASE(FixedArenaRejectsForeignInteriorWrongSizeAndDoubleFreeAtomically)
 }
 
 /**
- * Scenario: Allocate three blocks, free the middle and reuse it, then free the remaining blocks in arbitrary order.
- * Expected: The freed range is reused regardless of release order, and final usage returns to zero.
+ * Motivation: Allocate three blocks, free the middle and reuse it, then free the remaining blocks in arbitrary
+ *   order.
+ * Responsibilities: The freed range is reused regardless of release order, and final usage returns to zero.
  */
 MW_TEST_CASE(FixedArenaReusesBlocksAfterArbitraryOrderDeallocation)
 {
@@ -412,8 +488,9 @@ MW_TEST_CASE(FixedArenaReusesBlocksAfterArbitraryOrderDeallocation)
 }
 
 /**
- * Scenario: Fill the arena to capacity, then attempt a unique factory construction.
- * Expected: The factory reports out of memory, returns an empty owner, constructs no value, and leaves usage unchanged.
+ * Motivation: Fill the arena to capacity, then attempt a unique factory construction.
+ * Responsibilities: The factory reports out of memory, returns an empty owner, constructs no value, and leaves usage
+ *   unchanged.
  */
 MW_TEST_CASE(UniqueFactoryOutOfMemoryNeverConstructsValue)
 {
@@ -443,8 +520,9 @@ MW_TEST_CASE(UniqueFactoryOutOfMemoryNeverConstructsValue)
 }
 
 /**
- * Scenario: Construct a unique owner, move it, then reset the destination twice.
- * Expected: The move empties the source and transfers the live value; repeated reset destroys the value once and returns the original block once.
+ * Motivation: Construct a unique owner, move it, then reset the destination twice.
+ * Responsibilities: The move empties the source and transfers the live value; repeated reset destroys the value once and
+ *   returns the original block once.
  */
 MW_TEST_CASE(UniquePtrMoveAndResetReturnExactOriginalBlockOnce)
 {
@@ -485,8 +563,8 @@ MW_TEST_CASE(UniquePtrMoveAndResetReturnExactOriginalBlockOnce)
 }
 
 /**
- * Scenario: Construct a unique owner inside a scope and let it exit scope with no explicit reset.
- * Expected: Scope exit destroys the value exactly once and deallocates once, restoring resource usage.
+ * Motivation: Construct a unique owner inside a scope and let it exit scope with no explicit reset.
+ * Responsibilities: Scope exit destroys the value exactly once and deallocates once, restoring resource usage.
  */
 MW_TEST_CASE(UniquePtrScopeExitDestroysAndDeallocatesExactlyOnce)
 {
@@ -517,9 +595,10 @@ MW_TEST_CASE(UniquePtrScopeExitDestroysAndDeallocatesExactlyOnce)
 }
 
 /**
- * Scenario: Construct a shared value and acquire explicit strong, weak, and pinned owners, then release all strong owners and finally the weak owner.
- * Expected: One combined allocation backs all owners; the value lives until the final strong release and the allocation returns only after the final
- * weak release.
+ * Motivation: Construct a shared value and acquire explicit strong, weak, and pinned owners, then release all
+ *   strong owners and finally the weak owner.
+ * Responsibilities: One combined allocation backs all owners; the value lives until the final strong release and the
+ *   allocation returns only after the final.
  */
 MW_TEST_CASE(SharedAndWeakOwnersPreserveValueUntilFinalStrongAndWeakRelease)
 {
@@ -594,8 +673,9 @@ MW_TEST_CASE(SharedAndWeakOwnersPreserveValueUntilFinalStrongAndWeakRelease)
 }
 
 /**
- * Scenario: Attempt a shared factory construction against an under-capacity resource.
- * Expected: The factory reports combined-allocation exhaustion, returns an empty owner, constructs no value, and requires no deallocation.
+ * Motivation: Attempt a shared factory construction against an under-capacity resource.
+ * Responsibilities: The factory reports combined-allocation exhaustion, returns an empty owner, constructs no value, and
+ *   requires no deallocation.
  */
 MW_TEST_CASE(SharedFactoryOutOfMemoryNeverConstructsValue)
 {
@@ -621,8 +701,9 @@ MW_TEST_CASE(SharedFactoryOutOfMemoryNeverConstructsValue)
 }
 
 /**
- * Scenario: Attempt a shared factory construction for an over-aligned type against a lower-alignment resource.
- * Expected: The unsupported alignment is rejected before construction, returns an empty owner, allocates no block, and requires no deallocation.
+ * Motivation: Attempt a shared factory construction for an over-aligned type against a lower-alignment resource.
+ * Responsibilities: The unsupported alignment is rejected before construction, returns an empty owner, allocates no
+ *   block, and requires no deallocation.
  */
 MW_TEST_CASE(SharedFactoryRejectsUnsupportedAlignmentBeforeConstruction)
 {
@@ -649,8 +730,10 @@ MW_TEST_CASE(SharedFactoryRejectsUnsupportedAlignmentBeforeConstruction)
 }
 
 /**
- * Scenario: Construct a self-observing shared value that adopts its own weak observer, then release the only strong owner during value destruction.
- * Expected: The self-owned final weak deallocation is deferred until value destruction completes, deallocating once and restoring usage.
+ * Motivation: Construct a self-observing shared value that adopts its own weak observer, then release the only
+ *   strong owner during value destruction.
+ * Responsibilities: The self-owned final weak deallocation is deferred until value destruction completes, deallocating
+ *   once and restoring usage.
  */
 MW_TEST_CASE(SharedPtrDefersSelfOwnedFinalWeakDeallocationUntilValueDestructionCompletes)
 {
@@ -689,8 +772,9 @@ MW_TEST_CASE(SharedPtrDefersSelfOwnedFinalWeakDeallocationUntilValueDestructionC
 }
 
 /**
- * Scenario: Acquire strong owners up to the maximum reference count, then attempt one more TryShare.
- * Expected: The maximum count succeeds; one more acquisition fails as overflow without wrapping or returning another owner.
+ * Motivation: Acquire strong owners up to the maximum reference count, then attempt one more TryShare.
+ * Responsibilities: The maximum count succeeds; one more acquisition fails as overflow without wrapping or returning
+ *   another owner.
  */
 MW_TEST_CASE(SharedPtrRejectsStrongReferenceCountOverflowWithoutWrap)
 {
@@ -749,8 +833,9 @@ MW_TEST_CASE(SharedPtrRejectsStrongReferenceCountOverflowWithoutWrap)
 }
 
 /**
- * Scenario: Acquire weak observers up to the maximum reference count, then attempt one more acquisition.
- * Expected: The maximum count succeeds; one more acquisition fails as overflow without wrapping or returning another observer.
+ * Motivation: Acquire weak observers up to the maximum reference count, then attempt one more acquisition.
+ * Responsibilities: The maximum count succeeds; one more acquisition fails as overflow without wrapping or returning
+ *   another observer.
  */
 MW_TEST_CASE(SharedPtrRejectsWeakReferenceCountOverflowWithoutWrap)
 {
@@ -809,8 +894,9 @@ MW_TEST_CASE(SharedPtrRejectsWeakReferenceCountOverflowWithoutWrap)
 }
 
 /**
- * Scenario: Inspect a fresh positive-capacity vector and attempt to add to a zero-capacity vector.
- * Expected: The empty vector exposes safe boundary state; the zero-capacity vector atomically rejects its first element and preserves zero size.
+ * Motivation: Inspect a fresh positive-capacity vector and attempt to add to a zero-capacity vector.
+ * Responsibilities: The empty vector exposes safe boundary state; the zero-capacity vector atomically rejects its first
+ *   element and preserves zero size.
  */
 MW_TEST_CASE(StaticVectorHandlesEmptyAndZeroCapacityBoundaries)
 {
@@ -850,8 +936,10 @@ MW_TEST_CASE(StaticVectorHandlesEmptyAndZeroCapacityBoundaries)
 }
 
 /**
- * Scenario: Emplace three tracked elements to capacity, attempt a capacity-plus-one element, iterate, then clear.
- * Expected: The rejected element never constructs; iteration preserves insertion order; clear destroys elements in reverse order.
+ * Motivation: Emplace three tracked elements to capacity, attempt a capacity-plus-one element, iterate, then
+ *   clear.
+ * Responsibilities: The rejected element never constructs; iteration preserves insertion order; clear destroys elements
+ *   in reverse order.
  */
 MW_TEST_CASE(StaticVectorPreservesIterationAndRejectsCapacityPlusOneBeforeConstruction)
 {
@@ -909,8 +997,8 @@ MW_TEST_CASE(StaticVectorPreservesIterationAndRejectsCapacityPlusOneBeforeConstr
 }
 
 /**
- * Scenario: Emplace two tracked elements into a scoped vector and let it exit scope.
- * Expected: Scope exit destroys exactly the two live elements in reverse insertion order.
+ * Motivation: Emplace two tracked elements into a scoped vector and let it exit scope.
+ * Responsibilities: Scope exit destroys exactly the two live elements in reverse insertion order.
  */
 MW_TEST_CASE(StaticVectorScopeExitDestroysOnlyLiveElements)
 {
@@ -942,8 +1030,9 @@ MW_TEST_CASE(StaticVectorScopeExitDestroysOnlyLiveElements)
 }
 
 /**
- * Scenario: Construct default and explicit null-zero-count spans, plus a non-empty null span.
- * Expected: Null spans are valid only at the empty boundary; the non-empty null span is invalid but retains its caller-provided count.
+ * Motivation: Construct default and explicit null-zero-count spans, plus a non-empty null span.
+ * Responsibilities: Null spans are valid only at the empty boundary; the non-empty null span is invalid but retains its
+ *   caller-provided count.
  */
 MW_TEST_CASE(SpanDistinguishesValidEmptyNullFromInvalidNonEmptyNull)
 {
@@ -982,9 +1071,10 @@ MW_TEST_CASE(SpanDistinguishesValidEmptyNullFromInvalidNonEmptyNull)
 }
 
 /**
- * Scenario: Build mutable and const array spans including a const view converted from the mutable span, mutate through it, and iterate each.
- * Expected: The spans preserve array extent, the mutable write updates the caller array, and iteration visits each element in order including the
- * converted view.
+ * Motivation: Build mutable and const array spans including a const view converted from the mutable span, mutate
+ *   through it, and iterate each.
+ * Responsibilities: The spans preserve array extent, the mutable write updates the caller array, and iteration visits
+ *   each element in order including the.
  */
 MW_TEST_CASE(SpanProvidesMutableAndConstArrayViewsInOrder)
 {

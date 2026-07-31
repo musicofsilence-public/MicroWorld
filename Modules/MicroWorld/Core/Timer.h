@@ -11,85 +11,103 @@
 namespace MicroWorld::Core
 {
 
-/** Reports every bounded timer operation without borrowing unrelated lifecycle errors. */
+/**
+ * Motivation: Gives every bounded timer operation one result vocabulary that does not borrow unrelated
+ *   lifecycle errors.
+ * Responsibilities: Distinguish success from capacity, callback, handle, mode, dispatch, and time-rollback failures.
+ * Example:
+ *   if (Manager.Cancel(Handle) == ETimerResult::StaleHandle) { IgnoreStale(); }
+ */
 enum class ETimerResult : std::uint8_t
 {
-	/** Confirms that the requested timer operation completed. */
+	/** Motivation: Confirms that the requested timer operation completed. */
 	Success,
 
-	/** Reports that no reusable timer slot remains, including zero capacity and retired generations. */
+	/** Motivation: Reports that no reusable timer slot remains, including zero capacity and retired generations. */
 	CapacityExceeded,
 
-	/** Rejects an unbound delegate before any slot is consumed or callback ownership moves. */
+	/** Motivation: Rejects an unbound delegate before any slot is consumed or callback ownership moves. */
 	InvalidCallback,
 
-	/** Rejects a default, sentinel, or out-of-range handle before consulting slot state. */
+	/** Motivation: Rejects a default, sentinel, or out-of-range handle before consulting slot state. */
 	InvalidHandle,
 
-	/** Rejects a handle whose slot is free, retired, removed, expired, or holds another generation. */
+	/** Motivation: Rejects a handle whose slot is free, retired, removed, expired, or holds another generation. */
 	StaleHandle,
 
-	/** Rejects a timer mode that is neither OneShot nor Looping. */
+	/** Motivation: Rejects a timer mode that is neither OneShot nor Looping. */
 	InvalidMode,
 
-	/** Prevents Schedule, Cancel, and nested Advance from mutating an active dispatch. */
+	/** Motivation: Prevents Schedule, Cancel, and nested Advance from mutating an active dispatch. */
 	DispatchLocked,
 
-	/** Prevents unsigned time arithmetic from accepting a rolled-back caller clock. */
+	/** Motivation: Prevents unsigned time arithmetic from accepting a rolled-back caller clock. */
 	NonMonotonicTime,
 };
 
-/** Selects one timer schedule shape independently of its bound callback. */
+/**
+ * Motivation: Selects one timer schedule shape independently of its bound callback.
+ * Responsibilities: Distinguish the unscheduled default from one-shot and looping schedules.
+ * Example:
+ *   ETimerMode Mode = ETimerMode::Looping;
+ */
 enum class ETimerMode : std::uint8_t
 {
-	/** Rejects scheduling so an uninitialized mode never silently becomes OneShot or Looping. */
+	/** Motivation: Rejects scheduling so an uninitialized mode never silently becomes OneShot or Looping. */
 	None,
 
-	/** Fires once and removes the timer so its handle becomes stale. */
+	/** Motivation: Fires once and removes the timer so its handle becomes stale. */
 	OneShot,
 
-	/** Reschedules from the accepted NowMilliseconds after each fire and stays in insertion order. */
+	/** Motivation: Reschedules from the accepted NowMilliseconds after each fire and stays in insertion order. */
 	Looping,
 };
 
 /**
- * Identifies one live timer without exposing storage or extending callback lifetime.
- *
- * A handle is local to the `TTimerManager` instance that issued it: it is a plain
- * {slot index, generation} pair with no manager identity, and it must never be
- * carried between managers or used after the issuing manager is destroyed. This
- * milestone does not embed manager identity in the handle; correct use is the
- * caller's responsibility.
+ * Motivation: Lets a caller carry one live timer identity without exposing storage or extending the callback's lifetime.
+ * Responsibilities: Pair a slot index with a generation and never mutate on its own; a handle is local to the
+ *   manager that issued it and must not be carried between managers.
+ * Example:
+ *   FTimerHandle Handle;
+ *   if (Handle.IsValid()) { Manager.Cancel(Handle); }
  */
 struct FTimerHandle final
 {
-	/** Reserves the maximum index as the invalid sentinel independent of manager capacity. */
+	/** Motivation: Reserves the maximum index as the invalid sentinel independent of manager capacity. */
 	static constexpr std::uint16_t InvalidIndex = std::numeric_limits<std::uint16_t>::max();
 
-	/** Selects the fixed slot while preserving an explicit invalid sentinel. */
+	/** Motivation: Selects the fixed slot while preserving an explicit invalid sentinel. */
 	std::uint16_t Index{InvalidIndex};
 
-	/** Distinguishes successive schedules that occupy the same slot. */
+	/** Motivation: Distinguishes successive schedules that occupy the same slot. */
 	std::uint32_t Generation{0};
 
-	/** Reports whether the value can identify a timer before consulting its owning manager. */
+	/**
+	 * Motivation: Lets a caller reject a default or stale value before consulting its owning manager.
+	 * Responsibilities: Report true only when the index and generation together look like a live timer.
+	 */
 	constexpr bool IsValid() const noexcept { return Index != InvalidIndex && Generation != 0; }
 
-	/** Compares the complete stable timer identity. */
+	/**
+	 * Motivation: Lets containers compare two handles by complete stable identity.
+	 * Responsibilities: Return true only when both index and generation match.
+	 */
 	friend constexpr bool operator==(const FTimerHandle InLeft, const FTimerHandle InRight) noexcept
 	{
 		return InLeft.Index == InRight.Index && InLeft.Generation == InRight.Generation;
 	}
 
-	/** Distinguishes handles whose slot or generation identity differs. */
+	/**
+	 * Motivation: Lets a caller tell two handles apart by stable identity.
+	 * Responsibilities: Return true whenever the slot or generation identity differs.
+	 */
 	friend constexpr bool operator!=(const FTimerHandle InLeft, const FTimerHandle InRight) noexcept { return !(InLeft == InRight); }
 };
 
 /**
- * Confirms that one more live generation can be published without wrapping.
- *
- * A manager permanently retires the slot when this query is false; wrapping a
- * generation and making an old handle valid again is forbidden.
+ * Motivation: Confirms that one more live generation can be published without wrapping.
+ * Responsibilities: Report whether the generation is below its maximum, so a manager can retire a slot before
+ *   wrapping would make an old handle valid again.
  */
 constexpr bool CanAdvanceTimerGeneration(const std::uint32_t InCurrentGeneration) noexcept
 {
@@ -97,10 +115,13 @@ constexpr bool CanAdvanceTimerGeneration(const std::uint32_t InCurrentGeneration
 }
 
 /**
- * Owns a bounded set of caller-scheduled timers with deterministic dispatch.
- *
- * The caller owns the manager value and supplies every clock reading; the
- * manager stores the last accepted time and never reads a hidden clock.
+ * Motivation: Owns a bounded set of caller-scheduled timers and dispatches them deterministically.
+ * Responsibilities: Store the last accepted caller time, fire each due timer in stable insertion order, and never
+ *   read a hidden clock, accept a rolled-back clock, or let mutation disturb an active dispatch.
+ * Example:
+ *   TTimerManager<8, 16> Manager(Now);
+ *   Manager.Schedule(std::move(Callback), 100, ETimerMode::OneShot, Handle);
+ *   Manager.Advance(Now + 100);
  */
 template<std::size_t MaxTimers, std::size_t InlineTimerCallbackBytes>
 class TTimerManager final
@@ -109,41 +130,49 @@ class TTimerManager final
 	static_assert(InlineTimerCallbackBytes > 0, "A timer manager must reserve inline callback storage for its delegates.");
 
 public:
-	/** Stores the caller's initial clock as the scheduling baseline for every later operation. */
+	/**
+	 * Motivation: Gives the manager one caller-owned clock baseline for every later operation.
+	 * Responsibilities: Store the caller's initial time as LastAcceptedNowMilliseconds.
+	 */
 	explicit TTimerManager(const TimePointMilliseconds InInitialNow) noexcept : LastAcceptedNowMilliseconds{InInitialNow} {}
 
 	/**
-	 * Destroys every bound callback without invoking any of them.
-	 *
-	 * Implicit destruction is sufficient: each `FTimerSlot` owns its `TDelegate`
-	 * member, and `TDelegate` destroys its bound callable exactly once. No
-	 * explicit Reset loop is needed.
+	 * Motivation: Ensures no bound callback outlives the manager that owns its slot.
+	 * Responsibilities: Destroy every bound callback without invoking any of them; each FTimerSlot's TDelegate
+	 *   member destroys its callable exactly once, so no explicit Reset loop is needed.
 	 */
 	~TTimerManager() noexcept = default;
 
-	/** Prevents copying: the manager uniquely owns non-copyable inline callbacks and slot identity. */
+	/**
+	 * Motivation: Prevents copying from duplicating uniquely owned callbacks and slot identity.
+	 * Responsibilities: Reject copy construction so the manager stays the single owner of its slots.
+	 */
 	TTimerManager(const TTimerManager&) = delete;
 
-	/** Prevents copy assignment: it would duplicate uniquely owned callback and slot identity. */
+	/**
+	 * Motivation: Prevents copy assignment from duplicating uniquely owned callback and slot identity.
+	 * Responsibilities: Reject copy assignment so the manager stays the single owner of its slots.
+	 */
 	TTimerManager& operator=(const TTimerManager&) = delete;
 
 	/**
-	 * Prevents moving so the manager keeps one deliberately simple application-owned
-	 * lifetime and identity. Handles are plain {index, generation} pairs local to one
-	 * issuing manager; relocation would not mechanically rewrite them, and forbidding
-	 * move keeps the ownership boundary explicit instead of relying on the caller to
-	 * avoid carrying a handle across a relocated manager.
+	 * Motivation: Keeps the manager at one deliberately simple application-owned lifetime and identity.
+	 * Responsibilities: Reject move construction so handles, which are plain {index, generation} pairs local to one
+	 *   issuing manager, are never carried across a relocation.
 	 */
 	TTimerManager(TTimerManager&&) = delete;
 
-	/** Prevents move assignment for the same application-owned lifetime/identity reason as the deleted move ctor. */
+	/**
+	 * Motivation: Prevents move assignment for the same application-owned lifetime and identity reason as the deleted move ctor.
+	 * Responsibilities: Reject move assignment so handles stay local to one issuing manager.
+	 */
 	TTimerManager& operator=(TTimerManager&&) = delete;
 
 	/**
-	 * Schedules one bound delegate using a single duration as first delay and repeat period.
-	 *
-	 * Failure clears OutHandle and leaves Callback bound; success moves the
-	 * delegate into a reusable slot and publishes a fresh generation-checked handle.
+	 * Motivation: Lets a caller arm one bound delegate using a single duration as first delay and repeat period.
+	 * Responsibilities: Reject mutation during dispatch, an invalid mode, and an unbound callback, then move the
+	 *   delegate into a reusable slot and publish a fresh generation-checked handle; on failure clear OutHandle and
+	 *   leave InCallback bound.
 	 */
 	ETimerResult Schedule(
 		TDelegate<void(), InlineTimerCallbackBytes>&& InCallback,
@@ -185,7 +214,10 @@ public:
 		return ETimerResult::Success;
 	}
 
-	/** Removes exactly the timer identified by a current generation-checked handle. */
+	/**
+	 * Motivation: Lets a caller remove one timer by its current generation-checked handle.
+	 * Responsibilities: Reject mutation during dispatch and remove exactly the identified timer.
+	 */
 	ETimerResult Cancel(const FTimerHandle InHandle) noexcept
 	{
 		if (bDispatchActive)
@@ -208,14 +240,9 @@ public:
 	}
 
 	/**
-	 * Fires each timer due at the caller-supplied time in stable insertion order.
-	 *
-	 * Completed one-shot timers are cleared in place during dispatch and then
-	 * removed from `InsertionOrder` by a single stable compaction pass after
-	 * every callback has returned, so dispatch is O(active + removed) total
-	 * rather than one linear search and shift per fired one-shot. A rolled-back
-	 * clock is rejected transactionally; a nested Advance is rejected while
-	 * another dispatch is still active.
+	 * Motivation: Lets a dispatcher fire each timer due at the caller-supplied time in stable insertion order.
+	 * Responsibilities: Reject reentrant dispatch and a rolled-back clock transactionally, then fire the snapshotted
+	 *   due timers and compact completed one-shots in one stable pass so dispatch stays O(active + removed) total.
 	 */
 	ETimerResult Advance(const TimePointMilliseconds InNowMilliseconds) noexcept
 	{
@@ -242,42 +269,57 @@ public:
 		return ETimerResult::Success;
 	}
 
-	/** Reports the exact number of timers that the next successful Advance may visit. */
+	/**
+	 * Motivation: Lets a caller report how many timers the next successful Advance may visit.
+	 * Responsibilities: Return the exact count of active timers.
+	 */
 	std::size_t TimerCount() const noexcept { return ActiveTimerCount; }
 
-	/** Reports the compile-time upper bound on live timers and dispatch work. */
+	/**
+	 * Motivation: Lets a caller test capacity against the fixed limit without magic numbers.
+	 * Responsibilities: Report the compile-time upper bound on live timers and dispatch work.
+	 */
 	static constexpr std::size_t Capacity() noexcept { return MaxTimers; }
 
 private:
-	/** Owns one reusable inline callback plus its schedule and identity state. */
+	/**
+	 * Motivation: Owns one reusable inline callback plus its schedule and identity state.
+	 * Responsibilities: Hold the callback, deadline, period, mode, and generation-checked identity for one timer slot.
+	 * Example:
+	 *   FTimerSlot Slot;
+	 *   Slot.Arm(std::move(Callback), 100, 100, ETimerMode::Looping);
+	 */
 	struct FTimerSlot final
 	{
-		/** Owns the callable only while this slot is active. */
+		/** Motivation: Owns the callable only while this slot is active. */
 		TDelegate<void(), InlineTimerCallbackBytes> Callback;
 
-		/** Stores the absolute time at which this timer next becomes due. */
+		/** Motivation: Stores the absolute time at which this timer next becomes due. */
 		TimePointMilliseconds DeadlineMilliseconds{0};
 
-		/** Stores the looping repeat period; zero marks one-shot or zero-period looping. */
+		/** Motivation: Stores the looping repeat period; zero marks one-shot or zero-period looping. */
 		DurationMilliseconds PeriodMilliseconds{0};
 
-		/** Guards nonzero-period looping timers against refiring at the same accepted NowMilliseconds. */
+		/** Motivation: Guards nonzero-period looping timers against refiring at the same accepted NowMilliseconds. */
 		TimePointMilliseconds LastFiredMilliseconds{0};
 
-		/** Distinguishes successive schedules that occupy this slot. */
+		/** Motivation: Distinguishes successive schedules that occupy this slot. */
 		std::uint32_t Generation{1};
 
-		/** Records the schedule shape that owns this slot's removal or reschedule behavior. */
+		/** Motivation: Records the schedule shape that owns this slot's removal or reschedule behavior. */
 		ETimerMode Mode{ETimerMode::None};
 
-		/** Distinguishes a live timer from reusable unoccupied slot state. */
+		/** Motivation: Distinguishes a live timer from reusable unoccupied slot state. */
 		bool bActive{false};
 
-		/** Permanently removes this slot once its generation space is exhausted. */
+		/** Motivation: Permanently removes this slot once its generation space is exhausted. */
 		bool bRetired{false};
 
-		/** Populates every schedule field for a freshly claimed slot; leaves generation
-		 * and retirement identity untouched so slot reuse stays generation-checked. */
+		/**
+		 * Motivation: Populates every schedule field for a freshly claimed slot.
+		 * Responsibilities: Set callback, deadline, period, mode, and active flag, leaving generation and retirement
+		 *   identity untouched so slot reuse stays generation-checked.
+		 */
 		void Arm(
 			TDelegate<void(), InlineTimerCallbackBytes>&& InCallback,
 			const TimePointMilliseconds InFirstDeadlineMilliseconds,
@@ -293,7 +335,10 @@ private:
 		}
 	};
 
-	/** Finds the lowest reusable slot while insertion order remains separately recorded. */
+	/**
+	 * Motivation: Lets Schedule locate the next slot without disturbing insertion order.
+	 * Responsibilities: Return the lowest unoccupied, unretired slot, or null when none remains.
+	 */
 	FTimerSlot* FindAvailableSlot() noexcept
 	{
 		for (std::size_t SlotIndex = 0; SlotIndex < MaxTimers; ++SlotIndex)
@@ -308,11 +353,9 @@ private:
 	}
 
 	/**
-	 * Clears one caller-canceled timer and removes it from insertion order.
-	 *
-	 * Used only by `Cancel`, which runs outside dispatch; one bounded linear
-	 * removal remains acceptable there. `Advance` clears completed one-shots
-	 * in place and lets the post-dispatch compaction pass drop them together.
+	 * Motivation: Lets Cancel tear down one timer outside dispatch.
+	 * Responsibilities: Reset the callback, retire or advance the slot identity, remove its insertion-order entry,
+	 *   and drop the count; Advance clears completed one-shots in place and leaves them to the compaction pass.
 	 */
 	void CancelActiveSlot(FTimerSlot& InSlot, const FTimerHandle InHandle) noexcept
 	{
@@ -323,7 +366,10 @@ private:
 		--ActiveTimerCount;
 	}
 
-	/** Advances a reusable slot identity or retires it before generation wrap can cause ABA. */
+	/**
+	 * Motivation: Keeps a reused slot from matching an old handle as generations approach wrap.
+	 * Responsibilities: Advance the generation, or permanently retire the slot before it can wrap.
+	 */
 	static void AdvanceGenerationOrRetire(FTimerSlot& InSlot) noexcept
 	{
 		if (!CanAdvanceTimerGeneration(InSlot.Generation))
@@ -335,11 +381,9 @@ private:
 	}
 
 	/**
-	 * Freezes the handles active at Advance entry into the dispatch snapshot and
-	 * reports how many were frozen.
-	 *
-	 * The returned count bounds the dispatch loop so a callback that schedules or
-	 * cancels timers cannot change the set visited during this Advance.
+	 * Motivation: Freezes the timers active at Advance entry so dispatch visits a stable set.
+	 * Responsibilities: Copy the active insertion-order entries into the snapshot and return the count that bounds
+	 *   the dispatch loop, so a callback that schedules or cancels cannot change the visited set.
 	 */
 	std::size_t SnapshotActiveTimers() noexcept
 	{
@@ -352,11 +396,9 @@ private:
 	}
 
 	/**
-	 * Fires one snapshotted timer if it is still live and due, then retires a
-	 * completed one-shot in place or reschedules a looping timer.
-	 *
-	 * A stale, inactive, not-yet-due, or already-fired-this-instant slot is skipped
-	 * without firing.
+	 * Motivation: Fires one snapshotted timer if it is still live and due.
+	 * Responsibilities: Skip a stale, inactive, not-yet-due, or already-fired-this-instant slot without firing,
+	 *   then retire a completed one-shot in place or reschedule a looping timer.
 	 */
 	void FireAndRescheduleSlot(const FTimerHandle InHandle, const TimePointMilliseconds InNowMilliseconds) noexcept
 	{
@@ -405,11 +447,9 @@ private:
 	}
 
 	/**
-	 * Drops every insertion-order entry whose slot is no longer active in one stable pass.
-	 *
-	 * After `Advance` clears completed one-shots in place, this single compaction
-	 * removes them all while preserving the relative order of the survivors. It
-	 * never consults callback state and never shifts a survivor past another.
+	 * Motivation: Drops every insertion-order entry whose slot is no longer active in one stable pass.
+	 * Responsibilities: Remove the cleared one-shots after dispatch while preserving the relative order of survivors,
+	 *   never consulting callback state or shifting a survivor past another.
 	 */
 	void CompactInsertionOrder() noexcept
 	{
@@ -435,7 +475,10 @@ private:
 		ActiveTimerCount = WriteIndex;
 	}
 
-	/** Compacts insertion order after a Cancel without changing any remaining slot identity. */
+	/**
+	 * Motivation: Lets Cancel close the gap left by a removed timer in insertion order.
+	 * Responsibilities: Shift later entries down without changing any remaining slot identity.
+	 */
 	void RemoveInsertionOrderAt(const FTimerHandle InRemovedHandle) noexcept
 	{
 		std::size_t OrderIndex = ActiveTimerCount;
@@ -458,7 +501,10 @@ private:
 		InsertionOrder[ActiveTimerCount - 1U] = {};
 	}
 
-	/** Adds two time values while saturating at the TimePointMilliseconds maximum. */
+	/**
+	 * Motivation: Lets scheduling add to the time without wrapping into an early deadline.
+	 * Responsibilities: Return InBase plus InAddend, saturating at the TimePointMilliseconds maximum.
+	 */
 	static constexpr TimePointMilliseconds SaturatingAdd(const TimePointMilliseconds InBase, const DurationMilliseconds InAddend) noexcept
 	{
 		const TimePointMilliseconds MaximumTime = std::numeric_limits<TimePointMilliseconds>::max();
@@ -466,24 +512,24 @@ private:
 																					 : InBase + static_cast<TimePointMilliseconds>(InAddend);
 	}
 
-	/** Owns all bounded callback storage independently of insertion order. */
+	/** Motivation: Owns all bounded callback storage independently of insertion order. */
 	// C++ forbids zero-length arrays; the "== 0 ? 1" guard on these three arrays
 	// keeps a zero-capacity (MaxTimers == 0) manager well-formed.
 	FTimerSlot Slots[MaxTimers == 0 ? 1 : MaxTimers];
 
-	/** Preserves deterministic insertion order while slots are removed and reused. */
+	/** Motivation: Preserves deterministic insertion order while slots are removed and reused. */
 	FTimerHandle InsertionOrder[MaxTimers == 0 ? 1 : MaxTimers];
 
-	/** Snapshots the timers active at Advance entry so dispatch visits each at most once. */
+	/** Motivation: Snapshots the timers active at Advance entry so dispatch visits each at most once. */
 	FTimerHandle DispatchSnapshot[MaxTimers == 0 ? 1 : MaxTimers];
 
-	/** Stores the last accepted caller time so scheduling never reads a hidden clock. */
+	/** Motivation: Stores the last accepted caller time so scheduling never reads a hidden clock. */
 	TimePointMilliseconds LastAcceptedNowMilliseconds{0};
 
-	/** Bounds insertion-order traversal and makes current timer count observable. */
+	/** Motivation: Bounds insertion-order traversal and makes current timer count observable. */
 	std::size_t ActiveTimerCount{0};
 
-	/** Rejects Schedule, Cancel, and nested Advance while dispatch iteration is active. */
+	/** Motivation: Rejects Schedule, Cancel, and nested Advance while dispatch iteration is active. */
 	bool bDispatchActive{false};
 };
 

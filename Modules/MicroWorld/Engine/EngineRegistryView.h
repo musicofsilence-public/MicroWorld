@@ -13,16 +13,21 @@ template<std::size_t MaxActors>
 class FWorldActorRegistry;
 
 /**
- * Move-only reference over one caller-owned fixed actor registry.
- *
- * Only FWorldActorRegistry can create a reference, and only UWorld can inspect or
- * mutate it. This prevents forged views, shared mutable storage, and caller
- * mutation after lifecycle dispatch begins.
+ * Motivation: Lets one world reach a fixed actor registry's storage through a move-only reference so the storage cannot be
+ *   forged, shared, or mutated by a caller after lifecycle dispatch begins.
+ * Responsibilities: Carry pointers into one caller-owned registry and its pending lists, validate before access, and be
+ *   creatable only by the owning FWorldActorRegistry and inspectable only by UWorld.
+ * Example:
+ *   FWorldActorRegistryReference Ref = Registry.MakeReference();
+ *   if (Ref.IsValid()) { Ref.Add(Actor); }
  */
 class FWorldActorRegistryReference final
 {
 public:
-	/** Transfers the only usable reference and invalidates the source. */
+	/**
+	 * Motivation: Transfers the only usable reference to a registry and invalidates the source.
+	 * Responsibilities: Move every pointer and leave the source empty.
+	 */
 	FWorldActorRegistryReference(FWorldActorRegistryReference&& Other) noexcept
 		: Actors(Other.Actors)
 		, Capacity(Other.Capacity)
@@ -41,13 +46,22 @@ public:
 		Other.PendingDestroyCount = nullptr;
 	}
 
-	/** Prevents two worlds from sharing one mutable registry reference. */
+	/**
+	 * Motivation: Prevents two worlds from sharing one mutable registry reference.
+	 * Responsibilities: Reject copy construction so each registry has one holder.
+	 */
 	FWorldActorRegistryReference(const FWorldActorRegistryReference&) = delete;
 
-	/** Prevents rebinding a world's registry after construction. */
+	/**
+	 * Motivation: Prevents rebinding a world's registry after construction.
+	 * Responsibilities: Reject copy assignment so the registry binding never changes.
+	 */
 	FWorldActorRegistryReference& operator=(const FWorldActorRegistryReference&) = delete;
 
-	/** Prevents rebinding a world's registry after construction. */
+	/**
+	 * Motivation: Prevents rebinding a world's registry after construction via move.
+	 * Responsibilities: Reject move assignment so the registry binding never changes.
+	 */
 	FWorldActorRegistryReference& operator=(FWorldActorRegistryReference&&) = delete;
 
 private:
@@ -58,10 +72,16 @@ private:
 	template<std::size_t>
 	friend class FWorldActorRegistry;
 
-	/** Creates an invalid reference when registry storage has already been claimed. */
+	/**
+	 * Motivation: Creates an invalid reference when registry storage has already been claimed or for an empty holder.
+	 * Responsibilities: Produce a reference that reports invalid on every query.
+	 */
 	FWorldActorRegistryReference() noexcept = default;
 
-	/** Creates one validated reference from its owning fixed registry and pending lists. */
+	/**
+	 * Motivation: Lets the owning fixed registry mint one validated reference over its storage and pending lists.
+	 * Responsibilities: Bind all pointers and counts the registry validated without re-validating.
+	 */
 	FWorldActorRegistryReference(
 		TObjectPtr<AActor>* InActors,
 		const std::size_t InCapacity,
@@ -80,7 +100,10 @@ private:
 	{
 	}
 
-	/** Reports whether this reference still identifies one fixed registry and its pending lists. */
+	/**
+	 * Motivation: Lets UWorld confirm a reference still identifies one fixed registry and its pending lists before use.
+	 * Responsibilities: Report true only when all handles and arrays are present and every count is bounded by capacity.
+	 */
 	bool IsValid() const noexcept
 	{
 		const bool bHandlesPresent = Count != nullptr && PendingSpawnCount != nullptr && PendingDestroyCount != nullptr;
@@ -89,23 +112,38 @@ private:
 		return bHandlesPresent && bArraysPresent && bCountsBounded;
 	}
 
-	/** Returns the maximum number of actors accepted by this registry. */
+	/**
+	 * Motivation: Lets UWorld read the maximum number of actors accepted by this registry.
+	 * Responsibilities: Return the capacity the registry validated at mint time.
+	 */
 	std::size_t GetCapacity() const noexcept { return Capacity; }
 
-	/** Returns the number of actors registered by the owning world. */
+	/**
+	 * Motivation: Lets UWorld read how many actors the owning world has registered.
+	 * Responsibilities: Return the live count or zero for an empty reference.
+	 */
 	std::size_t GetCount() const noexcept { return Count != nullptr ? *Count : 0; }
 
-	/** Returns one registered actor reference by validated internal index. */
+	/**
+	 * Motivation: Lets UWorld read one registered actor reference by its validated internal index.
+	 * Responsibilities: Return the actor at the index with no bounds re-check beyond the registry's validation.
+	 */
 	const TObjectPtr<AActor>& At(const std::size_t InIndex) const noexcept { return Actors[InIndex]; }
 
-	/** Publishes one validated actor and advances the private live count. */
+	/**
+	 * Motivation: Lets UWorld publish one validated actor into the registry.
+	 * Responsibilities: Store the actor at the live count and advance the count exactly once.
+	 */
 	void Add(const TObjectPtr<AActor> InActor) noexcept
 	{
 		Actors[*Count] = InActor;
 		++*Count;
 	}
 
-	/** Removes the live actor at Index and shifts later survivors left, preserving order. */
+	/**
+	 * Motivation: Lets UWorld remove the live actor at an index without disturbing relative order.
+	 * Responsibilities: Shift later survivors left, advance the count down, and clear the freed slot.
+	 */
 	void RemoveAt(const std::size_t InIndex) noexcept
 	{
 		for (std::size_t Slot = InIndex + 1; Slot < *Count; ++Slot)
@@ -116,20 +154,32 @@ private:
 		Actors[*Count] = TObjectPtr<AActor>{};
 	}
 
-	/** Returns the number of actors queued to begin at the next deferred barrier. */
+	/**
+	 * Motivation: Lets UWorld read how many actors are queued to begin at the next deferred barrier.
+	 * Responsibilities: Return the pending-spawn count or zero for an empty reference.
+	 */
 	std::size_t GetPendingSpawnCount() const noexcept { return PendingSpawnCount != nullptr ? *PendingSpawnCount : 0; }
 
-	/** Returns one queued-spawn actor reference by validated internal index. */
+	/**
+	 * Motivation: Lets UWorld read one queued-spawn actor reference by its validated internal index.
+	 * Responsibilities: Return the pending-spawn actor at the index without re-checking bounds.
+	 */
 	const TObjectPtr<AActor>& PendingSpawnAt(const std::size_t InIndex) const noexcept { return PendingSpawn[InIndex]; }
 
-	/** Appends one actor to the bounded pending-spawn list. */
+	/**
+	 * Motivation: Lets UWorld append one actor to the bounded pending-spawn list.
+	 * Responsibilities: Store the actor at the pending-spawn count and advance it exactly once.
+	 */
 	void AddPendingSpawn(const TObjectPtr<AActor> InActor) noexcept
 	{
 		PendingSpawn[*PendingSpawnCount] = InActor;
 		++*PendingSpawnCount;
 	}
 
-	/** Drops every pending-spawn entry after the barrier has begun them. */
+	/**
+	 * Motivation: Lets UWorld drop every pending-spawn entry after the barrier has begun them.
+	 * Responsibilities: Clear each slot and reset the pending-spawn count to zero.
+	 */
 	void ClearPendingSpawn() noexcept
 	{
 		for (std::size_t Slot = 0; Slot < *PendingSpawnCount; ++Slot)
@@ -139,20 +189,32 @@ private:
 		*PendingSpawnCount = 0;
 	}
 
-	/** Returns the number of actors queued to end and release at the next deferred barrier. */
+	/**
+	 * Motivation: Lets UWorld read how many actors are queued to end and release at the next deferred barrier.
+	 * Responsibilities: Return the pending-destroy count or zero for an empty reference.
+	 */
 	std::size_t GetPendingDestroyCount() const noexcept { return PendingDestroyCount != nullptr ? *PendingDestroyCount : 0; }
 
-	/** Returns one queued-destroy actor reference by validated internal index. */
+	/**
+	 * Motivation: Lets UWorld read one queued-destroy actor reference by its validated internal index.
+	 * Responsibilities: Return the pending-destroy actor at the index without re-checking bounds.
+	 */
 	const TObjectPtr<AActor>& PendingDestroyAt(const std::size_t InIndex) const noexcept { return PendingDestroy[InIndex]; }
 
-	/** Appends one actor to the bounded pending-destroy list. */
+	/**
+	 * Motivation: Lets UWorld append one actor to the bounded pending-destroy list.
+	 * Responsibilities: Store the actor at the pending-destroy count and advance it exactly once.
+	 */
 	void AddPendingDestroy(const TObjectPtr<AActor> InActor) noexcept
 	{
 		PendingDestroy[*PendingDestroyCount] = InActor;
 		++*PendingDestroyCount;
 	}
 
-	/** Drops every pending-destroy entry after the barrier has ended them. */
+	/**
+	 * Motivation: Lets UWorld drop every pending-destroy entry after the barrier has ended them.
+	 * Responsibilities: Clear each slot and reset the pending-destroy count to zero.
+	 */
 	void ClearPendingDestroy() noexcept
 	{
 		for (std::size_t Slot = 0; Slot < *PendingDestroyCount; ++Slot)
@@ -162,25 +224,25 @@ private:
 		*PendingDestroyCount = 0;
 	}
 
-	/** Points at the private caller-owned actor array. */
+	/** Motivation: Points at the private caller-owned actor array. */
 	TObjectPtr<AActor>* Actors{nullptr};
 
-	/** Records the immutable capacity shared by the actor array and both pending lists. */
+	/** Motivation: Records the immutable capacity shared by the actor array and both pending lists. */
 	std::size_t Capacity{0};
 
-	/** Points at the private caller-owned live count advanced only by UWorld. */
+	/** Motivation: Points at the private caller-owned live count advanced only by UWorld. */
 	std::size_t* Count{nullptr};
 
-	/** Points at the private caller-owned pending-spawn array filled only by UWorld. */
+	/** Motivation: Points at the private caller-owned pending-spawn array filled only by UWorld. */
 	TObjectPtr<AActor>* PendingSpawn{nullptr};
 
-	/** Points at the private caller-owned pending-spawn count advanced only by UWorld. */
+	/** Motivation: Points at the private caller-owned pending-spawn count advanced only by UWorld. */
 	std::size_t* PendingSpawnCount{nullptr};
 
-	/** Points at the private caller-owned pending-destroy array filled only by UWorld. */
+	/** Motivation: Points at the private caller-owned pending-destroy array filled only by UWorld. */
 	TObjectPtr<AActor>* PendingDestroy{nullptr};
 
-	/** Points at the private caller-owned pending-destroy count advanced only by UWorld. */
+	/** Motivation: Points at the private caller-owned pending-destroy count advanced only by UWorld. */
 	std::size_t* PendingDestroyCount{nullptr};
 };
 

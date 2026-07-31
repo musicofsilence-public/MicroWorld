@@ -5,25 +5,19 @@
 namespace
 {
 
-/** Uses plain configuration values so the released facade compiles without exposing ESP-IDF UART types. */
+/** Motivation: Uses plain configuration values so the released facade compiles without exposing ESP-IDF UART types. */
 constexpr MicroWorld::Platform::Esp32::FEsp32E32LoraConfig RadioProbeConfig{1, 17, 18, 9600, 1};
 
 } // namespace
 
 /**
- * Compiles and links the released ESP32 RadioE32 facade without opening UART hardware at runtime.
- *
- * The default-false volatile gate keeps construction, destruction, and bounded transmit progress link-visible while
- * normal execution performs no radio I/O, leaving hardware behavior to explicit target verification.
+ * Motivation: Compiles and links the released ESP32 RadioE32 facade without opening UART hardware at runtime.
+ * Responsibilities: Keep construction, destruction, and transmit progress link-visible while performing no radio I/O.
  */
 extern "C" void app_main()
 {
-	/**
-	 * Keeps the compile/link probe disabled in normal firmware execution.
-	 *
-	 * This local gate has no configuration surface or persistent state; volatility prevents the compiler from removing
-	 * the guarded facade references that the radio-specific profile must compile and link.
-	 */
+	/** Motivation: Keeps the compile/link probe disabled in normal firmware execution; volatility prevents the compiler from removing the guarded
+	 * facade references. */
 	volatile bool bRunRadioHardwareProbe = false;
 	if (bRunRadioHardwareProbe)
 	{

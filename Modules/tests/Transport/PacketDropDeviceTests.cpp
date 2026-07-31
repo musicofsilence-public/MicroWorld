@@ -22,67 +22,85 @@ using MicroWorld::Transport::Address::FDeviceAddress;
 using MicroWorld::Transport::Address::MakeLoopbackAddress;
 using MicroWorld::Transport::Device::FReceiveResult;
 
-/** Loopback template parameters every packet-drop case binds: two ports, deep enough mailboxes, one-word packets. */
+/** Motivation: Loopback template parameters every packet-drop case binds: two ports, deep enough mailboxes, one-word packets. */
 constexpr std::size_t LoopbackPortCount = 2;
 constexpr std::size_t LoopbackMailboxDepth = 16;
 constexpr std::size_t LoopbackPacketBytes = 4;
 
-/** Loopback port index that owns the sender side in every packet-drop case. */
+/** Motivation: Loopback port index that owns the sender side in every packet-drop case. */
 constexpr std::uint8_t SenderPortIndex = 0;
-/** Loopback port index that owns the receiver mailbox in every packet-drop case. */
+/** Motivation: Loopback port index that owns the receiver mailbox in every packet-drop case. */
 constexpr std::uint8_t ReceiverPortIndex = 1;
 
-/** Drop interval that drops every send, proving Success is still reported to the caller. */
+/** Motivation: Drop interval that drops every send, proving Success is still reported to the caller. */
 constexpr std::uint32_t DropEverySendInterval = 1;
-/** Drop interval that drops exactly every third send while delivering the rest. */
+/** Motivation: Drop interval that drops exactly every third send while delivering the rest. */
 constexpr std::uint32_t DropEveryThirdInterval = 3;
-/** Drop interval that disables loss injection so every send is forwarded. */
+/** Motivation: Drop interval that disables loss injection so every send is forwarded. */
 constexpr std::uint32_t DropNeverInterval = 0;
 
-/** Number of sends the drop-every-third case drives so exactly three are dropped and six delivered. */
+/** Motivation: Number of sends the drop-every-third case drives so exactly three are dropped and six delivered. */
 constexpr std::size_t DropEveryThirdSendCount = 9;
-/** Number of sends the drop-every-third case must deliver after dropping three. */
+/** Motivation: Number of sends the drop-every-third case must deliver after dropping three. */
 constexpr std::size_t DropEveryThirdDeliveredCount = 6;
-/** Number of sends the drop-every-third case must count as dropped. */
+/** Motivation: Number of sends the drop-every-third case must count as dropped. */
 constexpr std::uint32_t DropEveryThirdDroppedCount = 3;
-/** Markers the drop-every-third case sends in order, so delivered order skips 3, 6, and 9. */
+/** Motivation: Markers the drop-every-third case sends in order, so delivered order skips 3, 6, and 9. */
 constexpr std::uint8_t DropEveryThirdMarkers[DropEveryThirdSendCount] = {1, 2, 3, 4, 5, 6, 7, 8, 9};
-/** Delivered markers expected after the drop-every-third case drops 3, 6, and 9. */
+/** Motivation: Delivered markers expected after the drop-every-third case drops 3, 6, and 9. */
 constexpr std::uint8_t DropEveryThirdExpected[DropEveryThirdDeliveredCount] = {1, 2, 4, 5, 7, 8};
 
-/** Number of sends the no-loss case drives to prove every one is forwarded. */
+/** Motivation: Number of sends the no-loss case drives to prove every one is forwarded. */
 constexpr std::size_t NoLossSendCount = 5;
-/** Markers the no-loss case sends, so each delivered packet can be checked for an unmodified marker. */
+/** Motivation: Markers the no-loss case sends, so each delivered packet can be checked for an unmodified marker. */
 constexpr std::uint8_t NoLossMarkers[NoLossSendCount] = {10, 20, 30, 40, 50};
 
-/** Single-byte payload the N=1 case sends and proves never reaches the inner device. */
+/** Motivation: Single-byte payload the N=1 case sends and proves never reaches the inner device. */
 constexpr std::uint8_t DroppedSendPayloadByte = 0x42;
-/** Two payload bytes the passthrough case threads through the receiver unchanged. */
+/** Motivation: Two payload bytes the passthrough case threads through the receiver unchanged. */
 constexpr std::uint8_t PassthroughPacketBytes[2] = {0xAA, 0xBB};
 
-/** Records transport progress without requiring a real transport, isolating the decorator forwarding contract. */
+/**
+ * Motivation: Records transport progress without requiring a real transport, isolating the decorator forwarding
+ *   contract.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FAdvanceRecordingDevice final : public MicroWorld::Transport::Device::IDevice
 {
 public:
-	/** Records the bounded progress command that a wrapping decorator must preserve. */
+	/**
+	 * Motivation: Records the bounded progress command that a wrapping decorator must preserve.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void AdvanceTransmit() noexcept override { ++AdvanceCount; }
 
-	/** Remains inert because this fake only observes transport progress. */
+	/**
+	 * Motivation: This fake only observes transport progress.
+	 * Responsibilities: Remains inert.
+	 */
 	ETransportResult TrySend(const FDeviceAddress&, TSpan<const std::uint8_t>) noexcept override { return ETransportResult::Unavailable; }
 
-	/** Remains inert because this fake only observes transport progress. */
+	/**
+	 * Motivation: This fake only observes transport progress.
+	 * Responsibilities: Remains inert.
+	 */
 	ETransportResult TryReceive(FDeviceAddress&, TSpan<std::uint8_t>, FReceiveResult&) noexcept override { return ETransportResult::Unavailable; }
 
-	/** Supplies a valid fixed capacity for the complete device contract. */
+	/**
+	 * Motivation: Supplies a valid fixed capacity for the complete device contract.
+	 * Responsibilities: Return the stored value and touch nothing else.
+	 */
 	std::size_t MaxPacketBytes() const noexcept override { return 1; }
 
-	/** Makes forwarded progress directly observable to this focused test. */
+	/** Motivation: Makes forwarded progress directly observable to this focused test. */
 	std::size_t AdvanceCount{0};
 };
 
 /**
- * Scenario: Wrap an inner recording device with a drop-every-send decorator, then advance transmit.
- * Expected: Transport progress reaches the wrapped device even when every logical send drops.
+ * Motivation: Wrap an inner recording device with a drop-every-send decorator, then advance transmit.
+ * Responsibilities: Transport progress reaches the wrapped device even when every logical send drops.
  */
 MW_TEST_CASE(PacketDropDevice_ForwardsPendingTransmitProgress)
 {
@@ -102,9 +120,9 @@ MW_TEST_CASE(PacketDropDevice_ForwardsPendingTransmitProgress)
 }
 
 /**
- * Scenario: Send nine sequential markers through a drop-every-third decorator, then drain the receiver.
- * Expected: Every send reports Success whether or not it was dropped; exactly three of nine are dropped and the six delivered markers skip 3, 6, and
- * 9 in order.
+ * Motivation: Send nine sequential markers through a drop-every-third decorator, then drain the receiver.
+ * Responsibilities: Every send reports Success whether or not it was dropped; exactly three of nine are dropped and the
+ *   six delivered markers skip 3, 6, and.
  */
 MW_TEST_CASE(PacketDropDevice_DropsEveryThirdSendDeliveringTheRest)
 {
@@ -152,8 +170,9 @@ MW_TEST_CASE(PacketDropDevice_DropsEveryThirdSendDeliveringTheRest)
 }
 
 /**
- * Scenario: Send five markers through a zero drop interval decorator, then drain the receiver.
- * Expected: A zero interval forwards every send to the receiver mailbox with its original marker unmodified and never counts a drop.
+ * Motivation: Send five markers through a zero drop interval decorator, then drain the receiver.
+ * Responsibilities: A zero interval forwards every send to the receiver mailbox with its original marker unmodified and
+ *   never counts a drop.
  */
 MW_TEST_CASE(PacketDropDevice_ZeroIntervalForwardsEverySend)
 {
@@ -192,8 +211,9 @@ MW_TEST_CASE(PacketDropDevice_ZeroIntervalForwardsEverySend)
 }
 
 /**
- * Scenario: Send one packet through a drop-every-send decorator and observe the receiver mailbox.
- * Expected: N=1 drops every send yet still reports Success, and the dropped send never reaches the inner device's wire.
+ * Motivation: Send one packet through a drop-every-send decorator and observe the receiver mailbox.
+ * Responsibilities: N=1 drops every send yet still reports Success, and the dropped send never reaches the inner
+ *   device's wire.
  */
 MW_TEST_CASE(PacketDropDevice_DroppedSendReturnsSuccessWithoutReachingInner)
 {
@@ -214,9 +234,10 @@ MW_TEST_CASE(PacketDropDevice_DroppedSendReturnsSuccessWithoutReachingInner)
 }
 
 /**
- * Scenario: Queue one packet for the receiver, receive through the drop decorator, then receive again on the empty queue.
- * Expected: The receive path is a bit-identical passthrough matching the inner device's own Success and Unavailable semantics, and a receive never
- * changes the drop count.
+ * Motivation: Queue one packet for the receiver, receive through the drop decorator, then receive again on the
+ *   empty queue.
+ * Responsibilities: The receive path is a bit-identical passthrough matching the inner device's own Success and
+ *   Unavailable semantics, and a receive never.
  */
 MW_TEST_CASE(PacketDropDevice_ReceivePathIsBitIdenticalPassthrough)
 {
@@ -261,8 +282,8 @@ MW_TEST_CASE(PacketDropDevice_ReceivePathIsBitIdenticalPassthrough)
 }
 
 /**
- * Scenario: Query MaxPacketBytes on the drop decorator and the wrapped loopback port.
- * Expected: MaxPacketBytes forwards the wrapped port's reported capacity unchanged.
+ * Motivation: Query MaxPacketBytes on the drop decorator and the wrapped loopback port.
+ * Responsibilities: MaxPacketBytes forwards the wrapped port's reported capacity unchanged.
  */
 MW_TEST_CASE(PacketDropDevice_MaxPacketBytesForwardsInner)
 {

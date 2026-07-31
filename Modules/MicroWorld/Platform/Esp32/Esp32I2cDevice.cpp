@@ -39,7 +39,11 @@ bool FI2cReceiveInbox::Pop(std::uint8_t& OutByte) noexcept
 namespace
 {
 
-	/** Maps one I2C write outcome to the shared device result (mirrors the UART device's mapping). */
+	/**
+	 * Motivation: Translates one ESP-IDF-normalized I2C write outcome into the shared device result so the
+	 *   device body never inspects platform codes.
+	 * Responsibilities: Map Sent to Success, WouldBlock to Full, and anything else to Invalid.
+	 */
 	Transport::ETransportResult MapI2cWriteOutcome(const EI2cWriteOutcome InOutcome) noexcept
 	{
 		switch (InOutcome)
@@ -54,7 +58,11 @@ namespace
 		}
 	}
 
-	/** Reports the first reason an outgoing packet cannot be framed and sent, or `Success`. */
+	/**
+	 * Motivation: Guards a send against a malformed address, oversize packet, or null span before any syscall so
+	 *   a rejection is truly transactional.
+	 * Responsibilities: Return the first reason an outgoing packet cannot be framed and sent, or Success.
+	 */
 	Transport::ETransportResult ValidateOutgoingI2cPacket(
 		const Transport::Address::FDeviceAddress& InTo, const Core::TSpan<const std::uint8_t> InPacket) noexcept
 	{
@@ -75,8 +83,12 @@ namespace
 		return Transport::ETransportResult::Success;
 	}
 
-	/** Copies the decoder's held frame into the destination and clears it, or returns `Full`
-	 * (leaving the frame held) when the payload exceeds the destination. */
+	/**
+	 * Motivation: Moves the decoder's held frame into the caller's destination so a completed frame is delivered
+	 *   in one transactional step.
+	 * Responsibilities: Copy the payload, byte count, and sender node id and clear the held frame, or return Full
+	 *   (leaving the frame held) when the payload exceeds the destination.
+	 */
 	Transport::ETransportResult DeliverFrameFromDecoder(
 		Transport::FrameCodec::TFrameDecoder<I2cMaxPayloadBytes>& InDecoder,
 		Core::TSpan<std::uint8_t> InDestination,

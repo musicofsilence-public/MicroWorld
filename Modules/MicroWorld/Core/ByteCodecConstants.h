@@ -7,23 +7,22 @@ namespace MicroWorld::Core
 {
 
 /**
- * Numeric constants shared by every byte-level codec (Transport framing and Messaging encode/decode).
- *
- * These name the values that would otherwise appear as bare literals in shifts, masks, and bounds
- * checks across Transport and Messaging, both of which depend on Core. Module-specific sentinels such as
- * CRC polynomials or sequence-number half spaces stay local to the module that owns them.
+ * Motivation: Gives every byte-level codec one shared place for the numeric values that would
+ *   otherwise appear as bare literals in shifts, masks, and bounds checks across Transport
+ *   framing and Messaging encode/decode, both of which depend on Core.
+ * Responsibilities: Name only the shared octet-level values; leave module-specific sentinels
+ *   such as CRC polynomials or sequence-number half spaces local to the module that owns them.
  */
-
-/** Number of bits per octet; used by bit-by-bit CRC advance loops and bit-pack shifts. */
+/** Motivation: Names the octet width used by bit-by-bit CRC advance loops and bit-pack shifts. */
 inline constexpr int BitsPerByte = 8;
 
-/** Mask selecting the low eight bits of a wider value; the single-byte fragment written or read. */
+/** Motivation: Selects the low eight bits of a wider value as the single-byte fragment written or read. */
 inline constexpr std::uint8_t LowByteMask = 0xFFu;
 
-/** Shift placing a byte into the high octet of a 16-bit value. */
+/** Motivation: Places one byte into the high octet of a 16-bit value. */
 inline constexpr std::uint16_t HighByteShift = 8u;
 
-/** Largest value representable in an unsigned 16-bit field; bounds the framed payload length. */
+/** Motivation: Bounds the framed payload length with the largest unsigned 16-bit value. */
 inline constexpr std::uint16_t Uint16Max = 0xFFFFu;
 
 } // namespace MicroWorld::Core

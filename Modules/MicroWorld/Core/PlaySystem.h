@@ -6,29 +6,46 @@ namespace MicroWorld::Core
 {
 
 /**
- * The contract for a system a host drives around its lifecycle and advance:
- * BeginPlay opens the system before the host begins, PreAdvance and PostAdvance
- * bracket each frame's main work, and EndPlay closes the system after the host ends.
- *
- * This contract lives in Core so Core-only modules can implement it without
- * depending on Engine.
+ * Motivation: Gives a host one contract for driving a system around its lifecycle and frame advance.
+ * Responsibilities: Open the system at play start, bracket each frame's main work with pre- and post-advance turns,
+ *   and close the system at play end, without depending on Engine.
+ * Example:
+ *   class FCounter : public IPlaySystem { // system body
+ *   };
+ *   FCounter System;
+ *   System.BeginPlay(Now);
  */
 class IPlaySystem
 {
 public:
-	/** Defaulted virtual so a derived system adapter destructs through this interface. */
+	/**
+	 * Motivation: Lets a derived system adapter be destroyed through this interface.
+	 * Responsibilities: Default destruction so concrete adapters clean up their own resources.
+	 */
 	virtual ~IPlaySystem() noexcept = default;
 
-	/** Play-start turn: a bound system opens its session at the host's one canonical time. */
+	/**
+	 * Motivation: Gives a bound system one canonical time to open its session before the host begins.
+	 * Responsibilities: Default to no-op so only systems that need play-start override it.
+	 */
 	virtual void BeginPlay(TimePointMilliseconds) noexcept {}
 
-	/** Pre-advance turn: a bound system does its inbound work before the host advances its own state. */
+	/**
+	 * Motivation: Lets a bound system do its inbound work before the host advances its own state.
+	 * Responsibilities: Run the pre-advance turn at the host-supplied time.
+	 */
 	virtual void PreAdvance(TimePointMilliseconds InNowMilliseconds) noexcept = 0;
 
-	/** Post-advance turn: a bound system does its outbound work after the host has advanced. */
+	/**
+	 * Motivation: Lets a bound system do its outbound work after the host has advanced.
+	 * Responsibilities: Run the post-advance turn at the host-supplied time.
+	 */
 	virtual void PostAdvance(TimePointMilliseconds InNowMilliseconds) noexcept = 0;
 
-	/** Play-end turn: a bound system closes its session after the host has ended. */
+	/**
+	 * Motivation: Gives a bound system one canonical time to close its session after the host ends.
+	 * Responsibilities: Default to no-op so only systems that need play-end override it.
+	 */
 	virtual void EndPlay() noexcept {}
 };
 

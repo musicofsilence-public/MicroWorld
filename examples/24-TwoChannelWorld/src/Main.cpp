@@ -10,13 +10,23 @@
 #error "Define MICROWORLD_EXAMPLE_SERVER=1 (server) or 0 (client) via the build environment."
 #endif
 
-/** Runs the server role (Board A): FTelemetrySinkActor + FCommanderActor; defined in ServerMain.cpp. */
+/**
+ * Motivation: Lets the server role live in its own translation unit so the composition root stays a build-time switch.
+ * Responsibilities: Run the server role (Board A): FTelemetrySinkActor + FCommanderActor, defined in ServerMain.cpp.
+ */
 void RunServer() noexcept;
 
-/** Runs the client role (Board B): FSensorActor; defined in ClientMain.cpp. */
+/**
+ * Motivation: Lets the client role live in its own translation unit so the composition root stays a build-time switch.
+ * Responsibilities: Run the client role (Board B): FSensorActor, defined in ClientMain.cpp.
+ */
 void RunClient() noexcept;
 
-/** Composition root: installs the output device, then runs the role this image was built for. */
+/**
+ * Motivation: Composition root for example 24, so the single ESP32 entry point stays a thin
+ *   build-time role selector rather than carrying role behavior.
+ * Responsibilities: Install the output device, then run the role this image was built for.
+ */
 extern "C" void app_main(void)
 {
 	MicroWorld::Core::SetOutputDevice(&MicroWorld::Platform::Esp32::WriteEsp32LogRecord);

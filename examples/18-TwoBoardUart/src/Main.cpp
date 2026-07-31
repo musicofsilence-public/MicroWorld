@@ -17,36 +17,40 @@
 
 namespace
 {
-/** Single real-time source; every deadline in this example reads it. */
+/** Motivation: Single real-time source; every deadline in this example reads it. */
 MicroWorld::Platform::Esp32::FEsp32TimeSource GTimeSource{};
 
-/** This board's node id, stamped on every frame it sends. */
+/** Motivation: This board's node id, stamped on every frame it sends. */
 constexpr std::uint8_t LocalNodeId = MICROWORLD_EXAMPLE_NODE_ID;
 
-/** The only other board on this point-to-point wire; the reply destination. */
+/** Motivation: The only other board on this point-to-point wire; the reply destination. */
 constexpr std::uint8_t PeerNodeId = (LocalNodeId == 1) ? 2 : 1;
 
-/** Node 1 sends the opening frame; node 2 waits to receive before it replies. */
+/** Motivation: Node 1 sends the opening frame; node 2 waits to receive before it replies. */
 constexpr std::uint8_t VolleyInitiatorNodeId = 1;
 
-/** UART port and the two data GPIOs (A's TX 17 -> B's RX 18, and the mirror). */
+/** Motivation: UART port and the two data GPIOs (A's TX 17 -> B's RX 18, and the mirror). */
 constexpr std::int32_t UartPortNumber = 1;
 constexpr std::int32_t TxGpioNumber = 17;
 constexpr std::int32_t RxGpioNumber = 18;
 
-/** A wire is fast, so 115200 baud (the E32 radio example runs the same UART at 9600). */
+/** Motivation: A wire is fast, so 115200 baud (the E32 radio example runs the same UART at 9600). */
 constexpr std::uint32_t UartBaudRate = 115200;
 
-/** Volley period: half a second, since a 30 cm wire is fast and lossless. */
+/** Motivation: Volley period: half a second, since a 30 cm wire is fast and lossless. */
 constexpr std::uint64_t VolleyPeriodMilliseconds = 500;
 
-/** Poll far faster than the volley so the FreeRTOS idle task (and its watchdog) always runs. */
+/** Motivation: Poll far faster than the volley so the FreeRTOS idle task (and its watchdog) always runs. */
 constexpr unsigned PollPacingMilliseconds = 10;
 
-/** Volley payload layout: byte 0 is the sender node id, bytes 1..4 the counter (big-endian). */
+/** Motivation: Volley payload layout: byte 0 is the sender node id, bytes 1..4 the counter (big-endian). */
 constexpr std::size_t VolleyPayloadBytes = 5;
 
-/** Renders one device outcome as a short label so the serial trace reads plainly. */
+/**
+ * Motivation: Lets the serial trace render one device outcome as a short label, so logs read plainly
+ *   without restating the enum-to-text mapping at each call site.
+ * Responsibilities: Map each transport result to one stable label string.
+ */
 const char* ToText(const MicroWorld::Transport::ETransportResult Result) noexcept
 {
 	switch (Result)
@@ -64,7 +68,11 @@ const char* ToText(const MicroWorld::Transport::ETransportResult Result) noexcep
 	}
 }
 
-/** Packs the sender id and counter into the five-byte volley payload. */
+/**
+ * Motivation: Lets one side pack the sender id and counter into the five-byte volley payload so the
+ *   wire layout is stated in a single place.
+ * Responsibilities: Write the sender id at byte 0 and the counter big-endian into bytes 1..4.
+ */
 void WriteVolleyPayload(std::uint8_t* const Out, const std::uint8_t SenderId, const std::uint32_t Counter) noexcept
 {
 	Out[0] = SenderId;
@@ -74,14 +82,22 @@ void WriteVolleyPayload(std::uint8_t* const Out, const std::uint8_t SenderId, co
 	Out[4] = static_cast<std::uint8_t>(Counter & 0xFFu);
 }
 
-/** Reads the big-endian counter back out of a received volley payload. */
+/**
+ * Motivation: Lets the receiver read the big-endian counter back out of a received volley payload,
+ *   mirroring the writer so the two halves agree on the layout.
+ * Responsibilities: Reassemble the counter from bytes 1..4 in big-endian order.
+ */
 std::uint32_t ReadVolleyCounter(const std::uint8_t* const In) noexcept
 {
 	return (static_cast<std::uint32_t>(In[1]) << 24) | (static_cast<std::uint32_t>(In[2]) << 16) | (static_cast<std::uint32_t>(In[3]) << 8)
 		| static_cast<std::uint32_t>(In[4]);
 }
 
-/** Builds the device configuration for this node from the fixed pins and baud. */
+/**
+ * Motivation: Lets one place build the device configuration from the fixed pins and baud, so a node's
+ *   config is never restated across the example.
+ * Responsibilities: Fill the UART config with the shared port, GPIO, baud, and node id values.
+ */
 MicroWorld::Platform::Esp32::FEsp32UartConfig MakeUartConfig(const std::uint8_t NodeId) noexcept
 {
 	MicroWorld::Platform::Esp32::FEsp32UartConfig Config;
@@ -94,7 +110,11 @@ MicroWorld::Platform::Esp32::FEsp32UartConfig MakeUartConfig(const std::uint8_t 
 }
 } // namespace
 
-/** Composition root: installs the output device, then ping-pongs a counter with the peer board over one wired UART. */
+/**
+ * Motivation: Composition root for example 18, so the single ESP32 entry point stays a thin driver
+ *   that ping-pongs a counter with the peer board over one wired UART.
+ * Responsibilities: Install the output device, open the UART, and run the counter volley loop.
+ */
 extern "C" void app_main(void)
 {
 	MicroWorld::Core::SetOutputDevice(&MicroWorld::Platform::Esp32::WriteEsp32LogRecord);

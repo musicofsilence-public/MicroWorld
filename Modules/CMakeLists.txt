@@ -544,16 +544,15 @@ if(MICROWORLD_BUILD_TESTS)
             --root ${CMAKE_CURRENT_SOURCE_DIR}
     )
     add_test(
-        NAME microworld_class_documentation_self_test
-        COMMAND ${Python3_EXECUTABLE} ${MICROWORLD_TOOLS_ROOT}/CheckClassDocumentation.py --self-test
+        NAME microworld_documentation_style_self_test
+        COMMAND ${Python3_EXECUTABLE} ${MICROWORLD_TOOLS_ROOT}/CheckDocumentationStyle.py --self-test
     )
     # The repository root, not Modules: examples are maintained source too, and
     # the checker's default exclusions keep every generated tree out.
     add_test(
-        NAME microworld_class_documentation
-        COMMAND ${Python3_EXECUTABLE} ${MICROWORLD_TOOLS_ROOT}/CheckClassDocumentation.py
+        NAME microworld_documentation_style
+        COMMAND ${Python3_EXECUTABLE} ${MICROWORLD_TOOLS_ROOT}/CheckDocumentationStyle.py
             --root ${CMAKE_CURRENT_SOURCE_DIR}/..
-            --require-doxygen
     )
 endif()
 

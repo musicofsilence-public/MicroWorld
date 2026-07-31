@@ -22,13 +22,10 @@ namespace MicroWorld::Core::RawStorage
 {
 
 /**
- * Begins one `ValueType` lifetime in caller-owned raw storage.
- *
- * @tparam ValueType Type to construct; specify explicitly (it is not deduced).
- * @tparam ConstructorArgumentTypes Argument types forwarded to the constructor.
- * @param InStorage Address of storage already sized and aligned for `ValueType`.
- * @param Arguments Constructor arguments forwarded to `ValueType`.
- * @return Pointer to the newly live object.
+ * Motivation: Lets a fixed-capacity container or smart pointer begin one object lifetime in
+ *   caller-owned raw storage without that storage ever implying a lifetime on its own.
+ * Responsibilities: Forward every constructor argument via placement new into already sized and
+ *   aligned storage and return a pointer to the newly live object.
  */
 template<typename ValueType, typename... ConstructorArgumentTypes>
 ValueType* ConstructAt(void* const InStorage, ConstructorArgumentTypes&&... Arguments) noexcept
@@ -37,9 +34,9 @@ ValueType* ConstructAt(void* const InStorage, ConstructorArgumentTypes&&... Argu
 }
 
 /**
- * Ends the lifetime a prior `ConstructAt` began; the storage bytes stay caller-owned.
- *
- * @param InValue Live object whose destructor to run.
+ * Motivation: Lets an owner end the lifetime a prior ConstructAt began while keeping the
+ *   underlying bytes caller-owned for reuse.
+ * Responsibilities: Run the live object's destructor exactly once without releasing storage.
  */
 template<typename ValueType>
 void DestroyAt(ValueType* const InValue) noexcept
@@ -48,11 +45,10 @@ void DestroyAt(ValueType* const InValue) noexcept
 }
 
 /**
- * Resolves the live `ValueType` begun in raw storage (see the launder rule above).
- *
- * @tparam ValueType Type of the live object; specify explicitly.
- * @param InStorage Address whose bytes hold a live `ValueType`.
- * @return Laundered pointer safe to read and write through.
+ * Motivation: Lets an owner read and write through the storage of a live object begun in raw
+ *   storage, where a bare reinterpret_cast would be undefined behavior.
+ * Responsibilities: Hand back a laundered pointer the compiler must treat as pointing at the
+ *   live ValueType object.
  */
 template<typename ValueType>
 ValueType* LaunderedPointer(void* const InStorage) noexcept
@@ -61,11 +57,9 @@ ValueType* LaunderedPointer(void* const InStorage) noexcept
 }
 
 /**
- * Const overload: resolves a live read-only `ValueType` in raw storage.
- *
- * @tparam ValueType Type of the live object; specify explicitly.
- * @param InStorage Address whose bytes hold a live `ValueType`.
- * @return Laundered read-only pointer.
+ * Motivation: Lets a const caller resolve the live read-only ValueType begun in raw storage
+ *   under the same launder rule as the mutable overload.
+ * Responsibilities: Hand back a laundered const pointer safe to read through.
  */
 template<typename ValueType>
 const ValueType* LaunderedPointer(const void* const InStorage) noexcept

@@ -12,10 +12,10 @@ namespace MicroWorld::Transport
 namespace
 {
 
-	/** Limits receive work so a UART flood cannot monopolize one caller iteration. */
+	/** Motivation: Limits receive work so a UART flood cannot monopolize one caller iteration. */
 	constexpr std::size_t ReceivePumpByteCap = 2u * (E32MaxPayloadBytes + ::MicroWorld::Transport::FrameCodec::FrameOverheadBytes);
 
-	/** Bounds one transmit progress call to one fixed encoded E32 frame. */
+	/** Motivation: Bounds one transmit progress call to one fixed encoded E32 frame. */
 	constexpr std::size_t TransmitProgressByteCap = E32MaxPayloadBytes + ::MicroWorld::Transport::FrameCodec::FrameOverheadBytes;
 
 } // namespace

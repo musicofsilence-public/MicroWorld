@@ -6,19 +6,22 @@
 namespace
 {
 
-/** Reserves bounded task stack storage for the one-shot Core probe. */
+/** Motivation: Reserves bounded task stack storage for the one-shot Core probe. */
 constexpr configSTACK_DEPTH_TYPE CoreProbeTaskStackDepth = 512;
 
-/** Owns the FreeRTOS task metadata for the full firmware lifetime. */
+/** Motivation: Owns the FreeRTOS task metadata for the full firmware lifetime. */
 StaticTask_t CoreProbeTaskControlBlock;
 
-/** Owns the statically allocated stack for the full firmware lifetime. */
+/** Motivation: Owns the statically allocated stack for the full firmware lifetime. */
 StackType_t CoreProbeTaskStack[CoreProbeTaskStackDepth];
 
-/** Retains the probe outcome so the linked behavior remains observable. */
+/** Motivation: Retains the probe outcome so the linked behavior remains observable. */
 volatile int CoreProbeResult = -1;
 
-/** Runs the shared Core probe once, then removes itself from scheduling. */
+/**
+ * Motivation: Runs the shared Core probe once, then removes itself from scheduling.
+ * Responsibilities: Capture the probe result and suspend so the task never re-enters.
+ */
 void RunCoreProbeTask(void*)
 {
 	CoreProbeResult = RunCoreConsumerProbe();
@@ -27,7 +30,10 @@ void RunCoreProbeTask(void*)
 
 } // namespace
 
-/** Creates the bounded probe task and transfers control to FreeRTOS. */
+/**
+ * Motivation: Creates the bounded probe task and transfers control to FreeRTOS.
+ * Responsibilities: Create the static probe task and hand control to the scheduler.
+ */
 int main()
 {
 	TaskHandle_t ProbeTask = xTaskCreateStatic(

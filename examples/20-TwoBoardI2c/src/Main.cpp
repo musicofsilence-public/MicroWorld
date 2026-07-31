@@ -17,31 +17,35 @@
 
 namespace
 {
-/** Node ids stamped on frames: the master is 1, the slave is 2 (point-to-point). */
+/** Motivation: Node ids stamped on frames: the master is 1, the slave is 2 (point-to-point). */
 constexpr std::uint8_t MasterNodeId = 1;
 constexpr std::uint8_t SlaveNodeId = 2;
 
-/** I2C port and the two bus GPIOs shared crossover-free (SDA<->SDA, SCL<->SCL). */
+/** Motivation: I2C port and the two bus GPIOs shared crossover-free (SDA<->SDA, SCL<->SCL). */
 constexpr std::int32_t I2cPortNumber = 0;
 constexpr std::int32_t SdaGpioNumber = 8;
 constexpr std::int32_t SclGpioNumber = 9;
 
-/** 100 kHz standard mode is reliable over short jumper wires with the external pull-ups. */
+/** Motivation: 100 kHz standard mode is reliable over short jumper wires with the external pull-ups. */
 constexpr std::uint32_t I2cSclSpeedHz = 100000;
 
-/** The slave's 7-bit bus address the master clocks; not the frame node id. */
+/** Motivation: The slave's 7-bit bus address the master clocks; not the frame node id. */
 constexpr std::uint8_t I2cSlaveBusAddress = 0x28;
 
-/** Volley period: half a second, since a short wired bus is fast. */
+/** Motivation: Volley period: half a second, since a short wired bus is fast. */
 constexpr std::uint64_t VolleyPeriodMilliseconds = 500;
 
-/** Poll far faster than the volley so the FreeRTOS idle task (and its watchdog) always runs. */
+/** Motivation: Poll far faster than the volley so the FreeRTOS idle task (and its watchdog) always runs. */
 constexpr unsigned PollPacingMilliseconds = 10;
 
-/** Volley payload layout: byte 0 is the sender node id, bytes 1..4 the counter (big-endian). */
+/** Motivation: Volley payload layout: byte 0 is the sender node id, bytes 1..4 the counter (big-endian). */
 constexpr std::size_t VolleyPayloadBytes = 5;
 
-/** Renders one device outcome as a short label so the serial trace reads plainly. */
+/**
+ * Motivation: Lets the serial trace render one device outcome as a short label, so logs read plainly
+ *   without restating the enum-to-text mapping at each call site.
+ * Responsibilities: Map each transport result to one stable label string.
+ */
 const char* ToText(const MicroWorld::Transport::ETransportResult Result) noexcept
 {
 	switch (Result)
@@ -59,7 +63,11 @@ const char* ToText(const MicroWorld::Transport::ETransportResult Result) noexcep
 	}
 }
 
-/** Packs the sender id and counter into the five-byte volley payload. */
+/**
+ * Motivation: Lets one side pack the sender id and counter into the five-byte volley payload so the
+ *   wire layout is stated in a single place.
+ * Responsibilities: Write the sender id at byte 0 and the counter big-endian into bytes 1..4.
+ */
 void WriteVolleyPayload(std::uint8_t* const Out, const std::uint8_t SenderId, const std::uint32_t Counter) noexcept
 {
 	Out[0] = SenderId;
@@ -69,7 +77,11 @@ void WriteVolleyPayload(std::uint8_t* const Out, const std::uint8_t SenderId, co
 	Out[4] = static_cast<std::uint8_t>(Counter & 0xFFu);
 }
 
-/** Reads the big-endian counter back out of a received volley payload. */
+/**
+ * Motivation: Lets the receiver read the big-endian counter back out of a received volley payload,
+ *   mirroring the writer so the two halves agree on the layout.
+ * Responsibilities: Reassemble the counter from bytes 1..4 in big-endian order.
+ */
 std::uint32_t ReadVolleyCounter(const std::uint8_t* const In) noexcept
 {
 	return (static_cast<std::uint32_t>(In[1]) << 24) | (static_cast<std::uint32_t>(In[2]) << 16) | (static_cast<std::uint32_t>(In[3]) << 8)
@@ -77,7 +89,11 @@ std::uint32_t ReadVolleyCounter(const std::uint8_t* const In) noexcept
 }
 
 #if MICROWORLD_EXAMPLE_I2C_MASTER
-/** Builds the master device configuration from the fixed pins, speed, and peer address. */
+/**
+ * Motivation: Lets the master build its device configuration from the fixed pins, speed, and peer
+ *   address in one place, so those values are never restated.
+ * Responsibilities: Fill the master config with the shared port, GPIO, speed, slave address, and node id.
+ */
 MicroWorld::Platform::Esp32::FEsp32I2cMasterConfig MakeMasterConfig() noexcept
 {
 	MicroWorld::Platform::Esp32::FEsp32I2cMasterConfig Config;
@@ -90,7 +106,12 @@ MicroWorld::Platform::Esp32::FEsp32I2cMasterConfig MakeMasterConfig() noexcept
 	return Config;
 }
 
-/** Master composition root: clocks the bus, so it paces every volley and the slave only reacts. */
+/**
+ * Motivation: Lets the master board clock the bus and pace every volley, so the slave can stay purely
+ *   reactive.
+ * Responsibilities: Open the master device, send counters on a fixed cadence, and poll reads to
+ *   harvest the slave's staged replies.
+ */
 void RunMaster() noexcept
 {
 	// Static, never on the app_main stack (the ESP32-S3 stack lesson, §2.2).
@@ -150,7 +171,11 @@ void RunMaster() noexcept
 	}
 }
 #else
-/** Builds the slave device configuration from the fixed pins and this board's own bus address. */
+/**
+ * Motivation: Lets the slave build its device configuration from the fixed pins and its own bus
+ *   address in one place, so those values are never restated.
+ * Responsibilities: Fill the slave config with the shared port, GPIO, slave address, and node id.
+ */
 MicroWorld::Platform::Esp32::FEsp32I2cSlaveConfig MakeSlaveConfig() noexcept
 {
 	MicroWorld::Platform::Esp32::FEsp32I2cSlaveConfig Config;
@@ -162,7 +187,11 @@ MicroWorld::Platform::Esp32::FEsp32I2cSlaveConfig MakeSlaveConfig() noexcept
 	return Config;
 }
 
-/** Slave composition root: purely reactive — on each received counter it stages counter + 1 for the master's next read. */
+/**
+ * Motivation: Lets the slave board stay purely reactive, so on each received counter it stages a reply
+ *   for the master's next read.
+ * Responsibilities: Open the slave device, receive counters, and stage counter-plus-one replies.
+ */
 void RunSlave() noexcept
 {
 	static MicroWorld::Platform::Esp32::FEsp32I2cSlaveDevice Device{MakeSlaveConfig()};
@@ -202,7 +231,11 @@ void RunSlave() noexcept
 #endif
 } // namespace
 
-/** Composition root: installs the output device, then ping-pongs a counter with the peer board over one wired I2C bus. */
+/**
+ * Motivation: Composition root for example 20, so the single ESP32 entry point stays a thin
+ *   build-time role selector over a wired I2C bus.
+ * Responsibilities: Install the output device, then run the master or slave counter volley.
+ */
 extern "C" void app_main(void)
 {
 	MicroWorld::Core::SetOutputDevice(&MicroWorld::Platform::Esp32::WriteEsp32LogRecord);

@@ -4,26 +4,40 @@ namespace MicroWorld::Platform::Host
 {
 
 /**
- * Reference-counted RAII guard for the host platform's socket stack lifetime.
- *
- * The first construction performs `WSAStartup` and the last destruction performs
- * `WSACleanup` on Windows; on POSIX both bodies are no-ops. The refcount is
- * intentionally not thread-safe: the MicroWorld engine drives the host on one
- * deterministic thread.
+ * Motivation: Lets each socket-bearing device bracket its lifetime with one RAII guard so the host platform's
+ *   socket stack is brought up exactly once and torn down exactly once.
+ * Responsibilities: Hold a reference count that performs WSAStartup on first construction and WSACleanup on last
+ *   destruction on Windows (no-ops on POSIX); stay single-threaded because the engine drives the host on one
+ *   deterministic thread.
+ * Example:
+ *   FWinSockScope SocketStack;
+ *   // socket-bearing device lifetime here
  */
 class FWinSockScope final
 {
 public:
-	/** Increments the shared refcount, performing `WSAStartup` on the first live scope. */
+	/**
+	 * Motivation: Lets each new scope add its contribution to the shared socket-stack lifetime.
+	 * Responsibilities: Increment the shared refcount and perform WSAStartup only on the first live scope.
+	 */
 	FWinSockScope() noexcept;
 
-	/** Decrements the shared refcount, performing `WSACleanup` when the last scope drops. */
+	/**
+	 * Motivation: Lets a dropped scope remove its contribution to the shared socket-stack lifetime.
+	 * Responsibilities: Decrement the shared refcount and perform WSACleanup only when the last scope drops.
+	 */
 	~FWinSockScope() noexcept;
 
-	/** Prevents two devices from sharing one refcount contribution through a copy. */
+	/**
+	 * Motivation: Prevents two devices from sharing one refcount contribution through a copy.
+	 * Responsibilities: Reject copy construction so each device value owns exactly one scope identity.
+	 */
 	FWinSockScope(const FWinSockScope&) = delete;
 
-	/** Prevents two devices from sharing one refcount contribution through an assignment. */
+	/**
+	 * Motivation: Prevents two devices from sharing one refcount contribution through an assignment.
+	 * Responsibilities: Reject copy assignment so each device value owns exactly one scope identity.
+	 */
 	FWinSockScope& operator=(const FWinSockScope&) = delete;
 };
 

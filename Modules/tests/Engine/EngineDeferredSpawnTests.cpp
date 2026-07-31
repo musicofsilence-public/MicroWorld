@@ -36,31 +36,51 @@ using MicroWorld::Engine::UObject;
 using MicroWorld::Engine::UWorld;
 using MicroWorld::Tests::TEngineEnvironment;
 
-/** Records public BeginPlay observation for one deferred actor instance. */
+/**
+ * Motivation: Records public BeginPlay observation for one deferred actor instance.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 struct FDeferredSpawnState final
 {
-	/** Counts barrier-time BeginPlay calls without observing queue internals. */
+	/** Motivation: Counts barrier-time BeginPlay calls without observing queue internals. */
 	std::uint32_t BeginCount{0};
 };
 
-/** Records BeginPlay order so composition-time and registered actor order stays externally observable. */
+/**
+ * Motivation: Records BeginPlay order so composition-time and registered actor order stays externally observable.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 struct FDeferredSpawnOrderState final
 {
-	/** Holds the actor labels in the order the World began them. */
+	/** Motivation: Holds the actor labels in the order the World began them. */
 	std::array<std::uint32_t, 2> BeginOrder{};
 
-	/** Identifies the next observation slot in the fixed test sequence. */
+	/** Motivation: Identifies the next observation slot in the fixed test sequence. */
 	std::size_t BeginCount{0};
 };
 
-/** Deliberately exceeds the configured inline factory budget without side effects. */
+/**
+ * Motivation: Deliberately exceeds the configured inline factory budget without side effects.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 struct FDeferredLargeCapture final
 {
-	/** Holds enough bytes to force public factory-layout rejection before argument movement. */
+	/** Motivation: Holds enough bytes to force public factory-layout rejection before argument movement. */
 	std::array<std::byte, 96> Bytes{};
 };
 
-/** Gives tests enough class and object capacity for a World plus bounded deferred actors. */
+/**
+ * Motivation: Gives tests enough class and object capacity for a World plus bounded deferred actors.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 struct FDeferredSpawnTraits : FDefaultEngineTraits
 {
 	static constexpr std::size_t MaxClasses = 6;
@@ -72,7 +92,12 @@ struct FDeferredSpawnTraits : FDefaultEngineTraits
 
 using FDeferredSpawnHost = TEngine<FDeferredSpawnTraits>;
 
-/** Reduces live actor capacity to one so a queued typed request exhausts it before publication. */
+/**
+ * Motivation: Reduces live actor capacity to one so a queued typed request exhausts it before publication.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 struct FCombinedSpawnCapacityTraits : FDeferredSpawnTraits
 {
 	static constexpr std::size_t MaxActors = 1;
@@ -80,40 +105,56 @@ struct FCombinedSpawnCapacityTraits : FDeferredSpawnTraits
 
 using FCombinedSpawnCapacityHost = TEngine<FCombinedSpawnCapacityTraits>;
 
-/** Keeps the manually constructed actor descriptor stable for the mixed-spawn capacity regression. */
+/** Motivation: Keeps the manually constructed actor descriptor stable for the mixed-spawn capacity regression. */
 constexpr MicroWorld::Engine::FTypeId DeferredActorTypeId{0x00070001u};
 
-/** Provides a public fixed-store fixture with enough room for collection and deferred construction tests. */
+/** Motivation: Provides a public fixed-store fixture with enough room for collection and deferred construction tests. */
 using FDeferredSpawnEnvironment = TEngineEnvironment<256, 16, 8, 1>;
 
-/** Restricts the store to a world and one blocking object for construction-failure coverage. */
+/** Motivation: Restricts the store to a world and one blocking object for construction-failure coverage. */
 using FDeferredSpawnCapacityEnvironment = TEngineEnvironment<256, 16, 2, 0>;
 
-/** Owns the caller-provided collection worklist used by the direct deferred-spawn fixtures. */
+/**
+ * Motivation: Owns the caller-provided collection worklist used by the direct deferred-spawn fixtures.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FDeferredSpawnCollectorFixture final
 {
 public:
-	/** Binds collection to the fixture's store without borrowing test-local temporary storage. */
+	/**
+	 * Motivation: Binds collection to the fixture's store without borrowing test-local temporary storage.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	explicit FDeferredSpawnCollectorFixture(FObjectStore& InStore) noexcept
 		: Collector(InStore, FGarbageCollectorStorage{Worklist.data(), static_cast<std::uint32_t>(Worklist.size())})
 	{
 	}
 
-	/** Exposes the collector so each test can drive its public collection lifecycle. */
+	/**
+	 * Motivation: Each test can drive its public collection lifecycle.
+	 * Responsibilities: Exposes the collector.
+	 */
 	FGarbageCollector& GetCollector() noexcept { return Collector; }
 
 private:
-	/** Backs bounded mark traversal for the entire fixture lifetime. */
+	/** Motivation: Backs bounded mark traversal for the entire fixture lifetime. */
 	std::array<FObjectHandle, 8> Worklist{};
 
-	/** Owns the active-cycle capability for the fixture's object store. */
+	/** Motivation: Owns the active-cycle capability for the fixture's object store. */
 	FGarbageCollector Collector;
 };
 
-/** Detects any move performed while deferred request preflight is expected to reject. */
+/**
+ * Motivation: Detects any move performed while deferred request preflight is expected to reject.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 struct FDeferredMoveProbe final
 {
-	/** Keeps the caller-visible move state unchanged until factory capture actually begins. */
+	/** Motivation: Keeps the caller-visible move state unchanged until factory capture actually begins. */
 	bool bWasMovedFrom{false};
 
 	FDeferredMoveProbe() noexcept = default;
@@ -123,31 +164,53 @@ struct FDeferredMoveProbe final
 	FDeferredMoveProbe& operator=(FDeferredMoveProbe&&) = delete;
 };
 
-/** Begins only when World publishes it from the deferred barrier. */
+/**
+ * Motivation: Begins only when World publishes it from the deferred barrier.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FDeferredActor final : public AActor
 {
 public:
-	/** Binds the per-test event sink through the deferred factory. */
+	/**
+	 * Motivation: Binds the per-test event sink through the deferred factory.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	FDeferredActor(FDeferredSpawnState* const InState) noexcept : AActor(), State(InState) {}
 
 protected:
-	/** Makes barrier publication directly observable through the actor lifecycle contract. */
+	/**
+	 * Motivation: Makes barrier publication directly observable through the actor lifecycle contract.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void BeginPlay() noexcept override { ++State->BeginCount; }
 
 private:
-	/** Belongs to the test and proves the world did not call BeginPlay at queue time. */
+	/** Motivation: Belongs to the test and proves the world did not call BeginPlay at queue time. */
 	FDeferredSpawnState* State{nullptr};
 };
 
-/** Records a caller-selected label when World dispatches this actor's BeginPlay. */
+/**
+ * Motivation: Records a caller-selected label when World dispatches this actor's BeginPlay.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FOrderedDeferredActor final : public AActor
 {
 public:
-	/** Retains isolated component storage, the shared order sink, and this actor's expected label. */
+	/**
+	 * Motivation: Retains isolated component storage, the shared order sink, and this actor's expected label.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	FOrderedDeferredActor(FDeferredSpawnOrderState* const InState, const std::uint32_t InLabel) noexcept : AActor(), State(InState), Label(InLabel) {}
 
 protected:
-	/** Makes the public actor lifecycle order directly observable without reading World internals. */
+	/**
+	 * Motivation: Makes the public actor lifecycle order directly observable without reading World internals.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void BeginPlay() noexcept override
 	{
 		if (State->BeginCount < State->BeginOrder.size())
@@ -158,93 +221,149 @@ protected:
 	}
 
 private:
-	/** Belongs to the test and records dispatch order across registered and queued actors. */
+	/** Motivation: Belongs to the test and records dispatch order across registered and queued actors. */
 	FDeferredSpawnOrderState* State{nullptr};
 
-	/** Distinguishes the actor in the compact fixed-size observation sequence. */
+	/** Motivation: Distinguishes the actor in the compact fixed-size observation sequence. */
 	std::uint32_t Label{0};
 };
 
-/** Accepts the large capture only so the request tests factory layout rather than constructor validity. */
+/**
+ * Motivation: Accepts the large capture only so the request tests factory layout rather than constructor validity.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FLargeDeferredActor final : public AActor
 {
 public:
-	/** Retains the same observable state dependency while intentionally ignoring the oversized value. */
+	/**
+	 * Motivation: Retains the same observable state dependency while intentionally ignoring the oversized value.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	FLargeDeferredActor(FDeferredSpawnState* const InState, FDeferredLargeCapture) noexcept : AActor(), State(InState) {}
 
 protected:
-	/** Makes any accidental admission observable through the normal actor lifecycle. */
+	/**
+	 * Motivation: Makes any accidental admission observable through the normal actor lifecycle.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void BeginPlay() noexcept override { ++State->BeginCount; }
 
 private:
-	/** Belongs to the test and remains unchanged when layout preflight rejects. */
+	/** Motivation: Belongs to the test and remains unchanged when layout preflight rejects. */
 	FDeferredSpawnState* State{nullptr};
 };
 
-/** Forces an unsupported factory alignment while leaving actor construction otherwise ordinary. */
+/**
+ * Motivation: Forces an unsupported factory alignment while leaving actor construction otherwise ordinary.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 struct alignas(32) FOveralignedCapture final
 {
-	/** Makes the capture itself require stricter alignment than caller-provided inline storage guarantees. */
+	/** Motivation: Makes the capture itself require stricter alignment than caller-provided inline storage guarantees. */
 	std::array<std::byte, 32> Bytes{};
 };
 
-/** Accepts the over-aligned capture only to exercise public factory-layout preflight. */
+/**
+ * Motivation: Accepts the over-aligned capture only to exercise public factory-layout preflight.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FOveralignedDeferredActor final : public AActor
 {
 public:
-	/** Keeps the test actor constructible if a future storage policy supports this alignment. */
+	/**
+	 * Motivation: Keeps the test actor constructible if a future storage policy supports this alignment.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	FOveralignedDeferredActor(FDeferredSpawnState* const InState, FOveralignedCapture) noexcept : AActor(), State(InState) {}
 
 protected:
-	/** Makes unexpected admission observable. */
+	/**
+	 * Motivation: Makes unexpected admission observable.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void BeginPlay() noexcept override { ++State->BeginCount; }
 
 private:
-	/** Belongs to this isolated test. */
+	/** Motivation: Belongs to this isolated test. */
 	FDeferredSpawnState* State{nullptr};
 };
 
-/** Retains a caller-provided world pointer so typed factory value capture is observable after publication. */
+/**
+ * Motivation: Retains a caller-provided world pointer so typed factory value capture is observable after
+ *   publication.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FLvaluePointerDeferredActor final : public AActor
 {
 public:
-	/** Captures an lvalue managed pointer by value for later barrier-time construction. */
+	/**
+	 * Motivation: Captures an lvalue managed pointer by value for later barrier-time construction.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	FLvaluePointerDeferredActor(const MicroWorld::Engine::TObjectPtr<MicroWorld::Engine::UWorld> InCapturedWorld) noexcept
 		: AActor(), CapturedWorld(InCapturedWorld)
 	{
 	}
 
-	/** Returns the managed pointer value received by the spawned actor constructor. */
+	/**
+	 * Motivation: Returns the managed pointer value received by the spawned actor constructor.
+	 * Responsibilities: Return the stored value and touch nothing else.
+	 */
 	MicroWorld::Engine::TObjectPtr<MicroWorld::Engine::UWorld> GetCapturedWorld() const noexcept { return CapturedWorld; }
 
 private:
-	/** Preserves the constructor input so the lvalue factory-capture contract remains observable. */
+	/** Motivation: Preserves the constructor input so the lvalue factory-capture contract remains observable. */
 	MicroWorld::Engine::TObjectPtr<MicroWorld::Engine::UWorld> CapturedWorld{};
 };
 
-/** Accepts a move probe so active collection can prove queue preflight happens before argument capture. */
+/**
+ * Motivation: Accepts a move probe so active collection can prove queue preflight happens before argument capture.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FMoveProbeDeferredActor final : public AActor
 {
 public:
-	/** Takes ownership only if deferred request admission reaches factory construction. */
+	/**
+	 * Motivation: Takes ownership only if deferred request admission reaches factory construction.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	FMoveProbeDeferredActor(FDeferredMoveProbe) noexcept : AActor() {}
 };
 
-/** Retains a captured managed object so queued-factory tracing is directly observable through collection. */
+/**
+ * Motivation: Retains a captured managed object so queued-factory tracing is directly observable through
+ *   collection.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FObjectCaptureDeferredActor final : public AActor
 {
 public:
-	/** Stores the direct managed capture until the World publishes this actor. */
+	/**
+	 * Motivation: Stores the direct managed capture until the World publishes this actor.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	FObjectCaptureDeferredActor(const TObjectPtr<UObject> InCapturedObject) noexcept : AActor(), CapturedObject(InCapturedObject) {}
 
 private:
-	/** Keeps the managed capture meaningful after barrier-time construction. */
+	/** Motivation: Keeps the managed capture meaningful after barrier-time construction. */
 	TObjectPtr<UObject> CapturedObject{};
 };
 
 /**
- * Scenario: Begin an empty world, queue a typed factory request, then run the next-frame barrier.
- * Expected: A typed factory remains queued until the next safe World barrier then yields a world-owned actor.
+ * Motivation: Begin an empty world, queue a typed factory request, then run the next-frame barrier.
+ * Responsibilities: A typed factory remains queued until the next safe World barrier then yields a world-owned actor.
  */
 MW_TEST_CASE(EngineDeferredSpawnReportsQueuedThenSpawnedAtBarrier)
 {
@@ -277,8 +396,8 @@ MW_TEST_CASE(EngineDeferredSpawnReportsQueuedThenSpawnedAtBarrier)
 }
 
 /**
- * Scenario: Admit a typed request before play begins, then run BeginPlay.
- * Expected: A typed request accepted during composition begins when the World enters play.
+ * Motivation: Admit a typed request before play begins, then run BeginPlay.
+ * Responsibilities: A typed request accepted during composition begins when the World enters play.
  */
 MW_TEST_CASE(EngineDeferredSpawnBeforeBeginPlayStartsWhenPlayBegins)
 {
@@ -312,8 +431,8 @@ MW_TEST_CASE(EngineDeferredSpawnBeforeBeginPlayStartsWhenPlayBegins)
 }
 
 /**
- * Scenario: Queue two typed requests in order before play begins, then run BeginPlay.
- * Expected: Pre-play typed requests preserve their FIFO queue order when BeginPlay starts them.
+ * Motivation: Queue two typed requests in order before play begins, then run BeginPlay.
+ * Responsibilities: Pre-play typed requests preserve their FIFO queue order when BeginPlay starts them.
  */
 MW_TEST_CASE(EngineDeferredSpawnBeforeBeginPlayStartsInQueueOrder)
 {
@@ -345,8 +464,8 @@ MW_TEST_CASE(EngineDeferredSpawnBeforeBeginPlayStartsInQueueOrder)
 }
 
 /**
- * Scenario: Register one actor, queue one typed request before play begins, then run BeginPlay.
- * Expected: Registered actors retain their established priority over composition-time typed requests.
+ * Motivation: Register one actor, queue one typed request before play begins, then run BeginPlay.
+ * Responsibilities: Registered actors retain their established priority over composition-time typed requests.
  */
 MW_TEST_CASE(EngineDeferredSpawnBeforeBeginPlayBeginsAfterRegisteredActors)
 {
@@ -380,8 +499,8 @@ MW_TEST_CASE(EngineDeferredSpawnBeforeBeginPlayBeginsAfterRegisteredActors)
 }
 
 /**
- * Scenario: Queue two pre-play requests competing for a single actor slot, then run BeginPlay.
- * Expected: Composition-time requests reserve the same fixed actor capacity before they are constructed.
+ * Motivation: Queue two pre-play requests competing for a single actor slot, then run BeginPlay.
+ * Responsibilities: Composition-time requests reserve the same fixed actor capacity before they are constructed.
  */
 MW_TEST_CASE(EngineDeferredSpawnBeforeBeginPlayRejectsCapacityExhaustion)
 {
@@ -413,8 +532,8 @@ MW_TEST_CASE(EngineDeferredSpawnBeforeBeginPlayRejectsCapacityExhaustion)
 }
 
 /**
- * Scenario: Begin and end a world, then attempt a typed spawn request.
- * Expected: A terminal world never reopens typed actor admission after it has ended.
+ * Motivation: Begin and end a world, then attempt a typed spawn request.
+ * Responsibilities: A terminal world never reopens typed actor admission after it has ended.
  */
 MW_TEST_CASE(EngineDeferredSpawnRejectsEndedWorld)
 {
@@ -438,8 +557,8 @@ MW_TEST_CASE(EngineDeferredSpawnRejectsEndedWorld)
 }
 
 /**
- * Scenario: Begin a world and queue a typed request with an oversized factory capture.
- * Expected: Factory byte preflight rejects before consuming an actor-storage reference or reserving a request.
+ * Motivation: Begin a world and queue a typed request with an oversized factory capture.
+ * Responsibilities: Factory byte preflight rejects before consuming an actor-storage reference or reserving a request.
  */
 MW_TEST_CASE(EngineDeferredSpawnRejectsOversizedFactoryWithoutMutation)
 {
@@ -462,8 +581,8 @@ MW_TEST_CASE(EngineDeferredSpawnRejectsOversizedFactoryWithoutMutation)
 }
 
 /**
- * Scenario: Begin a world and queue a typed request with an over-aligned factory capture.
- * Expected: An unsupported aligned factory is rejected before it consumes one deferred request slot.
+ * Motivation: Begin a world and queue a typed request with an over-aligned factory capture.
+ * Responsibilities: An unsupported aligned factory is rejected before it consumes one deferred request slot.
  */
 MW_TEST_CASE(EngineDeferredSpawnRejectsUnsupportedFactoryAlignment)
 {
@@ -489,8 +608,9 @@ MW_TEST_CASE(EngineDeferredSpawnRejectsUnsupportedFactoryAlignment)
 }
 
 /**
- * Scenario: Reserve the only actor slot with a typed request, then attempt a manual preconstructed spawn against the same world.
- * Expected: A queued typed request consumes the same finite World capacity as a manual preconstructed spawn.
+ * Motivation: Reserve the only actor slot with a typed request, then attempt a manual preconstructed spawn against
+ *   the same world.
+ * Responsibilities: A queued typed request consumes the same finite World capacity as a manual preconstructed spawn.
  */
 MW_TEST_CASE(EngineDeferredSpawnRejectsManualSpawnWhenTypedRequestUsesRemainingCapacity)
 {
@@ -531,8 +651,9 @@ MW_TEST_CASE(EngineDeferredSpawnRejectsManualSpawnWhenTypedRequestUsesRemainingC
 }
 
 /**
- * Scenario: Begin a world, queue a typed factory capturing an lvalue managed pointer by value, then run the barrier.
- * Expected: A typed factory accepts an lvalue managed pointer and delivers its value to the spawned actor.
+ * Motivation: Begin a world, queue a typed factory capturing an lvalue managed pointer by value, then run the
+ *   barrier.
+ * Responsibilities: A typed factory accepts an lvalue managed pointer and delivers its value to the spawned actor.
  */
 MW_TEST_CASE(EngineDeferredSpawnDeliversLvalueObjectPointerToSpawnedActor)
 {
@@ -565,8 +686,9 @@ MW_TEST_CASE(EngineDeferredSpawnDeliversLvalueObjectPointerToSpawnedActor)
 }
 
 /**
- * Scenario: Begin a world, enter an active collection phase, then attempt a typed spawn with a move-probe argument.
- * Expected: Active collection rejects typed spawn before moving the caller's constructor argument.
+ * Motivation: Begin a world, enter an active collection phase, then attempt a typed spawn with a move-probe
+ *   argument.
+ * Responsibilities: Active collection rejects typed spawn before moving the caller's constructor argument.
  */
 MW_TEST_CASE(EngineDeferredSpawnRejectsActiveCollectionBeforeMovingArguments)
 {
@@ -607,8 +729,9 @@ MW_TEST_CASE(EngineDeferredSpawnRejectsActiveCollectionBeforeMovingArguments)
 }
 
 /**
- * Scenario: Queue a typed factory capturing an unrooted managed object, run a full collection, then run the barrier to publish.
- * Expected: A queued typed factory traces an otherwise unrooted managed capture through full collection.
+ * Motivation: Queue a typed factory capturing an unrooted managed object, run a full collection, then run the
+ *   barrier to publish.
+ * Responsibilities: A queued typed factory traces an otherwise unrooted managed capture through full collection.
  */
 MW_TEST_CASE(EngineDeferredSpawnTracesCapturedObjectThroughCollectionThenPublishes)
 {
@@ -657,8 +780,9 @@ MW_TEST_CASE(EngineDeferredSpawnTracesCapturedObjectThroughCollectionThenPublish
 }
 
 /**
- * Scenario: Fill the store with a world and a blocking object, queue a typed request, then run the barrier that fails construction.
- * Expected: Barrier-time typed construction reports store exhaustion without publishing a partial actor.
+ * Motivation: Fill the store with a world and a blocking object, queue a typed request, then run the barrier that
+ *   fails construction.
+ * Responsibilities: Barrier-time typed construction reports store exhaustion without publishing a partial actor.
  */
 MW_TEST_CASE(EngineDeferredSpawnReportsStoreCapacityFailureWithoutPublication)
 {
@@ -705,8 +829,10 @@ MW_TEST_CASE(EngineDeferredSpawnReportsStoreCapacityFailureWithoutPublication)
 }
 
 /**
- * Scenario: Publish a deferred actor, destroy it at the barrier, then queue a second request that reuses the terminal slot.
- * Expected: A live spawn handle is pinned through world ownership, released on destruction, then staled by deterministic reuse.
+ * Motivation: Publish a deferred actor, destroy it at the barrier, then queue a second request that reuses the
+ *   terminal slot.
+ * Responsibilities: A live spawn handle is pinned through world ownership, released on destruction, then staled by
+ *   deterministic reuse.
  */
 MW_TEST_CASE(EngineDeferredSpawnPinsThenInvalidatesReusedHandle)
 {

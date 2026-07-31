@@ -21,85 +21,120 @@ namespace MicroWorld::Tests
 namespace
 {
 
-	/** Provides two deterministic ports so systems exchange packets without a platform transport. */
+	/** Motivation: Provides two deterministic ports so systems exchange packets without a platform transport. */
 	using FLoopback = MicroWorld::Transport::THostLoopback<2, 8, 256>;
 
-	/** Uses the default two-device and four-channel profile for normal composition tests. */
+	/** Motivation: Uses the default two-device and four-channel profile for normal composition tests. */
 	using FSystem = MicroWorld::Networking::TNetworking<>;
 
-	/** Makes device exhaustion observable with one fixed slot. */
+	/**
+	 * Motivation: Makes device exhaustion observable with one fixed slot.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 * Example:
+	 *   // Construct and exercise the type in one behavior test.
+	 */
 	struct FOneDeviceTraits : MicroWorld::Networking::FDefaultNetworkingTraits
 	{
 		static constexpr std::size_t MaxDevices = 1;
 	};
 
-	/** Makes channel exhaustion observable with one router and system channel slot. */
+	/**
+	 * Motivation: Makes channel exhaustion observable with one router and system channel slot.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 * Example:
+	 *   // Construct and exercise the type in one behavior test.
+	 */
 	struct FOneChannelTraits : MicroWorld::Networking::FDefaultNetworkingTraits
 	{
 		static constexpr std::size_t MaxRouterChannels = 1;
 		static constexpr std::size_t MaxChannels = 1;
 	};
 
-	/** Message type id both router tests register and broadcast so the handler and payload stay paired. */
+	/** Motivation: Message type id both router tests register and broadcast so the handler and payload stay paired. */
 	constexpr MicroWorld::Messaging::FMessageTypeId SampleMessageTypeId{1};
 
-	/** Routed actor id the cross-system broadcast targets so sender and receiver address one logical actor. */
+	/** Motivation: Routed actor id the cross-system broadcast targets so sender and receiver address one logical actor. */
 	constexpr MicroWorld::Messaging::FMessageActorId SampleActorId{1};
 
-	/** Channel id the cross-system test composes and broadcasts on so the routed message stays on one channel. */
+	/** Motivation: Channel id the cross-system test composes and broadcasts on so the routed message stays on one channel. */
 	constexpr MicroWorld::Messaging::FMessageChannelId SampleChannelId{1};
 
-	/** Single-byte payload the local-router test broadcasts so a delivery is observable without transport framing. */
+	/** Motivation: Single-byte payload the local-router test broadcasts so a delivery is observable without transport framing. */
 	constexpr std::uint8_t LocalRouterMessagePayloadByte{0x31};
 
-	/** Single-byte payload the cross-system test sends so a routed delivery is observable on the remote router. */
+	/** Motivation: Single-byte payload the cross-system test sends so a routed delivery is observable on the remote router. */
 	constexpr std::uint8_t CrossSystemPayloadByte{0x7A};
 
-	/** Builds a host configuration accepted by both loopback roles. */
+	/**
+	 * Motivation: Builds a host configuration accepted by both loopback roles.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	MicroWorld::Transport::FTransportHostConfig MakeConfig() noexcept
 	{
 		return MicroWorld::Transport::FTransportHostConfig{};
 	}
 
-	/** Supplies a shared monotonic order source so each device's first pump is directly observable. */
+	/**
+	 * Motivation: Supplies a shared monotonic order source so each device's first pump is directly observable.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 * Example:
+	 *   // Construct and exercise the type in one behavior test.
+	 */
 	class FDevicePumpSequence final
 	{
 	public:
-		/** Returns a unique increasing stamp for one device operation. */
+		/**
+		 * Motivation: Returns a unique increasing stamp for one device operation.
+		 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+		 */
 		std::uint32_t Next() noexcept { return ++Counter; }
 
 	private:
-		/** Tracks the order across every device that shares this test-owned sequence. */
+		/** Motivation: Tracks the order across every device that shares this test-owned sequence. */
 		std::uint32_t Counter{0};
 	};
 
-	/** Records the first inbound, outbound, and physical-progress pump each fake device receives. */
+	/**
+	 * Motivation: Records the first inbound, outbound, and physical-progress pump each fake device receives.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 * Example:
+	 *   // Construct and exercise the type in one behavior test.
+	 */
 	struct FDevicePumpRecord
 	{
-		/** Counts transport receive calls so the first call identifies device pump order. */
+		/** Motivation: Counts transport receive calls so the first call identifies device pump order. */
 		std::size_t ReceiveCount{0};
 
-		/** Counts transport send calls so the first call identifies device pump order. */
+		/** Motivation: Counts transport send calls so the first call identifies device pump order. */
 		std::size_t SendCount{0};
 
-		/** Counts bounded transmit-progress calls independently of logical packet acceptance. */
+		/** Motivation: Counts bounded transmit-progress calls independently of logical packet acceptance. */
 		std::size_t AdvanceCount{0};
 
-		/** Holds the first receive stamp from the shared test sequence. */
+		/** Motivation: Holds the first receive stamp from the shared test sequence. */
 		std::uint32_t FirstReceiveOrder{0};
 
-		/** Holds the first send stamp from the shared test sequence. */
+		/** Motivation: Holds the first send stamp from the shared test sequence. */
 		std::uint32_t FirstSendOrder{0};
 
-		/** Holds the first transmit-progress stamp from the shared test sequence. */
+		/** Motivation: Holds the first transmit-progress stamp from the shared test sequence. */
 		std::uint32_t FirstAdvanceOrder{0};
 	};
 
-	/** Provides a deterministic client transport whose observable operations reveal TNetworking's device pump order. */
+	/**
+	 * Motivation: Provides a deterministic client transport whose observable operations reveal TNetworking's device
+	 *   pump order.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 * Example:
+	 *   // Construct and exercise the type in one behavior test.
+	 */
 	class FRecordingDevice final : public MicroWorld::Transport::Device::IDevice
 	{
 	public:
-		/** Binds the device to caller-owned observability and a deterministic logical-send outcome. */
+		/**
+		 * Motivation: Binds the device to caller-owned observability and a deterministic logical-send outcome.
+		 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+		 */
 		FRecordingDevice(
 			FDevicePumpRecord& InRecord,
 			FDevicePumpSequence& InSequence,
@@ -108,7 +143,10 @@ namespace
 		{
 		}
 
-		/** Records each outbound transport attempt and accepts it without a real network. */
+		/**
+		 * Motivation: Records each outbound transport attempt and accepts it without a real network.
+		 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+		 */
 		MicroWorld::Transport::ETransportResult TrySend(
 			const MicroWorld::Transport::Address::FDeviceAddress&, MicroWorld::Core::TSpan<const std::uint8_t>) noexcept override
 		{
@@ -120,7 +158,10 @@ namespace
 			return SendResult;
 		}
 
-		/** Records each inbound transport attempt and reports the deterministic empty state. */
+		/**
+		 * Motivation: Records each inbound transport attempt and reports the deterministic empty state.
+		 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+		 */
 		MicroWorld::Transport::ETransportResult TryReceive(
 			MicroWorld::Transport::Address::FDeviceAddress&,
 			MicroWorld::Core::TSpan<std::uint8_t>,
@@ -134,7 +175,10 @@ namespace
 			return MicroWorld::Transport::ETransportResult::Unavailable;
 		}
 
-		/** Records one bounded physical-transmit advancement after the host's logical outbound drain. */
+		/**
+		 * Motivation: Records one bounded physical-transmit advancement after the host's logical outbound drain.
+		 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+		 */
 		void AdvanceTransmit() noexcept override
 		{
 			++Record.AdvanceCount;
@@ -144,25 +188,28 @@ namespace
 			}
 		}
 
-		/** Matches the integration profile's packet budget so host configuration remains valid. */
+		/**
+		 * Motivation: Host configuration remains valid.
+		 * Responsibilities: Matches the integration profile's packet budget.
+		 */
 		std::size_t MaxPacketBytes() const noexcept override { return 256; }
 
 	private:
-		/** Receives this device's counts and first-operation stamps; never owned here. */
+		/** Motivation: Receives this device's counts and first-operation stamps; never owned here. */
 		FDevicePumpRecord& Record;
 
-		/** Orders operations across the two fake devices; never owned here. */
+		/** Motivation: Orders operations across the two fake devices; never owned here. */
 		FDevicePumpSequence& Sequence;
 
-		/** Makes full-device lifecycle progress observable without a real transport. */
+		/** Motivation: Makes full-device lifecycle progress observable without a real transport. */
 		MicroWorld::Transport::ETransportResult SendResult;
 	};
 
 } // namespace
 
 /**
- * Scenario: Configure two devices on one system over a loopback with two ports.
- * Expected: Each device receives a valid handle with a distinct slot identity.
+ * Motivation: Configure two devices on one system over a loopback with two ports.
+ * Responsibilities: Each device receives a valid handle with a distinct slot identity.
  */
 MW_TEST_CASE(Networking_AddDeviceAcceptsTwoDevices)
 {
@@ -187,8 +234,8 @@ MW_TEST_CASE(Networking_AddDeviceAcceptsTwoDevices)
 }
 
 /**
- * Scenario: Add a best-effort and a guaranteed channel on one configured device.
- * Expected: Each reliability mode receives a valid channel handle without exposing internal wrappers.
+ * Motivation: Add a best-effort and a guaranteed channel on one configured device.
+ * Responsibilities: Each reliability mode receives a valid channel handle without exposing internal wrappers.
  */
 MW_TEST_CASE(Networking_AddChannelAcceptsBestEffortAndGuaranteedOnOneDevice)
 {
@@ -214,8 +261,9 @@ MW_TEST_CASE(Networking_AddChannelAcceptsBestEffortAndGuaranteedOnOneDevice)
 }
 
 /**
- * Scenario: Forge a device handle with a mismatched generation and attempt to add a channel, then add a channel on the current device.
- * Expected: The forged-generation request is rejected and leaves the current device slot usable.
+ * Motivation: Forge a device handle with a mismatched generation and attempt to add a channel, then add a channel
+ *   on the current device.
+ * Responsibilities: The forged-generation request is rejected and leaves the current device slot usable.
  */
 MW_TEST_CASE(Networking_AddChannelRejectsForgedDeviceGeneration)
 {
@@ -242,8 +290,8 @@ MW_TEST_CASE(Networking_AddChannelRejectsForgedDeviceGeneration)
 }
 
 /**
- * Scenario: Fill a one-device system and attempt to add a second device.
- * Expected: The device beyond fixed capacity is rejected with an invalid handle.
+ * Motivation: Fill a one-device system and attempt to add a second device.
+ * Responsibilities: The device beyond fixed capacity is rejected with an invalid handle.
  */
 MW_TEST_CASE(Networking_AddDeviceRejectsCapacityExhaustion)
 {
@@ -266,8 +314,9 @@ MW_TEST_CASE(Networking_AddDeviceRejectsCapacityExhaustion)
 }
 
 /**
- * Scenario: Fill a one-channel device and attempt to add a second channel.
- * Expected: The channel beyond fixed capacity is rejected with an invalid handle and does not disturb the accepted predecessor.
+ * Motivation: Fill a one-channel device and attempt to add a second channel.
+ * Responsibilities: The channel beyond fixed capacity is rejected with an invalid handle and does not disturb the
+ *   accepted predecessor.
  */
 MW_TEST_CASE(Networking_AddChannelRejectsCapacityExhaustion)
 {
@@ -293,8 +342,10 @@ MW_TEST_CASE(Networking_AddChannelRejectsCapacityExhaustion)
 }
 
 /**
- * Scenario: Configure a client device and channel, pump before BeginPlay, then close composition with BeginPlay, attempt late composition, and pump
- * once more. Expected: No packet crosses the transport before BeginPlay; afterward composition is frozen and the host starts to emit packets.
+ * Motivation: Scenario: Configure a client device and channel, pump before BeginPlay, then close composition with
+ *   BeginPlay, attempt late composition, and pump once more.
+ * Responsibilities: Expected: No packet crosses the transport before BeginPlay; afterward composition is frozen and the
+ *   host starts to emit packets.
  */
 MW_TEST_CASE(Networking_BeginPlayFinalizesCompositionAndDefersHostStart)
 {
@@ -336,8 +387,9 @@ MW_TEST_CASE(Networking_BeginPlayFinalizesCompositionAndDefersHostStart)
 }
 
 /**
- * Scenario: Compose two recording devices and run one BeginPlay plus one PreAdvance/PostAdvance cycle.
- * Expected: Inbound pumps run in forward add order, and outbound and physical-progress pumps run in reverse add order.
+ * Motivation: Compose two recording devices and run one BeginPlay plus one PreAdvance/PostAdvance cycle.
+ * Responsibilities: Inbound pumps run in forward add order, and outbound and physical-progress pumps run in reverse add
+ *   order.
  */
 MW_TEST_CASE(Networking_CoreLifecyclePumpsDevicesInForwardAndReverseOrder)
 {
@@ -391,8 +443,9 @@ MW_TEST_CASE(Networking_CoreLifecyclePumpsDevicesInForwardAndReverseOrder)
 }
 
 /**
- * Scenario: Compose an idle dedicated server device and a full client device, then run one BeginPlay plus one PostAdvance.
- * Expected: Each non-standalone device advances transport even when it has no packet or its device is full.
+ * Motivation: Compose an idle dedicated server device and a full client device, then run one BeginPlay plus one
+ *   PostAdvance.
+ * Responsibilities: Each non-standalone device advances transport even when it has no packet or its device is full.
  */
 MW_TEST_CASE(Networking_PostAdvanceAdvancesIdleAndFullDevices)
 {
@@ -431,8 +484,10 @@ MW_TEST_CASE(Networking_PostAdvanceAdvancesIdleAndFullDevices)
 }
 
 /**
- * Scenario: Register a router handler, queue a local broadcast, pump before BeginPlay, then open composition with BeginPlay and pump again.
- * Expected: Pre-BeginPlay pumps leave the queued message undelivered; the first post-BeginPlay pump delivers it without emitting transport packets.
+ * Motivation: Register a router handler, queue a local broadcast, pump before BeginPlay, then open composition
+ *   with BeginPlay and pump again.
+ * Responsibilities: Pre-BeginPlay pumps leave the queued message undelivered; the first post-BeginPlay pump delivers it
+ *   without emitting transport packets.
  */
 MW_TEST_CASE(Networking_PreBeginPlayPumpsLeaveQueuedLocalRouterMessageUndelivered)
 {
@@ -479,8 +534,9 @@ MW_TEST_CASE(Networking_PreBeginPlayPumpsLeaveQueuedLocalRouterMessageUndelivere
 }
 
 /**
- * Scenario: BeginPlay and one PostAdvance flush a client's initial hello, then EndPlay runs before a later PostAdvance.
- * Expected: The later PostAdvance cannot emit another connection hello after EndPlay stops the client.
+ * Motivation: BeginPlay and one PostAdvance flush a client's initial hello, then EndPlay runs before a later
+ *   PostAdvance.
+ * Responsibilities: The later PostAdvance cannot emit another connection hello after EndPlay stops the client.
  */
 MW_TEST_CASE(Networking_EndPlayStopsClientBeforeFuturePostAdvance)
 {
@@ -511,8 +567,10 @@ MW_TEST_CASE(Networking_EndPlayStopsClientBeforeFuturePostAdvance)
 }
 
 /**
- * Scenario: Connect a client and server system, register a server router handler, broadcast from the client, and alternate PreAdvance/PostAdvance
- * turns. Expected: The client's PostAdvance sends the routed message before the remote server's PreAdvance delivers it exactly once.
+ * Motivation: Scenario: Connect a client and server system, register a server router handler, broadcast from the
+ *   client, and alternate PreAdvance/PostAdvance turns.
+ * Responsibilities: Expected: The client's PostAdvance sends the routed message before the remote server's PreAdvance
+ *   delivers it exactly once.
  */
 MW_TEST_CASE(Networking_PreAdvanceAndPostAdvancePumpRoutedMessageInOrder)
 {

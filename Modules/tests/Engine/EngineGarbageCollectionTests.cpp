@@ -37,14 +37,24 @@ using MicroWorld::Engine::UActorComponent;
 using MicroWorld::Engine::UWorld;
 using MicroWorld::Tests::TEngineEnvironment;
 
-/** A component that observes lifetime and exposes its actor parent for tests. */
+/**
+ * Motivation: A component that observes lifetime and exposes its actor parent for tests.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FTrackedComponent final : public UActorComponent
 {
 public:
 	FTrackedComponent() noexcept : UActorComponent() {}
 };
 
-/** An actor that observes lifetime and exposes its world parent for tests. */
+/**
+ * Motivation: An actor that observes lifetime and exposes its world parent for tests.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FTrackedActor final : public AActor
 {
 public:
@@ -54,34 +64,45 @@ public:
 constexpr MicroWorld::Engine::FTypeId TrackedActorTypeId{0x00030001u};
 constexpr MicroWorld::Engine::FTypeId TrackedComponentTypeId{0x00030002u};
 
-/** Environment sized for GC tests with enough slots for world, actors, components, and roots. */
+/** Motivation: Environment sized for GC tests with enough slots for world, actors, components, and roots. */
 using FGarbageCollectionEnvironment = TEngineEnvironment<256, 16, 8, 4>;
 
-/** Fixed capacity of the GC fixture worklist, large enough for every reachable object in these tests. */
+/** Motivation: Fixed capacity of the GC fixture worklist, large enough for every reachable object in these tests. */
 constexpr std::uint32_t CollectorWorklistCapacity = 16;
 
-/** Canonical monotonic baseline every BeginPlay call uses as its starting world time. */
+/** Motivation: Canonical monotonic baseline every BeginPlay call uses as its starting world time. */
 constexpr MicroWorld::Core::TimePointMilliseconds BaselineTimeMilliseconds{0};
 
-/** Steady-state iterations the allocation probe runs to prove Advance never calls global new. */
+/** Motivation: Steady-state iterations the allocation probe runs to prove Advance never calls global new. */
 constexpr std::uint32_t SteadyStateAdvanceIterations = 64;
 
-/** Monotonic ms-per-step the allocation probe advances so each Advance lands on a later time. */
+/** Motivation: Monotonic ms-per-step the allocation probe advances so each Advance lands on a later time. */
 constexpr std::uint32_t SteadyStateAdvanceStepMilliseconds = 10;
 
-/** Builds a tracked actor through its own derived descriptor. */
+/**
+ * Motivation: Builds a tracked actor through its own derived descriptor.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ */
 TObjectPtr<FTrackedActor> MakeTrackedActor(FGarbageCollectionEnvironment& InEnv) noexcept
 {
 	return InEnv.CreateDerivedObject<FTrackedActor>(TrackedActorTypeId, "TrackedActor");
 }
 
-/** Builds a tracked component through its own derived descriptor. */
+/**
+ * Motivation: Builds a tracked component through its own derived descriptor.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ */
 TObjectPtr<FTrackedComponent> MakeTrackedComponent(FGarbageCollectionEnvironment& InEnv) noexcept
 {
 	return InEnv.CreateDerivedObject<FTrackedComponent>(TrackedComponentTypeId, "TrackedComponent");
 }
 
-/** Owns a fixed worklist and collector bound to an environment's store for GC tests. */
+/**
+ * Motivation: Owns a fixed worklist and collector bound to an environment's store for GC tests.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FCollectorFixture final
 {
 public:
@@ -90,15 +111,16 @@ public:
 	FGarbageCollector& GetCollector() noexcept { return Collector; }
 
 private:
-	/** Backs the collector's reachable-object queue without heap storage. */
+	/** Motivation: Backs the collector's reachable-object queue without heap storage. */
 	FObjectHandle Worklist[CollectorWorklistCapacity]{};
-	/** Owns the collector bound to this fixture's worklist for the test's lifetime. */
+	/** Motivation: Owns the collector bound to this fixture's worklist for the test's lifetime. */
 	FGarbageCollector Collector;
 };
 
 /**
- * Scenario: Root a world with one actor and component via a single strong pointer and run one full collection.
- * Expected: A single TStrongObjectPtr<UWorld> root retains the entire world graph (world, actors, components) through one full collection.
+ * Motivation: Root a world with one actor and component via a single strong pointer and run one full collection.
+ * Responsibilities: A single TStrongObjectPtr<UWorld> root retains the entire world graph (world, actors, components)
+ *   through one full collection.
  */
 MW_TEST_CASE(EngineRootedWorldRetainsActorsAndComponentsThroughFullGC)
 {
@@ -136,8 +158,9 @@ MW_TEST_CASE(EngineRootedWorldRetainsActorsAndComponentsThroughFullGC)
 }
 
 /**
- * Scenario: Root a world graph with weak links observed, release the world root, then run a full collection.
- * Expected: Releasing the world root allows the collector to reclaim the complete graph, and weak parent links expire once the parent is reclaimed.
+ * Motivation: Root a world graph with weak links observed, release the world root, then run a full collection.
+ * Responsibilities: Releasing the world root allows the collector to reclaim the complete graph, and weak parent links
+ *   expire once the parent is reclaimed.
  */
 MW_TEST_CASE(EngineReleasingWorldRootReclaimsEntireGraph)
 {
@@ -178,10 +201,12 @@ MW_TEST_CASE(EngineReleasingWorldRootReclaimsEntireGraph)
 }
 
 /**
- * Scenario: Independently root the world, actor, and component; reclaim the world while the actor survives, then reclaim the actor while the
- * component survives. Expected: The weak world parent link resolves to null after the world is reclaimed while the actor survives under its own root,
- * and the weak actor parent link resolves to null after the actor is reclaimed while the component survives under its own root, so a child never
- * observes a dangling parent pointer.
+ * Motivation: Scenario: Independently root the world, actor, and component; reclaim the world while the actor
+ *   survives, then reclaim the actor while the component survives.
+ * Responsibilities: Expected: The weak world parent link resolves to null after the world is reclaimed while the actor
+ *   survives under its own root, and the weak actor parent link resolves to null after the actor is
+ *   reclaimed while the component survives under its own root, so a child never observes a dangling
+ *   parent pointer.
  */
 MW_TEST_CASE(EngineWeakParentReferencesExpireCorrectly)
 {
@@ -250,9 +275,9 @@ MW_TEST_CASE(EngineWeakParentReferencesExpireCorrectly)
 }
 
 /**
- * Scenario: Begin a rooted world and run a bounded loop of repeated Advance calls in steady state.
- * Expected: Repeated Advance calls in steady state invoke no scalar, array, or C++17 aligned global allocation and leave fixed object/root occupancy
- * unchanged.
+ * Motivation: Begin a rooted world and run a bounded loop of repeated Advance calls in steady state.
+ * Responsibilities: Repeated Advance calls in steady state invoke no scalar, array, or C++17 aligned global allocation
+ *   and leave fixed object/root occupancy.
  */
 MW_TEST_CASE(EngineAdvancePerformsNoObservableAllocation)
 {
@@ -295,8 +320,9 @@ MW_TEST_CASE(EngineAdvancePerformsNoObservableAllocation)
 }
 
 /**
- * Scenario: Begin, re-begin, advance, end, re-end, and advance-after-end a world in sequence.
- * Expected: EndPlay is idempotent and repeated BeginPlay/Advance/EndPlay calls outside the legal lifecycle match Core's InvalidLifecycle semantics.
+ * Motivation: Begin, re-begin, advance, end, re-end, and advance-after-end a world in sequence.
+ * Responsibilities: EndPlay is idempotent and repeated BeginPlay/Advance/EndPlay calls outside the legal lifecycle match
+ *   Core's InvalidLifecycle semantics.
  */
 MW_TEST_CASE(EngineEndPlayIsIdempotentAndRepeatedLifecycleCallsMatchCore)
 {

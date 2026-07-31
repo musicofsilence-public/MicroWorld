@@ -31,57 +31,65 @@
 namespace MicroWorld::Platform::Esp32
 {
 
-/** Normalized result of one full-duplex SPI master transaction. */
+/**
+ * Motivation: Gives the device one vocabulary for a full-duplex SPI master transaction that is free of ESP-IDF
+ *   error codes.
+ * Responsibilities: Distinguish a clocked-out window, a timeout, and a hard error.
+ * Example:
+ *   if (TransmitSpiMaster(Dev, Tx, Rx, Len) == ESpiTransmitOutcome::Sent) { Drain(Rx); }
+ */
 enum class ESpiTransmitOutcome : std::uint8_t
 {
-	/** The whole window was clocked out and in. */
-	Sent,
-	/** The transaction timed out; treat as a transient full condition. */
-	WouldBlock,
-	/** Any other SPI error. */
-	Error,
+	Sent,		///< Motivation: The whole window was clocked out and in.
+	WouldBlock, ///< Motivation: The transaction timed out; treat as a transient full condition.
+	Error,		///< Motivation: Any other SPI error.
 };
 
-/** Result of initializing the SPI bus as a master and adding its single device. */
+/**
+ * Motivation: Reports whether initializing the SPI bus as a master and adding its device succeeded.
+ * Responsibilities: Carry the master device handle, the host number, and the open flag.
+ * Example:
+ *   FOpenedSpiMaster Opened = OpenConfiguredSpiMaster(Host, Mosi, Miso, Sclk, Cs, Clock);
+ */
 struct FOpenedSpiMaster
 {
-	/** ESP-IDF master device handle, valid only when `bOpen` is true. */
+	/** Motivation: ESP-IDF master device handle, valid only when bOpen is true. */
 	spi_device_handle_t Device;
-	/** SPI host number the bus was initialized on. */
+	/** Motivation: SPI host number the bus was initialized on. */
 	int Host;
-	/** True when the bus and device were initialized; false when construction rolled back. */
+	/** Motivation: True when the bus and device were initialized; false when construction rolled back. */
 	bool bOpen;
 };
 
-/** Result of initializing the SPI bus as a slave. */
+/**
+ * Motivation: Reports whether initializing the SPI bus as a slave succeeded.
+ * Responsibilities: Carry the host number and the open flag.
+ * Example:
+ *   FOpenedSpiSlave Opened = OpenConfiguredSpiSlave(Host, Mosi, Miso, Sclk, Cs);
+ */
 struct FOpenedSpiSlave
 {
-	/** SPI host number the slave bus was initialized on. */
+	/** Motivation: SPI host number the slave bus was initialized on. */
 	int Host;
-	/** True when the slave bus initialized; false when construction rolled back. */
+	/** Motivation: True when the slave bus initialized; false when construction rolled back. */
 	bool bOpen;
 };
 
-/** Reinterprets the opaque stored host number as its ESP-IDF SPI host type. */
+/**
+ * Motivation: Restores the ESP-IDF SPI host type from the opaque stored host number so the public header never
+ *   carries the platform enum.
+ * Responsibilities: Reinterpret one opaque host number to its ESP-IDF SPI host type.
+ */
 inline spi_host_device_t AsSpiHost(const int InHost) noexcept
 {
 	return static_cast<spi_host_device_t>(InHost);
 }
 
 /**
- * Initializes the SPI bus as a master and adds the slave as its only device.
- *
- * Uses SPI mode 0 at `ClockHz` with an automatically selected DMA channel and a transfer size of one whole
- * window. On any failure the partially initialized bus is freed so the caller sees `bOpen == false` and can
- * leave the device inert without throwing.
- *
- * @param InHost SPI host number to initialize.
- * @param InMosi MOSI GPIO number.
- * @param InMiso MISO GPIO number.
- * @param InSclk SCLK GPIO number.
- * @param InCs CS GPIO number.
- * @param InClockHz SCLK frequency in hertz.
- * @return Opened-master descriptor reporting whether initialization succeeded.
+ * Motivation: Initializes the SPI bus as a master and adds the slave as its only device behind one helper.
+ * Responsibilities: Use SPI mode 0 at ClockHz with an automatically selected DMA channel and a transfer size of one
+ *   whole window; on any failure free the partially initialized bus and return bOpen false so the caller can leave
+ *   the device inert without throwing.
  */
 inline FOpenedSpiMaster OpenConfiguredSpiMaster(
 	const int InHost,
@@ -117,16 +125,10 @@ inline FOpenedSpiMaster OpenConfiguredSpiMaster(
 }
 
 /**
- * Runs one full-duplex master transaction, clocking the transmit window out and the receive window in.
- *
- * A timeout maps to `WouldBlock`; any other error maps to `Error`. Runtime-verified by example 21
- * (2026-07-23): the full-duplex transaction round-tripped every volley (error/timeout branches unexercised).
- *
- * @param InDevice Open SPI master device handle.
- * @param InTransmitBytes First byte of the transmit window.
- * @param OutReceiveBytes First byte of the receive window (filled by the transaction).
- * @param InLengthBytes Window length in bytes (both directions transfer this many).
- * @return Normalized outcome of the single transaction.
+ * Motivation: Runs one full-duplex master transaction behind a normalized outcome so the device never inspects
+ *   platform codes.
+ * Responsibilities: Clock the transmit window out and the receive window in, mapping a timeout to WouldBlock and
+ *   any other error to Error.
  */
 inline ESpiTransmitOutcome TransmitSpiMaster(
 	const spi_device_handle_t InDevice,
@@ -151,13 +153,9 @@ inline ESpiTransmitOutcome TransmitSpiMaster(
 }
 
 /**
- * Removes the device and frees the master bus opened by `OpenConfiguredSpiMaster`.
- *
- * Each step is a safe no-op or ignored return because the device is already going inert and there is no
- * recovery action at this layer.
- *
- * @param InHost SPI host number to free.
- * @param InDevice Master device handle to remove.
+ * Motivation: Tears down the master bus and device behind a safe helper so the device destructor needs no validity branch.
+ * Responsibilities: No-op or ignore each step's return because the device is already inert and there is no recovery
+ *   action at this layer.
  */
 inline void CloseSpiMaster(const int InHost, const spi_device_handle_t InDevice) noexcept
 {
@@ -169,17 +167,9 @@ inline void CloseSpiMaster(const int InHost, const spi_device_handle_t InDevice)
 }
 
 /**
- * Initializes the SPI bus as a slave listening on the given pins.
- *
- * Uses SPI mode 0 with an automatically selected DMA channel; the master supplies the clock, so no speed is
- * set here. On failure the caller sees `bOpen == false` and can leave the device inert without throwing.
- *
- * @param InHost SPI host number to initialize.
- * @param InMosi MOSI GPIO number.
- * @param InMiso MISO GPIO number.
- * @param InSclk SCLK GPIO number.
- * @param InCs CS GPIO number.
- * @return Opened-slave descriptor reporting whether initialization succeeded.
+ * Motivation: Initializes the SPI bus as a slave listening on the given pins behind one helper.
+ * Responsibilities: Use SPI mode 0 with an automatically selected DMA channel and no speed (the master supplies the
+ *   clock); on failure return bOpen false so the caller can leave the device inert without throwing.
  */
 inline FOpenedSpiSlave OpenConfiguredSpiSlave(
 	const int InHost, const std::int32_t InMosi, const std::int32_t InMiso, const std::int32_t InSclk, const std::int32_t InCs) noexcept
@@ -206,17 +196,9 @@ inline FOpenedSpiSlave OpenConfiguredSpiSlave(
 }
 
 /**
- * Queues one full-duplex slave transaction so the master's next clock finds a buffer.
- *
- * Points the caller-owned persistent descriptor at the transmit and receive windows and queues it without
- * blocking. Runtime-verified by example 21 (2026-07-23): the queued descriptor served the master's clocks.
- *
- * @param InHost SPI host number acting as a slave.
- * @param OutTransaction Caller-owned persistent transaction descriptor (must outlive the queue/harvest cycle).
- * @param InTransmitBytes First byte of the transmit window.
- * @param InReceiveBytes First byte of the receive window.
- * @param InLengthBytes Window length in bytes.
- * @return True when the transaction was queued.
+ * Motivation: Queues one full-duplex slave transaction so the master's next clock finds a buffer.
+ * Responsibilities: Point the caller-owned persistent descriptor at the transmit and receive windows and queue it
+ *   without blocking; return whether the queue call succeeded.
  */
 inline bool QueueSpiSlave(
 	const int InHost,
@@ -233,13 +215,9 @@ inline bool QueueSpiSlave(
 }
 
 /**
- * Harvests one completed slave transaction without blocking.
- *
- * Returns true when a queued transaction has completed (its receive window now holds the master's bytes) and
- * false when none is done yet. Runtime-verified by example 21 (2026-07-23): harvested frames decoded correctly.
- *
- * @param InHost SPI host number acting as a slave.
- * @return True when a transaction completed.
+ * Motivation: Harvests one completed slave transaction without blocking so the device can drain its receive window.
+ * Responsibilities: Return true when a queued transaction has completed (its receive window now holds the master's
+ *   bytes) and false when none is done yet.
  */
 inline bool HarvestSpiSlave(const int InHost) noexcept
 {
@@ -248,12 +226,9 @@ inline bool HarvestSpiSlave(const int InHost) noexcept
 }
 
 /**
- * Frees the SPI slave bus opened by `OpenConfiguredSpiSlave`.
- *
- * The return value is ignored because the device is already going inert and there is no recovery action at
- * this layer.
- *
- * @param InHost SPI host number to free.
+ * Motivation: Tears down the slave bus behind a safe helper so the device destructor needs no validity branch.
+ * Responsibilities: Ignore the return value because the device is already inert and there is no recovery action at
+ *   this layer.
  */
 inline void CloseSpiSlave(const int InHost) noexcept
 {

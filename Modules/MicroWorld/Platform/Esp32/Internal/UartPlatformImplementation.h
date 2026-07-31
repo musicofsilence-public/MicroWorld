@@ -18,46 +18,37 @@
 namespace MicroWorld::Platform::Esp32
 {
 
-/** UART port number type matching the ESP-IDF enum so call sites need no implicit conversion. */
+/** Motivation: Names the ESP-IDF UART port number type so call sites need no implicit conversion. */
 using FUartPort = uart_port_t;
 
 /**
- * Reinterprets the opaque stored port number as its ESP-IDF UART port type.
- *
- * The public header stores the port as a plain `std::int32_t` so it stays free of the ESP-IDF enum; this
- * helper restores the type only where the UART syscalls expect it.
- *
- * @param InStored Opaque port number saved by the device.
- * @return ESP-IDF UART port number.
+ * Motivation: Restores the ESP-IDF UART port type from the opaque stored port number so the public header never
+ *   carries the ESP-IDF enum.
+ * Responsibilities: Reinterpret one opaque port number to its ESP-IDF UART port type where the syscalls expect it.
  */
 inline FUartPort AsUartPort(const std::int32_t InStored) noexcept
 {
 	return static_cast<FUartPort>(InStored);
 }
 
-/** Normalized result of one non-blocking UART write attempt. */
+/**
+ * Motivation: Gives the device one vocabulary for a UART write attempt that is free of ESP-IDF error codes.
+ * Responsibilities: Distinguish a fully accepted write, a short write (treat as transiently full), and a hard error.
+ * Example:
+ *   if (WriteUart(Port, Frame, Len) == EUartWriteOutcome::Sent) { Done(); }
+ */
 enum class EUartWriteOutcome : std::uint8_t
 {
-	/** The whole frame was accepted by the UART driver. */
-	Sent,
-	/** The write accepted fewer than the requested bytes; treat as a transient full condition. */
-	WouldBlock,
-	/** Any other UART error. */
-	Error,
+	Sent,		///< Motivation: The whole frame was accepted by the UART driver.
+	WouldBlock, ///< Motivation: The write accepted fewer than the requested bytes; treat as a transient full condition.
+	Error,		///< Motivation: Any other UART error.
 };
 
 /**
- * Writes one complete framed message to the UART.
- *
- * Hands the whole span to one `uart_write_bytes` call; the outcome classifies only whether it was fully
- * accepted, partially accepted, or failed, so the device can map it to the shared `ETransportResult`. The
- * full-accept path is runtime-verified (example 18, 2026-07-23); the short-write would-block branch stays
- * unexercised, so a short write is still mapped to `WouldBlock` to treat the UART as transiently full.
- *
- * @param InPort Open UART port number.
- * @param InFrameBytes First byte of the framed message to send.
- * @param InLength Number of bytes to send.
- * @return Normalized outcome of the single write attempt.
+ * Motivation: Writes one complete framed message to the UART behind a normalized outcome so the device never inspects
+ *   platform codes.
+ * Responsibilities: Hand the whole span to one uart_write_bytes call and classify whether it was fully accepted,
+ *   partially accepted, or failed; a short write maps to WouldBlock to treat the UART as transiently full.
  */
 inline EUartWriteOutcome WriteUart(const FUartPort InPort, const std::uint8_t* const InFrameBytes, const std::size_t InLength) noexcept
 {
@@ -74,15 +65,9 @@ inline EUartWriteOutcome WriteUart(const FUartPort InPort, const std::uint8_t* c
 }
 
 /**
- * Attempts one UART byte write without waiting for TX ring-buffer capacity.
- *
- * `uart_write_bytes` may wait for buffered TX space, so this first confirms one free byte through ESP-IDF. Exclusive
- * UART ownership means no competing writer can consume that confirmed capacity before the one-byte WriteUart call;
- * hardware transmission can only free more capacity. The existing whole-frame WriteUart behavior remains unchanged.
- *
- * @param InPort Open UART port number.
- * @param InByte One byte to write after confirming ring-buffer capacity.
- * @return Sent after acceptance, WouldBlock when no byte fits now, or Error after an ESP-IDF failure.
+ * Motivation: Attempts one UART byte write without waiting for TX ring-buffer capacity so a byte-stream poller never blocks.
+ * Responsibilities: Confirm one free byte through ESP-IDF before the one-byte WriteUart call; exclusive UART ownership
+ *   means no competing writer can consume that confirmed capacity before the write.
  */
 inline EUartWriteOutcome TryWriteUartByte(const FUartPort InPort, const std::uint8_t InByte) noexcept
 {
@@ -99,27 +84,24 @@ inline EUartWriteOutcome TryWriteUartByte(const FUartPort InPort, const std::uin
 	return WriteUart(InPort, &InByte, 1);
 }
 
-/** Normalized result of one non-blocking single-byte UART read. */
+/**
+ * Motivation: Gives the device one vocabulary for a non-blocking single-byte UART read that is free of ESP-IDF
+ *   error codes.
+ * Responsibilities: Distinguish a read byte, a would-block, and a hard error.
+ * Example:
+ *   if (ReadUartByte(Port, Byte) == EUartReadStatus::GotByte) { Pump(Byte); }
+ */
 enum class EUartReadStatus : std::uint8_t
 {
-	/** One byte was read and is available in the out parameter. */
-	GotByte,
-	/** No byte is ready right now. */
-	WouldBlock,
-	/** A UART error occurred. */
-	Error,
+	GotByte,	///< Motivation: One byte was read and is available in the out parameter.
+	WouldBlock, ///< Motivation: No byte is ready right now.
+	Error,		///< Motivation: A UART error occurred.
 };
 
 /**
- * Reads at most one byte from the UART without blocking.
- *
- * Uses `uart_read_bytes` with a zero timeout so the receive pump polls one byte at a time; a return of zero
- * means the UART is empty and the pump should drain, while a negative return is an error. The one-byte drain
- * is runtime-verified by example 18's ping-pong (2026-07-23).
- *
- * @param InPort Open UART port number.
- * @param OutByte Filled with the received byte only when the status is GotByte.
- * @return Normalized status of the single-byte read.
+ * Motivation: Reads at most one byte from the UART without blocking so the receive pump polls one byte at a time.
+ * Responsibilities: Use uart_read_bytes with a zero timeout; a return of zero means the UART is empty and the pump
+ *   should drain, while a negative return is an error.
  */
 inline EUartReadStatus ReadUartByte(const FUartPort InPort, std::uint8_t& OutByte) noexcept
 {
@@ -135,28 +117,24 @@ inline EUartReadStatus ReadUartByte(const FUartPort InPort, std::uint8_t& OutByt
 	return EUartReadStatus::GotByte;
 }
 
-/** Result of opening and configuring one UART for a framed transport. */
+/**
+ * Motivation: Reports whether opening and configuring one UART for a framed transport succeeded.
+ * Responsibilities: Carry the open flag.
+ * Example:
+ *   FOpenedUart Opened = OpenConfiguredUartPort(Port, Tx, Rx, Baud);
+ */
 struct FOpenedUart
 {
-	/** True when the UART was parameterized, pinned, and installed; false when construction rolled back. */
+	/** Motivation: True when the UART was parameterized, pinned, and installed; false when construction rolled back. */
 	bool bOpen;
 };
 
 /**
- * Configures and installs one UART for 8N1 framed transport traffic.
- *
- * Sets the UART to 8N1 at the given baud rate, routes it to the given TX/RX GPIOs with no hardware flow
- * control, and installs the ESP-IDF driver with RX and TX ring buffers of two hardware FIFOs so the install
- * clears the ESP-IDF minimum (both must exceed `UART_HW_FIFO_LEN`). On any configuration failure the partially
- * installed driver is uninstalled and `bOpen` is false, so the constructor can leave the device inert without
- * throwing. The ring-buffer headroom suits bounded framing work between receive pumps; airtime-tuned sizing is
- * deferred to measured bring-up.
- *
- * @param InPort UART port number to open.
- * @param InTxGpio TX GPIO number wired to the attached device RX pin.
- * @param InRxGpio RX GPIO number wired from the attached device TX pin.
- * @param InBaudRate Baud rate shared with the attached device UART configuration.
- * @return Opened-UART descriptor reporting whether installation succeeded.
+ * Motivation: Configures and installs one UART for 8N1 framed transport behind one helper.
+ * Responsibilities: Set 8N1 at the given baud, route to the given TX/RX GPIOs with no flow control, and install the
+ *   driver with RX and TX ring buffers of two hardware FIFOs (both must exceed UART_HW_FIFO_LEN); on any failure
+ *   uninstall the partially installed driver and return bOpen false so the constructor can leave the device inert
+ *   without throwing.
  */
 inline FOpenedUart OpenConfiguredUartPort(
 	const FUartPort InPort, const std::int32_t InTxGpio, const std::int32_t InRxGpio, const std::uint32_t InBaudRate) noexcept
@@ -188,12 +166,9 @@ inline FOpenedUart OpenConfiguredUartPort(
 }
 
 /**
- * Uninstalls the UART driver opened by `OpenConfiguredUartPort`.
- *
- * A safe no-op when the UART was never installed; the return value is ignored because the device is already
- * inert and there is no recovery action at this layer.
- *
- * @param InPort UART port number to release.
+ * Motivation: Tears down the UART driver behind a safe helper so the device destructor needs no validity branch.
+ * Responsibilities: Ignore the return value because the device is already inert and there is no recovery action at
+ *   this layer.
  */
 inline void CloseUart(const FUartPort InPort) noexcept
 {

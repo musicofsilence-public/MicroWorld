@@ -9,65 +9,79 @@ namespace MicroWorld::Application
 {
 
 /**
- * The pacing function a runner calls between frames.
- *
- * noexcept is part of the type, so a platform's existing sleep function binds with
- * no
- * wrapper and the compiler rejects one that could throw into a noexcept Run.
+ * Motivation: Names the pacing function a runner calls between frames so a platform's existing sleep binds directly.
+ * Responsibilities: Carry the noexcept in the type so a sleep that could throw is rejected at compile time and needs no wrapper.
+ * Example:
+ *   FSleepFunction Sleep = &Platform::SleepMilliseconds;
+ *   Sleep(16);
  */
 using FSleepFunction = void (*)(Core::DurationMilliseconds InSleepDurationMilliseconds) noexcept;
 
 /**
- * Base class for an application that owns one engine: BeginPlay runs once,
- * Advance every frame, EndPlay once.
- *
- * The application holds its engine by IEngine& so a subclass cannot get the
- * lifecycle wrong: the per-frame BeginPlay/Tick/EndPlay calls are sealed behind
- * private non-virtual forwarders, the one thing a subclass must supply is what
- * happens when startup fails (OnBeginPlayFailed), and the one thing it may
- * override is OnConfigure, which runs once at BeginPlay (before the engine
- * begins) to spawn actors and configure systems. This class still enforces
- * begin/tick/end order and rejects time that moves backward, so OnConfigure
- * never runs out of order and the engine never sees time go back.
+ * Motivation: Owns one engine and seals its lifecycle order so a subclass cannot get begin/tick/end wrong; the subclass supplies only what
+ *   happens when startup fails (OnBeginPlayFailed) and may override what runs once at configure (OnConfigure).
+ * Responsibilities: Run BeginPlay once, Advance each frame, and EndPlay once; reject backward time; drive the engine through private non-virtual
+ *   forwarders so the per-frame order is fixed.
+ * Example:
+ *   FMyApplication App(Engine);
+ *   App.Run(TimeSource, &Platform::SleepMilliseconds, 16);
  */
 class FApplication
 {
 public:
-	/** No copying: a copy would be a second object claiming the same started application. */
+	/**
+	 * Motivation: Prevents a second object from claiming the same started application.
+	 * Responsibilities: Reject copy construction so application lifecycle stays singular.
+	 */
 	FApplication(const FApplication&) = delete;
 
-	/** No copy assignment: it would overwrite the lifecycle of an application already running. */
+	/**
+	 * Motivation: Prevents assignment from overwriting the lifecycle of an application already running.
+	 * Responsibilities: Reject copy assignment so application lifecycle stays singular.
+	 */
 	FApplication& operator=(const FApplication&) = delete;
 
-	/** No moving: this application holds its IEngine& for life, and callers can retain its FApplication&. */
+	/**
+	 * Motivation: Keeps this application's IEngine& and any retained FApplication& valid for life.
+	 * Responsibilities: Reject move construction so every reference stays at one address.
+	 */
 	FApplication(FApplication&&) = delete;
 
-	/** No move assignment: same reason — every reference to this object must stay valid. */
+	/**
+	 * Motivation: Keeps this application's IEngine& and any retained FApplication& valid for life.
+	 * Responsibilities: Reject move assignment so every reference stays at one address.
+	 */
 	FApplication& operator=(FApplication&&) = delete;
 
-	/** Virtual so deleting through an FApplication& also destroys the derived class. */
+	/**
+	 * Motivation: Lets a subclass be destroyed through its FApplication base.
+	 * Responsibilities: Run the derived destructor when deletion happens through an FApplication&.
+	 */
 	virtual ~FApplication() = default;
 
-	/** Starts the application once, at the caller's current time; fails if already started. */
+	/**
+	 * Motivation: Starts the application once at the caller's current time before any frame runs.
+	 * Responsibilities: Move the lifecycle to Playing, latch the first time sample, and run configure-then-begin; on begin failure run
+	 * OnBeginPlayFailed and latch Failed.
+	 */
 	Core::ERuntimeResult BeginPlay(Core::TimePointMilliseconds InNowMilliseconds) noexcept;
 
-	/** Runs one frame; rejects a time earlier than the last one instead of forwarding it. */
+	/**
+	 * Motivation: Runs one framed step while the application is playing.
+	 * Responsibilities: Reject a time earlier than the last accepted time, then forward the frame to the engine's Tick.
+	 */
 	Core::ERuntimeResult Advance(Core::TimePointMilliseconds InNowMilliseconds) noexcept;
 
-	/** Stops the application; calling it again after success does nothing and still succeeds. */
+	/**
+	 * Motivation: Stops the application cleanly, idempotently, on shutdown.
+	 * Responsibilities: Move Playing to Ended; a second call succeeds without doing anything.
+	 */
 	Core::ERuntimeResult EndPlay() noexcept;
 
 	/**
-	 * Runs the application and returns the result of the frame that failed.
-	 *
-	 * A healthy application never fails a frame, so in normal
-	 * operation this call
-	 * does not return and nothing written after it runs. A failed BeginPlay returns
-	 * at once without EndPlay:
-	 * FApplication has already run OnBeginPlayFailed and
-	 * latched Failed, so EndPlay could only answer InvalidLifecycle and would hide
-	 * the
-	 * real reason.
+	 * Motivation: Runs the framed loop until a frame fails and returns that frame's result, so a healthy application never returns from it.
+	 * Responsibilities: BeginPlay once, loop Advance until failure, then EndPlay; a failed BeginPlay returns at once without EndPlay since the
+	 * failure is already latched.
 	 */
 	template<typename TimeSourceType>
 	Core::ERuntimeResult Run(
@@ -93,37 +107,50 @@ public:
 	}
 
 protected:
-	/** Binds this application to the one engine it will drive for its lifetime. */
+	/**
+	 * Motivation: Binds this application to the one engine it will drive for its lifetime.
+	 * Responsibilities: Store the engine reference; no configuration or lifecycle change happens here.
+	 */
 	explicit FApplication(::MicroWorld::Engine::IEngine& InEngine) noexcept : Engine(InEngine) {}
 
 	/**
-	 * The world exists and nothing has begun. Spawn actors and configure systems here.
-	 *
-	 * Defaulted to success so an application with nothing to configure writes no body
-	 * at all, rather than a hook that discards both parameters to satisfy the compiler.
+	 * Motivation: Gives a subclass its one chance to spawn actors and configure systems into a world that exists but has not begun.
+	 * Responsibilities: Run once at BeginPlay before the engine begins; return non-success to abort the start.
 	 */
 	virtual Core::ERuntimeResult OnConfigure(::MicroWorld::Engine::IEngine&, Core::TimePointMilliseconds) { return Core::ERuntimeResult::Success; }
 
-	/** Undoes whatever OnConfigure started before it failed; it runs on the failure path, so it cannot throw. */
+	/**
+	 * Motivation: Lets a subclass react to a failed startup after BeginPlay has already latched the failure.
+	 * Responsibilities: Undo whatever OnConfigure started; must not throw because it runs on the failure path.
+	 */
 	virtual void OnBeginPlayFailed() noexcept = 0;
 
 private:
-	/** Runs OnConfigure first, then forwards to the engine's BeginPlay, returning the first failure. */
+	/**
+	 * Motivation: Runs the subclass configure hook before the engine begins, surfacing the first failure.
+	 * Responsibilities: Call OnConfigure then Engine.BeginPlay and return the first non-success result.
+	 */
 	Core::ERuntimeResult OnBeginPlay(Core::TimePointMilliseconds InNowMilliseconds) noexcept;
 
-	/** Forwards one frame to the engine's Tick. */
+	/**
+	 * Motivation: Forwards one framed step to the engine.
+	 * Responsibilities: Call Engine.Tick with the accepted time.
+	 */
 	Core::ERuntimeResult OnAdvance(Core::TimePointMilliseconds InNowMilliseconds) noexcept;
 
-	/** Forwards the stop to the engine's EndPlay. */
+	/**
+	 * Motivation: Forwards the stop to the engine once the lifecycle has moved to Ended.
+	 * Responsibilities: Call Engine.EndPlay.
+	 */
 	Core::ERuntimeResult OnEndPlay() noexcept;
 
-	/** Tracks the current phase, so a failed start stays dead and a second EndPlay is harmless. */
+	/** Motivation: Tracks the current phase so a failed start stays dead and a second EndPlay is harmless. */
 	Core::FLifecycleGuard Lifecycle;
 
-	/** The last time Advance accepted; a smaller one is rejected before the engine sees it. */
+	/** Motivation: The last time Advance accepted; a smaller one is rejected before the engine sees it. */
 	Core::TimePointMilliseconds LastUpdateMilliseconds{0};
 
-	/** The one engine this application drives; bound at construction and never rebound. */
+	/** Motivation: The one engine this application drives; bound at construction and never rebound. */
 	::MicroWorld::Engine::IEngine& Engine;
 };
 

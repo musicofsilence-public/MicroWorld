@@ -8,7 +8,10 @@ static_assert(MicroWorld::Core::Version.Major == 0);
 static_assert(MicroWorld::Core::Version.Minor == 4);
 static_assert(MicroWorld::Core::Version.Patch == 0);
 
-/** Exercises the exact public Core primitives a downstream host links and runs against. */
+/**
+ * Motivation: Exercises the exact public Core primitives a downstream host links and runs against.
+ * Responsibilities: Drive one full Tick lifecycle and report success only when it ticks as expected.
+ */
 inline int RunCoreConsumerProbe() noexcept
 {
 	MicroWorld::Core::FTickFunction CoreArchiveProbe({true, true, 0});

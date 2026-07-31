@@ -13,42 +13,49 @@ namespace MicroWorld::Tests
 namespace
 {
 
-	/** File-static counter for the free noexcept pacing function, since FSleepFunction cannot bind a member. */
+	/** Motivation: File-static counter for the free noexcept pacing function, since FSleepFunction cannot bind a member. */
 	int GPacingCallCount{0};
 
-	/** Maximum scripted clock/timestamp entries one test drives, bounding both fixtures without dynamic storage. */
+	/** Motivation: Maximum scripted clock/timestamp entries one test drives, bounding both fixtures without dynamic storage. */
 	constexpr std::size_t MaximumScriptedEntries = 16;
 
-	/** Capacity of the recorded observed-tick array, sized to the most frames any runner test drives. */
+	/** Motivation: Capacity of the recorded observed-tick array, sized to the most frames any runner test drives. */
 	constexpr std::size_t MaximumObservedTickTimestamps = 16;
 
 	/**
-	 * Free noexcept pacing function that counts calls without sleeping.
-	 *
-	 * The signature must match FSleepFunction exactly, so the call counter cannot live on a member
-	 * and the runner exercises the same binding a real platform sleep would use.
+	 * Motivation: Free noexcept pacing function that counts calls without sleeping.
+	 * Responsibilities: The signature must match FSleepFunction exactly, so the call counter cannot live on a member and the
+	 *   runner exercises the same binding a real platform sleep would use.
 	 */
 	void CountingSleepFunction(MicroWorld::Core::DurationMilliseconds) noexcept
 	{
 		++GPacingCallCount;
 	}
 
-	/** Resets the file-static pacing counter before one test observes its value. */
+	/**
+	 * Motivation: Resets the file-static pacing counter before one test observes its value.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void ResetPacingCounter() noexcept
 	{
 		GPacingCallCount = 0;
 	}
 
 	/**
-	 * Returns a scripted monotonic clock sequence so tests can reason about which Now value reached each hook.
-	 *
-	 * Hold one by reference and call Now() repeatedly; the sequence advances by one entry per call so the
-	 * runner's begin-then-frames split is deterministic.
+	 * Motivation: Returns a scripted monotonic clock sequence so tests can reason about which Now value reached each
+	 *   hook. Hold one by reference and call Now() repeatedly; the sequence advances by one entry per call
+	 *   so the runner's begin-then-frames split is deterministic.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 * Example:
+	 *   // Construct and exercise the type in one behavior test.
 	 */
 	class FScriptedClock
 	{
 	public:
-		/** Seeds the clock with the monotonic values the test expects BeginPlay and each Advance to see. */
+		/**
+		 * Motivation: Seeds the clock with the monotonic values the test expects BeginPlay and each Advance to see.
+		 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+		 */
 		explicit FScriptedClock(std::initializer_list<MicroWorld::Core::TimePointMilliseconds> InValues) noexcept
 		{
 			// Copying under the capacity check keeps an over-long list from writing past Sequence.
@@ -63,10 +70,9 @@ namespace
 		}
 
 		/**
-		 * Returns the next scripted value, then holds the last one for every later call.
-		 *
-		 * Holding rather than extrapolating keeps every reading monotonic without inventing
-		 * timestamps a test never scripted; FApplication accepts a repeated timestamp.
+		 * Motivation: Returns the next scripted value, then holds the last one for every later call.
+		 * Responsibilities: Holding rather than extrapolating keeps every reading monotonic without inventing timestamps a test
+		 *   never scripted; FApplication accepts a repeated timestamp.
 		 */
 		MicroWorld::Core::TimePointMilliseconds Now() noexcept
 		{
@@ -79,45 +85,53 @@ namespace
 		}
 
 	private:
-		/** Caps the scripted sequence so one test drives many frames without unbounded storage. */
+		/** Motivation: Caps the scripted sequence so one test drives many frames without unbounded storage. */
 		static constexpr std::size_t MaximumScriptedValues = MaximumScriptedEntries;
 
-		/** Holds the scripted monotonic values the test selected. */
+		/** Motivation: Holds the scripted monotonic values the test selected. */
 		MicroWorld::Core::TimePointMilliseconds Sequence[MaximumScriptedValues]{};
 
-		/** Counts how many scripted values are populated, so unused tail slots are never read. */
+		/** Motivation: Counts how many scripted values are populated, so unused tail slots are never read. */
 		std::size_t ValueCount{0};
 
-		/** Tracks the next value Now() will return. */
+		/** Motivation: Tracks the next value Now() will return. */
 		std::size_t CallIndex{0};
 	};
 
 	/**
-	 * IEngine double whose Tick stops the runner on a configured frame and records observed timestamps.
-	 *
-	 * Tick returns non-Success once TickCount reaches the configured stop frame, so Run returns instead
-	 * of looping forever; the observed-timestamp vector is what RunnerFeedsClockValuesIntoTick inspects.
-	 * BeginPlay can also be configured to fail so a failed-begin run is reachable from a test.
+	 * Motivation: IEngine double whose Tick stops the runner on a configured frame and records observed timestamps.
+	 *   Tick returns non-Success once TickCount reaches the configured stop frame, so Run returns instead of
+	 *   looping forever; the observed-timestamp vector is what RunnerFeedsClockValuesIntoTick inspects.
+	 *   BeginPlay can also be configured to fail so a failed-begin run is reachable from a test.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 * Example:
+	 *   // Construct and exercise the type in one behavior test.
 	 */
 	class FScriptedEngine final : public MicroWorld::Engine::IEngine
 	{
 	public:
-		/** Selects the zero-based Tick index that returns non-Success so Run terminates. */
+		/**
+		 * Motivation: Run terminates.
+		 * Responsibilities: Selects the zero-based Tick index that returns non-Success.
+		 */
 		void ConfigureStopOnFrame(int InFrameIndex) noexcept { StopOnFrameIndex = InFrameIndex; }
 
-		/** Selects the result BeginPlay returns, so a failed-begin run is reachable from a test. */
+		/**
+		 * Motivation: A failed-begin run is reachable from a test.
+		 * Responsibilities: Selects the result BeginPlay returns.
+		 */
 		void ConfigureBeginPlayResult(MicroWorld::Core::ERuntimeResult InResult) noexcept { ConfiguredBeginPlayResult = InResult; }
 
-		/** Holds the Now timestamps Tick observed, so a test can assert the scripted clock reached frames. */
+		/** Motivation: Holds the Now timestamps Tick observed, so a test can assert the scripted clock reached frames. */
 		MicroWorld::Core::TimePointMilliseconds ObservedTickTimestamps[MaximumObservedTickTimestamps]{};
 
-		/** Counts how many frames Tick accepted, so a test can size observed timestamps and pacing calls. */
+		/** Motivation: Counts how many frames Tick accepted, so a test can size observed timestamps and pacing calls. */
 		int TickCount{0};
 
-		/** Counts BeginPlay calls so a test can confirm the runner begins the engine exactly once. */
+		/** Motivation: Counts BeginPlay calls so a test can confirm the runner begins the engine exactly once. */
 		int BeginPlayCount{0};
 
-		/** Counts EndPlay calls so a test can confirm the runner ends exactly once after a stopping frame. */
+		/** Motivation: Counts EndPlay calls so a test can confirm the runner ends exactly once after a stopping frame. */
 		int EndPlayCount{0};
 
 		MicroWorld::Core::ERuntimeResult BeginPlay(MicroWorld::Core::TimePointMilliseconds) noexcept override
@@ -154,20 +168,23 @@ namespace
 		}
 
 	private:
-		/** Holds the frame index at which Tick stops the run, so Run always returns in tests. */
+		/** Motivation: Holds the frame index at which Tick stops the run, so Run always returns in tests. */
 		int StopOnFrameIndex{0};
 
-		/** Holds the result BeginPlay returns, seeded to Success so the happy-path runs need no setup. */
+		/** Motivation: Holds the result BeginPlay returns, seeded to Success so the happy-path runs need no setup. */
 		MicroWorld::Core::ERuntimeResult ConfiguredBeginPlayResult{MicroWorld::Core::ERuntimeResult::Success};
 
-		/** Raw storage for the world/store pointers the contract requires but these tests never use. */
+		/** Motivation: Raw storage for the world/store pointers the contract requires but these tests never use. */
 		std::uint64_t WorldStorage{0};
 		std::uint64_t StoreStorage{0};
 	};
 
 	/**
-	 * Minimal FApplication subclass bound to the scripted engine; OnConfigure always succeeds so the
-	 * runner's begin-then-frames loop is driven entirely by the engine's BeginPlay/Tick/EndPlay.
+	 * Motivation: Minimal FApplication subclass bound to the scripted engine; OnConfigure always succeeds so the
+	 *   runner's begin-then-frames loop is driven entirely by the engine's BeginPlay/Tick/EndPlay.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 * Example:
+	 *   // Construct and exercise the type in one behavior test.
 	 */
 	class FRunnerApplication final : public MicroWorld::Application::FApplication
 	{
@@ -189,8 +206,8 @@ namespace
 } // namespace
 
 /**
- * Scenario: Run the application against a scripted engine whose Tick returns non-Success on the first frame.
- * Expected: Run returns that frame's non-Success result as soon as the run stops.
+ * Motivation: Run the application against a scripted engine whose Tick returns non-Success on the first frame.
+ * Responsibilities: Run returns that frame's non-Success result as soon as the run stops.
  */
 MW_TEST_CASE(RunnerStopsOnFirstNonSuccessFrameAndReturnsIt)
 {
@@ -208,8 +225,8 @@ MW_TEST_CASE(RunnerStopsOnFirstNonSuccessFrameAndReturnsIt)
 }
 
 /**
- * Scenario: Run the application against a scripted engine that stops on the first frame.
- * Expected: The engine EndPlay is invoked exactly once after the stopping frame.
+ * Motivation: Run the application against a scripted engine that stops on the first frame.
+ * Responsibilities: The engine EndPlay is invoked exactly once after the stopping frame.
  */
 MW_TEST_CASE(RunnerEndsPlayAfterAStoppingFrame)
 {
@@ -227,8 +244,8 @@ MW_TEST_CASE(RunnerEndsPlayAfterAStoppingFrame)
 }
 
 /**
- * Scenario: Run the application against a scripted engine whose BeginPlay fails.
- * Expected: Run returns the begin failure result without ever invoking EndPlay.
+ * Motivation: Run the application against a scripted engine whose BeginPlay fails.
+ * Responsibilities: Run returns the begin failure result without ever invoking EndPlay.
  */
 MW_TEST_CASE(RunnerDoesNotEndPlayAfterFailedBeginPlay)
 {
@@ -247,8 +264,8 @@ MW_TEST_CASE(RunnerDoesNotEndPlayAfterFailedBeginPlay)
 }
 
 /**
- * Scenario: Run the application across several successful frames until a configured frame stops the run.
- * Expected: Pacing fires exactly once per successful frame and never for the stopping frame.
+ * Motivation: Run the application across several successful frames until a configured frame stops the run.
+ * Responsibilities: Pacing fires exactly once per successful frame and never for the stopping frame.
  */
 MW_TEST_CASE(RunnerSleepsOncePerSuccessfulFrameOnly)
 {
@@ -267,8 +284,9 @@ MW_TEST_CASE(RunnerSleepsOncePerSuccessfulFrameOnly)
 }
 
 /**
- * Scenario: Run the application with a scripted clock and a scripted engine that stops on the first frame.
- * Expected: Each engine Tick sees the next scripted clock value; begin consumes the first reading before the first Tick.
+ * Motivation: Run the application with a scripted clock and a scripted engine that stops on the first frame.
+ * Responsibilities: Each engine Tick sees the next scripted clock value; begin consumes the first reading before the
+ *   first Tick.
  */
 MW_TEST_CASE(RunnerFeedsClockValuesIntoTick)
 {

@@ -28,20 +28,16 @@
 namespace MicroWorld::Platform::Esp32
 {
 
-/** lwIP socket descriptor width; a negative value is its sentinel. */
+/** Motivation: Names the lwIP socket descriptor width so call sites stay free of the platform int width, with a negative value as its sentinel. */
 using FSocketHandle = int;
 
-/** Address-length type expected by the lwIP `sockaddr` accessors. */
+/** Motivation: Names the address-length type expected by the lwIP sockaddr accessors. */
 using FSockLen = socklen_t;
 
 /**
- * Stamps the open/closed state of one socket handle.
- *
- * lwIP uses a negative `int` for its invalid descriptor, so callers must not
- * test the raw value against a Windows-style sentinel.
- *
- * @param InSocket Handle whose validity is in question.
- * @return True when the handle names an open socket.
+ * Motivation: Stamps the open/closed state of one socket handle behind one predicate so callers never test the raw
+ *   int against a Windows-style sentinel.
+ * Responsibilities: Return true only when the handle names an open socket.
  */
 inline bool IsValidHandle(const FSocketHandle InSocket) noexcept
 {
@@ -49,13 +45,9 @@ inline bool IsValidHandle(const FSocketHandle InSocket) noexcept
 }
 
 /**
- * Converts an opaque stored handle back to its lwIP socket type.
- *
- * `std::uintptr_t` is at least as wide as `int`, so the round trip is lossless
- * and keeps `std::uintptr_t` out of the public header.
- *
- * @param InStored Opaque handle value saved by the device.
- * @return lwIP socket handle.
+ * Motivation: Restores the lwIP socket type from the device's opaque stored form so the public header never
+ *   carries std::uintptr_t.
+ * Responsibilities: Reinterpret one opaque handle back to its lwIP socket type losslessly.
  */
 inline FSocketHandle AsSocketHandle(const std::uintptr_t InStored) noexcept
 {
@@ -63,10 +55,8 @@ inline FSocketHandle AsSocketHandle(const std::uintptr_t InStored) noexcept
 }
 
 /**
- * Converts an lwIP socket handle to the device's opaque stored form.
- *
- * @param InSocket lwIP socket handle.
- * @return Opaque handle value the device stores.
+ * Motivation: Stores the lwIP socket handle in an opaque form so the public header never reaches the platform type.
+ * Responsibilities: Reinterpret one lwIP socket handle to its opaque stored form losslessly.
  */
 inline std::uintptr_t AsOpaqueHandle(const FSocketHandle InSocket) noexcept
 {
@@ -74,12 +64,8 @@ inline std::uintptr_t AsOpaqueHandle(const FSocketHandle InSocket) noexcept
 }
 
 /**
- * Releases one lwIP socket descriptor.
- *
- * A no-op on an invalid handle so the device's destructor does not need its own
- * validity branch.
- *
- * @param InSocket Handle to release.
+ * Motivation: Releases one lwIP socket descriptor behind a safe helper so the device destructor needs no validity branch.
+ * Responsibilities: Close the socket and no-op on an invalid handle.
  */
 inline void CloseSocket(const FSocketHandle InSocket) noexcept
 {
@@ -91,13 +77,8 @@ inline void CloseSocket(const FSocketHandle InSocket) noexcept
 }
 
 /**
- * Switches one socket to non-blocking mode.
- *
- * Sets `O_NONBLOCK` via `fcntl`; returns false on any syscall failure so the
- * constructor can roll back cleanly.
- *
- * @param InSocket Handle whose mode to change.
- * @return True when the socket is now non-blocking.
+ * Motivation: Switches one socket to non-blocking mode so the device polls rather than blocks.
+ * Responsibilities: Set O_NONBLOCK via fcntl and return false on any syscall failure so the constructor can roll back.
  */
 inline bool SetNonBlocking(const FSocketHandle InSocket) noexcept
 {
@@ -110,17 +91,9 @@ inline bool SetNonBlocking(const FSocketHandle InSocket) noexcept
 }
 
 /**
- * Builds an IPv4 `sockaddr_in` from dotted octets and a host-order port.
- *
- * The octets are packed and converted with `htonl`; the port with `htons`, so the
- * returned address is ready for `bind` or `sendto` without further byte swapping.
- *
- * @param InA First IPv4 octet.
- * @param InB Second IPv4 octet.
- * @param InC Third IPv4 octet.
- * @param InD Fourth IPv4 octet.
- * @param InPort Host-order UDP port.
- * @return Network-ready IPv4 socket address.
+ * Motivation: Builds a network-ready IPv4 socket address from plain octets and a host-order port so call sites need
+ *   no byte-swap boilerplate.
+ * Responsibilities: Pack the octets with htonl and the port with htons so the returned address is ready for bind or sendto.
  */
 inline sockaddr_in MakeSockAddrIn(
 	const std::uint8_t InA, const std::uint8_t InB, const std::uint8_t InC, const std::uint8_t InD, const std::uint16_t InPort) noexcept
@@ -134,29 +107,23 @@ inline sockaddr_in MakeSockAddrIn(
 	return Address;
 }
 
-/** Normalized result of one non-blocking send attempt. */
+/**
+ * Motivation: Gives the device one vocabulary for a send attempt that is free of lwIP error codes.
+ * Responsibilities: Distinguish accepted, would-block, and failed send outcomes.
+ * Example:
+ *   if (SendDatagram(Sock, Bytes, Len, To) == ESendOutcome::WouldBlock) { Retry(); }
+ */
 enum class ESendOutcome : std::uint8_t
 {
-	/** The whole datagram was accepted. */
-	Success,
-	/** The send would block because the socket buffer is full. */
-	WouldBlock,
-	/** Any other socket error. */
-	Error,
+	Success,	///< Motivation: The whole datagram was accepted.
+	WouldBlock, ///< Motivation: The send would block because the socket buffer is full.
+	Error,		///< Motivation: Any other socket error.
 };
 
 /**
- * Sends one complete datagram to a network-ready IPv4 address.
- *
- * The whole span is handed to one `sendto`; the outcome classifies only whether
- * it was fully accepted, would block, or failed, so the device can map it to the
- * shared `ETransportResult` without inspecting lwIP error codes.
- *
- * @param InSocket Open non-blocking socket.
- * @param InDatagramBytes First byte of the datagram to send.
- * @param InLength Number of bytes to send.
- * @param InTo Network-ready destination address.
- * @return Normalized outcome of the single send attempt.
+ * Motivation: Sends one complete datagram through one lwIP sendto so the device maps the result without inspecting
+ *   platform error codes.
+ * Responsibilities: Hand the whole span to one sendto and classify whether it was fully accepted, would block, or failed.
  */
 inline ESendOutcome SendDatagram(
 	const FSocketHandle InSocket, const std::uint8_t* const InDatagramBytes, const std::size_t InLength, const sockaddr_in& InTo) noexcept
@@ -174,47 +141,42 @@ inline ESendOutcome SendDatagram(
 	return ESendOutcome::Error;
 }
 
-/** Normalized result of a non-consuming peek at the head datagram. */
+/**
+ * Motivation: Gives the device one vocabulary for a non-consuming peek that is free of lwIP error codes.
+ * Responsibilities: Distinguish a queued datagram, a would-block, and a socket error.
+ * Example:
+ *   EPeekStatus S = ProbeReadableDatagram(Sock).Status;
+ */
 enum class EPeekStatus : std::uint8_t
 {
-	/** A datagram is queued; `BytesReady` carries its observed length. */
-	Ready,
-	/** No datagram is ready right now. */
-	WouldBlock,
-	/** A socket error occurred. */
-	Error,
+	Ready,		///< Motivation: A datagram is queued; BytesReady carries its observed length.
+	WouldBlock, ///< Motivation: No datagram is ready right now.
+	Error,		///< Motivation: A socket error occurred.
 };
 
 /**
- * Carries one peek result plus, on `Ready`, the head datagram's observed length.
+ * Motivation: Carries one peek result and, on Ready, the observed head datagram length so the device sizes a
+ *   consuming read without inspecting platform codes.
+ * Responsibilities: Hold the status and the observed byte count.
+ * Example:
+ *   FPeekProbe Probe = ProbeReadableDatagram(Sock);
  */
 struct FPeekProbe
 {
-	/** Classifies what the non-consuming peek observed. */
+	/** Motivation: Classifies what the non-consuming peek observed. */
 	EPeekStatus Status;
 
-	/** Valid only when `Status == Ready`; the observed byte count of the queued datagram. */
+	/** Motivation: Valid only when Status == Ready; the observed byte count of the queued datagram. */
 	std::size_t BytesReady;
 };
 
-/**
- * Largest datagram the sizing peek can observe without an overflow error.
- *
- * Mirrors `FEsp32WifiDevice::UdpMaxPacketBytes` (kept in sync by a `static_assert`
- * in `Esp32WifiDevice.cpp`); the sizing peek never reads more than this, so it is
- * also the largest payload one send accepts.
- */
+/** Motivation: Bounds the sizing peek so it never overflows its scratch, mirroring FEsp32WifiDevice::UdpMaxPacketBytes (kept in sync by a
+ * static_assert). */
 constexpr std::size_t PeekScratchBytes = 1200;
 
 /**
- * Maps a peek-time socket error code to a peek-probe outcome.
- *
- * A would-block error is the common "nothing queued yet" case; every other code
- * is a hard error. lwIP has no oversize-datagram error, so this mirrors the host
- * POSIX branch without a size sentinel.
- *
- * @param InErrorCode Platform last-error captured right after a failed peek.
- * @return Peek probe the device acts on without inspecting platform codes.
+ * Motivation: Maps a peek-time socket error to a peek-probe outcome so the device never inspects platform codes.
+ * Responsibilities: Treat a would-block error as the common nothing-queued case and every other code as a hard error.
  */
 inline FPeekProbe ClassifyPeekError(const int InErrorCode) noexcept
 {
@@ -226,18 +188,10 @@ inline FPeekProbe ClassifyPeekError(const int InErrorCode) noexcept
 }
 
 /**
- * Peeks the head datagram into an internal scratch buffer, never the caller's.
- *
- * When lwIP defines `MSG_TRUNC` the peek returns the true datagram length in
- * `BytesReady`; otherwise it returns the delivered length, so a datagram larger
- * than the scratch is under-reported (capped at `PeekScratchBytes`). For every
- * in-contract capacity (at most the scratch size) this still drives `Full`
- * correctly; the exact oversize-datagram behavior is UNVERIFIED at runtime
- * (compile-only phase). The peek never touches the caller-owned destination,
- * keeping `Full` transactional.
- *
- * @param InSocket Open non-blocking socket.
- * @return Peek classification with the observed datagram length when `Ready`.
+ * Motivation: Sizes the head datagram without consuming it, so a Full receive leaves the datagram queued and
+ *   transactional.
+ * Responsibilities: Peek into an internal scratch buffer (never the caller's destination); report the observed
+ *   length via MSG_TRUNC when available, otherwise the delivered length capped at PeekScratchBytes.
  */
 inline FPeekProbe ProbeReadableDatagram(const FSocketHandle InSocket) noexcept
 {
@@ -257,29 +211,25 @@ inline FPeekProbe ProbeReadableDatagram(const FSocketHandle InSocket) noexcept
 }
 
 /**
- * Carries one consuming receive result plus, on success, the received byte count.
+ * Motivation: Carries one consuming receive result and, on success, the received byte count so the device reports
+ *   the count without inspecting platform codes.
+ * Responsibilities: Hold the success flag and the byte count.
+ * Example:
+ *   FConsumeResult R = ConsumeDatagram(Sock, Dest, Cap, Sender);
  */
 struct FConsumeResult
 {
-	/** True when a datagram was consumed into the destination. */
+	/** Motivation: True when a datagram was consumed into the destination. */
 	bool bSuccess;
 
-	/** Valid only when `bSuccess`; bytes written to the destination. */
+	/** Motivation: Valid only when bSuccess; bytes written to the destination. */
 	std::size_t BytesReceived;
 };
 
 /**
- * Consumes the previously-probed head datagram into the destination.
- *
- * Uses a plain `recvfrom` (flags zero) so the datagram leaves the socket queue.
- * The caller's `OutSender` is filled only on success; the device decodes its
- * IPv4 fields with `ntohl`/`ntohs`.
- *
- * @param InSocket Open non-blocking socket.
- * @param OutDestination Caller-owned buffer for the received bytes.
- * @param InCapacity Byte capacity of `OutDestination`.
- * @param OutSender Filled with the sender's IPv4 socket address on success.
- * @return Consume result with byte count on success.
+ * Motivation: Removes the previously-probed head datagram from the queue and copies it into the caller's buffer.
+ * Responsibilities: Use a plain recvfrom so the datagram leaves the queue, fill OutSender only on success, and leave
+ *   the destination untouched on failure.
  */
 inline FConsumeResult ConsumeDatagram(
 	const FSocketHandle InSocket, std::uint8_t* const OutDestination, const std::size_t InCapacity, sockaddr_in& OutSender) noexcept
@@ -294,29 +244,27 @@ inline FConsumeResult ConsumeDatagram(
 }
 
 /**
- * Result of opening and binding one non-blocking UDP socket.
+ * Motivation: Reports whether opening and binding one non-blocking UDP socket succeeded, plus the actual bound port.
+ * Responsibilities: Carry the handle, the open flag, and the host-order bound port.
+ * Example:
+ *   FOpenedSocket Opened = OpenBoundUdpSocket(Port);
  */
 struct FOpenedSocket
 {
-	/** lwIP socket handle; invalid when `bOpen` is false. */
+	/** Motivation: lwIP socket handle; invalid when bOpen is false. */
 	FSocketHandle Handle;
 
-	/** True when the socket was created, set non-blocking, and bound. */
+	/** Motivation: True when the socket was created, set non-blocking, and bound. */
 	bool bOpen;
 
-	/** Host-order port the OS actually bound; valid only when `bOpen`. */
+	/** Motivation: Host-order port the OS actually bound; valid only when bOpen. */
 	std::uint16_t BoundPort;
 };
 
 /**
- * Closes a partially opened socket and reports the open as failed.
- *
- * Folds the close-then-report rollback shared by every post-open syscall failure
- * so each failure site reads as one line; the returned descriptor carries the
- * now-closed handle with `bOpen` false.
- *
- * @param InSocket Partially opened handle to release.
- * @return Failed opened-socket descriptor.
+ * Motivation: Folds the close-then-report rollback shared by every post-open syscall failure so each failure site
+ *   reads as one line.
+ * Responsibilities: Close the partially opened socket and return a failed opened-socket descriptor.
  */
 inline FOpenedSocket CloseAndReportFailure(const FSocketHandle InSocket) noexcept
 {
@@ -325,16 +273,10 @@ inline FOpenedSocket CloseAndReportFailure(const FSocketHandle InSocket) noexcep
 }
 
 /**
- * Opens, binds, and sizes one non-blocking UDP socket on all IPv4 interfaces.
- *
- * An `InBindPort` of zero requests an ephemeral port; the actual port is read back
- * via `getsockname`. On any syscall failure the partially opened socket is closed
- * and `bOpen` is false, so the constructor can leave the device inert without
- * throwing. Binding to `INADDR_ANY` keeps the adapter free of netif assumptions;
- * a real deployment brings up netif/WiFi before any traffic can flow.
- *
- * @param InBindPort Host-order UDP port to bind, or zero for an ephemeral port.
- * @return Opened-socket descriptor with the actual bound port.
+ * Motivation: Opens, binds, and sizes one non-blocking UDP socket on all IPv4 interfaces so the device can be
+ *   constructed without throwing.
+ * Responsibilities: On any syscall failure close the partially opened socket and return bOpen false; bind to
+ *   INADDR_ANY so the adapter stays free of netif assumptions and read the actual port back via getsockname.
  */
 inline FOpenedSocket OpenBoundUdpSocket(const std::uint16_t InBindPort) noexcept
 {
@@ -365,15 +307,8 @@ inline FOpenedSocket OpenBoundUdpSocket(const std::uint16_t InBindPort) noexcept
 }
 
 /**
- * Waits up to `InTimeoutMilliseconds` for the socket to become readable.
- *
- * Uses `select()` with a bounded timeout so ESP32 demos wait for readiness
- * deterministically without a sleep-poll loop. A true return means a datagram
- * is ready to consume; a false return means the timeout elapsed.
- *
- * @param InSocket Open non-blocking socket.
- * @param InTimeoutMilliseconds Upper bound on the readiness wait.
- * @return True when the socket is readable within the timeout.
+ * Motivation: Lets an ESP32 demo wait for inbound readiness deterministically without a sleep-poll loop.
+ * Responsibilities: Use select() with a bounded timeout and return true only when the socket is readable within it.
  */
 inline bool WaitForReadable(const FSocketHandle InSocket, const Core::DurationMilliseconds InTimeoutMilliseconds) noexcept
 {

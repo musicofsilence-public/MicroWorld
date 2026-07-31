@@ -37,89 +37,132 @@ using MicroWorld::Engine::TStrongObjectPtr;
 using MicroWorld::Engine::TWeakObjectPtr;
 using MicroWorld::Engine::UObject;
 
-/** Records managed lifetime hooks in fresh state owned by one test. */
+/**
+ * Motivation: Records managed lifetime hooks in fresh state owned by one test.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 struct FObjectLifetimeState final
 {
-	/** Proves rejected construction attempts do not start an object lifetime. */
+	/** Motivation: Proves rejected construction attempts do not start an object lifetime. */
 	std::uint32_t ConstructionCount{0};
 
-	/** Proves the deferred destruction hook runs exactly once per object. */
+	/** Motivation: Proves the deferred destruction hook runs exactly once per object. */
 	std::uint32_t BeginDestroyCount{0};
 
-	/** Proves exact descriptor destruction runs exactly once per object. */
+	/** Motivation: Proves exact descriptor destruction runs exactly once per object. */
 	std::uint32_t DestructionCount{0};
 };
 
-/** Exposes construction and destruction through caller-owned counters. */
+/**
+ * Motivation: Exposes construction and destruction through caller-owned counters.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FTrackedObject : public UObject
 {
 public:
-	/** Begins one observable lifetime after every store validation succeeds. */
+	/**
+	 * Motivation: Begins one observable lifetime after every store validation succeeds.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	explicit FTrackedObject(FObjectLifetimeState& InState) noexcept : State(InState) { ++State.ConstructionCount; }
 
-	/** Records exact derived destruction selected by the registered descriptor. */
+	/**
+	 * Motivation: Records exact derived destruction selected by the registered descriptor.
+	 * Responsibilities: Release the documented observation exactly once and leave no leak behind.
+	 */
 	~FTrackedObject() noexcept override { ++State.DestructionCount; }
 
 protected:
-	/** Records the one deferred lifecycle hook before exact destruction. */
+	/**
+	 * Motivation: Records the one deferred lifecycle hook before exact destruction.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void BeginDestroy() noexcept override { ++State.BeginDestroyCount; }
 
 private:
-	/** Reports lifecycle events without global mutable test state. */
+	/** Motivation: Reports lifecycle events without global mutable test state. */
 	FObjectLifetimeState& State;
 };
 
-/** Supplies an equally laid-out wrong type whose destructor may be linker-folded. */
+/**
+ * Motivation: Supplies an equally laid-out wrong type whose destructor may be linker-folded.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FWrongDestructorObject : public UObject
 {
 public:
-	/** Keeps this type layout-equivalent to FTrackedObject for descriptor validation. */
+	/**
+	 * Motivation: Keeps this type layout-equivalent to FTrackedObject for descriptor validation.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	explicit FWrongDestructorObject(FObjectLifetimeState& InState) noexcept : State(InState) {}
 
-	/** Deliberately matches tracked destructor work so type tokens carry identity. */
+	/**
+	 * Motivation: Type tokens carry identity.
+	 * Responsibilities: Deliberately matches tracked destructor work.
+	 */
 	~FWrongDestructorObject() noexcept override { ++State.DestructionCount; }
 
 private:
-	/** Preserves the same instance layout as the intended managed type. */
+	/** Motivation: Preserves the same instance layout as the intended managed type. */
 	FObjectLifetimeState& State;
 };
 
-/** Captures every store/collector operation attempted from one lifecycle callback. */
+/**
+ * Motivation: Captures every store/collector operation attempted from one lifecycle callback.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 struct FReentryState final
 {
-	/** Records a nested construction attempt while the store is callback-locked. */
+	/** Motivation: Records a nested construction attempt while the store is callback-locked. */
 	EObjectResult ConstructionResult{EObjectResult::Success};
 
-	/** Records a nested destruction barrier while the store is callback-locked. */
+	/** Motivation: Records a nested destruction barrier while the store is callback-locked. */
 	EObjectResult BarrierResult{EObjectResult::Success};
 
-	/** Records a nested root registration while the store is callback-locked. */
+	/** Motivation: Records a nested root registration while the store is callback-locked. */
 	EObjectResult AddRootResult{EObjectResult::Success};
 
-	/** Records a nested destruction request while the store is callback-locked. */
+	/** Motivation: Records a nested destruction request while the store is callback-locked. */
 	EObjectResult MarkPendingResult{EObjectResult::Success};
 
-	/** Records the one root release that remains safe during exact destruction. */
+	/** Motivation: Records the one root release that remains safe during exact destruction. */
 	EObjectResult RemoveRootResult{EObjectResult::StaleHandle};
 
-	/** Records a collection request attempted from construction or destruction. */
+	/** Motivation: Records a collection request attempted from construction or destruction. */
 	ERuntimeResult CollectionRequestResult{ERuntimeResult::Success};
 
-	/** Records collection advancement attempted from a destruction callback. */
+	/** Motivation: Records collection advancement attempted from a destruction callback. */
 	ERuntimeResult CollectionAdvanceResult{ERuntimeResult::Success};
 
-	/** Counts exact destruction of the outer object. */
+	/** Motivation: Counts exact destruction of the outer object. */
 	std::uint32_t DestructionCount{0};
 
-	/** Counts destruction hooks for the outer object. */
+	/** Motivation: Counts destruction hooks for the outer object. */
 	std::uint32_t BeginDestroyCount{0};
 };
 
-/** Attempts forbidden store and collector operations from a placement constructor. */
+/**
+ * Motivation: Attempts forbidden store and collector operations from a placement constructor.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FConstructorReentryObject final : public UObject
 {
 public:
-	/** Proves the slot remains unpublished and locked until construction completes. */
+	/**
+	 * Motivation: Proves the slot remains unpublished and locked until construction completes.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	FConstructorReentryObject(
 		FObjectStore& InStore,
 		const FClassDescriptor& InNestedDescriptor,
@@ -133,23 +176,37 @@ public:
 		State.CollectionRequestResult = InCollector.RequestCollection();
 	}
 
-	/** Records exact outer destruction after successful publication. */
+	/**
+	 * Motivation: Records exact outer destruction after successful publication.
+	 * Responsibilities: Release the documented observation exactly once and leave no leak behind.
+	 */
 	~FConstructorReentryObject() noexcept override { ++State.DestructionCount; }
 
 protected:
-	/** Records the normal later destruction barrier independently from construction. */
+	/**
+	 * Motivation: Records the normal later destruction barrier independently from construction.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void BeginDestroy() noexcept override { ++State.BeginDestroyCount; }
 
 private:
-	/** Shares callback observations only with the owning test. */
+	/** Motivation: Shares callback observations only with the owning test. */
 	FReentryState& State;
 };
 
-/** Attempts recursive mutation while BeginDestroy owns the explicit barrier. */
+/**
+ * Motivation: Attempts recursive mutation while BeginDestroy owns the explicit barrier.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FDestroyReentryObject final : public UObject
 {
 public:
-	/** Retains injected public boundaries used by the adversarial destruction hook. */
+	/**
+	 * Motivation: Retains injected public boundaries used by the adversarial destruction hook.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	FDestroyReentryObject(
 		FObjectStore& InStore,
 		const FClassDescriptor& InNestedDescriptor,
@@ -160,11 +217,17 @@ public:
 	{
 	}
 
-	/** Records the one exact destructor after all recursive attempts are rejected. */
+	/**
+	 * Motivation: Records the one exact destructor after all recursive attempts are rejected.
+	 * Responsibilities: Release the documented observation exactly once and leave no leak behind.
+	 */
 	~FDestroyReentryObject() noexcept override { ++State.DestructionCount; }
 
 protected:
-	/** Exercises every mutation path that must not reenter destruction callbacks. */
+	/**
+	 * Motivation: Exercises every mutation path that must not reenter destruction callbacks.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void BeginDestroy() noexcept override
 	{
 		++State.BeginDestroyCount;
@@ -178,19 +241,19 @@ protected:
 	}
 
 private:
-	/** Identifies the store whose barrier owns this callback. */
+	/** Motivation: Identifies the store whose barrier owns this callback. */
 	FObjectStore& Store;
 
-	/** Supplies a valid nested type so rejection proves locking rather than validation. */
+	/** Motivation: Supplies a valid nested type so rejection proves locking rather than validation. */
 	const FClassDescriptor& NestedDescriptor;
 
-	/** Detects any nested lifetime that escaped the mutation lock. */
+	/** Motivation: Detects any nested lifetime that escaped the mutation lock. */
 	FObjectLifetimeState& NestedLifetime;
 
-	/** Exercises collection-request rejection during the mutation barrier. */
+	/** Motivation: Exercises collection-request rejection during the mutation barrier. */
 	FGarbageCollector& Collector;
 
-	/** Shares callback results only with the owning test. */
+	/** Motivation: Shares callback results only with the owning test. */
 	FReentryState& State;
 };
 
@@ -201,22 +264,36 @@ static_assert(!std::is_copy_assignable<TStrongObjectPtr<FTrackedObject>>::value)
 static_assert(std::is_move_constructible<TStrongObjectPtr<FTrackedObject>>::value);
 static_assert(std::is_move_assignable<TStrongObjectPtr<FTrackedObject>>::value);
 
-/** Owns all fixed store storage locally so every behavior test is isolated. */
+/**
+ * Motivation: Owns all fixed store storage locally so every behavior test is isolated.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 template<std::size_t SlotSizeBytes, std::size_t SlotAlignmentBytes, std::uint32_t SlotCount, std::uint32_t RootCapacity>
 class TObjectStoreFixture final
 {
 public:
-	/** Binds a store to this fixture's aligned slots, metadata, and root entries. */
+	/**
+	 * Motivation: Binds a store to this fixture's aligned slots, metadata, and root entries.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	explicit TObjectStoreFixture(const MicroWorld::Engine::FClassRegistryView InClasses) noexcept : Store(MakeStorage(), InClasses) {}
 
-	/** Provides the public store under test without exposing fixture storage. */
+	/**
+	 * Motivation: Provides the public store under test without exposing fixture storage.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	FObjectStore& GetStore() noexcept { return Store; }
 
 private:
 	static_assert(SlotCount > 0, "Object-store tests require at least one slot.");
 	static_assert(SlotSizeBytes % SlotAlignmentBytes == 0, "Slot stride must preserve alignment.");
 
-	/** Describes this fixture's complete caller-owned store storage. */
+	/**
+	 * Motivation: Describes this fixture's complete caller-owned store storage.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	FObjectStoreStorage MakeStorage() noexcept
 	{
 		return FObjectStoreStorage{
@@ -231,20 +308,23 @@ private:
 		};
 	}
 
-	/** Keeps every equal-size slot correctly aligned for placement construction. */
+	/** Motivation: Keeps every equal-size slot correctly aligned for placement construction. */
 	alignas(SlotAlignmentBytes) std::array<std::byte, SlotSizeBytes * SlotCount> SlotBytes{};
 
-	/** Gives the store one lifecycle record per fixed object slot. */
+	/** Motivation: Gives the store one lifecycle record per fixed object slot. */
 	std::array<FObjectSlotMetadata, SlotCount> Slots{};
 
-	/** Gives each successful strong pointer one independently reusable token entry. */
+	/** Motivation: Gives each successful strong pointer one independently reusable token entry. */
 	std::array<FObjectRootEntry, RootCapacity> Roots{};
 
-	/** Owns all managed lifetimes while the fixture storage remains alive. */
+	/** Motivation: Owns all managed lifetimes while the fixture storage remains alive. */
 	FObjectStore Store;
 };
 
-/** Registers one tracked-object descriptor and returns its registry-owned identity. */
+/**
+ * Motivation: Registers one tracked-object descriptor and returns its registry-owned identity.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ */
 EObjectResult RegisterTrackedDescriptor(
 	TClassRegistry<2>& InRegistry, const FClassDescriptor*& OutDescriptor, const MicroWorld::Engine::FTypeId InTypeId = 1) noexcept
 {
@@ -255,8 +335,9 @@ EObjectResult RegisterTrackedDescriptor(
 }
 
 /**
- * Scenario: Register a valid tracked descriptor, bind the store to zeroed-out caller storage, and attempt one construction.
- * Expected: The store reports an unsupported layout before construction; no object lifetime begins.
+ * Motivation: Register a valid tracked descriptor, bind the store to zeroed-out caller storage, and attempt one
+ *   construction.
+ * Responsibilities: The store reports an unsupported layout before construction; no object lifetime begins.
  */
 MW_TEST_CASE(ObjectStoreRejectsInvalidStorageBeforeConstruction)
 {
@@ -283,8 +364,10 @@ MW_TEST_CASE(ObjectStoreRejectsInvalidStorageBeforeConstruction)
 }
 
 /**
- * Scenario: Register a valid tracked descriptor into a structurally valid store whose single slot is too small, then attempt construction.
- * Expected: Construction is rejected atomically with an unsupported-layout result; no lifetime starts and no slot is consumed.
+ * Motivation: Register a valid tracked descriptor into a structurally valid store whose single slot is too small,
+ *   then attempt construction.
+ * Responsibilities: Construction is rejected atomically with an unsupported-layout result; no lifetime starts and no
+ *   slot is consumed.
  */
 MW_TEST_CASE(ObjectStoreRejectsUnsupportedObjectLayoutBeforeConstruction)
 {
@@ -314,8 +397,9 @@ MW_TEST_CASE(ObjectStoreRejectsUnsupportedObjectLayoutBeforeConstruction)
 }
 
 /**
- * Scenario: Build a store with one registered descriptor and attempt construction through a descriptor that was never registered.
- * Expected: The store rejects the unknown class; construction does not start and slot capacity is preserved.
+ * Motivation: Build a store with one registered descriptor and attempt construction through a descriptor that was
+ *   never registered.
+ * Responsibilities: The store rejects the unknown class; construction does not start and slot capacity is preserved.
  */
 MW_TEST_CASE(ObjectStoreRejectsUnknownClassWithoutConsumingCapacity)
 {
@@ -344,8 +428,9 @@ MW_TEST_CASE(ObjectStoreRejectsUnknownClassWithoutConsumingCapacity)
 }
 
 /**
- * Scenario: Register a layout-equivalent descriptor carrying the wrong exact destructor and attempt typed construction through it.
- * Expected: Construction is rejected by the destructor-token check; no lifetime starts and no slot is consumed.
+ * Motivation: Register a layout-equivalent descriptor carrying the wrong exact destructor and attempt typed
+ *   construction through it.
+ * Responsibilities: Construction is rejected by the destructor-token check; no lifetime starts and no slot is consumed.
  */
 MW_TEST_CASE(ObjectStoreRejectsSameLayoutDescriptorWithWrongExactDestructor)
 {
@@ -373,8 +458,10 @@ MW_TEST_CASE(ObjectStoreRejectsSameLayoutDescriptorWithWrongExactDestructor)
 }
 
 /**
- * Scenario: Register a descriptor, mutate its source copy's destructor, token, and size, then construct through both the registry-owned copy and the
- * mutated source. Expected: The owned copy constructs and destroys exactly once; the mutated source is rejected as unknown.
+ * Motivation: Scenario: Register a descriptor, mutate its source copy's destructor, token, and size, then
+ *   construct through both the registry-owned copy and the mutated source.
+ * Responsibilities: Expected: The owned copy constructs and destroys exactly once; the mutated source is rejected as
+ *   unknown.
  */
 MW_TEST_CASE(ObjectStoreUsesImmutableRegistryOwnedDescriptorCopy)
 {
@@ -409,8 +496,9 @@ MW_TEST_CASE(ObjectStoreUsesImmutableRegistryOwnedDescriptorCopy)
 }
 
 /**
- * Scenario: Fill the store's single slot with one object and attempt to construct a second object.
- * Expected: The second construction fails atomically with capacity exhaustion; the first object is not disturbed and no collection runs.
+ * Motivation: Fill the store's single slot with one object and attempt to construct a second object.
+ * Responsibilities: The second construction fails atomically with capacity exhaustion; the first object is not disturbed
+ *   and no collection runs.
  */
 MW_TEST_CASE(ObjectStoreCapacityFailureIsAtomicAndDoesNotCollect)
 {
@@ -444,8 +532,9 @@ MW_TEST_CASE(ObjectStoreCapacityFailureIsAtomicAndDoesNotCollect)
 }
 
 /**
- * Scenario: Create one object, request pending destruction twice, and run the destruction barrier twice.
- * Expected: The handle is hidden immediately and the repeated request is idempotent; BeginDestroy and the exact destructor each run exactly once.
+ * Motivation: Create one object, request pending destruction twice, and run the destruction barrier twice.
+ * Responsibilities: The handle is hidden immediately and the repeated request is idempotent; BeginDestroy and the exact
+ *   destructor each run exactly once.
  */
 MW_TEST_CASE(ObjectStoreDeferredDestructionRunsLifecycleHooksOnce)
 {
@@ -485,8 +574,10 @@ MW_TEST_CASE(ObjectStoreDeferredDestructionRunsLifecycleHooksOnce)
 }
 
 /**
- * Scenario: Destroy one generation, then construct a second object in the same one-slot store, and attempt to use the old handle.
- * Expected: The reclaimed slot publishes a new generation; the old handle cannot resolve or release a current root.
+ * Motivation: Destroy one generation, then construct a second object in the same one-slot store, and attempt to
+ *   use the old handle.
+ * Responsibilities: The reclaimed slot publishes a new generation; the old handle cannot resolve or release a current
+ *   root.
  */
 MW_TEST_CASE(ObjectStoreSlotReuseInvalidatesEveryOldHandle)
 {
@@ -526,9 +617,10 @@ MW_TEST_CASE(ObjectStoreSlotReuseInvalidatesEveryOldHandle)
 }
 
 /**
- * Scenario: Create two independent strong roots, attempt a third, then move the first root through construction and assignment.
- * Expected: The third root fails with root capacity exhaustion; move construction and assignment each empty their source and transfer exactly one
- * token.
+ * Motivation: Create two independent strong roots, attempt a third, then move the first root through construction
+ *   and assignment.
+ * Responsibilities: The third root fails with root capacity exhaustion; move construction and assignment each empty
+ *   their source and transfer exactly one.
  */
 MW_TEST_CASE(ObjectStoreStrongRootsAreIndependentAndMoveOnly)
 {
@@ -568,9 +660,10 @@ MW_TEST_CASE(ObjectStoreStrongRootsAreIndependentAndMoveOnly)
 }
 
 /**
- * Scenario: Create a rooted object, mark it pending destruction, then attempt resolution, a new root, reset, and a stale root release.
- * Expected: The pending object cannot resolve or gain a new root; the weak pointer expires; the stale release remains stale and no root token
- * remains.
+ * Motivation: Create a rooted object, mark it pending destruction, then attempt resolution, a new root, reset, and
+ *   a stale root release.
+ * Responsibilities: The pending object cannot resolve or gain a new root; the weak pointer expires; the stale release
+ *   remains stale and no root token.
  */
 MW_TEST_CASE(ObjectStorePendingObjectCannotBeResolvedOrResurrected)
 {
@@ -612,8 +705,10 @@ MW_TEST_CASE(ObjectStorePendingObjectCannotBeResolvedOrResurrected)
 }
 
 /**
- * Scenario: Query generation advancement against the last reusable generation and the fully exhausted generation.
- * Expected: The final distinct generation may advance once; an exhausted slot must retire before any wrap could revive an old identity.
+ * Motivation: Query generation advancement against the last reusable generation and the fully exhausted
+ *   generation.
+ * Responsibilities: The final distinct generation may advance once; an exhausted slot must retire before any wrap could
+ *   revive an old identity.
  */
 MW_TEST_CASE(ObjectHandleGenerationBoundaryRequiresRetirementBeforeWrap)
 {
@@ -631,9 +726,10 @@ MW_TEST_CASE(ObjectHandleGenerationBoundaryRequiresRetirementBeforeWrap)
 }
 
 /**
- * Scenario: Construct an object whose placement constructor attempts nested construction, the destruction barrier, and a collection request, then run
- * the outer barrier. Expected: Every recursive mutation returns lifecycle-locked; the outer object publishes once and is destroyed once with no
- * nested lifetime escaping.
+ * Motivation: Scenario: Construct an object whose placement constructor attempts nested construction, the
+ *   destruction barrier, and a collection request, then run the outer barrier.
+ * Responsibilities: Expected: Every recursive mutation returns lifecycle-locked; the outer object publishes once and is
+ *   destroyed once with no nested lifetime escaping.
  */
 MW_TEST_CASE(ObjectStoreLocksMutationUntilPlacementConstructionPublishes)
 {
@@ -676,29 +772,33 @@ MW_TEST_CASE(ObjectStoreLocksMutationUntilPlacementConstructionPublishes)
 }
 
 /**
- * Observation bundle captured after the adversarial destruction-reentry world runs its barrier.
- * Every field is a copyable value so the store, collector, and fixture can be destroyed before
- * the split tests assert on it — keeping each test isolated without duplicating the build sequence.
+ * Motivation: Observation bundle captured after the adversarial destruction-reentry world runs its barrier. Every
+ *   field is a copyable value so the store, collector, and fixture can be destroyed before the split
+ *   tests assert on it — keeping each test isolated without duplicating the build sequence.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
  */
 struct FDestructionReentryOutcome final
 {
-	/** The publication result of the adversarial object before its barrier ran. */
+	/** Motivation: The publication result of the adversarial object before its barrier ran. */
 	EObjectResult CreationResult{EObjectResult::Success};
 
-	/** One recorded result per mutation path BeginDestroy attempted during the barrier. */
+	/** Motivation: One recorded result per mutation path BeginDestroy attempted during the barrier. */
 	FReentryState Reentry{};
 
-	/** Detects any nested lifetime that escaped the mutation lock. */
+	/** Motivation: Detects any nested lifetime that escaped the mutation lock. */
 	FObjectLifetimeState NestedLifetime{};
 
-	/** Final occupancy after the barrier reclaimed the destroyed slot. */
+	/** Motivation: Final occupancy after the barrier reclaimed the destroyed slot. */
 	FObjectStoreStats StoreStats{};
 };
 
 /**
- * Builds the adversarial destruction-reentry world, drives it through its owning barrier, and
- * returns the captured observations. Centralizing the build keeps both split tests isolated
- * (each gets a fresh world) without duplicating the registry, fixture, collector, and barrier.
+ * Motivation: Builds the adversarial destruction-reentry world, drives it through its owning barrier, and returns
+ *   the captured observations.
+ * Responsibilities: Centralizing the build keeps both split tests isolated (each gets a fresh world) without duplicating
+ *   the registry, fixture, collector, and barrier.
  */
 FDestructionReentryOutcome RunDestructionReentryBarrierOnce() noexcept
 {
@@ -727,9 +827,10 @@ FDestructionReentryOutcome RunDestructionReentryBarrierOnce() noexcept
 }
 
 /**
- * Scenario: Drive an adversarial object whose BeginDestroy attempts every mutation path, and observe the captured results after the barrier.
- * Expected: Barrier reentry, publication, rooting, pending mutation, collection requests, and collection advance are each rejected; the object still
- * publishes before its barrier.
+ * Motivation: Drive an adversarial object whose BeginDestroy attempts every mutation path, and observe the
+ *   captured results after the barrier.
+ * Responsibilities: Barrier reentry, publication, rooting, pending mutation, collection requests, and collection advance
+ *   are each rejected; the object still.
  */
 MW_TEST_CASE(BeginDestroyRejectsEveryRecursiveMutationPath)
 {
@@ -754,8 +855,10 @@ MW_TEST_CASE(BeginDestroyRejectsEveryRecursiveMutationPath)
 }
 
 /**
- * Scenario: Drive an adversarial object through its destruction barrier with an active root and observe the captured occupancy and counts.
- * Expected: BeginDestroy and exact destruction run exactly once; the root is released safely; no nested lifetime escapes and no slot or root leaks.
+ * Motivation: Drive an adversarial object through its destruction barrier with an active root and observe the
+ *   captured occupancy and counts.
+ * Responsibilities: BeginDestroy and exact destruction run exactly once; the root is released safely; no nested lifetime
+ *   escapes and no slot or root leaks.
  */
 MW_TEST_CASE(DestructionReentryLeavesNoLeakedSlotsOrRoots)
 {
@@ -782,8 +885,9 @@ static_assert(
 	"A base traced reference must not widen to an arbitrary derived type.");
 
 /**
- * Scenario: Create one tracked object and convert its derived reference to base, then to the same derived type.
- * Expected: Each conversion preserves the handle identity, resolves the same object, and retains store membership.
+ * Motivation: Create one tracked object and convert its derived reference to base, then to the same derived type.
+ * Responsibilities: Each conversion preserves the handle identity, resolves the same object, and retains store
+ *   membership.
  */
 MW_TEST_CASE(TObjectPtrDerivedToBaseConversionPreservesStoreAndGeneration)
 {
@@ -825,9 +929,10 @@ MW_TEST_CASE(TObjectPtrDerivedToBaseConversionPreservesStoreAndGeneration)
 }
 
 /**
- * Scenario: Manually occupy the preferred automatic ID, then automatically register the same candidate twice and attempt one registration into a full
- * registry. Expected: Automatic registration probes past the occupied ID, returns a stable canonical descriptor on repeat, and leaves occupancy
- * unchanged when the registry is full.
+ * Motivation: Scenario: Manually occupy the preferred automatic ID, then automatically register the same candidate
+ *   twice and attempt one registration into a full registry.
+ * Responsibilities: Expected: Automatic registration probes past the occupied ID, returns a stable canonical descriptor
+ *   on repeat, and leaves occupancy unchanged when the registry is full.
  */
 MW_TEST_CASE(ObjectRegistryAutomaticRegistrationIsCanonicalAndBounded)
 {

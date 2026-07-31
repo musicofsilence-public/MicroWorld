@@ -30,14 +30,24 @@ using MicroWorld::Engine::UActorComponent;
 using MicroWorld::Engine::UWorld;
 using MicroWorld::Tests::TEngineEnvironment;
 
-/** A minimal component used by registration rejection tests. */
+/**
+ * Motivation: A minimal component used by registration rejection tests.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FPlainComponent final : public UActorComponent
 {
 public:
 	FPlainComponent() noexcept : UActorComponent() {}
 };
 
-/** A minimal actor used by registration rejection tests. */
+/**
+ * Motivation: A minimal actor used by registration rejection tests.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FPlainActor final : public AActor
 {
 public:
@@ -47,28 +57,39 @@ public:
 constexpr MicroWorld::Engine::FTypeId PlainActorTypeId{0x00020001u};
 constexpr MicroWorld::Engine::FTypeId PlainComponentTypeId{0x00020002u};
 
-/** Canonical monotonic baseline every BeginPlay call uses as its starting world time. */
+/** Motivation: Canonical monotonic baseline every BeginPlay call uses as its starting world time. */
 constexpr MicroWorld::Core::TimePointMilliseconds BaselineTimeMilliseconds{0};
 
-/** Fixed capacity of the GC worklist used by the active-collection guard test. */
+/** Motivation: Fixed capacity of the GC worklist used by the active-collection guard test. */
 constexpr std::uint32_t CollectorWorklistCapacity = 16;
 
-/** Environment sized for registration tests with capacity for several actors and components. */
+/** Motivation: Environment sized for registration tests with capacity for several actors and components. */
 using FRegistrationEnvironment = TEngineEnvironment<256, 16, 16, 4>;
 
-/** Builds a plain actor in the environment through its own derived descriptor. */
+/**
+ * Motivation: Builds a plain actor in the environment through its own derived descriptor.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ */
 TObjectPtr<FPlainActor> MakePlainActor(FRegistrationEnvironment& InEnv) noexcept
 {
 	return InEnv.CreateDerivedObject<FPlainActor>(PlainActorTypeId, "PlainActor");
 }
 
-/** Builds a plain component in the environment through its own derived descriptor. */
+/**
+ * Motivation: Builds a plain component in the environment through its own derived descriptor.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ */
 TObjectPtr<FPlainComponent> MakePlainComponent(FRegistrationEnvironment& InEnv) noexcept
 {
 	return InEnv.CreateDerivedObject<FPlainComponent>(PlainComponentTypeId, "PlainComponent");
 }
 
-/** Builds a fresh standalone store so cross-store tests can use a second owner. */
+/**
+ * Motivation: Builds a fresh standalone store so cross-store tests can use a second owner.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FSecondStore final
 {
 public:
@@ -105,8 +126,8 @@ private:
 };
 
 /**
- * Scenario: Register the same actor twice and the same component twice against their already-bound owners.
- * Expected: Both second registrations are rejected as duplicates and leave the registry unchanged.
+ * Motivation: Register the same actor twice and the same component twice against their already-bound owners.
+ * Responsibilities: Both second registrations are rejected as duplicates and leave the registry unchanged.
  */
 MW_TEST_CASE(EngineDuplicateActorAndComponentRegistrationRejected)
 {
@@ -134,8 +155,10 @@ MW_TEST_CASE(EngineDuplicateActorAndComponentRegistrationRejected)
 }
 
 /**
- * Scenario: Register actors into full and zero-capacity actor registries and components past a default actor's fixed slot count.
- * Expected: Fixed actor and component capacities reject registration without partially mutating ownership or the candidate's parent link.
+ * Motivation: Register actors into full and zero-capacity actor registries and components past a default actor's
+ *   fixed slot count.
+ * Responsibilities: Fixed actor and component capacities reject registration without partially mutating ownership or the
+ *   candidate's parent link.
  */
 MW_TEST_CASE(EngineFullAndZeroCapacityRegistrationRejected)
 {
@@ -192,8 +215,10 @@ MW_TEST_CASE(EngineFullAndZeroCapacityRegistrationRejected)
 }
 
 /**
- * Scenario: Begin play on a world with one actor and component, then attempt to register a second actor and a second component.
- * Expected: Registration after BeginPlay is rejected as lifecycle-locked at every level (world, actor) without changing registry state.
+ * Motivation: Begin play on a world with one actor and component, then attempt to register a second actor and a
+ *   second component.
+ * Responsibilities: Registration after BeginPlay is rejected as lifecycle-locked at every level (world, actor) without
+ *   changing registry state.
  */
 MW_TEST_CASE(EngineRegistrationAfterBeginPlayRejected)
 {
@@ -221,8 +246,8 @@ MW_TEST_CASE(EngineRegistrationAfterBeginPlayRejected)
 }
 
 /**
- * Scenario: Register an actor with one world and then attempt to register it with a second world.
- * Expected: An actor already owned by one world is rejected by a second world.
+ * Motivation: Register an actor with one world and then attempt to register it with a second world.
+ * Responsibilities: An actor already owned by one world is rejected by a second world.
  */
 MW_TEST_CASE(EngineActorCrossOwnerRejected)
 {
@@ -248,8 +273,8 @@ MW_TEST_CASE(EngineActorCrossOwnerRejected)
 }
 
 /**
- * Scenario: Register a component with one actor and then attempt to register it with a second actor.
- * Expected: A component already owned by one actor is rejected by a second actor.
+ * Motivation: Register a component with one actor and then attempt to register it with a second actor.
+ * Responsibilities: A component already owned by one actor is rejected by a second actor.
  */
 MW_TEST_CASE(EngineComponentCrossOwnerRejected)
 {
@@ -275,8 +300,10 @@ MW_TEST_CASE(EngineComponentCrossOwnerRejected)
 }
 
 /**
- * Scenario: Build actors and components in a second store and attempt to register them with worlds in the first store.
- * Expected: A managed reference that belongs to a different FObjectStore is rejected as a cross-store relationship by world and actor registration.
+ * Motivation: Build actors and components in a second store and attempt to register them with worlds in the first
+ *   store.
+ * Responsibilities: A managed reference that belongs to a different FObjectStore is rejected as a cross-store
+ *   relationship by world and actor registration.
  */
 MW_TEST_CASE(EngineCrossStoreRegistrationRejected)
 {
@@ -309,8 +336,9 @@ MW_TEST_CASE(EngineCrossStoreRegistrationRejected)
 }
 
 /**
- * Scenario: Register a second actor into a world already at capacity one.
- * Expected: A registration rejected for any reason leaves no partial state: the registry count and the candidate's parent link are unchanged.
+ * Motivation: Register a second actor into a world already at capacity one.
+ * Responsibilities: A registration rejected for any reason leaves no partial state: the registry count and the
+ *   candidate's parent link are unchanged.
  */
 MW_TEST_CASE(EngineRejectedRegistrationLeavesNoPartialState)
 {
@@ -334,8 +362,10 @@ MW_TEST_CASE(EngineRejectedRegistrationLeavesNoPartialState)
 }
 
 /**
- * Scenario: Register empty and reclaimed (stale) actor and component references against a world and a host actor.
- * Expected: Empty and reclaimed actor/component references are rejected explicitly and cannot publish either a registry entry or a parent link.
+ * Motivation: Register empty and reclaimed (stale) actor and component references against a world and a host
+ *   actor.
+ * Responsibilities: Empty and reclaimed actor/component references are rejected explicitly and cannot publish either a
+ *   registry entry or a parent link.
  */
 MW_TEST_CASE(EngineEmptyAndStaleRegistrationRejectedWithoutPartialState)
 {
@@ -375,8 +405,8 @@ MW_TEST_CASE(EngineEmptyAndStaleRegistrationRejectedWithoutPartialState)
 }
 
 /**
- * Scenario: Request an active collection phase, then attempt to register an actor and a component.
- * Expected: Active collection blocks registration before either owner graph changes.
+ * Motivation: Request an active collection phase, then attempt to register an actor and a component.
+ * Responsibilities: Active collection blocks registration before either owner graph changes.
  */
 MW_TEST_CASE(EngineRegistrationRejectedDuringActiveCollection)
 {
@@ -409,8 +439,8 @@ MW_TEST_CASE(EngineRegistrationRejectedDuringActiveCollection)
 }
 
 /**
- * Scenario: Register test-derived actor and component descriptors and look them up by type id.
- * Expected: Test-derived descriptors preserve their registered Engine inheritance.
+ * Motivation: Register test-derived actor and component descriptors and look them up by type id.
+ * Responsibilities: Test-derived descriptors preserve their registered Engine inheritance.
  */
 MW_TEST_CASE(EngineDerivedDescriptorsUseRegisteredEngineParents)
 {
@@ -436,8 +466,9 @@ MW_TEST_CASE(EngineDerivedDescriptorsUseRegisteredEngineParents)
 }
 
 /**
- * Scenario: Construct a world from a shared actor registry reference and then begin a second world that reuses the same reference.
- * Expected: Reusing a world's one-shot registry reference fails before hooks run.
+ * Motivation: Construct a world from a shared actor registry reference and then begin a second world that reuses
+ *   the same reference.
+ * Responsibilities: Reusing a world's one-shot registry reference fails before hooks run.
  */
 MW_TEST_CASE(EngineReusedWorldRegistryReferenceFailsBeginPlay)
 {

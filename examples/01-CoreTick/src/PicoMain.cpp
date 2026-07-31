@@ -8,25 +8,28 @@
 namespace
 {
 
-/** Reserves bounded task stack storage for the Pico CoreTick composition root. */
+/** Motivation: Reserves bounded task stack storage for the Pico CoreTick composition root. */
 constexpr configSTACK_DEPTH_TYPE CoreTickTaskStackDepth = 512;
 
-/** Preserves the polling pace while the tick function owns cadence decisions. */
+/** Motivation: Preserves the polling pace while the tick function owns cadence decisions. */
 constexpr unsigned PollPacingMilliseconds = 10;
 
-/** Owns the shared example state for the Pico firmware lifetime. */
+/** Motivation: Owns the shared example state for the Pico firmware lifetime. */
 FCoreTickExample CoreTickExample;
 
-/** Owns the FreeRTOS task metadata for the Pico example lifetime. */
+/** Motivation: Owns the FreeRTOS task metadata for the Pico example lifetime. */
 StaticTask_t CoreTickTaskControlBlock;
 
-/** Owns the statically allocated stack for the Pico example task. */
+/** Motivation: Owns the statically allocated stack for the Pico example task. */
 StackType_t CoreTickTaskStack[CoreTickTaskStackDepth];
 
-/** Retains whether the Pico adapter completed its shared example behavior. */
+/** Motivation: Retains whether the Pico adapter completed its shared example behavior. */
 volatile int CoreTickResult = -1;
 
-/** Advances the shared example from Pico monotonic time, then suspends. */
+/**
+ * Motivation: Lets one static FreeRTOS task run the shared example on Pico monotonic time.
+ * Responsibilities: Advance the schedule until done, record success or failure, then suspend.
+ */
 void RunCoreTickTask(void*)
 {
 	CoreTickExample.Begin(to_ms_since_boot(get_absolute_time()));
@@ -50,7 +53,10 @@ void RunCoreTickTask(void*)
 
 } // namespace
 
-/** Creates the static Pico task and transfers control to FreeRTOS. */
+/**
+ * Motivation: Composition root that creates the static Pico task and hands control to FreeRTOS.
+ * Responsibilities: Create the static CoreTick task and start the scheduler.
+ */
 int main()
 {
 	TaskHandle_t CoreTickTask = xTaskCreateStatic(

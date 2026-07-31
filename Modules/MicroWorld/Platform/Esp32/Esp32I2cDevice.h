@@ -12,282 +12,303 @@
 namespace MicroWorld::Platform::Esp32
 {
 
-/**
- * Largest single-transmission payload one wired I2C frame carries.
- *
- * Kept equal to `UartMaxPayloadBytes` so every wired transport carries the same message size and only the
- * device construction differs; the slave's ESP-IDF send/receive buffers are sized well above one whole frame
- * so a frame is never split across I2C transactions at the example's pacing.
- */
+/** Motivation: Sizes one wired I2C frame payload to match UartMaxPayloadBytes so every wired transport carries the same message size, while the slave
+ * buffers hold a whole frame plus headroom so a frame never splits across transactions. */
 constexpr std::size_t I2cMaxPayloadBytes = 120;
 
-/**
- * Bytes of one whole I2C transaction window: the largest single frame (payload plus framing) the master reads
- * or the slave stages in one transfer.
- */
+/** Motivation: Names the largest single frame (payload plus framing) the master reads or the slave stages in one I2C transfer. */
 constexpr std::size_t I2cTransactionWindowBytes = I2cMaxPayloadBytes + Transport::FrameCodec::FrameOverheadBytes;
 
 /**
- * Fixed-capacity byte inbox the I2C slave device owns, filled by the platform receive ISR and drained by `TryReceive`.
- *
- * A single-producer/single-consumer ring: the ESP-IDF `on_receive` callback pushes bytes from ISR context
- * while the receive pump pops them, so the indices are `volatile` and a byte is dropped (not blocked) when the
- * ring is full — the frame codec's resync tolerates the loss exactly as a noisy radio link would.
+ * Motivation: Gives the I2C slave device one bounded byte inbox that decouples the ISR context pushing received
+ *   bytes from the receive pump draining them, so the on_receive callback never blocks the bus.
+ * Responsibilities: Act as a single-producer/single-consumer ring that drops a byte (never blocks) when full and
+ *   keeps its read and write indices volatile so the ISR producer and pump consumer race safely.
+ * Example:
+ *   FI2cReceiveInbox Inbox;
+ *   Inbox.PushFromIsr(Byte);
+ *   if (Inbox.Pop(Out)) { Pump(Out); }
  */
 class FI2cReceiveInbox
 {
 public:
-	/** Pushes one received byte from ISR context, dropping it when the ring is full so the ISR never blocks. */
+	/**
+	 * Motivation: Lets the receive ISR enqueue one byte without ever blocking the bus.
+	 * Responsibilities: Drop the byte when the ring is full and advance only the write index.
+	 */
 	void PushFromIsr(std::uint8_t InByte) noexcept;
 
-	/** Pops one buffered byte into `OutByte`, returning false when the ring is empty. */
+	/**
+	 * Motivation: Lets the receive pump harvest one buffered byte without racing the ISR.
+	 * Responsibilities: Return false and leave OutByte untouched when the ring is empty; otherwise copy and advance.
+	 */
 	bool Pop(std::uint8_t& OutByte) noexcept;
 
 private:
-	/** Ring capacity in bytes: two whole transaction windows, so a full window plus a second arriving mid-pump both fit. */
+	/** Motivation: Bounds the ring at two whole transaction windows so a full window plus a second arriving mid-pump both fit. */
 	static constexpr std::uint32_t Capacity = 2u * static_cast<std::uint32_t>(I2cTransactionWindowBytes);
 
-	/** Backing storage; read and write positions wrap modulo `Capacity`. */
+	/** Motivation: Backing byte storage whose read and write positions wrap modulo Capacity. */
 	std::uint8_t Bytes[Capacity]{};
 
-	/** Next write position, advanced only by the ISR producer. */
+	/** Motivation: Next write position, advanced only by the ISR producer. */
 	volatile std::uint32_t WriteIndex{0};
 
-	/** Next read position, advanced only by the pump consumer. */
+	/** Motivation: Next read position, advanced only by the pump consumer. */
 	volatile std::uint32_t ReadIndex{0};
 };
 
 /**
- * Construction parameters for the wired I2C master device.
- *
- * Holds plain-integer bus parameters so the public header stays free of the ESP-IDF I2C enum types; the
- * platform-implementation header reinterprets them on the ESP32 side. `SlaveAddress` is the 7-bit bus address
- * of the peer slave this master clocks.
+ * Motivation: Carries the plain-integer bus parameters one wired I2C master needs at construction so the public
+ *   header stays free of ESP-IDF enum types.
+ * Responsibilities: Hold port, SDA/SCL GPIO, SCL speed, peer slave address, and local node id as plain integers.
+ * Example:
+ *   FEsp32I2cMasterConfig Config;
+ *   Config.SlaveAddress = 0x28;
  */
 struct FEsp32I2cMasterConfig
 {
-	/** I2C port number (ESP-IDF `i2c_port_num_t`, e.g. I2C_NUM_0) passed as a plain integer. */
+	/** Motivation: I2C port number (ESP-IDF i2c_port_num_t, e.g. I2C_NUM_0) passed as a plain integer. */
 	std::int32_t I2cPort{0};
 
-	/** SDA GPIO number shared with the slave's SDA pin, passed as a plain integer. */
+	/** Motivation: SDA GPIO number shared with the slave's SDA pin, passed as a plain integer. */
 	std::int32_t SdaGpio{0};
 
-	/** SCL GPIO number shared with the slave's SCL pin, passed as a plain integer. */
+	/** Motivation: SCL GPIO number shared with the slave's SCL pin, passed as a plain integer. */
 	std::int32_t SclGpio{0};
 
-	/** SCL clock frequency in hertz (100 kHz standard mode is reliable over short jumper wires). */
+	/** Motivation: SCL clock frequency in hertz (100 kHz standard mode is reliable over short jumper wires). */
 	std::uint32_t SclSpeedHz{100000};
 
-	/** 7-bit bus address of the peer slave this master addresses. */
+	/** Motivation: 7-bit bus address of the peer slave this master addresses. */
 	std::uint8_t SlaveAddress{0x28};
 
-	/** Local node id stamped on every outgoing frame's source node id byte. */
+	/** Motivation: Local node id stamped on every outgoing frame's source node id byte. */
 	std::uint8_t LocalNodeId{0};
 };
 
 /**
- * Construction parameters for the wired I2C slave device.
- *
- * Holds plain-integer bus parameters so the public header stays free of the ESP-IDF I2C enum types.
- * `SlaveAddress` is this board's own 7-bit bus address, the address the peer master clocks.
+ * Motivation: Carries the plain-integer bus parameters one wired I2C slave needs at construction so the public
+ *   header stays free of ESP-IDF enum types.
+ * Responsibilities: Hold port, SDA/SCL GPIO, this board's own 7-bit slave address, and local node id as plain integers.
+ * Example:
+ *   FEsp32I2cSlaveConfig Config;
+ *   Config.SlaveAddress = 0x29;
  */
 struct FEsp32I2cSlaveConfig
 {
-	/** I2C port number (ESP-IDF `i2c_port_num_t`, e.g. I2C_NUM_0) passed as a plain integer. */
+	/** Motivation: I2C port number (ESP-IDF i2c_port_num_t, e.g. I2C_NUM_0) passed as a plain integer. */
 	std::int32_t I2cPort{0};
 
-	/** SDA GPIO number shared with the master's SDA pin, passed as a plain integer. */
+	/** Motivation: SDA GPIO number shared with the master's SDA pin, passed as a plain integer. */
 	std::int32_t SdaGpio{0};
 
-	/** SCL GPIO number shared with the master's SCL pin, passed as a plain integer. */
+	/** Motivation: SCL GPIO number shared with the master's SCL pin, passed as a plain integer. */
 	std::int32_t SclGpio{0};
 
-	/** This board's own 7-bit bus address, the address the master clocks. */
+	/** Motivation: This board's own 7-bit bus address, the address the master clocks. */
 	std::uint8_t SlaveAddress{0x28};
 
-	/** Local node id stamped on every outgoing frame's source node id byte. */
+	/** Motivation: Local node id stamped on every outgoing frame's source node id byte. */
 	std::uint8_t LocalNodeId{0};
 };
 
 /**
- * Non-blocking wired `IDevice` for the master side of a point-to-point I2C link.
- *
- * It clocks the bus: `TrySend` writes one framed packet in a single bus transaction and `TryReceive` reads one
- * whole-frame window and pumps it through a bounded `TFrameDecoder`, so a silent slave simply yields filler the
- * codec discards. It validates every argument before any syscall, leaves caller outputs unchanged on any
- * non-`Success` result, and exercises no bus traffic until example 20's hardware checkpoint passes (§1.2).
+ * Motivation: Gives one composition root a non-blocking wired IDevice that clocks the master side of a
+ *   point-to-point I2C link through one bus transaction per send and one whole-frame read window per receive.
+ * Responsibilities: Validate every argument before any syscall, leave caller outputs unchanged on any non-Success
+ *   result, and never split a frame across I2C transactions.
+ * Example:
+ *   FEsp32I2cMasterDevice Master(Config);
+ *   if (Master.IsOpen()) { Master.TrySend(To, Packet); }
  */
 class FEsp32I2cMasterDevice final : public Transport::Device::IDevice
 {
 public:
 	/**
-	 * Opens the I2C master bus and adds the peer slave as its device.
-	 *
-	 * Allocates the bus at `I2cPort` on the given SDA/SCL GPIOs at `SclSpeedHz` and registers `SlaveAddress`
-	 * as its device. On any failure the constructor rolls back what it allocated and leaves `IsOpen() == false`;
-	 * it never throws. The local node id is stamped on every outgoing frame.
-	 *
-	 * @param InConfig Bus, GPIO, speed, slave-address, and local node id parameters.
+	 * Motivation: Opens the I2C master bus and registers the peer slave as its device before any traffic flows.
+	 * Responsibilities: Allocate the bus and device on the configured port/GPIOs/speed; on any failure roll back
+	 *   what was allocated and leave IsOpen false; never throw.
 	 */
 	explicit FEsp32I2cMasterDevice(const FEsp32I2cMasterConfig& InConfig) noexcept;
 
-	/** Removes the device and deletes the master bus opened by construction. */
+	/**
+	 * Motivation: Releases the master bus and device so construction-allocated ESP-IDF resources never leak.
+	 * Responsibilities: Remove the device and delete the master bus opened by construction.
+	 */
 	~FEsp32I2cMasterDevice() noexcept override;
 
-	/** Prevents copying so one device value owns exactly one bus identity. */
+	/**
+	 * Motivation: Keeps one device value owning exactly one bus identity so the bus handle never aliases.
+	 * Responsibilities: Reject copy construction so the master stays the single owner of its bus.
+	 */
 	FEsp32I2cMasterDevice(const FEsp32I2cMasterDevice&) = delete;
 
-	/** Prevents copying so one device value owns exactly one bus identity. */
+	/**
+	 * Motivation: Keeps one device value owning exactly one bus identity so the bus handle never aliases.
+	 * Responsibilities: Reject copy assignment so the master stays the single owner of its bus.
+	 */
 	FEsp32I2cMasterDevice& operator=(const FEsp32I2cMasterDevice&) = delete;
 
-	/** Prevents moving so the owned bus handles and interface identity stay fixed. */
+	/**
+	 * Motivation: Keeps the owned bus handles and interface identity fixed at one address for the link's lifetime.
+	 * Responsibilities: Reject move construction so the opaque ESP-IDF handles never relocate.
+	 */
 	FEsp32I2cMasterDevice(FEsp32I2cMasterDevice&&) = delete;
 
-	/** Prevents moving so the owned bus handles and interface identity stay fixed. */
+	/**
+	 * Motivation: Keeps the owned bus handles and interface identity fixed at one address for the link's lifetime.
+	 * Responsibilities: Reject move assignment so the opaque ESP-IDF handles never relocate.
+	 */
 	FEsp32I2cMasterDevice& operator=(FEsp32I2cMasterDevice&&) = delete;
 
 	/**
-	 * Sends one complete framed message to the slave in a single bus write, transactionally.
-	 *
-	 * Returns `Invalid` for a destination that is not an I2C encoding, an oversize packet, or a null span with
-	 * nonzero length; `Full` when the slave does not acknowledge or the bus is busy; and `Success` only when the
-	 * whole frame was clocked out. A non-success result leaves the bus state unchanged.
-	 *
-	 * @param InTo Destination whose single byte must be an I2C node id (validated; the wire is point-to-point).
-	 * @param InPacket Caller-owned payload bytes framed and sent as one message.
-	 * @return Normalized outcome of the single send attempt.
+	 * Motivation: Sends one complete framed message to the slave in a single bus write, transactionally.
+	 * Responsibilities: Return Invalid for a non-I2C destination, oversize packet, or null span with nonzero
+	 *   length, Full when the slave does not acknowledge or the bus is busy, and Success only after the whole
+	 *   frame is clocked out; leave bus state unchanged on any non-success result.
 	 */
 	Transport::ETransportResult TrySend(const Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
-	 * Receives at most one framed message by clocking one whole-frame window from the slave, transactionally.
-	 *
-	 * Reads one bounded window and pumps its bytes through the decoder; `Unavailable` when the window holds no
-	 * frame (the filler a silent slave returns is discarded), `Full` when the held frame exceeds the destination
-	 * (kept held for a larger retry), `Invalid` for a null destination with nonzero length, and `Success` after a
-	 * complete frame copies its payload, byte count, and sender node id into `OutFrom`.
-	 *
-	 * @param OutFrom Filled with the sender's I2C address only on `Success`.
-	 * @param InDestination Caller-owned buffer for the received payload bytes.
-	 * @param OutResult Filled with the received byte count only on `Success`.
-	 * @return Normalized outcome of the single receive attempt.
+	 * Motivation: Receives at most one framed message by clocking one whole-frame window from the slave, transactionally.
+	 * Responsibilities: Pump the read window through the decoder and report Unavailable (filler discarded), Full
+	 *   (frame held for a larger retry), Invalid (null destination with nonzero length), or Success after a
+	 *   complete frame copies payload, byte count, and sender node id into OutFrom; leave outputs unchanged on
+	 *   any non-success result.
 	 */
 	Transport::ETransportResult TryReceive(
 		Transport::Address::FDeviceAddress& OutFrom,
 		Core::TSpan<std::uint8_t> InDestination,
 		Transport::Device::FReceiveResult& OutResult) noexcept override;
 
-	/** Reports the largest payload, in bytes, one send accepts (excludes framing overhead). */
+	/**
+	 * Motivation: Lets a caller size a packet against the transport's capacity without a magic number.
+	 * Responsibilities: Report the largest payload, in bytes, one send accepts, excluding framing overhead.
+	 */
 	std::size_t MaxPacketBytes() const noexcept override;
 
-	/** Reports whether the constructor opened a usable I2C master bus. */
+	/**
+	 * Motivation: Lets a caller gate every op on whether construction opened a usable bus.
+	 * Responsibilities: Report the open flag set at construction and never mutated afterward except by destruction.
+	 */
 	bool IsOpen() const noexcept;
 
 private:
-	/** Bounded RX deframer held by value; its capacity matches `I2cMaxPayloadBytes`. */
+	/** Motivation: Bounded RX deframer held by value; its capacity matches I2cMaxPayloadBytes. */
 	Transport::FrameCodec::TFrameDecoder<I2cMaxPayloadBytes> Decoder{};
 
-	/** ESP-IDF `i2c_master_bus_handle_t` stored opaquely; reinterpreted only in the source file. */
+	/** Motivation: ESP-IDF i2c_master_bus_handle_t stored opaquely; reinterpreted only in the source file. */
 	void* BusHandle{nullptr};
 
-	/** ESP-IDF `i2c_master_dev_handle_t` stored opaquely; reinterpreted only in the source file. */
+	/** Motivation: ESP-IDF i2c_master_dev_handle_t stored opaquely; reinterpreted only in the source file. */
 	void* DeviceHandle{nullptr};
 
-	/** Local node id stamped on every outgoing frame's source node id byte. */
+	/** Motivation: Local node id stamped on every outgoing frame's source node id byte. */
 	std::uint8_t LocalNodeIdValue{0};
 
-	/** Remains false when construction failed, so every op short-circuits safely. */
+	/** Motivation: Remains false when construction failed, so every op short-circuits safely. */
 	bool bOpen{false};
 };
 
 /**
- * Non-blocking wired `IDevice` for the slave side of a point-to-point I2C link.
- *
- * The master clocks the bus, so `TrySend` stages one framed packet for the master's next read and `TryReceive`
- * drains an ISR-filled inbox through a bounded `TFrameDecoder`; it is the master device's mirror above the `IDevice` interface.
- * It validates every argument before any syscall, leaves caller outputs unchanged on any non-`Success` result,
- * and exercises no bus traffic until example 20's hardware checkpoint passes (§1.2).
+ * Motivation: Gives one composition root a non-blocking wired IDevice for the slave side of a point-to-point I2C
+ *   link, mirroring the master above the IDevice interface.
+ * Responsibilities: Stage one framed packet per TrySend for the master's next read and drain an ISR-filled inbox
+ *   per TryReceive through a bounded TFrameDecoder; validate every argument before any syscall and leave caller
+ *   outputs unchanged on any non-Success result.
+ * Example:
+ *   FEsp32I2cSlaveDevice Slave(Config);
+ *   if (Slave.IsOpen()) { Slave.TryReceive(From, Dest, Result); }
  */
 class FEsp32I2cSlaveDevice final : public Transport::Device::IDevice
 {
 public:
 	/**
-	 * Opens the I2C slave device and registers its receive callback.
-	 *
-	 * Creates the slave at `I2cPort` on the given SDA/SCL GPIOs listening on `SlaveAddress`, and registers the
-	 * platform `on_receive` callback that fills this device's inbox. On any failure the constructor rolls back and
-	 * leaves `IsOpen() == false`; it never throws. The local node id is stamped on every outgoing frame.
-	 *
-	 * @param InConfig Bus, GPIO, own-address, and local node id parameters.
+	 * Motivation: Opens the I2C slave device and registers its receive callback before any traffic flows.
+	 * Responsibilities: Create the slave on the configured port/GPIOs/address and register the platform
+	 *   on_receive callback that fills the inbox; on any failure roll back and leave IsOpen false; never throw.
 	 */
 	explicit FEsp32I2cSlaveDevice(const FEsp32I2cSlaveConfig& InConfig) noexcept;
 
-	/** Deletes the slave device opened by construction. */
+	/**
+	 * Motivation: Releases the slave device so construction-allocated ESP-IDF resources never leak.
+	 * Responsibilities: Delete the slave device opened by construction.
+	 */
 	~FEsp32I2cSlaveDevice() noexcept override;
 
-	/** Prevents copying so one device value owns exactly one slave identity. */
+	/**
+	 * Motivation: Keeps one device value owning exactly one slave identity so the device handle never aliases.
+	 * Responsibilities: Reject copy construction so the slave stays the single owner of its device.
+	 */
 	FEsp32I2cSlaveDevice(const FEsp32I2cSlaveDevice&) = delete;
 
-	/** Prevents copying so one device value owns exactly one slave identity. */
+	/**
+	 * Motivation: Keeps one device value owning exactly one slave identity so the device handle never aliases.
+	 * Responsibilities: Reject copy assignment so the slave stays the single owner of its device.
+	 */
 	FEsp32I2cSlaveDevice& operator=(const FEsp32I2cSlaveDevice&) = delete;
 
-	/** Prevents moving so the owned slave handle, inbox address, and interface identity stay fixed. */
+	/**
+	 * Motivation: Keeps the owned slave handle, inbox address, and interface identity fixed at one address for the
+	 *   link's lifetime.
+	 * Responsibilities: Reject move construction so the inbox address handed to the ISR callback never relocates.
+	 */
 	FEsp32I2cSlaveDevice(FEsp32I2cSlaveDevice&&) = delete;
 
-	/** Prevents moving so the owned slave handle, inbox address, and interface identity stay fixed. */
+	/**
+	 * Motivation: Keeps the owned slave handle, inbox address, and interface identity fixed at one address for the
+	 *   link's lifetime.
+	 * Responsibilities: Reject move assignment so the inbox address handed to the ISR callback never relocates.
+	 */
 	FEsp32I2cSlaveDevice& operator=(FEsp32I2cSlaveDevice&&) = delete;
 
 	/**
-	 * Stages one complete framed message for the master's next read, transactionally.
-	 *
-	 * Returns `Invalid` for a destination that is not an I2C encoding, an oversize packet, or a null span with
-	 * nonzero length; `Full` when the transmit ring cannot take the whole frame (any partial bytes are discarded
-	 * so a half-frame never reaches the master); and `Success` only when the whole frame was queued.
-	 *
-	 * @param InTo Destination whose single byte must be an I2C node id (validated; the wire is point-to-point).
-	 * @param InPacket Caller-owned payload bytes framed and staged as one message.
-	 * @return Normalized outcome of the single send attempt.
+	 * Motivation: Stages one complete framed message for the master's next read, transactionally.
+	 * Responsibilities: Return Invalid for a non-I2C destination, oversize packet, or null span with nonzero
+	 *   length, Full (discarding any partial bytes so a half-frame never reaches the master) when the transmit
+	 *   ring cannot take the whole frame, and Success only after the whole frame is queued.
 	 */
 	Transport::ETransportResult TrySend(const Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
-	 * Receives at most one framed message by draining the ISR-filled inbox, transactionally.
-	 *
-	 * Pumps buffered bytes one at a time through the decoder until a frame completes or the bounded pump drains;
-	 * `Unavailable` when no frame is ready, `Full` when the held frame exceeds the destination (kept held for a
-	 * larger retry), `Invalid` for a null destination with nonzero length, and `Success` after a complete frame
-	 * copies its payload, byte count, and sender node id into `OutFrom`.
-	 *
-	 * @param OutFrom Filled with the sender's I2C address only on `Success`.
-	 * @param InDestination Caller-owned buffer for the received payload bytes.
-	 * @param OutResult Filled with the received byte count only on `Success`.
-	 * @return Normalized outcome of the single receive attempt.
+	 * Motivation: Receives at most one framed message by draining the ISR-filled inbox, transactionally.
+	 * Responsibilities: Pump buffered bytes through the decoder until a frame completes or the bounded pump drains,
+	 *   and report Unavailable, Full (frame held for a larger retry), Invalid (null destination with nonzero
+	 *   length), or Success after a complete frame copies payload, byte count, and sender node id into OutFrom;
+	 *   leave outputs unchanged on any non-success result.
 	 */
 	Transport::ETransportResult TryReceive(
 		Transport::Address::FDeviceAddress& OutFrom,
 		Core::TSpan<std::uint8_t> InDestination,
 		Transport::Device::FReceiveResult& OutResult) noexcept override;
 
-	/** Reports the largest payload, in bytes, one send accepts (excludes framing overhead). */
+	/**
+	 * Motivation: Lets a caller size a packet against the transport's capacity without a magic number.
+	 * Responsibilities: Report the largest payload, in bytes, one send accepts, excluding framing overhead.
+	 */
 	std::size_t MaxPacketBytes() const noexcept override;
 
-	/** Reports whether the constructor opened a usable I2C slave device. */
+	/**
+	 * Motivation: Lets a caller gate every op on whether construction opened a usable slave device.
+	 * Responsibilities: Report the open flag set at construction and never mutated afterward except by destruction.
+	 */
 	bool IsOpen() const noexcept;
 
 private:
-	/** Bounded RX deframer held by value; its capacity matches `I2cMaxPayloadBytes`. */
+	/** Motivation: Bounded RX deframer held by value; its capacity matches I2cMaxPayloadBytes. */
 	Transport::FrameCodec::TFrameDecoder<I2cMaxPayloadBytes> Decoder{};
 
-	/** Inbox the platform receive ISR fills and `TryReceive` drains; its address is passed to the callback. */
+	/** Motivation: Inbox the platform receive ISR fills and TryReceive drains; its address is passed to the callback. */
 	FI2cReceiveInbox Inbox{};
 
-	/** ESP-IDF `i2c_slave_dev_handle_t` stored opaquely; reinterpreted only in the source file. */
+	/** Motivation: ESP-IDF i2c_slave_dev_handle_t stored opaquely; reinterpreted only in the source file. */
 	void* SlaveHandle{nullptr};
 
-	/** Local node id stamped on every outgoing frame's source node id byte. */
+	/** Motivation: Local node id stamped on every outgoing frame's source node id byte. */
 	std::uint8_t LocalNodeIdValue{0};
 
-	/** Remains false when construction failed, so every op short-circuits safely. */
+	/** Motivation: Remains false when construction failed, so every op short-circuits safely. */
 	bool bOpen{false};
 };
 

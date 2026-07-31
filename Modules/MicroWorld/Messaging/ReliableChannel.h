@@ -11,79 +11,124 @@
 namespace MicroWorld::Messaging
 {
 
-/** Encoded byte count of the reliable wrapper's own header prefix: one Kind byte plus a little-endian u16 sequence. */
+/** Motivation: Fixes the encoded byte count of the reliable wrapper's header prefix for offset math. */
 inline constexpr std::size_t ReliableHeaderBytes = 3;
 
-/** Half of the 16-bit sequence space; the threshold that separates "newer" from "older" after wrap. */
+/** Motivation: Names half the 16-bit sequence space, the threshold that separates newer from older after wrap. */
 inline constexpr std::uint16_t HalfSequenceSpace = 0x8000u;
 
-/** First sequence number ever sent; 0 is reserved as "never sent" so allocations start here. */
+/** Motivation: Fixes the first sequence ever sent, since 0 is reserved as never-sent so allocations start here. */
 inline constexpr std::uint16_t FirstOutgoingSequence = 1;
 
-/** Byte offset of the little-endian sequence field within a reliable header. */
+/** Motivation: Fixes the byte offset of the little-endian sequence field within a reliable header. */
 inline constexpr std::size_t ReliableSequenceFieldByteIndex = 1;
 
-/** Byte offset of the Kind byte within a reliable header. */
+/** Motivation: Fixes the byte offset of the Kind byte within a reliable header. */
 inline constexpr std::size_t ReliableKindByteIndex = 0;
 
-/** Distinguishes an original wrapped message from a bare acknowledgement on the reliable wire format. */
+/**
+ * Motivation: Names, on the reliable wire format, whether bytes are an original message awaiting acknowledgement or a
+ *   bare acknowledgement, so one Kind byte selects the parsing path.
+ * Responsibilities: Distinguish the Data shape from the Acknowledgement shape and carry no behavior.
+ * Example:
+ *   EReliablePacketKind Kind = EReliablePacketKind::Data;
+ */
 enum class EReliablePacketKind : std::uint8_t
 {
-	/** A wrapped original message awaiting acknowledgement: [Data][Sequence][original encoded message]. */
-	Data = 1,
+	Data = 1, ///< Motivation: Marks a wrapped original message awaiting acknowledgement, carrying sequence and payload.
 
-	/** A bare acknowledgement of one received sequence: [Acknowledgement][Sequence], no payload. */
-	Acknowledgement = 2,
+	Acknowledgement = 2, ///< Motivation: Marks a bare acknowledgement of one received sequence, carrying no payload.
 };
 
-/** Retry/acknowledgement settings for one guaranteed channel. */
+/**
+ * Motivation: Groups the retry and acknowledgement settings for one guaranteed channel into one value a caller passes
+ *   at construction.
+ * Responsibilities: Hold the retry interval and attempt ceiling and carry no behavior.
+ * Example:
+ *   FReliableChannelConfig Config; Config.RetryIntervalMilliseconds = 200; Config.MaxSendAttempts = 5;
+ */
 struct FReliableChannelConfig
 {
-	/** Minimum wall-clock gap between successive resend attempts for one unacknowledged message. */
+	/** Motivation: Holds the minimum wall-clock gap between successive resend attempts for one unacknowledged message. */
 	Core::DurationMilliseconds RetryIntervalMilliseconds{250};
 
-	/** Total send attempts (the initial send plus retries) before a message is abandoned. */
+	/** Motivation: Holds the total send attempts (initial plus retries) before a message is abandoned. */
 	std::uint8_t MaxSendAttempts{8};
 };
 
 /**
- * Guaranteed-delivery wrapper around one IMessageChannel (roadmap D6-D8).
- * Sits between a channel binding and the router in both directions: outbound it prefixes
- * [Kind][Sequence] and keeps a copy until acknowledged; inbound it acknowledges data, drops
- * duplicates via a serial-number window, and forwards fresh payloads to ForwardSink.
- * Implements IPlaySystem so PostAdvance resends due unacknowledged messages; point-to-point only.
+ * Motivation: Adds guaranteed delivery to one IMessageChannel so an unreliable wire can still carry messages the router
+ *   cannot afford to lose, sitting between a channel binding and the router in both directions.
+ * Responsibilities: Prefix [Kind][Sequence] outbound and keep a copy until acknowledged, acknowledge inbound data,
+ *   drop duplicates via a serial-number window, forward fresh payloads to ForwardSink, and resend due unacknowledged
+ *   messages from PostAdvance; point-to-point only.
+ * Example:
+ *   TReliableChannel<4, 64> Reliable(Router, Config);
+ *   Reliable.SetInnerChannel(Binding);
+ *   Router.AddChannel(Reliable);
  */
 template<std::size_t MaxPendingMessages, std::size_t MaxMessageBytes>
 class TReliableChannel final : public IMessageChannel, public IEncodedMessageSink, public Core::IPlaySystem
 {
 public:
-	/** Stores the forward sink and retry configuration; the inner channel is bound later via SetInnerChannel. */
+	/**
+	 * Motivation: Lets a caller build the wrapper with its forward sink and retry config in one call, binding the inner
+	 *   channel later when the composition order allows.
+	 * Responsibilities: Store ForwardSink and Config, leaving the inner channel unset until SetInnerChannel.
+	 */
 	TReliableChannel(IEncodedMessageSink& InForwardSink, const FReliableChannelConfig InConfig) noexcept
 		: ForwardSink(InForwardSink), Config(InConfig)
 	{
 	}
 
-	/** Virtual destructor via the bases; this wrapper owns no external resource. */
+	/**
+	 * Motivation: Lets a caller destroy the wrapper through its base classes without owning an external resource.
+	 * Responsibilities: Destroy the wrapper and its pending-message storage, invoking no callbacks.
+	 */
 	~TReliableChannel() noexcept override = default;
 
 	// Held by reference at a fixed composition root (the wrapper<->binding cycle breaker, see
 	// SetInnerChannel) and captured by pointer in a frame set, matching TMessageRouter's fixed-identity rule.
+	/**
+	 * Motivation: Stops copy construction from duplicating the wrapper the composition root and pending set point at.
+	 * Responsibilities: Reject copy construction outright so the wrapper keeps one fixed identity.
+	 */
 	TReliableChannel(const TReliableChannel&) = delete;
+	/**
+	 * Motivation: Stops copy assignment from rebinding the wrapper the composition root and pending set point at.
+	 * Responsibilities: Reject copy assignment outright so the wrapper keeps one fixed identity.
+	 */
 	TReliableChannel& operator=(const TReliableChannel&) = delete;
+	/**
+	 * Motivation: Stops move construction from relocating the wrapper the composition root and pending set point at.
+	 * Responsibilities: Reject move construction outright so the wrapper keeps one fixed identity.
+	 */
 	TReliableChannel(TReliableChannel&&) = delete;
+	/**
+	 * Motivation: Stops move assignment from relocating the wrapper the composition root and pending set point at.
+	 * Responsibilities: Reject move assignment outright so the wrapper keeps one fixed identity.
+	 */
 	TReliableChannel& operator=(TReliableChannel&&) = delete;
 
 	/**
-	 * Binds the wrapped channel once at composition, breaking the wrapper<->binding reference cycle
-	 * (the binding's constructor needs this wrapper as its sink, so this wrapper cannot take the
-	 * binding in its own constructor). Call before Router.AddChannel(*this): GetChannelId needs the inner id.
+	 * Motivation: Lets a caller break the wrapper<->binding reference cycle by binding the wrapped channel once at
+	 *   composition, after this wrapper exists to serve as the binding's sink.
+	 * Responsibilities: Store the inner channel pointer before AddChannel is called, since GetChannelId needs the
+	 *   inner id thereafter.
 	 */
 	void SetInnerChannel(IMessageChannel& InInnerChannel) noexcept { InnerChannel = &InInnerChannel; }
 
-	/** Returns the inner channel's id, or LocalChannelId before SetInnerChannel has been called. */
+	/**
+	 * Motivation: Lets the router identify this wrapper by the id of the channel it wraps.
+	 * Responsibilities: Return the inner channel's id, or LocalChannelId before SetInnerChannel has been called.
+	 */
 	FMessageChannelId GetChannelId() const noexcept override { return InnerChannel != nullptr ? InnerChannel->GetChannelId() : LocalChannelId; }
 
-	/** Returns the inner channel's budget minus ReliableHeaderBytes (floored at 0), or 0 before SetInnerChannel has been called. */
+	/**
+	 * Motivation: Lets a caller size an encoded message against the reliable wrapper's reduced budget before sending.
+	 * Responsibilities: Return the inner channel's budget minus ReliableHeaderBytes (floored at 0), or 0 before
+	 *   SetInnerChannel has been called.
+	 */
 	std::size_t MaxEncodedMessageBytes() const noexcept override
 	{
 		if (InnerChannel == nullptr)
@@ -95,11 +140,11 @@ public:
 	}
 
 	/**
-	 * Wraps Encoded as a Data packet, stores it pending acknowledgement, and sends it via the inner channel.
-	 * Rejects transactionally (no sequence consumed, nothing sent, no state change) when the inner channel is
-	 * unset (Unavailable), the wrapped size cannot fit a pending slot or the inner budget (PayloadTooLarge), or
-	 * every pending slot is already in use (CapacityExceeded). Otherwise keeps the pending slot even when the
-	 * initial inner send does not report Success, since PostAdvance retries it later instead of losing it.
+	 * Motivation: Lets the router send one encoded message through the reliable layer as guaranteed delivery.
+	 * Responsibilities: Reject transactionally (no sequence consumed, nothing sent, no state change) when the inner
+	 *   channel is unset (Unavailable), the wrapped size cannot fit a pending slot or the inner budget
+	 *   (PayloadTooLarge), or every pending slot is in use (CapacityExceeded); otherwise store the slot even when the
+	 *   initial inner send does not report Success, since PostAdvance retries it later.
 	 */
 	EMessageResult TrySendEncodedMessage(const Core::TSpan<const std::uint8_t> InEncoded) noexcept override
 	{
@@ -130,10 +175,11 @@ public:
 	}
 
 	/**
-	 * Handles one inbound wire payload from the inner channel. A payload shorter than ReliableHeaderBytes or
-	 * carrying an unrecognized Kind byte is rejected as PayloadTooLarge and dropped. A Data packet always
-	 * triggers an ack (fresh or duplicate, since the sender's first ack may itself have been lost), then
-	 * forwards a fresh payload to ForwardSink once or counts a duplicate; an Acknowledgement frees the matching pending slot.
+	 * Motivation: Lets the inner channel hand one inbound wire payload to the reliable layer for acknowledgement,
+	 *   deduplication, and forwarding.
+	 * Responsibilities: Reject a payload shorter than ReliableHeaderBytes or carrying an unrecognized Kind byte as
+	 *   PayloadTooLarge; on a Data packet always ack (fresh or duplicate), then forward a fresh payload to ForwardSink
+	 *   once or count a duplicate; on an Acknowledgement free the matching pending slot.
 	 */
 	EMessageResult ReceiveEncodedMessage(
 		const FMessageChannelId InArrivedOnChannelId, const Core::TSpan<const std::uint8_t> InEncoded) noexcept override
@@ -164,13 +210,17 @@ public:
 		return EMessageResult::PayloadTooLarge;
 	}
 
-	/** No-op: this wrapper has no inbound polling of its own; inbound arrives via ReceiveEncodedMessage. */
+	/**
+	 * Motivation: Lets TEngine call the play-system pump entry this wrapper does not need.
+	 * Responsibilities: Do nothing, since inbound arrives via ReceiveEncodedMessage and retries run in PostAdvance.
+	 */
 	void PreAdvance(const Core::TimePointMilliseconds InNowMilliseconds) noexcept override { (void)InNowMilliseconds; }
 
 	/**
-	 * Paces retries for every pending slot: the first flush after a send only records the retry baseline
-	 * (never resending that same tick), a later flush resends once RetryIntervalMilliseconds has elapsed
-	 * and the slot has not exhausted Config.MaxSendAttempts, and an exhausted slot is dropped and counted lost instead.
+	 * Motivation: Lets TEngine drive the retry cadence for every unacknowledged pending message as one framed pump step.
+	 * Responsibilities: Record the retry baseline on the first flush after a send without resending that tick, resend
+	 *   once RetryIntervalMilliseconds has elapsed while attempts remain, and drop and count a slot that has exhausted
+	 *   Config.MaxSendAttempts.
 	 */
 	void PostAdvance(const Core::TimePointMilliseconds InNowMilliseconds) noexcept override
 	{
@@ -188,7 +238,10 @@ public:
 		}
 	}
 
-	/** Reports how many pending slots currently await acknowledgement. */
+	/**
+	 * Motivation: Lets a caller observe how many messages still await acknowledgement.
+	 * Responsibilities: Return the exact count of currently occupied pending slots.
+	 */
 	std::size_t PendingCount() const noexcept
 	{
 		std::size_t Count = 0;
@@ -202,56 +255,74 @@ public:
 		return Count;
 	}
 
-	/** Reports how many retry resends PostAdvance has issued so far. */
+	/**
+	 * Motivation: Lets a caller observe retry pressure on the reliable layer.
+	 * Responsibilities: Return how many retry resends PostAdvance has issued so far.
+	 */
 	std::uint32_t ResentCount() const noexcept { return ResentTotal; }
 
-	/** Reports how many pending messages were abandoned after exhausting Config.MaxSendAttempts. */
+	/**
+	 * Motivation: Lets a caller observe delivery failures the reliable layer could not recover.
+	 * Responsibilities: Return how many pending messages were abandoned after exhausting Config.MaxSendAttempts.
+	 */
 	std::uint32_t LostCount() const noexcept { return LostTotal; }
 
-	/** Reports how many inbound Data packets were recognized as duplicates and not forwarded. */
+	/**
+	 * Motivation: Lets a caller observe duplicate inbound pressure on the reliable layer.
+	 * Responsibilities: Return how many inbound Data packets were recognized as duplicates and not forwarded.
+	 */
 	std::uint32_t DuplicateDroppedCount() const noexcept { return DuplicateDroppedTotal; }
 
 private:
-	/** One outbound message awaiting acknowledgement: its wrapped bytes, retry bookkeeping, and occupancy. */
+	/**
+	 * Motivation: Holds one outbound message awaiting acknowledgement, with its wrapped bytes and retry bookkeeping.
+	 * Responsibilities: Store the wrapped Data packet, its length and sequence, the send-attempt count and retry
+	 *   baseline, and an occupancy flag.
+	 * Example:
+	 *   FPendingMessage Slot; Slot.Sequence = 1; Slot.bInUse = true;
+	 */
 	struct FPendingMessage final
 	{
-		/** Wrapped Data packet bytes: [Kind][Sequence][original encoded message]. */
+		/** Motivation: Holds the wrapped Data packet bytes, [Kind][Sequence][original encoded message]. */
 		std::uint8_t Bytes[MaxMessageBytes == 0 ? 1 : MaxMessageBytes]{};
 
-		/** Valid byte count at the front of Bytes. */
+		/** Motivation: Holds the valid byte count at the front of Bytes. */
 		std::size_t Length{0};
 
-		/** Sequence number this slot was sent under; matched against an inbound Acknowledgement. */
+		/** Motivation: Holds the sequence number this slot was sent under, matched against an inbound Acknowledgement. */
 		std::uint16_t Sequence{0};
 
-		/** Total send attempts so far, including the initial send (attempt 1). */
+		/** Motivation: Holds the total send attempts so far, including the initial send as attempt 1. */
 		std::uint8_t Attempts{0};
 
-		/** Distinguishes "no retry baseline established yet" from a real LastSendTimeMilliseconds. */
+		/** Motivation: Distinguishes no retry baseline yet from a real LastSendTimeMilliseconds. */
 		bool bBaselineTimeSet{false};
 
-		/** Wall-clock time PostAdvance last (re)sent this slot, meaningful only once bBaselineTimeSet is true. */
+		/** Motivation: Holds the wall-clock time PostAdvance last (re)sent this slot, once bBaselineTimeSet is true. */
 		Core::TimePointMilliseconds LastSendTimeMilliseconds{0};
 
-		/** Distinguishes an occupied slot from reusable free storage. */
+		/** Motivation: Distinguishes an occupied slot from reusable free storage. */
 		bool bInUse{false};
 	};
 
 	/**
-	 * Serial-number "is newer" comparison over the 16-bit sequence space (roadmap 4.3, normative):
-	 * 0x8000 is half that space, so the smaller forward distance between InCandidate and InReference decides which is newer.
+	 * Motivation: Lets the duplicate window compare sequence numbers as newer-or-older across 16-bit wrap, so a rolled
+	 *   counter never looks older than the current highest.
+	 * Responsibilities: Decide newness by the smaller forward distance between InCandidate and InReference, using
+	 *   HalfSequenceSpace as the threshold.
 	 */
 	static bool IsNewer(const std::uint16_t InCandidate, const std::uint16_t InReference) noexcept
 	{
 		return (InCandidate != InReference) && (static_cast<std::uint16_t>(InCandidate - InReference) < HalfSequenceSpace);
 	}
 
-	/** Width of the duplicate-detection window: SeenMask's bit count, one bit per sequence older than HighestSequenceSeen. */
+	/** Motivation: Fixes the width of the duplicate-detection window at one bit per sequence older than the highest seen. */
 	static constexpr std::uint32_t DuplicateWindowWidth = 32;
 
 	/**
-	 * Reports whether InSequence has already been observed: the current highest itself, anything within
-	 * the DuplicateWindowWidth-wide mask below it and already marked, or anything older than the window.
+	 * Motivation: Lets the inbound path tell a fresh Data packet from a redelivery before forwarding it.
+	 * Responsibilities: Report InSequence as seen when it is the current highest, anything marked within
+	 *   DuplicateWindowWidth below it, or anything older than the window.
 	 */
 	bool WasSeen(const std::uint16_t InSequence) const noexcept
 	{
@@ -271,7 +342,11 @@ private:
 		return ((SeenMask >> (Delta - 1)) & 1u) != 0u;
 	}
 
-	/** Records a fresh InSequence as seen, sliding the window forward when InSequence becomes the new highest. */
+	/**
+	 * Motivation: Lets the inbound path record a sequence so a later redelivery is recognized as a duplicate.
+	 * Responsibilities: Mark a fresh InSequence seen and slide the window forward when it becomes the new highest,
+	 *   dropping bits that fall past DuplicateWindowWidth.
+	 */
 	void MarkSeen(const std::uint16_t InSequence) noexcept
 	{
 		if (IsNewer(InSequence, HighestSequenceSeen))
@@ -302,20 +377,30 @@ private:
 		}
 	}
 
-	/** Writes the three-byte [Kind][Sequence LE] reliable header at the front of OutBytes. */
+	/**
+	 * Motivation: Lets send and ack paths write the reliable header bytes from one Kind and Sequence without each
+	 *   inlining the layout.
+	 * Responsibilities: Write the three-byte [Kind][Sequence LE] header at the front of OutBytes.
+	 */
 	static void WriteReliableHeader(std::uint8_t* const OutBytes, const EReliablePacketKind InKind, const std::uint16_t InSequence) noexcept
 	{
 		OutBytes[ReliableKindByteIndex] = static_cast<std::uint8_t>(InKind);
 		WriteMessageUint16LittleEndian(InSequence, &OutBytes[ReliableSequenceFieldByteIndex]);
 	}
 
-	/** Reads the little-endian Sequence field starting at byte index 1 of a reliable-header-prefixed payload. */
+	/**
+	 * Motivation: Lets the inbound path read the sequence field of a reliable-header-prefixed payload in one place.
+	 * Responsibilities: Read the little-endian Sequence field starting at byte index 1.
+	 */
 	static std::uint16_t ReadSequence(const std::uint8_t* const InBytes) noexcept
 	{
 		return ReadMessageUint16LittleEndian(&InBytes[ReliableSequenceFieldByteIndex]);
 	}
 
-	/** Copies InLength bytes from InSource to OutDestination; InLength may be 0. */
+	/**
+	 * Motivation: Lets the send path copy the wrapped payload bytes behind one named helper.
+	 * Responsibilities: Copy InLength bytes from InSource to OutDestination, handling a zero length.
+	 */
 	static void CopyBytes(std::uint8_t* const OutDestination, const std::uint8_t* const InSource, const std::size_t InLength) noexcept
 	{
 		for (std::size_t Index = 0; Index < InLength; ++Index)
@@ -324,7 +409,10 @@ private:
 		}
 	}
 
-	/** Assigns the next Data sequence and advances NextSequenceToSend, skipping 0 on wrap (sequences start at 1; 0 is never sent). */
+	/**
+	 * Motivation: Lets TrySendEncodedMessage give each sent Data packet a distinct sequence without the caller tracking it.
+	 * Responsibilities: Return the current sequence and advance NextSequenceToSend, skipping 0 on wrap so 0 is never sent.
+	 */
 	std::uint16_t AllocateNextSequence() noexcept
 	{
 		const std::uint16_t Sequence = NextSequenceToSend;
@@ -333,7 +421,10 @@ private:
 		return Sequence;
 	}
 
-	/** Finds the lowest free pending slot, or nullptr when every slot is in use. */
+	/**
+	 * Motivation: Lets TrySendEncodedMessage claim the next free pending slot for a new send.
+	 * Responsibilities: Return the lowest free pending slot, or null when every slot is in use.
+	 */
 	FPendingMessage* FindFreePendingSlot() noexcept
 	{
 		for (std::size_t Index = 0; Index < MaxPendingMessages; ++Index)
@@ -346,7 +437,10 @@ private:
 		return nullptr;
 	}
 
-	/** Frees the pending slot whose Sequence matches, if any; an unmatched Acknowledgement is silently ignored. */
+	/**
+	 * Motivation: Lets an inbound Acknowledgement release the slot holding the message it confirms.
+	 * Responsibilities: Free the pending slot whose Sequence matches, and silently ignore an unmatched Acknowledgement.
+	 */
 	void FreePendingBySequence(const std::uint16_t InSequence) noexcept
 	{
 		for (std::size_t Index = 0; Index < MaxPendingMessages; ++Index)
@@ -360,9 +454,10 @@ private:
 	}
 
 	/**
-	 * Acks InSequence unconditionally, then forwards the inner payload once for a fresh sequence or
-	 * only counts a duplicate; ForwardSink rejecting a fresh forward is an accepted v1 limitation
-	 * (the message is already acked and marked seen, so this wrapper never un-acks or re-delivers it).
+	 * Motivation: Lets the inbound Data path acknowledge, deduplicate, and forward one received message in one step.
+	 * Responsibilities: Ack InSequence unconditionally, then forward the inner payload once for a fresh sequence or only
+	 *   count a duplicate; accept that a ForwardSink rejection of a fresh forward is an unrecoverable v1 limitation
+	 *   since the message is already acked and marked seen.
 	 */
 	EMessageResult HandleInboundData(
 		const FMessageChannelId InArrivedOnChannelId, const std::uint16_t InSequence, const Core::TSpan<const std::uint8_t> InEncoded) noexcept
@@ -384,7 +479,11 @@ private:
 		return EMessageResult::Success;
 	}
 
-	/** Advances one pending slot's retry state by exactly one PostAdvance's worth of elapsed time. */
+	/**
+	 * Motivation: Lets PostAdvance advance one pending slot's retry state by one tick's worth of elapsed time.
+	 * Responsibilities: Set the retry baseline on the first tick, resend once the interval elapses while attempts
+	 *   remain, and drop and count a slot that has exhausted Config.MaxSendAttempts.
+	 */
 	void TickOnePendingSlot(FPendingMessage& InSlot, const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		if (!InSlot.bBaselineTimeSet)
@@ -410,34 +509,34 @@ private:
 		InSlot.LastSendTimeMilliseconds = InNowMilliseconds;
 	}
 
-	/** Externally owned sink that receives forwarded fresh payloads; never owned here. */
+	/** Motivation: Holds the externally owned sink that receives forwarded fresh payloads. */
 	IEncodedMessageSink& ForwardSink;
 
-	/** Retry interval and attempt ceiling this channel was constructed with. */
+	/** Motivation: Holds the retry interval and attempt ceiling this channel was constructed with. */
 	FReliableChannelConfig Config;
 
-	/** Externally owned wrapped channel bound by SetInnerChannel; never owned here, null until then. */
+	/** Motivation: Holds the externally owned wrapped channel bound by SetInnerChannel, null until then. */
 	IMessageChannel* InnerChannel{nullptr};
 
-	/** Next Data sequence TrySendEncodedMessage will assign; starts at 1 since 0 is never sent. */
+	/** Motivation: Holds the next Data sequence TrySendEncodedMessage will assign, starting at 1 since 0 is never sent. */
 	std::uint16_t NextSequenceToSend{1};
 
-	/** Fixed table of outbound messages awaiting acknowledgement. */
+	/** Motivation: Holds the fixed table of outbound messages awaiting acknowledgement. */
 	FPendingMessage Pending[MaxPendingMessages == 0 ? 1 : MaxPendingMessages]{};
 
-	/** Highest inbound Data sequence observed so far; 0 means none yet. */
+	/** Motivation: Holds the highest inbound Data sequence observed so far, with 0 meaning none yet. */
 	std::uint16_t HighestSequenceSeen{0};
 
-	/** Bit i set means sequence (HighestSequenceSeen - (i+1)) has already been seen. */
+	/** Motivation: Holds the duplicate-detection window, where bit i marks sequence (HighestSequenceSeen - (i+1)) seen. */
 	std::uint32_t SeenMask{0};
 
-	/** Counts retry resends issued by PostAdvance. */
+	/** Motivation: Counts the retry resends issued by PostAdvance. */
 	std::uint32_t ResentTotal{0};
 
-	/** Counts pending messages abandoned after exhausting Config.MaxSendAttempts. */
+	/** Motivation: Counts pending messages abandoned after exhausting Config.MaxSendAttempts. */
 	std::uint32_t LostTotal{0};
 
-	/** Counts inbound Data packets recognized as duplicates and not forwarded. */
+	/** Motivation: Counts inbound Data packets recognized as duplicates and not forwarded. */
 	std::uint32_t DuplicateDroppedTotal{0};
 };
 

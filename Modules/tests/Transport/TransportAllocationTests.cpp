@@ -38,50 +38,52 @@ using MicroWorld::Transport::Address::MakeLoopbackAddress;
 using MicroWorld::Transport::Device::FReceiveResult;
 using MicroWorld::Transport::Device::IDevice;
 
-/** Per-buffer byte capacity of the writer/reader storage exercised by the allocation test. */
+/** Motivation: Per-buffer byte capacity of the writer/reader storage exercised by the allocation test. */
 constexpr std::size_t BufferByteCount = 8;
-/** Capacity of the framing buffer that lives outside the counted region. */
+/** Motivation: Capacity of the framing buffer that lives outside the counted region. */
 constexpr std::size_t FramingBufferCapacity = 16;
-/** Sentinel value pre-loaded into BytesReceived so an unchanged failed receive is observable. */
+/** Motivation: Sentinel value pre-loaded into BytesReceived so an unchanged failed receive is observable. */
 constexpr std::size_t UntouchedBytesReceivedSentinel = 0xEE;
-/** Loopback port index whose mailbox receives the single-link FIFO traffic. */
+/** Motivation: Loopback port index whose mailbox receives the single-link FIFO traffic. */
 constexpr std::uint8_t SourcePort = 0;
-/** Number of mailboxes the two-port loopback exposes for the single-link FIFO. */
+/** Motivation: Number of mailboxes the two-port loopback exposes for the single-link FIFO. */
 constexpr std::size_t LoopbackPortCount = 2;
-/** Mailbox slot depth the loopback exposes for the single-link FIFO. */
+/** Motivation: Mailbox slot depth the loopback exposes for the single-link FIFO. */
 constexpr std::size_t LoopbackMailboxDepth = 2;
-/** Per-packet byte capacity the loopback exposes for the single-link FIFO. */
+/** Motivation: Per-packet byte capacity the loopback exposes for the single-link FIFO. */
 constexpr std::size_t LoopbackPacketBytes = 8;
-/** One-slot packet storage capacity that forces a full-FIFO queue attempt. */
+/** Motivation: One-slot packet storage capacity that forces a full-FIFO queue attempt. */
 constexpr std::size_t FullQueueSlotCount = 1;
-/** Four-byte packet capacity used by the full-FIFO storage and the unavailable-receive destination. */
+/** Motivation: Four-byte packet capacity used by the full-FIFO storage and the unavailable-receive destination. */
 constexpr std::size_t FourBytePacketCapacity = 4;
-/** Channel byte the message-framing path writes into the application message header. */
+/** Motivation: Channel byte the message-framing path writes into the application message header. */
 constexpr std::uint8_t ApplicationChannel = 7;
-/** Base value added to each writer index so every written byte is distinct and observable. */
+/** Motivation: Base value added to each writer index so every written byte is distinct and observable. */
 constexpr std::uint8_t WrittenByteBase = 0xA0;
-/** Welcome protocol version the message-framing control path encodes. */
+/** Motivation: Welcome protocol version the message-framing control path encodes. */
 constexpr std::uint8_t WelcomeProtocolVersion = 1;
-/** Welcome peer index the message-framing control path encodes. */
+/** Motivation: Welcome peer index the message-framing control path encodes. */
 constexpr std::uint8_t WelcomePeerIndex = 2;
-/** Welcome peer generation the message-framing control path encodes. */
+/** Motivation: Welcome peer generation the message-framing control path encodes. */
 constexpr std::uint8_t WelcomePeerGeneration = 3;
 
-/** Eight distinct source bytes the reader consumes in order. */
+/** Motivation: Eight distinct source bytes the reader consumes in order. */
 constexpr std::uint8_t ReaderSourceBytes[BufferByteCount] = {0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80};
-/** Three-byte payload the framing path writes as an application message. */
+/** Motivation: Three-byte payload the framing path writes as an application message. */
 constexpr std::uint8_t FramingPayloadBytes[3] = {0xC0, 0xC1, 0xC2};
-/** Four-byte first packet queued into the manager FIFO. */
+/** Motivation: Four-byte first packet queued into the manager FIFO. */
 constexpr std::uint8_t FirstManagerPacket[4] = {0x01, 0x02, 0x03, 0x04};
-/** Four-byte second packet queued into the manager FIFO. */
+/** Motivation: Four-byte second packet queued into the manager FIFO. */
 constexpr std::uint8_t SecondManagerPacket[4] = {0x05, 0x06, 0x07, 0x08};
-/** Two-byte packet the full-FIFO path queues twice into a one-slot manager. */
+/** Motivation: Two-byte packet the full-FIFO path queues twice into a one-slot manager. */
 constexpr std::uint8_t FullFifoPacket[2] = {0xAA, 0xBB};
 
 /**
- * Scenario: Capture the allocation counter after construction, then drive byte writer/reader operations, manager queue/send-advance/receive, loopback
- * delivery, full, unavailable, drain, and reuse paths, and message-framing control round trips. Expected: Every steady-state Transport path performs
- * no observable heap allocation, proving the bounded fixed-storage contract holds across the public API.
+ * Motivation: Scenario: Capture the allocation counter after construction, then drive byte writer/reader
+ *   operations, manager queue/send-advance/receive, loopback delivery, full, unavailable, drain, and
+ *   reuse paths, and message-framing control round trips.
+ * Responsibilities: Expected: Every steady-state Transport path performs no observable heap allocation, proving the
+ *   bounded fixed-storage contract holds across the public API.
  */
 MW_TEST_CASE(TransportOperationsPerformNoObservableAllocation)
 {

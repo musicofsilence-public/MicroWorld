@@ -21,21 +21,14 @@
 namespace MicroWorld::Platform::Esp32
 {
 
-/**
- * Latches to true once the joining station receives its IPv4 lease.
- *
- * Set only from `OnStationEvent` (running on the event-loop task) and polled from the bounded
- * wait slice in `FEsp32WifiLink::JoinAccessPoint`; `volatile` is enough here because the poll
- * never needs anything stronger than "observe the latest write eventually".
- */
+/** Motivation: Latches true once the joining station receives its IPv4 lease, polled by the bounded wait in JoinAccessPoint; volatile is enough
+ * because the poll only needs to observe the latest write eventually. */
 inline volatile bool GGotStationIpAddress = false;
 
 /**
- * Station-role WiFi/IP event handler: connects on start, reconnects on every disconnect, and
- * latches the got-IP flag once a lease arrives.
- *
- * @param InEventBase Event family (`WIFI_EVENT` or `IP_EVENT`).
- * @param InEventId Specific event within the family.
+ * Motivation: Drives the station-role WiFi/IP lifecycle from the ESP-IDF event loop so JoinAccessPoint can wait on a
+ *   simple flag instead of registering its own callbacks.
+ * Responsibilities: Connect on start, reconnect on every disconnect, and latch the got-IP flag once a lease arrives.
  */
 inline void OnStationEvent(void* /*Arg*/, esp_event_base_t InEventBase, std::int32_t InEventId, void* /*EventData*/) noexcept
 {
@@ -53,7 +46,11 @@ inline void OnStationEvent(void* /*Arg*/, esp_event_base_t InEventBase, std::int
 	}
 }
 
-/** Brings up NVS (WiFi PHY calibration store); erases and retries once on a version/space fault. */
+/**
+ * Motivation: Brings up NVS (the WiFi PHY calibration store) behind one helper so the bring-up path tolerates a
+ *   version or space fault.
+ * Responsibilities: Erase and retry once on a version/space fault, then report whether NVS is usable.
+ */
 inline bool InitNvsFlash() noexcept
 {
 	esp_err_t Result = nvs_flash_init();
@@ -66,11 +63,9 @@ inline bool InitNvsFlash() noexcept
 }
 
 /**
- * Brings up NVS, netif, and the default event loop shared by both WiFi roles.
- *
- * `esp_netif_init()` and `esp_event_loop_create_default()` may already be initialized (`Stop()`
- * leaves them up by design, and a consumer may also initialize them); `ESP_ERR_INVALID_STATE` is
- * tolerated as success for both.
+ * Motivation: Brings up the shared NVS/netif/event-loop stack both WiFi roles need behind one helper.
+ * Responsibilities: Tolerate ESP_ERR_INVALID_STATE for netif and the default event loop because Stop leaves them up by
+ *   design and a consumer may also initialize them.
  */
 inline bool InitNetworkStack() noexcept
 {
@@ -88,16 +83,9 @@ inline bool InitNetworkStack() noexcept
 }
 
 /**
- * Fills a SoftAP `wifi_config_t` from plain SSID/password/channel/station-limit values.
- *
- * SSID and password are copied with a bounded `strncpy` (bounded by the field size minus one),
- * so an oversize input is truncated rather than overrunning the ESP-IDF struct.
- *
- * @param InSsid Network name to advertise.
- * @param InPassword WPA2 passphrase.
- * @param InWifiChannel 2.4 GHz channel to broadcast on.
- * @param InMaxStations Largest number of stations admitted at once.
- * @return SoftAP configuration ready for `esp_wifi_set_config`.
+ * Motivation: Fills a SoftAP wifi_config_t from plain values so the facade never hand-builds the ESP-IDF struct.
+ * Responsibilities: Copy SSID and password with a bounded strncpy (field size minus one) so an oversize input is
+ *   truncated rather than overrunning the struct.
  */
 inline wifi_config_t MakeAccessPointConfig(
 	const char* const InSsid, const char* const InPassword, const std::uint8_t InWifiChannel, const std::uint8_t InMaxStations) noexcept
@@ -114,13 +102,9 @@ inline wifi_config_t MakeAccessPointConfig(
 }
 
 /**
- * Fills a station `wifi_config_t` from plain SSID/password values.
- *
- * SSID and password are copied with a bounded `strncpy` (bounded by the field size minus one).
- *
- * @param InSsid Network name to join.
- * @param InPassword Passphrase of the network to join.
- * @return Station configuration ready for `esp_wifi_set_config`.
+ * Motivation: Fills a station wifi_config_t from plain values so the facade never hand-builds the ESP-IDF struct.
+ * Responsibilities: Copy SSID and password with a bounded strncpy (field size minus one) so an oversize input is
+ *   truncated rather than overrunning the struct.
  */
 inline wifi_config_t MakeStationConfig(const char* const InSsid, const char* const InPassword) noexcept
 {

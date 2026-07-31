@@ -3,22 +3,11 @@
 #include <cstdint>
 
 /**
- * MicroWorld logging facade.
- *
- * Design invariants:
- *   * Level gating happens in the preprocessor, so a below-floor call expands
- *     to ((void)0): zero emitted code, zero format/category string literals in
- *     flash, and its arguments are never evaluated.
- *   * Formatting uses a fixed-size caller-stack buffer plus vsnprintf (see
- *     src/Log.cpp): no heap, no exceptions, no hidden clock.
- *   * One process-global function-pointer output device; a null device (the default)
- *     disables logging. Install it once at startup (MicroWorld is
- *     single-threaded).
- *
- * Worked expansion of MW_LOG(Log, "Boot", "x=%d", X):
- *   * level enabled  ->  ::MicroWorld::Core::DispatchLogFormatted(
- *                         ::MicroWorld::Core::ELogLevel::Log, ("Boot"), "x=%d", X)
- *   * below floor    ->  ((void)0)      // X is never evaluated
+ * Motivation: Gives the whole process one logging facade that gates levels in the preprocessor,
+ *   formats without a heap, and routes everything through one process-global output device.
+ * Responsibilities: Strip below-floor call sites to nothing, format each enabled record into a
+ *   fixed-size caller-stack buffer with no exceptions or hidden clock, and forward only to the
+ *   single installed device (a null device disables logging).
  */
 
 // Compile-time severity ranks. Lower value = more important. The preprocessor
@@ -79,32 +68,39 @@
 namespace MicroWorld::Core
 {
 
-/** Ranks a log record by importance so a compile-time floor can strip the rest. */
+/**
+ * Motivation: Ranks each log record by importance so a compile-time floor can strip the rest.
+ * Responsibilities: Carry one severity rank the preprocessor and output device both understand.
+ * Example:
+ *   ELogLevel Level = ELogLevel::Warning;
+ */
 enum class ELogLevel : std::uint8_t
 {
-	Error = MW_LOG_LEVEL_Error,		///< Reports an unrecoverable fault the caller must handle.
-	Warning = MW_LOG_LEVEL_Warning, ///< Reports a recoverable anomaly worth surfacing.
-	Log = MW_LOG_LEVEL_Log,			///< Reports ordinary operational milestones.
-	Verbose = MW_LOG_LEVEL_Verbose, ///< Reports fine-grained detail usually stripped in release.
+	Error = MW_LOG_LEVEL_Error,		///< Motivation: Reports an unrecoverable fault the caller must handle.
+	Warning = MW_LOG_LEVEL_Warning, ///< Motivation: Reports a recoverable anomaly worth surfacing.
+	Log = MW_LOG_LEVEL_Log,			///< Motivation: Reports ordinary operational milestones.
+	Verbose = MW_LOG_LEVEL_Verbose, ///< Motivation: Reports fine-grained detail usually stripped in release.
 };
 
-/**
- * Receives one fully formed record; the process installs exactly one output device.
- *
- * Named after UE5's FOutputDevice because it fills the same role, and suffixed
- * Function because it is a plain function pointer rather than an abstract class:
- * there is nothing to subclass and no Serialize override. A platform supplies one
- * free function, so every function-pointer alias here announces itself.
- */
+/** Motivation: Names the plain function pointer that receives one fully formed record from the one installed output device. */
 using FOutputDeviceFunction = void (*)(ELogLevel InLevel, const char* InCategory, const char* InMessage);
 
-/** Installs the process-global output device; pass nullptr (the default) to disable logging. */
+/**
+ * Motivation: Lets startup install the one process-global output device that all dispatch uses.
+ * Responsibilities: Store InOutputDevice, accepting nullptr to disable logging.
+ */
 void SetOutputDevice(FOutputDeviceFunction InOutputDevice) noexcept;
 
-/** Forwards a ready-made message to the installed output device, doing nothing when none is set. */
+/**
+ * Motivation: Lets a caller forward an already-formed message without printf interpretation.
+ * Responsibilities: Deliver the record to the installed device, doing nothing when none is set.
+ */
 void DispatchLogMessage(ELogLevel InLevel, const char* InCategory, const char* InMessage) noexcept;
 
-/** Formats into a bounded stack buffer then forwards to the output device, skipping work when none is set. */
+/**
+ * Motivation: Lets a caller format a printf-style record into a bounded buffer before delivery.
+ * Responsibilities: Format into a fixed-size stack buffer and forward to the device, skipping the work when none is set.
+ */
 void DispatchLogFormatted(ELogLevel InLevel, const char* InCategory, const char* InFormat, ...) noexcept MW_LOG_PRINTF_FORMAT;
 
 } // namespace MicroWorld::Core
@@ -123,16 +119,16 @@ void DispatchLogFormatted(ELogLevel InLevel, const char* InCategory, const char*
 	::MicroWorld::Core::DispatchLogMessage(::MicroWorld::Core::ELogLevel::Level, (Category), (Message))
 
 /**
- * Logs a printf-style record at the given level and category, e.g.
- * MW_LOG(Warning, "Transport", "peer %u timed out", Index). Stripped to nothing when
- * the level is below MW_LOG_MIN_LEVEL. Use MW_LOG_MSG for a runtime string that
- * may itself contain '%'.
+ * Motivation: Lets a call site emit one printf-style record at a level and category while the
+ *   preprocessor decides whether it survives the configured floor.
+ * Responsibilities: Expand an enabled level to a DispatchLogFormatted call and a below-floor level to nothing,
+ *   never evaluating its arguments when stripped.
  */
 #define MW_LOG(Level, Category, ...) MW_LOG_CONCAT(MW_LOG_EMIT_FORMATTED_, MW_LOG_CONCAT(MW_LOG_ENABLED_, Level))(Level, Category, __VA_ARGS__)
 
 /**
- * Logs an already-formed message string at the given level and category without
- * printf interpretation, e.g. MW_LOG_MSG(Log, "Boot", "ready"). Stripped to
- * nothing when the level is below MW_LOG_MIN_LEVEL.
+ * Motivation: Lets a call site emit an already-formed message string without printf interpretation.
+ * Responsibilities: Expand an enabled level to a DispatchLogMessage call and a below-floor level to nothing,
+ *   never evaluating its arguments when stripped.
  */
 #define MW_LOG_MSG(Level, Category, Message) MW_LOG_CONCAT(MW_LOG_EMIT_MESSAGE_, MW_LOG_CONCAT(MW_LOG_ENABLED_, Level))(Level, Category, Message)

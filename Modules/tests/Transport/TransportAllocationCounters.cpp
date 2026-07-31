@@ -11,7 +11,7 @@
 namespace MicroWorld::Tests
 {
 
-/** Counts process-wide scalar and array allocation calls after test setup. */
+/** Motivation: Counts process-wide scalar and array allocation calls after test setup. */
 std::uint32_t GlobalAllocationCount{0};
 
 } // namespace MicroWorld::Tests
@@ -19,7 +19,10 @@ std::uint32_t GlobalAllocationCount{0};
 namespace
 {
 
-/** Allocates one block with the requested C++17 over-alignment. */
+/**
+ * Motivation: Allocates one block with the requested C++17 over-alignment.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ */
 void* AllocateAligned(const std::size_t InSize, const std::size_t InAlignment) noexcept
 {
 #if defined(_WIN32)
@@ -30,7 +33,10 @@ void* AllocateAligned(const std::size_t InSize, const std::size_t InAlignment) n
 #endif
 }
 
-/** Releases one block returned by AllocateAligned on the active host runtime. */
+/**
+ * Motivation: Releases one block returned by AllocateAligned on the active host runtime.
+ * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+ */
 void FreeAligned(void* const InAllocation) noexcept
 {
 #if defined(_WIN32)

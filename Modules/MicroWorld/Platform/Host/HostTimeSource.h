@@ -8,29 +8,45 @@ namespace MicroWorld::Platform::Host
 {
 
 /**
- * Host clock that feeds the engine's caller-supplied monotonic time contract.
- *
- * Captures a `steady_clock` baseline at construction and reports elapsed
- * milliseconds from it, so the host platform is the single source of real time
- * and no engine path reads a hidden clock. The type owns no resource and is
- * safe to copy or default-construct by value.
+ * Motivation: Makes the host platform the single source of real time so no engine path reads a hidden clock,
+ *   by turning the C++ steady_clock into the engine's caller-supplied monotonic time contract.
+ * Responsibilities: Capture one baseline instant at construction and report only elapsed milliseconds from it,
+ *   never reading a wall clock or moving backward; own no resource so the value stays safe to copy.
+ * Example:
+ *   FHostTimeSource Clock;
+ *   const Core::TimePointMilliseconds Now = Clock.Now();
  */
 class FHostTimeSource final
 {
 public:
-	/** Records the baseline instant used by every subsequent `Now()` call. */
+	/**
+	 * Motivation: Lets the source observe elapsed time from the moment construction finishes.
+	 * Responsibilities: Record the steady_clock baseline that every subsequent Now() call subtracts from.
+	 */
 	FHostTimeSource() noexcept : Baseline(std::chrono::steady_clock::now()) {}
 
-	/** Defaults the baseline so a value-initialized source still observes elapsed time. */
+	/**
+	 * Motivation: Lets a copied source keep observing elapsed time rather than resetting its baseline.
+	 * Responsibilities: Copy the stored baseline so the copy reports the same elapsed timeline as the original.
+	 */
 	FHostTimeSource(const FHostTimeSource&) noexcept = default;
 
-	/** Keeps the single baseline invariant while allowing reassignment of the source. */
+	/**
+	 * Motivation: Lets a reassigned source keep observing elapsed time rather than resetting its baseline.
+	 * Responsibilities: Copy the stored baseline so the source continues reporting the original timeline after assignment.
+	 */
 	FHostTimeSource& operator=(const FHostTimeSource&) noexcept = default;
 
-	/** Defaults the special members; the type holds only a trivially destructible time point. */
+	/**
+	 * Motivation: Keeps destruction trivial since the type owns only a trivially destructible time point.
+	 * Responsibilities: Release no resource and never throw.
+	 */
 	~FHostTimeSource() noexcept = default;
 
-	/** Reports milliseconds elapsed since construction as the engine's canonical time point. */
+	/**
+	 * Motivation: Lets the engine ask for its canonical time point through one stable call.
+	 * Responsibilities: Report milliseconds elapsed since construction, derived only from the captured baseline.
+	 */
 	Core::TimePointMilliseconds Now() const noexcept
 	{
 		const std::chrono::steady_clock::duration Elapsed = std::chrono::steady_clock::now() - Baseline;
@@ -38,7 +54,7 @@ public:
 	}
 
 private:
-	/** Anchor instant subtracted from the current reading to form a monotonic elapsed time. */
+	/** Motivation: Anchor instant subtracted from the current reading to form a monotonic elapsed time. */
 	std::chrono::steady_clock::time_point Baseline;
 };
 

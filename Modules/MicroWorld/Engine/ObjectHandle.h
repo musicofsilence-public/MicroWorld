@@ -8,100 +8,118 @@
 namespace MicroWorld::Engine
 {
 
-/** Selects one caller-owned object-store slot without exposing its address. */
+/** Motivation: Selects one caller-owned object-store slot without exposing its address. */
 using ObjectIndex = std::uint32_t;
 
-/** Distinguishes every reusable lifetime published from one object-store slot. */
+/** Motivation: Distinguishes every reusable lifetime published from one object-store slot. */
 using ObjectGeneration = std::uint32_t;
 
 /**
- * Reports every bounded managed-object operation outcome without exceptions.
- *
- * The object store and its handles speak `EObjectResult`; cross-layer lifecycle
- * and tick outcomes speak `ERuntimeResult` (`RuntimeResult.h`). The two overlap
- * by design and are deliberately not merged.
+ * Motivation: Lets every bounded managed-object operation report its outcome without exceptions, independent of the
+ *   cross-layer lifecycle and tick vocabulary that ERuntimeResult carries.
+ * Responsibilities: Distinguish success from capacity, layout, class, root-table, stale handle, lifecycle, descriptor,
+ *   duplicate, and generation-exhaustion failures so distinct conditions never collapse into one result.
+ * Example:
+ *   if (Store.Spawn(Object) == EObjectResult::CapacityExceeded) { Stop(); }
  */
 enum class EObjectResult : std::uint8_t
 {
-	/** Confirms that the requested managed-object operation completed. */
+	/** Motivation: Confirms that the requested managed-object operation completed. */
 	Success,
 
-	/** Reports that no reusable object slot remains in caller-owned storage. */
+	/** Motivation: Reports that no reusable object slot remains in caller-owned storage. */
 	CapacityExceeded,
 
-	/** Rejects an object whose size or alignment cannot fit the configured slots. */
+	/** Motivation: Rejects an object whose size or alignment cannot fit the configured slots. */
 	UnsupportedObjectLayout,
 
-	/** Rejects an unregistered type identifier or descriptor relationship. */
+	/** Motivation: Rejects an unregistered type identifier or descriptor relationship. */
 	UnknownClass,
 
-	/** Reports that the fixed caller-owned root table cannot accept another root. */
+	/** Motivation: Reports that the fixed caller-owned root table cannot accept another root. */
 	RootCapacityExceeded,
 
-	/** Rejects a handle whose slot is unused, retired, or has another generation. */
+	/** Motivation: Rejects a handle whose slot is unused, retired, or has another generation. */
 	StaleHandle,
 
-	/** Makes repeated destruction requests observable and idempotent. */
+	/** Motivation: Makes repeated destruction requests observable and idempotent. */
 	AlreadyPendingDestroy,
 
-	/** Rejects mutation while the owning runtime has locked the relevant barrier. */
+	/** Motivation: Rejects mutation while the owning runtime has locked the relevant barrier. */
 	LifecycleLocked,
 
-	/** Rejects a malformed class descriptor before registry state changes. */
+	/** Motivation: Rejects a malformed class descriptor before registry state changes. */
 	InvalidClassDescriptor,
 
-	/** Rejects a type identifier already owned by the class registry. */
+	/** Motivation: Rejects a type identifier already owned by the class registry. */
 	DuplicateClass,
 
-	/** Reports permanent slot retirement before its generation could wrap. */
+	/** Motivation: Reports permanent slot retirement before its generation could wrap. */
 	GenerationExhausted,
 };
 
-/** Identifies one local managed-object lifetime by stable slot and generation. */
+/**
+ * Motivation: Lets a caller carry one local managed-object lifetime as a stable slot-plus-generation pair without
+ *   exposing a raw object address.
+ * Responsibilities: Hold index and generation and never outlive or be transported across the store that issued them;
+ *   a handle is local diagnostic identity, never a serialized or transport identity.
+ * Example:
+ *   FObjectHandle Handle;
+ *   if (Handle.IsValid()) { Store.Destroy(Handle); }
+ */
 struct FObjectHandle
 {
-	/** Reserves the maximum index as the only invalid slot representation. */
+	/** Motivation: Reserves the maximum index as the only invalid slot representation. */
 	static constexpr ObjectIndex InvalidIndex = std::numeric_limits<ObjectIndex>::max();
 
-	/** Selects a caller-owned store slot or InvalidIndex when no object is referenced. */
+	/** Motivation: Selects a caller-owned store slot or InvalidIndex when no object is referenced. */
 	ObjectIndex Index{InvalidIndex};
 
-	/** Distinguishes reused slot lifetimes; zero is never published for a live object. */
+	/** Motivation: Distinguishes reused slot lifetimes; zero is never published for a live object. */
 	ObjectGeneration Generation{0};
 
-	/** Confirms that both fields can represent a published local object lifetime. */
+	/**
+	 * Motivation: Lets a caller reject a default or stale value before consulting its owning store.
+	 * Responsibilities: Report true only when the index and generation together look like a live published object.
+	 */
 	constexpr bool IsValid() const noexcept { return Index != InvalidIndex && Generation != 0; }
 };
 
-/** Compares complete local lifetime identity rather than a potentially reused slot. */
+/**
+ * Motivation: Lets containers compare two handles by complete local lifetime identity rather than a potentially reused slot.
+ * Responsibilities: Return true only when both index and generation match.
+ */
 constexpr bool operator==(const FObjectHandle InLeft, const FObjectHandle InRight) noexcept
 {
 	return InLeft.Index == InRight.Index && InLeft.Generation == InRight.Generation;
 }
 
-/** Distinguishes any slot or generation mismatch. */
+/**
+ * Motivation: Lets a caller tell two handles apart by complete local lifetime identity.
+ * Responsibilities: Return true whenever the slot or generation identity differs.
+ */
 constexpr bool operator!=(const FObjectHandle InLeft, const FObjectHandle InRight) noexcept
 {
 	return !(InLeft == InRight);
 }
 
 /**
- * Provides a type-safe local diagnostic identifier.
- *
- * This value and FObjectHandle are process-local and must never become Transport or
- * serialized identities.
+ * Motivation: Gives one local managed object a type-safe diagnostic identifier that never masquerades as a transport
+ *   or serialized identity.
+ * Responsibilities: Carry an application-defined diagnostic value only, with no wire semantics.
+ * Example:
+ *   FObjectId Id{0x1234u};
  */
 struct FObjectId
 {
-	/** Carries an application-defined diagnostic value without wire semantics. */
+	/** Motivation: Carries an application-defined diagnostic value without wire semantics. */
 	std::uint32_t Value{0};
 };
 
 /**
- * Confirms that one more live generation can be published without wrapping.
- *
- * A store permanently retires the slot when this query is false; wrapping a
- * generation and making an old handle valid again is forbidden.
+ * Motivation: Confirms that one more live generation can be published without wrapping.
+ * Responsibilities: Report whether the generation is below its maximum, so a store can retire a slot before wrapping
+ *   would make an old handle valid again.
  */
 constexpr bool CanAdvanceObjectGeneration(const ObjectGeneration InCurrentGeneration) noexcept
 {

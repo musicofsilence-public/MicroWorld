@@ -21,54 +21,54 @@ using MicroWorld::Transport::FrameCodec::FrameMagicByte;
 using MicroWorld::Transport::FrameCodec::FrameOverheadBytes;
 using MicroWorld::Transport::FrameCodec::TFrameDecoder;
 
-/** Decoder payload capacity shared by every case so a declared length of nine exercises the oversize path. */
+/** Motivation: Decoder payload capacity shared by every case so a declared length of nine exercises the oversize path. */
 constexpr std::size_t DecoderMaxPayload = 8;
 
-/** One framed payload buffer's capacity: the maximum payload plus the codec's per-frame overhead. */
+/** Motivation: One framed payload buffer's capacity: the maximum payload plus the codec's per-frame overhead. */
 constexpr std::size_t FrameBufferCapacity = DecoderMaxPayload + FrameOverheadBytes;
 
-/** Capacity for a stream holding two back-to-back framed payloads. */
+/** Motivation: Capacity for a stream holding two back-to-back framed payloads. */
 constexpr std::size_t DoubleFrameBufferCapacity = FrameBufferCapacity * 2;
 
-/** Number of leading non-magic bytes the resync case drops before a valid frame. */
+/** Motivation: Number of leading non-magic bytes the resync case drops before a valid frame. */
 constexpr std::size_t GarbageByteCount = 3;
 
-/** Number of CRC-16/CCITT-FALSE check-vector input bytes (ASCII "123456789"). */
+/** Motivation: Number of CRC-16/CCITT-FALSE check-vector input bytes (ASCII "123456789"). */
 constexpr std::size_t CrcCheckInputCount = 9;
 
-/** Number of hand-assembled bytes in the oversize-declared-length candidate. */
+/** Motivation: Number of hand-assembled bytes in the oversize-declared-length candidate. */
 constexpr std::size_t BadLengthCandidateCount = 4;
 
-/** Number of hand-assembled bytes in the truncated candidate. */
+/** Motivation: Number of hand-assembled bytes in the truncated candidate. */
 constexpr std::size_t TruncatedCandidateCount = 6;
 
-/** Payload byte index whose value equals the frame magic, proving it is not misread as a boundary. */
+/** Motivation: Payload byte index whose value equals the frame magic, proving it is not misread as a boundary. */
 constexpr std::size_t MagicPayloadIndex = 1;
 
-/** Payload sizes the round-trip case exercises: empty, single-byte, and the decoder maximum. */
+/** Motivation: Payload sizes the round-trip case exercises: empty, single-byte, and the decoder maximum. */
 constexpr std::size_t EmptyPayloadSize = 0;
 constexpr std::size_t SingleBytePayloadSize = 1;
 constexpr std::size_t RoundTripSizeCount = 3;
 
-/** Span length larger than any 16-bit length field can encode, so the size guard rejects it before any byte is read. */
+/** Motivation: Span length larger than any 16-bit length field can encode, so the size guard rejects it before any byte is read. */
 constexpr std::size_t OversizePayloadLength = 0x10000;
 
-/** Nonzero destination length paired with a null pointer to exercise the null-destination rejection. */
+/** Motivation: Nonzero destination length paired with a null pointer to exercise the null-destination rejection. */
 constexpr std::size_t NullDestinationLength = 4;
 
-/** Base added to each round-trip payload index so every non-magic byte is distinct and observable. */
+/** Motivation: Base added to each round-trip payload index so every non-magic byte is distinct and observable. */
 constexpr std::uint8_t PayloadBaseByte = 0x10;
 
-/** Mask XORed into the final CRC byte to force a validation failure on the candidate's last byte. */
+/** Motivation: Mask XORed into the final CRC byte to force a validation failure on the candidate's last byte. */
 constexpr std::uint8_t CrcCorruptionMask = 0xFF;
 
-/** Sentinel pre-loaded into OutWritten so a rejection that leaves it unchanged is observable. */
+/** Motivation: Sentinel pre-loaded into OutWritten so a rejection that leaves it unchanged is observable. */
 constexpr std::size_t UntouchedWrittenSentinel = 0xDEAD;
 
-/** The check value CRC-16/CCITT-FALSE produces for ASCII "123456789". */
+/** Motivation: The check value CRC-16/CCITT-FALSE produces for ASCII "123456789". */
 constexpr std::uint16_t Crc16CcittFalseCheckValue = 0x29B1;
 
-/** Distinct source node ids the encode/decode cases thread through the codec. */
+/** Motivation: Distinct source node ids the encode/decode cases thread through the codec. */
 constexpr std::uint8_t NodeId01 = 0x01;
 constexpr std::uint8_t NodeId02 = 0x02;
 constexpr std::uint8_t NodeId03 = 0x03;
@@ -77,52 +77,55 @@ constexpr std::uint8_t NodeId06 = 0x06;
 constexpr std::uint8_t NodeId07 = 0x07;
 constexpr std::uint8_t NodeId09 = 0x09;
 
-/** ASCII "123456789" - the canonical CRC-16/CCITT-FALSE check-vector input. */
+/** Motivation: ASCII "123456789" - the canonical CRC-16/CCITT-FALSE check-vector input. */
 constexpr std::uint8_t CrcCheckInput[CrcCheckInputCount] = {0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39};
 
-/** Two-byte payload the encode-rejects case threads through a too-small destination. */
+/** Motivation: Two-byte payload the encode-rejects case threads through a too-small destination. */
 constexpr std::uint8_t EncodeRejectsPayload[2] = {0x01, 0x02};
 
-/** Single-byte payload the leading-garbage case delivers after the dropped prefix. */
+/** Motivation: Single-byte payload the leading-garbage case delivers after the dropped prefix. */
 constexpr std::uint8_t LeadingGarbagePayload[1] = {0x55};
 
-/** Two-byte first payload the back-to-back case encodes ahead of a second frame. */
+/** Motivation: Two-byte first payload the back-to-back case encodes ahead of a second frame. */
 constexpr std::uint8_t FirstBackToBackPayload[2] = {0x10, 0x20};
 
-/** Three-byte second payload the back-to-back case encodes after the first frame. */
+/** Motivation: Three-byte second payload the back-to-back case encodes after the first frame. */
 constexpr std::uint8_t SecondBackToBackPayload[3] = {0x30, 0x40, 0x50};
 
-/** Two-byte payload whose CRC the corrupted-CRC case invalidates. */
+/** Motivation: Two-byte payload whose CRC the corrupted-CRC case invalidates. */
 constexpr std::uint8_t CorruptedCrcPayload[2] = {0x11, 0x22};
 
-/** Single-byte good payload the corrupted-CRC case decodes after the discard. */
+/** Motivation: Single-byte good payload the corrupted-CRC case decodes after the discard. */
 constexpr std::uint8_t CorruptedCrcGoodPayload[1] = {0x77};
 
-/** Single-byte good payload the bad-length case decodes after the discard. */
+/** Motivation: Single-byte good payload the bad-length case decodes after the discard. */
 constexpr std::uint8_t BadLengthGoodPayload[1] = {0x66};
 
-/** Two-byte payload A the truncated-resync case encodes after the truncated candidate. */
+/** Motivation: Two-byte payload A the truncated-resync case encodes after the truncated candidate. */
 constexpr std::uint8_t TruncatedPayloadA[2] = {0x11, 0x22};
 
-/** Single-byte payload B the truncated-resync case decodes as the surviving frame. */
+/** Motivation: Single-byte payload B the truncated-resync case decodes as the surviving frame. */
 constexpr std::uint8_t TruncatedPayloadB[1] = {0x33};
 
-/** Eight distinct payload bytes the steady-state allocation case round-trips. */
+/** Motivation: Eight distinct payload bytes the steady-state allocation case round-trips. */
 constexpr std::uint8_t SteadyStatePayload[DecoderMaxPayload] = {0x10, 0x21, 0x32, 0x43, 0x54, 0x65, 0x76, 0x87};
 
-/** Non-magic leading bytes the decoder must drop while waiting for a frame start. */
+/** Motivation: Non-magic leading bytes the decoder must drop while waiting for a frame start. */
 constexpr std::uint8_t LeadingGarbageBytes[GarbageByteCount] = {0x00, 0xFF, 0x42};
 
-/** Hand-assembled candidate whose declared length (nine) exceeds the decoder capacity (eight). */
+/** Motivation: Hand-assembled candidate whose declared length (nine) exceeds the decoder capacity (eight). */
 constexpr std::uint8_t BadLengthCandidate[BadLengthCandidateCount] = {FrameMagicByte, 0x05, 0x00, 0x09};
 
-/** Hand-assembled truncated candidate: magic, node, declared length five, but only two payload bytes. */
+/** Motivation: Hand-assembled truncated candidate: magic, node, declared length five, but only two payload bytes. */
 constexpr std::uint8_t TruncatedCandidate[TruncatedCandidateCount] = {FrameMagicByte, 0x08, 0x00, 0x05, 0xAA, 0xBB};
 
-/** Convenient alias so each case names one concrete decoder type without repeating the capacity. */
+/** Motivation: Convenient alias so each case names one concrete decoder type without repeating the capacity. */
 using FDecoder = TFrameDecoder<DecoderMaxPayload>;
 
-/** Feeds a byte sequence through a decoder and returns the event produced by the final byte. */
+/**
+ * Motivation: Feeds a byte sequence through a decoder and returns the event produced by the final byte.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ */
 EFrameEvent FeedBytes(FDecoder& InDecoder, const std::uint8_t* const InBytes, const std::size_t InCount) noexcept
 {
 	EFrameEvent Last = EFrameEvent::None;
@@ -133,7 +136,10 @@ EFrameEvent FeedBytes(FDecoder& InDecoder, const std::uint8_t* const InBytes, co
 	return Last;
 }
 
-/** Reports whether the decoder's held payload equals the expected bytes and length. */
+/**
+ * Motivation: Reports whether the decoder's held payload equals the expected bytes and length.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ */
 bool PayloadMatches(const FDecoder& InDecoder, const std::uint8_t* const InExpected, const std::size_t InCount) noexcept
 {
 	if (InDecoder.FramePayload().Size() != InCount)
@@ -152,8 +158,8 @@ bool PayloadMatches(const FDecoder& InDecoder, const std::uint8_t* const InExpec
 }
 
 /**
- * Scenario: Compute the CRC-16/CCITT-FALSE primitive over the canonical ASCII "123456789" check vector.
- * Expected: The result equals the canonical check value 0x29B1.
+ * Motivation: Compute the CRC-16/CCITT-FALSE primitive over the canonical ASCII "123456789" check vector.
+ * Responsibilities: The result equals the canonical check value 0x29B1.
  */
 MW_TEST_CASE(FrameCodec_Crc16CcittFalseCheckValueIs29B1)
 {
@@ -165,9 +171,10 @@ MW_TEST_CASE(FrameCodec_Crc16CcittFalseCheckValueIs29B1)
 }
 
 /**
- * Scenario: Encode payloads of size zero, one, and the decoder maximum, then feed each frame byte-by-byte into a decoder and clear the held frame.
- * Expected: Each frame completes with the encoded source node id and a byte-for-byte matching payload, including a 0xA5 magic-valued payload byte;
- * ClearFrame releases the held frame.
+ * Motivation: Encode payloads of size zero, one, and the decoder maximum, then feed each frame byte-by-byte into a
+ *   decoder and clear the held frame.
+ * Responsibilities: Each frame completes with the encoded source node id and a byte-for-byte matching payload, including
+ *   a 0xA5 magic-valued payload byte;.
  */
 MW_TEST_CASE(FrameCodec_RoundTripsPayloadSizesZeroOneAndMax)
 {
@@ -209,8 +216,9 @@ MW_TEST_CASE(FrameCodec_RoundTripsPayloadSizesZeroOneAndMax)
 }
 
 /**
- * Scenario: Attempt EncodeFrame with a null nonzero payload, a too-small destination, a null nonzero destination, and a payload larger than the
- * 16-bit length field. Expected: Each rejection returns Invalid or Full as appropriate and leaves OutWritten unchanged.
+ * Motivation: Scenario: Attempt EncodeFrame with a null nonzero payload, a too-small destination, a null nonzero
+ *   destination, and a payload larger than the 16-bit length field.
+ * Responsibilities: Expected: Each rejection returns Invalid or Full as appropriate and leaves OutWritten unchanged.
  */
 MW_TEST_CASE(FrameCodec_EncodeRejectsInvalidAndFullCases)
 {
@@ -264,9 +272,9 @@ MW_TEST_CASE(FrameCodec_EncodeRejectsInvalidAndFullCases)
 }
 
 /**
- * Scenario: Prepend three non-magic garbage bytes to a valid frame and feed the stream into a decoder.
- * Expected: The garbage is dropped while the decoder waits for a frame start, and the following frame still completes with the correct source node id
- * and payload.
+ * Motivation: Prepend three non-magic garbage bytes to a valid frame and feed the stream into a decoder.
+ * Responsibilities: The garbage is dropped while the decoder waits for a frame start, and the following frame still
+ *   completes with the correct source node id.
  */
 MW_TEST_CASE(FrameCodec_LeadingGarbageThenValidFrameDecodes)
 {
@@ -304,8 +312,8 @@ MW_TEST_CASE(FrameCodec_LeadingGarbageThenValidFrameDecodes)
 }
 
 /**
- * Scenario: Feed two valid frames back-to-back into a decoder, clearing the held frame between them.
- * Expected: Both frames complete in order, each carrying its encoded source node id and payload.
+ * Motivation: Feed two valid frames back-to-back into a decoder, clearing the held frame between them.
+ * Responsibilities: Both frames complete in order, each carrying its encoded source node id and payload.
  */
 MW_TEST_CASE(FrameCodec_TwoBackToBackFramesDecodeInOrder)
 {
@@ -362,8 +370,9 @@ MW_TEST_CASE(FrameCodec_TwoBackToBackFramesDecodeInOrder)
 }
 
 /**
- * Scenario: Feed a frame whose final CRC byte is corrupted followed by a valid frame into a decoder.
- * Expected: The corrupted candidate is discarded, and the valid frame completes afterward with the correct source node id and payload.
+ * Motivation: Feed a frame whose final CRC byte is corrupted followed by a valid frame into a decoder.
+ * Responsibilities: The corrupted candidate is discarded, and the valid frame completes afterward with the correct
+ *   source node id and payload.
  */
 MW_TEST_CASE(FrameCodec_CorruptedCrcDiscardsThenNextFrameDecodes)
 {
@@ -428,8 +437,10 @@ MW_TEST_CASE(FrameCodec_CorruptedCrcDiscardsThenNextFrameDecodes)
 }
 
 /**
- * Scenario: Feed a hand-assembled candidate whose declared length exceeds the decoder capacity followed by a valid frame into a decoder.
- * Expected: The oversize-declared candidate is discarded, and the valid frame completes afterward with the correct source node id and payload.
+ * Motivation: Feed a hand-assembled candidate whose declared length exceeds the decoder capacity followed by a
+ *   valid frame into a decoder.
+ * Responsibilities: The oversize-declared candidate is discarded, and the valid frame completes afterward with the
+ *   correct source node id and payload.
  */
 MW_TEST_CASE(FrameCodec_BadLengthDiscardsThenNextFrameDecodes)
 {
@@ -473,9 +484,10 @@ MW_TEST_CASE(FrameCodec_BadLengthDiscardsThenNextFrameDecodes)
 }
 
 /**
- * Scenario: Feed a truncated candidate, a first valid frame, and a second valid frame into a decoder and capture the last completed frame.
- * Expected: The decoder resyncs after the truncated frame and decodes a later well-formed frame, with the surviving frame carrying the later frame's
- * node id and payload.
+ * Motivation: Feed a truncated candidate, a first valid frame, and a second valid frame into a decoder and capture
+ *   the last completed frame.
+ * Responsibilities: The decoder resyncs after the truncated frame and decodes a later well-formed frame, with the
+ *   surviving frame carrying the later frame's.
  */
 MW_TEST_CASE(FrameCodec_TruncatedFrameResyncsOnSubsequentValidFrame)
 {
@@ -535,8 +547,9 @@ MW_TEST_CASE(FrameCodec_TruncatedFrameResyncsOnSubsequentValidFrame)
 }
 
 /**
- * Scenario: Warm up the codec once, capture the allocation counter, then run one steady-state encode and decode round trip.
- * Expected: The steady-state round trip performs no heap allocation.
+ * Motivation: Warm up the codec once, capture the allocation counter, then run one steady-state encode and decode
+ *   round trip.
+ * Responsibilities: The steady-state round trip performs no heap allocation.
  */
 MW_TEST_CASE(FrameCodec_RoundTripDoesNotAllocate)
 {

@@ -19,16 +19,16 @@ using MicroWorld::Messaging::FMessageActorId;
 using MicroWorld::Messaging::FMessageTypeId;
 using MicroWorld::Tests::GlobalAllocationCount;
 
-/** Sentinel value pre-loaded into OutWrittenBytes so a failed encode leaving it untouched is observable. */
+/** Motivation: Sentinel value pre-loaded into OutWrittenBytes so a failed encode leaving it untouched is observable. */
 constexpr std::size_t UntouchedWrittenByteCount = 0xDEAD;
 
-/** Sentinel byte pre-filled into every destination byte so a failed encode leaving it untouched is observable. */
+/** Motivation: Sentinel byte pre-filled into every destination byte so a failed encode leaving it untouched is observable. */
 constexpr std::uint8_t UntouchedDestinationByte = 0x5A;
 
-/** Sentinel field value loaded into the untouched OutHeader so a failed decode leaving it untouched is observable. */
+/** Motivation: Sentinel field value loaded into the untouched OutHeader so a failed decode leaving it untouched is observable. */
 constexpr FMessageActorId UntouchedHeaderField = 0x5A5A;
 
-/** Distinct payload bytes the round-trip tests thread through the codec. */
+/** Motivation: Distinct payload bytes the round-trip tests thread through the codec. */
 constexpr std::uint8_t PayloadByte01 = 0x01;
 constexpr std::uint8_t PayloadByte02 = 0x02;
 constexpr std::uint8_t PayloadByte03 = 0x03;
@@ -42,7 +42,7 @@ constexpr std::uint8_t PayloadByteCC = 0xCC;
 constexpr std::uint8_t PayloadByteAD = 0xAD;
 constexpr std::uint8_t PayloadByteDE = 0xDE;
 
-/** Distinct little-endian header field bytes the byte-layout test expects. */
+/** Motivation: Distinct little-endian header field bytes the byte-layout test expects. */
 constexpr std::uint8_t HeaderLowByte0102 = 0x02;
 constexpr std::uint8_t HeaderHighByte0102 = 0x01;
 constexpr std::uint8_t HeaderLowByte0304 = 0x04;
@@ -50,7 +50,7 @@ constexpr std::uint8_t HeaderHighByte0304 = 0x03;
 constexpr std::uint8_t HeaderLowByte0506 = 0x06;
 constexpr std::uint8_t HeaderHighByte0506 = 0x05;
 
-/** Header field ids the round-trip and rejection tests assign. */
+/** Motivation: Header field ids the round-trip and rejection tests assign. */
 constexpr FMessageTypeId MessageTypeId0102 = 0x0102;
 constexpr FMessageTypeId MessageTypeId0001 = 0x0001;
 constexpr FMessageTypeId MessageTypeId0010 = 0x0010;
@@ -64,31 +64,34 @@ constexpr FMessageActorId ActorId0020 = 0x0020;
 constexpr FMessageActorId ActorId0030 = 0x0030;
 constexpr FMessageActorId ActorId0007 = 0x0007;
 
-/** A one-byte payload count used by both the 1-byte payload and the 1-byte sentinel storage. */
+/** Motivation: A one-byte payload count used by both the 1-byte payload and the 1-byte sentinel storage. */
 constexpr std::size_t OneBytePayloadCount = 1;
 
-/** A two-byte payload count used by the 2-byte payloads and their matching destinations. */
+/** Motivation: A two-byte payload count used by the 2-byte payloads and their matching destinations. */
 constexpr std::size_t TwoBytePayloadCount = 2;
 
-/** A three-byte payload count used by the 3-byte payloads and their matching destinations. */
+/** Motivation: A three-byte payload count used by the 3-byte payloads and their matching destinations. */
 constexpr std::size_t ThreeBytePayloadCount = 3;
 
-/** A four-byte payload count used by the 4-byte payload and its matching destination. */
+/** Motivation: A four-byte payload count used by the 4-byte payload and its matching destination. */
 constexpr std::size_t FourBytePayloadCount = 4;
 
-/** Header byte count minus one, the short-input length the decode rejection test feeds in. */
+/** Motivation: Header byte count minus one, the short-input length the decode rejection test feeds in. */
 constexpr std::size_t ShortInputByteCount = ActorMessageHeaderBytes - 1;
 
-/** Total byte count of a header plus a two-byte payload, the smallest destination several tests use. */
+/** Motivation: Total byte count of a header plus a two-byte payload, the smallest destination several tests use. */
 constexpr std::size_t HeaderPlusTwoBytes = ActorMessageHeaderBytes + 2;
 
-/** Total byte count of a header plus a three-byte payload. */
+/** Motivation: Total byte count of a header plus a three-byte payload. */
 constexpr std::size_t HeaderPlusThreeBytes = ActorMessageHeaderBytes + 3;
 
-/** Total byte count of a header plus a four-byte payload. */
+/** Motivation: Total byte count of a header plus a four-byte payload. */
 constexpr std::size_t HeaderPlusFourBytes = ActorMessageHeaderBytes + 4;
 
-/** Fills a buffer with a recognizable sentinel so a transactional failure leaving it untouched is observable. */
+/**
+ * Motivation: A transactional failure leaving it untouched is observable.
+ * Responsibilities: Fills a buffer with a recognizable sentinel.
+ */
 void FillWithSentinel(std::uint8_t* const InBytes, const std::size_t InCount, const std::uint8_t InSentinelByte) noexcept
 {
 	for (std::size_t Index = 0; Index < InCount; ++Index)
@@ -98,8 +101,9 @@ void FillWithSentinel(std::uint8_t* const InBytes, const std::size_t InCount, co
 }
 
 /**
- * Scenario: Encode a header and three-byte payload, then decode the result back through the codec.
- * Expected: Both calls succeed; the decoded header fields and payload bytes match the inputs; the written byte count equals header plus payload size.
+ * Motivation: Encode a header and three-byte payload, then decode the result back through the codec.
+ * Responsibilities: Both calls succeed; the decoded header fields and payload bytes match the inputs; the written byte
+ *   count equals header plus payload size.
  */
 MW_TEST_CASE(EngineMessageCodec_RoundTripsHeaderAndPayload)
 {
@@ -135,8 +139,8 @@ MW_TEST_CASE(EngineMessageCodec_RoundTripsHeaderAndPayload)
 }
 
 /**
- * Scenario: Encode a known header and two-byte payload into a destination buffer.
- * Expected: Encoding succeeds; each written byte matches the expected little-endian header-then-payload layout.
+ * Motivation: Encode a known header and two-byte payload into a destination buffer.
+ * Responsibilities: Encoding succeeds; each written byte matches the expected little-endian header-then-payload layout.
  */
 MW_TEST_CASE(EngineMessageCodec_EncodeProducesExactLittleEndianByteLayout)
 {
@@ -171,9 +175,9 @@ MW_TEST_CASE(EngineMessageCodec_EncodeProducesExactLittleEndianByteLayout)
 }
 
 /**
- * Scenario: Encode a header with a zero-length payload, then decode the result back through the codec.
- * Expected: Both calls succeed; the decoded header fields match the inputs and the decoded payload is empty; the written byte count equals exactly
- * the header size.
+ * Motivation: Encode a header with a zero-length payload, then decode the result back through the codec.
+ * Responsibilities: Both calls succeed; the decoded header fields match the inputs and the decoded payload is empty; the
+ *   written byte count equals exactly.
  */
 MW_TEST_CASE(EngineMessageCodec_ZeroLengthPayloadRoundTrips)
 {
@@ -202,8 +206,8 @@ MW_TEST_CASE(EngineMessageCodec_ZeroLengthPayloadRoundTrips)
 }
 
 /**
- * Scenario: Encode a header whose MessageTypeId is zero into a sentinel-filled destination.
- * Expected: The call returns InvalidType; OutWrittenBytes and every destination byte remain untouched.
+ * Motivation: Encode a header whose MessageTypeId is zero into a sentinel-filled destination.
+ * Responsibilities: The call returns InvalidType; OutWrittenBytes and every destination byte remain untouched.
  */
 MW_TEST_CASE(EngineMessageCodec_EncodeRejectsZeroMessageTypeIdTransactionally)
 {
@@ -228,8 +232,8 @@ MW_TEST_CASE(EngineMessageCodec_EncodeRejectsZeroMessageTypeIdTransactionally)
 }
 
 /**
- * Scenario: Encode a header and three-byte payload into a destination too small to hold them both.
- * Expected: The call returns PayloadTooLarge; OutWrittenBytes and every destination byte remain untouched.
+ * Motivation: Encode a header and three-byte payload into a destination too small to hold them both.
+ * Responsibilities: The call returns PayloadTooLarge; OutWrittenBytes and every destination byte remain untouched.
  */
 MW_TEST_CASE(EngineMessageCodec_EncodeRejectsTooSmallDestinationTransactionally)
 {
@@ -254,8 +258,8 @@ MW_TEST_CASE(EngineMessageCodec_EncodeRejectsTooSmallDestinationTransactionally)
 }
 
 /**
- * Scenario: Decode a sentinel-populated header and payload from an Encoded span shorter than the header.
- * Expected: The call returns PayloadTooLarge; OutHeader and OutPayload remain untouched.
+ * Motivation: Decode a sentinel-populated header and payload from an Encoded span shorter than the header.
+ * Responsibilities: The call returns PayloadTooLarge; OutHeader and OutPayload remain untouched.
  */
 MW_TEST_CASE(EngineMessageCodec_DecodeRejectsShortInputTransactionally)
 {
@@ -279,8 +283,8 @@ MW_TEST_CASE(EngineMessageCodec_DecodeRejectsShortInputTransactionally)
 }
 
 /**
- * Scenario: Decode a sentinel-populated header and payload from a header-sized message whose type id is zero.
- * Expected: The call returns InvalidType; OutHeader and OutPayload remain untouched.
+ * Motivation: Decode a sentinel-populated header and payload from a header-sized message whose type id is zero.
+ * Responsibilities: The call returns InvalidType; OutHeader and OutPayload remain untouched.
  */
 MW_TEST_CASE(EngineMessageCodec_DecodeRejectsZeroMessageTypeIdTransactionally)
 {
@@ -306,8 +310,8 @@ MW_TEST_CASE(EngineMessageCodec_DecodeRejectsZeroMessageTypeIdTransactionally)
 }
 
 /**
- * Scenario: Warm up the codec once, then perform a steady-state encode plus decode round trip.
- * Expected: The steady-state round trip performs no heap allocation.
+ * Motivation: Warm up the codec once, then perform a steady-state encode plus decode round trip.
+ * Responsibilities: The steady-state round trip performs no heap allocation.
  */
 MW_TEST_CASE(EngineMessageCodec_RoundTripDoesNotAllocate)
 {

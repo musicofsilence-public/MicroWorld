@@ -32,27 +32,32 @@ static_assert(MicroWorld::Version.Patch == 0);
 namespace MicroWorldConsumer
 {
 
-/** Stable process exit codes that identify the exact Transport public-API probe failure. */
+/**
+ * Motivation: Stable process exit codes that identify the exact Transport public-API probe failure.
+ * Responsibilities: Name each distinct transport-API failure so the probe reports the exact broken step.
+ * Example:
+ *   ETransportConsumerExitCode Code = ETransportConsumerExitCode::Success;
+ */
 enum class ETransportConsumerExitCode : int
 {
-	Success = 0,
-	ByteWriterOverflowDidNotReturnFull = 1,
-	ByteWriterAcceptedPrefixAltered = 2,
-	ByteReaderTruncatedDidNotReturnUnavailable = 3,
-	ByteReaderOutputModifiedOnFailure = 4,
-	LoopbackFifoOrderBroken = 5,
-	LoopbackFullOverwroteHead = 6,
-	LoopbackEmptyDidNotReturnUnavailable = 7,
-	LoopbackTooSmallDidNotReturnFull = 8,
-	ManagerQueueDidNotAcceptPacket = 9,
-	ManagerAdvanceDidNotSendHead = 10,
-	ManagerDeviceFullDidNotRetainHead = 11,
-	ManagerReceiveDidNotPropagateSuccess = 12,
-	ManagerRecoveryDidNotClearBackpressure = 13,
-	MemoryProfileFailureOffset = 100,
+	Success = 0,									///< Motivation: Reports the probe observed every transport API succeeding.
+	ByteWriterOverflowDidNotReturnFull = 1,			///< Motivation: Names a writer overflow that did not report Full.
+	ByteWriterAcceptedPrefixAltered = 2,			///< Motivation: Names an accepted prefix that was altered after a rejected write.
+	ByteReaderTruncatedDidNotReturnUnavailable = 3, ///< Motivation: Names a reader past-end read that did not report Unavailable.
+	ByteReaderOutputModifiedOnFailure = 4,			///< Motivation: Names a failed read that still modified the output byte.
+	LoopbackFifoOrderBroken = 5,					///< Motivation: Names a loopback that delivered packets out of FIFO order.
+	LoopbackFullOverwroteHead = 6,					///< Motivation: Names a full loopback that overwrote the retained head packet.
+	LoopbackEmptyDidNotReturnUnavailable = 7,		///< Motivation: Names an empty loopback receive that did not report Unavailable.
+	LoopbackTooSmallDidNotReturnFull = 8,			///< Motivation: Names a too-small receive that did not report Full.
+	ManagerQueueDidNotAcceptPacket = 9,				///< Motivation: Names a manager queue that rejected a queued packet.
+	ManagerAdvanceDidNotSendHead = 10,				///< Motivation: Names a manager advance that did not forward the head packet.
+	ManagerDeviceFullDidNotRetainHead = 11,			///< Motivation: Names a manager that dropped its head under device backpressure.
+	ManagerReceiveDidNotPropagateSuccess = 12,		///< Motivation: Names a manager receive that did not propagate the device success.
+	ManagerRecoveryDidNotClearBackpressure = 13,	///< Motivation: Names a manager that stayed blocked after the device recovered.
+	MemoryProfileFailureOffset = 100,				///< Motivation: Offsets the nested memory-probe failure codes out of the transport range.
 };
 
-/** Literal byte values used as test inputs across the Transport consumer probe. */
+/** Motivation: Literal byte values used as test inputs across the Transport consumer probe. */
 inline constexpr std::uint8_t ByteValue01 = 0x01;
 inline constexpr std::uint8_t ByteValue02 = 0x02;
 inline constexpr std::uint8_t ByteValue03 = 0x03;
@@ -70,10 +75,10 @@ inline constexpr std::uint8_t ByteValueDD = 0xDD;
 inline constexpr std::uint8_t UntouchedByteMarker = 0xEE;
 inline constexpr std::uint8_t FullByteMarker = 0xFF;
 
-/** Sentinel address byte that proves a receive call did not overwrite the caller's address. */
+/** Motivation: Sentinel address byte that proves a receive call did not overwrite the caller's address. */
 inline constexpr std::uint8_t UntouchedAddressByte = 0x42;
 
-/** Capacities and packet sizes the probe exercises. */
+/** Motivation: Capacities and packet sizes the probe exercises. */
 inline constexpr std::size_t SmallWriterByteCount = 4;
 inline constexpr std::size_t SmallPacketByteCount = 2;
 inline constexpr std::size_t LoopbackDestinationByteCount = 4;
@@ -84,7 +89,10 @@ inline constexpr std::size_t EmptyReceiveByteCount = 0;
 
 } // namespace MicroWorldConsumer
 
-/** Exercises representative Core+Transport public APIs without platform I/O. */
+/**
+ * Motivation: Exercises representative Core+Transport public APIs without platform I/O.
+ * Responsibilities: Drive the byte reader/writer, loopback, and manager paths and report the first failure code.
+ */
 inline int RunTransportConsumerProbe() noexcept
 {
 	using namespace MicroWorld::Core;

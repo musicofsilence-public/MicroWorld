@@ -26,25 +26,25 @@ using MicroWorld::Messaging::ReliableHeaderBytes;
 using MicroWorld::Messaging::ReliableSequenceFieldByteIndex;
 using MicroWorld::Messaging::TReliableChannel;
 
-/** Fixed channel id FRecordingInnerChannel reports, distinct from LocalChannelId. */
+/** Motivation: Fixed channel id FRecordingInnerChannel reports, distinct from LocalChannelId. */
 constexpr FMessageChannelId InnerChannelId = 7;
 
-/** Fixed per-send budget FRecordingInnerChannel reports, generously above every test payload. */
+/** Motivation: Fixed per-send budget FRecordingInnerChannel reports, generously above every test payload. */
 constexpr std::size_t InnerChannelBudget = 64;
 
-/** Pending-table capacity shared by every case in this suite. */
+/** Motivation: Pending-table capacity shared by every case in this suite. */
 constexpr std::size_t TestMaxPendingMessages = 4;
 
-/** Per-slot wrapped-packet byte budget shared by every case in this suite. */
+/** Motivation: Per-slot wrapped-packet byte budget shared by every case in this suite. */
 constexpr std::size_t TestMaxMessageBytes = 96;
 
-/** Retry interval used by every case's config, distinct so cases 3/4's counts stay unambiguous. */
+/** Motivation: Retry interval used by every case's config, distinct so cases 3/4's counts stay unambiguous. */
 constexpr DurationMilliseconds TestRetryIntervalMilliseconds = 250;
 
-/** Attempt ceiling used by every case's config, distinct so case 4's counts stay unambiguous. */
+/** Motivation: Attempt ceiling used by every case's config, distinct so case 4's counts stay unambiguous. */
 constexpr std::uint8_t TestMaxSendAttempts = 4;
 
-/** Distinct payload bytes the wrapping and forwarding cases thread through the reliable channel. */
+/** Motivation: Distinct payload bytes the wrapping and forwarding cases thread through the reliable channel. */
 constexpr std::uint8_t PayloadByte01 = 0x01;
 constexpr std::uint8_t PayloadByte11 = 0x11;
 constexpr std::uint8_t PayloadByte22 = 0x22;
@@ -56,40 +56,43 @@ constexpr std::uint8_t PayloadByteCC = 0xCC;
 constexpr std::uint8_t PayloadByteA1 = 0xA1;
 constexpr std::uint8_t PayloadByteA2 = 0xA2;
 
-/** Sequence number the wrapping case assigns to its first outbound Data packet. */
+/** Motivation: Sequence number the wrapping case assigns to its first outbound Data packet. */
 constexpr std::uint16_t FirstAssignedSequence = 1;
 
-/** Sequence number the duplicate-forward case threads through its single inbound Data packet. */
+/** Motivation: Sequence number the duplicate-forward case threads through its single inbound Data packet. */
 constexpr std::uint16_t SequenceFive = 5;
 
-/** Sequence number the window-edge case uses for its second (one-window-newer) Data packet. */
+/** Motivation: Sequence number the window-edge case uses for its second (one-window-newer) Data packet. */
 constexpr std::uint16_t SequenceThirtyThree = 33;
 
-/** Maximum value a 16-bit sequence field can hold; the value the wraparound case drains the sequence space down to. */
+/** Motivation: Maximum value a 16-bit sequence field can hold; the value the wraparound case drains the sequence space down to. */
 constexpr std::uint16_t MaxSequenceValue = 0xFFFFu;
 
-/** Sequence value the allocator must reuse after the field wraps past its maximum, since 0 is reserved as "never sent". */
+/** Motivation: Sequence value the allocator must reuse after the field wraps past its maximum, since 0 is reserved as "never sent". */
 constexpr std::uint16_t FirstSequenceAfterWrap = MicroWorld::Messaging::FirstOutgoingSequence;
 
-/** Wall-clock baseline the retry cases establish before advancing toward the retry interval. */
+/** Motivation: Wall-clock baseline the retry cases establish before advancing toward the retry interval. */
 constexpr TimePointMilliseconds BaselineTime = 1000;
 
-/** One-byte payload count shared by every one-byte payload and ack-handling span in this suite. */
+/** Motivation: One-byte payload count shared by every one-byte payload and ack-handling span in this suite. */
 constexpr std::size_t OneBytePayloadCount = 1;
 
-/** Three-byte payload count the wrapping case sends and its matching ack packet both use. */
+/** Motivation: Three-byte payload count the wrapping case sends and its matching ack packet both use. */
 constexpr std::size_t ThreeBytePayloadCount = 3;
 
-/** Four-byte wire-packet count the inbound Data cases feed to ReceiveEncodedMessage. */
+/** Motivation: Four-byte wire-packet count the inbound Data cases feed to ReceiveEncodedMessage. */
 constexpr std::size_t FourByteWirePacketCount = 4;
 
-/** Wrapped Data packet length for a three-byte payload: ReliableHeaderBytes plus the payload. */
+/** Motivation: Wrapped Data packet length for a three-byte payload: ReliableHeaderBytes plus the payload. */
 constexpr std::size_t WrappedThreeByteDataLength = ReliableHeaderBytes + ThreeBytePayloadCount;
 
-/** The reliable channel profile under test in this suite. */
+/** Motivation: The reliable channel profile under test in this suite. */
 using FTestReliableChannel = TReliableChannel<TestMaxPendingMessages, TestMaxMessageBytes>;
 
-/** Builds the shared retry config every case constructs its channel with. */
+/**
+ * Motivation: Builds the shared retry config every case constructs its channel with.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ */
 FReliableChannelConfig MakeTestConfig() noexcept
 {
 	FReliableChannelConfig Config{};
@@ -99,31 +102,52 @@ FReliableChannelConfig MakeTestConfig() noexcept
 }
 
 /**
- * Records every TrySendEncodedMessage call's full bytes and a running count so a case can assert
- * the wrapper's outbound wire format byte-for-byte and count how many sends the inner channel observed.
+ * Motivation: Records every TrySendEncodedMessage call's full bytes and a running count so a case can assert the
+ *   wrapper's outbound wire format byte-for-byte and count how many sends the inner channel observed.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
  */
 class FRecordingInnerChannel final : public IMessageChannel
 {
 public:
-	/** Bounds the copied bytes of the most recent send so this fixture stays fixed-size. */
+	/** Motivation: Bounds the copied bytes of the most recent send so this fixture stays fixed-size. */
 	static constexpr std::size_t MaxRecordedBytes = 32;
 
-	/** Reports how many TrySendEncodedMessage calls this stub has observed. */
+	/**
+	 * Motivation: Reports how many TrySendEncodedMessage calls this stub has observed.
+	 * Responsibilities: Return the stored value and touch nothing else.
+	 */
 	std::size_t SendCallCount() const noexcept { return CallCount; }
 
-	/** Reports the byte length of the most recently recorded send. */
+	/**
+	 * Motivation: Reports the byte length of the most recently recorded send.
+	 * Responsibilities: Return the stored value and touch nothing else.
+	 */
 	std::size_t LastSendLength() const noexcept { return LastLength; }
 
-	/** Accesses one byte of the most recently recorded send; the caller must keep Index < LastSendLength(). */
+	/**
+	 * Motivation: Accesses one byte of the most recently recorded send; the caller must keep Index < LastSendLength().
+	 * Responsibilities: Return the stored value and touch nothing else.
+	 */
 	std::uint8_t LastSendByte(const std::size_t InIndex) const noexcept { return LastBytes[InIndex]; }
 
-	/** Returns the fixed test channel id this stub was configured with. */
+	/**
+	 * Motivation: Returns the fixed test channel id this stub was configured with.
+	 * Responsibilities: Return the stored value and touch nothing else.
+	 */
 	FMessageChannelId GetChannelId() const noexcept override { return InnerChannelId; }
 
-	/** Returns the fixed test budget this stub was configured with. */
+	/**
+	 * Motivation: Returns the fixed test budget this stub was configured with.
+	 * Responsibilities: Return the stored value and touch nothing else.
+	 */
 	std::size_t MaxEncodedMessageBytes() const noexcept override { return InnerChannelBudget; }
 
-	/** Records the call and its bytes, then always reports Success. */
+	/**
+	 * Motivation: Records the call and its bytes, then always reports Success.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	EMessageResult TrySendEncodedMessage(const TSpan<const std::uint8_t> InEncoded) noexcept override
 	{
 		++CallCount;
@@ -136,27 +160,39 @@ public:
 	}
 
 private:
-	/** Total TrySendEncodedMessage calls observed so far. */
+	/** Motivation: Total TrySendEncodedMessage calls observed so far. */
 	std::size_t CallCount{0};
 
-	/** Byte length of the most recently recorded send. */
+	/** Motivation: Byte length of the most recently recorded send. */
 	std::size_t LastLength{0};
 
-	/** Copy of the most recently recorded send's bytes, truncated to MaxRecordedBytes. */
+	/** Motivation: Copy of the most recently recorded send's bytes, truncated to MaxRecordedBytes. */
 	std::uint8_t LastBytes[MaxRecordedBytes]{};
 };
 
-/** Records every forwarded payload's byte count and bytes so a case can assert "forwarded once" and inspect the delivered bytes. */
+/**
+ * Motivation: Records every forwarded payload's byte count and bytes so a case can assert "forwarded once" and
+ *   inspect the delivered bytes.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FRecordingForwardSink final : public IEncodedMessageSink
 {
 public:
-	/** Bounds the copied bytes of the most recent forward so this fixture stays fixed-size. */
+	/** Motivation: Bounds the copied bytes of the most recent forward so this fixture stays fixed-size. */
 	static constexpr std::size_t MaxRecordedBytes = 32;
 
-	/** Reports how many ReceiveEncodedMessage calls this stub has observed. */
+	/**
+	 * Motivation: Reports how many ReceiveEncodedMessage calls this stub has observed.
+	 * Responsibilities: Return the stored value and touch nothing else.
+	 */
 	std::size_t ForwardedCallCount() const noexcept { return CallCount; }
 
-	/** Records the call and its bytes, then always reports Success. */
+	/**
+	 * Motivation: Records the call and its bytes, then always reports Success.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	EMessageResult ReceiveEncodedMessage(const FMessageChannelId InArrivedOnChannelId, const TSpan<const std::uint8_t> InEncoded) noexcept override
 	{
 		(void)InArrivedOnChannelId;
@@ -170,20 +206,20 @@ public:
 	}
 
 private:
-	/** Total ReceiveEncodedMessage calls observed so far. */
+	/** Motivation: Total ReceiveEncodedMessage calls observed so far. */
 	std::size_t CallCount{0};
 
-	/** Byte length of the most recently recorded forward. */
+	/** Motivation: Byte length of the most recently recorded forward. */
 	std::size_t LastLength{0};
 
-	/** Copy of the most recently recorded forward's bytes, truncated to MaxRecordedBytes. */
+	/** Motivation: Copy of the most recently recorded forward's bytes, truncated to MaxRecordedBytes. */
 	std::uint8_t LastBytes[MaxRecordedBytes]{};
 };
 
 /**
- * Scenario: Send a three-byte payload through a reliable channel wired to a recording inner channel.
- * Expected: The send is accepted; the inner channel receives one packet wrapped as [Data][Sequence=1 LE][payload] and the message remains pending
- * until acknowledged.
+ * Motivation: Send a three-byte payload through a reliable channel wired to a recording inner channel.
+ * Responsibilities: The send is accepted; the inner channel receives one packet wrapped as [Data][Sequence=1
+ *   LE][payload] and the message remains pending.
  */
 MW_TEST_CASE(EngineReliableChannel_DataIsWrappedWithKindAndSequence)
 {
@@ -226,8 +262,10 @@ MW_TEST_CASE(EngineReliableChannel_DataIsWrappedWithKindAndSequence)
 }
 
 /**
- * Scenario: Send a message, then receive an Acknowledgement naming its sequence, then advance past the retry interval.
- * Expected: The send is accepted and acked; the pending slot is cleared and no resend fires after the interval elapses.
+ * Motivation: Send a message, then receive an Acknowledgement naming its sequence, then advance past the retry
+ *   interval.
+ * Responsibilities: The send is accepted and acked; the pending slot is cleared and no resend fires after the interval
+ *   elapses.
  */
 MW_TEST_CASE(EngineReliableChannel_AckClearsPending)
 {
@@ -267,9 +305,9 @@ MW_TEST_CASE(EngineReliableChannel_AckClearsPending)
 }
 
 /**
- * Scenario: Send a message with no ack, then advance to one-before, then exactly at, the retry interval.
- * Expected: The initial send reaches the inner channel once; the baseline PostAdvance and a flush before the interval never resend; a flush at
- * exactly the interval resends exactly once.
+ * Motivation: Send a message with no ack, then advance to one-before, then exactly at, the retry interval.
+ * Responsibilities: The initial send reaches the inner channel once; the baseline PostAdvance and a flush before the
+ *   interval never resend; a flush at.
  */
 MW_TEST_CASE(EngineReliableChannel_NoAckResendsAfterExactlyRetryInterval)
 {
@@ -308,9 +346,10 @@ MW_TEST_CASE(EngineReliableChannel_NoAckResendsAfterExactlyRetryInterval)
 }
 
 /**
- * Scenario: Send a message with no ack, then advance through MaxSendAttempts - 1 retries and one further interval, then advance once more.
- * Expected: Exactly MaxSendAttempts - 1 resends fire before the slot exhausts; one further interval drops the slot and counts it as lost; a later
- * flush sends nothing further.
+ * Motivation: Send a message with no ack, then advance through MaxSendAttempts - 1 retries and one further
+ *   interval, then advance once more.
+ * Responsibilities: Exactly MaxSendAttempts - 1 resends fire before the slot exhausts; one further interval drops the
+ *   slot and counts it as lost; a later.
  */
 MW_TEST_CASE(EngineReliableChannel_DropsAfterMaxSendAttempts)
 {
@@ -362,9 +401,10 @@ MW_TEST_CASE(EngineReliableChannel_DropsAfterMaxSendAttempts)
 }
 
 /**
- * Scenario: Deliver the same Data sequence twice through a reliable channel wired to a recording forward sink and inner channel.
- * Expected: Both deliveries are accepted and both send an ack; the message is forwarded only once and the second delivery counts as exactly one
- * duplicate.
+ * Motivation: Deliver the same Data sequence twice through a reliable channel wired to a recording forward sink
+ *   and inner channel.
+ * Responsibilities: Both deliveries are accepted and both send an ack; the message is forwarded only once and the second
+ *   delivery counts as exactly one.
  */
 MW_TEST_CASE(EngineReliableChannel_DuplicateDataForwardedOnceAckedTwice)
 {
@@ -400,9 +440,9 @@ MW_TEST_CASE(EngineReliableChannel_DuplicateDataForwardedOnceAckedTwice)
 }
 
 /**
- * Scenario: Deliver sequence 1, then jump exactly one window width to sequence 33, then re-deliver sequence 1.
- * Expected: Both fresh sequences are accepted and forwarded once each; the re-delivered sequence 1 is still acked but recognized as seen and counted
- * as exactly one duplicate, not re-forwarded.
+ * Motivation: Deliver sequence 1, then jump exactly one window width to sequence 33, then re-deliver sequence 1.
+ * Responsibilities: Both fresh sequences are accepted and forwarded once each; the re-delivered sequence 1 is still
+ *   acked but recognized as seen and counted.
  */
 MW_TEST_CASE(EngineReliableChannel_WindowEdgeJumpStillDropsOldHighestDuplicate)
 {
@@ -448,8 +488,9 @@ MW_TEST_CASE(EngineReliableChannel_WindowEdgeJumpStillDropsOldHighestDuplicate)
 }
 
 /**
- * Scenario: Fill every pending slot with unacked sends, then attempt one more send.
- * Expected: The overflow send returns CapacityExceeded; the pending table is unchanged and the inner channel sees no further send.
+ * Motivation: Fill every pending slot with unacked sends, then attempt one more send.
+ * Responsibilities: The overflow send returns CapacityExceeded; the pending table is unchanged and the inner channel
+ *   sees no further send.
  */
 MW_TEST_CASE(EngineReliableChannel_PendingTableFullReportsCapacityExceededTransactionally)
 {
@@ -481,8 +522,9 @@ MW_TEST_CASE(EngineReliableChannel_PendingTableFullReportsCapacityExceededTransa
 }
 
 /**
- * Scenario: Construct a reliable channel without calling SetInnerChannel, then issue a send.
- * Expected: The send returns Unavailable; GetChannelId reports LocalChannelId and MaxEncodedMessageBytes reports zero.
+ * Motivation: Construct a reliable channel without calling SetInnerChannel, then issue a send.
+ * Responsibilities: The send returns Unavailable; GetChannelId reports LocalChannelId and MaxEncodedMessageBytes reports
+ *   zero.
  */
 MW_TEST_CASE(EngineReliableChannel_UnsetInnerChannelReportsUnavailable)
 {
@@ -501,9 +543,10 @@ MW_TEST_CASE(EngineReliableChannel_UnsetInnerChannelReportsUnavailable)
 }
 
 /**
- * Scenario: Drain the entire 16-bit sequence space by sending and acking one message at a time, then send once more and ack the wrapped sequence.
- * Expected: The first send after the maximum wraps the sequence to its first value (never zero) as a Data packet and the wrapped send remains
- * ackable, clearing its pending slot.
+ * Motivation: Drain the entire 16-bit sequence space by sending and acking one message at a time, then send once
+ *   more and ack the wrapped sequence.
+ * Responsibilities: The first send after the maximum wraps the sequence to its first value (never zero) as a Data packet
+ *   and the wrapped send remains.
  */
 MW_TEST_CASE(EngineReliableChannel_SequenceWrapsAndWrappedSendRemainsAckable)
 {

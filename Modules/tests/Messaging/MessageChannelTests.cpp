@@ -61,68 +61,91 @@ using MicroWorld::Transport::Address::MakeLoopbackAddress;
 /** Asserts a messaging operation returned Success without discarding the result. */
 #define MW_EXPECT_SUCCESS(TestContext, Result, Message) MW_EXPECT_EQ(TestContext, EMessageResult::Success, Result, Message)
 
-/** Wall-clock step every simulated frame advances by; must be nonzero so Tick never rejects it as non-monotonic. */
+/** Motivation: Wall-clock step every simulated frame advances by; must be nonzero so Tick never rejects it as
+ *   non-monotonic.
+ */
 constexpr TimePointMilliseconds FrameStepMilliseconds = 10;
 
-/** Upper bound on frames spent waiting for the client Hello/Welcome handshake before a test gives up. */
+/** Motivation: Upper bound on frames spent waiting for the client Hello/Welcome handshake before a test gives up. */
 constexpr int MaxHandshakeFrames = 8;
 
-/** The router-facing channel id every case binds; kept numerically distinct from AppWireChannelByte so the two id spaces read as separate concepts.
+/** Motivation: The router-facing channel id every case binds; kept numerically distinct from AppWireChannelByte so
+ *   the two id spaces read as separate concepts.
  */
 constexpr FMessageChannelId AppChannelId = 1;
 
-/** The TTransportHost wire-level channel byte the bindings under test read and write. */
+/** Motivation: The TTransportHost wire-level channel byte the bindings under test read and write. */
 constexpr std::uint8_t AppWireChannelByte = 5;
 
-/** A second wire-level channel byte on the same hosts, used only to prove a binding ignores traffic addressed to some other channel. */
+/** Motivation: A second wire-level channel byte on the same hosts, used only to prove a binding ignores traffic
+ *   addressed to some other channel.
+ */
 constexpr std::uint8_t ForeignWireChannelByte = 9;
 
-/** Router-facing channel id the multi-channel cases bind their telemetry wire to; equals AppChannelId since both name "the first channel". */
+/** Motivation: Router-facing channel id the multi-channel cases bind their telemetry wire to; equals AppChannelId
+ *   since both name "the first channel".
+ */
 constexpr FMessageChannelId TelemetryChannelId = AppChannelId;
 
-/** Router-facing channel id the multi-channel cases bind their command wire to; distinct from TelemetryChannelId so the router holds two channels. */
+/** Motivation: Router-facing channel id the multi-channel cases bind their command wire to; distinct from
+ *   TelemetryChannelId so the router holds two channels.
+ */
 constexpr FMessageChannelId CommandChannelId = 2;
 
-/** Wire-level channel byte the multi-channel cases' telemetry hosts read and write; equals AppWireChannelByte since it is that same single-channel
- * byte. */
+/** Motivation: Wire-level channel byte the multi-channel cases' telemetry hosts read and write; equals
+ *   AppWireChannelByte since it is that same single-channel byte.
+ */
 constexpr std::uint8_t TelemetryWireChannelByte = AppWireChannelByte;
 
-/** Wire-level channel byte the multi-channel cases' command hosts read and write; a different network to Telemetry's, so the value need not differ,
- * but a distinct one keeps captured logs unambiguous. */
+/** Motivation: Wire-level channel byte the multi-channel cases' command hosts read and write; a different network
+ *   to Telemetry's, so the value need not differ, but a distinct one keeps captured logs unambiguous.
+ */
 constexpr std::uint8_t CommandWireChannelByte = 6;
 
-/** Message type shared by every case; its value is arbitrary and only needs to be nonzero. */
+/** Motivation: Message type shared by every case; its value is arbitrary and only needs to be nonzero. */
 constexpr FMessageTypeId TestMessageType = 42;
 
-/** Actor id a targeted send names as its listener, matched against a handler registered under the same id.
- *  Named distinctly from TMessageRouter's own ListenerActorId parameter so this file-scope constant never shadows it. */
+/** Motivation: Actor id a targeted send names as its listener, matched against a handler registered under the same
+ *   id. Named distinctly from TMessageRouter's own ListenerActorId parameter so this file-scope constant
+ *   never shadows it.
+ */
 constexpr FMessageActorId TestListenerActorId = 7;
 
-/** Actor id recorded as every test message's sender.
- *  Named distinctly from TMessageRouter's own SenderActorId parameter so this file-scope constant never shadows it. */
+/** Motivation: Actor id recorded as every test message's sender. Named distinctly from TMessageRouter's own
+ *   SenderActorId parameter so this file-scope constant never shadows it.
+ */
 constexpr FMessageActorId TestSenderActorId = 3;
 
-/** Capacities shared by every router instance in this suite; each case constructs its own fresh router, sized with generous headroom. */
+/** Motivation: Capacities shared by every router instance in this suite; each case constructs its own fresh router,
+ *   sized with generous headroom.
+ */
 constexpr std::size_t HandlerCapacity = 2;
 constexpr std::size_t OutboundQueueCapacity = 4;
 constexpr std::size_t MessageByteCapacity = 32;
 constexpr std::size_t ChannelCapacity = 1;
 
-/** GC budget every host world is rooted with; generous headroom since these cases never spawn actors, so the values are not under test. */
+/** Motivation: GC budget every host world is rooted with; generous headroom since these cases never spawn actors,
+ *   so the values are not under test.
+ */
 constexpr std::uint32_t TestRootOperations = 1;
 constexpr std::uint32_t TestMarkOperations = 4;
 constexpr std::uint32_t TestSweepOperations = 8;
 
-/** The network host type every case wires a channel binding to. */
+/** Motivation: The network host type every case wires a channel binding to. */
 using FTransport = TTransportHost<2, 64>;
 
-/** Adapts FTransport to the engine's per-frame network slot, matching EngineHostTests.cpp's wiring. */
+/** Motivation: Adapts FTransport to the engine's per-frame network slot, matching EngineHostTests.cpp's wiring. */
 using FHostPlay = THostPlaySystem<FTransport>;
 
-/** The channel binding under test, duck-typed on FTransport. */
+/** Motivation: The channel binding under test, duck-typed on FTransport. */
 using FBinding = TMessageChannelBinding<FTransport>;
 
-/** Carries the exact capacities FHost sized before the traits refactor, so the test store is unchanged. */
+/**
+ * Motivation: Carries the exact capacities FHost sized before the traits refactor, so the test store is unchanged.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 struct FHostTraits : FDefaultEngineTraits
 {
 	static constexpr std::size_t MaxClasses = 6;
@@ -133,25 +156,39 @@ struct FHostTraits : FDefaultEngineTraits
 	static constexpr std::size_t MaxTimers = 4;
 };
 
-/** Engine profile sized for a bare rooted world; these cases never spawn actors. */
+/** Motivation: Engine profile sized for a bare rooted world; these cases never spawn actors. */
 using FHost = TEngine<FHostTraits>;
 
-/** Per-side D3 composition root: holds one side's host play system and message router behind the one IPlaySystem slot TEngine drives. */
+/** Motivation: Per-side D3 composition root: holds one side's host play system and message router behind the one
+ *   IPlaySystem slot TEngine drives.
+ */
 using FFrameSet = TPlaySystemSet<2>;
 
-/** Per-side D3 composition root for the multi-channel cases: two host play systems (telemetry, command) plus the one router that binds both. */
+/** Motivation: Per-side D3 composition root for the multi-channel cases: two host play systems (telemetry, command)
+ *   plus the one router that binds both.
+ */
 using FMultiChannelFrameSet = TPlaySystemSet<3>;
 
-/** Router profile shared by every case; its capacities are generous headroom, never the behavior under test. */
+/** Motivation: Router profile shared by every case; its capacities are generous headroom, never the behavior under
+ *   test.
+ */
 using FTestRouter = TMessageRouter<HandlerCapacity, OutboundQueueCapacity, MessageByteCapacity, ChannelCapacity>;
 
-/** Channel capacity for the multi-channel cases: exactly Telemetry + Command, the roadmap 4.2 scenario under test. */
+/** Motivation: Channel capacity for the multi-channel cases: exactly Telemetry + Command, the roadmap 4.2 scenario
+ *   under test.
+ */
 constexpr std::size_t MultiChannelCapacity = 2;
 
-/** One router driving two wired channels (roadmap 4.2): otherwise identical profile to FTestRouter, sized only for its extra channel slot. */
+/** Motivation: One router driving two wired channels (roadmap 4.2): otherwise identical profile to FTestRouter,
+ *   sized only for its extra channel slot.
+ */
 using FMultiChannelRouter = TMessageRouter<HandlerCapacity, OutboundQueueCapacity, MessageByteCapacity, MultiChannelCapacity>;
 
-/** Builds the shared fast-heartbeat, short-timeout config every case's hosts use for deterministic frames. */
+/**
+ * Motivation: Builds the shared fast-heartbeat, short-timeout config every case's hosts use for deterministic
+ *   frames.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ */
 FTransportHostConfig MakeConfig() noexcept
 {
 	FTransportHostConfig Config{};
@@ -161,34 +198,43 @@ FTransportHostConfig MakeConfig() noexcept
 	return Config;
 }
 
-/** Captures one delivered message's full header, arrival channel, and payload bytes for later assertion. */
+/**
+ * Motivation: Captures one delivered message's full header, arrival channel, and payload bytes for later
+ *   assertion.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 struct FDeliveredMessageRecord final
 {
-	/** Bounds the payload copy so this fixture stays fixed-size like the production types it observes. */
+	/** Motivation: Bounds the payload copy so this fixture stays fixed-size like the production types it observes. */
 	static constexpr std::size_t MaxPayloadBytes = 8;
 
-	/** Distinguishes "never invoked" from a delivery whose fields all happen to be zero. */
+	/** Motivation: Distinguishes "never invoked" from a delivery whose fields all happen to be zero. */
 	bool bWasCalled{false};
 
-	/** The delivered view's MessageTypeId. */
+	/** Motivation: The delivered view's MessageTypeId. */
 	FMessageTypeId MessageTypeId{0};
 
-	/** The delivered view's TargetActorId. */
+	/** Motivation: The delivered view's TargetActorId. */
 	FMessageActorId TargetActorId{0};
 
-	/** The delivered view's SenderActorId. */
+	/** Motivation: The delivered view's SenderActorId. */
 	FMessageActorId SenderActorId{0};
 
-	/** The channel id the router recorded as this message's arrival channel. */
+	/** Motivation: The channel id the router recorded as this message's arrival channel. */
 	FMessageChannelId ArrivedOnChannelId{LocalChannelId};
 
-	/** Number of valid bytes at the front of PayloadBytes. */
+	/** Motivation: Number of valid bytes at the front of PayloadBytes. */
 	std::size_t PayloadLength{0};
 
-	/** Copy of the delivered payload, truncated to MaxPayloadBytes. */
+	/** Motivation: Copy of the delivered payload, truncated to MaxPayloadBytes. */
 	std::uint8_t PayloadBytes[MaxPayloadBytes]{};
 
-	/** Records one delivered view's header, arrival channel, and payload for a later assertion. */
+	/**
+	 * Motivation: Records one delivered view's header, arrival channel, and payload for a later assertion.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void Record(const FMessageView& InView) noexcept
 	{
 		bWasCalled = true;
@@ -204,7 +250,10 @@ struct FDeliveredMessageRecord final
 	}
 };
 
-/** Binds a nothrow inline handler that records every delivered view into Recorder. */
+/**
+ * Motivation: Binds a nothrow inline handler that records every delivered view into Recorder.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ */
 FMessageHandlerBinding MakeRecordingHandler(FDeliveredMessageRecord& InRecorder) noexcept
 {
 	FMessageHandlerBinding Delegate;
@@ -213,20 +262,27 @@ FMessageHandlerBinding MakeRecordingHandler(FDeliveredMessageRecord& InRecorder)
 }
 
 /**
- * Buckets delivered views by ArrivedOnChannelId into one of two FDeliveredMessageRecords, so a single
- * handler registered once on a multi-channel router can still prove per-channel isolation: a view that
- * arrived on TelemetryChannelId only ever writes Telemetry, one that arrived on CommandChannelId only
- * ever writes Command, so the recorded payload in either slot can only be its own channel's payload.
+ * Motivation: Buckets delivered views by ArrivedOnChannelId into one of two FDeliveredMessageRecords, so a single
+ *   handler registered once on a multi-channel router can still prove per-channel isolation: a view that
+ *   arrived on TelemetryChannelId only ever writes Telemetry, one that arrived on CommandChannelId only
+ *   ever writes Command, so the recorded payload in either slot can only be its own channel's payload.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
  */
 struct FChannelKeyedMessageRecords final
 {
-	/** Written only by a view whose ArrivedOnChannelId equals TelemetryChannelId. */
+	/** Motivation: Written only by a view whose ArrivedOnChannelId equals TelemetryChannelId. */
 	FDeliveredMessageRecord Telemetry;
 
-	/** Written only by a view whose ArrivedOnChannelId equals CommandChannelId. */
+	/** Motivation: Written only by a view whose ArrivedOnChannelId equals CommandChannelId. */
 	FDeliveredMessageRecord Command;
 
-	/** Routes View into the slot matching its arrival channel; any other channel id is left unrecorded (never expected in this suite). */
+	/**
+	 * Motivation: Routes View into the slot matching its arrival channel; any other channel id is left unrecorded
+	 *   (never expected in this suite).
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void RecordByArrivalChannel(const FMessageView& InView) noexcept
 	{
 		if (InView.ArrivedOnChannelId == TelemetryChannelId)
@@ -240,7 +296,10 @@ struct FChannelKeyedMessageRecords final
 	}
 };
 
-/** Binds a nothrow inline handler that buckets every delivered view into Recorder's channel-keyed slot. */
+/**
+ * Motivation: Binds a nothrow inline handler that buckets every delivered view into Recorder's channel-keyed slot.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ */
 FMessageHandlerBinding MakeChannelKeyedRecordingHandler(FChannelKeyedMessageRecords& InRecorder) noexcept
 {
 	FMessageHandlerBinding Delegate;
@@ -249,19 +308,31 @@ FMessageHandlerBinding MakeChannelKeyedRecordingHandler(FChannelKeyedMessageReco
 }
 
 /**
- * A minimal IEncodedMessageSink test double that can be toggled to reject every inbound message, isolating
- * TMessageChannelBinding::DroppedInboundCount from a real router's own queue mechanics.
+ * Motivation: A minimal IEncodedMessageSink test double that can be toggled to reject every inbound message,
+ *   isolating TMessageChannelBinding::DroppedInboundCount from a real router's own queue mechanics.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
  */
 class FToggleableSink final : public IEncodedMessageSink
 {
 public:
-	/** Selects whether the next ReceiveEncodedMessage calls accept or reject their message. */
+	/**
+	 * Motivation: Selects whether the next ReceiveEncodedMessage calls accept or reject their message.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void SetRejectInbound(const bool bInReject) noexcept { bRejectInbound = bInReject; }
 
-	/** Reports how many ReceiveEncodedMessage calls this stub has observed, accepted or not. */
+	/**
+	 * Motivation: Reports how many ReceiveEncodedMessage calls this stub has observed, accepted or not.
+	 * Responsibilities: Return the stored value and touch nothing else.
+	 */
 	std::size_t ReceivedCallCount() const noexcept { return CallCount; }
 
-	/** Records the call and reports CapacityExceeded while rejecting, Success otherwise. */
+	/**
+	 * Motivation: Records the call and reports CapacityExceeded while rejecting, Success otherwise.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	EMessageResult ReceiveEncodedMessage(const FMessageChannelId InArrivedOnChannelId, const TSpan<const std::uint8_t> InEncoded) noexcept override
 	{
 		(void)InArrivedOnChannelId;
@@ -271,25 +342,34 @@ public:
 	}
 
 private:
-	/** Selects this stub's next scripted outcome. */
+	/** Motivation: Selects this stub's next scripted outcome. */
 	bool bRejectInbound{false};
 
-	/** Total ReceiveEncodedMessage calls observed, accepted or not. */
+	/** Motivation: Total ReceiveEncodedMessage calls observed, accepted or not. */
 	std::size_t CallCount{0};
 };
 
 /**
- * Minimal application-layer stand-in for the reliable-channel integration case's server side:
- * counts every payload a TReliableChannel forwards once its own ack/duplicate handling has run,
- * so delivered-count can be compared against sender count without a full router and handler.
+ * Motivation: Minimal application-layer stand-in for the reliable-channel integration case's server side: counts
+ *   every payload a TReliableChannel forwards once its own ack/duplicate handling has run, so
+ *   delivered-count can be compared against sender count without a full router and handler.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
  */
 class FRecordingReliableForwardSink final : public IEncodedMessageSink
 {
 public:
-	/** Reports how many payloads have been forwarded so far. */
+	/**
+	 * Motivation: Far.
+	 * Responsibilities: Reports how many payloads have been forwarded.
+	 */
 	std::size_t ForwardedCount() const noexcept { return CallCount; }
 
-	/** Records the call and always accepts. */
+	/**
+	 * Motivation: Records the call and always accepts.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	EMessageResult ReceiveEncodedMessage(const FMessageChannelId InArrivedOnChannelId, const TSpan<const std::uint8_t> InEncoded) noexcept override
 	{
 		(void)InArrivedOnChannelId;
@@ -299,23 +379,27 @@ public:
 	}
 
 private:
-	/** Total ReceiveEncodedMessage calls observed so far. */
+	/** Motivation: Total ReceiveEncodedMessage calls observed so far. */
 	std::size_t CallCount{0};
 };
 
 /**
- * Runs one side's frame-driven pump for one tick. Each side's TEngine is bound to an
- * FFrameSet holding that side's host play system and message router (transport added first, router added
- * last per the D3 recipe), so this single Tick call already dispatches the host play system then the
- * router (inbound) and flushes the router then the host play system (outbound) in the right order.
+ * Motivation: Runs one side's frame-driven pump for one tick.
+ * Responsibilities: Each side's TEngine is bound to an FFrameSet holding that side's host play system and message router
+ *   (transport added first, router added last per the D3 recipe), so this single Tick call already
+ *   dispatches the host play system then the router (inbound) and flushes the router then the host play
+ *   system (outbound) in the right order.
  */
 void PumpSide(FHost& InHost, const TimePointMilliseconds InNowMilliseconds) noexcept
 {
 	(void)InHost.Tick(InNowMilliseconds);
 }
 
-/** Drives both sides through PumpSide until the client's TransportHost reports Connected or the frame budget runs out, mirroring
- * EngineHostTests.cpp's handshake loop. */
+/**
+ * Motivation: Drives both sides through PumpSide until the client's TransportHost reports Connected or the frame
+ *   budget runs out, mirroring EngineHostTests.cpp's handshake loop.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ */
 TimePointMilliseconds ConnectClientToServer(
 	FHost& InClientHost, FTransport& InClientTransport, FHost& InServerHost, TimePointMilliseconds InNowMilliseconds) noexcept
 {
@@ -331,9 +415,10 @@ TimePointMilliseconds ConnectClientToServer(
 }
 
 /**
- * Extends ConnectClientToServer to two independent wires (roadmap 4.2's telemetry + command networks):
- * waits for BOTH client transports to report Connected, since each side's one Host.Tick already pumps both
- * of that side's host play systems through its frame set.
+ * Motivation: Extends ConnectClientToServer to two independent wires (roadmap 4.2's telemetry + command networks):
+ *   waits for BOTH client transports to report Connected, since each side's one Host.Tick already pumps
+ *   both of that side's host play systems through its frame set.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
  */
 TimePointMilliseconds ConnectClientToServerOverTwoWires(
 	FHost& InClientHost,
@@ -356,8 +441,9 @@ TimePointMilliseconds ConnectClientToServerOverTwoWires(
 }
 
 /**
- * Scenario: Connect a client and server through a bound channel, then issue a targeted send from the client.
- * Expected: The send enqueues successfully and reaches only the server's matching handler, carrying the original header fields and payload byte.
+ * Motivation: Connect a client and server through a bound channel, then issue a targeted send from the client.
+ * Responsibilities: The send enqueues successfully and reaches only the server's matching handler, carrying the original
+ *   header fields and payload byte.
  */
 MW_TEST_CASE(EngineMessageChannel_ClientToServerTargetedSendReachesServerHandler)
 {
@@ -430,9 +516,10 @@ MW_TEST_CASE(EngineMessageChannel_ClientToServerTargetedSendReachesServerHandler
 }
 
 /**
- * Scenario: Connect a client and server through a bound channel with a client broadcast listener, then issue a broadcast from the server.
- * Expected: The broadcast enqueues successfully and reaches the client handler, targeting every subscriber and carrying the original header fields
- * and payload byte.
+ * Motivation: Connect a client and server through a bound channel with a client broadcast listener, then issue a
+ *   broadcast from the server.
+ * Responsibilities: The broadcast enqueues successfully and reaches the client handler, targeting every subscriber and
+ *   carrying the original header fields.
  */
 MW_TEST_CASE(EngineMessageChannel_ServerBroadcastReachesClientHandler)
 {
@@ -504,8 +591,10 @@ MW_TEST_CASE(EngineMessageChannel_ServerBroadcastReachesClientHandler)
 }
 
 /**
- * Scenario: Connect a client and server through one bound channel, then send raw bytes on a different wire-channel byte.
- * Expected: The foreign-channel message never reaches the binding's sink; the router's inbound queue stays empty and DroppedInboundCount stays zero.
+ * Motivation: Connect a client and server through one bound channel, then send raw bytes on a different
+ *   wire-channel byte.
+ * Responsibilities: The foreign-channel message never reaches the binding's sink; the router's inbound queue stays empty
+ *   and DroppedInboundCount stays zero.
  */
 MW_TEST_CASE(EngineMessageChannel_ForeignWireChannelNeverReachesBoundSink)
 {
@@ -583,9 +672,10 @@ MW_TEST_CASE(EngineMessageChannel_ForeignWireChannelNeverReachesBoundSink)
 }
 
 /**
- * Scenario: Queue a broadcast before the client connects and pump once, then connect through the frame-set-driven handshake.
- * Expected: Queuing succeeds and the unavailable transport retains the queued message; the retained message is sent and delivered within the same
- * connecting frame once the peer flips to Connected.
+ * Motivation: Queue a broadcast before the client connects and pump once, then connect through the
+ *   frame-set-driven handshake.
+ * Responsibilities: Queuing succeeds and the unavailable transport retains the queued message; the retained message is
+ *   sent and delivered within the same.
  */
 MW_TEST_CASE(EngineMessageChannel_SendBeforeConnectReportsUnavailableThenDeliversAfterConnect)
 {
@@ -678,9 +768,10 @@ MW_TEST_CASE(EngineMessageChannel_SendBeforeConnectReportsUnavailableThenDeliver
 }
 
 /**
- * Scenario: Wire a binding to a toggleable sink on a listen server, then broadcast with the sink accepting and then rejecting twice.
- * Expected: An accepted sink call does not count as dropped; each rejected broadcast still succeeds at the transport and increments
- * DroppedInboundCount; every broadcast reaches the sink after passing the channel filter.
+ * Motivation: Wire a binding to a toggleable sink on a listen server, then broadcast with the sink accepting and
+ *   then rejecting twice.
+ * Responsibilities: An accepted sink call does not count as dropped; each rejected broadcast still succeeds at the
+ *   transport and increments.
  */
 MW_TEST_CASE(EngineMessageChannel_RejectingSinkIncrementsDroppedInboundCount)
 {
@@ -724,9 +815,10 @@ MW_TEST_CASE(EngineMessageChannel_RejectingSinkIncrementsDroppedInboundCount)
 }
 
 /**
- * Scenario: Connect two wires (telemetry and command) behind one router per side, then broadcast a distinct payload on each channel and pump one
- * frame per side. Expected: Both sends enqueue successfully; each message arrives tagged with its own channel id within one post-send frame and never
- * bleeds into the other channel's record.
+ * Motivation: Scenario: Connect two wires (telemetry and command) behind one router per side, then broadcast a
+ *   distinct payload on each channel and pump one frame per side.
+ * Responsibilities: Expected: Both sends enqueue successfully; each message arrives tagged with its own channel id
+ *   within one post-send frame and never bleeds into the other channel's record.
  */
 MW_TEST_CASE(EngineMessageChannel_MultiChannelIsolationDeliversBothInOneFrame)
 {
@@ -859,9 +951,11 @@ MW_TEST_CASE(EngineMessageChannel_MultiChannelIsolationDeliversBothInOneFrame)
 }
 
 /**
- * Scenario: Connect telemetry and command wires, prime the client's command FIFO and the server's command mailbox to saturation, then queue a
- * stalled-channel message followed by a healthy-channel message and pump the client once. Expected: Both sends enqueue successfully; the stalled
- * channel at the head of the router's shared outbound queue retains both itself and the healthy message queued behind it.
+ * Motivation: Scenario: Connect telemetry and command wires, prime the client's command FIFO and the server's
+ *   command mailbox to saturation, then queue a stalled-channel message followed by a healthy-channel
+ *   message and pump the client once.
+ * Responsibilities: Expected: Both sends enqueue successfully; the stalled channel at the head of the router's shared
+ *   outbound queue retains both itself and the healthy message queued behind it.
  */
 MW_TEST_CASE(EngineMessageChannel_StalledChannelRetainsRouterHead)
 {
@@ -1014,9 +1108,10 @@ MW_TEST_CASE(EngineMessageChannel_StalledChannelRetainsRouterHead)
 }
 
 /**
- * Scenario: Wrap each side's wire binding in a TReliableChannel behind an every-third-send packet-drop device, then send several guaranteed messages
- * and pump until each is acknowledged. Expected: Every message is delivered to the server exactly once despite the injected drops; at least one
- * resend fires because a send was actually dropped.
+ * Motivation: Scenario: Wrap each side's wire binding in a TReliableChannel behind an every-third-send packet-drop
+ *   device, then send several guaranteed messages and pump until each is acknowledged.
+ * Responsibilities: Expected: Every message is delivered to the server exactly once despite the injected drops; at least
+ *   one resend fires because a send was actually dropped.
  */
 MW_TEST_CASE(EngineMessageChannel_ReliableChannelSurvivesPacketDropsDeliveringExactlyOnce)
 {

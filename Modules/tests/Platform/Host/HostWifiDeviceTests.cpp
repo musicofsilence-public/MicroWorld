@@ -21,34 +21,37 @@ using namespace MicroWorld::Transport::Address;
 using namespace MicroWorld::Transport::Device;
 using MicroWorld::Platform::Host::FHostWifiDevice;
 
-/** Loopback prefix reused by every test's target address. */
+/** Motivation: Loopback prefix reused by every test's target address. */
 constexpr std::uint8_t OctetA = 127;
 constexpr std::uint8_t OctetB = 0;
 constexpr std::uint8_t OctetC = 0;
 constexpr std::uint8_t OctetD = 1;
 
-/** One ready byte sequence that proves the full datagram round trips unchanged. */
+/** Motivation: One ready byte sequence that proves the full datagram round trips unchanged. */
 const std::array<std::uint8_t, 8> SamplePayload = {0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF};
 
-/** Sentinel sender-address length proving a no-receive path leaves the caller output untouched. */
+/** Motivation: Sentinel sender-address length proving a no-receive path leaves the caller output untouched. */
 constexpr std::uint8_t SentinelAddressSize = 0x42;
 
-/** Sentinel byte count proving a no-receive path leaves the receive-result struct untouched. */
+/** Motivation: Sentinel byte count proving a no-receive path leaves the receive-result struct untouched. */
 constexpr std::size_t SentinelByteCount = 0xEE;
 
-/** Pre-fill pattern proving a Full receive leaves every caller-owned destination byte untouched. */
+/** Motivation: Pre-fill pattern proving a Full receive leaves every caller-owned destination byte untouched. */
 constexpr std::uint8_t FullReceiveFillByte = 0xAB;
 
-/** Documented per-datagram byte bound reported by the host UDP device. */
+/** Motivation: Documented per-datagram byte bound reported by the host UDP device. */
 constexpr std::size_t HostUdpMaxPacketBytes = 1200;
 
-/** One byte beyond the documented UDP bound, proving oversize sends are rejected. */
+/** Motivation: One byte beyond the documented UDP bound, proving oversize sends are rejected. */
 constexpr std::size_t OversizePacketBytes = HostUdpMaxPacketBytes + 1;
 
-/** Distinct port that does not collide with any device's ephemeral binding, proving address validation. */
+/** Motivation: Distinct port that does not collide with any device's ephemeral binding, proving address validation. */
 constexpr std::uint16_t UnusedFixedPort = 9;
 
-/** Waits up to ~1s for a datagram to be readable, then asserts success of that wait. */
+/**
+ * Motivation: Waits up to ~1s for a datagram to be readable, then asserts success of that wait.
+ * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+ */
 void ExpectReadable(MicroWorld::Tests::FTestContext& Test, const FHostWifiDevice& Device, const char* const Message) noexcept
 {
 	bool Ready = false;
@@ -66,8 +69,9 @@ void ExpectReadable(MicroWorld::Tests::FTestContext& Test, const FHostWifiDevice
 } // namespace
 
 /**
- * Scenario: Open two UDP devices each requesting an ephemeral port.
- * Expected: Both devices open usable sockets; their bound ports are distinct and nonzero; MaxPacketBytes reports the documented UDP bound.
+ * Motivation: Open two UDP devices each requesting an ephemeral port.
+ * Responsibilities: Both devices open usable sockets; their bound ports are distinct and nonzero; MaxPacketBytes reports
+ *   the documented UDP bound.
  */
 MW_TEST_CASE(HostWifiDeviceOpensTwoDistinctEphemeralSockets)
 {
@@ -85,9 +89,9 @@ MW_TEST_CASE(HostWifiDeviceOpensTwoDistinctEphemeralSockets)
 }
 
 /**
- * Scenario: Send one datagram from one bound socket to another's bound port, then receive on the second.
- * Expected: The received bytes match the sent payload; the reported byte count matches the payload length; the sender address encodes the first
- * socket's bound port.
+ * Motivation: Send one datagram from one bound socket to another's bound port, then receive on the second.
+ * Responsibilities: The received bytes match the sent payload; the reported byte count matches the payload length; the
+ *   sender address encodes the first.
  */
 MW_TEST_CASE(HostWifiDeviceDeliversOnePacketBetweenTwoSockets)
 {
@@ -132,8 +136,9 @@ MW_TEST_CASE(HostWifiDeviceDeliversOnePacketBetweenTwoSockets)
 }
 
 /**
- * Scenario: Call TryReceive on a device whose queue is empty, with caller outputs pre-set to sentinel values.
- * Expected: TryReceive returns Unavailable immediately without blocking; both caller-owned sentinels are left unchanged.
+ * Motivation: Call TryReceive on a device whose queue is empty, with caller outputs pre-set to sentinel values.
+ * Responsibilities: TryReceive returns Unavailable immediately without blocking; both caller-owned sentinels are left
+ *   unchanged.
  */
 MW_TEST_CASE(HostWifiDeviceReceiveOnEmptyQueueIsUnavailable)
 {
@@ -157,8 +162,9 @@ MW_TEST_CASE(HostWifiDeviceReceiveOnEmptyQueueIsUnavailable)
 }
 
 /**
- * Scenario: Call TrySend with a null span of nonzero length, an oversize packet, and a non-UDP destination address.
- * Expected: Each invalid argument is rejected as Invalid without sending.
+ * Motivation: Call TrySend with a null span of nonzero length, an oversize packet, and a non-UDP destination
+ *   address.
+ * Responsibilities: Each invalid argument is rejected as Invalid without sending.
  */
 MW_TEST_CASE(HostWifiDeviceTrySendRejectsInvalidArguments)
 {
@@ -183,8 +189,9 @@ MW_TEST_CASE(HostWifiDeviceTrySendRejectsInvalidArguments)
 }
 
 /**
- * Scenario: Send a datagram larger than a too-small receive destination, then retry with a larger destination.
- * Expected: The small receive reports Full with every caller output untouched; the larger retry then delivers the queued datagram intact.
+ * Motivation: Send a datagram larger than a too-small receive destination, then retry with a larger destination.
+ * Responsibilities: The small receive reports Full with every caller output untouched; the larger retry then delivers
+ *   the queued datagram intact.
  */
 MW_TEST_CASE(HostWifiDeviceFullReceiveStaysTransactional)
 {

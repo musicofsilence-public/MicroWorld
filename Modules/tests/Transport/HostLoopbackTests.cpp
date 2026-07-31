@@ -20,81 +20,81 @@ using MicroWorld::Transport::Address::MakeLoopbackAddress;
 using MicroWorld::Transport::Device::FReceiveResult;
 using MicroWorld::Transport::Device::IDevice;
 
-/** Sentinel address byte that proves a receive call did not overwrite the caller's address. */
+/** Motivation: Sentinel address byte that proves a receive call did not overwrite the caller's address. */
 constexpr std::uint8_t UntouchedAddressByte = 0x42;
 
-/** Pre-fill marker written into every destination byte before a receive, so a delivery is observable. */
+/** Motivation: Pre-fill marker written into every destination byte before a receive, so a delivery is observable. */
 constexpr std::uint8_t DestinationPrefillByte = 0xFF;
 
-/** Value written into destination storage before each multi-port receive so an overwrite is provable. */
+/** Motivation: Value written into destination storage before each multi-port receive so an overwrite is provable. */
 constexpr std::uint8_t DestinationResetMarker = 0xEE;
 
-/** Sentinel value pre-loaded into BytesReceived so an unchanged failed receive is observable. */
+/** Motivation: Sentinel value pre-loaded into BytesReceived so an unchanged failed receive is observable. */
 constexpr std::size_t UntouchedBytesReceivedSentinel = 0xEE;
 
-/** Loopback template parameter: one mailbox (start, multi-port cases raise it). */
+/** Motivation: Loopback template parameter: one mailbox (start, multi-port cases raise it). */
 constexpr std::size_t SinglePortCount = 1;
-/** Loopback template parameter: four mailboxes for the multi-port routing cases. */
+/** Motivation: Loopback template parameter: four mailboxes for the multi-port routing cases. */
 constexpr std::size_t FourPortCount = 4;
-/** Loopback template parameter: two mailbox slots. */
+/** Motivation: Loopback template parameter: two mailbox slots. */
 constexpr std::size_t TwoSlotMailbox = 2;
-/** Loopback template parameter: one mailbox slot (forces Full after a single send). */
+/** Motivation: Loopback template parameter: one mailbox slot (forces Full after a single send). */
 constexpr std::size_t OneSlotMailbox = 1;
-/** Loopback template parameter: a four-byte per-packet capacity. */
+/** Motivation: Loopback template parameter: a four-byte per-packet capacity. */
 constexpr std::size_t FourBytePacketCapacity = 4;
-/** Loopback template parameter: a two-byte per-packet capacity. */
+/** Motivation: Loopback template parameter: a two-byte per-packet capacity. */
 constexpr std::size_t TwoBytePacketCapacity = 2;
-/** Loopback port index that owns the outbound side in the single-port cases. */
+/** Motivation: Loopback port index that owns the outbound side in the single-port cases. */
 constexpr std::uint8_t SourcePort = 0;
-/** Number of target ports the multi-port routing case delivers distinct packets to. */
+/** Motivation: Number of target ports the multi-port routing case delivers distinct packets to. */
 constexpr std::uint8_t TargetPortCount = 3;
-/** First target port index the multi-port routing case sends to. */
+/** Motivation: First target port index the multi-port routing case sends to. */
 constexpr std::uint8_t FirstTargetPort = 1;
-/** Out-of-range port index the unroutable-address case must reject. */
+/** Motivation: Out-of-range port index the unroutable-address case must reject. */
 constexpr std::uint8_t OverRangePortIndex = 99;
-/** Device port index queried for MaxPacketBytes in the capacity-report case. */
+/** Motivation: Device port index queried for MaxPacketBytes in the capacity-report case. */
 constexpr std::uint8_t ReportedDevicePort = 2;
 
-/** Two-byte packet the FIFO case delivers as the head packet. */
+/** Motivation: Two-byte packet the FIFO case delivers as the head packet. */
 constexpr std::uint8_t FifoFirstPacket[2] = {0x10, 0x20};
-/** Three-byte packet the FIFO case delivers after the head packet. */
+/** Motivation: Three-byte packet the FIFO case delivers after the head packet. */
 constexpr std::uint8_t FifoSecondPacket[3] = {0x30, 0x40, 0x50};
-/** Two-byte packet the full-queue case accepts before the overflow send. */
+/** Motivation: Two-byte packet the full-queue case accepts before the overflow send. */
 constexpr std::uint8_t FullQueueAcceptedPacket[2] = {0xAA, 0xBB};
-/** Two-byte packet the full-queue case rejects as the overflow send. */
+/** Motivation: Two-byte packet the full-queue case rejects as the overflow send. */
 constexpr std::uint8_t FullQueueRejectedPacket[2] = {0xCC, 0xDD};
-/** Three-byte packet the too-small-destination case retains as the head. */
+/** Motivation: Three-byte packet the too-small-destination case retains as the head. */
 constexpr std::uint8_t TooSmallHeadPacket[3] = {0x01, 0x02, 0x03};
-/** Two-byte packet the drain case sends first to fill the mailbox. */
+/** Motivation: Two-byte packet the drain case sends first to fill the mailbox. */
 constexpr std::uint8_t DrainFirstPacket[2] = {0x11, 0x22};
-/** Two-byte packet the drain case sends second to fill the mailbox. */
+/** Motivation: Two-byte packet the drain case sends second to fill the mailbox. */
 constexpr std::uint8_t DrainSecondPacket[2] = {0x33, 0x44};
-/** Two-byte packet the drain case re-queues after the mailbox is emptied. */
+/** Motivation: Two-byte packet the drain case re-queues after the mailbox is emptied. */
 constexpr std::uint8_t DrainReusePacket[2] = {0x55, 0x66};
-/** Four-byte oversized packet the oversized-rejection case must reject. */
+/** Motivation: Four-byte oversized packet the oversized-rejection case must reject. */
 constexpr std::uint8_t OversizedPacket[4] = {0x01, 0x02, 0x03, 0x04};
-/** Two-byte packet the null-destination-retains-head case queues as the head. */
+/** Motivation: Two-byte packet the null-destination-retains-head case queues as the head. */
 constexpr std::uint8_t NullDestHeadPacket[2] = {0x11, 0x22};
-/** Two-byte packet the IDevice interface case threads through the loopback. */
+/** Motivation: Two-byte packet the IDevice interface case threads through the loopback. */
 constexpr std::uint8_t InterfacePacket[2] = {0x07, 0x08};
-/** Single-byte packet the multi-port routing case delivers to port 1. */
+/** Motivation: Single-byte packet the multi-port routing case delivers to port 1. */
 constexpr std::uint8_t ToPort1Packet[1] = {0x01};
-/** Single-byte packet the multi-port routing case delivers to port 2. */
+/** Motivation: Single-byte packet the multi-port routing case delivers to port 2. */
 constexpr std::uint8_t ToPort2Packet[1] = {0x02};
-/** Single-byte packet the multi-port routing case delivers to port 3. */
+/** Motivation: Single-byte packet the multi-port routing case delivers to port 3. */
 constexpr std::uint8_t ToPort3Packet[1] = {0x03};
-/** Two-byte request packet the two-way-reply case sends from port 0 to port 1. */
+/** Motivation: Two-byte request packet the two-way-reply case sends from port 0 to port 1. */
 constexpr std::uint8_t TwoWayRequestPacket[2] = {0xA0, 0xA1};
-/** Two-byte reply packet the two-way-reply case sends from port 1 back to port 0. */
+/** Motivation: Two-byte reply packet the two-way-reply case sends from port 1 back to port 0. */
 constexpr std::uint8_t TwoWayReplyPacket[2] = {0xB0, 0xB1};
-/** Two-byte packet the unroutable-address case tries to send to invalid destinations. */
+/** Motivation: Two-byte packet the unroutable-address case tries to send to invalid destinations. */
 constexpr std::uint8_t UnroutablePacket[2] = {0x77, 0x88};
-/** Three-byte packet the capacity-report case retains on a too-small receive. */
+/** Motivation: Three-byte packet the capacity-report case retains on a too-small receive. */
 constexpr std::uint8_t CapacityReportHeadPacket[3] = {0x10, 0x20, 0x30};
 
 /**
- * Scenario: Construct a fresh host loopback with a fixed mailbox depth and per-packet capacity.
- * Expected: The mailbox reports empty, not full, matching template capacities and zero queued packets.
+ * Motivation: Construct a fresh host loopback with a fixed mailbox depth and per-packet capacity.
+ * Responsibilities: The mailbox reports empty, not full, matching template capacities and zero queued packets.
  */
 MW_TEST_CASE(HostLoopbackStartsEmptyWithFixedCapacities)
 {
@@ -110,8 +110,9 @@ MW_TEST_CASE(HostLoopbackStartsEmptyWithFixedCapacities)
 }
 
 /**
- * Scenario: Queue two differently sized packets into a single port, then receive both in turn.
- * Expected: Each receive delivers the queued bytes in FIFO order, reports the sender as port 0, and leaves the mailbox empty after both are drained.
+ * Motivation: Queue two differently sized packets into a single port, then receive both in turn.
+ * Responsibilities: Each receive delivers the queued bytes in FIFO order, reports the sender as port 0, and leaves the
+ *   mailbox empty after both are drained.
  */
 MW_TEST_CASE(HostLoopbackDeliversPacketsInFifoOrder)
 {
@@ -165,8 +166,9 @@ MW_TEST_CASE(HostLoopbackDeliversPacketsInFifoOrder)
 }
 
 /**
- * Scenario: Fill a one-slot queue, attempt an overflow send, then drain the head.
- * Expected: The overflow send returns Full without changing the queued count, and the accepted head packet survives unmodified.
+ * Motivation: Fill a one-slot queue, attempt an overflow send, then drain the head.
+ * Responsibilities: The overflow send returns Full without changing the queued count, and the accepted head packet
+ *   survives unmodified.
  */
 MW_TEST_CASE(HostLoopbackFullQueueDoesNotOverwriteAcceptedPackets)
 {
@@ -201,8 +203,8 @@ MW_TEST_CASE(HostLoopbackFullQueueDoesNotOverwriteAcceptedPackets)
 }
 
 /**
- * Scenario: Attempt a receive on an empty mailbox with pre-filled destination, byte count, and sender outputs.
- * Expected: The receive returns Unavailable and leaves the destination, BytesReceived, and OutFrom untouched.
+ * Motivation: Attempt a receive on an empty mailbox with pre-filled destination, byte count, and sender outputs.
+ * Responsibilities: The receive returns Unavailable and leaves the destination, BytesReceived, and OutFrom untouched.
  */
 MW_TEST_CASE(HostLoopbackEmptyReceiveReturnsUnavailable)
 {
@@ -225,9 +227,10 @@ MW_TEST_CASE(HostLoopbackEmptyReceiveReturnsUnavailable)
 }
 
 /**
- * Scenario: Send a three-byte head packet, attempt a receive into a too-small destination, then retry with a large enough destination.
- * Expected: The too-small receive returns Full and leaves the head packet and outputs intact; the retry succeeds and delivers the retained head with
- * its original bytes and sender.
+ * Motivation: Send a three-byte head packet, attempt a receive into a too-small destination, then retry with a
+ *   large enough destination.
+ * Responsibilities: The too-small receive returns Full and leaves the head packet and outputs intact; the retry succeeds
+ *   and delivers the retained head with.
  */
 MW_TEST_CASE(HostLoopbackTooSmallDestinationRetainsHeadPacket)
 {
@@ -265,8 +268,9 @@ MW_TEST_CASE(HostLoopbackTooSmallDestinationRetainsHeadPacket)
 }
 
 /**
- * Scenario: Fill a two-slot mailbox, drain it, then send a fresh packet.
- * Expected: Drain empties the mailbox and resets the queued count, and the fresh send reuses the freed capacity successfully.
+ * Motivation: Fill a two-slot mailbox, drain it, then send a fresh packet.
+ * Responsibilities: Drain empties the mailbox and resets the queued count, and the fresh send reuses the freed capacity
+ *   successfully.
  */
 MW_TEST_CASE(HostLoopbackDrainRestoresCapacityForReuse)
 {
@@ -295,9 +299,9 @@ MW_TEST_CASE(HostLoopbackDrainRestoresCapacityForReuse)
 }
 
 /**
- * Scenario: Send a zero-length packet, then receive it into a pre-filled destination.
- * Expected: The zero-length send succeeds but still occupies one slot, and the receive succeeds reporting zero bytes without modifying the
- * destination and still reports the sender as port 0.
+ * Motivation: Send a zero-length packet, then receive it into a pre-filled destination.
+ * Responsibilities: The zero-length send succeeds but still occupies one slot, and the receive succeeds reporting zero
+ *   bytes without modifying the.
  */
 MW_TEST_CASE(HostLoopbackAcceptsZeroLengthPacketRoundTrip)
 {
@@ -325,8 +329,8 @@ MW_TEST_CASE(HostLoopbackAcceptsZeroLengthPacketRoundTrip)
 }
 
 /**
- * Scenario: Attempt to send a packet larger than the loopback's maximum packet bytes.
- * Expected: The send returns Invalid and no packet is queued.
+ * Motivation: Attempt to send a packet larger than the loopback's maximum packet bytes.
+ * Responsibilities: The send returns Invalid and no packet is queued.
  */
 MW_TEST_CASE(HostLoopbackRejectsOversizedPacket)
 {
@@ -343,8 +347,8 @@ MW_TEST_CASE(HostLoopbackRejectsOversizedPacket)
 }
 
 /**
- * Scenario: Attempt to send a null packet with a nonzero length.
- * Expected: The send returns Invalid and no packet is queued.
+ * Motivation: Attempt to send a null packet with a nonzero length.
+ * Responsibilities: The send returns Invalid and no packet is queued.
  */
 MW_TEST_CASE(HostLoopbackRejectsNullPacketWithNonzeroLength)
 {
@@ -360,8 +364,10 @@ MW_TEST_CASE(HostLoopbackRejectsNullPacketWithNonzeroLength)
 }
 
 /**
- * Scenario: Attempt a receive with a null destination and nonzero length into pre-filled outputs on an empty loopback.
- * Expected: The receive returns Invalid and leaves the destination, BytesReceived, OutFrom, and queue state unchanged.
+ * Motivation: Attempt a receive with a null destination and nonzero length into pre-filled outputs on an empty
+ *   loopback.
+ * Responsibilities: The receive returns Invalid and leaves the destination, BytesReceived, OutFrom, and queue state
+ *   unchanged.
  */
 MW_TEST_CASE(HostLoopbackEmptyReceiveNullDestinationReturnsInvalid)
 {
@@ -392,9 +398,10 @@ MW_TEST_CASE(HostLoopbackEmptyReceiveNullDestinationReturnsInvalid)
 }
 
 /**
- * Scenario: Queue a head packet, attempt a receive with a null destination and nonzero length, then retry with a valid destination.
- * Expected: The null-destination receive returns Invalid and leaves the destination, BytesReceived, OutFrom, and queue count unchanged; the retry
- * delivers the retained head with its original bytes and sender.
+ * Motivation: Queue a head packet, attempt a receive with a null destination and nonzero length, then retry with a
+ *   valid destination.
+ * Responsibilities: The null-destination receive returns Invalid and leaves the destination, BytesReceived, OutFrom, and
+ *   queue count unchanged; the retry.
  */
 MW_TEST_CASE(HostLoopbackNullDestinationRetainsHeadPacketAndOutputs)
 {
@@ -435,8 +442,9 @@ MW_TEST_CASE(HostLoopbackNullDestinationRetainsHeadPacketAndOutputs)
 }
 
 /**
- * Scenario: Send and receive through an IDevice reference bound to a loopback port.
- * Expected: The interface send and receive route to the loopback mailbox, delivering the head packet length and the correct sender.
+ * Motivation: Send and receive through an IDevice reference bound to a loopback port.
+ * Responsibilities: The interface send and receive route to the loopback mailbox, delivering the head packet length and
+ *   the correct sender.
  */
 MW_TEST_CASE(HostLoopbackSatisfiesIDeviceInterface)
 {
@@ -466,9 +474,10 @@ MW_TEST_CASE(HostLoopbackSatisfiesIDeviceInterface)
 }
 
 /**
- * Scenario: From port 0, send a distinct single-byte packet to each of ports 1, 2, and 3, then receive on each target.
- * Expected: The sender's own mailbox stays empty and each target receives exactly its own packet with OutFrom equal to port 0 exactly once
- * (multi-port isolation).
+ * Motivation: From port 0, send a distinct single-byte packet to each of ports 1, 2, and 3, then receive on each
+ *   target.
+ * Responsibilities: The sender's own mailbox stays empty and each target receives exactly its own packet with OutFrom
+ *   equal to port 0 exactly once.
  */
 MW_TEST_CASE(HostLoopbackRoutesDistinctPacketsToEachTargetPort)
 {
@@ -515,8 +524,9 @@ MW_TEST_CASE(HostLoopbackRoutesDistinctPacketsToEachTargetPort)
 }
 
 /**
- * Scenario: Port 0 sends a request to port 1, port 1 receives it and replies back to port 0, then port 0 receives the reply.
- * Expected: Each receive reports the correct sender as the other port, and the reply bytes are delivered intact.
+ * Motivation: Port 0 sends a request to port 1, port 1 receives it and replies back to port 0, then port 0
+ *   receives the reply.
+ * Responsibilities: Each receive reports the correct sender as the other port, and the reply bytes are delivered intact.
  */
 MW_TEST_CASE(HostLoopbackSupportsTwoWayReplyWithCorrectSender)
 {
@@ -564,8 +574,9 @@ MW_TEST_CASE(HostLoopbackSupportsTwoWayReplyWithCorrectSender)
 }
 
 /**
- * Scenario: Attempt to send to an out-of-range port index, a zero-size address, and a two-byte address, then check every mailbox.
- * Expected: Each unroutable destination is rejected as Invalid and no mailbox absorbs any packet.
+ * Motivation: Attempt to send to an out-of-range port index, a zero-size address, and a two-byte address, then
+ *   check every mailbox.
+ * Responsibilities: Each unroutable destination is rejected as Invalid and no mailbox absorbs any packet.
  */
 MW_TEST_CASE(HostLoopbackRejectsUnroutableDestinationAddress)
 {
@@ -606,9 +617,10 @@ MW_TEST_CASE(HostLoopbackRejectsUnroutableDestinationAddress)
 }
 
 /**
- * Scenario: Query the per-port device and loopback maximum packet bytes, send a three-byte head, then attempt a too-small receive.
- * Expected: MaxPacketBytes reports the template packet capacity; the too-small receive returns Full, leaves BytesReceived and OutFrom unchanged, and
- * retains the head packet.
+ * Motivation: Query the per-port device and loopback maximum packet bytes, send a three-byte head, then attempt a
+ *   too-small receive.
+ * Responsibilities: MaxPacketBytes reports the template packet capacity; the too-small receive returns Full, leaves
+ *   BytesReceived and OutFrom unchanged, and.
  */
 MW_TEST_CASE(HostLoopbackReportsMaxPacketBytesAndRetainsHeadOnTooSmallReceive)
 {

@@ -9,8 +9,8 @@ namespace
 {
 
 /**
- * Scenario: Query every payload-regression boundary through the shared helper.
- * Expected: The wire contract remains exactly empty zero bytes, typical five bytes, and maximum 58 bytes.
+ * Motivation: Confirms the shared helper reports the exact payload boundary for each regression case.
+ * Responsibilities: Query empty, typical, and maximum boundaries and assert the wire contract byte counts.
  */
 MW_TEST_CASE(LoraPayloadRegressionUsesExactPayloadBoundaries)
 {
@@ -26,8 +26,8 @@ MW_TEST_CASE(LoraPayloadRegressionUsesExactPayloadBoundaries)
 }
 
 /**
- * Scenario: Fill a maximum-size payload using the shared canonical pattern.
- * Expected: Representative first, middle, and final bytes remain stable for cross-board comparison.
+ * Motivation: Confirms the canonical fill produces a stable maximum-size pattern for cross-board comparison.
+ * Responsibilities: Fill a maximum payload and assert representative first, middle, and final bytes.
  */
 MW_TEST_CASE(LoraPayloadRegressionFillsCanonicalMaximumBytes)
 {
@@ -47,8 +47,8 @@ MW_TEST_CASE(LoraPayloadRegressionFillsCanonicalMaximumBytes)
 }
 
 /**
- * Scenario: Validate an intact canonical maximum payload with the exact wire length.
- * Expected: The shared validator accepts the pattern used by both board roles.
+ * Motivation: Confirms the shared validator accepts an intact canonical maximum payload at the exact wire length.
+ * Responsibilities: Fill a maximum payload and assert the validator accepts the pattern both roles use.
  */
 MW_TEST_CASE(LoraPayloadRegressionAcceptsIntactMaximumPayload)
 {
@@ -65,12 +65,18 @@ MW_TEST_CASE(LoraPayloadRegressionAcceptsIntactMaximumPayload)
 }
 
 /**
- * Scenario: Validate canonical payload bytes with wire lengths one byte away from each supported boundary.
- * Expected: The shared validator rejects every underlength and overlength packet before reading its contents.
+ * Motivation: Confirms the validator rejects canonical payloads whose wire length is one byte off any boundary.
+ * Responsibilities: Exercise every boundary with an underlength and overlength packet and assert rejection.
  */
 MW_TEST_CASE(LoraPayloadRegressionRejectsCanonicalPayloadsWithMismatchedLengths)
 {
-	/** Pairs one payload shape with an invalid wire length and its diagnostic contract. */
+	/**
+	 * Motivation: Pairs one payload shape with an invalid wire length so each mismatch case carries its own
+	 *   diagnostic contract.
+	 * Responsibilities: Hold the case, the invalid received byte count, and the failure message together.
+	 * Example:
+	 *   FLengthMismatchCase Case{EPayloadRegressionCase::Typical, 4, "four-byte typical must fail"};
+	 */
 	struct FLengthMismatchCase
 	{
 		MicroWorld::Example17::EPayloadRegressionCase PayloadCase;
@@ -102,8 +108,8 @@ MW_TEST_CASE(LoraPayloadRegressionRejectsCanonicalPayloadsWithMismatchedLengths)
 }
 
 /**
- * Scenario: Validate a maximum payload after one canonical byte is changed.
- * Expected: The shared validator rejects corrupted wire content before protocol advancement.
+ * Motivation: Confirms the validator rejects a maximum payload after one canonical byte is corrupted.
+ * Responsibilities: Flip one byte of a canonical maximum payload and assert the validator rejects it.
  */
 MW_TEST_CASE(LoraPayloadRegressionRejectsCorruptedMaximumPayload)
 {

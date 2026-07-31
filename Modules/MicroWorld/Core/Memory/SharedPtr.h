@@ -12,32 +12,42 @@
 namespace MicroWorld::Core
 {
 
-/** Identifies the only reference-counting execution contract currently supported. */
+/**
+ * Motivation: Names the only reference-counting execution contract the implementation currently supports.
+ * Responsibilities: Distinguish the single-threaded contract so callers know all ownership operations share one thread.
+ * Example:
+ *   TSharedPtr<int, ESharedPointerMode::SingleThreaded> Owner;
+ */
 enum class ESharedPointerMode : std::uint8_t
 {
-	/** Requires all ownership operations to execute from one caller-controlled thread. */
+	/** Motivation: Requires all ownership operations to execute from one caller-controlled thread. */
 	SingleThreaded,
 };
 
-/** Reports every fallible shared/weak ownership operation without exceptions. */
+/**
+ * Motivation: Gives every fallible shared or weak ownership operation one result vocabulary without exceptions.
+ * Responsibilities: Distinguish acquisition success from capacity, alignment, expiry, overflow, and resource failure.
+ * Example:
+ *   if (Result == ESharedPointerResult::Expired) { Recover(); }
+ */
 enum class ESharedPointerResult : std::uint8_t
 {
-	/** Confirms that the requested owner or observer was acquired. */
+	/** Motivation: Confirms that the requested owner or observer was acquired. */
 	Success,
 
-	/** Reports that the selected resource could not hold the combined allocation. */
+	/** Motivation: Reports that the selected resource could not hold the combined allocation. */
 	OutOfMemory,
 
-	/** Reports that the selected resource cannot satisfy the combined alignment. */
+	/** Motivation: Reports that the selected resource cannot satisfy the combined alignment. */
 	UnsupportedAlignment,
 
-	/** Rejects acquisition after the observed value's last strong owner released it. */
+	/** Motivation: Rejects acquisition after the observed value's last strong owner released it. */
 	Expired,
 
-	/** Rejects an increment that would make a reference counter wrap. */
+	/** Motivation: Rejects an increment that would make a reference counter wrap. */
 	ReferenceCountOverflow,
 
-	/** Preserves an unexpected resource failure without pretending it was exhaustion. */
+	/** Motivation: Preserves an unexpected resource failure without pretending it was exhaustion. */
 	ResourceFailure,
 };
 
@@ -54,57 +64,61 @@ template<typename ValueType, ESharedPointerMode Mode = ESharedPointerMode::Singl
 struct TWeakPointerResult;
 
 /**
- * Constructs one shared value and control block in one resource allocation.
- *
- * @tparam ValueType Complete value type whose construction and destruction cannot throw.
- * @tparam Mode Reference-counting execution contract.
- * @tparam ConstructorArgumentTypes Constructor argument types forwarded only after allocation.
- * @param InResource Resource that must outlive every resulting shared and weak handle.
- * @param Arguments Arguments forwarded to ValueType's constructor.
- * @return Typed allocation outcome and first strong owner on success.
+ * Motivation: Lets a caller construct one shared value and its control block in a single allocation.
+ * Responsibilities: Allocate combined storage from InResource, construct the value with forwarded arguments, and
+ *   return the typed outcome and first strong owner on success or the exact resource failure otherwise.
  */
 template<typename ValueType, ESharedPointerMode Mode = ESharedPointerMode::SingleThreaded, typename... ConstructorArgumentTypes>
 TSharedPointerResult<ValueType, Mode> MakeShared(IMemoryResource& InResource, ConstructorArgumentTypes&&... Arguments) noexcept;
 
-/** Retains single-threaded lifetime state until both strong and weak counts reach zero. */
+/**
+ * Motivation: Holds the single-threaded lifetime state shared by strong and weak handles until both counts reach zero.
+ * Responsibilities: Track the strong and weak counts, the live value, and the resource that must reclaim the allocation.
+ * Example:
+ *   auto Result = MakeShared<int>(Arena, 42);
+ *   TSharedPtr<int> Owner = std::move(Result.Pointer);
+ */
 template<typename ValueType>
 struct TSharedControlBlock final
 {
-	/** Counter width keeps handle cost bounded while exposing an explicit overflow result. */
+	/** Motivation: Keeps handle cost bounded while exposing an explicit counter overflow result. */
 	using FReferenceCount = std::uint16_t;
 
-	/** Identifies the resource that must receive Allocation. */
+	/** Motivation: Identifies the resource that must receive Allocation. */
 	IMemoryResource* Resource{nullptr};
 
-	/** Preserves the exact combined object/control-block allocation. */
+	/** Motivation: Preserves the exact combined object/control-block allocation. */
 	FMemoryBlock Allocation{};
 
-	/** Identifies the live value and becomes null before weak observers can report expiry. */
+	/** Motivation: Identifies the live value and becomes null before weak observers can report expiry. */
 	ValueType* Value{nullptr};
 
-	/** Counts live strong handles that keep Value constructed. */
+	/** Motivation: Counts live strong handles that keep Value constructed. */
 	FReferenceCount StrongReferenceCount{1};
 
-	/** Counts live weak handles that keep this control block allocated. */
+	/** Motivation: Counts live weak handles that keep this control block allocated. */
 	FReferenceCount WeakReferenceCount{0};
 
-	/**
-	 * True only while the final strong Reset() runs the value destructor. It
-	 * makes the weak-side Reset() defer control-block deallocation, so a value
-	 * that drops its own last weak handle mid-destruction cannot free the block
-	 * out from under the strong side (self-observer teardown; see
-	 * MemoryTests.cpp:558).
-	 */
+	/** Motivation: Defers weak-side reclamation while the final strong Reset() runs the value destructor. */
 	bool bValueDestructionInProgress{false};
 
-	/** Reports whether at least one strong handle still keeps this block alive. */
+	/**
+	 * Motivation: Lets a strong handle prove at least one strong owner keeps this block alive.
+	 * Responsibilities: Report whether the strong count is non-zero.
+	 */
 	bool HasLiveStrongReference() const noexcept { return StrongReferenceCount != 0; }
 
-	/** Reports whether the value is still constructed and observable through a strong handle. */
+	/**
+	 * Motivation: Lets a weak handle prove the value is still constructed and observable.
+	 * Responsibilities: Report whether the strong count is non-zero and the value pointer is set.
+	 */
 	bool HasLiveValue() const noexcept { return StrongReferenceCount != 0 && Value != nullptr; }
 };
 
-/** Converts allocation-boundary failures into the shared-pointer result domain. */
+/**
+ * Motivation: Lets the shared-pointer internals translate a memory-resource failure into their own result domain.
+ * Responsibilities: Map each EMemoryResult to the matching ESharedPointerResult, defaulting unexpected results to ResourceFailure.
+ */
 inline ESharedPointerResult ToSharedPointerResult(const EMemoryResult InResult) noexcept
 {
 	switch (InResult)
@@ -121,7 +135,10 @@ inline ESharedPointerResult ToSharedPointerResult(const EMemoryResult InResult) 
 	}
 }
 
-/** Returns an expired control block to its exact resource after its final weak release. */
+/**
+ * Motivation: Lets the last weak release return an expired control block to its exact resource.
+ * Responsibilities: Destroy the control block and return its allocation to the resource that produced it.
+ */
 template<typename ValueType>
 void DestroySharedControlBlock(TSharedControlBlock<ValueType>* const InControlBlock) noexcept
 {
@@ -132,9 +149,11 @@ void DestroySharedControlBlock(TSharedControlBlock<ValueType>* const InControlBl
 }
 
 /**
- * Places the value immediately after its control block in one shared
- * allocation, each on its own aligned boundary. ValueOffsetBytes rounds the
- * control-block size up to the value's alignment so the value starts aligned.
+ * Motivation: Places the value immediately after its control block in one shared allocation.
+ * Responsibilities: Compute the combined alignment, the value offset that keeps it aligned, and the total size.
+ * Example:
+ *   using FLayout = TSharedAllocationLayout<int>;
+ *   static constexpr std::size_t Size = FLayout::CombinedSizeBytes;
  */
 template<typename ValueType>
 struct TSharedAllocationLayout final
@@ -148,7 +167,10 @@ struct TSharedAllocationLayout final
 	static constexpr std::size_t CombinedSizeBytes = ValueOffsetBytes + sizeof(ValueType);
 };
 
-/** Constructs the control block and value in one allocation and links the block to its resource. */
+/**
+ * Motivation: Lets MakeShared fill one combined allocation with its control block and value.
+ * Responsibilities: Construct the control block and value at their aligned offsets and link the block to its resource.
+ */
 template<typename ValueType, typename... ConstructorArgumentTypes>
 TSharedControlBlock<ValueType>* ConstructSharedBlock(
 	IMemoryResource& InResource,
@@ -168,10 +190,13 @@ TSharedControlBlock<ValueType>* ConstructSharedBlock(
 }
 
 /**
- * Owns one non-managed value through explicit single-threaded reference counting.
- *
- * Handles are move-only because an implicit copy could fail at the documented
- * counter boundary. TryShare performs the fallible strong-owner acquisition.
+ * Motivation: Lets an owner share one non-managed value through explicit single-threaded reference counting.
+ * Responsibilities: Hold one strong count, keep move-only so a copy cannot overflow the counter at its boundary,
+ *   and destroy the value exactly once when the last strong owner releases it.
+ * Example:
+ *   auto Result = MakeShared<int>(Arena, 7);
+ *   TSharedPtr<int> Owner = std::move(Result.Pointer);
+ *   TSharedPointerResult<int> Shared = Owner.TryShare();
  */
 template<typename ValueType, ESharedPointerMode Mode>
 class TSharedPtr final
@@ -181,26 +206,41 @@ class TSharedPtr final
 	static_assert(std::is_nothrow_destructible<ValueType>::value, "TSharedPtr requires noexcept destruction.");
 
 private:
-	/** Names the type-specific control block shared with weak observers. */
+	/** Motivation: Names the type-specific control block shared with weak observers. */
 	using FControlBlock = TSharedControlBlock<ValueType>;
 
-	/** Names the bounded counter used by the selected control-block layout. */
+	/** Motivation: Names the bounded counter used by the selected control-block layout. */
 	using FReferenceCount = typename FControlBlock::FReferenceCount;
 
 public:
-	/** Creates an empty owner without selecting or touching a resource. */
+	/**
+	 * Motivation: Lets an owner declare an empty shared pointer before any resource is chosen.
+	 * Responsibilities: Produce an owner holding no strong count and touching no resource.
+	 */
 	TSharedPtr() noexcept = default;
 
-	/** Prevents an invisible reference-count overflow during copy construction. */
+	/**
+	 * Motivation: Prevents an invisible reference-count overflow during copy construction.
+	 * Responsibilities: Reject copy construction so acquiring a strong owner stays an explicit, fallible step.
+	 */
 	TSharedPtr(const TSharedPtr&) = delete;
 
-	/** Prevents an invisible reference-count overflow during copy assignment. */
+	/**
+	 * Motivation: Prevents an invisible reference-count overflow during copy assignment.
+	 * Responsibilities: Reject copy assignment so acquiring a strong owner stays an explicit, fallible step.
+	 */
 	TSharedPtr& operator=(const TSharedPtr&) = delete;
 
-	/** Transfers one already-counted strong handle without changing counters. */
+	/**
+	 * Motivation: Lets an owner transfer one already-counted strong handle without touching the counter.
+	 * Responsibilities: Move the control block pointer and leave the source empty.
+	 */
 	TSharedPtr(TSharedPtr&& Other) noexcept : ControlBlock(Other.ControlBlock) { Other.ControlBlock = nullptr; }
 
-	/** Releases any current owner, then transfers another already-counted handle. */
+	/**
+	 * Motivation: Lets an owner replace its strong handle with another already-counted one.
+	 * Responsibilities: Release any current owner, then adopt the source handle and leave the source empty.
+	 */
 	TSharedPtr& operator=(TSharedPtr&& Other) noexcept
 	{
 		if (this == &Other)
@@ -214,22 +254,40 @@ public:
 		return *this;
 	}
 
-	/** Releases this strong handle and completes destruction when it is the last. */
+	/**
+	 * Motivation: Ensures no strong handle outlives the count it contributes.
+	 * Responsibilities: Release this strong handle and complete destruction when it is the last.
+	 */
 	~TSharedPtr() noexcept { Reset(); }
 
-	/** Observes the live value without changing either reference counter. */
+	/**
+	 * Motivation: Lets a caller observe the live value without changing the counts.
+	 * Responsibilities: Return the value pointer, or null when no live value is held.
+	 */
 	ValueType* Get() const noexcept { return ControlBlock == nullptr ? nullptr : ControlBlock->Value; }
 
-	/** Reports whether this handle currently keeps a live value constructed. */
+	/**
+	 * Motivation: Lets a caller guard dereference behind one cheap check.
+	 * Responsibilities: Report whether this handle currently keeps a live value constructed.
+	 */
 	bool IsValid() const noexcept { return Get() != nullptr; }
 
-	/** Acquires another strong owner or reports the exact counter-boundary failure. */
+	/**
+	 * Motivation: Lets a caller acquire another strong owner at the documented counter boundary.
+	 * Responsibilities: Increment the strong count or report the exact expiry or overflow failure.
+	 */
 	TSharedPointerResult<ValueType, Mode> TryShare() const noexcept;
 
-	/** Acquires a weak observer or reports the exact counter-boundary failure. */
+	/**
+	 * Motivation: Lets a caller acquire a weak observer of this value.
+	 * Responsibilities: Increment the weak count or report the exact expiry or overflow failure.
+	 */
 	TWeakPointerResult<ValueType, Mode> TryAcquireWeak() const noexcept;
 
-	/** Releases this strong handle and destroys the value at the final strong release. */
+	/**
+	 * Motivation: Lets an owner release its strong handle deterministically.
+	 * Responsibilities: Decrement the strong count, destroy the value at the final strong release, and reclaim the block when unreferenced.
+	 */
 	void Reset() noexcept
 	{
 		if (ControlBlock == nullptr)
@@ -247,33 +305,51 @@ public:
 		ReclaimControlBlockIfUnreferenced(ReleasedControlBlock);
 	}
 
-	/** Reports the current strong count for diagnostics and boundary tests. */
+	/**
+	 * Motivation: Lets diagnostics and boundary tests inspect the strong count without a backdoor.
+	 * Responsibilities: Report the current strong count, or zero when empty.
+	 */
 	std::size_t StrongReferenceCount() const noexcept
 	{
 		return ControlBlock == nullptr ? 0U : static_cast<std::size_t>(ControlBlock->StrongReferenceCount);
 	}
 
-	/** Reports the current weak count for diagnostics and boundary tests. */
+	/**
+	 * Motivation: Lets diagnostics and boundary tests inspect the weak count without a backdoor.
+	 * Responsibilities: Report the current weak count, or zero when empty.
+	 */
 	std::size_t WeakReferenceCount() const noexcept
 	{
 		return ControlBlock == nullptr ? 0U : static_cast<std::size_t>(ControlBlock->WeakReferenceCount);
 	}
 
-	/** Exposes the exact supported counter boundary without a mutation backdoor. */
+	/**
+	 * Motivation: Lets a caller test against the supported counter boundary without a mutation backdoor.
+	 * Responsibilities: Report the maximum count the selected counter width can hold.
+	 */
 	static constexpr std::size_t MaximumReferenceCount() noexcept { return static_cast<std::size_t>(std::numeric_limits<FReferenceCount>::max()); }
 
 private:
-	/** Adopts one strong count already acquired by a factory or fallible operation. */
+	/**
+	 * Motivation: Lets a factory or fallible operation adopt one strong count already acquired.
+	 * Responsibilities: Bind the control block pointer without incrementing the count.
+	 */
 	explicit TSharedPtr(FControlBlock* const InControlBlock) noexcept : ControlBlock(InControlBlock) {}
 
-	/** Allows matching weak observers to create an already-counted strong handle. */
+	/** Motivation: Allows matching weak observers to create an already-counted strong handle. */
 	friend class TWeakPtr<ValueType, Mode>;
 
-	/** Lets the factory create the first strong owner without exposing raw adoption. */
+	/**
+	 * Motivation: Lets the factory create the first strong owner without exposing raw adoption.
+	 * Responsibilities: Grant the factory access to the private adoption constructor.
+	 */
 	template<typename FactoryValueType, ESharedPointerMode PointerMode, typename... FactoryConstructorArgumentTypes>
 	friend TSharedPointerResult<FactoryValueType, PointerMode> MakeShared(IMemoryResource&, FactoryConstructorArgumentTypes&&...) noexcept;
 
-	/** Destroys the owned value in place while blocking weak-side reclamation mid-teardown. */
+	/**
+	 * Motivation: Destroys the owned value while blocking weak-side reclamation mid-teardown.
+	 * Responsibilities: Run the value destructor in place and set the destruction-in-progress flag for the duration.
+	 */
 	static void DestroyValueInPlace(FControlBlock* const InReleasedControlBlock) noexcept
 	{
 		ValueType* const Value = InReleasedControlBlock->Value;
@@ -283,7 +359,10 @@ private:
 		InReleasedControlBlock->bValueDestructionInProgress = false;
 	}
 
-	/** Frees the control block once no strong or weak handle can still observe it. */
+	/**
+	 * Motivation: Reclaims the control block exactly when no handle can still observe it.
+	 * Responsibilities: Destroy and return the block to its resource once both strong and weak counts are zero.
+	 */
 	static void ReclaimControlBlockIfUnreferenced(FControlBlock* const InReleasedControlBlock) noexcept
 	{
 		if (InReleasedControlBlock->WeakReferenceCount == 0)
@@ -292,15 +371,17 @@ private:
 		}
 	}
 
-	/** Retains the allocation while this handle contributes one strong count. */
+	/** Motivation: Retains the allocation while this handle contributes one strong count. */
 	FControlBlock* ControlBlock{nullptr};
 };
 
 /**
- * Observes one shared value without extending its construction lifetime.
- *
- * Handles are move-only because duplicating a weak count can fail explicitly at
- * the counter boundary. Pin and TryAcquireStrong never expose an expired value.
+ * Motivation: Lets a caller observe one shared value without extending its construction lifetime.
+ * Responsibilities: Hold one weak count, stay move-only so duplicating a weak count stays explicit and fallible,
+ *   and never expose an expired value through Pin or TryAcquireStrong.
+ * Example:
+ *   TWeakPointerResult<int> Weak = Owner.TryAcquireWeak();
+ *   if (!Weak.Pointer.IsExpired()) { TSharedPointerResult<int> Strong = Weak.Pointer.Pin(); }
  */
 template<typename ValueType, ESharedPointerMode Mode>
 class TWeakPtr final
@@ -308,26 +389,41 @@ class TWeakPtr final
 	static_assert(Mode == ESharedPointerMode::SingleThreaded, "Only single-threaded weak pointers are available.");
 
 private:
-	/** Names the type-specific control block retained by weak observers. */
+	/** Motivation: Names the type-specific control block retained by weak observers. */
 	using FControlBlock = TSharedControlBlock<ValueType>;
 
-	/** Names the bounded counter used by the selected control-block layout. */
+	/** Motivation: Names the bounded counter used by the selected control-block layout. */
 	using FReferenceCount = typename FControlBlock::FReferenceCount;
 
 public:
-	/** Creates an empty observer without selecting or touching a resource. */
+	/**
+	 * Motivation: Lets an owner declare an empty weak pointer before any value is observed.
+	 * Responsibilities: Produce an observer holding no weak count and touching no resource.
+	 */
 	TWeakPtr() noexcept = default;
 
-	/** Prevents an invisible reference-count overflow during copy construction. */
+	/**
+	 * Motivation: Prevents an invisible reference-count overflow during copy construction.
+	 * Responsibilities: Reject copy construction so acquiring a weak observer stays an explicit, fallible step.
+	 */
 	TWeakPtr(const TWeakPtr&) = delete;
 
-	/** Prevents an invisible reference-count overflow during copy assignment. */
+	/**
+	 * Motivation: Prevents an invisible reference-count overflow during copy assignment.
+	 * Responsibilities: Reject copy assignment so acquiring a weak observer stays an explicit, fallible step.
+	 */
 	TWeakPtr& operator=(const TWeakPtr&) = delete;
 
-	/** Transfers one already-counted weak handle without changing counters. */
+	/**
+	 * Motivation: Lets an owner transfer one already-counted weak handle without touching the counter.
+	 * Responsibilities: Move the control block pointer and leave the source empty.
+	 */
 	TWeakPtr(TWeakPtr&& Other) noexcept : ControlBlock(Other.ControlBlock) { Other.ControlBlock = nullptr; }
 
-	/** Releases any current observer, then transfers another already-counted handle. */
+	/**
+	 * Motivation: Lets an owner replace its weak handle with another already-counted one.
+	 * Responsibilities: Release any current observer, then adopt the source handle and leave the source empty.
+	 */
 	TWeakPtr& operator=(TWeakPtr&& Other) noexcept
 	{
 		if (this == &Other)
@@ -341,22 +437,40 @@ public:
 		return *this;
 	}
 
-	/** Releases this weak handle and returns an expired final block when necessary. */
+	/**
+	 * Motivation: Ensures no weak handle outlives the count it contributes.
+	 * Responsibilities: Release this weak handle and return an expired final block to its resource when necessary.
+	 */
 	~TWeakPtr() noexcept { Reset(); }
 
-	/** Reports expiry without dereferencing the value storage. */
+	/**
+	 * Motivation: Lets a caller decide whether a strong acquisition can still succeed.
+	 * Responsibilities: Report expiry without dereferencing the value storage.
+	 */
 	bool IsExpired() const noexcept { return ControlBlock == nullptr || ControlBlock->StrongReferenceCount == 0; }
 
-	/** Acquires another weak observer or reports the exact counter-boundary failure. */
+	/**
+	 * Motivation: Lets a caller acquire another weak observer at the documented counter boundary.
+	 * Responsibilities: Increment the weak count or report the exact expiry or overflow failure.
+	 */
 	TWeakPointerResult<ValueType, Mode> TryObserve() const noexcept;
 
-	/** Acquires a strong owner only while the observed value remains live. */
+	/**
+	 * Motivation: Lets a caller promote an observer to a strong owner only while the value is live.
+	 * Responsibilities: Increment the strong count or report the exact expiry or overflow failure.
+	 */
 	TSharedPointerResult<ValueType, Mode> TryAcquireStrong() const noexcept;
 
-	/** Provides UE-familiar naming for the same typed, fallible strong acquisition. */
+	/**
+	 * Motivation: Gives UE-familiar naming for the same typed, fallible strong acquisition.
+	 * Responsibilities: Delegate to TryAcquireStrong without changing semantics.
+	 */
 	TSharedPointerResult<ValueType, Mode> Pin() const noexcept;
 
-	/** Releases this weak count and deallocates the block after expiry when final. */
+	/**
+	 * Motivation: Lets an observer release its weak handle deterministically.
+	 * Responsibilities: Decrement the weak count and deallocate the block after expiry when this is the final handle.
+	 */
 	void Reset() noexcept
 	{
 		if (ControlBlock == nullptr)
@@ -375,51 +489,73 @@ public:
 		}
 	}
 
-	/** Reports the current strong count for diagnostics and boundary tests. */
+	/**
+	 * Motivation: Lets diagnostics and boundary tests inspect the strong count without a backdoor.
+	 * Responsibilities: Report the current strong count, or zero when empty.
+	 */
 	std::size_t StrongReferenceCount() const noexcept
 	{
 		return ControlBlock == nullptr ? 0U : static_cast<std::size_t>(ControlBlock->StrongReferenceCount);
 	}
 
-	/** Reports the current weak count for diagnostics and boundary tests. */
+	/**
+	 * Motivation: Lets diagnostics and boundary tests inspect the weak count without a backdoor.
+	 * Responsibilities: Report the current weak count, or zero when empty.
+	 */
 	std::size_t WeakReferenceCount() const noexcept
 	{
 		return ControlBlock == nullptr ? 0U : static_cast<std::size_t>(ControlBlock->WeakReferenceCount);
 	}
 
-	/** Exposes the exact supported counter boundary without a mutation backdoor. */
+	/**
+	 * Motivation: Lets a caller test against the supported counter boundary without a mutation backdoor.
+	 * Responsibilities: Report the maximum count the selected counter width can hold.
+	 */
 	static constexpr std::size_t MaximumReferenceCount() noexcept { return static_cast<std::size_t>(std::numeric_limits<FReferenceCount>::max()); }
 
 private:
-	/** Adopts one weak count already acquired by a fallible operation. */
+	/**
+	 * Motivation: Lets a fallible operation adopt one weak count already acquired.
+	 * Responsibilities: Bind the control block pointer without incrementing the count.
+	 */
 	explicit TWeakPtr(FControlBlock* const InControlBlock) noexcept : ControlBlock(InControlBlock) {}
 
-	/** Allows strong owners to create an already-counted weak handle. */
+	/** Motivation: Allows strong owners to create an already-counted weak handle. */
 	friend class TSharedPtr<ValueType, Mode>;
 
-	/** Retains an expired control block until this handle releases its weak count. */
+	/** Motivation: Retains an expired control block until this handle releases its weak count. */
 	FControlBlock* ControlBlock{nullptr};
 };
 
-/** Couples a shared-pointer operation outcome with its acquired strong owner. */
+/**
+ * Motivation: Couples a shared-pointer operation outcome with the strong owner it acquired.
+ * Responsibilities: Carry the result and one strong owner that is valid only when Result is Success.
+ * Example:
+ *   TSharedPointerResult<int> Shared = Owner.TryShare();
+ */
 template<typename ValueType, ESharedPointerMode Mode>
 struct TSharedPointerResult
 {
-	/** Distinguishes acquisition success from allocation, expiry, and overflow. */
+	/** Motivation: Distinguishes acquisition success from allocation, expiry, and overflow. */
 	ESharedPointerResult Result{ESharedPointerResult::OutOfMemory};
 
-	/** Owns one strong count only when Result is Success. */
+	/** Motivation: Owns one strong count only when Result is Success. */
 	TSharedPtr<ValueType, Mode> Pointer{};
 };
 
-/** Couples a weak-pointer operation outcome with its acquired observer. */
+/**
+ * Motivation: Couples a weak-pointer operation outcome with the observer it acquired.
+ * Responsibilities: Carry the result and one weak observer that is valid only when Result is Success.
+ * Example:
+ *   TWeakPointerResult<int> Weak = Owner.TryAcquireWeak();
+ */
 template<typename ValueType, ESharedPointerMode Mode>
 struct TWeakPointerResult
 {
-	/** Distinguishes acquisition success from expiry and counter overflow. */
+	/** Motivation: Distinguishes acquisition success from expiry and counter overflow. */
 	ESharedPointerResult Result{ESharedPointerResult::Expired};
 
-	/** Owns one weak count only when Result is Success. */
+	/** Motivation: Owns one weak count only when Result is Success. */
 	TWeakPtr<ValueType, Mode> Pointer{};
 };
 

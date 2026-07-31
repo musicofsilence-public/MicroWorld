@@ -72,7 +72,7 @@ Run from the repo root, in this order, for every task touching `Modules/`:
 clang-format --style=file:clang-format -i <every .h/.cpp file you touched>
 cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure
-python tools/CheckClassDocumentation.py --root Modules --require-doxygen
+python tools/CheckDocumentationStyle.py --root Modules
 ```
 
 PlatformEsp32 has no host build: for its files the gate is a line-by-line

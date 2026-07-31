@@ -33,25 +33,36 @@ using namespace Ex23;
 
 namespace
 {
-/** Single real-time source for the server board. */
+/** Motivation: Single real-time source for the server board. */
 FEsp32TimeSource GTimeSource{};
 
 /**
- * Subscribes to a targeted SetLampStateMessageId (its own actor id) and logs the decoded state.
- *
- * Takes the router by constructor injection (D9); never ticks, since it only reacts to a message.
+ * Motivation: Subscribes to a targeted SetLampStateMessageId (its own actor id) and logs the decoded
+ *   state, so the lamp half of the two-board wire demo is observable. Takes the router by constructor
+ *   injection and never ticks.
+ * Responsibilities: Register a handler for SetLampState on play and log each received state.
+ * Example:
+ *   auto Lamp = Engine.CreateObject<FLampActor>(LampActorTypeId, Router).Object;
+ *   Engine.GetWorld().RegisterActor(TObjectPtr<AActor>{Lamp});
  */
 class FLampActor final : public AActor
 {
 public:
-	/** Stores the injected router; this actor's tick is disabled, matching FDisplayActor in example 22. */
+	/**
+	 * Motivation: Stores the injected router; this actor's tick is disabled because it only reacts to a message.
+	 * Responsibilities: Construct with tick disabled and capture the router reference.
+	 */
 	explicit FLampActor(IMessageRouter& InRouter) noexcept
 		: AActor({/*bCanEverTick*/ false, /*bStartWithTickEnabled*/ false, /*TickIntervalMilliseconds*/ 0}), Router(InRouter)
 	{
 	}
 
 protected:
-	/** Subscribes to SetLampStateMessageId targeted at this actor's own LampActorId. */
+	/**
+	 * Motivation: Subscribes to SetLampStateMessageId targeted at this actor's own LampActorId, so later
+	 *   toggle sends reach this lamp.
+	 * Responsibilities: Bind and register the lamp-state handler under the lamp's actor id.
+	 */
 	void BeginPlay() noexcept override
 	{
 		FMessageHandlerBinding Handler;
@@ -72,7 +83,10 @@ protected:
 	}
 
 private:
-	/** Decodes the 1-byte state and logs the lamp's new state; this is the handler bound in BeginPlay. */
+	/**
+	 * Motivation: Decodes the 1-byte state and logs the lamp's new state; this is the handler bound in BeginPlay.
+	 * Responsibilities: Validate the payload and log ON or OFF.
+	 */
 	void OnLampStateReceived(const FMessageView& View) noexcept
 	{
 		if (View.Payload.Size() < 1)
@@ -84,26 +98,36 @@ private:
 		MW_LOG(Log, "ex23", "lamp %s", bLampOn ? "ON" : "OFF");
 	}
 
-	/** Router this actor listens through; injected at construction (D9), never a global. */
+	/** Motivation: Router this actor listens through; injected at construction, never a global. */
 	IMessageRouter& Router;
 };
 
 /**
- * Subscribes to the broadcast HeartbeatCountMessageId and logs every count it receives.
- *
- * Takes the router by constructor injection (D9); never ticks, since it only reacts to a message.
+ * Motivation: Subscribes to the broadcast HeartbeatCountMessageId and logs every count it receives, so
+ *   the heartbeat half of the two-board wire demo is observable. Takes the router by constructor
+ *   injection and never ticks.
+ * Responsibilities: Register a broadcast handler on play and log each received count.
+ * Example:
+ *   auto Display = Engine.CreateObject<FDisplayActor>(DisplayActorTypeId, Router).Object;
+ *   Engine.GetWorld().RegisterActor(TObjectPtr<AActor>{Display});
  */
 class FDisplayActor final : public AActor
 {
 public:
-	/** Stores the injected router; this actor's tick is disabled, matching FDisplayActor in example 22. */
+	/**
+	 * Motivation: Stores the injected router; this actor's tick is disabled because it only reacts to a message.
+	 * Responsibilities: Construct with tick disabled and capture the router reference.
+	 */
 	explicit FDisplayActor(IMessageRouter& InRouter) noexcept
 		: AActor({/*bCanEverTick*/ false, /*bStartWithTickEnabled*/ false, /*TickIntervalMilliseconds*/ 0}), Router(InRouter)
 	{
 	}
 
 protected:
-	/** Subscribes to every broadcast HeartbeatCountMessageId (BroadcastActorId receives broadcasts). */
+	/**
+	 * Motivation: Subscribes to every broadcast HeartbeatCountMessageId, so the display receives each heartbeat.
+	 * Responsibilities: Bind and register the heartbeat handler under the broadcast listener id.
+	 */
 	void BeginPlay() noexcept override
 	{
 		FMessageHandlerBinding Handler;
@@ -124,7 +148,10 @@ protected:
 	}
 
 private:
-	/** Decodes the 1-byte counter and logs it; this is the handler bound in BeginPlay. */
+	/**
+	 * Motivation: Decodes the 1-byte counter and logs it; this is the handler bound in BeginPlay.
+	 * Responsibilities: Validate the payload and log the received count.
+	 */
 	void OnHeartbeatReceived(const FMessageView& View) noexcept
 	{
 		if (View.Payload.Size() < 1)
@@ -135,15 +162,17 @@ private:
 		MW_LOG(Log, "ex23", "heartbeat=%u", static_cast<unsigned>(View.Payload.Data()[0]));
 	}
 
-	/** Router this actor listens through; injected at construction (D9), never a global. */
+	/** Motivation: Router this actor listens through; injected at construction, never a global. */
 	IMessageRouter& Router;
 };
 } // namespace
 
 /**
- * Server board (node 1): FLampActor + FDisplayActor over a TMessageRouter wired to TTransportHost
- * (DedicatedServer) through TMessageChannelBinding, with the engine holding the host play system and the
- * loop pumping the router manually (Phase 4.1 will fold this into TPlaySystemSet — see §4).
+ * Motivation: Lets Board A (node 1) run FLampActor + FDisplayActor over a TMessageRouter wired to
+ *   TTransportHost (DedicatedServer) through TMessageChannelBinding, so the server half of the two-board
+ *   wire demo can be reasoned about in one place.
+ * Responsibilities: Open the UART, wire the transport, router, binding, and engine, spawn the actors,
+ *   start as a dedicated server, and pump frames in an unbounded loop.
  */
 void RunServer() noexcept
 {

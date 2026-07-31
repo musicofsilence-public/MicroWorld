@@ -25,51 +25,60 @@ using namespace MicroWorld::Transport::Device;
 using MicroWorld::Platform::Host::FHostTimeSource;
 using MicroWorld::Platform::Host::FHostWifiDevice;
 
-/** Records the last application message the server handler observed. */
+/**
+ * Motivation: Records the last application message the server handler observed.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 struct FServerCapture
 {
-	/** Number of messages the handler has observed; zero means it never ran. */
+	/** Motivation: Number of messages the handler has observed; zero means it never ran. */
 	std::size_t Count{0};
 
-	/** Sender identity from the most recent dispatch. */
+	/** Motivation: Sender identity from the most recent dispatch. */
 	FPeerId From{};
 
-	/** Channel from the most recent dispatch. */
+	/** Motivation: Channel from the most recent dispatch. */
 	std::uint8_t Channel{0};
 
-	/** First payload byte from the most recent dispatch, or zero for an empty payload. */
+	/** Motivation: First payload byte from the most recent dispatch, or zero for an empty payload. */
 	std::uint8_t FirstByte{0};
 };
 
-/** Host loopback octet prefix reused by every endpoint address in the demo. */
+/** Motivation: Host loopback octet prefix reused by every endpoint address in the demo. */
 constexpr std::uint8_t OctetA = 127;
 constexpr std::uint8_t OctetB = 0;
 constexpr std::uint8_t OctetC = 0;
 constexpr std::uint8_t OctetD = 1;
 
-/** TTransportHost peer capacity shared by the client and server fixtures in the end-to-end demo. */
+/** Motivation: TTransportHost peer capacity shared by the client and server fixtures in the end-to-end demo. */
 constexpr std::size_t TransportHostPeerCapacity = 4;
 
-/** TTransportHost per-message scratch capacity the demo's short application payload must stay within. */
+/** Motivation: TTransportHost per-message scratch capacity the demo's short application payload must stay within. */
 constexpr std::size_t TransportHostScratchBytes = 256;
 
-/** Application payload delivered after the handshake; kept short so the host's 256-byte scratch is never exceeded. */
+/** Motivation: Application payload delivered after the handshake; kept short so the host's 256-byte scratch is never exceeded. */
 const std::array<std::uint8_t, 4> AppPayload = {0x10, 0x20, 0x30, 0x40};
 
-/** Upper bound on handshake pump iterations before the test gives up waiting for Connected. */
+/** Motivation: Upper bound on handshake pump iterations before the test gives up waiting for Connected. */
 constexpr int HandshakeIterationCap = 20;
 
-/** Milliseconds `PollReadable` blocks waiting for a readable datagram during the handshake. */
+/** Motivation: Milliseconds `PollReadable` blocks waiting for a readable datagram during the handshake. */
 constexpr int HandshakePollTimeoutMilliseconds = 500;
 
-/** Distinct byte values carried by the four-byte application payload. */
+/** Motivation: Distinct byte values carried by the four-byte application payload. */
 constexpr std::uint8_t AppPayloadByte0 = 0x10;
 constexpr std::uint8_t AppPayloadByte1 = 0x20;
 
-/** Application-message channel the client uses to address the server's handler. */
+/** Motivation: Application-message channel the client uses to address the server's handler. */
 constexpr std::uint8_t ApplicationChannel = 1;
 
-/** Drives one client and one server through the Hello/Welcome handshake over UDP, bounded by the iteration cap. */
+/**
+ * Motivation: Drives one client and one server through the Hello/Welcome handshake over UDP, bounded by the
+ *   iteration cap.
+ * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+ */
 void PumpHandshake(
 	FHostWifiDevice& ServerDevice,
 	FHostWifiDevice& ClientDevice,
@@ -102,9 +111,10 @@ void PumpHandshake(
 } // namespace
 
 /**
- * Scenario: Drive a TTransportHost client and dedicated server through the Hello/Welcome handshake over real UDP localhost, then send one application
- * message. Expected: The client reaches Connected; the server admits exactly one peer; the server handler observes one message on the requested
- * channel carrying the sent payload's first byte.
+ * Motivation: Scenario: Drive a TTransportHost client and dedicated server through the Hello/Welcome handshake
+ *   over real UDP localhost, then send one application message.
+ * Responsibilities: Expected: The client reaches Connected; the server admits exactly one peer; the server handler
+ *   observes one message on the requested channel carrying the sent payload's first byte.
  */
 MW_TEST_CASE(HostTransportHandshakeAndApplicationMessageCrossRealUdp)
 {

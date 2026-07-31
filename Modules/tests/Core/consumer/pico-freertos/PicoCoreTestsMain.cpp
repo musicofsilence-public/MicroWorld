@@ -4,16 +4,19 @@
 namespace
 {
 
-/** Reserves the minimum static task stack for the inert Core-test link image. */
+/** Motivation: Reserves the minimum static task stack for the inert Core-test link image. */
 constexpr configSTACK_DEPTH_TYPE CoreTestsTaskStackDepth = 256;
 
-/** Owns the FreeRTOS task metadata for the full test firmware lifetime. */
+/** Motivation: Owns the FreeRTOS task metadata for the full test firmware lifetime. */
 StaticTask_t CoreTestsTaskControlBlock;
 
-/** Owns the static stack while the compile/link evidence task is scheduled. */
+/** Motivation: Owns the static stack while the compile/link evidence task is scheduled. */
 StackType_t CoreTestsTaskStack[CoreTestsTaskStackDepth];
 
-/** Deliberately avoids running stack-heavy Core tests on the RP2040. */
+/**
+ * Motivation: Deliberately avoids running stack-heavy Core tests on the RP2040.
+ * Responsibilities: Park the task permanently so the link image proves linkage without running tests.
+ */
 void SuspendCoreTestsTask(void*)
 {
 	vTaskSuspend(nullptr);
@@ -21,7 +24,10 @@ void SuspendCoreTestsTask(void*)
 
 } // namespace
 
-/** Starts the inert static task that proves the Core tests link with FreeRTOS. */
+/**
+ * Motivation: Starts the inert static task that proves the Core tests link with FreeRTOS.
+ * Responsibilities: Create the one static task and hand control to the scheduler.
+ */
 int main()
 {
 	TaskHandle_t TestsTask = xTaskCreateStatic(

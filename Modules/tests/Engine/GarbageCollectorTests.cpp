@@ -35,42 +35,61 @@ using MicroWorld::Engine::TStrongObjectPointerResult;
 using MicroWorld::Engine::TWeakObjectPtr;
 using MicroWorld::Engine::UObject;
 
-/** Per-slice operation budget used by the bounded-slice test: one root, one mark, one sweep per advance. */
+/** Motivation: Per-slice operation budget used by the bounded-slice test: one root, one mark, one sweep per advance. */
 constexpr FGarbageCollectionBudget UnitSliceBudget{1, 1, 1};
 
-/** Zero-budget advance used to prove a no-op slice performs no work. */
+/** Motivation: Zero-budget advance used to prove a no-op slice performs no work. */
 constexpr FGarbageCollectionBudget ZeroSliceBudget{0, 0, 0};
 
-/** Upper bound on bounded-slice iterations before the test declares the cycle cannot complete. */
+/** Motivation: Upper bound on bounded-slice iterations before the test declares the cycle cannot complete. */
 constexpr std::uint32_t BoundedSliceIterationCap = 16;
 
-/** Largest total operation count one UnitSliceBudget advance may report (root + mark + sweep). */
+/** Motivation: Largest total operation count one UnitSliceBudget advance may report (root + mark + sweep). */
 constexpr std::uint32_t MaxOperationsPerUnitSlice = 3;
 
-/** Records collector-visible lifetime completion in fresh per-test state. */
+/**
+ * Motivation: Records collector-visible lifetime completion in fresh per-test state.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 struct FGraphLifetimeState final
 {
-	/** Counts successfully constructed graph nodes. */
+	/** Motivation: Counts successfully constructed graph nodes. */
 	std::uint32_t ConstructionCount{0};
 
-	/** Counts nodes entering managed destruction. */
+	/** Motivation: Counts nodes entering managed destruction. */
 	std::uint32_t BeginDestroyCount{0};
 
-	/** Counts exact graph-node destructor executions. */
+	/** Motivation: Counts exact graph-node destructor executions. */
 	std::uint32_t DestructionCount{0};
 };
 
-/** Provides two explicit outgoing handles for graph and bounded-visitor tests. */
+/**
+ * Motivation: Provides two explicit outgoing handles for graph and bounded-visitor tests.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FGraphObject final : public UObject
 {
 public:
-	/** Begins one observable graph-node lifetime. */
+	/**
+	 * Motivation: Begins one observable graph-node lifetime.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	explicit FGraphObject(FGraphLifetimeState& InState) noexcept : State(InState) { ++State.ConstructionCount; }
 
-	/** Records exact derived destruction after collector reclamation. */
+	/**
+	 * Motivation: Records exact derived destruction after collector reclamation.
+	 * Responsibilities: Release the documented observation exactly once and leave no leak behind.
+	 */
 	~FGraphObject() noexcept override { ++State.DestructionCount; }
 
-	/** Replaces one bounded outgoing edge without changing target lifetime. */
+	/**
+	 * Motivation: Replaces one bounded outgoing edge without changing target lifetime.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void SetReference(const std::size_t InIndex, const TObjectPtr<FGraphObject> InReference) noexcept
 	{
 		if (InIndex >= References.size())
@@ -85,7 +104,10 @@ public:
 		}
 	}
 
-	/** Requests one deliberately recursive advance from the next reference visit. */
+	/**
+	 * Motivation: Requests one deliberately recursive advance from the next reference visit.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void SetReentrantAdvance(FGarbageCollector& InCollector, ERuntimeResult& OutResult) noexcept
 	{
 		ReentrantCollector = &InCollector;
@@ -93,7 +115,10 @@ public:
 	}
 
 protected:
-	/** Presents every configured edge to the active iterative collector. */
+	/**
+	 * Motivation: Presents every configured edge to the active iterative collector.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void VisitReferences(FReferenceCollector& InCollector) noexcept override
 	{
 		if (ReentrantCollector != nullptr && ReentrantResult != nullptr)
@@ -107,89 +132,140 @@ protected:
 		}
 	}
 
-	/** Records the lifecycle barrier before exact destruction. */
+	/**
+	 * Motivation: Records the lifecycle barrier before exact destruction.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void BeginDestroy() noexcept override { ++State.BeginDestroyCount; }
 
 private:
-	/** Shares observations only with the test that owns this node. */
+	/** Motivation: Shares observations only with the test that owns this node. */
 	FGraphLifetimeState& State;
 
-	/** Holds a small same-store typed graph without dynamic storage. */
+	/** Motivation: Holds a small same-store typed graph without dynamic storage. */
 	std::array<TObjectPtr<FGraphObject>, 2> References{};
 
-	/** Bounds visitor work to edges explicitly configured by the test. */
+	/** Motivation: Bounds visitor work to edges explicitly configured by the test. */
 	std::size_t ReferenceCount{0};
 
-	/** Selects the active collector targeted only by the recursive-advance regression. */
+	/** Motivation: Selects the active collector targeted only by the recursive-advance regression. */
 	FGarbageCollector* ReentrantCollector{nullptr};
 
-	/** Exposes the recursive call result without global test state. */
+	/** Motivation: Exposes the recursive call result without global test state. */
 	ERuntimeResult* ReentrantResult{nullptr};
 };
 
-/** Provides a complete typed target for cross-store pointer-origin validation. */
+/**
+ * Motivation: Provides a complete typed target for cross-store pointer-origin validation.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FCrossStoreLeaf final : public UObject
 {
 public:
-	/** Begins one observable leaf lifetime. */
+	/**
+	 * Motivation: Begins one observable leaf lifetime.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	explicit FCrossStoreLeaf(FGraphLifetimeState& InState) noexcept : State(InState) { ++State.ConstructionCount; }
 
-	/** Records exact leaf destruction independently from holder destruction. */
+	/**
+	 * Motivation: Records exact leaf destruction independently from holder destruction.
+	 * Responsibilities: Release the documented observation exactly once and leave no leak behind.
+	 */
 	~FCrossStoreLeaf() noexcept override { ++State.DestructionCount; }
 
 protected:
-	/** Records managed leaf teardown before exact destruction. */
+	/**
+	 * Motivation: Records managed leaf teardown before exact destruction.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void BeginDestroy() noexcept override { ++State.BeginDestroyCount; }
 
 private:
-	/** Shares observations only with the store-specific test state. */
+	/** Motivation: Shares observations only with the store-specific test state. */
 	FGraphLifetimeState& State;
 };
 
-/** Presents one typed reference whose originating store must be validated. */
+/**
+ * Motivation: Presents one typed reference whose originating store must be validated.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FCrossStoreReferenceHolder final : public UObject
 {
 public:
-	/** Begins one observable holder lifetime. */
+	/**
+	 * Motivation: Begins one observable holder lifetime.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	explicit FCrossStoreReferenceHolder(FGraphLifetimeState& InState) noexcept : State(InState) { ++State.ConstructionCount; }
 
-	/** Records exact holder destruction. */
+	/**
+	 * Motivation: Records exact holder destruction.
+	 * Responsibilities: Release the documented observation exactly once and leave no leak behind.
+	 */
 	~FCrossStoreReferenceHolder() noexcept override { ++State.DestructionCount; }
 
-	/** Selects the typed reference presented during the next trace. */
+	/**
+	 * Motivation: Selects the typed reference presented during the next trace.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void SetReference(const TObjectPtr<FCrossStoreLeaf> InReference) noexcept { Reference = InReference; }
 
 protected:
-	/** Exercises TObjectPtr store-origin validation at the collector boundary. */
+	/**
+	 * Motivation: Exercises TObjectPtr store-origin validation at the collector boundary.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void VisitReferences(FReferenceCollector& InCollector) noexcept override { InCollector.AddReferencedObject(Reference); }
 
-	/** Records managed holder teardown before exact destruction. */
+	/**
+	 * Motivation: Records managed holder teardown before exact destruction.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void BeginDestroy() noexcept override { ++State.BeginDestroyCount; }
 
 private:
-	/** Shares observations only with the holder's store-specific test state. */
+	/** Motivation: Shares observations only with the holder's store-specific test state. */
 	FGraphLifetimeState& State;
 
-	/** Retains the foreign-or-local typed identity without caching its raw address. */
+	/** Motivation: Retains the foreign-or-local typed identity without caching its raw address. */
 	TObjectPtr<FCrossStoreLeaf> Reference{};
 };
 
-/** Owns one isolated fixed object store for collector behavior tests. */
+/**
+ * Motivation: Owns one isolated fixed object store for collector behavior tests.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 template<std::uint32_t SlotCount, std::uint32_t RootCapacity>
 class TGraphStoreFixture final
 {
 public:
-	/** Binds the store to this fixture's complete aligned caller-owned storage. */
+	/**
+	 * Motivation: Binds the store to this fixture's complete aligned caller-owned storage.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	explicit TGraphStoreFixture(const MicroWorld::Engine::FClassRegistryView InClasses) noexcept : Store(MakeStorage(), InClasses) {}
 
-	/** Exposes the public store under test. */
+	/**
+	 * Motivation: Exposes the public store under test.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	FObjectStore& GetStore() noexcept { return Store; }
 
 private:
 	static constexpr std::size_t SlotSizeBytes = 128;
 	static constexpr std::size_t SlotAlignmentBytes = 16;
 
-	/** Describes the fixed storage retained by this fixture. */
+	/**
+	 * Motivation: Describes the fixed storage retained by this fixture.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	FObjectStoreStorage MakeStorage() noexcept
 	{
 		return FObjectStoreStorage{
@@ -204,20 +280,23 @@ private:
 		};
 	}
 
-	/** Provides aligned non-moving placement storage for every graph node. */
+	/** Motivation: Provides aligned non-moving placement storage for every graph node. */
 	alignas(SlotAlignmentBytes) std::array<std::byte, SlotSizeBytes * SlotCount> SlotBytes{};
 
-	/** Provides one lifecycle record per fixed slot. */
+	/** Motivation: Provides one lifecycle record per fixed slot. */
 	std::array<FObjectSlotMetadata, SlotCount> Slots{};
 
-	/** Provides independently counted explicit root entries. */
+	/** Motivation: Provides independently counted explicit root entries. */
 	std::array<FObjectRootEntry, RootCapacity> Roots{};
 
-	/** Owns managed graph lifetimes while all fixture storage is alive. */
+	/** Motivation: Owns managed graph lifetimes while all fixture storage is alive. */
 	FObjectStore Store;
 };
 
-/** Registers the one graph-node class used by a fresh test. */
+/**
+ * Motivation: Registers the one graph-node class used by a fresh test.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ */
 EObjectResult RegisterGraphDescriptor(TClassRegistry<2>& InRegistry, const FClassDescriptor*& OutDescriptor) noexcept
 {
 	const FClassDescriptor Candidate = MakeClassDescriptor<FGraphObject>(1, "GraphObject", nullptr, &TraceManagedObjectReferences);
@@ -226,23 +305,31 @@ EObjectResult RegisterGraphDescriptor(TClassRegistry<2>& InRegistry, const FClas
 	return Result;
 }
 
-/** Captures equivalent observable outcomes from full and incremental collection. */
+/**
+ * Motivation: Captures equivalent observable outcomes from full and incremental collection.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 struct FCollectionObservation final
 {
-	/** Reports whether the tested cycle completed successfully. */
+	/** Motivation: Reports whether the tested cycle completed successfully. */
 	bool bCycleComplete{false};
 
-	/** Counts objects reclaimed by the tested cycle. */
+	/** Motivation: Counts objects reclaimed by the tested cycle. */
 	std::uint32_t ReclaimedObjects{0};
 
-	/** Counts objects remaining immediately after the tested cycle. */
+	/** Motivation: Counts objects remaining immediately after the tested cycle. */
 	std::uint32_t OccupiedSlots{0};
 
-	/** Counts exact destructors run by the tested cycle. */
+	/** Motivation: Counts exact destructors run by the tested cycle. */
 	std::uint32_t DestructionCount{0};
 };
 
-/** Runs the same rooted-chain graph using either full or one-operation slices. */
+/**
+ * Motivation: Runs the same rooted-chain graph using either full or one-operation slices.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ */
 FCollectionObservation ObserveEquivalentCollection(const bool bIncremental) noexcept
 {
 	FGraphLifetimeState Lifetime{};
@@ -288,8 +375,9 @@ FCollectionObservation ObserveEquivalentCollection(const bool bIncremental) noex
 }
 
 /**
- * Scenario: Build a three-node chain rooted at one strong pointer and run a full collection.
- * Expected: The cycle completes and reclaims nothing; every rooted and transitively-traced node remains resolvable and occupied.
+ * Motivation: Build a three-node chain rooted at one strong pointer and run a full collection.
+ * Responsibilities: The cycle completes and reclaims nothing; every rooted and transitively-traced node remains
+ *   resolvable and occupied.
  */
 MW_TEST_CASE(GarbageCollectorPreservesRootedGraph)
 {
@@ -332,8 +420,9 @@ MW_TEST_CASE(GarbageCollectorPreservesRootedGraph)
 }
 
 /**
- * Scenario: Build two objects that reference each other with no root and run a full collection.
- * Expected: The unreachable cycle is reclaimed; both members begin destruction and are destroyed exactly once and both weak observers expire.
+ * Motivation: Build two objects that reference each other with no root and run a full collection.
+ * Responsibilities: The unreachable cycle is reclaimed; both members begin destruction and are destroyed exactly once
+ *   and both weak observers expire.
  */
 MW_TEST_CASE(GarbageCollectorReclaimsUnrootedCycle)
 {
@@ -372,8 +461,9 @@ MW_TEST_CASE(GarbageCollectorReclaimsUnrootedCycle)
 }
 
 /**
- * Scenario: Create one unrooted object with a weak observer and run a full collection.
- * Expected: The isolated object is reclaimed; weak observation alone does not keep the object reachable and expires after collection.
+ * Motivation: Create one unrooted object with a weak observer and run a full collection.
+ * Responsibilities: The isolated object is reclaimed; weak observation alone does not keep the object reachable and
+ *   expires after collection.
  */
 MW_TEST_CASE(GarbageCollectorExpiresWeakReferenceWithoutRooting)
 {
@@ -402,8 +492,9 @@ MW_TEST_CASE(GarbageCollectorExpiresWeakReferenceWithoutRooting)
 }
 
 /**
- * Scenario: Run the same rooted-chain graph once with a full collection and once with one-operation slices.
- * Expected: Both modes complete the cycle, reclaim the same objects, preserve the same graph, and run the same destructors.
+ * Motivation: Run the same rooted-chain graph once with a full collection and once with one-operation slices.
+ * Responsibilities: Both modes complete the cycle, reclaim the same objects, preserve the same graph, and run the same
+ *   destructors.
  */
 MW_TEST_CASE(GarbageCollectorIncrementalAndFullCyclesHaveEquivalentOutcomes)
 {
@@ -423,9 +514,10 @@ MW_TEST_CASE(GarbageCollectorIncrementalAndFullCyclesHaveEquivalentOutcomes)
 }
 
 /**
- * Scenario: Start a cycle, advance once with a zero budget, then drive repeated one-operation slices to completion.
- * Expected: The zero budget performs no work and keeps the waiting phase; every bounded slice respects its one-operation phase budget and the cycle
- * eventually completes.
+ * Motivation: Start a cycle, advance once with a zero budget, then drive repeated one-operation slices to
+ *   completion.
+ * Responsibilities: The zero budget performs no work and keeps the waiting phase; every bounded slice respects its
+ *   one-operation phase budget and the cycle.
  */
 MW_TEST_CASE(GarbageCollectorHonorsZeroAndOneOperationBudgets)
 {
@@ -479,8 +571,10 @@ MW_TEST_CASE(GarbageCollectorHonorsZeroAndOneOperationBudgets)
 }
 
 /**
- * Scenario: Build a parent with two discovered children under one root and run bounded mark slices capped at one mark operation.
- * Expected: The multi-reference visitor consumes only one mark per slice; the cycle completes and the complete two-edge graph survives.
+ * Motivation: Build a parent with two discovered children under one root and run bounded mark slices capped at one
+ *   mark operation.
+ * Responsibilities: The multi-reference visitor consumes only one mark per slice; the cycle completes and the complete
+ *   two-edge graph survives.
  */
 MW_TEST_CASE(GarbageCollectorMultiReferenceVisitorCountsOneMarkAndPreservesGraph)
 {
@@ -531,8 +625,10 @@ MW_TEST_CASE(GarbageCollectorMultiReferenceVisitorCountsOneMarkAndPreservesGraph
 }
 
 /**
- * Scenario: Build a deep rooted chain, run one collection with the root held, then remove the root and collect again.
- * Expected: The rooted deep graph survives the first cycle; removing the root reclaims the entire chain iteratively with no node remaining.
+ * Motivation: Build a deep rooted chain, run one collection with the root held, then remove the root and collect
+ *   again.
+ * Responsibilities: The rooted deep graph survives the first cycle; removing the root reclaims the entire chain
+ *   iteratively with no node remaining.
  */
 MW_TEST_CASE(GarbageCollectorTraversesDeepGraphWithoutRecursion)
 {
@@ -582,9 +678,11 @@ MW_TEST_CASE(GarbageCollectorTraversesDeepGraphWithoutRecursion)
 }
 
 /**
- * Scenario: Start one cycle, advance one root slice, then attempt construction, pending destruction, a new root, a barrier, and a second collector
- * while the cycle owns the store. Expected: Every reachability-changing mutation and the second collector are rejected as lifecycle-locked; removing
- * an existing root stays safe; cancellation releases ownership so mutation and a later collection resume.
+ * Motivation: Scenario: Start one cycle, advance one root slice, then attempt construction, pending destruction, a
+ *   new root, a barrier, and a second collector while the cycle owns the store.
+ * Responsibilities: Expected: Every reachability-changing mutation and the second collector are rejected as
+ *   lifecycle-locked; removing an existing root stays safe; cancellation releases ownership so mutation
+ *   and a later collection resume.
  */
 MW_TEST_CASE(GarbageCollectorLocksMutationAndSecondCollectorBetweenSlices)
 {
@@ -639,9 +737,10 @@ MW_TEST_CASE(GarbageCollectorLocksMutationAndSecondCollectorBetweenSlices)
 }
 
 /**
- * Scenario: Let one collector acquire the store and pause mid-mark, destroy it, then start a fresh collector and run a full collection.
- * Expected: The abandoned cycle's partial mark is cleared on destruction; a later collector acquires the released store and reclaims the formerly
- * marked object exactly once.
+ * Motivation: Let one collector acquire the store and pause mid-mark, destroy it, then start a fresh collector and
+ *   run a full collection.
+ * Responsibilities: The abandoned cycle's partial mark is cleared on destruction; a later collector acquires the
+ *   released store and reclaims the formerly.
  */
 MW_TEST_CASE(GarbageCollectorDestructorReleasesActiveCycleAndPartialMarks)
 {
@@ -686,8 +785,10 @@ MW_TEST_CASE(GarbageCollectorDestructorReleasesActiveCycleAndPartialMarks)
 }
 
 /**
- * Scenario: Arm a rooted node's reference visitor to recursively advance the active collector, then start the cycle and advance it.
- * Expected: The recursive advance is rejected as lifecycle-locked; the outer cycle still completes and the rooted object remains live.
+ * Motivation: Arm a rooted node's reference visitor to recursively advance the active collector, then start the
+ *   cycle and advance it.
+ * Responsibilities: The recursive advance is rejected as lifecycle-locked; the outer cycle still completes and the
+ *   rooted object remains live.
  */
 MW_TEST_CASE(GarbageCollectorRejectsRecursiveAdvanceFromReferenceVisitor)
 {
@@ -725,9 +826,9 @@ MW_TEST_CASE(GarbageCollectorRejectsRecursiveAdvanceFromReferenceVisitor)
 }
 
 /**
- * Scenario: Build a collector whose worklist is smaller than the store's slot capacity and request a collection.
- * Expected: The request is rejected atomically with capacity exhaustion; the collector stays idle and observable, the object is not reclaimed and
- * remains live.
+ * Motivation: Build a collector whose worklist is smaller than the store's slot capacity and request a collection.
+ * Responsibilities: The request is rejected atomically with capacity exhaustion; the collector stays idle and
+ *   observable, the object is not reclaimed and.
  */
 MW_TEST_CASE(GarbageCollectorRejectsInsufficientWorklistAtomically)
 {
@@ -762,9 +863,10 @@ MW_TEST_CASE(GarbageCollectorRejectsInsufficientWorklistAtomically)
 }
 
 /**
- * Scenario: Give a Store A holder a foreign reference to a Store B object whose handle matches a distinct unrelated Store A object, then run a full
- * collection on Store A. Expected: The unrelated same-valued local object is reclaimed; the rooted holder survives and the foreign Store B object is
- * unaffected.
+ * Motivation: Scenario: Give a Store A holder a foreign reference to a Store B object whose handle matches a
+ *   distinct unrelated Store A object, then run a full collection on Store A.
+ * Responsibilities: Expected: The unrelated same-valued local object is reclaimed; the rooted holder survives and the
+ *   foreign Store B object is unaffected.
  */
 MW_TEST_CASE(GarbageCollectorIgnoresCrossStoreSameValuedReference)
 {

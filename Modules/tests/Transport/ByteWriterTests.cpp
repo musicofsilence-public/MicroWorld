@@ -14,10 +14,10 @@ using MicroWorld::Core::TSpan;
 using MicroWorld::Transport::ETransportResult;
 using MicroWorld::Transport::FByteWriter;
 
-/** Value the value-initialized storage bytes hold before any write, so a write is observable. */
+/** Motivation: Value the value-initialized storage bytes hold before any write, so a write is observable. */
 constexpr std::uint8_t UntouchedStorageByte = 0x00;
 
-/** Distinct payload bytes the ordered-write tests thread through the writer. */
+/** Motivation: Distinct payload bytes the ordered-write tests thread through the writer. */
 constexpr std::uint8_t WriteByte01 = 0x01;
 constexpr std::uint8_t WriteByte02 = 0x02;
 constexpr std::uint8_t WriteByte03 = 0x03;
@@ -36,15 +36,16 @@ constexpr std::uint8_t WriteByteAA = 0xAA;
 constexpr std::uint8_t WriteByteBB = 0xBB;
 constexpr std::uint8_t WriteByteCC = 0xCC;
 
-/** Storage/span byte counts the capacity and boundary tests exercise. */
+/** Motivation: Storage/span byte counts the capacity and boundary tests exercise. */
 constexpr std::size_t FourByteBufferCount = 4;
 constexpr std::size_t ThreeByteBufferCount = 3;
 constexpr std::size_t TwoByteBufferCount = 2;
 constexpr std::size_t OneByteBufferCount = 1;
 
 /**
- * Scenario: Construct a fresh byte writer over a four-byte buffer.
- * Expected: The writer reports its observed capacity, zero position, full remaining capacity, and an empty written prefix.
+ * Motivation: Construct a fresh byte writer over a four-byte buffer.
+ * Responsibilities: The writer reports its observed capacity, zero position, full remaining capacity, and an empty
+ *   written prefix.
  */
 MW_TEST_CASE(ByteWriterStartsEmptyWithObservedCapacity)
 {
@@ -61,8 +62,9 @@ MW_TEST_CASE(ByteWriterStartsEmptyWithObservedCapacity)
 }
 
 /**
- * Scenario: Write two single bytes in sequence into a three-byte buffer.
- * Expected: Each byte is appended in storage order, the cursor advances by exactly one byte per write, and the trailing byte stays untouched.
+ * Motivation: Write two single bytes in sequence into a three-byte buffer.
+ * Responsibilities: Each byte is appended in storage order, the cursor advances by exactly one byte per write, and the
+ *   trailing byte stays untouched.
  */
 MW_TEST_CASE(ByteWriterAppendsOrderedBytes)
 {
@@ -82,9 +84,9 @@ MW_TEST_CASE(ByteWriterAppendsOrderedBytes)
 }
 
 /**
- * Scenario: Write one byte, then append a two-byte span to the writer.
- * Expected: The span is appended after the prior byte in source order, prior bytes are not altered, and the cursor advances by the accepted span
- * length.
+ * Motivation: Write one byte, then append a two-byte span to the writer.
+ * Responsibilities: The span is appended after the prior byte in source order, prior bytes are not altered, and the
+ *   cursor advances by the accepted span.
  */
 MW_TEST_CASE(ByteWriterAppendsOrderedSpan)
 {
@@ -108,8 +110,9 @@ MW_TEST_CASE(ByteWriterAppendsOrderedSpan)
 }
 
 /**
- * Scenario: Write two bytes to the exact capacity of a two-byte buffer, then attempt one more byte.
- * Expected: The capacity-filling writes succeed; the overflow write returns Full, does not advance the cursor, and leaves accepted bytes intact.
+ * Motivation: Write two bytes to the exact capacity of a two-byte buffer, then attempt one more byte.
+ * Responsibilities: The capacity-filling writes succeed; the overflow write returns Full, does not advance the cursor,
+ *   and leaves accepted bytes intact.
  */
 MW_TEST_CASE(ByteWriterAcceptsExactCapacityThenReportsFull)
 {
@@ -133,8 +136,8 @@ MW_TEST_CASE(ByteWriterAcceptsExactCapacityThenReportsFull)
 }
 
 /**
- * Scenario: Attempt a span write larger than the total capacity into a pre-filled buffer.
- * Expected: The write returns Invalid, does not advance the cursor, and leaves the storage untouched.
+ * Motivation: Attempt a span write larger than the total capacity into a pre-filled buffer.
+ * Responsibilities: The write returns Invalid, does not advance the cursor, and leaves the storage untouched.
  */
 MW_TEST_CASE(ByteWriterSpanLargerThanTotalCapacityReturnsInvalid)
 {
@@ -155,9 +158,10 @@ MW_TEST_CASE(ByteWriterSpanLargerThanTotalCapacityReturnsInvalid)
 }
 
 /**
- * Scenario: Write one byte into a three-byte buffer, then attempt a three-byte span that fits total capacity but exceeds remaining.
- * Expected: The write returns Full, does not advance the cursor, makes no partial progress, and leaves both the accepted prefix and the untouched
- * tail intact.
+ * Motivation: Write one byte into a three-byte buffer, then attempt a three-byte span that fits total capacity but
+ *   exceeds remaining.
+ * Responsibilities: The write returns Full, does not advance the cursor, makes no partial progress, and leaves both the
+ *   accepted prefix and the untouched.
  */
 MW_TEST_CASE(ByteWriterSpanExceedingRemainingReturnsFullWithoutPartialProgress)
 {
@@ -181,8 +185,8 @@ MW_TEST_CASE(ByteWriterSpanExceedingRemainingReturnsFullWithoutPartialProgress)
 }
 
 /**
- * Scenario: Write one byte, then attempt a span write with a null data pointer and nonzero length.
- * Expected: The write returns Invalid, does not advance the cursor, and leaves accepted bytes intact.
+ * Motivation: Write one byte, then attempt a span write with a null data pointer and nonzero length.
+ * Responsibilities: The write returns Invalid, does not advance the cursor, and leaves accepted bytes intact.
  */
 MW_TEST_CASE(ByteWriterRejectsNullSourceWithNonzeroLength)
 {
@@ -200,8 +204,8 @@ MW_TEST_CASE(ByteWriterRejectsNullSourceWithNonzeroLength)
 }
 
 /**
- * Scenario: Write one byte, then attempt empty-span writes with both non-null and null data pointers.
- * Expected: Each empty span is a valid no-op that does not advance the cursor.
+ * Motivation: Write one byte, then attempt empty-span writes with both non-null and null data pointers.
+ * Responsibilities: Each empty span is a valid no-op that does not advance the cursor.
  */
 MW_TEST_CASE(ByteWriterAcceptsEmptySpanAsNoOp)
 {
@@ -224,9 +228,9 @@ MW_TEST_CASE(ByteWriterAcceptsEmptySpanAsNoOp)
 }
 
 /**
- * Scenario: Fill a two-byte buffer, reset the writer, then write one byte again.
- * Expected: Reset returns the cursor to zero and restores remaining to capacity, and the rewrite overwrites the first byte while leaving the second
- * untouched.
+ * Motivation: Fill a two-byte buffer, reset the writer, then write one byte again.
+ * Responsibilities: Reset returns the cursor to zero and restores remaining to capacity, and the rewrite overwrites the
+ *   first byte while leaving the second.
  */
 MW_TEST_CASE(ByteWriterResetAllowsBufferReuse)
 {
@@ -251,8 +255,8 @@ MW_TEST_CASE(ByteWriterResetAllowsBufferReuse)
 }
 
 /**
- * Scenario: Write two bytes into a four-byte buffer, then read the written-bytes view.
- * Expected: The view exposes exactly the accepted prefix length and bytes without exposing mutable storage.
+ * Motivation: Write two bytes into a four-byte buffer, then read the written-bytes view.
+ * Responsibilities: The view exposes exactly the accepted prefix length and bytes without exposing mutable storage.
  */
 MW_TEST_CASE(ByteWriterReportsAcceptedPrefixView)
 {
@@ -271,8 +275,10 @@ MW_TEST_CASE(ByteWriterReportsAcceptedPrefixView)
 }
 
 /**
- * Scenario: Bind a writer to an invalid {nullptr, nonzero} buffer and exercise query, single-byte write, and span-write operations.
- * Expected: Query operations report the observed configuration; mutating operations return Invalid without advancing the cursor or touching storage.
+ * Motivation: Bind a writer to an invalid {nullptr, nonzero} buffer and exercise query, single-byte write, and
+ *   span-write operations.
+ * Responsibilities: Query operations report the observed configuration; mutating operations return Invalid without
+ *   advancing the cursor or touching storage.
  */
 MW_TEST_CASE(ByteWriterInvalidBackingBufferNeverDereferencesNull)
 {
@@ -299,9 +305,10 @@ MW_TEST_CASE(ByteWriterInvalidBackingBufferNeverDereferencesNull)
 }
 
 /**
- * Scenario: Bind a writer to a valid empty {nullptr, 0} buffer, then attempt an empty span, a single byte, and a span larger than total capacity.
- * Expected: The writer reports zero capacity and empty written bytes, accepts the empty span as a no-op, and returns Full for the single byte and
- * Invalid for the oversized span.
+ * Motivation: Bind a writer to a valid empty {nullptr, 0} buffer, then attempt an empty span, a single byte, and a
+ *   span larger than total capacity.
+ * Responsibilities: The writer reports zero capacity and empty written bytes, accepts the empty span as a no-op, and
+ *   returns Full for the single byte and.
  */
 MW_TEST_CASE(ByteWriterValidEmptyBufferAcceptsOnlyEmptySpans)
 {

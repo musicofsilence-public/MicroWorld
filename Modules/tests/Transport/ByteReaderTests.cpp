@@ -14,13 +14,13 @@ using MicroWorld::Core::TSpan;
 using MicroWorld::Transport::ETransportResult;
 using MicroWorld::Transport::FByteReader;
 
-/** Pre-fill marker written into every destination byte before a read, so a write is observable. */
+/** Motivation: Pre-fill marker written into every destination byte before a read, so a write is observable. */
 constexpr std::uint8_t DestinationPrefillByte = 0xFF;
 
-/** Sentinel left in an output parameter to prove a failed read left it untouched. */
+/** Motivation: Sentinel left in an output parameter to prove a failed read left it untouched. */
 constexpr std::uint8_t UntouchedOutputByte = 0xEE;
 
-/** Distinct source bytes the ordered-read tests thread through the reader. */
+/** Motivation: Distinct source bytes the ordered-read tests thread through the reader. */
 constexpr std::uint8_t SourceByte01 = 0x01;
 constexpr std::uint8_t SourceByte02 = 0x02;
 constexpr std::uint8_t SourceByte03 = 0x03;
@@ -40,15 +40,15 @@ constexpr std::uint8_t SourceByteAA = 0xAA;
 constexpr std::uint8_t SourceByteBB = 0xBB;
 constexpr std::uint8_t SourceByteCC = 0xCC;
 
-/** Source/destination byte counts the capacity and boundary tests exercise. */
+/** Motivation: Source/destination byte counts the capacity and boundary tests exercise. */
 constexpr std::size_t FourByteSourceCount = 4;
 constexpr std::size_t ThreeByteSourceCount = 3;
 constexpr std::size_t TwoByteSourceCount = 2;
 constexpr std::size_t OneByteSourceCount = 1;
 
 /**
- * Scenario: Construct a fresh byte reader over a four-byte source.
- * Expected: The reader reports the source length, zero consumed bytes, and full remaining capacity.
+ * Motivation: Construct a fresh byte reader over a four-byte source.
+ * Responsibilities: The reader reports the source length, zero consumed bytes, and full remaining capacity.
  */
 MW_TEST_CASE(ByteReaderStartsAtZeroConsumed)
 {
@@ -63,8 +63,8 @@ MW_TEST_CASE(ByteReaderStartsAtZeroConsumed)
 }
 
 /**
- * Scenario: Read two single bytes in sequence from a three-byte source.
- * Expected: Each read returns the next source byte in order and advances the cursor by exactly one byte.
+ * Motivation: Read two single bytes in sequence from a three-byte source.
+ * Responsibilities: Each read returns the next source byte in order and advances the cursor by exactly one byte.
  */
 MW_TEST_CASE(ByteReaderReturnsOrderedBytes)
 {
@@ -85,8 +85,8 @@ MW_TEST_CASE(ByteReaderReturnsOrderedBytes)
 }
 
 /**
- * Scenario: Read a two-byte span into a pre-filled destination from a four-byte source.
- * Expected: The complete span is copied in source order and the cursor advances by the read length.
+ * Motivation: Read a two-byte span into a pre-filled destination from a four-byte source.
+ * Responsibilities: The complete span is copied in source order and the cursor advances by the read length.
  */
 MW_TEST_CASE(ByteReaderCopiesOrderedSpan)
 {
@@ -106,8 +106,9 @@ MW_TEST_CASE(ByteReaderCopiesOrderedSpan)
 }
 
 /**
- * Scenario: Read two bytes to the exact source boundary, then attempt one more byte.
- * Expected: The boundary reads succeed; the overflow read returns Invalid (truncated), leaves its output untouched, and does not advance the cursor.
+ * Motivation: Read two bytes to the exact source boundary, then attempt one more byte.
+ * Responsibilities: The boundary reads succeed; the overflow read returns Invalid (truncated), leaves its output
+ *   untouched, and does not advance the cursor.
  */
 MW_TEST_CASE(ByteReaderAcceptsExactBoundaryThenReportsInvalid)
 {
@@ -133,8 +134,9 @@ MW_TEST_CASE(ByteReaderAcceptsExactBoundaryThenReportsInvalid)
 }
 
 /**
- * Scenario: Attempt a span read larger than the remaining source into a pre-filled destination.
- * Expected: The read returns Invalid (truncated), does not advance the cursor, and leaves the destination untouched.
+ * Motivation: Attempt a span read larger than the remaining source into a pre-filled destination.
+ * Responsibilities: The read returns Invalid (truncated), does not advance the cursor, and leaves the destination
+ *   untouched.
  */
 MW_TEST_CASE(ByteReaderTruncatedSpanReadLeavesCursorAndOutputUnchanged)
 {
@@ -154,8 +156,8 @@ MW_TEST_CASE(ByteReaderTruncatedSpanReadLeavesCursorAndOutputUnchanged)
 }
 
 /**
- * Scenario: Attempt a span read with a null destination and nonzero length.
- * Expected: The read returns Invalid without advancing the cursor.
+ * Motivation: Attempt a span read with a null destination and nonzero length.
+ * Responsibilities: The read returns Invalid without advancing the cursor.
  */
 MW_TEST_CASE(ByteReaderRejectsNullDestinationWithNonzeroLength)
 {
@@ -171,8 +173,8 @@ MW_TEST_CASE(ByteReaderRejectsNullDestinationWithNonzeroLength)
 }
 
 /**
- * Scenario: Attempt a span read with an empty destination whose data pointer is null.
- * Expected: The read is a valid no-op and does not advance the cursor.
+ * Motivation: Attempt a span read with an empty destination whose data pointer is null.
+ * Responsibilities: The read is a valid no-op and does not advance the cursor.
  */
 MW_TEST_CASE(ByteReaderAcceptsEmptyDestinationAsNoOp)
 {
@@ -188,8 +190,8 @@ MW_TEST_CASE(ByteReaderAcceptsEmptyDestinationAsNoOp)
 }
 
 /**
- * Scenario: Peek at a non-empty source twice from the same cursor.
- * Expected: Each peek returns the first source byte and does not advance the cursor.
+ * Motivation: Peek at a non-empty source twice from the same cursor.
+ * Responsibilities: Each peek returns the first source byte and does not advance the cursor.
  */
 MW_TEST_CASE(ByteReaderPeeksWithoutAdvancing)
 {
@@ -213,8 +215,8 @@ MW_TEST_CASE(ByteReaderPeeksWithoutAdvancing)
 }
 
 /**
- * Scenario: Consume a one-byte source entirely, then peek with a sentinel output.
- * Expected: The peek returns Invalid and leaves its output untouched.
+ * Motivation: Consume a one-byte source entirely, then peek with a sentinel output.
+ * Responsibilities: The peek returns Invalid and leaves its output untouched.
  */
 MW_TEST_CASE(ByteReaderPeekPastSourceReturnsInvalid)
 {
@@ -234,8 +236,8 @@ MW_TEST_CASE(ByteReaderPeekPastSourceReturnsInvalid)
 }
 
 /**
- * Scenario: Read one byte from a two-byte source, then reset the reader.
- * Expected: The cursor returns to zero and the next read returns the first source byte again.
+ * Motivation: Read one byte from a two-byte source, then reset the reader.
+ * Responsibilities: The cursor returns to zero and the next read returns the first source byte again.
  */
 MW_TEST_CASE(ByteReaderResetAllowsSourceReparse)
 {
@@ -256,8 +258,8 @@ MW_TEST_CASE(ByteReaderResetAllowsSourceReparse)
 }
 
 /**
- * Scenario: Consume one byte from a four-byte source, then read the remaining-bytes view.
- * Expected: The view exposes the unconsumed suffix length and bytes without exposing mutable storage.
+ * Motivation: Consume one byte from a four-byte source, then read the remaining-bytes view.
+ * Responsibilities: The view exposes the unconsumed suffix length and bytes without exposing mutable storage.
  */
 MW_TEST_CASE(ByteReaderReportsRemainingSuffixView)
 {
@@ -277,9 +279,10 @@ MW_TEST_CASE(ByteReaderReportsRemainingSuffixView)
 }
 
 /**
- * Scenario: Bind a reader to an invalid {nullptr, nonzero} source and exercise query, read, peek, and span-read operations.
- * Expected: Query operations report the observed configuration; consuming operations return Invalid without advancing the cursor or modifying
- * outputs.
+ * Motivation: Bind a reader to an invalid {nullptr, nonzero} source and exercise query, read, peek, and span-read
+ *   operations.
+ * Responsibilities: Query operations report the observed configuration; consuming operations return Invalid without
+ *   advancing the cursor or modifying.
  */
 MW_TEST_CASE(ByteReaderInvalidBackingSourceNeverDereferencesNull)
 {
@@ -312,8 +315,10 @@ MW_TEST_CASE(ByteReaderInvalidBackingSourceNeverDereferencesNull)
 }
 
 /**
- * Scenario: Bind a reader to a valid empty {nullptr, 0} source, query its capacity and remaining view, then attempt a read.
- * Expected: The reader reports an empty suffix view with a null data pointer, and the read returns Invalid without modifying its output.
+ * Motivation: Bind a reader to a valid empty {nullptr, 0} source, query its capacity and remaining view, then
+ *   attempt a read.
+ * Responsibilities: The reader reports an empty suffix view with a null data pointer, and the read returns Invalid
+ *   without modifying its output.
  */
 MW_TEST_CASE(ByteReaderValidEmptySourceReturnsEmptyRemainingBytes)
 {

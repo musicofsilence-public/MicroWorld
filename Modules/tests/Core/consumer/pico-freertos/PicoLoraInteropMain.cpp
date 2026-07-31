@@ -13,52 +13,64 @@
 #include "LoraPayloadRegression.h"
 #endif
 
-/** Satisfies virtual deleting-destructor linkage; the LoRa device is never dynamically deleted. */
+/**
+ * Motivation: Satisfies virtual deleting-destructor linkage; the LoRa device is never dynamically deleted.
+ * Responsibilities: Provide an empty no-op body so the static-only firmware links without a heap.
+ */
 void operator delete(void*) noexcept {}
 
-/** Satisfies array deleting-destructor linkage without enabling an allocator for this static-only firmware. */
+/**
+ * Motivation: Satisfies array deleting-destructor linkage without enabling an allocator for this static-only firmware.
+ * Responsibilities: Provide an empty no-op body so array-delete references resolve at link time.
+ */
 void operator delete[](void*) noexcept {}
 
-/** Satisfies sized virtual deleting-destructor linkage; static device storage is never reclaimed. */
+/**
+ * Motivation: Satisfies sized virtual deleting-destructor linkage; static device storage is never reclaimed.
+ * Responsibilities: Provide an empty no-op body so the sized delete symbol links without a heap.
+ */
 void operator delete(void*, std::size_t) noexcept {}
 
-/** Satisfies sized array deleting-destructor linkage without creating a heap dependency. */
+/**
+ * Motivation: Satisfies sized array deleting-destructor linkage without creating a heap dependency.
+ * Responsibilities: Provide an empty no-op body so the sized array-delete symbol links without a heap.
+ */
 void operator delete[](void*, std::size_t) noexcept {}
 
 namespace
 {
 
-/** Identifies the Pico as the node that starts the paired LoRa counter volley. */
+/** Motivation: Identifies the Pico as the node that starts the paired LoRa counter volley. */
 constexpr std::uint8_t LocalNodeId = 1;
 
-/** Identifies the unchanged ESP32 example-17 node-B peer. */
+/** Motivation: Identifies the unchanged ESP32 example-17 node-B peer. */
 constexpr std::uint8_t PeerNodeId = 2;
 
-/** Selects RP2040 UART1, whose supported GP4/GP5 routing matches the wired Pico H. */
+/** Motivation: Selects RP2040 UART1, whose supported GP4/GP5 routing matches the wired Pico H. */
 constexpr std::uint8_t LoraUartIndex = 1;
 
-/** Matches the E32-433T20D factory UART rate used by the paired ESP32 example. */
+/** Motivation: Matches the E32-433T20D factory UART rate used by the paired ESP32 example. */
 constexpr std::uint32_t LoraBaudRate = 9600;
 
-/** Routes Pico UART1 transmit output to the wired E32 RXD pin. */
+/** Motivation: Routes Pico UART1 transmit output to the wired E32 RXD pin. */
 constexpr unsigned int LoraTransmitPin = 4;
 
-/** Routes Pico UART1 receive input from the wired E32 TXD pin. */
+/** Motivation: Routes Pico UART1 receive input from the wired E32 TXD pin. */
 constexpr unsigned int LoraReceivePin = 5;
 
-/** Leaves enough air time between alternating transparent-mode E32 messages. */
+/** Motivation: Leaves enough air time between alternating transparent-mode E32 messages. */
 constexpr TickType_t VolleyPeriodTicks = pdMS_TO_TICKS(1000);
 
-/** Paces UART polling and one-byte transmit advancement without busy-spinning the task. */
+/** Motivation: Paces UART polling and one-byte transmit advancement without busy-spinning the task. */
 constexpr TickType_t PollPeriodTicks = pdMS_TO_TICKS(10);
 
-/** Reserves a fixed stack for the sole LoRa task through the firmware lifetime. */
+/** Motivation: Reserves a fixed stack for the sole LoRa task through the firmware lifetime. */
 constexpr configSTACK_DEPTH_TYPE LoraTaskStackDepth = 512;
 
-/** Fails the task before an unmeasured stack margin can silently become a radio failure. */
+/** Motivation: Fails the task before an unmeasured stack margin can silently become a radio failure. */
 constexpr UBaseType_t MinimumStackHeadroomWords = 128;
 
-/** Configures the reusable device with the exact UART wiring proven by the Pico-to-ESP32 exchange. */
+/** Motivation: Configures the reusable device with the exact UART wiring proven by the Pico-to-ESP32 exchange. */
 constexpr MicroWorld::Platform::Pico::FPicoE32LoraConfig LoraConfig{
 	LoraUartIndex,
 	LoraTransmitPin,
@@ -67,17 +79,23 @@ constexpr MicroWorld::Platform::Pico::FPicoE32LoraConfig LoraConfig{
 	LocalNodeId,
 };
 
-/** Reports whether `InNow` has reached `InDue`, including the normal tick-counter wraparound case. */
+/**
+ * Motivation: Reports whether `InNow` has reached `InDue`, including the normal tick-counter wraparound case.
+ * Responsibilities: Succeed only when the tick delta is non-negative, so wraparound reads as elapsed.
+ */
 bool IsTickDue(const TickType_t InNow, const TickType_t InDue) noexcept
 {
 	return static_cast<std::int32_t>(InNow - InDue) >= 0;
 }
 
 #if !defined(MICROWORLD_LORA_PAYLOAD_REGRESSION)
-/** Preserves the node-id plus big-endian counter payload shared with example 17. */
+/** Motivation: Preserves the node-id plus big-endian counter payload shared with example 17. */
 constexpr std::size_t VolleyPayloadBytes = 5;
 
-/** Writes the shared five-byte node-and-counter payload without allocating. */
+/**
+ * Motivation: Writes the shared five-byte node-and-counter payload without allocating.
+ * Responsibilities: Lay out the fixed five bytes in the example-17 big-endian order.
+ */
 void WriteVolleyPayload(std::uint8_t (&OutPayload)[VolleyPayloadBytes], const std::uint8_t InNodeId, const std::uint32_t InCounter) noexcept
 {
 	OutPayload[0] = InNodeId;
@@ -87,7 +105,10 @@ void WriteVolleyPayload(std::uint8_t (&OutPayload)[VolleyPayloadBytes], const st
 	OutPayload[4] = static_cast<std::uint8_t>(InCounter);
 }
 
-/** Reads the big-endian counter field after the caller validated the volley payload shape. */
+/**
+ * Motivation: Reads the big-endian counter field after the caller validated the volley payload shape.
+ * Responsibilities: Assemble the four payload bytes into one u32 in shared big-endian order.
+ */
 std::uint32_t ReadVolleyCounter(const std::uint8_t* const InPayload) noexcept
 {
 	return (static_cast<std::uint32_t>(InPayload[1]) << 24u) | (static_cast<std::uint32_t>(InPayload[2]) << 16u)
@@ -95,14 +116,17 @@ std::uint32_t ReadVolleyCounter(const std::uint8_t* const InPayload) noexcept
 }
 #endif
 
-/** Owns FreeRTOS metadata for the one LoRa task. */
+/** Motivation: Owns FreeRTOS metadata for the one LoRa task. */
 StaticTask_t LoraTaskControlBlock;
 
-/** Owns the static stack consumed by the LoRa task. */
+/** Motivation: Owns the static stack consumed by the LoRa task. */
 StackType_t LoraTaskStack[LoraTaskStackDepth];
 
 #if !defined(MICROWORLD_LORA_PAYLOAD_REGRESSION)
-/** Checks one decoded packet is the expected five-byte reply from ESP32 node B. */
+/**
+ * Motivation: Checks one decoded packet is the expected five-byte reply from ESP32 node B.
+ * Responsibilities: Return true only when the sender, length, and node byte all match the peer reply.
+ */
 bool IsExpectedPeerPayload(
 	const MicroWorld::Transport::Address::FDeviceAddress& InFrom,
 	const MicroWorld::Transport::Device::FReceiveResult& InResult,
@@ -112,7 +136,10 @@ bool IsExpectedPeerPayload(
 		&& InResult.BytesReceived == VolleyPayloadBytes && InPayload[0] == PeerNodeId;
 }
 
-/** Drives the Pico node-1 counter volley and continuously checks its measured task-stack margin. */
+/**
+ * Motivation: Drives the Pico node-1 counter volley and continuously checks its measured task-stack margin.
+ * Responsibilities: Alternate send and receive with the ESP32 peer and assert the stack headroom each loop.
+ */
 void RunLoraInteropTask(void* const InContext)
 {
 	auto& LoraDevice = *static_cast<MicroWorld::Platform::Pico::FPicoLoraDevice*>(InContext);
@@ -155,21 +182,29 @@ void RunLoraInteropTask(void* const InContext)
 	}
 }
 #else
-/** Distinguishes the Pico's bounded regression exchanges so only the expected peer frame can advance them. */
+/**
+ * Motivation: Distinguishes the Pico's bounded regression exchanges so only the expected peer frame can advance them.
+ * Responsibilities: Name each step of the empty/typical/maximum volley and never let an out-of-order frame advance it.
+ * Example:
+ *   EPayloadRegressionState State = EPayloadRegressionState::SendEmpty;
+ */
 enum class EPayloadRegressionState : std::uint8_t
 {
-	SendEmpty,
-	AwaitEmptyEcho,
-	SendTypical,
-	AwaitTypicalEcho,
-	AwaitMaximum,
-	EchoMaximum
+	SendEmpty,		  ///< Motivation: Queue the empty-frame case to start the regression volley.
+	AwaitEmptyEcho,	  ///< Motivation: Wait for the peer's echo of the empty frame before advancing.
+	SendTypical,	  ///< Motivation: Queue the typical-size frame once the empty echo arrives.
+	AwaitTypicalEcho, ///< Motivation: Wait for the peer's echo of the typical frame.
+	AwaitMaximum,	  ///< Motivation: Wait for the peer's maximum-size frame after the typical echo.
+	EchoMaximum		  ///< Motivation: Echo the maximum-size frame back to the peer to close the exchange.
 };
 
-/** Requires an empty-frame retry to wait one complete transparent-radio airtime period. */
+/** Motivation: Requires an empty-frame retry to wait one complete transparent-radio airtime period. */
 constexpr TickType_t EmptyRetryPeriodTicks = VolleyPeriodTicks;
 
-/** Checks the sender address, exact length, and canonical bytes before accepting one regression frame. */
+/**
+ * Motivation: Checks the sender address, exact length, and canonical bytes before accepting one regression frame.
+ * Responsibilities: Return true only when the peer address and the canonical case bytes both match.
+ */
 bool IsExpectedRegressionPayload(
 	const MicroWorld::Transport::Address::FDeviceAddress& InFrom,
 	const MicroWorld::Transport::Device::FReceiveResult& InResult,
@@ -180,7 +215,10 @@ bool IsExpectedRegressionPayload(
 		&& MicroWorld::Example17::IsCanonicalPayload(InExpectedCase, InPayload, InResult.BytesReceived);
 }
 
-/** Advances only when the received peer frame matches the payload case expected by the current exchange state. */
+/**
+ * Motivation: Advances only when the received peer frame matches the payload case expected by the current exchange state.
+ * Responsibilities: Move the state forward on a matching echo and leave it untouched on anything else.
+ */
 void AdvancePayloadRegressionReceiveState(
 	EPayloadRegressionState& InOutState,
 	const MicroWorld::Transport::Address::FDeviceAddress& InFrom,
@@ -212,7 +250,10 @@ void AdvancePayloadRegressionReceiveState(
 	}
 }
 
-/** Queues one canonical frame and advances only after the device accepted it into its bounded transmit slot. */
+/**
+ * Motivation: Queues one canonical frame and advances only after the device accepted it into its bounded transmit slot.
+ * Responsibilities: Fill the canonical payload, send it, and move the state only on a successful device accept.
+ */
 void QueuePendingPayloadRegressionTransmit(
 	MicroWorld::Platform::Pico::FPicoLoraDevice& InDevice,
 	EPayloadRegressionState& InOutState,
@@ -261,7 +302,10 @@ void QueuePendingPayloadRegressionTransmit(
 	}
 }
 
-/** Drives the Pico peer through the fixed empty, typical, and maximum E32 payload exchange. */
+/**
+ * Motivation: Drives the Pico peer through the fixed empty, typical, and maximum E32 payload exchange.
+ * Responsibilities: Step the regression state machine on each receive/transmit tick and assert the stack headroom.
+ */
 void RunLoraInteropTask(void* const InContext)
 {
 	auto& LoraDevice = *static_cast<MicroWorld::Platform::Pico::FPicoLoraDevice*>(InContext);
@@ -297,7 +341,10 @@ void RunLoraInteropTask(void* const InContext)
 
 } // namespace
 
-/** Initializes the reusable device, creates the static LoRa task, and transfers control to FreeRTOS. */
+/**
+ * Motivation: Initializes the reusable device, creates the static LoRa task, and transfers control to FreeRTOS.
+ * Responsibilities: Initialize the device, create the static task, and start the scheduler.
+ */
 int main()
 {
 	MicroWorld::Platform::Pico::FPicoLoraDevice LoraDevice;

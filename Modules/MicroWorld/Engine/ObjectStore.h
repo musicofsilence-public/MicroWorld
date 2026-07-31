@@ -15,162 +15,225 @@ class FGarbageCollector;
 class FObjectStore;
 
 /**
- * Prevents object publication, destruction, root acquisition, and collection
- * while one bounded callback cascade runs.
- *
- * Acquisition fails without blocking when construction, destruction, collection,
- * or another dispatch already owns the mutation boundary. Releasing an existing
- * root token remains allowed so noexcept RAII cleanup cannot leak reachability;
- * release alone cannot reclaim or reuse an object.
+ * Motivation: Prevents object publication, destruction, root acquisition, and collection while one bounded callback
+ *   cascade runs, so a BeginPlay or EndPlay dispatch cannot be reentered.
+ * Responsibilities: Try to reserve the mutation boundary once and release it at scope exit; tolerate acquisition failure
+ *   as a non-success rather than blocking, and still allow an existing root token to be released so noexcept RAII cleanup
+ *   cannot leak reachability.
+ * Example:
+ *   FObjectStoreDispatchGuard Guard(Store);
+ *   if (Guard.IsAcquired()) { Dispatch(); }
  */
 class FObjectStoreDispatchGuard final
 {
 public:
-	/** Tries to exclude lifetime-changing work from one callback cascade. */
+	/**
+	 * Motivation: Tries to exclude lifetime-changing work from one callback cascade.
+	 * Responsibilities: Reserve the dispatch boundary or leave the guard not acquired.
+	 */
 	explicit FObjectStoreDispatchGuard(FObjectStore& InStore) noexcept;
 
-	/** Releases callback exclusion only when this instance acquired it. */
+	/**
+	 * Motivation: Ensures the callback exclusion is released when the guard leaves scope.
+	 * Responsibilities: Release the reservation only when this instance acquired it.
+	 */
 	~FObjectStoreDispatchGuard() noexcept;
 
-	/** Prevents two guards from releasing one dispatch reservation. */
+	/**
+	 * Motivation: Prevents two guards from releasing one dispatch reservation.
+	 * Responsibilities: Reject copy construction so each reservation has one owner.
+	 */
 	FObjectStoreDispatchGuard(const FObjectStoreDispatchGuard&) = delete;
 
-	/** Prevents replacing this guard's unique dispatch reservation. */
+	/**
+	 * Motivation: Prevents replacing this guard's unique dispatch reservation via assignment.
+	 * Responsibilities: Reject copy assignment so each reservation has one owner.
+	 */
 	FObjectStoreDispatchGuard& operator=(const FObjectStoreDispatchGuard&) = delete;
 
-	/** Reports whether callback dispatch may proceed under this guard. */
+	/**
+	 * Motivation: Lets a caller branch on whether callback dispatch may proceed under this guard.
+	 * Responsibilities: Report true only when this instance holds the reservation.
+	 */
 	bool IsAcquired() const noexcept { return ObjectStore != nullptr; }
 
 private:
-	/** Identifies the store reservation released at scope exit, or null after rejection. */
+	/** Motivation: Identifies the store reservation released at scope exit, or null after rejection. */
 	FObjectStore* ObjectStore{nullptr};
 };
 
-/** Identifies the store-owned lifecycle phase of one caller-supplied slot. */
+/**
+ * Motivation: Names the store-owned lifecycle phase of one caller-supplied slot so lifecycle, destruction, retirement,
+ *   and reuse decisions read as one value instead of several flags.
+ * Responsibilities: Distinguish vacant, constructing, live, pending-destroy, destroying, and retired phases.
+ * Example:
+ *   if (Slot.State == EObjectSlotState::Live) { Resolve(); }
+ */
 enum class EObjectSlotState : std::uint8_t
 {
-	/** Allows the slot to publish another generation when one remains. */
+	/** Motivation: Allows the slot to publish another generation when one remains. */
 	Vacant,
 
-	/** Hides storage while a nothrow placement constructor is running. */
+	/** Motivation: Hides storage while a nothrow placement constructor is running. */
 	Constructing,
 
-	/** Makes the constructed object resolvable and eligible for tracing. */
+	/** Motivation: Makes the constructed object resolvable and eligible for tracing. */
 	Live,
 
-	/** Hides the object immediately until the destruction barrier reclaims it. */
+	/** Motivation: Hides the object immediately until the destruction barrier reclaims it. */
 	PendingDestroy,
 
-	/** Prevents lifecycle callbacks from recursively destroying the same slot. */
+	/** Motivation: Prevents lifecycle callbacks from recursively destroying the same slot. */
 	Destroying,
 
-	/** Permanently prevents reuse after the generation space is exhausted. */
+	/** Motivation: Permanently prevents reuse after the generation space is exhausted. */
 	Retired,
 };
 
-/** Holds lifecycle metadata in storage supplied and owned by the application. */
+/**
+ * Motivation: Holds lifecycle metadata in storage supplied and owned by the application so the store keeps no
+ *   bookkeeping of its own.
+ * Responsibilities: Carry the slot's generation, descriptor, object pointer, state, and collector mark for one slot.
+ * Example:
+ *   FObjectSlotMetadata Slot;
+ *   Slot.State = EObjectSlotState::Live;
+ */
 struct FObjectSlotMetadata
 {
-	/** Retains the most recently published generation without ever wrapping it. */
+	/** Motivation: Retains the most recently published generation without ever wrapping it. */
 	ObjectGeneration Generation{0};
 
-	/** Selects tracing, ancestry, layout, and exact destruction for the active object. */
+	/** Motivation: Selects tracing, ancestry, layout, and exact destruction for the active object. */
 	const FClassDescriptor* Descriptor{nullptr};
 
-	/** Points at the active UObject base within the non-moving slot. */
+	/** Motivation: Points at the active UObject base within the non-moving slot. */
 	UObject* Object{nullptr};
 
-	/** Prevents unpublished, pending, vacant, and retired storage from resolving. */
+	/** Motivation: Prevents unpublished, pending, vacant, and retired storage from resolving. */
 	EObjectSlotState State{EObjectSlotState::Vacant};
 
-	/** Stores one collector mark without allocating a side table. */
+	/** Motivation: Stores one collector mark without allocating a side table. */
 	bool bMarked{false};
 };
 
-/** Holds one independently owned explicit-root token in caller-supplied storage. */
+/**
+ * Motivation: Holds one independently owned explicit-root token in caller-supplied storage.
+ * Responsibilities: Carry the rooted lifetime's handle or remain invalid while free.
+ * Example:
+ *   FObjectRootEntry Root;
+ *   Root.Handle = Store.AddRoot(Handle);
+ */
 struct FObjectRootEntry
 {
-	/** Identifies the rooted lifetime or remains invalid while this entry is free. */
+	/** Motivation: Identifies the rooted lifetime or remains invalid while this entry is free. */
 	FObjectHandle Handle{};
 };
 
-/** Describes all non-owning fixed storage required by one object store. */
+/**
+ * Motivation: Describes all non-owning fixed storage required by one object store so the store itself stays allocation-free.
+ * Responsibilities: Bundle slot payload bytes, slot metadata, slot sizing, root entries, and root capacity into one value
+ *   the application owns for the store's lifetime.
+ * Example:
+ *   FObjectStoreStorage Storage{Bytes, N, Meta, N, Size, Align, Roots, R};
+ */
 struct FObjectStoreStorage
 {
-	/** Provides the first byte of equal-size, non-moving object slots. */
+	/** Motivation: Provides the first byte of equal-size, non-moving object slots. */
 	std::byte* SlotPayloadBytes{nullptr};
 
-	/** Provides enough bytes for SlotCount consecutive SlotSizeBytes ranges. */
+	/** Motivation: Provides enough bytes for SlotCount consecutive SlotSizeBytes ranges. */
 	std::size_t TotalSlotStorageBytes{0};
 
-	/** Provides one lifecycle record for every equal-size object slot. */
+	/** Motivation: Provides one lifecycle record for every equal-size object slot. */
 	FObjectSlotMetadata* SlotMetadata{nullptr};
 
-	/** Fixes the number of object lifetimes that may be active concurrently. */
+	/** Motivation: Fixes the number of object lifetimes that may be active concurrently. */
 	std::uint32_t SlotCount{0};
 
-	/** Fixes the maximum object extent and internal-fragmentation unit. */
+	/** Motivation: Fixes the maximum object extent and internal-fragmentation unit. */
 	std::size_t SlotSizeBytes{0};
 
-	/** Fixes the maximum supported object alignment for every slot. */
+	/** Motivation: Fixes the maximum supported object alignment for every slot. */
 	std::size_t SlotAlignmentBytes{0};
 
-	/** Provides independently reusable entries for explicit strong-root tokens. */
+	/** Motivation: Provides independently reusable entries for explicit strong-root tokens. */
 	FObjectRootEntry* Roots{nullptr};
 
-	/** Fixes the number of simultaneous independently owned root tokens. */
+	/** Motivation: Fixes the number of simultaneous independently owned root tokens. */
 	std::uint32_t RootCapacity{0};
 };
 
 /**
- * Provides a non-owning lookup over an explicitly registered class set.
- *
- * The type-erased view keeps FObjectStore independent of registry capacity
- * while retaining descriptor identity validation without RTTI.
+ * Motivation: Provides a non-owning lookup over an explicitly registered class set so FObjectStore stays independent of
+ *   registry capacity while still validating descriptor identity without RTTI.
+ * Responsibilities: Bind one application-owned registry context with an allocation-free find operation and answer class
+ *   lookups or null when unbound.
+ * Example:
+ *   FClassRegistryView View = MakeClassRegistryView(Registry);
+ *   const FClassDescriptor* D = View.Find(Id);
  */
 class FClassRegistryView final
 {
 public:
-	/** Defines the only operation needed from an application-owned registry. */
+	/** Motivation: Defines the only operation needed from an application-owned registry. */
 	using FFindClass = const FClassDescriptor* (*)(const void*, FTypeId) noexcept;
 
-	/** Creates an empty view that rejects every class as unknown. */
+	/**
+	 * Motivation: Creates an empty view that rejects every class as unknown.
+	 * Responsibilities: Produce an unbound view whose Find always returns null.
+	 */
 	FClassRegistryView() noexcept = default;
 
-	/** Binds a stable registry context and its allocation-free lookup operation. */
+	/**
+	 * Motivation: Binds a stable registry context and its allocation-free lookup operation.
+	 * Responsibilities: Store the context and find callable for the store's lifetime.
+	 */
 	FClassRegistryView(const void* InContext, FFindClass InFindClass) noexcept : Context(InContext), FindClass(InFindClass) {}
 
-	/** Finds one descriptor by local type identifier without changing registry state. */
+	/**
+	 * Motivation: Finds one descriptor by local type identifier without changing registry state.
+	 * Responsibilities: Return the descriptor for a bound view or null when unbound or unknown.
+	 */
 	const FClassDescriptor* Find(const FTypeId InTypeId) const noexcept
 	{
 		return Context != nullptr && FindClass != nullptr ? FindClass(Context, InTypeId) : nullptr;
 	}
 
 private:
-	/** Identifies the application-owned registry retained for the store lifetime. */
+	/** Motivation: Identifies the application-owned registry retained for the store lifetime. */
 	const void* Context{nullptr};
 
-	/** Performs bounded registry lookup without virtual allocation or RTTI. */
+	/** Motivation: Performs bounded registry lookup without virtual allocation or RTTI. */
 	FFindClass FindClass{nullptr};
 };
 
 /**
- * Provides World with the only two mutable-registry operations it needs for
- * deferred actor construction without exposing registry capacity or
- * storage.
+ * Motivation: Gives World the only two mutable-registry operations it needs for deferred actor construction without
+ *   exposing registry capacity or storage.
+ * Responsibilities: Bind one application-owned registry for find, type-token lookup, and automatic registration, and
+ *   forward each operation or a safe rejection when unbound.
+ * Example:
+ *   FClassRegistryRegistrationView View = MakeClassRegistryRegistrationView(Registry);
+ *   View.RegisterAutomatic(Candidate, OutDescriptor);
  */
 class FClassRegistryRegistrationView final
 {
 public:
-	/** Defines bounded find, type-token lookup, and automatic registration operations. */
+	/** Motivation: Defines bounded find, type-token lookup, and automatic registration operations. */
 	using FFindClass = const FClassDescriptor* (*)(const void*, FTypeId) noexcept;
 	using FFindByTypeToken = const FClassDescriptor* (*)(const void*, const void*) noexcept;
 	using FRegisterAutomatic = EObjectResult (*)(void*, FClassDescriptor, const FClassDescriptor*&) noexcept;
 
-	/** Creates an empty view that rejects registration without mutation. */
+	/**
+	 * Motivation: Creates an empty view that rejects registration without mutation.
+	 * Responsibilities: Produce an unbound view whose operations reject without touching any registry.
+	 */
 	FClassRegistryRegistrationView() noexcept = default;
 
-	/** Binds one application-owned registry for the world lifetime. */
+	/**
+	 * Motivation: Binds one application-owned registry for the world lifetime.
+	 * Responsibilities: Store the context and all three callables for the world's lifetime.
+	 */
 	FClassRegistryRegistrationView(
 		void* const InContext,
 		const FFindClass InFindClass,
@@ -180,19 +243,28 @@ public:
 	{
 	}
 
-	/** Finds a canonical descriptor by local class ID without mutation. */
+	/**
+	 * Motivation: Finds a canonical descriptor by local class ID without mutation.
+	 * Responsibilities: Return the descriptor for a bound view or null when unbound or unknown.
+	 */
 	const FClassDescriptor* Find(const FTypeId InTypeId) const noexcept
 	{
 		return Context != nullptr && FindClass != nullptr ? FindClass(Context, InTypeId) : nullptr;
 	}
 
-	/** Finds a canonical descriptor by exact no-RTTI type token without mutation. */
+	/**
+	 * Motivation: Finds a canonical descriptor by exact no-RTTI type token without mutation.
+	 * Responsibilities: Return the descriptor for a bound view or null when unbound or unknown.
+	 */
 	const FClassDescriptor* FindByTypeToken(const void* const InTypeToken) const noexcept
 	{
 		return Context != nullptr && FindTypeToken != nullptr ? FindTypeToken(Context, InTypeToken) : nullptr;
 	}
 
-	/** Registers a candidate or returns its existing canonical descriptor. */
+	/**
+	 * Motivation: Registers a candidate or returns its existing canonical descriptor.
+	 * Responsibilities: Forward to automatic registration for a bound view or return UnknownClass when unbound.
+	 */
 	EObjectResult RegisterAutomatic(const FClassDescriptor InCandidate, const FClassDescriptor*& OutDescriptor) const noexcept
 	{
 		OutDescriptor = nullptr;
@@ -200,27 +272,33 @@ public:
 																		  : EObjectResult::UnknownClass;
 	}
 
-	/** Reports whether all required registry operations are available. */
+	/**
+	 * Motivation: Lets a caller confirm all required registry operations are available before use.
+	 * Responsibilities: Report true only when context and all three callables are set.
+	 */
 	bool IsValid() const noexcept
 	{
 		return Context != nullptr && FindClass != nullptr && FindTypeToken != nullptr && RegisterAutomaticFunction != nullptr;
 	}
 
 private:
-	/** Identifies the registry whose lifetime encloses this view. */
+	/** Motivation: Identifies the registry whose lifetime encloses this view. */
 	void* Context{nullptr};
 
-	/** Performs canonical descriptor lookup by local ID. */
+	/** Motivation: Performs canonical descriptor lookup by local ID. */
 	FFindClass FindClass{nullptr};
 
-	/** Reuses an explicitly registered descriptor by exact C++ type token. */
+	/** Motivation: Reuses an explicitly registered descriptor by exact C++ type token. */
 	FFindByTypeToken FindTypeToken{nullptr};
 
-	/** Adds only a validated descriptor to caller-owned fixed registry storage. */
+	/** Motivation: Adds only a validated descriptor to caller-owned fixed registry storage. */
 	FRegisterAutomatic RegisterAutomaticFunction{nullptr};
 };
 
-/** Creates a type-erased non-owning view over one fixed-capacity class registry. */
+/**
+ * Motivation: Creates a type-erased non-owning view over one fixed-capacity class registry.
+ * Responsibilities: Bind the registry and a lambda that forwards Find by id.
+ */
 template<std::size_t MaxClasses>
 FClassRegistryView MakeClassRegistryView(const TClassRegistry<MaxClasses>& Registry) noexcept
 {
@@ -230,7 +308,10 @@ FClassRegistryView MakeClassRegistryView(const TClassRegistry<MaxClasses>& Regis
 		{ return static_cast<const TClassRegistry<MaxClasses>*>(InContext)->Find(InTypeId); });
 }
 
-/** Creates World's narrow mutable capability over an application-owned class registry. */
+/**
+ * Motivation: Creates World's narrow mutable capability over an application-owned class registry.
+ * Responsibilities: Bind the registry and lambdas that forward Find, FindByTypeToken, and RegisterAutomatic.
+ */
 template<std::size_t MaxClasses>
 FClassRegistryRegistrationView MakeClassRegistryRegistrationView(TClassRegistry<MaxClasses>& Registry) noexcept
 {
@@ -244,7 +325,12 @@ FClassRegistryRegistrationView MakeClassRegistryRegistrationView(TClassRegistry<
 		{ return static_cast<TClassRegistry<MaxClasses>*>(InContext)->RegisterAutomatic(InCandidate, OutDescriptor); });
 }
 
-/** Invokes the exact public nothrow destructor bound to one managed C++ type. */
+/**
+ * Motivation: Invokes the exact public nothrow destructor bound to one managed C++ type so the store can destroy an
+ *   object through a type-erased pointer without exposing delete.
+ * Responsibilities: Call the exact T destructor on the object after asserting T is UObject-derived and nothrow
+ *   destructible.
+ */
 template<typename T>
 void DestroyManagedObject(UObject& InObject) noexcept
 {
@@ -253,7 +339,11 @@ void DestroyManagedObject(UObject& InObject) noexcept
 	static_cast<T&>(InObject).~T();
 }
 
-/** Creates a descriptor whose layout and exact destructor are bound to T without RTTI. */
+/**
+ * Motivation: Creates a descriptor whose layout and exact destructor are bound to T without RTTI.
+ * Responsibilities: Build a descriptor with T's size, alignment, type token, and exact destructor after asserting T is
+ *   UObject-derived and nothrow destructible.
+ */
 template<typename T>
 FClassDescriptor MakeClassDescriptor(
 	const FTypeId InTypeId,
@@ -276,97 +366,142 @@ FClassDescriptor MakeClassDescriptor(
 	};
 }
 
-/** Reports placement construction success or one explicit bounded-store failure. */
+/**
+ * Motivation: Reports placement construction success or one explicit bounded-store failure alongside the published
+ *   object.
+ * Responsibilities: Distinguish the outcome and resolve the object only when Result is Success.
+ * Example:
+ *   TObjectCreationResult<AActor> R = Store.NewObject<AActor>(Args);
+ *   if (R.Result == EObjectResult::Success) { R.Object.Get()->Tick(); }
+ */
 template<typename T>
 struct TObjectCreationResult
 {
-	/** Distinguishes capacity, layout, class, generation, and successful outcomes. */
+	/** Motivation: Distinguishes capacity, layout, class, generation, and successful outcomes. */
 	EObjectResult Result{EObjectResult::CapacityExceeded};
 
-	/** Resolves the newly published object only when Result is Success. */
+	/** Motivation: Resolves the newly published object only when Result is Success. */
 	TObjectPtr<T> Object{};
 };
 
-/** Reports bounded pending-destruction work performed at one mutation barrier. */
+/**
+ * Motivation: Reports bounded pending-destruction work performed at one mutation barrier so a caller can drive
+ *   reclamation across multiple frames.
+ * Responsibilities: Summarize the result, slots visited, objects destroyed, and pending objects remaining.
+ * Example:
+ *   FObjectMutationResult R = Store.ApplyPendingDestroy(Budget);
+ *   if (R.PendingObjectsRemaining == 0) { Done(); }
+ */
 struct FObjectMutationResult
 {
-	/** Reports invalid store configuration or successful bounded traversal. */
+	/** Motivation: Reports invalid store configuration or successful bounded traversal. */
 	EObjectResult Result{EObjectResult::Success};
 
-	/** Counts slots inspected so every call's work remains observable and bounded. */
+	/** Motivation: Counts slots inspected so every call's work remains observable and bounded. */
 	std::uint32_t SlotsVisited{0};
 
-	/** Counts objects whose BeginDestroy and exact destructor ran in this call. */
+	/** Motivation: Counts objects whose BeginDestroy and exact destructor ran in this call. */
 	std::uint32_t ObjectsDestroyed{0};
 
-	/** Reports pending objects left for a later explicit mutation barrier. */
+	/** Motivation: Reports pending objects left for a later explicit mutation barrier. */
 	std::uint32_t PendingObjectsRemaining{0};
 };
 
-/** Exposes fixed capacity, occupancy, roots, retirement, and fragmentation. */
+/**
+ * Motivation: Exposes fixed capacity, occupancy, roots, retirement, and fragmentation as one snapshot so a caller can
+ *   observe store health without inspecting private state.
+ * Responsibilities: Count slot capacity, occupancy, pending-destroy and retired slots, root capacity and active roots,
+ *   and payload and fragmentation bytes.
+ * Example:
+ *   FObjectStoreStats S = Store.Stats();
+ *   if (S.OccupiedSlots == S.SlotCapacity) { Full(); }
+ */
 struct FObjectStoreStats
 {
-	/** Reports the caller-selected number of equal-size object slots. */
+	/** Motivation: Reports the caller-selected number of equal-size object slots. */
 	std::uint32_t SlotCapacity{0};
 
-	/** Counts constructed live and pending objects that still occupy slots. */
+	/** Motivation: Counts constructed live and pending objects that still occupy slots. */
 	std::uint32_t OccupiedSlots{0};
 
-	/** Counts occupied objects hidden until the destruction barrier reclaims them. */
+	/** Motivation: Counts occupied objects hidden until the destruction barrier reclaims them. */
 	std::uint32_t PendingDestroySlots{0};
 
-	/** Counts slots permanently unavailable because their generation was exhausted. */
+	/** Motivation: Counts slots permanently unavailable because their generation was exhausted. */
 	std::uint32_t RetiredSlots{0};
 
-	/** Reports the caller-selected independent explicit-root capacity. */
+	/** Motivation: Reports the caller-selected independent explicit-root capacity. */
 	std::uint32_t RootCapacity{0};
 
-	/** Counts independently owned root tokens, including duplicate handles. */
+	/** Motivation: Counts independently owned root tokens, including duplicate handles. */
 	std::uint32_t ActiveRoots{0};
 
-	/** Reports the fixed byte extent reserved for every object slot. */
+	/** Motivation: Reports the fixed byte extent reserved for every object slot. */
 	std::size_t SlotSizeBytes{0};
 
-	/** Sums exact descriptor extents for all occupied objects. */
+	/** Motivation: Sums exact descriptor extents for all occupied objects. */
 	std::size_t ObjectPayloadBytes{0};
 
-	/** Reports equal-slot bytes unavailable to object payloads while occupied. */
+	/** Motivation: Reports equal-slot bytes unavailable to object payloads while occupied. */
 	std::size_t InternalFragmentationBytes{0};
 };
 
 /**
- * Owns managed-object lifetimes over fixed, non-moving, caller-owned storage.
- *
- * FObjectStore never allocates bookkeeping, invokes collection after failure,
- * reads a clock, or moves a published object.
+ * Motivation: Owns managed-object lifetimes over fixed, non-moving, caller-owned storage so the engine keeps a stable
+ *   object identity without allocating bookkeeping or moving published objects.
+ * Responsibilities: Validate and initialize caller-owned storage, construct and publish UObject-derived values through
+ *   registered descriptors, resolve generation-checked handles, mark and reclaim pending destroys at an explicit
+ *   barrier, and manage independent root tokens; never invoke collection after failure, read a clock, or move a
+ *   published object.
+ * Example:
+ *   FObjectStore Store(Storage, MakeClassRegistryView(Registry));
+ *   auto R = Store.NewObject<AActor>(Descriptor);
+ *   if (R.Result == EObjectResult::Success) { R.Object.Get()->Tick(); }
  */
 class FObjectStore final
 {
 public:
-	/** Validates and initializes caller-owned slot metadata and root entries. */
+	/**
+	 * Motivation: Validates and initializes caller-owned slot metadata and root entries.
+	 * Responsibilities: Record the storage and class view and store the configuration result for later queries.
+	 */
 	FObjectStore(FObjectStoreStorage InStorage, FClassRegistryView InClasses) noexcept;
 
-	/** Destroys every remaining object before caller-owned storage may disappear. */
+	/**
+	 * Motivation: Ensures every remaining object is destroyed before caller-owned storage may disappear.
+	 * Responsibilities: Destroy every live and pending object through its exact destructor.
+	 */
 	~FObjectStore() noexcept;
 
-	/** Preserves the unique identity of caller-owned storage and all published handles. */
+	/**
+	 * Motivation: Preserves the unique identity of caller-owned storage and all published handles.
+	 * Responsibilities: Reject copy construction so storage and handle identity stay single-owner.
+	 */
 	FObjectStore(const FObjectStore&) = delete;
 
-	/** Prevents two stores from mutating the same metadata and object lifetimes. */
+	/**
+	 * Motivation: Prevents two stores from mutating the same metadata and object lifetimes.
+	 * Responsibilities: Reject copy assignment so storage and handle identity stay single-owner.
+	 */
 	FObjectStore& operator=(const FObjectStore&) = delete;
 
-	/** Preserves the address used by every managed object and pointer bridge. */
+	/**
+	 * Motivation: Preserves the address used by every managed object and pointer bridge.
+	 * Responsibilities: Reject move construction so published TObjectPtr values never dangle.
+	 */
 	FObjectStore(FObjectStore&&) = delete;
 
-	/** Prevents moving store identity behind already published TObjectPtr values. */
+	/**
+	 * Motivation: Prevents moving store identity behind already published TObjectPtr values.
+	 * Responsibilities: Reject move assignment so published TObjectPtr values never dangle.
+	 */
 	FObjectStore& operator=(FObjectStore&&) = delete;
 
 	/**
-	 * Constructs one UObject-derived value using an explicit registered descriptor.
-	 *
-	 * T must be nothrow constructible because portable MicroWorld builds disable
-	 * exception unwinding. The descriptor and slot layout are validated before
-	 * a generation changes or placement construction begins.
+	 * Motivation: Constructs one UObject-derived value using an explicit registered descriptor.
+	 * Responsibilities: Reject mutation during a locked boundary and a bad descriptor or layout before any generation
+	 *   changes or placement construction begins, then publish a generation-checked handle; T must be nothrow
+	 *   constructible because portable builds disable exception unwinding.
 	 */
 	template<typename T, typename... TArguments>
 	TObjectCreationResult<T> NewObject(const FClassDescriptor& InDescriptor, TArguments&&... Arguments) noexcept
@@ -409,10 +544,9 @@ public:
 	}
 
 	/**
-	 * Constructs through a type's optional static descriptor convention.
-	 *
-	 * Explicit descriptor composition remains the primitive API; this overload
-	 * participates only when T exposes StaticClassDescriptor().
+	 * Motivation: Constructs through a type's optional static descriptor convention so callers spawn without naming the
+	 *   descriptor explicitly.
+	 * Responsibilities: Forward to the explicit-descriptor overload when T exposes StaticClassDescriptor().
 	 */
 	template<typename T, typename... TArguments>
 	auto NewObject(TArguments&&... Arguments) noexcept -> decltype(T::StaticClassDescriptor(), TObjectCreationResult<T>{})
@@ -420,28 +554,42 @@ public:
 		return NewObject<T>(T::StaticClassDescriptor(), std::forward<TArguments>(Arguments)...);
 	}
 
-	/** Resolves only a live matching generation and never changes store state. */
+	/**
+	 * Motivation: Lets traced and weak references resolve a handle without changing store state.
+	 * Responsibilities: Return the live UObject for a matching generation or null.
+	 */
 	UObject* Resolve(FObjectHandle InHandle) const noexcept;
 
-	/** Hides one live object immediately and queues it for the explicit barrier. */
+	/**
+	 * Motivation: Hides one live object immediately and queues it for the explicit destruction barrier.
+	 * Responsibilities: Move a live matching-generation slot to PendingDestroy or report why it cannot.
+	 */
 	EObjectResult MarkPendingDestroy(FObjectHandle InHandle) noexcept;
 
-	/** Inspects at most InMaxSlotsToInspect slots and destroys pending objects encountered. */
+	/**
+	 * Motivation: Bounds pending-destruction work so reclamation can run across multiple frames.
+	 * Responsibilities: Inspect at most InMaxSlotsToInspect slots and destroy the pending objects encountered.
+	 */
 	FObjectMutationResult ApplyPendingDestroy(std::uint32_t InMaxSlotsToInspect) noexcept;
 
-	/** Registers one independent root token after live-handle and capacity validation. */
+	/**
+	 * Motivation: Registers one independent root token after live-handle and capacity validation.
+	 * Responsibilities: Reject a stale or foreign handle, a duplicate, and a full root table, leaving state unchanged.
+	 */
 	EObjectResult AddRoot(FObjectHandle InHandle) noexcept;
 
 	/**
-	 * Releases one matching root token even while guarded work is active.
-	 *
-	 * Immediate release keeps noexcept strong-pointer cleanup leak-free. It changes
-	 * only future reachability; destruction, slot reuse, and collection remain
-	 * blocked until the active callback or mutation boundary ends.
+	 * Motivation: Releases one matching root token even while guarded work is active, so noexcept strong-pointer cleanup
+	 *   stays leak-free.
+	 * Responsibilities: Remove the matching token immediately; this changes only future reachability, not destruction,
+	 *   slot reuse, or collection, which stay blocked until the active boundary ends.
 	 */
 	EObjectResult RemoveRoot(FObjectHandle InHandle) noexcept;
 
-	/** Registers one independent root token and transfers it into an RAII owner. */
+	/**
+	 * Motivation: Registers one independent root token and transfers it into an RAII owner in one call.
+	 * Responsibilities: Validate the reference belongs to this store, then AddRoot and return a strong pointer on success.
+	 */
 	template<typename T>
 	TStrongObjectPointerResult<T> MakeStrongObjectPtr(const TObjectPtr<T> InObject) noexcept
 	{
@@ -460,23 +608,39 @@ public:
 		return StrongResult;
 	}
 
-	/** Reports constructor validation so malformed storage never fails implicitly. */
+	/**
+	 * Motivation: Lets a caller confirm constructor validation so malformed storage never fails implicitly.
+	 * Responsibilities: Return the configuration result recorded at construction.
+	 */
 	EObjectResult ConfigurationResult() const noexcept { return StoreConfigurationResult; }
 
-	/** Reports fixed capacity, current occupancy, roots, and slot fragmentation. */
+	/**
+	 * Motivation: Lets a caller observe fixed capacity, current occupancy, roots, and slot fragmentation.
+	 * Responsibilities: Return one FObjectStoreStats snapshot of the current store state.
+	 */
 	FObjectStoreStats Stats() const noexcept;
 
-	/** Reports whether publication, destruction, root acquisition, or collection is currently blocked. */
+	/**
+	 * Motivation: Lets a caller branch on whether publication, destruction, root acquisition, or collection is blocked.
+	 * Responsibilities: Report true when mutation, dispatch, or collection is active.
+	 */
 	bool IsMutationLocked() const noexcept { return bMutationLocked || bDispatchLocked || ActiveCollector != nullptr; }
 
-	/** Reports only active incremental collection so callbacks may still queue deferred construction safely. */
+	/**
+	 * Motivation: Lets callbacks report only active incremental collection so deferred construction may still queue safely.
+	 * Responsibilities: Report true only while a collector owns store traversal.
+	 */
 	bool IsCollectionActive() const noexcept { return ActiveCollector != nullptr; }
 
 private:
 	friend class FGarbageCollector;
 	friend class FObjectStoreDispatchGuard;
 
-	/** Validates descriptor identity and exact T layout before any slot mutation. */
+	/**
+	 * Motivation: Validates descriptor identity and exact T layout before any slot mutation.
+	 * Responsibilities: Reject a bad configuration, a descriptor the registry does not own, and a size, alignment, type
+	 *   token, or destructor mismatch with T.
+	 */
 	template<typename T>
 	EObjectResult ValidateConstruction(const FClassDescriptor& InDescriptor) const noexcept
 	{
@@ -500,49 +664,94 @@ private:
 		return EObjectResult::Success;
 	}
 
-	/** Reports whether the caller-supplied storage descriptor has valid slot and root layout. */
+	/**
+	 * Motivation: Reports whether the caller-supplied storage descriptor has valid slot and root layout before use.
+	 * Responsibilities: Return true only when slot and root arrays, counts, and alignment invariants hold.
+	 */
 	static bool IsStorageDescriptorValid(const FObjectStoreStorage& InStorage) noexcept;
 
-	/** Returns the first reusable slot without changing its generation or state. */
+	/**
+	 * Motivation: Lets NewObject locate the next slot without changing its generation or state.
+	 * Responsibilities: Return the first reusable slot index or the invalid sentinel when none remains.
+	 */
 	ObjectIndex FindVacantSlot() const noexcept;
 
-	/** Returns the stable first byte of one validated equal-size slot. */
+	/**
+	 * Motivation: Lets placement construction reach one validated equal-size slot.
+	 * Responsibilities: Return the stable first byte of the slot at the index.
+	 */
 	void* SlotAddress(ObjectIndex InSlotIndex) const noexcept;
 
-	/** Validates index, generation, and occupancy while optionally accepting pending state. */
+	/**
+	 * Motivation: Lets resolve and mutation paths share one generation-checked slot lookup.
+	 * Responsibilities: Return the matching slot or null for an index, generation, or occupancy mismatch.
+	 */
 	FObjectSlotMetadata* FindMatchingSlot(FObjectHandle InHandle, bool bInAllowPending) noexcept;
 
-	/** Provides const matching-slot validation to query-only operations. */
+	/**
+	 * Motivation: Provides const matching-slot validation to query-only operations.
+	 * Responsibilities: Return the matching slot or null for an index, generation, or occupancy mismatch.
+	 */
 	const FObjectSlotMetadata* FindMatchingSlot(FObjectHandle InHandle, bool bInAllowPending) const noexcept;
 
-	/** Runs BeginDestroy and exact destruction once, then vacates or retires the slot. */
+	/**
+	 * Motivation: Reclaims one slot by running BeginDestroy and exact destruction once, then vacating or retiring it.
+	 * Responsibilities: Reject a non-destroyable slot, run the destruction callbacks, and recycle or retire the slot.
+	 */
 	EObjectResult DestroySlot(ObjectIndex InSlotIndex) noexcept;
 
-	/** Removes every independent root token for a lifetime that can no longer resolve. */
+	/**
+	 * Motivation: Removes every independent root token for a lifetime that can no longer resolve.
+	 * Responsibilities: Drop all root entries whose handle matches without failing when none match.
+	 */
 	void RemoveAllRoots(FObjectHandle InHandle) noexcept;
 
-	/** Rejects an index that is out of range or not a destroyable live/pending slot. */
+	/**
+	 * Motivation: Rejects an index that is out of range or not a destroyable live/pending slot.
+	 * Responsibilities: Return a result naming why a slot cannot be destroyed or Success.
+	 */
 	EObjectResult ValidateDestroyableSlot(ObjectIndex InSlotIndex) const noexcept;
 
-	/** Reports whether a slot holds a destroyable object with a complete destructor chain. */
+	/**
+	 * Motivation: Reports whether a slot holds a destroyable object with a complete destructor chain.
+	 * Responsibilities: Return true only for a live or pending-destroy slot with a descriptor and destructor.
+	 */
 	static bool IsSlotDestroyable(const FObjectSlotMetadata& InSlot) noexcept;
 
-	/** Runs BeginDestroy and exact destruction, then drops the lifetime's root tokens. */
+	/**
+	 * Motivation: Runs BeginDestroy and exact destruction, then drops the lifetime's root tokens.
+	 * Responsibilities: Invoke BeginDestroy and the exact destructor once and remove the lifetime's roots.
+	 */
 	void RunDestructionCallbacks(FObjectSlotMetadata& InSlot, FObjectHandle InHandle) noexcept;
 
-	/** Clears the slot's live pointers and either vacates it or retires it before wrap. */
+	/**
+	 * Motivation: Clears the slot's live pointers and either vacates it or retires it before wrap.
+	 * Responsibilities: Reset the slot's object and descriptor and retire it when its generation cannot advance.
+	 */
 	void RecycleOrRetireSlot(FObjectSlotMetadata& InSlot) noexcept;
 
-	/** Decrements occupancy, pending, and payload totals for one destroyed object. */
+	/**
+	 * Motivation: Decrements occupancy, pending, and payload totals for one destroyed object.
+	 * Responsibilities: Adjust the occupied, pending, and payload counters consistently with the destroyed slot.
+	 */
 	void UpdateOccupancyCounters(bool bInWasPending, std::size_t InPayloadBytes) noexcept;
 
-	/** Computes the generation a reused slot publishes next (0 means never published). */
+	/**
+	 * Motivation: Computes the generation a reused slot publishes next.
+	 * Responsibilities: Return the next generation for a current value, with zero meaning never published.
+	 */
 	static ObjectGeneration NextPublishGeneration(ObjectGeneration InCurrentGeneration) noexcept;
 
-	/** Wires object identity and slot metadata for a freshly constructed object and returns its handle. */
+	/**
+	 * Motivation: Wires object identity and slot metadata for a freshly constructed object and returns its handle.
+	 * Responsibilities: Stamp the object's store, handle, and descriptor and advance the slot to Live.
+	 */
 	FObjectHandle PublishObjectIntoSlot(ObjectIndex InSlotIndex, const FClassDescriptor& InDescriptor, UObject& InManagedObject) noexcept;
 
-	/** Returns the next pending-destroy slot to inspect and advances the wrapping scan cursor. */
+	/**
+	 * Motivation: Returns the next pending-destroy slot to inspect and advances the wrapping scan cursor.
+	 * Responsibilities: Advance the round-robin cursor and return the next pending slot index or the sentinel.
+	 */
 	ObjectIndex AdvancePendingScanCursor() noexcept;
 
 	// --- Collector-only interface (FGarbageCollector friend) ---
@@ -550,104 +759,164 @@ private:
 	// these private methods rather than public mutators, so no ordinary caller can
 	// start, observe, or end a collection out of phase. Keeping the back-channel
 	// private means the store's public surface can never corrupt an in-progress cycle.
-	/** Reports collector iteration capacity without exposing mutable metadata publicly. */
+	/**
+	 * Motivation: Reports collector iteration capacity without exposing mutable metadata publicly.
+	 * Responsibilities: Return the caller-selected slot count.
+	 */
 	std::uint32_t CollectorSlotCapacity() const noexcept { return Storage.SlotCount; }
 
-	/** Reports collector root iteration capacity including currently empty entries. */
+	/**
+	 * Motivation: Reports collector root iteration capacity including currently empty entries.
+	 * Responsibilities: Return the caller-selected root capacity.
+	 */
 	std::uint32_t CollectorRootCapacity() const noexcept { return Storage.RootCapacity; }
 
-	/** Returns one root token or an invalid handle for a free/out-of-range entry. */
+	/**
+	 * Motivation: Lets the collector read one root token by index.
+	 * Responsibilities: Return the root handle at the index or an invalid handle for a free or out-of-range entry.
+	 */
 	FObjectHandle CollectorRootAt(std::uint32_t InRootIndex) const noexcept;
 
-	/** Returns the current live handle for one slot or an invalid handle otherwise. */
+	/**
+	 * Motivation: Lets the collector read the current live handle for one slot.
+	 * Responsibilities: Return the live handle at the index or an invalid handle otherwise.
+	 */
 	FObjectHandle CollectorHandleAt(ObjectIndex InSlotIndex) const noexcept;
 
-	/** Resolves one live slot by index for descriptor-driven tracing. */
+	/**
+	 * Motivation: Lets the collector resolve one live slot by index for descriptor-driven tracing.
+	 * Responsibilities: Return the live UObject at the index or null.
+	 */
 	UObject* CollectorObjectAt(ObjectIndex InSlotIndex) const noexcept;
 
-	/** Reports whether a slot contains either a live or pending object. */
+	/**
+	 * Motivation: Lets the collector test whether a slot contains a live or pending object.
+	 * Responsibilities: Report true for any occupied slot state.
+	 */
 	bool CollectorIsOccupied(ObjectIndex InSlotIndex) const noexcept;
 
-	/** Reports whether a slot is irreversibly pending destruction. */
+	/**
+	 * Motivation: Lets the collector test whether a slot is irreversibly pending destruction.
+	 * Responsibilities: Report true only for a pending-destroy slot state.
+	 */
 	bool CollectorIsPendingDestroy(ObjectIndex InSlotIndex) const noexcept;
 
-	/** Reports whether a slot state counts as occupied (live, pending destroy, or destroying). */
+	/**
+	 * Motivation: Reports whether a slot state counts as occupied (live, pending destroy, or destroying).
+	 * Responsibilities: Return true for any state the collector treats as reachable storage.
+	 */
 	static bool IsStateOccupied(EObjectSlotState InState) noexcept;
 
-	/** Reports whether a slot state is irreversibly pending destruction. */
+	/**
+	 * Motivation: Reports whether a slot state is irreversibly pending destruction.
+	 * Responsibilities: Return true only for the pending-destroy state.
+	 */
 	static bool IsStatePendingDestroy(EObjectSlotState InState) noexcept;
 
-	/** Prevents a collector cycle from starting inside construction or destruction callbacks. */
+	/**
+	 * Motivation: Prevents a collector cycle from starting inside construction or destruction callbacks.
+	 * Responsibilities: Report true when mutation or dispatch is active.
+	 */
 	bool CollectorIsMutationLocked() const noexcept { return bMutationLocked || bDispatchLocked; }
 
-	/** Gives callback dispatch precedence over collector phase validation. */
+	/**
+	 * Motivation: Gives callback dispatch precedence over collector phase validation.
+	 * Responsibilities: Report true throughout one Engine callback cascade.
+	 */
 	bool CollectorIsDispatchLocked() const noexcept { return bDispatchLocked; }
 
-	/** Atomically reserves public store mutation for one collector cycle. */
+	/**
+	 * Motivation: Atomically reserves public store mutation for one collector cycle.
+	 * Responsibilities: Set the active collector when no other boundary is held and report success.
+	 */
 	bool CollectorTryBegin(const FGarbageCollector& InCollector) noexcept;
 
-	/** Releases store ownership only for the collector that acquired it. */
+	/**
+	 * Motivation: Releases store ownership only for the collector that acquired it.
+	 * Responsibilities: Clear the active collector when it matches the caller.
+	 */
 	void CollectorEnd(const FGarbageCollector& InCollector) noexcept;
 
-	/** Confirms that this collector owns the active incremental cycle. */
+	/**
+	 * Motivation: Confirms that this collector owns the active incremental cycle.
+	 * Responsibilities: Return true only when the caller is the active collector.
+	 */
 	bool CollectorIsOwnedBy(const FGarbageCollector& InCollector) const noexcept { return ActiveCollector == &InCollector; }
 
-	/** Reports the collector mark associated with one occupied slot. */
+	/**
+	 * Motivation: Lets the collector read the mark associated with one occupied slot.
+	 * Responsibilities: Return the slot's collector mark.
+	 */
 	bool CollectorIsMarked(ObjectIndex InSlotIndex) const noexcept;
 
-	/** Changes one occupied slot's collector mark without changing lifecycle state. */
+	/**
+	 * Motivation: Lets the collector change one occupied slot's mark without changing lifecycle state.
+	 * Responsibilities: Set the slot's mark for the given index.
+	 */
 	void CollectorSetMarked(ObjectIndex InSlotIndex, bool bInMarked) noexcept;
 
-	/** Reclaims one generation-checked unmarked lifetime during bounded sweep. */
+	/**
+	 * Motivation: Reclaims one generation-checked unmarked lifetime during bounded sweep.
+	 * Responsibilities: Destroy the matching unmarked live slot or report why it cannot.
+	 */
 	EObjectResult CollectorReclaim(FObjectHandle InHandle) noexcept;
 
-	/** Excludes lifetime-changing work from one non-nested callback cascade. */
+	/**
+	 * Motivation: Excludes lifetime-changing work from one non-nested callback cascade.
+	 * Responsibilities: Reserve the dispatch boundary when no other is held and report success.
+	 */
 	bool TryBeginDispatch() noexcept;
 
-	/** Releases the callback reservation acquired by one dispatch guard. */
+	/**
+	 * Motivation: Releases the callback reservation acquired by one dispatch guard.
+	 * Responsibilities: Clear the dispatch lock exactly once.
+	 */
 	void EndDispatch() noexcept;
 
-	/** Rejects guarded publication, destruction, root acquisition, and collection work. */
+	/**
+	 * Motivation: Rejects guarded publication, destruction, root acquisition, and collection work.
+	 * Responsibilities: Report the union of mutation, dispatch, and collection locks.
+	 */
 	bool IsPublicMutationLocked() const noexcept { return IsMutationLocked(); }
 
-	/** Retains non-owning fixed storage whose lifetime encloses this store. */
+	/** Motivation: Retains non-owning fixed storage whose lifetime encloses this store. */
 	FObjectStoreStorage Storage{};
 
-	/** Retains non-owning class lookup whose registry lifetime encloses this store. */
+	/** Motivation: Retains non-owning class lookup whose registry lifetime encloses this store. */
 	FClassRegistryView ClassRegistryLookup{};
 
-	/** Prevents operations when caller-owned storage violates fixed-slot invariants. */
+	/** Motivation: Prevents operations when caller-owned storage violates fixed-slot invariants. */
 	EObjectResult StoreConfigurationResult{EObjectResult::UnsupportedObjectLayout};
 
-	/** Counts active object lifetimes without rescanning all slot metadata. */
+	/** Motivation: Counts active object lifetimes without rescanning all slot metadata. */
 	std::uint32_t OccupiedSlotCount{0};
 
-	/** Counts pending objects left for later bounded barrier work. */
+	/** Motivation: Counts pending objects left for later bounded barrier work. */
 	std::uint32_t PendingDestroyCount{0};
 
-	/** Counts slots permanently removed before generation wrap. */
+	/** Motivation: Counts slots permanently removed before generation wrap. */
 	std::uint32_t RetiredSlotCount{0};
 
-	/** Counts independently owned root tokens without rescanning the root table. */
+	/** Motivation: Counts independently owned root tokens without rescanning the root table. */
 	std::uint32_t ActiveRootCount{0};
 
-	/** Sums descriptor payload extents to expose equal-slot fragmentation. */
+	/** Motivation: Sums descriptor payload extents to expose equal-slot fragmentation. */
 	std::size_t ObjectPayloadByteCount{0};
 
-	/** Preserves bounded round-robin progress across partial destruction barriers. */
+	/** Motivation: Preserves bounded round-robin progress across partial destruction barriers. */
 	ObjectIndex PendingDestroyScanCursor{0};
 
 	// Locking trio, each guarding a distinct phase (see IsMutationLocked):
 	//   bMutationLocked -- set while a construct / exact-destruction callback runs.
 	//   bDispatchLocked -- set throughout one Engine callback cascade.
 	//   ActiveCollector -- non-null while one collection cycle owns store traversal.
-	/** Rejects callback reentry while construction or exact destruction is in progress. */
+	/** Motivation: Rejects callback reentry while construction or exact destruction is in progress. */
 	bool bMutationLocked{false};
 
-	/** Rejects structural store mutation throughout one Engine callback cascade. */
+	/** Motivation: Rejects structural store mutation throughout one Engine callback cascade. */
 	bool bDispatchLocked{false};
 
-	/** Identifies the collector that exclusively owns incremental store traversal. */
+	/** Motivation: Identifies the collector that exclusively owns incremental store traversal. */
 	const FGarbageCollector* ActiveCollector{nullptr};
 };
 

@@ -32,19 +32,24 @@ using MicroWorld::Tests::FComponentEventState;
 using MicroWorld::Tests::FSequenceCounter;
 using MicroWorld::Tests::TEngineEnvironment;
 
-/** Tick configuration that lets ordering types tick every advance by default. */
+/** Motivation: Tick configuration that lets ordering types tick every advance by default. */
 constexpr FTickConfiguration OrderingTickConfiguration{true, true, DurationMilliseconds{0}};
 
-/** Canonical monotonic baseline every BeginPlay call uses as its starting world time. */
+/** Motivation: Canonical monotonic baseline every BeginPlay call uses as its starting world time. */
 constexpr MicroWorld::Core::TimePointMilliseconds BaselineTimeMilliseconds{0};
 
-/** First advance time the ordering and interval tests use after the baseline begin. */
+/** Motivation: First advance time the ordering and interval tests use after the baseline begin. */
 constexpr MicroWorld::Core::TimePointMilliseconds FirstTickTimeMilliseconds{100};
 
-/** Fixed capacity of the GC worklist used by the lifecycle-mutation guard test. */
+/** Motivation: Fixed capacity of the GC worklist used by the lifecycle-mutation guard test. */
 constexpr std::uint32_t CollectorWorklistCapacity = 8;
 
-/** A component that records begin/tick/end ordering into per-instance state. */
+/**
+ * Motivation: A component that records begin/tick/end ordering into per-instance state.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FOrderingComponent final : public UActorComponent
 {
 public:
@@ -75,7 +80,12 @@ private:
 	FComponentEventState& Events;
 };
 
-/** An actor that records begin/tick/end ordering into per-instance state. */
+/**
+ * Motivation: An actor that records begin/tick/end ordering into per-instance state.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FOrderingActor final : public AActor
 {
 public:
@@ -106,12 +116,17 @@ private:
 	FActorEventState& Events;
 };
 
-/** Test-local type ids for the ordering actor and component descriptors. */
+/** Motivation: Test-local type ids for the ordering actor and component descriptors. */
 constexpr MicroWorld::Engine::FTypeId OrderingActorTypeId{0x00010001u};
 constexpr MicroWorld::Engine::FTypeId OrderingComponentTypeId{0x00010002u};
 constexpr MicroWorld::Engine::FTypeId MutationAttemptActorTypeId{0x00010003u};
 
-/** Records every structural operation attempted from each lifecycle hook. */
+/**
+ * Motivation: Records every structural operation attempted from each lifecycle hook.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 struct FLifecycleMutationState final
 {
 	std::array<EObjectResult, 3> Construction{};
@@ -122,7 +137,12 @@ struct FLifecycleMutationState final
 	std::array<ERuntimeResult, 3> AdvanceCollection{};
 };
 
-/** Attempts forbidden object-graph mutation from BeginPlay, Tick, and EndPlay. */
+/**
+ * Motivation: Attempts forbidden object-graph mutation from BeginPlay, Tick, and EndPlay.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FMutationAttemptActor final : public AActor
 {
 public:
@@ -157,7 +177,10 @@ private:
 	FLifecycleMutationState& State;
 };
 
-/** Builds one ordering actor through its derived descriptor in the environment. */
+/**
+ * Motivation: Builds one ordering actor through its derived descriptor in the environment.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ */
 template<std::size_t SlotSizeBytes, std::size_t SlotAlignmentBytes, std::uint32_t SlotCount, std::uint32_t RootCapacity>
 TObjectPtr<FOrderingActor> MakeOrderingActor(
 	TEngineEnvironment<SlotSizeBytes, SlotAlignmentBytes, SlotCount, RootCapacity>& InEnv,
@@ -167,7 +190,10 @@ TObjectPtr<FOrderingActor> MakeOrderingActor(
 	return InEnv.template CreateDerivedObject<FOrderingActor>(OrderingActorTypeId, "OrderingActor", OrderingTickConfiguration, InSequence, InEvents);
 }
 
-/** Builds one ordering component through its derived descriptor in the environment. */
+/**
+ * Motivation: Builds one ordering component through its derived descriptor in the environment.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ */
 template<std::size_t SlotSizeBytes, std::size_t SlotAlignmentBytes, std::uint32_t SlotCount, std::uint32_t RootCapacity>
 TObjectPtr<FOrderingComponent> MakeOrderingComponent(
 	TEngineEnvironment<SlotSizeBytes, SlotAlignmentBytes, SlotCount, RootCapacity>& InEnv,
@@ -177,12 +203,13 @@ TObjectPtr<FOrderingComponent> MakeOrderingComponent(
 	return InEnv.template CreateDerivedObject<FOrderingComponent>(OrderingComponentTypeId, "OrderingComponent", InSequence, InEvents);
 }
 
-/** Convenience environment sized for the lifecycle ordering tests. */
+/** Motivation: Convenience environment sized for the lifecycle ordering tests. */
 using FLifecycleEnvironment = TEngineEnvironment<256, 16, 8, 4>;
 
 /**
- * Scenario: Register two actors (one with two components, one with one) and run BeginPlay on the world.
- * Expected: BeginPlay visits actors in registration order, beginning each actor's components in registration order before its own hook.
+ * Motivation: Register two actors (one with two components, one with one) and run BeginPlay on the world.
+ * Responsibilities: BeginPlay visits actors in registration order, beginning each actor's components in registration
+ *   order before its own hook.
  */
 MW_TEST_CASE(EngineBeginPlayOrderIsActorsThenComponentsPerActor)
 {
@@ -234,8 +261,9 @@ MW_TEST_CASE(EngineBeginPlayOrderIsActorsThenComponentsPerActor)
 }
 
 /**
- * Scenario: Begin a world with two actors (each with one component) and Advance it by one frame.
- * Expected: Advance ticks actors in registration order and, for each actor, ticks its components before the actor's own Tick hook.
+ * Motivation: Begin a world with two actors (each with one component) and Advance it by one frame.
+ * Responsibilities: Advance ticks actors in registration order and, for each actor, ticks its components before the
+ *   actor's own Tick hook.
  */
 MW_TEST_CASE(EngineTickOrderIsActorsThenComponentsPerActor)
 {
@@ -284,8 +312,9 @@ MW_TEST_CASE(EngineTickOrderIsActorsThenComponentsPerActor)
 }
 
 /**
- * Scenario: Begin a world with two actors and run EndPlay (twice) after BeginPlay.
- * Expected: EndPlay ends actors in reverse registration order, each actor's EndPlay running before its components' EndPlay in reverse order.
+ * Motivation: Begin a world with two actors and run EndPlay (twice) after BeginPlay.
+ * Responsibilities: EndPlay ends actors in reverse registration order, each actor's EndPlay running before its
+ *   components' EndPlay in reverse order.
  */
 MW_TEST_CASE(EngineEndPlayIsReverseRegistrationAndActorBeforeComponents)
 {
@@ -336,8 +365,10 @@ MW_TEST_CASE(EngineEndPlayIsReverseRegistrationAndActorBeforeComponents)
 }
 
 /**
- * Scenario: Advance an interval actor through an immediate due, a multi-interval forward jump, an early poll, and a rollback.
- * Expected: The interval actor ticks at most once per Advance even when the caller jumps multiple intervals forward, and time rollback is rejected.
+ * Motivation: Advance an interval actor through an immediate due, a multi-interval forward jump, an early poll,
+ *   and a rollback.
+ * Responsibilities: The interval actor ticks at most once per Advance even when the caller jumps multiple intervals
+ *   forward, and time rollback is rejected.
  */
 MW_TEST_CASE(EngineTickIntervalAndNoCatchUpBehavior)
 {
@@ -377,9 +408,10 @@ MW_TEST_CASE(EngineTickIntervalAndNoCatchUpBehavior)
 }
 
 /**
- * Scenario: Register an adversarial actor that attempts store/collector reentry from every lifecycle hook and drive it through BeginPlay, Advance,
- * and EndPlay. Expected: The world dispatch guard rejects structural store/collector reentry from every consumer lifecycle hook and preserves the
- * live world graph.
+ * Motivation: Scenario: Register an adversarial actor that attempts store/collector reentry from every lifecycle
+ *   hook and drive it through BeginPlay, Advance, and EndPlay.
+ * Responsibilities: Expected: The world dispatch guard rejects structural store/collector reentry from every consumer
+ *   lifecycle hook and preserves the live world graph.
  */
 MW_TEST_CASE(EngineLifecycleHooksCannotMutateManagedGraph)
 {

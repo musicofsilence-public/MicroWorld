@@ -21,98 +21,109 @@ using MicroWorld::Transport::Address::FDeviceAddress;
 using MicroWorld::Transport::Device::FReceiveResult;
 using MicroWorld::Transport::Device::IDevice;
 
-/** Sentinel address byte that proves a receive call did not overwrite the caller's address. */
+/** Motivation: Sentinel address byte that proves a receive call did not overwrite the caller's address. */
 constexpr std::uint8_t UntouchedAddressByte = 0x42;
 
-/** Pre-fill marker written into every destination byte before a receive, so a delivery is observable. */
+/** Motivation: Pre-fill marker written into every destination byte before a receive, so a delivery is observable. */
 constexpr std::uint8_t DestinationPrefillByte = 0xFF;
 
-/** Sentinel value pre-loaded into BytesReceived so an unchanged failed receive is observable. */
+/** Motivation: Sentinel value pre-loaded into BytesReceived so an unchanged failed receive is observable. */
 constexpr std::size_t UntouchedBytesReceivedSentinel = 0xEE;
 
-/** Index of the destination address byte the FIFO and routing cases queue packets to. */
+/** Motivation: Index of the destination address byte the FIFO and routing cases queue packets to. */
 constexpr std::uint8_t DefaultDestIndex = 0;
-/** Distinct destination indices the per-packet routing case queues packets to. */
+/** Motivation: Distinct destination indices the per-packet routing case queues packets to. */
 constexpr std::uint8_t DestIndexA = 1;
 constexpr std::uint8_t DestIndexB = 2;
 constexpr std::uint8_t DestIndexC = 3;
-/** Sender port index the receive-success case stamps into OutFrom. */
+/** Motivation: Sender port index the receive-success case stamps into OutFrom. */
 constexpr std::uint8_t ReceiveSenderIndex = 7;
-/** Length of every two-byte packet the capacity and ordering cases thread through the manager. */
+/** Motivation: Length of every two-byte packet the capacity and ordering cases thread through the manager. */
 constexpr std::size_t TwoBytePacketLength = 2;
-/** Length of the three-byte packet the FIFO ordering case threads through the manager. */
+/** Motivation: Length of the three-byte packet the FIFO ordering case threads through the manager. */
 constexpr std::size_t ThreeBytePacketLength = 3;
-/** Length of the single-byte packet the FIFO ordering and recovery cases thread through the manager. */
+/** Motivation: Length of the single-byte packet the FIFO ordering and recovery cases thread through the manager. */
 constexpr std::size_t OneBytePacketLength = 1;
-/** Length of the four-byte packet the oversize-rejection case rejects. */
+/** Motivation: Length of the four-byte packet the oversize-rejection case rejects. */
 constexpr std::size_t FourBytePacketLength = 4;
-/** Byte count a successful forced receive reports in the receive-success case. */
+/** Motivation: Byte count a successful forced receive reports in the receive-success case. */
 constexpr std::size_t ReceiveFillByteCount = 3;
-/** Number of wraparound cycles the storage-reuse case drives through the two-slot FIFO. */
+/** Motivation: Number of wraparound cycles the storage-reuse case drives through the two-slot FIFO. */
 constexpr std::size_t WraparoundCycleCount = 6;
 
-/** Fill byte the recording device writes into every received byte so a success is observable. */
+/** Motivation: Fill byte the recording device writes into every received byte so a success is observable. */
 constexpr std::uint8_t ReceiveFillerByteValue = 0x7C;
-/** Default fill byte a successful forced receive stamps into destination storage. */
+/** Motivation: Default fill byte a successful forced receive stamps into destination storage. */
 constexpr std::uint8_t DefaultReceiveFillerByte = 0xAB;
 
-/** Four-byte packet the oversize-rejection case rejects above the storage capacity. */
+/** Motivation: Four-byte packet the oversize-rejection case rejects above the storage capacity. */
 constexpr std::uint8_t OversizedPacketData[FourBytePacketLength] = {0x01, 0x02, 0x03, 0x04};
-/** Two-byte packet the FIFO ordering case queues first. */
+/** Motivation: Two-byte packet the FIFO ordering case queues first. */
 constexpr std::uint8_t FifoFirstPacket[TwoBytePacketLength] = {0x10, 0x20};
-/** Three-byte packet the FIFO ordering case queues second. */
+/** Motivation: Three-byte packet the FIFO ordering case queues second. */
 constexpr std::uint8_t FifoSecondPacket[ThreeBytePacketLength] = {0x30, 0x40, 0x50};
-/** Single-byte packet the FIFO ordering case queues third. */
+/** Motivation: Single-byte packet the FIFO ordering case queues third. */
 constexpr std::uint8_t FifoThirdPacket[OneBytePacketLength] = {0x60};
-/** Two-byte packet the full-FIFO case accepts before the rejected queue. */
+/** Motivation: Two-byte packet the full-FIFO case accepts before the rejected queue. */
 constexpr std::uint8_t FullFifoAcceptedPacket[TwoBytePacketLength] = {0xAA, 0xBB};
-/** Two-byte packet the full-FIFO case rejects as the overflow queue. */
+/** Motivation: Two-byte packet the full-FIFO case rejects as the overflow queue. */
 constexpr std::uint8_t FullFifoRejectedPacket[TwoBytePacketLength] = {0xCC, 0xDD};
-/** Two-byte packet the single-advance case queues as the head. */
+/** Motivation: Two-byte packet the single-advance case queues as the head. */
 constexpr std::uint8_t SingleAdvanceHeadPacket[TwoBytePacketLength] = {0x11, 0x22};
-/** Three-byte packet the device-Full case queues first. */
+/** Motivation: Three-byte packet the device-Full case queues first. */
 constexpr std::uint8_t DeviceFullFirstPacket[ThreeBytePacketLength] = {0x01, 0x02, 0x03};
-/** Two-byte packet the device-Full case queues second. */
+/** Motivation: Two-byte packet the device-Full case queues second. */
 constexpr std::uint8_t DeviceFullSecondPacket[TwoBytePacketLength] = {0x04, 0x05};
-/** Two-byte packet the device-Unavailable case queues as the retained head. */
+/** Motivation: Two-byte packet the device-Unavailable case queues as the retained head. */
 constexpr std::uint8_t DeviceUnavailablePacket[TwoBytePacketLength] = {0x55, 0x66};
-/** Two-byte packet the device-Invalid case queues as the retained head. */
+/** Motivation: Two-byte packet the device-Invalid case queues as the retained head. */
 constexpr std::uint8_t DeviceInvalidPacket[TwoBytePacketLength] = {0x07, 0x08};
-/** Two-byte packet the recovery case queues as the retained head before backpressure clears. */
+/** Motivation: Two-byte packet the recovery case queues as the retained head before backpressure clears. */
 constexpr std::uint8_t RecoveryHeadPacket[TwoBytePacketLength] = {0x99, 0xAA};
-/** Single-byte packet the recovery case queues after the retained head. */
+/** Motivation: Single-byte packet the recovery case queues after the retained head. */
 constexpr std::uint8_t RecoveryLaterPacket[OneBytePacketLength] = {0xBB};
-/** Two-byte packet A the storage-reuse case queues each wraparound cycle. */
+/** Motivation: Two-byte packet A the storage-reuse case queues each wraparound cycle. */
 constexpr std::uint8_t WraparoundCycleAPacket[TwoBytePacketLength] = {0xA0, 0xA1};
-/** Two-byte packet B the storage-reuse case queues each wraparound cycle. */
+/** Motivation: Two-byte packet B the storage-reuse case queues each wraparound cycle. */
 constexpr std::uint8_t WraparoundCycleBPacket[TwoBytePacketLength] = {0xB0, 0xB1};
-/** Two-byte packet A the per-packet routing case queues to DestA. */
+/** Motivation: Two-byte packet A the per-packet routing case queues to DestA. */
 constexpr std::uint8_t RoutedPacketA[TwoBytePacketLength] = {0xA0, 0xA1};
-/** Two-byte packet B the per-packet routing case queues to DestB. */
+/** Motivation: Two-byte packet B the per-packet routing case queues to DestB. */
 constexpr std::uint8_t RoutedPacketB[TwoBytePacketLength] = {0xB0, 0xB1};
-/** Two-byte packet C the per-packet routing case queues to DestC. */
+/** Motivation: Two-byte packet C the per-packet routing case queues to DestC. */
 constexpr std::uint8_t RoutedPacketC[TwoBytePacketLength] = {0xC0, 0xC1};
 
-/** Builds a 1-byte destination address whose single byte is `InIndex`; keeps queue call sites concise. */
+/**
+ * Motivation: Builds a 1-byte destination address whose single byte is `InIndex`; keeps queue call sites concise.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ */
 constexpr FDeviceAddress MakeDest(const std::uint8_t InIndex) noexcept
 {
 	return MicroWorld::Transport::Address::MakeLoopbackAddress(InIndex);
 }
 
 /**
- * Records the exact bytes and destination address the manager passed to every device send so FIFO order,
- * head retention, recovery, and per-packet routing can be proven across differently sized and valued packets.
- *
- * The device returns a caller-chosen result on each send attempt and never touches a real transport, so
- * manager ordering and retention behavior stays deterministic.
+ * Motivation: Records the exact bytes and destination address the manager passed to every device send so FIFO
+ *   order, head retention, recovery, and per-packet routing can be proven across differently sized and
+ *   valued packets. The device returns a caller-chosen result on each send attempt and never touches a
+ *   real transport, so manager ordering and retention behavior stays deterministic.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
  */
 class FRecordingDevice final : public IDevice
 {
 public:
-	/** Defaulted so the device can live in automatic storage without side effects. */
+	/**
+	 * Motivation: The device can live in automatic storage without side effects.
+	 * Responsibilities: Defaulted.
+	 */
 	~FRecordingDevice() noexcept override = default;
 
-	/** Counts every attempt and records the destination address and bytes of every successful send so FIFO order of delivered packets is provable. */
+	/**
+	 * Motivation: FIFO order of delivered packets is provable.
+	 * Responsibilities: Counts every attempt and records the destination address and bytes of every successful send.
+	 */
 	ETransportResult TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override
 	{
 		++SendCount;
@@ -130,7 +141,11 @@ public:
 		return ForcedSendResult;
 	}
 
-	/** Returns the forced result, fills the destination on success, and stamps a deterministic sender into OutFrom only on success. */
+	/**
+	 * Motivation: Returns the forced result, fills the destination on success, and stamps a deterministic sender into
+	 *   OutFrom only on success.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	ETransportResult TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept override
 	{
 		++ReceiveAttemptCount;
@@ -147,51 +162,54 @@ public:
 		return ForcedReceiveResult;
 	}
 
-	/** Reports a fixed per-packet byte capacity large enough for every test packet in this suite. */
+	/**
+	 * Motivation: Reports a fixed per-packet byte capacity large enough for every test packet in this suite.
+	 * Responsibilities: Return the stored value and touch nothing else.
+	 */
 	std::size_t MaxPacketBytes() const noexcept override { return DeviceMaxPacketBytes; }
 
-	/** The result the next TrySend call must return, regardless of packet contents. */
+	/** Motivation: The result the next TrySend call must return, regardless of packet contents. */
 	ETransportResult ForcedSendResult{ETransportResult::Success};
 
-	/** The result the next TryReceive call must return, regardless of destination. */
+	/** Motivation: The result the next TryReceive call must return, regardless of destination. */
 	ETransportResult ForcedReceiveResult{ETransportResult::Unavailable};
 
-	/** The byte count a successful forced receive reports. */
+	/** Motivation: The byte count a successful forced receive reports. */
 	std::size_t ReceiveByteCount{0};
 
-	/** The byte value written into every received byte so success is observable. */
+	/** Motivation: The byte value written into every received byte so success is observable. */
 	std::uint8_t ReceiveFillerByte{DefaultReceiveFillerByte};
 
-	/** The sender address a successful forced receive stamps into OutFrom. */
+	/** Motivation: The sender address a successful forced receive stamps into OutFrom. */
 	FDeviceAddress ReceiveSender{};
 
-	/** Counts every send attempt, including failures, so backpressure retention is observable. */
+	/** Motivation: Counts every send attempt, including failures, so backpressure retention is observable. */
 	std::size_t SendCount{0};
 
-	/** Counts only successful sends so recorded slots map one-to-one to delivered packets. */
+	/** Motivation: Counts only successful sends so recorded slots map one-to-one to delivered packets. */
 	std::size_t SuccessfulSendCount{0};
 
-	/** Counts how many times the manager attempted a receive. */
+	/** Motivation: Counts how many times the manager attempted a receive. */
 	std::size_t ReceiveAttemptCount{0};
 
 	static constexpr std::size_t MaxRecordedSends = 16;
 	static constexpr std::size_t MaxRecordedBytes = 8;
 	static constexpr std::size_t DeviceMaxPacketBytes = 64;
 
-	/** Records the exact bytes of each send so FIFO order is provable. */
+	/** Motivation: Records the exact bytes of each send so FIFO order is provable. */
 	std::uint8_t RecordedSendBytes[MaxRecordedSends][MaxRecordedBytes]{};
 
-	/** Records the exact length of each send alongside its bytes. */
+	/** Motivation: Records the exact length of each send alongside its bytes. */
 	std::size_t RecordedSendLengths[MaxRecordedSends]{};
 
-	/** Records the destination address the manager passed with each send so per-packet routing is provable. */
+	/** Motivation: Records the destination address the manager passed with each send so per-packet routing is provable. */
 	FDeviceAddress RecordedSendDestinations[MaxRecordedSends]{};
 };
 
 /**
- * Scenario: Construct a manager over a recording device and fixed-capacity packet storage.
- * Expected: The manager reports an empty non-full FIFO with queue capacity and max packet bytes matching the template parameters and zero queued
- * packets.
+ * Motivation: Construct a manager over a recording device and fixed-capacity packet storage.
+ * Responsibilities: The manager reports an empty non-full FIFO with queue capacity and max packet bytes matching the
+ *   template parameters and zero queued.
  */
 MW_TEST_CASE(TransportManagerStartsEmptyWithFixedConfiguration)
 {
@@ -209,8 +227,8 @@ MW_TEST_CASE(TransportManagerStartsEmptyWithFixedConfiguration)
 }
 
 /**
- * Scenario: Attempt to queue a packet larger than MaximumPacketBytes.
- * Expected: The queue returns Invalid and no packet is enqueued.
+ * Motivation: Attempt to queue a packet larger than MaximumPacketBytes.
+ * Responsibilities: The queue returns Invalid and no packet is enqueued.
  */
 MW_TEST_CASE(TransportManagerRejectsOversizedPacketTransactionally)
 {
@@ -228,8 +246,8 @@ MW_TEST_CASE(TransportManagerRejectsOversizedPacketTransactionally)
 }
 
 /**
- * Scenario: Attempt to queue a null packet with a nonzero length.
- * Expected: The queue returns Invalid and no packet is enqueued.
+ * Motivation: Attempt to queue a null packet with a nonzero length.
+ * Responsibilities: The queue returns Invalid and no packet is enqueued.
  */
 MW_TEST_CASE(TransportManagerRejectsNullPacketWithNonzeroLength)
 {
@@ -246,9 +264,9 @@ MW_TEST_CASE(TransportManagerRejectsNullPacketWithNonzeroLength)
 }
 
 /**
- * Scenario: Queue three differently sized and valued packets, then advance each to the device.
- * Expected: Three advances call the device exactly three times and deliver the packets in FIFO order with byte-for-byte matching contents, leaving
- * the FIFO empty.
+ * Motivation: Queue three differently sized and valued packets, then advance each to the device.
+ * Responsibilities: Three advances call the device exactly three times and deliver the packets in FIFO order with
+ *   byte-for-byte matching contents, leaving.
  */
 MW_TEST_CASE(TransportManagerAdvanceSendsDifferentlySizedPacketsInFifoOrder)
 {
@@ -300,8 +318,9 @@ MW_TEST_CASE(TransportManagerAdvanceSendsDifferentlySizedPacketsInFifoOrder)
 }
 
 /**
- * Scenario: Fill a one-slot FIFO, attempt to queue an overflow packet, then advance the device.
- * Expected: The overflow queue returns Full without changing the queued count, and the accepted head packet survives to be advanced intact.
+ * Motivation: Fill a one-slot FIFO, attempt to queue an overflow packet, then advance the device.
+ * Responsibilities: The overflow queue returns Full without changing the queued count, and the accepted head packet
+ *   survives to be advanced intact.
  */
 MW_TEST_CASE(TransportManagerFullFifoRejectsFurtherQueue)
 {
@@ -330,8 +349,8 @@ MW_TEST_CASE(TransportManagerFullFifoRejectsFurtherQueue)
 }
 
 /**
- * Scenario: Advance an empty FIFO and observe the recording device's send count.
- * Expected: The advance returns Unavailable and never calls the device.
+ * Motivation: Advance an empty FIFO and observe the recording device's send count.
+ * Responsibilities: The advance returns Unavailable and never calls the device.
  */
 MW_TEST_CASE(TransportManagerAdvanceEmptyReturnsUnavailableWithoutDeviceCall)
 {
@@ -348,8 +367,9 @@ MW_TEST_CASE(TransportManagerAdvanceEmptyReturnsUnavailableWithoutDeviceCall)
 }
 
 /**
- * Scenario: Queue one head packet, then advance once against a successful device.
- * Expected: The advance succeeds, calls the device exactly once with the head packet length, and removes the head from the FIFO.
+ * Motivation: Queue one head packet, then advance once against a successful device.
+ * Responsibilities: The advance succeeds, calls the device exactly once with the head packet length, and removes the
+ *   head from the FIFO.
  */
 MW_TEST_CASE(TransportManagerAdvanceAttemptsOneSendAndRemovesHeadOnSuccess)
 {
@@ -370,9 +390,10 @@ MW_TEST_CASE(TransportManagerAdvanceAttemptsOneSendAndRemovesHeadOnSuccess)
 }
 
 /**
- * Scenario: Queue two packets, advance against a device that returns Full, then clear backpressure and advance twice more.
- * Expected: Device Full propagates as Full and retains all queued packets; once backpressure clears, advances send the retained first packet ahead of
- * the second in FIFO order with byte-for-byte matching contents.
+ * Motivation: Queue two packets, advance against a device that returns Full, then clear backpressure and advance
+ *   twice more.
+ * Responsibilities: Device Full propagates as Full and retains all queued packets; once backpressure clears, advances
+ *   send the retained first packet ahead of.
  */
 MW_TEST_CASE(TransportManagerDeviceFullRetainsExactHeadContents)
 {
@@ -408,9 +429,10 @@ MW_TEST_CASE(TransportManagerDeviceFullRetainsExactHeadContents)
 }
 
 /**
- * Scenario: Queue one packet, advance against a device that returns Unavailable, then switch the device to success and advance again.
- * Expected: Device Unavailable propagates as Unavailable and retains the head packet; the retry advance sends the retained head with its original
- * length and bytes.
+ * Motivation: Queue one packet, advance against a device that returns Unavailable, then switch the device to
+ *   success and advance again.
+ * Responsibilities: Device Unavailable propagates as Unavailable and retains the head packet; the retry advance sends
+ *   the retained head with its original.
  */
 MW_TEST_CASE(TransportManagerDeviceUnavailableRetainsExactHead)
 {
@@ -437,9 +459,10 @@ MW_TEST_CASE(TransportManagerDeviceUnavailableRetainsExactHead)
 }
 
 /**
- * Scenario: Queue one packet, advance against a device that returns Invalid, then switch the device to success and advance again.
- * Expected: Device Invalid propagates as Invalid and retains the head packet; the retry advance sends the retained head with its original length and
- * bytes.
+ * Motivation: Queue one packet, advance against a device that returns Invalid, then switch the device to success
+ *   and advance again.
+ * Responsibilities: Device Invalid propagates as Invalid and retains the head packet; the retry advance sends the
+ *   retained head with its original length and.
  */
 MW_TEST_CASE(TransportManagerDeviceInvalidRetainsExactHead)
 {
@@ -466,9 +489,9 @@ MW_TEST_CASE(TransportManagerDeviceInvalidRetainsExactHead)
 }
 
 /**
- * Scenario: Queue a head and a later packet, advance into a full device, clear backpressure, then advance twice.
- * Expected: Backpressure retains both packets; recovery sends the retained head first, before the later packet, removing only the head on the first
- * advance.
+ * Motivation: Queue a head and a later packet, advance into a full device, clear backpressure, then advance twice.
+ * Responsibilities: Backpressure retains both packets; recovery sends the retained head first, before the later packet,
+ *   removing only the head on the first.
  */
 MW_TEST_CASE(TransportManagerRecoverySendsRetainedHeadBeforeLaterPackets)
 {
@@ -501,9 +524,10 @@ MW_TEST_CASE(TransportManagerRecoverySendsRetainedHeadBeforeLaterPackets)
 }
 
 /**
- * Scenario: Cycle a two-slot FIFO through queue-fill-advance-drain more times than its capacity, recording each send.
- * Expected: Caller-owned storage is reused across many wraparound cycles, each cycle queues and delivers both packets in order, and the device is
- * called exactly twice per cycle.
+ * Motivation: Cycle a two-slot FIFO through queue-fill-advance-drain more times than its capacity, recording each
+ *   send.
+ * Responsibilities: Caller-owned storage is reused across many wraparound cycles, each cycle queues and delivers both
+ *   packets in order, and the device is.
  */
 MW_TEST_CASE(TransportManagerCallerStorageReusedAfterWraparoundAndDraining)
 {
@@ -543,9 +567,9 @@ MW_TEST_CASE(TransportManagerCallerStorageReusedAfterWraparoundAndDraining)
 }
 
 /**
- * Scenario: Queue one packet to each of three distinct destinations, then advance each to the device.
- * Expected: Three advances call the device exactly three times and route each head to its stored destination address in FIFO order with its original
- * bytes, leaving the FIFO empty.
+ * Motivation: Queue one packet to each of three distinct destinations, then advance each to the device.
+ * Responsibilities: Three advances call the device exactly three times and route each head to its stored destination
+ *   address in FIFO order with its original.
  */
 MW_TEST_CASE(TransportManagerAdvanceSendsEachHeadToItsStoredDestination)
 {
@@ -590,9 +614,10 @@ MW_TEST_CASE(TransportManagerAdvanceSendsEachHeadToItsStoredDestination)
 }
 
 /**
- * Scenario: Receive against a device that returns Unavailable with pre-filled destination, byte count, and sender outputs.
- * Expected: Receive performs exactly one direct device receive, propagates Unavailable, and leaves BytesReceived, the destination, and OutFrom
- * unchanged on failure.
+ * Motivation: Receive against a device that returns Unavailable with pre-filled destination, byte count, and
+ *   sender outputs.
+ * Responsibilities: Receive performs exactly one direct device receive, propagates Unavailable, and leaves
+ *   BytesReceived, the destination, and OutFrom.
  */
 MW_TEST_CASE(TransportManagerReceivePerformsOneDirectDeviceReceive)
 {
@@ -616,9 +641,9 @@ MW_TEST_CASE(TransportManagerReceivePerformsOneDirectDeviceReceive)
 }
 
 /**
- * Scenario: Receive against a device that succeeds with a chosen byte count, fill byte, and sender address.
- * Expected: Receive propagates Success with the device-reported byte count, fills exactly that many destination bytes without writing past it, and
- * propagates the device-reported sender address.
+ * Motivation: Receive against a device that succeeds with a chosen byte count, fill byte, and sender address.
+ * Responsibilities: Receive propagates Success with the device-reported byte count, fills exactly that many destination
+ *   bytes without writing past it, and.
  */
 MW_TEST_CASE(TransportManagerReceivePropagatesSuccessAndByteCount)
 {

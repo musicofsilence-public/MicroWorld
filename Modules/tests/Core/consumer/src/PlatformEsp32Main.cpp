@@ -36,45 +36,65 @@
 namespace
 {
 
-/** Stable type id for the example's user-derived managed actor descriptor. */
+/** Motivation: Stable type id for the example's user-derived managed actor descriptor. */
 constexpr MicroWorld::Engine::FTypeId DemoActorTypeId{0x00050001u};
 
-/** Stable type id for the example's user-derived managed component descriptor. */
+/** Motivation: Stable type id for the example's user-derived managed component descriptor. */
 constexpr MicroWorld::Engine::FTypeId DemoComponentTypeId{0x00050002u};
 
-/** A concrete component proving the engine component base is constructible on ESP32. */
+/**
+ * Motivation: A concrete component proving the engine component base is constructible on ESP32.
+ * Responsibilities: Derive UActorComponent so a descriptor can construct and destroy one user component.
+ * Example:
+ *   Host.RegisterClass<FDemoComponent>(DemoComponentTypeId, "DemoComponent");
+ */
 class FDemoComponent final : public MicroWorld::Engine::UActorComponent
 {
 public:
-	/** Keeps exact descriptor-driven destruction publicly instantiable. */
+	/**
+	 * Motivation: Keeps exact descriptor-driven destruction publicly instantiable.
+	 * Responsibilities: Keep the destructor defaulted so the descriptor's destroy path can call it.
+	 */
 	~FDemoComponent() noexcept override = default;
 };
 
-/** A concrete actor proving the engine actor base is constructible on ESP32. */
+/**
+ * Motivation: A concrete actor proving the engine actor base is constructible on ESP32.
+ * Responsibilities: Derive AActor so a descriptor can construct and destroy one user actor with component slots.
+ * Example:
+ *   Host.RegisterClass<FDemoActor>(DemoActorTypeId, "DemoActor");
+ */
 class FDemoActor final : public MicroWorld::Engine::AActor
 {
 public:
-	/** Initializes the managed actor base, which owns its bounded component slots. */
+	/**
+	 * Motivation: Initializes the managed actor base, which owns its bounded component slots.
+	 * Responsibilities: Forward to the actor base so its component slots are ready before registration.
+	 */
 	explicit FDemoActor() noexcept : AActor() {}
 
-	/** Keeps exact descriptor-driven destruction publicly instantiable. */
+	/**
+	 * Motivation: Keeps exact descriptor-driven destruction publicly instantiable.
+	 * Responsibilities: Keep the destructor defaulted so the descriptor's destroy path can call it.
+	 */
 	~FDemoActor() noexcept override = default;
 };
 
-/** Retains the tick-loop outcome so optimization cannot erase the representative host calls. */
+/** Motivation: Retains the tick-loop outcome so optimization cannot erase the representative host calls. */
 volatile int PlatformEsp32CompositionResult = -1;
 
 } // namespace
 
 /**
- * Composes the full ESP32 stack and ticks the engine at a fixed cadence.
- *
- * This is a compile/composition proof: the dedicated-server network host is
- * wired through the `THostPlaySystem` interface but no netif/WiFi is brought up, so the loop
- * exercises only the host's plumbing. Flashing this image to hardware requires
- * explicit authorization that is out of scope for Phase 5.2.
+ * Motivation: Composes the full ESP32 stack and ticks the engine at a fixed cadence.
+ * Responsibilities: Wire the dedicated-server host through the engine frame and tick at a fixed 20 ms cadence.
  */
-/** Carries the exact capacities FDemoHost sized before the traits refactor, so the proof store is unchanged. */
+/**
+ * Motivation: Carries the exact capacities FDemoHost sized before the traits refactor, so the proof store is unchanged.
+ * Responsibilities: Override the trait constants the engine template sizes its fixed storage from.
+ * Example:
+ *   using FDemoHost = TEngine<FDemoHostTraits>;
+ */
 struct FDemoHostTraits : MicroWorld::Engine::FDefaultEngineTraits
 {
 	static constexpr std::size_t MaxClasses = 6;

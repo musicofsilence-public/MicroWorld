@@ -46,22 +46,27 @@ using MicroWorld::Tests::FActorEventState;
 using MicroWorld::Tests::FComponentEventState;
 using MicroWorld::Tests::FSequenceCounter;
 
-/** Ticks every advance with a zero interval so the lifecycle test counts one tick per frame. */
+/** Motivation: Ticks every advance with a zero interval so the lifecycle test counts one tick per frame. */
 constexpr FTickConfiguration HostTickConfiguration{true, true, MicroWorld::Core::DurationMilliseconds{0}};
 
-/** Stable type id for the recording actor managed through TEngine in this suite. */
+/** Motivation: Stable type id for the recording actor managed through TEngine in this suite. */
 constexpr FTypeId HostActorTypeId{0x00060001u};
 
-/** Stable type id for the recording component managed through TEngine in this suite. */
+/** Motivation: Stable type id for the recording component managed through TEngine in this suite. */
 constexpr FTypeId HostComponentTypeId{0x00060002u};
 
-/** Stable type id for the plain unrooted component used as true garbage in the GC test. */
+/** Motivation: Stable type id for the plain unrooted component used as true garbage in the GC test. */
 constexpr FTypeId HostPlainComponentTypeId{0x00060003u};
 
-/** Inline storage reserved for one timer callback bound through the host's delegate type. */
+/** Motivation: Inline storage reserved for one timer callback bound through the host's delegate type. */
 constexpr std::size_t HostTimerCallbackBytes = 64;
 
-/** Carries the exact capacities FHost sized before the traits refactor, so the test store is unchanged. */
+/**
+ * Motivation: Carries the exact capacities FHost sized before the traits refactor, so the test store is unchanged.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 struct FHostTraits : FDefaultEngineTraits
 {
 	static constexpr std::size_t MaxClasses = 6;
@@ -72,41 +77,56 @@ struct FHostTraits : FDefaultEngineTraits
 	static constexpr std::size_t MaxTimers = 4;
 };
 
-/** Sizes a host large enough for the world, one actor, one component, and three garbage objects. */
+/** Motivation: Sizes a host large enough for the world, one actor, one component, and three garbage objects. */
 using FHost = TEngine<FHostTraits>;
 
-/** Matches the host's timer manager delegate type so Schedule accepts the bound callback. */
+/** Motivation: Matches the host's timer manager delegate type so Schedule accepts the bound callback. */
 using FHostDelegate = TDelegate<void(), HostTimerCallbackBytes>;
 
 /**
- * Records BeginPlay/TickComponent/EndPlay against a shared sequence so the host
- * lifecycle test proves component-before-actor begin and actor-before-component end.
+ * Motivation: Records BeginPlay/TickComponent/EndPlay against a shared sequence so the host lifecycle test proves
+ *   component-before-actor begin and actor-before-component end.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
  */
 class FHostComponent final : public UActorComponent
 {
 public:
-	/** Captures the shared sequence and per-component event sink the hooks will stamp. */
+	/**
+	 * Motivation: Captures the shared sequence and per-component event sink the hooks will stamp.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	FHostComponent(FSequenceCounter& InSequence, FComponentEventState& InEvents) noexcept
 		: UActorComponent(HostTickConfiguration), Sequence(InSequence), Events(InEvents)
 	{
 	}
 
 protected:
-	/** Stamps the component's begin sequence before any sibling actor hook runs. */
+	/**
+	 * Motivation: Stamps the component's begin sequence before any sibling actor hook runs.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void BeginPlay() noexcept override
 	{
 		Events.BeginOrder = Sequence.Next();
 		++Events.BeginCount;
 	}
 
-	/** Stamps the component's tick sequence after the timer slice in the same frame. */
+	/**
+	 * Motivation: Stamps the component's tick sequence after the timer slice in the same frame.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void TickComponent(const MicroWorld::Core::FTickContext&) noexcept override
 	{
 		Events.TickOrder = Sequence.Next();
 		++Events.TickCount;
 	}
 
-	/** Stamps the component's end sequence after the owning actor's end hook. */
+	/**
+	 * Motivation: Stamps the component's end sequence after the owning actor's end hook.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void EndPlay() noexcept override
 	{
 		Events.EndOrder = Sequence.Next();
@@ -114,42 +134,57 @@ protected:
 	}
 
 private:
-	/** Shares the monotonic sequence across every observed object in this test. */
+	/** Motivation: Shares the monotonic sequence across every observed object in this test. */
 	FSequenceCounter& Sequence;
 
-	/** Holds the per-instance begin/tick/end counts and ordering stamps. */
+	/** Motivation: Holds the per-instance begin/tick/end counts and ordering stamps. */
 	FComponentEventState& Events;
 };
 
 /**
- * Records BeginPlay/Tick/EndPlay against a shared sequence so the host lifecycle
- * test proves the actor's begin runs after its component and its end runs before.
+ * Motivation: Records BeginPlay/Tick/EndPlay against a shared sequence so the host lifecycle test proves the
+ *   actor's begin runs after its component and its end runs before.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
  */
 class FHostActor final : public AActor
 {
 public:
-	/** Captures the shared sequence and per-actor event sink. */
+	/**
+	 * Motivation: Captures the shared sequence and per-actor event sink.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	FHostActor(FSequenceCounter& InSequence, FActorEventState& InEvents) noexcept
 		: AActor(HostTickConfiguration), Sequence(InSequence), Events(InEvents)
 	{
 	}
 
 protected:
-	/** Stamps the actor's begin sequence after every registered component has begun. */
+	/**
+	 * Motivation: Stamps the actor's begin sequence after every registered component has begun.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void BeginPlay() noexcept override
 	{
 		Events.BeginOrder = Sequence.Next();
 		++Events.BeginCount;
 	}
 
-	/** Stamps the actor's tick sequence after the timer slice in the same frame. */
+	/**
+	 * Motivation: Stamps the actor's tick sequence after the timer slice in the same frame.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void Tick(const MicroWorld::Core::FTickContext&) noexcept override
 	{
 		Events.TickOrder = Sequence.Next();
 		++Events.TickCount;
 	}
 
-	/** Stamps the actor's end sequence before any registered component ends. */
+	/**
+	 * Motivation: Stamps the actor's end sequence before any registered component ends.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void EndPlay() noexcept override
 	{
 		Events.EndOrder = Sequence.Next();
@@ -157,34 +192,48 @@ protected:
 	}
 
 private:
-	/** Shares the monotonic sequence across every observed object in this test. */
+	/** Motivation: Shares the monotonic sequence across every observed object in this test. */
 	FSequenceCounter& Sequence;
 
-	/** Holds the per-instance begin/tick/end counts and ordering stamps. */
+	/** Motivation: Holds the per-instance begin/tick/end counts and ordering stamps. */
 	FActorEventState& Events;
 };
 
-/** A component with no hooks used as unreferenced garbage for the bounded-GC test. */
+/**
+ * Motivation: A component with no hooks used as unreferenced garbage for the bounded-GC test.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 class FHostPlainComponent final : public UActorComponent
 {
 public:
-	/** Inherits the default tick-disabled configuration so the instance never dispatches. */
+	/**
+	 * Motivation: The instance never dispatches.
+	 * Responsibilities: Inherits the default tick-disabled configuration.
+	 */
 	FHostPlainComponent() noexcept = default;
 };
 
-/** Captures the order and firing state the host timer records against the shared sequence. */
+/**
+ * Motivation: Captures the order and firing state the host timer records against the shared sequence.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 struct FTimerFireRecord final
 {
-	/** Sequence value stamped when the timer callback fires in one frame. */
+	/** Motivation: Sequence value stamped when the timer callback fires in one frame. */
 	std::uint32_t Order{0};
 
-	/** Signals whether the timer callback has run at least once. */
+	/** Motivation: Signals whether the timer callback has run at least once. */
 	bool bFired{false};
 };
 
 /**
- * Registers the actor, recording component, and plain component descriptors on a
- * fresh host so each test builds its graph through the host's own descriptor copies.
+ * Motivation: Registers the actor, recording component, and plain component descriptors on a fresh host so each
+ *   test builds its graph through the host's own descriptor copies.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
  */
 bool RegisterHostTypes(FHost& InHost) noexcept
 {
@@ -199,34 +248,36 @@ bool RegisterHostTypes(FHost& InHost) noexcept
 }
 
 /**
- * Owns the shared per-test state and builds one registered, world-attached actor
- * and component graph on a host so each case starts from the same baseline.
- *
- * The fixture owns the sequence, event sinks, and constructed
- * handles so they outlive the host whose store retains the actor; declare it
- * before the host in each test so destruction order drops the host first.
+ * Motivation: Owns the shared per-test state and builds one registered, world-attached actor and component graph
+ *   on a host so each case starts from the same baseline. The fixture owns the sequence, event sinks,
+ *   and constructed handles so they outlive the host whose store retains the actor; declare it before
+ *   the host in each test so destruction order drops the host first.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
  */
 struct FHostFixture final
 {
-	/** Shares the monotonic sequence across the actor and its component. */
+	/** Motivation: Shares the monotonic sequence across the actor and its component. */
 	FSequenceCounter Sequence{};
 
-	/** Records the actor's begin/tick/end counts and ordering stamps. */
+	/** Motivation: Records the actor's begin/tick/end counts and ordering stamps. */
 	FActorEventState ActorEvents{};
 
-	/** Records the component's begin/tick/end counts and ordering stamps. */
+	/** Motivation: Records the component's begin/tick/end counts and ordering stamps. */
 	FComponentEventState ComponentEvents{};
 
-	/** Holds the constructed actor handle so the test can drive and observe its lifecycle. */
+	/** Motivation: Holds the constructed actor handle so the test can drive and observe its lifecycle. */
 	TObjectPtr<FHostActor> Actor{};
 
-	/** Holds the constructed component handle so the test can read its event state. */
+	/** Motivation: Holds the constructed component handle so the test can read its event state. */
 	TObjectPtr<FHostComponent> Component{};
 
 	/**
-	 * Registers the user types, creates the world, constructs the actor and component,
-	 * and wires them onto the host. Returns false if any step fails so the caller can
-	 * assert the common baseline without repeating the graph construction inline.
+	 * Motivation: Registers the user types, creates the world, constructs the actor and component, and wires them onto
+	 *   the host.
+	 * Responsibilities: Returns false if any step fails so the caller can assert the common baseline without repeating the
+	 *   graph construction inline.
 	 */
 	bool Build(FHost& InHost) noexcept
 	{
@@ -258,8 +309,9 @@ struct FHostFixture final
 } // namespace
 
 /**
- * Scenario: Build a registered actor-and-component graph on the host and drive one begin, three ticks, and an end through TEngine.
- * Expected: The host runs begin, tick, and end through TEngine in the engine's deterministic order.
+ * Motivation: Build a registered actor-and-component graph on the host and drive one begin, three ticks, and an
+ *   end through TEngine.
+ * Responsibilities: The host runs begin, tick, and end through TEngine in the engine's deterministic order.
  */
 MW_TEST_CASE(EngineHostLifecycleRunsBeginTickEndInOrder)
 {
@@ -289,8 +341,8 @@ MW_TEST_CASE(EngineHostLifecycleRunsBeginTickEndInOrder)
 }
 
 /**
- * Scenario: Build a graph, begin play, schedule a one-shot timer, then advance the frame to the timer deadline.
- * Expected: The host frame order fires due timers before actor/component ticks in the same frame.
+ * Motivation: Build a graph, begin play, schedule a one-shot timer, then advance the frame to the timer deadline.
+ * Responsibilities: The host frame order fires due timers before actor/component ticks in the same frame.
  */
 MW_TEST_CASE(EngineHostFrameOrderRunsTimerBeforeActorTick)
 {
@@ -328,9 +380,10 @@ MW_TEST_CASE(EngineHostFrameOrderRunsTimerBeforeActorTick)
 }
 
 /**
- * Scenario: Build the live graph, create three unreferenced garbage objects, begin play, then drive successive bounded GC slices.
- * Expected: The host's idle-gated GC slice reclaims unreferenced garbage across multiple bounded ticks rather than all at once, while never touching
- * the live world/actor/component graph.
+ * Motivation: Build the live graph, create three unreferenced garbage objects, begin play, then drive successive
+ *   bounded GC slices.
+ * Responsibilities: The host's idle-gated GC slice reclaims unreferenced garbage across multiple bounded ticks rather
+ *   than all at once, while never touching.
  */
 MW_TEST_CASE(EngineHostGarbageCollectorReclaimsUnrootedObjectsInBoundedSlices)
 {
@@ -376,8 +429,8 @@ MW_TEST_CASE(EngineHostGarbageCollectorReclaimsUnrootedObjectsInBoundedSlices)
 }
 
 /**
- * Scenario: Build a graph, advance the baseline to 150 ms, then issue an earlier tick at 149 ms.
- * Expected: A rolled-back tick is rejected transactionally without advancing any observed state.
+ * Motivation: Build a graph, advance the baseline to 150 ms, then issue an earlier tick at 149 ms.
+ * Responsibilities: A rolled-back tick is rejected transactionally without advancing any observed state.
  */
 MW_TEST_CASE(EngineHostRejectsNonMonotonicTickTransactionally)
 {
@@ -400,8 +453,8 @@ MW_TEST_CASE(EngineHostRejectsNonMonotonicTickTransactionally)
 }
 
 /**
- * Scenario: Build a graph, begin play, tick once, then call EndPlay twice.
- * Expected: EndPlay succeeds twice and runs the end hooks exactly once across both calls.
+ * Motivation: Build a graph, begin play, tick once, then call EndPlay twice.
+ * Responsibilities: EndPlay succeeds twice and runs the end hooks exactly once across both calls.
  */
 MW_TEST_CASE(EngineHostEndPlayIsIdempotent)
 {
@@ -428,8 +481,8 @@ MW_TEST_CASE(EngineHostEndPlayIsIdempotent)
 }
 
 /**
- * Scenario: Construct a host without a world and call BeginPlay, Tick, and EndPlay before CreateWorld.
- * Expected: BeginPlay, Tick, and EndPlay are rejected before CreateWorld constructs the world.
+ * Motivation: Construct a host without a world and call BeginPlay, Tick, and EndPlay before CreateWorld.
+ * Responsibilities: BeginPlay, Tick, and EndPlay are rejected before CreateWorld constructs the world.
  */
 MW_TEST_CASE(EngineHostRejectsLifecycleBeforeCreateWorld)
 {
@@ -443,8 +496,8 @@ MW_TEST_CASE(EngineHostRejectsLifecycleBeforeCreateWorld)
 }
 
 /**
- * Scenario: Call CreateWorld twice on the same host and read GetWorld after the second call.
- * Expected: CreateWorld constructs the world exactly once and leaves GetWorld referring to that first world.
+ * Motivation: Call CreateWorld twice on the same host and read GetWorld after the second call.
+ * Responsibilities: CreateWorld constructs the world exactly once and leaves GetWorld referring to that first world.
  */
 MW_TEST_CASE(EngineHostCreateWorldIsSingleShot)
 {
@@ -464,9 +517,10 @@ MW_TEST_CASE(EngineHostCreateWorldIsSingleShot)
 }
 
 /**
- * Scenario: Register user types through the helpers, construct the world and user objects, wire them, and drive a begin/three-tick/end schedule.
- * Expected: The RegisterClass<T>/CreateObject<T> ergonomics helpers register, construct, and wire user types end to end so the descriptors they build
- * participate in both validation and reference tracing just like hand-built descriptors do.
+ * Motivation: Register user types through the helpers, construct the world and user objects, wire them, and drive
+ *   a begin/three-tick/end schedule.
+ * Responsibilities: The RegisterClass<T>/CreateObject<T> ergonomics helpers register, construct, and wire user types end
+ *   to end so the descriptors they build.
  */
 MW_TEST_CASE(EngineHostTemplateHelpersRegisterAndConstructUserTypes)
 {
@@ -537,8 +591,8 @@ MW_TEST_CASE(EngineHostTemplateHelpersRegisterAndConstructUserTypes)
 }
 
 /**
- * Scenario: Construct a world and attempt CreateObject<T> with an id that was never registered.
- * Expected: CreateObject<T> rejects an unregistered type id with UnknownClass and a null handle.
+ * Motivation: Construct a world and attempt CreateObject<T> with an id that was never registered.
+ * Responsibilities: CreateObject<T> rejects an unregistered type id with UnknownClass and a null handle.
  */
 MW_TEST_CASE(EngineHostCreateObjectRejectsUnregisteredType)
 {

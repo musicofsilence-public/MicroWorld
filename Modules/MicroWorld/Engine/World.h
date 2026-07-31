@@ -23,85 +23,113 @@ class FObjectStore;
 class FReferenceCollector;
 
 /**
- * The smallest managed world anchored on UObject.
- *
- * The application creates one UWorld (or a user-derived class) inside an
- * FObjectStore, registers or queues zero or more AActor instances before
- * BeginPlay, then roots the world with one TStrongObjectPtr<UWorld>.
- * UWorld
- * traces its actors; it does not tick on its own.
+ * Motivation: Provides the smallest managed world anchored on UObject, giving an application one owner for the actors
+ *   and deferred spawns in a scene.
+ * Responsibilities: Hold the caller-owned actor registry and optional typed spawn storage, trace its actors for
+ *   collection without ticking on its own, and drive a forward-only BeginPlay/Advance/EndPlay lifecycle with a single
+ *   per-frame structural-change barrier.
+ * Example:
+ *   UWorld& World = *Store.NewObject<UWorld>(RegistryRef).Object.Get();
+ *   (void)World.RegisterActor(Actor);
+ *   (void)World.BeginPlay(Now); World.Advance(Now + 16);
  */
 class UWorld : public UObject
 {
 public:
-	/** Copying or moving would duplicate a managed object's slot identity; each
-	 * lives and dies in one object-store slot. */
+	/**
+	 * Motivation: Prevents copying or moving from duplicating a managed object's slot identity.
+	 * Responsibilities: Reject copy construction so each world lives and dies in one store slot.
+	 */
 	UWorld(const UWorld&) = delete;
+
+	/**
+	 * Motivation: Prevents copy assignment from duplicating a managed object's slot identity.
+	 * Responsibilities: Reject copy assignment so each world keeps one slot identity.
+	 */
 	UWorld& operator=(const UWorld&) = delete;
+
+	/**
+	 * Motivation: Prevents moving a managed object away from its stable slot.
+	 * Responsibilities: Reject move construction so each world keeps one slot identity.
+	 */
 	UWorld(UWorld&&) = delete;
+
+	/**
+	 * Motivation: Prevents moving another identity into this managed object's stable slot.
+	 * Responsibilities: Reject move assignment so each world keeps one slot identity.
+	 */
 	UWorld& operator=(UWorld&&) = delete;
 
-	/** Returns the stable descriptor that lets the store construct and trace this type. */
+	/**
+	 * Motivation: Returns the stable descriptor that lets the store construct and trace this type.
+	 * Responsibilities: Return the canonical UWorld class descriptor registered into the registry.
+	 */
 	static const FClassDescriptor& StaticClassDescriptor() noexcept;
 
 	/**
-	 * Binds this world to the unique caller-owned actor registry reference that will
-	 * hold its registered actors.
-	 *
-	 * The object store assigns canonical ownership only after construction
-	 * publishes this UObject, so callers cannot supply a second store identity.
+	 * Motivation: Binds this world to the unique caller-owned actor registry reference that will hold its registered
+	 *   actors.
+	 * Responsibilities: Take the move-only registry reference; the store assigns canonical ownership after publish, so
+	 *   callers cannot supply a second store identity.
 	 */
 	explicit UWorld(FWorldActorRegistryReference InActorStorage) noexcept;
 
-	/** Binds optional caller-owned typed spawn storage and a narrow canonical descriptor capability. */
+	/**
+	 * Motivation: Binds optional caller-owned typed spawn storage and a narrow canonical descriptor capability.
+	 * Responsibilities: Take the registry reference, deferred spawn storage, and class registration view together.
+	 */
 	UWorld(
 		FWorldActorRegistryReference InActorStorage,
 		FDeferredActorSpawnStorageReference InSpawnStorage,
 		FClassRegistryRegistrationView InClasses) noexcept;
 
-	/** Keeps exact derived destruction behind the descriptor/store boundary. */
+	/**
+	 * Motivation: Keeps exact derived destruction behind the descriptor/store boundary.
+	 * Responsibilities: Override the destructor so the registered exact destructor runs derived teardown.
+	 */
 	~UWorld() noexcept override;
 
 	/**
-	 * Registers one actor before BeginPlay.
-	 *
-	 * Rejects duplicates, exhausted or zero capacity, lifecycle-locked worlds,
-	 * actors already owned by another world, cross-store actors, and empty,
-	 * stale, or non-resolvable references atomically: a rejected registration
-	 * leaves the world and the actor unchanged.
+	 * Motivation: Lets a caller register one actor before BeginPlay.
+	 * Responsibilities: Reject duplicates, exhausted or zero capacity, a lifecycle-locked world, an actor already owned
+	 *   by another world, a cross-store actor, and an empty, stale, or non-resolvable reference atomically, leaving the
+	 *   world and actor unchanged on rejection.
 	 */
 	EEngineResult RegisterActor(TObjectPtr<AActor> InActor) noexcept;
 
-	/** Starts registered actors, then pre-play queued actors, from one canonical time. */
+	/**
+	 * Motivation: Starts registered actors, then pre-play queued actors, from one canonical time.
+	 * Responsibilities: Move the world lifecycle forward and begin every registered and queued actor in order.
+	 */
 	Core::ERuntimeResult BeginPlay(Core::TimePointMilliseconds InNowMilliseconds) noexcept;
 
-	/** Advances every registered actor once after validating monotonic world time. */
+	/**
+	 * Motivation: Advances every registered actor once after validating monotonic world time.
+	 * Responsibilities: Reject a rolled-back clock, then advance every registered actor for the given time.
+	 */
 	Core::ERuntimeResult Advance(Core::TimePointMilliseconds InNowMilliseconds) noexcept;
 
-	/** Ends every registered actor in reverse registration order; idempotent after success. */
+	/**
+	 * Motivation: Ends every registered actor in reverse registration order; idempotent after success.
+	 * Responsibilities: End actors in reverse and stay idempotent after a successful first call.
+	 */
 	Core::ERuntimeResult EndPlay() noexcept;
 
 	/**
-	 * Queues one constructed, same-store, unowned actor to begin at the next
-	 * barrier while the world is playing.
-	 *
-	 * Rejects a non-playing world, empty/stale/cross-store references, actors
-	 * already registered or already pending-spawn, actors owned by another world,
-	 * and exhausted live-plus-pending capacity, all transactionally.
+	 * Motivation: Lets a caller queue one constructed, same-store, unowned actor to begin at the next barrier while the
+	 *   world is playing.
+	 * Responsibilities: Reject a non-playing world, empty, stale, or cross-store references, an actor already registered
+	 *   or already pending-spawn, an actor owned by another world, and exhausted live-plus-pending capacity,
+	 *   transactionally.
 	 */
 	EEngineResult SpawnActor(TObjectPtr<AActor> InActor) noexcept;
 
 	/**
-	 * Captures a typed actor factory for safe construction at the next world barrier.
-	 *
-	 * A request accepted before BeginPlay is
-	 * constructed and begun by BeginPlay;
-	 * a request accepted during play waits for the next frame barrier.
-	 *
-	 * No actor or argument
-	 * capture is created until lifecycle, collection, capacity,
-	 * and inline-layout preflight succeeds, so calls from actor callbacks are safe.
-
+	 * Motivation: Lets a caller capture a typed actor factory for safe construction at the next world barrier without
+	 *   moving caller arguments until preflight succeeds.
+	 * Responsibilities: Reject lifecycle, collection, capacity, and inline-layout failures before capturing, so a
+	 *   request accepted before BeginPlay is constructed and begun by BeginPlay and one accepted during play waits for
+	 *   the next frame barrier.
 	 */
 	template<typename TActor, typename... TArguments>
 	[[nodiscard]] FActorSpawnRequest SpawnActor(TArguments&&... InArguments) noexcept
@@ -148,114 +176,180 @@ public:
 		}
 	}
 
-	/** Returns deferred typed-spawn completion state without exposing storage internals. */
+	/**
+	 * Motivation: Lets a caller read deferred typed-spawn completion state without exposing storage internals.
+	 * Responsibilities: Return the public status for the generation-checked handle.
+	 */
 	[[nodiscard]] FActorSpawnStatus GetSpawnStatus(FActorSpawnHandle InHandle) const noexcept;
 
 	/**
-	 * Queues one actor registered with this world to end and release at the next
-	 * barrier while the world is playing.
-	 *
-	 * Rejects a non-playing world, empty/stale/cross-store references, actors not
-	 * registered with this world, and actors already pending-destroy, all
-	 * transactionally.
+	 * Motivation: Lets a caller queue one actor registered with this world to end and release at the next barrier while
+	 *   the world is playing.
+	 * Responsibilities: Reject a non-playing world, empty, stale, or cross-store references, an actor not registered
+	 *   with this world, and an actor already pending-destroy, transactionally.
 	 */
 	EEngineResult DestroyActor(TObjectPtr<AActor> InActor) noexcept;
 
 	/**
-	 * Applies pending destroys first, then pending spawns; call once per frame
-	 * after Advance so structural change happens only at this barrier. Returns the
-	 * first end or begin failure while still applying every queued change.
+	 * Motivation: Applies pending destroys first, then pending spawns, so structural change happens only at this barrier
+	 *   once per frame after Advance.
+	 * Responsibilities: Apply every queued change and return the first end or begin failure while still applying the rest.
 	 */
 	Core::ERuntimeResult ApplyPending(Core::TimePointMilliseconds InNowMilliseconds) noexcept;
 
-	/** Reports how many actors are queued to begin at the next barrier. */
+	/**
+	 * Motivation: Lets a caller report how many actors are queued to begin at the next barrier.
+	 * Responsibilities: Return the pending-spawn count.
+	 */
 	std::size_t PendingSpawnCount() const noexcept;
 
-	/** Reports how many actors are queued to end and release at the next barrier. */
+	/**
+	 * Motivation: Lets a caller report how many actors are queued to end and release at the next barrier.
+	 * Responsibilities: Return the pending-destroy count.
+	 */
 	std::size_t PendingDestroyCount() const noexcept;
 
 private:
-	/** Reports whether the live registry still has room for one more actor at the next barrier. */
+	/**
+	 * Motivation: Reports whether the live registry still has room for one more actor at the next barrier.
+	 * Responsibilities: Return true when registered plus pending-spawn count is below capacity.
+	 */
 	bool CanAcceptMoreActors() const noexcept;
 
-	/** Reports whether spawn or destroy work remains queued for the next barrier. */
+	/**
+	 * Motivation: Reports whether spawn or destroy work remains queued for the next barrier.
+	 * Responsibilities: Return true when either pending list is non-empty.
+	 */
 	bool HasPendingBarrierWork() const noexcept;
 
-	/** Reports the first reason an actor cannot register, or Success. */
+	/**
+	 * Motivation: Reports the first reason an actor cannot register before any world or actor mutation.
+	 * Responsibilities: Return Success or the first rejection reason for the candidate actor.
+	 */
 	EEngineResult CheckActorRegistrable(TObjectPtr<AActor> InActor) const noexcept;
 
-	/** Reports the first reason a deferred spawn cannot be queued, or Success. */
+	/**
+	 * Motivation: Reports the first reason a deferred spawn cannot be queued.
+	 * Responsibilities: Return Success or the first rejection reason for the candidate spawn.
+	 */
 	EEngineResult CheckSpawnable(TObjectPtr<AActor> InActor) const noexcept;
 
-	/** Reports the first reason a registered actor cannot be queued for destroy, or Success. */
+	/**
+	 * Motivation: Reports the first reason a registered actor cannot be queued for destroy.
+	 * Responsibilities: Return Success or the first rejection reason for the candidate destroy.
+	 */
 	EEngineResult CheckDestroyable(TObjectPtr<AActor> InActor) const noexcept;
 
-	/** Links an actor to this world and adds it to the registry after all checks pass. */
+	/**
+	 * Motivation: Links an actor to this world and adds it to the registry after all checks pass.
+	 * Responsibilities: Assign world ownership and append the actor to the registry.
+	 */
 	void PublishActor(TObjectPtr<AActor> InActor) noexcept;
 
-	/** Begins one actor's lifecycle while letting the world roll back on failure. */
+	/**
+	 * Motivation: Begins one actor's lifecycle while letting the world roll back on failure.
+	 * Responsibilities: Begin the actor and propagate its result for rollback decisions.
+	 */
 	Core::ERuntimeResult DispatchActorBegin(AActor& InActor, Core::TimePointMilliseconds InNowMilliseconds) noexcept;
 
-	/** Advances one actor for one dispatcher step. */
+	/**
+	 * Motivation: Advances one actor for one dispatcher step.
+	 * Responsibilities: Forward the actor's advance and return its result.
+	 */
 	Core::ERuntimeResult DispatchActorAdvance(AActor& InActor, Core::TimePointMilliseconds InNowMilliseconds) noexcept;
 
-	/** Ends one actor while the world retains the first error and still ends every actor. */
+	/**
+	 * Motivation: Ends one actor while the world retains the first error and still ends every actor.
+	 * Responsibilities: Forward the actor's end and return its result.
+	 */
 	Core::ERuntimeResult DispatchActorEnd(AActor& InActor) noexcept;
 
-	/** Begins every registered actor in order and, on the first failure, ends the
-	 * already-begun actors in reverse and fails the world lifecycle. */
+	/**
+	 * Motivation: Begins every registered actor in order and, on the first failure, ends the already-begun actors in
+	 *   reverse so the world lifecycle fails atomically.
+	 * Responsibilities: Begin actors forward and roll back on the first failure.
+	 */
 	Core::ERuntimeResult BeginRegisteredActorsWithRollback(Core::TimePointMilliseconds InNowMilliseconds) noexcept;
 
-	/** Ends every registered actor in reverse order, retaining the first error while still ending every actor. */
+	/**
+	 * Motivation: Ends every registered actor in reverse order, retaining the first error while still ending every actor.
+	 * Responsibilities: End actors in reverse and fold the first error out.
+	 */
 	Core::ERuntimeResult EndRegisteredActorsReverse() noexcept;
 
-	/** Ends every doomed actor under the dispatch guard and folds the first end
-	 * failure into FirstError; returns LifecycleLocked only when the guard cannot
-	 * be acquired. */
+	/**
+	 * Motivation: Ends every doomed actor under the dispatch guard and folds the first end failure into FirstError.
+	 * Responsibilities: Acquire the guard, end doomed actors in reverse, and return LifecycleLocked only when the guard
+	 *   cannot be acquired.
+	 */
 	Core::ERuntimeResult EndDoomedActorsUnderGuard(FObjectStore& InObjectStore, Core::ERuntimeResult& InOutFirstError) noexcept;
 
-	/** Marks each doomed actor's components and itself for the destruction barrier
-	 * and removes it from the live set, run after the dispatch guard has released. */
+	/**
+	 * Motivation: Marks each doomed actor's components and itself for the destruction barrier and removes it from the
+	 *   live set after the dispatch guard has released.
+	 * Responsibilities: Mark doomed actors and their components pending destroy and unregister them.
+	 */
 	void MarkAndUnregisterDoomedActors(FObjectStore& InObjectStore) noexcept;
 
-	/** Begins every pending-spawn actor under a fresh dispatch guard and folds the
-	 * first begin failure into FirstError; returns LifecycleLocked only when the
-	 * guard cannot be acquired. */
+	/**
+	 * Motivation: Begins every pending-spawn actor under a fresh dispatch guard and folds the first begin failure into
+	 *   FirstError.
+	 * Responsibilities: Acquire the guard, begin pending spawns in FIFO order, and return LifecycleLocked only when the
+	 *   guard cannot be acquired.
+	 */
 	Core::ERuntimeResult BeginPendingSpawnsUnderGuard(
 		FObjectStore& InObjectStore, Core::TimePointMilliseconds InNowMilliseconds, Core::ERuntimeResult& InOutFirstError) noexcept;
 
-	/** Reports typed factory admission failure without moving caller constructor arguments. */
+	/**
+	 * Motivation: Reports typed factory admission failure without moving caller constructor arguments.
+	 * Responsibilities: Return the first preflight reason or Queued.
+	 */
 	EActorSpawnRequestResult CheckDeferredSpawnRequest() const noexcept;
 
-	/** Returns this World's caller-selected inline factory extent for template layout preflight. */
+	/**
+	 * Motivation: Returns this World's caller-selected inline factory extent for template layout preflight.
+	 * Responsibilities: Return the configured inline factory bytes or zero when unconfigured.
+	 */
 	std::size_t DeferredActorSpawnInlineBytes() const noexcept;
 
-	/** Constructs the immutable factory snapshot only while no collection owns store traversal. */
+	/**
+	 * Motivation: Constructs the immutable factory snapshot only while no collection owns store traversal.
+	 * Responsibilities: Seal the barrier and construct each queued factory at the safe point.
+	 */
 	void ConstructDeferredSpawns(FObjectStore& InObjectStore) noexcept;
 
-	/** Publishes retained deferred actors under one fresh dispatch guard in FIFO order. */
+	/**
+	 * Motivation: Publishes retained deferred actors under one fresh dispatch guard in FIFO order.
+	 * Responsibilities: Acquire the guard, begin and publish each constructed deferred actor, and fold the first failure.
+	 */
 	Core::ERuntimeResult BeginDeferredSpawnsUnderGuard(
 		FObjectStore& InObjectStore, Core::TimePointMilliseconds InNowMilliseconds, Core::ERuntimeResult& InOutFirstError) noexcept;
 
-	/** Traces queued captures and temporarily unpublished constructed actors before world registry edges. */
+	/**
+	 * Motivation: Traces queued captures and temporarily unpublished constructed actors before world registry edges.
+	 * Responsibilities: Forward deferred-spawn reference tracing to the collector.
+	 */
 	void VisitDeferredSpawnReferences(FReferenceCollector& InCollector) noexcept;
 
-	/** Presents every registered actor to the active iterative collector. */
+	/**
+	 * Motivation: Presents every registered actor to the active iterative collector.
+	 * Responsibilities: Add each registered actor reference to the collector.
+	 */
 	void VisitReferences(FReferenceCollector& InCollector) noexcept override;
 
-	/** Holds the unique caller-owned actor registry reference for this world's lifetime. */
+	/** Motivation: Holds the unique caller-owned actor registry reference for this world's lifetime. */
 	FWorldActorRegistryReference Actors;
 
-	/** Holds optional caller-owned factory storage; an empty capability preserves direct World contracts. */
+	/** Motivation: Holds optional caller-owned factory storage; an empty capability preserves direct World contracts. */
 	FDeferredActorSpawnStorageReference DeferredSpawns;
 
-	/** Supplies canonical actor descriptors without exposing the application registry to World. */
+	/** Motivation: Supplies canonical actor descriptors without exposing the application registry to World. */
 	FClassRegistryRegistrationView Classes;
 
-	/** Guards the forward-only world lifecycle without scattering boolean flags. */
+	/** Motivation: Guards the forward-only world lifecycle without scattering boolean flags. */
 	Core::FLifecycleGuard Lifecycle;
 
-	/** Caches the last observed dispatcher time so rollback stays observable. */
+	/** Motivation: Caches the last observed dispatcher time so rollback stays observable. */
 	Core::TimePointMilliseconds LastUpdateMilliseconds{0};
 };
 

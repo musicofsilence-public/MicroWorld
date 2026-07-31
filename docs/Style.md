@@ -19,17 +19,42 @@ identity, tracing, and lifecycle semantics. They do not imply Unreal
 inheritance or source compatibility. Reflection vocabulary such as `UCLASS`,
 `UPROPERTY`, and `GENERATED_BODY` remains forbidden.
 
-Every complete class or class template has an adjacent one-to-three-sentence
-`/** ... */` contract. Every function declaration, enumerator, configuration
-field, and persistent/shared/state variable also has an adjacent
-intent-focused Doxygen comment. State why the declaration exists, the ownership
-or lifecycle boundary it protects, or the invariant it makes observable:
+Every maintained C++ declaration has an adjacent `/** ... */` block whose
+labels state *why* it exists and *what* it owes. The labels are tiered by the
+kind of declaration so a reader scanning a header can rely on the same shape at
+every level:
+
+| Declaration kind | Required labels |
+| --- | --- |
+| `class`, `struct`, `enum class` | `Motivation`, `Responsibilities`, `Example` |
+| function (free or member) | `Motivation`, `Responsibilities` |
+| variable, enumerator, `using`/typedef | `Motivation` (one line) |
+
+`Motivation` states why the declaration exists — the use it brings or the
+boundary it protects. `Responsibilities` states what it owes once it exists —
+the contract it honors or the invariant it keeps observable. `Example` shows
+one high-level use, enough to convey the capability and execution context; it
+is required only on type definitions because a function or variable's use is
+already narrowed by its signature. Fold any `@param`/`@return` detail into the
+prose rather than carrying Doxygen tags. Enumerators use a trailing
+`///< Motivation:` note, since they share their type's contract.
 
 ```cpp
-/** Owns the bounded scheduling state for one independently tickable object. */
+/**
+ * Motivation: Owns the bounded scheduling state for one independently tickable
+ *   object so each object ticks on its own cadence without a shared dispatcher.
+ * Responsibilities: Return at most one due tick per call and reject backward time.
+ * Example:
+ *   FTickFunction Tick(FTickConfiguration::EnabledEvery(16));
+ *   Tick.BeginPlay(NowMs);
+ *   FTickDecision Decision = Tick.Advance(NowMs);
+ */
 class FTickFunction final;
 
-/** Rejects backward caller time before unsigned scheduling arithmetic can wrap. */
+/**
+ * Motivation: Rejects backward caller time before unsigned scheduling arithmetic can wrap.
+ * Responsibilities: Hold the most recently accepted time and never decrease it.
+ */
 TimePointMilliseconds LastObservedMilliseconds{0};
 ```
 
@@ -54,10 +79,10 @@ clang-format --style=file:clang-format --dry-run --Werror <files>
 
 ## Simplicity rules
 
-The rules below extend the conventions above. `CheckClassDocumentation.py
---require-doxygen` remains the gate for comment *presence* and the
-three-sentence contract cap; this section defines the *content* that names
-and comments should carry.
+The rules below extend the conventions above. `CheckDocumentationStyle.py`
+remains the gate for the tiered `Motivation`/`Responsibilities`/`Example`
+contract; this section defines the *content* that names and comments should
+carry.
 
 ### Rule N — names state their whole role
 

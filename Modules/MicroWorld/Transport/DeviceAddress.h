@@ -8,26 +8,30 @@ namespace MicroWorld::Transport::Address
 {
 
 /**
- * Opaque fixed-size transport address shared by every Transport device.
- *
- * Holds up to `MaxBytes` device-defined bytes plus an active length, so one type
- * spans a 6-byte UDP IPv4+port, a 1-2 byte LoRa node id, and a 1-byte loopback
- * port index without allocating. The address ascribes no meaning to the bytes;
- * each device documents the encoding it writes and reads.
+ * Motivation: Gives every Transport device one opaque fixed-size address type so a UDP endpoint, a LoRa node id,
+ *   and a loopback port index all flow through the same interface without per-device allocation.
+ * Responsibilities: Hold up to MaxBytes device-defined bytes plus an active length, and ascribe no meaning to the
+ *   bytes so each device owns its own encoding.
+ * Example:
+ *   FDeviceAddress A = MakeLoopbackAddress(0);
+ *   if (A == Other) { Route(); }
  */
 struct FDeviceAddress
 {
-	/** Maximum address bytes any device may store; sized for IPv4+port with headroom. */
+	/** Motivation: Sizes the fixed storage so a 6-byte UDP IPv4+port address fits with headroom for other devices. */
 	static constexpr std::size_t MaxBytes = 12;
 
-	/** Device-defined address bytes; only the leading `Size` bytes are meaningful. */
+	/** Motivation: Holds device-defined address bytes where only the leading Size are meaningful. */
 	std::array<std::uint8_t, MaxBytes> Bytes{};
 
-	/** Count of meaningful leading bytes in `Bytes`; the remaining bytes are unspecified. */
+	/** Motivation: Counts meaningful leading bytes so trailing storage stays unspecified. */
 	std::uint8_t Size{0};
 };
 
-/** Compares two addresses by active length and the leading `Size` bytes only. */
+/**
+ * Motivation: Lets containers and peers compare two addresses by complete meaningful content.
+ * Responsibilities: Return true only when both the active length and every leading byte match.
+ */
 constexpr bool operator==(const FDeviceAddress& InLeft, const FDeviceAddress& InRight) noexcept
 {
 	if (InLeft.Size != InRight.Size)
@@ -44,13 +48,19 @@ constexpr bool operator==(const FDeviceAddress& InLeft, const FDeviceAddress& In
 	return true;
 }
 
-/** Negates `operator==` so callers can test address inequality directly. */
+/**
+ * Motivation: Lets callers test address inequality directly rather than negating operator== by hand.
+ * Responsibilities: Return the negation of operator==.
+ */
 constexpr bool operator!=(const FDeviceAddress& InLeft, const FDeviceAddress& InRight) noexcept
 {
 	return !(InLeft == InRight);
 }
 
-/** Builds a 1-byte loopback address whose single byte is the destination port index. */
+/**
+ * Motivation: Builds a 1-byte loopback address so an in-process network can route by port index.
+ * Responsibilities: Stamp the port index into the first byte and set the active length to one.
+ */
 constexpr FDeviceAddress MakeLoopbackAddress(const std::uint8_t InPortIndex) noexcept
 {
 	FDeviceAddress Address{};

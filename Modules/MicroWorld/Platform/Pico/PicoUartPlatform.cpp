@@ -9,7 +9,10 @@
 namespace
 {
 
-/** Resolves the two UART identities supported by the RP2040 Pico SDK. */
+/**
+ * Motivation: Maps a portable UART index to the concrete RP2040 SDK handle at the platform edge.
+ * Responsibilities: Return uart0 for index 0, uart1 for index 1, or nullptr for any other index.
+ */
 uart_inst_t* ResolveUart(const std::uint8_t InUartIndex) noexcept
 {
 	if (InUartIndex == 0u)
@@ -25,11 +28,22 @@ uart_inst_t* ResolveUart(const std::uint8_t InUartIndex) noexcept
 	return nullptr;
 }
 
-/** Pico SDK implementation whose process-lifetime storage keeps the default byte-stream binding valid. */
+/**
+ * Motivation: Backs the borrowed byte-stream interface with the RP2040 SDK from one place so byte-stream callers stay
+ *   SDK-free.
+ * Responsibilities: Live for the whole process so the default byte-stream binding stays valid; translate each byte-stream
+ *   operation into the matching uart/gpio SDK call.
+ * Example:
+ *   IPicoUartPlatform& Platform = GetPicoUartPlatform();
+ *   Platform.OpenUart(0, 0, 1, 115200);
+ */
 class FPicoUartPlatform final : public MicroWorld::Platform::Pico::IPicoUartPlatform
 {
 public:
-	/** Opens the requested UART and configures its pins after the requested baud rate was accepted. */
+	/**
+	 * Motivation: Lets a byte stream bring one RP2040 UART online behind a single SDK call.
+	 * Responsibilities: Resolve the UART, accept only the exact requested baud, and configure TX/RX pins and format.
+	 */
 	std::uint32_t OpenUart(
 		const std::uint8_t InUartIndex, const unsigned int InTxGpio, const unsigned int InRxGpio, const std::uint32_t InBaudRate) noexcept override
 	{
@@ -53,7 +67,10 @@ public:
 		return ActualBaudRate;
 	}
 
-	/** Releases an initialized UART when its byte stream ends or configuration failed after initialization. */
+	/**
+	 * Motivation: Lets a byte stream return its UART to the SDK on close or after a failed configuration.
+	 * Responsibilities: Resolve and deinitialize the UART identified by its index, ignoring an unknown index.
+	 */
 	void CloseUart(const std::uint8_t InUartIndex) noexcept override
 	{
 		if (uart_inst_t* const Uart = ResolveUart(InUartIndex); Uart != nullptr)
@@ -62,7 +79,10 @@ public:
 		}
 	}
 
-	/** Reports the SDK UART's non-blocking transmit capacity. */
+	/**
+	 * Motivation: Lets a byte stream ask for non-blocking transmit capacity before queueing a byte.
+	 * Responsibilities: Report the resolved UART's writability, or false for an unknown index.
+	 */
 	bool IsUartWritable(const std::uint8_t InUartIndex) noexcept override
 	{
 		if (uart_inst_t* const Uart = ResolveUart(InUartIndex); Uart != nullptr)
@@ -73,7 +93,10 @@ public:
 		return false;
 	}
 
-	/** Writes one byte only after the byte stream observed writable capacity. */
+	/**
+	 * Motivation: Lets a byte stream push one byte after it observed writable capacity.
+	 * Responsibilities: Write the byte to the resolved UART, ignoring an unknown index.
+	 */
 	void WriteUartByte(const std::uint8_t InUartIndex, const std::uint8_t InByte) noexcept override
 	{
 		if (uart_inst_t* const Uart = ResolveUart(InUartIndex); Uart != nullptr)
@@ -82,7 +105,10 @@ public:
 		}
 	}
 
-	/** Reads one byte only when the SDK UART reports data, preserving bounded byte-stream polling. */
+	/**
+	 * Motivation: Lets a byte stream poll one byte without blocking on an empty UART.
+	 * Responsibilities: Read a byte only when the resolved UART reports data, leaving OutByte untouched otherwise.
+	 */
 	bool TryReadUartByte(const std::uint8_t InUartIndex, std::uint8_t& OutByte) noexcept override
 	{
 		if (uart_inst_t* const Uart = ResolveUart(InUartIndex); Uart != nullptr && uart_is_readable(Uart))

@@ -32,29 +32,38 @@ using namespace Ex23;
 
 namespace
 {
-/** Single real-time source for the client board. */
+/** Motivation: Single real-time source for the client board. */
 FEsp32TimeSource GTimeSource{};
 
-/** Cadence the switch toggles the lamp and broadcasts a heartbeat, per the roadmap's "every 2 s". */
+/** Motivation: Cadence the switch toggles the lamp and broadcasts a heartbeat, per the roadmap's "every 2 s". */
 constexpr DurationMilliseconds SwitchToggleIntervalMilliseconds = 2000;
 
 /**
- * Every SwitchToggleIntervalMilliseconds, toggles a lamp state and sends it to FLampActor, and
- * broadcasts an incrementing heartbeat counter.
- *
- * Takes the router by constructor injection (D9); this actor owns no components (AActor).
+ * Motivation: Toggles a lamp state and sends it to FLampActor every SwitchToggleIntervalMilliseconds,
+ *   and broadcasts an incrementing heartbeat counter. Takes the router by constructor injection and
+ *   owns no components.
+ * Responsibilities: Tick on the 2 s cadence, send one targeted lamp toggle, and broadcast one heartbeat.
+ * Example:
+ *   auto Switch = Engine.CreateObject<FSwitchActor>(SwitchActorTypeId, Router).Object;
+ *   Engine.GetWorld().RegisterActor(TObjectPtr<AActor>{Switch});
  */
 class FSwitchActor final : public AActor
 {
 public:
-	/** Aligns this actor's own tick to the 2 s toggle cadence and stores the injected router. */
+	/**
+	 * Motivation: Aligns this actor's own tick to the 2 s toggle cadence and stores the injected router.
+	 * Responsibilities: Construct on the toggle cadence and capture the router reference.
+	 */
 	explicit FSwitchActor(IMessageRouter& InRouter) noexcept
 		: AActor(FTickConfiguration::EnabledEvery(SwitchToggleIntervalMilliseconds)), Router(InRouter)
 	{
 	}
 
 protected:
-	/** Toggles the lamp state (targeted send) then bumps and broadcasts the heartbeat counter. */
+	/**
+	 * Motivation: Drives the per-tick exchange so the lamp toggle and heartbeat stay in step.
+	 * Responsibilities: Send the targeted lamp toggle then broadcast the heartbeat counter, each tick.
+	 */
 	void Tick(const FTickContext&) noexcept override
 	{
 		SendLampToggle();
@@ -62,7 +71,10 @@ protected:
 	}
 
 private:
-	/** Flips bLampOn and sends its new value to LampActorId as a 1-byte targeted message. */
+	/**
+	 * Motivation: Flips bLampOn and sends its new value to LampActorId as a 1-byte targeted message.
+	 * Responsibilities: Toggle the state, send it, and log the outcome.
+	 */
 	void SendLampToggle() noexcept
 	{
 		bLampOn = !bLampOn;
@@ -77,7 +89,10 @@ private:
 		MW_LOG(Log, "ex23", "switch -> lamp %s", bLampOn ? "ON" : "OFF");
 	}
 
-	/** Bumps HeartbeatCount and broadcasts it as a 1-byte message to every subscriber. */
+	/**
+	 * Motivation: Bumps HeartbeatCount and broadcasts it as a 1-byte message to every subscriber.
+	 * Responsibilities: Increment the counter, broadcast it, and log the outcome.
+	 */
 	void BroadcastHeartbeat() noexcept
 	{
 		++HeartbeatCount;
@@ -91,21 +106,23 @@ private:
 		MW_LOG(Log, "ex23", "switch broadcast heartbeat=%u", static_cast<unsigned>(HeartbeatCount));
 	}
 
-	/** Router this actor sends through; injected at construction (D9), never a global. */
+	/** Motivation: Router this actor sends through; injected at construction, never a global. */
 	IMessageRouter& Router;
 
-	/** Current toggled lamp state; flips every tick, starting OFF -> first send is ON. */
+	/** Motivation: Current toggled lamp state; flips every tick, starting OFF -> first send is ON. */
 	bool bLampOn{false};
 
-	/** Counts every heartbeat sent since BeginPlay; wraps at 256 (accepted for this bounded-value demo). */
+	/** Motivation: Counts every heartbeat sent since BeginPlay; wraps at 256 (accepted for this bounded-value demo). */
 	std::uint8_t HeartbeatCount{0};
 };
 } // namespace
 
 /**
- * Client board (node 2): FSwitchActor over a TMessageRouter wired to TTransportHost (Client, greeting the
- * server's UART address) through TMessageChannelBinding, with the engine holding the host play system and
- * the loop pumping the router manually (Phase 4.1 will fold this into TPlaySystemSet -- see §4).
+ * Motivation: Lets Board B (node 2) run FSwitchActor over a TMessageRouter wired to TTransportHost
+ *   (Client, greeting the server's UART address) through TMessageChannelBinding, so the client half of
+ *   the two-board wire demo can be reasoned about in one place.
+ * Responsibilities: Open the UART, wire the transport, router, binding, and engine, spawn the switch,
+ *   start as a client, and pump frames in an unbounded loop.
  */
 void RunClient() noexcept
 {

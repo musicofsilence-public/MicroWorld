@@ -24,32 +24,40 @@ using MicroWorld::Tests::GlobalAllocationCount;
 /** Asserts a timer operation returned Success without discarding the result. */
 #define MW_EXPECT_SUCCESS(TestContext, Result, Message) MW_EXPECT_EQ(TestContext, ETimerResult::Success, Result, Message)
 
-/** Inline callback storage shared by every timer test so capturing lambdas fit one fixed size. */
+/** Motivation: Inline callback storage shared by every timer test so capturing lambdas fit one fixed size. */
 constexpr std::size_t TestInlineCallbackBytes = 64;
 
-/** Capacity large enough for ordering and mutation tests without masking capacity behavior. */
+/** Motivation: Capacity large enough for ordering and mutation tests without masking capacity behavior. */
 constexpr std::size_t TestTimerCapacity = 4;
 
-/** Timer period most scheduling tests use so their deadlines land on round Advance timestamps. */
+/** Motivation: Timer period most scheduling tests use so their deadlines land on round Advance timestamps. */
 constexpr DurationMilliseconds StandardTimerPeriod{100};
 
-/** Initial clock the zero-delay tests start at so a first Advance at the same timestamp is due. */
+/** Motivation: Initial clock the zero-delay tests start at so a first Advance at the same timestamp is due. */
 constexpr TimePointMilliseconds SaturatedTestInitialNow{1000};
 
 using FTestManager = TTimerManager<TestTimerCapacity, TestInlineCallbackBytes>;
 using FTestDelegate = TDelegate<void(), TestInlineCallbackBytes>;
 
-/** A valid-looking handle value used to prove failed Schedule calls clear their output. */
+/** Motivation: A valid-looking handle value used to prove failed Schedule calls clear their output. */
 constexpr FTimerHandle CanaryHandle{0u, 1u};
 
-/** Counts callback invocations for one timer without allocating. */
+/**
+ * Motivation: Counts callback invocations for one timer without allocating.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 struct FFireCounter final
 {
-	/** Records one observed callback invocation. */
+	/** Motivation: Records one observed callback invocation. */
 	std::uint32_t Count{0};
 };
 
-/** Binds a nothrow inline callback that increments the supplied counter when invoked. */
+/**
+ * Motivation: Binds a nothrow inline callback that increments the supplied counter when invoked.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ */
 FTestDelegate MakeCounterCallback(FFireCounter& InCounter) noexcept
 {
 	FTestDelegate Delegate;
@@ -58,12 +66,11 @@ FTestDelegate MakeCounterCallback(FFireCounter& InCounter) noexcept
 }
 
 /**
- * Produces an out-of-range ETimerMode value at runtime.
- *
- * Routed through a function rather than a `const` initializer so the cast is
- * not a constant expression: Clang's default `-Wenum-constexpr-conversion`
- * rejects `static_cast<ETimerMode>(non-enumerator)` only in constant contexts,
- * and this regression test deliberately targets the runtime rejection path.
+ * Motivation: Produces an out-of-range ETimerMode value at runtime.
+ * Responsibilities: Routed through a function rather than a `const` initializer so the cast is not a constant
+ *   expression: Clang's default `-Wenum-constexpr-conversion` rejects
+ *   `static_cast<ETimerMode>(non-enumerator)` only in constant contexts, and this regression test
+ *   deliberately targets the runtime rejection path.
  */
 ETimerMode MakeOutOfRangeTimerMode() noexcept
 {
@@ -75,8 +82,8 @@ ETimerMode MakeOutOfRangeTimerMode() noexcept
 // ---------------------------------------------------------------------------
 
 /**
- * Scenario: Schedule a one-shot timer and advance before its deadline.
- * Expected: The timer does not fire before its deadline and remains occupied.
+ * Motivation: Schedule a one-shot timer and advance before its deadline.
+ * Responsibilities: The timer does not fire before its deadline and remains occupied.
  */
 MW_TEST_CASE(EngineTimerOneShotDoesNotFireBeforeDeadline)
 {
@@ -102,8 +109,8 @@ MW_TEST_CASE(EngineTimerOneShotDoesNotFireBeforeDeadline)
 }
 
 /**
- * Scenario: Schedule a one-shot timer and advance to its deadline.
- * Expected: The one-shot timer fires exactly once when due and leaves no occupied slot.
+ * Motivation: Schedule a one-shot timer and advance to its deadline.
+ * Responsibilities: The one-shot timer fires exactly once when due and leaves no occupied slot.
  */
 MW_TEST_CASE(EngineTimerOneShotFiresOnceWhenDue)
 {
@@ -126,8 +133,8 @@ MW_TEST_CASE(EngineTimerOneShotFiresOnceWhenDue)
 }
 
 /**
- * Scenario: Schedule a one-shot timer and advance to its deadline.
- * Expected: The fired one-shot timer is removed and no longer occupies a slot.
+ * Motivation: Schedule a one-shot timer and advance to its deadline.
+ * Responsibilities: The fired one-shot timer is removed and no longer occupies a slot.
  */
 MW_TEST_CASE(EngineTimerOneShotIsRemovedAfterFiring)
 {
@@ -150,8 +157,8 @@ MW_TEST_CASE(EngineTimerOneShotIsRemovedAfterFiring)
 }
 
 /**
- * Scenario: Schedule a one-shot timer, fire it, then attempt to cancel its handle.
- * Expected: The fired one-shot timer's handle becomes stale and cancel returns StaleHandle.
+ * Motivation: Schedule a one-shot timer, fire it, then attempt to cancel its handle.
+ * Responsibilities: The fired one-shot timer's handle becomes stale and cancel returns StaleHandle.
  */
 MW_TEST_CASE(EngineTimerOneShotHandleBecomesStaleAfterFiring)
 {
@@ -179,8 +186,8 @@ MW_TEST_CASE(EngineTimerOneShotHandleBecomesStaleAfterFiring)
 // ---------------------------------------------------------------------------
 
 /**
- * Scenario: Schedule a looping timer and advance through three successive deadlines.
- * Expected: The looping timer fires on its repeat cadence at each deadline.
+ * Motivation: Schedule a looping timer and advance through three successive deadlines.
+ * Responsibilities: The looping timer fires on its repeat cadence at each deadline.
  */
 MW_TEST_CASE(EngineTimerLoopingFiresOnCadence)
 {
@@ -211,8 +218,9 @@ MW_TEST_CASE(EngineTimerLoopingFiresOnCadence)
 }
 
 /**
- * Scenario: Schedule a looping timer, advance to its first deadline, then advance far past the next deadline.
- * Expected: The looping timer fires at most once per Advance even when its deadline is far overdue, with no catch-up burst.
+ * Motivation: Schedule a looping timer, advance to its first deadline, then advance far past the next deadline.
+ * Responsibilities: The looping timer fires at most once per Advance even when its deadline is far overdue, with no
+ *   catch-up burst.
  */
 MW_TEST_CASE(EngineTimerLoopingFiresAtMostOncePerAdvance)
 {
@@ -238,8 +246,10 @@ MW_TEST_CASE(EngineTimerLoopingFiresAtMostOncePerAdvance)
 }
 
 /**
- * Scenario: Fire a looping timer at an accepted Now later than its previous deadline, then advance to the previous-deadline time and the actual-Now
- * deadline. Expected: The next deadline is computed from the actual accepted Now, so the timer does not refire at the previous-deadline time.
+ * Motivation: Scenario: Fire a looping timer at an accepted Now later than its previous deadline, then advance to
+ *   the previous-deadline time and the actual-Now deadline.
+ * Responsibilities: Expected: The next deadline is computed from the actual accepted Now, so the timer does not refire
+ *   at the previous-deadline time.
  */
 MW_TEST_CASE(EngineTimerLoopingNextDeadlineUsesActualNow)
 {
@@ -277,8 +287,8 @@ MW_TEST_CASE(EngineTimerLoopingNextDeadlineUsesActualNow)
 }
 
 /**
- * Scenario: Schedule a zero-period looping timer and advance twice at the same timestamp.
- * Expected: The zero-period looping timer fires once per Advance, including at the same timestamp.
+ * Motivation: Schedule a zero-period looping timer and advance twice at the same timestamp.
+ * Responsibilities: The zero-period looping timer fires once per Advance, including at the same timestamp.
  */
 MW_TEST_CASE(EngineTimerZeroPeriodLoopingFiresOncePerAdvance)
 {
@@ -303,8 +313,10 @@ MW_TEST_CASE(EngineTimerZeroPeriodLoopingFiresOncePerAdvance)
 }
 
 /**
- * Scenario: Schedule a nonzero-period looping timer at the saturated maximum timestamp, advance once, then advance again at the same timestamp.
- * Expected: The timer fires once at the saturated timestamp and does not refire on a repeated advance at the same timestamp.
+ * Motivation: Schedule a nonzero-period looping timer at the saturated maximum timestamp, advance once, then
+ *   advance again at the same timestamp.
+ * Responsibilities: The timer fires once at the saturated timestamp and does not refire on a repeated advance at the
+ *   same timestamp.
  */
 MW_TEST_CASE(EngineTimerNonzeroPeriodLoopingDoesNotRepeatAtSaturatedTimestamp)
 {
@@ -340,8 +352,8 @@ MW_TEST_CASE(EngineTimerNonzeroPeriodLoopingDoesNotRepeatAtSaturatedTimestamp)
 // ---------------------------------------------------------------------------
 
 /**
- * Scenario: Schedule a one-shot timer, cancel it before its deadline, then advance well past the deadline.
- * Expected: Cancellation before the deadline releases the slot and prevents any invocation.
+ * Motivation: Schedule a one-shot timer, cancel it before its deadline, then advance well past the deadline.
+ * Responsibilities: Cancellation before the deadline releases the slot and prevents any invocation.
  */
 MW_TEST_CASE(EngineTimerCancellationBeforeDuePreventsInvocation)
 {
@@ -370,8 +382,8 @@ MW_TEST_CASE(EngineTimerCancellationBeforeDuePreventsInvocation)
 }
 
 /**
- * Scenario: Schedule a one-shot timer and then cancel it.
- * Expected: Successful cancellation reduces observable occupancy to zero.
+ * Motivation: Schedule a one-shot timer and then cancel it.
+ * Responsibilities: Successful cancellation reduces observable occupancy to zero.
  */
 MW_TEST_CASE(EngineTimerCancellationReducesOccupancy)
 {
@@ -393,8 +405,8 @@ MW_TEST_CASE(EngineTimerCancellationReducesOccupancy)
 }
 
 /**
- * Scenario: Schedule a one-shot timer, cancel it once, then cancel the same handle again.
- * Expected: Repeated cancellation of the same handle returns StaleHandle.
+ * Motivation: Schedule a one-shot timer, cancel it once, then cancel the same handle again.
+ * Responsibilities: Repeated cancellation of the same handle returns StaleHandle.
  */
 MW_TEST_CASE(EngineTimerRepeatedCancellationReturnsStaleHandle)
 {
@@ -422,8 +434,8 @@ MW_TEST_CASE(EngineTimerRepeatedCancellationReturnsStaleHandle)
 }
 
 /**
- * Scenario: Schedule a one-shot timer, fire it to completion, then attempt to cancel its handle.
- * Expected: Cancellation after one-shot completion returns StaleHandle.
+ * Motivation: Schedule a one-shot timer, fire it to completion, then attempt to cancel its handle.
+ * Responsibilities: Cancellation after one-shot completion returns StaleHandle.
  */
 MW_TEST_CASE(EngineTimerCancellationAfterCompletionReturnsStaleHandle)
 {
@@ -451,8 +463,8 @@ MW_TEST_CASE(EngineTimerCancellationAfterCompletionReturnsStaleHandle)
 // ---------------------------------------------------------------------------
 
 /**
- * Scenario: Cancel with default, sentinel, capacity-boundary, and zero-generation handles.
- * Expected: Each invalid handle returns InvalidHandle.
+ * Motivation: Cancel with default, sentinel, capacity-boundary, and zero-generation handles.
+ * Responsibilities: Each invalid handle returns InvalidHandle.
  */
 MW_TEST_CASE(EngineTimerInvalidHandleIndicesRejected)
 {
@@ -475,8 +487,9 @@ MW_TEST_CASE(EngineTimerInvalidHandleIndicesRejected)
 }
 
 /**
- * Scenario: Cancel an active timer, then attempt to cancel the same-slot handle with the retired generation and a mismatched generation.
- * Expected: The canceled handle and the generation-mismatched handle both return StaleHandle.
+ * Motivation: Cancel an active timer, then attempt to cancel the same-slot handle with the retired generation and
+ *   a mismatched generation.
+ * Responsibilities: The canceled handle and the generation-mismatched handle both return StaleHandle.
  */
 MW_TEST_CASE(EngineTimerStaleAndGenerationMismatchedHandlesRejected)
 {
@@ -503,8 +516,8 @@ MW_TEST_CASE(EngineTimerStaleAndGenerationMismatchedHandlesRejected)
 }
 
 /**
- * Scenario: Schedule and cancel a one-shot timer, then schedule a second timer that reuses the freed slot.
- * Expected: Slot reuse reuses the same index but publishes a different generation than the retired handle.
+ * Motivation: Schedule and cancel a one-shot timer, then schedule a second timer that reuses the freed slot.
+ * Responsibilities: Slot reuse reuses the same index but publishes a different generation than the retired handle.
  */
 MW_TEST_CASE(EngineTimerSlotReusePublishesDifferentGeneration)
 {
@@ -531,8 +544,10 @@ MW_TEST_CASE(EngineTimerSlotReusePublishesDifferentGeneration)
 }
 
 /**
- * Scenario: Cancel a timer, schedule a replacement into the freed slot, then attempt to cancel the replacement with the retired handle.
- * Expected: The stale handle cannot cancel the replacement and leaves occupancy unchanged; the live replacement handle still cancels.
+ * Motivation: Cancel a timer, schedule a replacement into the freed slot, then attempt to cancel the replacement
+ *   with the retired handle.
+ * Responsibilities: The stale handle cannot cancel the replacement and leaves occupancy unchanged; the live replacement
+ *   handle still cancels.
  */
 MW_TEST_CASE(EngineTimerStaleHandleCannotAffectReplacement)
 {
@@ -570,8 +585,8 @@ MW_TEST_CASE(EngineTimerStaleHandleCannotAffectReplacement)
 }
 
 /**
- * Scenario: Evaluate the generation helper at zero, one, the last finite value, and the type maximum.
- * Expected: The helper accepts every earlier value and refuses to advance at the type maximum.
+ * Motivation: Evaluate the generation helper at zero, one, the last finite value, and the type maximum.
+ * Responsibilities: The helper accepts every earlier value and refuses to advance at the type maximum.
  */
 MW_TEST_CASE(EngineTimerGenerationHelperRefusesWrap)
 {
@@ -593,8 +608,8 @@ MW_TEST_CASE(EngineTimerGenerationHelperRefusesWrap)
 // ---------------------------------------------------------------------------
 
 /**
- * Scenario: Schedule against a zero-capacity manager holding a canary output handle.
- * Expected: The zero-capacity manager reports CapacityExceeded and clears the canary handle.
+ * Motivation: Schedule against a zero-capacity manager holding a canary output handle.
+ * Responsibilities: The zero-capacity manager reports CapacityExceeded and clears the canary handle.
  */
 MW_TEST_CASE(EngineTimerZeroCapacityRejectsSchedule)
 {
@@ -612,8 +627,9 @@ MW_TEST_CASE(EngineTimerZeroCapacityRejectsSchedule)
 }
 
 /**
- * Scenario: Fill a capacity-two manager, then attempt a third schedule holding a canary output handle.
- * Expected: The full manager returns CapacityExceeded without consuming the supplied callback and clears the canary handle.
+ * Motivation: Fill a capacity-two manager, then attempt a third schedule holding a canary output handle.
+ * Responsibilities: The full manager returns CapacityExceeded without consuming the supplied callback and clears the
+ *   canary handle.
  */
 MW_TEST_CASE(EngineTimerFullManagerPreservesCallbackOnFailure)
 {
@@ -646,8 +662,9 @@ MW_TEST_CASE(EngineTimerFullManagerPreservesCallbackOnFailure)
 }
 
 /**
- * Scenario: Schedule with an unbound delegate holding a canary output handle.
- * Expected: The unbound callback is rejected as InvalidCallback before any slot is consumed and clears the canary handle.
+ * Motivation: Schedule with an unbound delegate holding a canary output handle.
+ * Responsibilities: The unbound callback is rejected as InvalidCallback before any slot is consumed and clears the
+ *   canary handle.
  */
 MW_TEST_CASE(EngineTimerUnboundCallbackRejected)
 {
@@ -666,8 +683,8 @@ MW_TEST_CASE(EngineTimerUnboundCallbackRejected)
 }
 
 /**
- * Scenario: Schedule with the None mode holding a canary output handle.
- * Expected: The None mode is rejected transactionally and clears the canary handle without changing occupancy.
+ * Motivation: Schedule with the None mode holding a canary output handle.
+ * Responsibilities: The None mode is rejected transactionally and clears the canary handle without changing occupancy.
  */
 MW_TEST_CASE(EngineTimerInvalidModeRejected)
 {
@@ -686,8 +703,9 @@ MW_TEST_CASE(EngineTimerInvalidModeRejected)
 }
 
 /**
- * Scenario: Schedule with an out-of-range ETimerMode cast holding a canary output handle.
- * Expected: The out-of-range mode is rejected transactionally and clears the canary handle without changing occupancy.
+ * Motivation: Schedule with an out-of-range ETimerMode cast holding a canary output handle.
+ * Responsibilities: The out-of-range mode is rejected transactionally and clears the canary handle without changing
+ *   occupancy.
  */
 MW_TEST_CASE(EngineTimerOutOfRangeModeRejectedTransactionally)
 {
@@ -711,8 +729,9 @@ MW_TEST_CASE(EngineTimerOutOfRangeModeRejectedTransactionally)
 // ---------------------------------------------------------------------------
 
 /**
- * Scenario: Schedule a zero-delay one-shot timer and then advance at InitialNow.
- * Expected: The zero-delay timer does not fire synchronously at schedule time; it becomes due and fires on the next Advance at InitialNow.
+ * Motivation: Schedule a zero-delay one-shot timer and then advance at InitialNow.
+ * Responsibilities: The zero-delay timer does not fire synchronously at schedule time; it becomes due and fires on the
+ *   next Advance at InitialNow.
  */
 MW_TEST_CASE(EngineTimerZeroDelayBecomesDueOnNextAdvance)
 {
@@ -735,9 +754,10 @@ MW_TEST_CASE(EngineTimerZeroDelayBecomesDueOnNextAdvance)
 }
 
 /**
- * Scenario: Schedule a not-yet-due timer, accept an advance, then issue a backward and an intermediate backward advance, then reach the original
- * deadline. Expected: Rolled-back Advances are rejected transactionally without changing occupancy or firing callbacks, and the original deadline is
- * preserved.
+ * Motivation: Scenario: Schedule a not-yet-due timer, accept an advance, then issue a backward and an intermediate
+ *   backward advance, then reach the original deadline.
+ * Responsibilities: Expected: Rolled-back Advances are rejected transactionally without changing occupancy or firing
+ *   callbacks, and the original deadline is preserved.
  */
 MW_TEST_CASE(EngineTimerRollbackAdvanceRejectedTransactionally)
 {
@@ -778,8 +798,10 @@ MW_TEST_CASE(EngineTimerRollbackAdvanceRejectedTransactionally)
 }
 
 /**
- * Scenario: Schedule a looping timer with a huge period starting near the maximum timestamp, advance to the boundary, then to the maximum.
- * Expected: First-deadline arithmetic saturates without overflow; the saturated deadline fires exactly once at the maximum timestamp.
+ * Motivation: Schedule a looping timer with a huge period starting near the maximum timestamp, advance to the
+ *   boundary, then to the maximum.
+ * Responsibilities: First-deadline arithmetic saturates without overflow; the saturated deadline fires exactly once at
+ *   the maximum timestamp.
  */
 MW_TEST_CASE(EngineTimerFirstDeadlineSaturatesWithoutOverflow)
 {
@@ -815,19 +837,27 @@ MW_TEST_CASE(EngineTimerFirstDeadlineSaturatesWithoutOverflow)
 // Category 7: Deterministic ordering
 // ---------------------------------------------------------------------------
 
-/** Records the identity of each callback in stable dispatch order without allocating. */
+/**
+ * Motivation: Records the identity of each callback in stable dispatch order without allocating.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 struct FDispatchOrderRecorder final
 {
-	/** Bounds the recorded sequence so the test fixtures stay allocation-free and fixed-size. */
+	/** Motivation: Bounds the recorded sequence so the test fixtures stay allocation-free and fixed-size. */
 	static constexpr std::size_t MaximumEntries = 8;
 
-	/** Tracks the next write position so later reads observe insertion-order dispatch. */
+	/** Motivation: Tracks the next write position so later reads observe insertion-order dispatch. */
 	std::size_t Count{0};
 
-	/** Stores the caller-supplied identity of each fired callback. */
+	/** Motivation: Stores the caller-supplied identity of each fired callback. */
 	int Identities[MaximumEntries]{0};
 
-	/** Appends one observed identity when space remains. */
+	/**
+	 * Motivation: Appends one observed identity when space remains.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void Record(const int InIdentity) noexcept
 	{
 		if (Count < MaximumEntries)
@@ -838,7 +868,10 @@ struct FDispatchOrderRecorder final
 	}
 };
 
-/** Binds a callback that records its identity in the shared recorder. */
+/**
+ * Motivation: Binds a callback that records its identity in the shared recorder.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ */
 FTestDelegate MakeOrderCallback(FDispatchOrderRecorder& InRecorder, const int InIdentity) noexcept
 {
 	FTestDelegate Delegate;
@@ -847,8 +880,9 @@ FTestDelegate MakeOrderCallback(FDispatchOrderRecorder& InRecorder, const int In
 }
 
 /**
- * Scenario: Schedule three one-shot timers sharing one deadline and advance at that deadline.
- * Expected: Simultaneously due timers fire in insertion order rather than slot order and are removed after firing.
+ * Motivation: Schedule three one-shot timers sharing one deadline and advance at that deadline.
+ * Responsibilities: Simultaneously due timers fire in insertion order rather than slot order and are removed after
+ *   firing.
  */
 MW_TEST_CASE(EngineTimerSimultaneouslyDueTimersFireInInsertionOrder)
 {
@@ -877,8 +911,10 @@ MW_TEST_CASE(EngineTimerSimultaneouslyDueTimersFireInInsertionOrder)
 }
 
 /**
- * Scenario: Schedule three timers, cancel the middle one, schedule a replacement into the freed slot, then advance at the shared deadline.
- * Expected: The reused slot's replacement dispatches at the insertion tail rather than in the canceled slot's position.
+ * Motivation: Schedule three timers, cancel the middle one, schedule a replacement into the freed slot, then
+ *   advance at the shared deadline.
+ * Responsibilities: The reused slot's replacement dispatches at the insertion tail rather than in the canceled slot's
+ *   position.
  */
 MW_TEST_CASE(EngineTimerCancelReuseAppendsReplacementAtInsertionTail)
 {
@@ -913,9 +949,10 @@ MW_TEST_CASE(EngineTimerCancelReuseAppendsReplacementAtInsertionTail)
 }
 
 /**
- * Scenario: Schedule four one-shots to fill capacity at a shared deadline, advance to fire them, then schedule and fire a reused-slot replacement.
- * Expected: The full-capacity set dispatches in stable insertion order, removes completely, and the reused slot fires once at its calculated
- * deadline.
+ * Motivation: Schedule four one-shots to fill capacity at a shared deadline, advance to fire them, then schedule
+ *   and fire a reused-slot replacement.
+ * Responsibilities: The full-capacity set dispatches in stable insertion order, removes completely, and the reused slot
+ *   fires once at its calculated.
  */
 MW_TEST_CASE(EngineTimerFullCapacitySameDeadlineStableOrderAndReuse)
 {
@@ -962,9 +999,10 @@ MW_TEST_CASE(EngineTimerFullCapacitySameDeadlineStableOrderAndReuse)
 }
 
 /**
- * Scenario: Schedule Looping A, OneShot B, and Looping C at a shared deadline, fire them, then schedule replacement D into B's freed slot and advance
- * again. Expected: Compaction preserves the looping survivors while dropping B, and the reused-slot replacement dispatches at the logical insertion
- * tail, not its physical slot.
+ * Motivation: Scenario: Schedule Looping A, OneShot B, and Looping C at a shared deadline, fire them, then
+ *   schedule replacement D into B's freed slot and advance again.
+ * Responsibilities: Expected: Compaction preserves the looping survivors while dropping B, and the reused-slot
+ *   replacement dispatches at the logical insertion tail, not its physical slot.
  */
 MW_TEST_CASE(EngineTimerMixedStableCompactionPreservesSurvivorsAndTailReuse)
 {
@@ -1035,19 +1073,25 @@ MW_TEST_CASE(EngineTimerMixedStableCompactionPreservesSurvivorsAndTailReuse)
 // Category 8: Mutation rules during dispatch
 // ---------------------------------------------------------------------------
 
-/** Records the result of one attempted mutation performed from inside a callback. */
+/**
+ * Motivation: Records the result of one attempted mutation performed from inside a callback.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
 struct FCapturedMutation final
 {
-	/** Holds the result of the attempted in-callback operation. */
+	/** Motivation: Holds the result of the attempted in-callback operation. */
 	ETimerResult Result{ETimerResult::Success};
 
-	/** Remembers whether the captured operation has executed. */
+	/** Motivation: Remembers whether the captured operation has executed. */
 	bool bObserved{false};
 };
 
 /**
- * Scenario: From inside a fired callback, issue a Schedule with a delegate holding a canary output handle.
- * Expected: The callback-issued Schedule returns DispatchLocked, preserves the delegate, clears the canary handle, and changes no occupancy.
+ * Motivation: From inside a fired callback, issue a Schedule with a delegate holding a canary output handle.
+ * Responsibilities: The callback-issued Schedule returns DispatchLocked, preserves the delegate, clears the canary
+ *   handle, and changes no occupancy.
  */
 MW_TEST_CASE(EngineTimerCallbackScheduleRejectedAndDelegatePreserved)
 {
@@ -1084,8 +1128,9 @@ MW_TEST_CASE(EngineTimerCallbackScheduleRejectedAndDelegatePreserved)
 }
 
 /**
- * Scenario: From inside a looping callback, cancel itself and a later one-shot, then let the Advance continue.
- * Expected: In-callback cancellation is rejected as DispatchLocked while the other due timer still fires later in the same Advance.
+ * Motivation: From inside a looping callback, cancel itself and a later one-shot, then let the Advance continue.
+ * Responsibilities: In-callback cancellation is rejected as DispatchLocked while the other due timer still fires later
+ *   in the same Advance.
  */
 MW_TEST_CASE(EngineTimerCallbackCancellationRejectedAndOtherTimerStillFires)
 {
@@ -1127,9 +1172,10 @@ MW_TEST_CASE(EngineTimerCallbackCancellationRejectedAndOtherTimerStillFires)
 }
 
 /**
- * Scenario: From inside a callback, issue a nested Advance, then issue an intermediate Advance after the outer dispatch ends.
- * Expected: The nested Advance is rejected without changing accepted time, and a later intermediate time between the outer and nested values is still
- * accepted.
+ * Motivation: From inside a callback, issue a nested Advance, then issue an intermediate Advance after the outer
+ *   dispatch ends.
+ * Responsibilities: The nested Advance is rejected without changing accepted time, and a later intermediate time between
+ *   the outer and nested values is still.
  */
 MW_TEST_CASE(EngineTimerNestedAdvanceRejected)
 {
@@ -1169,8 +1215,9 @@ MW_TEST_CASE(EngineTimerNestedAdvanceRejected)
 // ---------------------------------------------------------------------------
 
 /**
- * Scenario: Exercise Schedule, Advance dispatch, Cancel, slot reuse, and looping operation while observing the allocation counter.
- * Expected: The steady-state operations perform no observable allocation.
+ * Motivation: Exercise Schedule, Advance dispatch, Cancel, slot reuse, and looping operation while observing the
+ *   allocation counter.
+ * Responsibilities: The steady-state operations perform no observable allocation.
  */
 MW_TEST_CASE(EngineTimerOperationsPerformNoObservableAllocation)
 {

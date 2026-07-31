@@ -12,29 +12,45 @@ namespace MicroWorld::Transport
 {
 
 /**
- * Appends bytes into a caller-owned fixed buffer without allocating or throwing.
- *
- * The writer observes one caller-owned `TSpan<std::uint8_t>` and tracks a write
- * cursor. A buffer bound to `{nullptr, nonzero}` is an invalid configuration:
- * every mutating operation returns `Invalid` without dereferencing null, and a
- * failed write never partially advances the cursor or alters accepted bytes.
+ * Motivation: Appends bytes into a caller-owned fixed buffer so a codec can build a frame without allocating or throwing.
+ * Responsibilities: Observe one caller-owned destination view and a write cursor, treat a {nullptr, nonzero} buffer as an
+ *   invalid configuration that every mutating operation rejects without dereferencing null, and never partially advance
+ *   the cursor or alter accepted bytes on a failed write.
+ * Example:
+ *   FByteWriter Writer(Destination);
+ *   if (Writer.WriteByte(0xA5) == ETransportResult::Success) { Send(Writer.WrittenBytes()); }
  */
 class FByteWriter final
 {
 public:
-	/** Binds the writer to a caller-owned destination view; storage is observed, never owned. */
+	/**
+	 * Motivation: Binds the writer to a caller-owned destination view at construction.
+	 * Responsibilities: Observe the destination without owning it and start the cursor at zero.
+	 */
 	constexpr explicit FByteWriter(Core::TSpan<std::uint8_t> InStorage) noexcept : Buffer(InStorage), WritePosition(0) {}
 
-	/** Prevents the writer from being copied while caller storage has one owner. */
+	/**
+	 * Motivation: Prevents the writer from being copied while caller storage has one owner.
+	 * Responsibilities: Reject copy construction so one buffer keeps one cursor.
+	 */
 	FByteWriter(const FByteWriter&) = delete;
 
-	/** Prevents two writers from observing the same cursor over one buffer. */
+	/**
+	 * Motivation: Prevents two writers from observing the same cursor over one buffer.
+	 * Responsibilities: Reject copy assignment so one buffer keeps one cursor.
+	 */
 	FByteWriter& operator=(const FByteWriter&) = delete;
 
-	/** Lets a caller move a writer that no other reference observes, preserving its cursor. */
+	/**
+	 * Motivation: Lets a caller move a writer no other reference observes while preserving its cursor.
+	 * Responsibilities: Copy the destination view and cursor, then reset the moved-from cursor to zero.
+	 */
 	constexpr FByteWriter(FByteWriter&& Other) noexcept : Buffer(Other.Buffer), WritePosition(Other.WritePosition) { Other.WritePosition = 0; }
 
-	/** Lets a caller move-assign a writer that no other reference observes, preserving its cursor. */
+	/**
+	 * Motivation: Lets a caller move-assign a writer no other reference observes while preserving its cursor.
+	 * Responsibilities: Guard self-assignment, copy the destination view and cursor, then reset the moved-from cursor to zero.
+	 */
 	constexpr FByteWriter& operator=(FByteWriter&& Other) noexcept
 	{
 		if (this != &Other)
@@ -46,13 +62,16 @@ public:
 		return *this;
 	}
 
-	/** Defaulted so a writer with automatic storage destructs without side effects. */
+	/**
+	 * Motivation: Keeps a writer with automatic storage side-effect free on destruction.
+	 * Responsibilities: Default the destructor since the writer owns no resource.
+	 */
 	~FByteWriter() noexcept = default;
 
 	/**
-	 * Appends one byte and advances the cursor.
-	 * Returns `Invalid` without advancing when the backing buffer is an invalid `{nullptr, nonzero}` view.
-	 * Returns `Full` without advancing when a valid buffer has no remaining capacity.
+	 * Motivation: Lets a codec append one byte transactionally so a full or invalid buffer never corrupts accepted bytes.
+	 * Responsibilities: Return Invalid without advancing for an invalid {nullptr, nonzero} buffer, Full without advancing
+	 *   when a valid buffer has no remaining capacity, and write and advance only on success.
 	 */
 	ETransportResult WriteByte(const std::uint8_t InValue) noexcept
 	{
@@ -70,11 +89,10 @@ public:
 	}
 
 	/**
-	 * Appends a byte span and advances the cursor.
-	 * An empty span is a valid no-op. A span bound to `{nullptr, nonzero}` returns `Invalid`.
-	 * A span larger than the total buffer capacity returns `Invalid` because it can never fit.
-	 * A span that fits the total capacity but exceeds remaining capacity returns `Full`.
-	 * None of these failures advances the cursor or alters accepted bytes.
+	 * Motivation: Lets a codec append a span transactionally so a full or invalid buffer never leaves a partial write.
+	 * Responsibilities: Treat an empty span as a valid no-op, reject a {nullptr, nonzero} source and an invalid {nullptr,
+	 *   nonzero} destination with Invalid, reject a span larger than total capacity with Invalid (it can never fit) and one
+	 *   that fits total but not remaining capacity with Full, and copy and advance only on a complete write.
 	 */
 	ETransportResult Write(Core::TSpan<const std::uint8_t> InBytes) noexcept
 	{
@@ -109,18 +127,27 @@ public:
 		return ETransportResult::Success;
 	}
 
-	/** Reports the caller-owned buffer capacity observed at construction. */
+	/**
+	 * Motivation: Lets a caller observe the caller-owned buffer capacity without exposing the view.
+	 * Responsibilities: Report the buffer length recorded at construction.
+	 */
 	constexpr std::size_t Capacity() const noexcept { return Buffer.Size(); }
 
-	/** Reports how many bytes have been accepted and survive a failed operation. */
+	/**
+	 * Motivation: Lets a caller report accepted bytes that survive a failed operation.
+	 * Responsibilities: Report the accepted prefix length.
+	 */
 	constexpr std::size_t Position() const noexcept { return WritePosition; }
 
-	/** Reports how many more bytes a valid writer can accept before the next `Full`. */
+	/**
+	 * Motivation: Lets a caller predict how many bytes a valid writer can still accept.
+	 * Responsibilities: Report the buffer length minus the cursor.
+	 */
 	constexpr std::size_t Remaining() const noexcept { return Buffer.Size() - WritePosition; }
 
 	/**
-	 * Returns a read-only view of the accepted prefix without exposing mutable storage.
-	 * The view is empty for an invalid `{nullptr, nonzero}` backing buffer.
+	 * Motivation: Gives a caller a view of the accepted prefix to hand off without exposing mutable storage.
+	 * Responsibilities: Return an empty view for an invalid {nullptr, nonzero} backing buffer, and the accepted prefix otherwise.
 	 */
 	constexpr Core::TSpan<const std::uint8_t> WrittenBytes() const noexcept
 	{
@@ -132,32 +159,28 @@ public:
 	}
 
 	/**
-	 * Resets the cursor to zero so the caller-owned buffer can be reused.
-	 * Previously accepted bytes are not zeroed; the caller owns the storage and
-	 * decides when to clear it.
+	 * Motivation: Lets a caller reuse the caller-owned buffer from the start.
+	 * Responsibilities: Reset the cursor to zero without zeroing accepted bytes, since the caller owns the storage.
 	 */
 	constexpr void Reset() noexcept { WritePosition = 0; }
 
 private:
 	/**
-	 * Reports whether the backing buffer can honestly hold bytes.
-	 * A `{nullptr, 0}` view is a valid empty buffer; a `{nullptr, nonzero}` view is an invalid
-	 * configuration that must never be dereferenced.
+	 * Motivation: Guards every mutating operation against an invalid {nullptr, nonzero} buffer.
+	 * Responsibilities: Report true for a valid empty {nullptr, 0} buffer and false for an invalid {nullptr, nonzero} one.
 	 */
 	constexpr bool HasValidStorage() const noexcept { return Buffer.Data() != nullptr || Buffer.Size() == 0; }
 
-	/** Observes the caller-owned destination; the writer never releases or grows it. */
+	/** Motivation: Observes the caller-owned destination, which the writer never releases or grows. */
 	Core::TSpan<std::uint8_t> Buffer;
 
-	/** Tracks the accepted prefix length so failures leave prior bytes intact. */
+	/** Motivation: Tracks the accepted prefix length so failures leave prior bytes intact. */
 	std::size_t WritePosition;
 };
 
 /**
- * Writes a 16-bit value as two big-endian bytes (most significant byte first).
- *
- * @param InValue 16-bit value to serialize.
- * @param OutBytes Caller-owned destination for exactly two bytes.
+ * Motivation: Serializes a 16-bit value as two big-endian bytes for codecs that emit the most significant byte first.
+ * Responsibilities: Write exactly two bytes into the caller-owned destination.
  */
 inline void WriteUint16BigEndian(const std::uint16_t InValue, std::uint8_t* const OutBytes) noexcept
 {
@@ -166,10 +189,8 @@ inline void WriteUint16BigEndian(const std::uint16_t InValue, std::uint8_t* cons
 }
 
 /**
- * Writes a 16-bit value as two little-endian bytes (least significant byte first).
- *
- * @param InValue 16-bit value to serialize.
- * @param OutBytes Caller-owned destination for exactly two bytes.
+ * Motivation: Serializes a 16-bit value as two little-endian bytes for codecs that emit the least significant byte first.
+ * Responsibilities: Write exactly two bytes into the caller-owned destination.
  */
 inline void WriteUint16LittleEndian(const std::uint16_t InValue, std::uint8_t* const OutBytes) noexcept
 {

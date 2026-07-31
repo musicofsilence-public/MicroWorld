@@ -11,30 +11,35 @@ namespace MicroWorld::Tests
 namespace
 {
 
-	/** Dispatcher timestamp every lifecycle test passes to BeginPlay and Advance. */
+	/** Motivation: Dispatcher timestamp every lifecycle test passes to BeginPlay and Advance. */
 	constexpr MicroWorld::Core::TimePointMilliseconds DispatcherStartTime{100};
 
 	/**
-	 * Records every IEngine call so FApplication's sealed forwarding is observed behaviourally.
-	 *
-	 * Carries configurable BeginPlay/OnConfigure results so a test can drive the failed-begin path
-	 * without duplicating the application base's own state machine. GetWorld/GetObjectStore return
-	 * references to backing storage so the IEngine contract is satisfied even though these tests
-	 * never exercise the world or store.
+	 * Motivation: Records every IEngine call so FApplication's sealed forwarding is observed behaviourally. Carries
+	 *   configurable BeginPlay/OnConfigure results so a test can drive the failed-begin path without
+	 *   duplicating the application base's own state machine. GetWorld/GetObjectStore return references to
+	 *   backing storage so the IEngine contract is satisfied even though these tests never exercise the
+	 *   world or store.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 * Example:
+	 *   // Construct and exercise the type in one behavior test.
 	 */
 	class FRecordingEngine final : public MicroWorld::Engine::IEngine
 	{
 	public:
-		/** Drives the next BeginPlay result so the failed-engine-begin path is reachable from a test. */
+		/**
+		 * Motivation: The failed-engine-begin path is reachable from a test.
+		 * Responsibilities: Drives the next BeginPlay result.
+		 */
 		void ConfigureBeginPlayResult(MicroWorld::Core::ERuntimeResult InResult) noexcept { ConfiguredBeginPlayResult = InResult; }
 
-		/** Observes how many times BeginPlay fired, since double-begin must not re-invoke it. */
+		/** Motivation: Observes how many times BeginPlay fired, since double-begin must not re-invoke it. */
 		int BeginPlayCount{0};
 
-		/** Observes how many times Tick fired, since rejected lifecycle or backward time must not reach it. */
+		/** Motivation: Observes how many times Tick fired, since rejected lifecycle or backward time must not reach it. */
 		int TickCount{0};
 
-		/** Observes whether EndPlay fired exactly once across repeated EndPlay calls. */
+		/** Motivation: Observes whether EndPlay fired exactly once across repeated EndPlay calls. */
 		int EndPlayCount{0};
 
 		MicroWorld::Core::ERuntimeResult BeginPlay(MicroWorld::Core::TimePointMilliseconds) noexcept override
@@ -62,31 +67,37 @@ namespace
 		}
 
 	private:
-		/** Holds the result BeginPlay will return, seeded to Success so the happy path needs no setup. */
+		/** Motivation: Holds the result BeginPlay will return, seeded to Success so the happy path needs no setup. */
 		MicroWorld::Core::ERuntimeResult ConfiguredBeginPlayResult{MicroWorld::Core::ERuntimeResult::Success};
 
-		/** Raw storage for the world/store pointers the contract requires but these tests never use. */
+		/** Motivation: Raw storage for the world/store pointers the contract requires but these tests never use. */
 		std::uint64_t WorldStorage{0};
 		std::uint64_t StoreStorage{0};
 	};
 
 	/**
-	 * FApplication double whose only override is OnConfigure, so the new single-hook contract is
-	 * observed: it counts OnConfigure invocations and can return a configured failure to drive the
-	 * failed-configure path, exactly as a real subclass would.
+	 * Motivation: FApplication double whose only override is OnConfigure, so the new single-hook contract is observed:
+	 *   it counts OnConfigure invocations and can return a configured failure to drive the failed-configure
+	 *   path, exactly as a real subclass would.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 * Example:
+	 *   // Construct and exercise the type in one behavior test.
 	 */
 	class FConfiguringApplication final : public MicroWorld::Application::FApplication
 	{
 	public:
 		explicit FConfiguringApplication(MicroWorld::Engine::IEngine& InEngine) noexcept : MicroWorld::Application::FApplication(InEngine) {}
 
-		/** Drives the next OnConfigure result so the failed-configure path is reachable from a test. */
+		/**
+		 * Motivation: The failed-configure path is reachable from a test.
+		 * Responsibilities: Drives the next OnConfigure result.
+		 */
 		void ConfigureConfigureResult(MicroWorld::Core::ERuntimeResult InResult) noexcept { ConfiguredConfigureResult = InResult; }
 
-		/** Observes how many times OnConfigure fired, since double-begin must not re-invoke it. */
+		/** Motivation: Observes how many times OnConfigure fired, since double-begin must not re-invoke it. */
 		int ConfigureCount{0};
 
-		/** Observes whether the rollback hook fired exactly once after a failed configure. */
+		/** Motivation: Observes whether the rollback hook fired exactly once after a failed configure. */
 		int BeginPlayFailedCount{0};
 
 	protected:
@@ -100,15 +111,15 @@ namespace
 		void OnBeginPlayFailed() noexcept override { ++BeginPlayFailedCount; }
 
 	private:
-		/** Holds the result OnConfigure will return, seeded to Success so the happy path needs no setup. */
+		/** Motivation: Holds the result OnConfigure will return, seeded to Success so the happy path needs no setup. */
 		MicroWorld::Core::ERuntimeResult ConfiguredConfigureResult{MicroWorld::Core::ERuntimeResult::Success};
 	};
 
 } // namespace
 
 /**
- * Scenario: Invoke BeginPlay once on a freshly constructed application.
- * Expected: OnConfigure runs once; the engine's BeginPlay runs once after it; BeginPlay reports Success.
+ * Motivation: Invoke BeginPlay once on a freshly constructed application.
+ * Responsibilities: OnConfigure runs once; the engine's BeginPlay runs once after it; BeginPlay reports Success.
  */
 MW_TEST_CASE(ApplicationBeginPlayInvokesOnConfigureThenEngineBeginPlay)
 {
@@ -126,8 +137,9 @@ MW_TEST_CASE(ApplicationBeginPlayInvokesOnConfigureThenEngineBeginPlay)
 }
 
 /**
- * Scenario: Configure OnConfigure to fail, then invoke BeginPlay, Advance, and EndPlay after the failed begin.
- * Expected: The rollback hook fires once; the engine BeginPlay is never reached; Advance and EndPlay are rejected as terminal.
+ * Motivation: Configure OnConfigure to fail, then invoke BeginPlay, Advance, and EndPlay after the failed begin.
+ * Responsibilities: The rollback hook fires once; the engine BeginPlay is never reached; Advance and EndPlay are
+ *   rejected as terminal.
  */
 MW_TEST_CASE(ApplicationFailedConfigureInvokesFailureHookAndLatchesTerminal)
 {
@@ -153,8 +165,9 @@ MW_TEST_CASE(ApplicationFailedConfigureInvokesFailureHookAndLatchesTerminal)
 }
 
 /**
- * Scenario: Complete one BeginPlay, then invoke BeginPlay a second time.
- * Expected: The second BeginPlay is rejected by the lifecycle guard; OnConfigure and the engine BeginPlay are not re-invoked.
+ * Motivation: Complete one BeginPlay, then invoke BeginPlay a second time.
+ * Responsibilities: The second BeginPlay is rejected by the lifecycle guard; OnConfigure and the engine BeginPlay are
+ *   not re-invoked.
  */
 MW_TEST_CASE(ApplicationSecondBeginPlayIsRejected)
 {
@@ -173,8 +186,8 @@ MW_TEST_CASE(ApplicationSecondBeginPlayIsRejected)
 }
 
 /**
- * Scenario: Invoke Advance before any BeginPlay has been called.
- * Expected: Advance is rejected as a lifecycle violation; the engine Tick is never reached.
+ * Motivation: Invoke Advance before any BeginPlay has been called.
+ * Responsibilities: Advance is rejected as a lifecycle violation; the engine Tick is never reached.
  */
 MW_TEST_CASE(ApplicationAdvanceBeforeBeginPlayIsRejected)
 {
@@ -191,8 +204,9 @@ MW_TEST_CASE(ApplicationAdvanceBeforeBeginPlayIsRejected)
 }
 
 /**
- * Scenario: After one advancing Advance, invoke Advance again with a timestamp strictly earlier than the previous one.
- * Expected: The backward timestamp is rejected; the engine Tick is not invoked for that call.
+ * Motivation: After one advancing Advance, invoke Advance again with a timestamp strictly earlier than the
+ *   previous one.
+ * Responsibilities: The backward timestamp is rejected; the engine Tick is not invoked for that call.
  */
 MW_TEST_CASE(ApplicationAdvanceRejectsBackwardTime)
 {
@@ -211,8 +225,8 @@ MW_TEST_CASE(ApplicationAdvanceRejectsBackwardTime)
 }
 
 /**
- * Scenario: After one advancing Advance, invoke Advance again with the same timestamp.
- * Expected: The repeated timestamp is accepted as monotonic-equivalent; the engine Tick still dispatches.
+ * Motivation: After one advancing Advance, invoke Advance again with the same timestamp.
+ * Responsibilities: The repeated timestamp is accepted as monotonic-equivalent; the engine Tick still dispatches.
  */
 MW_TEST_CASE(ApplicationAdvanceAcceptsRepeatedSameTimestamp)
 {
@@ -231,8 +245,8 @@ MW_TEST_CASE(ApplicationAdvanceAcceptsRepeatedSameTimestamp)
 }
 
 /**
- * Scenario: After BeginPlay, invoke EndPlay twice.
- * Expected: The first EndPlay succeeds; the second remains successful; the engine EndPlay runs only once.
+ * Motivation: After BeginPlay, invoke EndPlay twice.
+ * Responsibilities: The first EndPlay succeeds; the second remains successful; the engine EndPlay runs only once.
  */
 MW_TEST_CASE(ApplicationEndPlayIsIdempotent)
 {
@@ -252,8 +266,8 @@ MW_TEST_CASE(ApplicationEndPlayIsIdempotent)
 }
 
 /**
- * Scenario: Complete BeginPlay then EndPlay, then invoke Advance.
- * Expected: Advance is rejected as a lifecycle violation; the engine Tick is never reached.
+ * Motivation: Complete BeginPlay then EndPlay, then invoke Advance.
+ * Responsibilities: Advance is rejected as a lifecycle violation; the engine Tick is never reached.
  */
 MW_TEST_CASE(ApplicationAdvanceAfterEndPlayIsRejected)
 {

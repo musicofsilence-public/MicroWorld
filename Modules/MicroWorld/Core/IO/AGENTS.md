@@ -28,7 +28,7 @@ Format C++ files with `clang-format --style=file:clang-format` and verify
 documentation with:
 
 ```powershell
-python tools/CheckClassDocumentation.py --root Modules/MicroWorld/Core/IO --require-doxygen --max-sentences 3
+python tools/CheckDocumentationStyle.py --root Modules/MicroWorld/Core/IO
 ```
 
 Build and test the standalone Core package:

@@ -17,29 +17,42 @@ static_assert(MicroWorld::Version.Patch == 0);
 namespace MicroWorldConsumer
 {
 
-/** Stable process exit codes that identify the exact Core+Object public-API probe failure. */
+/**
+ * Motivation: Stable process exit codes that identify the exact Core+Object public-API probe failure.
+ * Responsibilities: Name each distinct object-API failure so the probe reports the exact broken step.
+ * Example:
+ *   EObjectConsumerExitCode Code = EObjectConsumerExitCode::Success;
+ */
 enum class EObjectConsumerExitCode : int
 {
-	Success = 0,
-	ClassRegistrationFailed = 1,
-	RegisteredDescriptorMissing = 2,
-	StoreConfigurationFailed = 3,
-	ObjectCreationFailed = 4,
-	StrongRootAcquireFailed = 5,
-	RootedCollectionDidNotRetain = 6,
-	ProbeOutcomeMismatch = 7,
-	MemoryProfileFailureOffset = 100,
+	Success = 0,					  ///< Motivation: Reports the probe observed every object API succeeding.
+	ClassRegistrationFailed = 1,	  ///< Motivation: Names a class-descriptor registration the registry rejected.
+	RegisteredDescriptorMissing = 2,  ///< Motivation: Names a lookup that did not return the just-registered descriptor.
+	StoreConfigurationFailed = 3,	  ///< Motivation: Names an object store that rejected its caller-owned storage.
+	ObjectCreationFailed = 4,		  ///< Motivation: Names an object construction that did not return a live pointer.
+	StrongRootAcquireFailed = 5,	  ///< Motivation: Names a strong-root acquire that did not return a live pointer.
+	RootedCollectionDidNotRetain = 6, ///< Motivation: Names a rooted collection that reclaimed a still-referenced object.
+	ProbeOutcomeMismatch = 7,		  ///< Motivation: Names a final outcome check that did not match the expected state.
+	MemoryProfileFailureOffset = 100, ///< Motivation: Offsets the nested memory-probe failure codes out of the object range.
 };
 
-/** Supplies one concrete managed type for downstream construction and collection. */
+/**
+ * Motivation: Supplies one concrete managed type for downstream construction and collection.
+ * Responsibilities: Derive UObject so a descriptor can construct and destroy one user object.
+ * Example:
+ *   const FClassDescriptor D = MakeClassDescriptor<FConsumerObject>(1, "ConsumerObject");
+ */
 class FConsumerObject final : public MicroWorld::Engine::UObject
 {
 public:
-	/** Makes exact descriptor-driven destruction publicly instantiable. */
+	/**
+	 * Motivation: Makes exact descriptor-driven destruction publicly instantiable.
+	 * Responsibilities: Keep the destructor defaulted so the descriptor's destroy path can call it.
+	 */
 	~FConsumerObject() noexcept override = default;
 };
 
-/** One-slot object store configuration the probe exercises. */
+/** Motivation: One-slot object store configuration the probe exercises. */
 inline constexpr std::uint32_t ProbeSlotCount = 1;
 inline constexpr std::uint32_t ProbeRootCapacity = 1;
 inline constexpr std::size_t ProbeSlotSizeBytes = 128;
@@ -48,7 +61,10 @@ inline constexpr MicroWorld::Engine::FTypeId ConsumerObjectTypeId = 1;
 
 } // namespace MicroWorldConsumer
 
-/** Exercises representative Core+Object public APIs without platform I/O. */
+/**
+ * Motivation: Exercises representative Core+Object public APIs without platform I/O.
+ * Responsibilities: Register, create, root, collect, and reclaim one managed object and report the first failure code.
+ */
 inline int RunObjectConsumerProbe() noexcept
 {
 	using namespace MicroWorld::Core;

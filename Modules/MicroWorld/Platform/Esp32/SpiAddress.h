@@ -8,16 +8,10 @@ namespace MicroWorld::Platform::Esp32
 {
 
 /**
- * Encodes an SPI node id into an opaque one-byte `FDeviceAddress`.
- *
- * The byte carries a frame node id: the local id stamped on an outgoing frame, or the SENDER's id read
- * from a received frame. It is NOT a bus address — SPI selects the device with the CS pin, so the link is
- * point-to-point and this address only stamps and reports identity, exactly as the UART, I2C, and LoRa
- * encodings do. The encoding is owned here because `FDeviceAddress` ascribes no meaning to its bytes and is
- * shared with the UDP, loopback, LoRa, UART, and I2C encodings.
- *
- * @param InNodeId Node id of the sender or recipient this address names.
- * @return One-byte address carrying the node id.
+ * Motivation: Encodes one SPI node id into an opaque one-byte FDeviceAddress so callers route a point-to-point
+ *   link by identity rather than bus address (SPI selects the device with the CS pin); the encoding lives here
+ *   because FDeviceAddress ascribes no meaning to its bytes and is shared across every transport.
+ * Responsibilities: Stamp exactly one node id into the first byte and set the active length to one.
  */
 constexpr Transport::Address::FDeviceAddress MakeSpiAddress(const std::uint8_t InNodeId) noexcept
 {
@@ -28,15 +22,9 @@ constexpr Transport::Address::FDeviceAddress MakeSpiAddress(const std::uint8_t I
 }
 
 /**
- * Reports whether an address carries this package's one-byte SPI encoding.
- *
- * Only the active length is inspected, so a six-byte UDP address is never mistaken for an SPI one; the byte
- * value is validated when a device actually routes the address. The one-byte UART, I2C, LoRa, and loopback
- * encodings share this shape by design — a single device instance only ever handles addresses meant for its
- * own transport.
- *
- * @param InAddress Address whose encoding to test.
- * @return True when the active length is exactly one byte.
+ * Motivation: Lets a device reject a non-SPI encoding before routing it, so a multi-transport caller cannot
+ *   hand a UDP or wrong-length address to a point-to-point SPI device.
+ * Responsibilities: Inspect only the active length and return true when it is exactly one byte.
  */
 constexpr bool IsSpiAddress(const Transport::Address::FDeviceAddress& InAddress) noexcept
 {
@@ -44,13 +32,9 @@ constexpr bool IsSpiAddress(const Transport::Address::FDeviceAddress& InAddress)
 }
 
 /**
- * Recomposes the SPI node id from an address's first byte.
- *
- * The wire is point-to-point, so this id is meaningful as the sender on a received frame or as the local
- * stamp on an outgoing frame; callers must first confirm `IsSpiAddress` to avoid reading unrelated bytes.
- *
- * @param InAddress Address whose first byte holds the node id.
- * @return Node id carried by the address.
+ * Motivation: Recovers the SPI node id a one-byte address carries so a received frame can report its sender
+ *   identity back to the caller.
+ * Responsibilities: Return the first byte; callers must confirm IsSpiAddress first to avoid reading unrelated bytes.
  */
 constexpr std::uint8_t SpiAddressNodeId(const Transport::Address::FDeviceAddress& InAddress) noexcept
 {

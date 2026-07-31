@@ -51,7 +51,7 @@ MicroWorld/
 ├── examples/           PlatformIO examples + the host HostLifecycle/TwoNodeDemo
 ├── docs/               engine-wide design docs, ADRs, diagrams, the one plan
 ├── tools/              CheckDependencyBoundaries, CheckProfileMap,
-│                       CheckFolderAgents, CheckClassDocumentation,
+│                       CheckFolderAgents, CheckDocumentationStyle,
 │                       CheckFormatting, CheckNamespaces
 ├── CMakeLists.txt      root superbuild (adds Modules/)
 └── clang-format        repo style file (invoke as --style=file:clang-format)
@@ -108,9 +108,13 @@ future refactors preserve the system-directory names and the side-by-side
   leading dot, so invoke it explicitly:
   `clang-format --style=file:clang-format ...`
   Bare `clang-format` falls back to LLVM style and produces false positives.
-- Document every function declaration and every persistent, shared,
-  configuration, or state variable with why it exists, the ownership/lifecycle
-  boundary it protects, or the invariant it makes observable.
+- Document every C++ declaration with a tiered `/** ... */` contract: every
+  `class`, `struct`, and `enum class` carries `Motivation`, `Responsibilities`,
+  and `Example`; every function carries `Motivation` and `Responsibilities`;
+  every variable, enumerator, and `using`/typedef carries a one-line
+  `Motivation`. State why the declaration exists (Motivation), what it owes
+  once it exists (Responsibilities), and one high-level use (Example, types
+  only). `tools/CheckDocumentationStyle.py` enforces the labels repo-wide.
 - Every scoped `AGENTS.md` describes the architecture, concepts, dependency
   direction, and verification owned by its directory.
 
@@ -136,8 +140,8 @@ python tools/CheckDependencyBoundaries.py --self-test
 python tools/CheckProfileMap.py --self-test
 python tools/CheckFolderAgents.py --self-test
 python tools/CheckFolderAgents.py --root Modules
-python tools/CheckClassDocumentation.py --self-test
-python tools/CheckClassDocumentation.py --root . --require-doxygen
+python tools/CheckDocumentationStyle.py --self-test
+python tools/CheckDocumentationStyle.py --root .
 python tools/CheckFormatting.py
 python tools/CheckNamespaces.py --self-test
 python tools/CheckNamespaces.py
@@ -163,3 +167,42 @@ Before a change is complete: build every affected module, run host tests for
 pure protocol/timing/policy logic, run the checkers, run the formatting gate,
 and treat warnings as defects. Never claim a build, test, measurement, or
 hardware behavior that was not actually verified.
+
+<!-- code-review-graph MCP tools -->
+## MCP Tools: code-review-graph
+
+**IMPORTANT: This project has a knowledge graph. ALWAYS use the
+code-review-graph MCP tools BEFORE using Grep/Glob/Read to explore
+the codebase.** The graph is faster, cheaper (fewer tokens), and gives
+you structural context (callers, dependents, test coverage) that file
+scanning cannot.
+
+### When to use graph tools FIRST
+
+- **Exploring code**: `semantic_search_nodes_tool` or `query_graph_tool` instead of Grep
+- **Understanding impact**: `get_impact_radius_tool` instead of manually tracing imports
+- **Code review**: `detect_changes_tool` + `get_review_context_tool` instead of reading entire files
+- **Finding relationships**: `query_graph_tool` with callers_of/callees_of/imports_of/tests_for
+- **Architecture questions**: `get_architecture_overview_tool` + `list_communities_tool`
+
+Fall back to Grep/Glob/Read **only** when the graph doesn't cover what you need.
+
+### Key Tools
+
+| Tool | Use when |
+| ------ | ---------- |
+| `detect_changes_tool` | Reviewing code changes — gives risk-scored analysis |
+| `get_review_context_tool` | Need source snippets for review — token-efficient |
+| `get_impact_radius_tool` | Understanding blast radius of a change |
+| `get_affected_flows_tool` | Finding which execution paths are impacted |
+| `query_graph_tool` | Tracing callers, callees, imports, tests, dependencies |
+| `semantic_search_nodes_tool` | Finding functions/classes by name or keyword |
+| `get_architecture_overview_tool` | Understanding high-level codebase structure |
+| `refactor_tool` | Planning renames, finding dead code |
+
+### Workflow
+
+1. The graph auto-updates on file changes (via hooks).
+2. Use `detect_changes_tool` for code review.
+3. Use `get_affected_flows_tool` to understand impact.
+4. Use `query_graph_tool` pattern="tests_for" to check coverage.

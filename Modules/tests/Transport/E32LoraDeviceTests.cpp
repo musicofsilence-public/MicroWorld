@@ -24,51 +24,56 @@ using MicroWorld::Transport::Address::FDeviceAddress;
 using MicroWorld::Transport::Device::FReceiveResult;
 using MicroWorld::Transport::FrameCodec::FrameOverheadBytes;
 
-/** Fixed encoded E32 frame capacity used by transmit and receive test fixtures. */
+/** Motivation: Fixed encoded E32 frame capacity used by transmit and receive test fixtures. */
 constexpr std::size_t EncodedFrameCapacity = E32MaxPayloadBytes + FrameOverheadBytes;
 
-/** Device receive budget derived from the largest possible encoded E32 frame. */
+/** Motivation: Device receive budget derived from the largest possible encoded E32 frame. */
 constexpr std::size_t ReceivePumpByteCap = 2u * EncodedFrameCapacity;
 
-/** Fixed receive-stream capacity for one capped prefix followed by up to two encoded frames. */
+/** Motivation: Fixed receive-stream capacity for one capped prefix followed by up to two encoded frames. */
 constexpr std::size_t ReceiveStreamCapacity = ReceivePumpByteCap + (2u * EncodedFrameCapacity);
 
-/** Local node id used by every initialized transmitting device fixture. */
+/** Motivation: Local node id used by every initialized transmitting device fixture. */
 constexpr std::uint8_t LocalNodeId = 7;
 
-/** Peer node id used by every valid one-byte E32 destination and decoded frame fixture. */
+/** Motivation: Peer node id used by every valid one-byte E32 destination and decoded frame fixture. */
 constexpr std::uint8_t PeerNodeId = 9;
 
-/** Distinct node id used to prove non-success receives preserve caller sender outputs. */
+/** Motivation: Distinct node id used to prove non-success receives preserve caller sender outputs. */
 constexpr std::uint8_t SentinelNodeId = 0xEE;
 
-/** Distinct value used to prove non-success receives preserve caller byte outputs. */
+/** Motivation: Distinct value used to prove non-success receives preserve caller byte outputs. */
 constexpr std::uint8_t SentinelByte = 0xD3;
 
-/** Distinct byte count used to prove non-success receives preserve the result output. */
+/** Motivation: Distinct byte count used to prove non-success receives preserve the result output. */
 constexpr std::size_t SentinelByteCount = 123;
 
-/** Three-byte payload used by normal send, receive, recovery, and exchange cases. */
+/** Motivation: Three-byte payload used by normal send, receive, recovery, and exchange cases. */
 constexpr std::uint8_t Payload[] = {0x10, 0x20, 0x30};
 
-/** Different payload that proves a released transmit slot accepts later work. */
+/** Motivation: Different payload that proves a released transmit slot accepts later work. */
 constexpr std::uint8_t ReplacementPayload[] = {0x91, 0x82};
 
-/** Largest valid payload, used to exercise fixed-frame capacity and bounded burst progress. */
+/** Motivation: Largest valid payload, used to exercise fixed-frame capacity and bounded burst progress. */
 constexpr std::uint8_t MaximumPayload[E32MaxPayloadBytes] = {};
 
-/** One backed byte paired with an oversize span length so validation rejects before reading beyond it. */
+/** Motivation: One backed byte paired with an oversize span length so validation rejects before reading beyond it. */
 constexpr std::uint8_t OversizePayloadByte = 0;
 
 /**
- * Fixed-capacity UART fake exposing explicit non-blocking read and write outcomes.
- *
- * Each test owns one fresh fake, so recorded traffic and configured outcomes never cross test boundaries.
+ * Motivation: Fixed-capacity UART fake exposing explicit non-blocking read and write outcomes. Each test owns one
+ *   fresh fake, so recorded traffic and configured outcomes never cross test boundaries.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
  */
 class FFakeUartByteStream final : public IUartByteStream
 {
 public:
-	/** Records a successful byte write or reports the result currently selected by the test. */
+	/**
+	 * Motivation: Records a successful byte write or reports the result currently selected by the test.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	EUartByteStreamResult TryWriteByte(const std::uint8_t InByte) noexcept override
 	{
 		++WriteCallCountValue;
@@ -90,7 +95,10 @@ public:
 		return EUartByteStreamResult::Success;
 	}
 
-	/** Supplies the next queued byte or reports the result currently selected by the test. */
+	/**
+	 * Motivation: Supplies the next queued byte or reports the result currently selected by the test.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	EUartByteStreamResult TryReadByte(std::uint8_t& OutByte) noexcept override
 	{
 		++ReadCallCountValue;
@@ -108,16 +116,29 @@ public:
 		return EUartByteStreamResult::Success;
 	}
 
-	/** Selects the outcome returned by every later write attempt until another test change. */
+	/**
+	 * Motivation: Selects the outcome returned by every later write attempt until another test change.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void SetWriteResult(const EUartByteStreamResult InResult) noexcept { WriteResult = InResult; }
 
-	/** Limits accepted writes before later attempts report Error, exercising partial-frame failure without result storage. */
+	/**
+	 * Motivation: Limits accepted writes before later attempts report Error, exercising partial-frame failure without
+	 *   result storage.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void SetSuccessfulWriteLimit(const std::size_t InLimit) noexcept { SuccessfulWriteLimit = InLimit; }
 
-	/** Selects the outcome returned by every later read attempt until another test change. */
+	/**
+	 * Motivation: Selects the outcome returned by every later read attempt until another test change.
+	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 */
 	void SetReadResult(const EUartByteStreamResult InResult) noexcept { ReadResult = InResult; }
 
-	/** Queues one raw incoming UART byte when fixed test storage remains available. */
+	/**
+	 * Motivation: Queues one raw incoming UART byte when fixed test storage remains available.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
 	bool QueueReceivedByte(const std::uint8_t InByte) noexcept
 	{
 		if (QueuedReceiveByteCount == ReceiveStreamCapacity)
@@ -130,51 +151,66 @@ public:
 		return true;
 	}
 
-	/** Reports how many write attempts the device made, including blocked and failed attempts. */
+	/**
+	 * Motivation: Reports how many write attempts the device made, including blocked and failed attempts.
+	 * Responsibilities: Return the stored value and touch nothing else.
+	 */
 	std::size_t WriteCallCount() const noexcept { return WriteCallCountValue; }
 
-	/** Reports how many bytes the fake accepted after successful write attempts. */
+	/**
+	 * Motivation: Reports how many bytes the fake accepted after successful write attempts.
+	 * Responsibilities: Return the stored value and touch nothing else.
+	 */
 	std::size_t WrittenByteCount() const noexcept { return WrittenByteCountValue; }
 
-	/** Reports how many read attempts the device made, including empty and failed attempts. */
+	/**
+	 * Motivation: Reports how many read attempts the device made, including empty and failed attempts.
+	 * Responsibilities: Return the stored value and touch nothing else.
+	 */
 	std::size_t ReadCallCount() const noexcept { return ReadCallCountValue; }
 
-	/** Reads one captured successful write for observable wire-traffic assertions. */
+	/**
+	 * Motivation: Reads one captured successful write for observable wire-traffic assertions.
+	 * Responsibilities: Return the stored value and touch nothing else.
+	 */
 	std::uint8_t WrittenByteAt(const std::size_t InIndex) const noexcept { return WrittenBytes[InIndex]; }
 
 private:
-	/** Stores all successful writes from the one fixed frame a device may queue at once. */
+	/** Motivation: Stores all successful writes from the one fixed frame a device may queue at once. */
 	std::uint8_t WrittenBytes[EncodedFrameCapacity]{};
 
-	/** Stores raw bytes supplied to later receive polls without dynamic storage. */
+	/** Motivation: Stores raw bytes supplied to later receive polls without dynamic storage. */
 	std::uint8_t QueuedReceiveBytes[ReceiveStreamCapacity]{};
 
-	/** Controls whether a write succeeds, blocks, or fails for the active test scenario. */
+	/** Motivation: Controls whether a write succeeds, blocks, or fails for the active test scenario. */
 	EUartByteStreamResult WriteResult{EUartByteStreamResult::Success};
 
-	/** Controls whether a read consumes queued data, blocks, or fails for the active test scenario. */
+	/** Motivation: Controls whether a read consumes queued data, blocks, or fails for the active test scenario. */
 	EUartByteStreamResult ReadResult{EUartByteStreamResult::Success};
 
-	/** Bounds successful writes before the fake reports Error for later attempts in a partial-frame failure scenario. */
+	/** Motivation: Bounds successful writes before the fake reports Error for later attempts in a partial-frame failure scenario. */
 	std::size_t SuccessfulWriteLimit{EncodedFrameCapacity};
 
-	/** Counts accepted bytes in WrittenBytes and bounds later indexed observations. */
+	/** Motivation: Counts accepted bytes in WrittenBytes and bounds later indexed observations. */
 	std::size_t WrittenByteCountValue{0};
 
-	/** Counts queued inbound bytes and bounds later UART read attempts. */
+	/** Motivation: Counts queued inbound bytes and bounds later UART read attempts. */
 	std::size_t QueuedReceiveByteCount{0};
 
-	/** Identifies the next queued inbound byte that a successful read may consume. */
+	/** Motivation: Identifies the next queued inbound byte that a successful read may consume. */
 	std::size_t NextReceivedByteIndex{0};
 
-	/** Counts every write operation so blocked/error attempts stay observable. */
+	/** Motivation: Counts every write operation so blocked/error attempts stay observable. */
 	std::size_t WriteCallCountValue{0};
 
-	/** Counts every read operation so bounded receive polling stays observable. */
+	/** Motivation: Counts every read operation so bounded receive polling stays observable. */
 	std::size_t ReadCallCountValue{0};
 };
 
-/** Encodes one peer frame into fixed storage for public-device receive scenarios. */
+/**
+ * Motivation: Encodes one peer frame into fixed storage for public-device receive scenarios.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ */
 ETransportResult EncodePeerFrame(
 	const std::uint8_t* const InPayload,
 	const std::size_t InPayloadSize,
@@ -185,7 +221,11 @@ ETransportResult EncodePeerFrame(
 		PeerNodeId, TSpan<const std::uint8_t>(InPayload, InPayloadSize), TSpan<std::uint8_t>(OutFrame, sizeof(OutFrame)), OutFrameBytes);
 }
 
-/** Queues every byte of one fixed frame into a fake stream and reports whether its capacity was sufficient. */
+/**
+ * Motivation: Queues every byte of one fixed frame into a fake stream and reports whether its capacity was
+ *   sufficient.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ */
 bool QueueFrame(FFakeUartByteStream& InStream, const std::uint8_t* const InFrame, const std::size_t InFrameBytes) noexcept
 {
 	for (std::size_t ByteIndex = 0; ByteIndex < InFrameBytes; ++ByteIndex)
@@ -199,7 +239,10 @@ bool QueueFrame(FFakeUartByteStream& InStream, const std::uint8_t* const InFrame
 	return true;
 }
 
-/** Reports whether a destination retains one expected repeated sentinel value. */
+/**
+ * Motivation: Reports whether a destination retains one expected repeated sentinel value.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ */
 bool DestinationContains(const std::uint8_t* const InDestination, const std::size_t InDestinationBytes, const std::uint8_t InExpected) noexcept
 {
 	for (std::size_t ByteIndex = 0; ByteIndex < InDestinationBytes; ++ByteIndex)
@@ -213,7 +256,10 @@ bool DestinationContains(const std::uint8_t* const InDestination, const std::siz
 	return true;
 }
 
-/** Reports whether one received destination exactly matches the supplied expected payload. */
+/**
+ * Motivation: Reports whether one received destination exactly matches the supplied expected payload.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ */
 bool DestinationMatches(const std::uint8_t* const InDestination, const std::uint8_t* const InExpected, const std::size_t InBytes) noexcept
 {
 	for (std::size_t ByteIndex = 0; ByteIndex < InBytes; ++ByteIndex)
@@ -227,15 +273,19 @@ bool DestinationMatches(const std::uint8_t* const InDestination, const std::uint
 	return true;
 }
 
-/** Reports whether an output address remains the expected one-byte E32 address. */
+/**
+ * Motivation: Reports whether an output address remains the expected one-byte E32 address.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ */
 bool AddressHasNodeId(const FDeviceAddress& InAddress, const std::uint8_t InNodeId) noexcept
 {
 	return InAddress.Size == 1 && InAddress.Bytes[0] == InNodeId;
 }
 
 /**
- * Scenario: Use send and receive before initialization, then initialize twice.
- * Expected: The device remains inert before initialization, initializes once without UART I/O, and rejects a later initialization.
+ * Motivation: Use send and receive before initialization, then initialize twice.
+ * Responsibilities: The device remains inert before initialization, initializes once without UART I/O, and rejects a
+ *   later initialization.
  */
 MW_TEST_CASE(E32LoraDeviceRemainsInertUntilSingleShotInitialization)
 {
@@ -276,8 +326,8 @@ MW_TEST_CASE(E32LoraDeviceRemainsInertUntilSingleShotInitialization)
 }
 
 /**
- * Scenario: Send malformed, null, and oversize payloads before sending valid normal, empty, and maximum packets.
- * Expected: Invalid sends do not occupy the slot; every documented valid payload boundary is accepted.
+ * Motivation: Send malformed, null, and oversize payloads before sending valid normal, empty, and maximum packets.
+ * Responsibilities: Invalid sends do not occupy the slot; every documented valid payload boundary is accepted.
  */
 MW_TEST_CASE(E32LoraDeviceValidatesSendInputsAndAcceptsPayloadBoundaries)
 {
@@ -318,8 +368,10 @@ MW_TEST_CASE(E32LoraDeviceValidatesSendInputsAndAcceptsPayloadBoundaries)
 }
 
 /**
- * Scenario: Queue one maximum packet, attempt a second while occupied, then advance once through an always-writable UART.
- * Expected: The second send reports Full; one advance drains the complete fixed frame within its bounded byte budget and frees the slot.
+ * Motivation: Queue one maximum packet, attempt a second while occupied, then advance once through an
+ *   always-writable UART.
+ * Responsibilities: The second send reports Full; one advance drains the complete fixed frame within its bounded byte
+ *   budget and frees the slot.
  */
 MW_TEST_CASE(E32LoraDeviceAppliesBackpressureAndDrainsMaximumFrameInOneAdvance)
 {
@@ -347,8 +399,8 @@ MW_TEST_CASE(E32LoraDeviceAppliesBackpressureAndDrainsMaximumFrameInOneAdvance)
 }
 
 /**
- * Scenario: Queue a frame, block the first write, then make the UART writable and advance again.
- * Expected: The blocked byte remains queued and becomes the first successfully emitted byte on retry.
+ * Motivation: Queue a frame, block the first write, then make the UART writable and advance again.
+ * Responsibilities: The blocked byte remains queued and becomes the first successfully emitted byte on retry.
  */
 MW_TEST_CASE(E32LoraDeviceRetainsCurrentByteWhenWriteIsUnavailable)
 {
@@ -393,8 +445,8 @@ MW_TEST_CASE(E32LoraDeviceRetainsCurrentByteWhenWriteIsUnavailable)
 }
 
 /**
- * Scenario: Queue a frame, make the first UART write fail permanently, then queue another frame.
- * Expected: The failed frame is discarded so the later send is accepted instead of remaining Full forever.
+ * Motivation: Queue a frame, make the first UART write fail permanently, then queue another frame.
+ * Responsibilities: The failed frame is discarded so the later send is accepted instead of remaining Full forever.
  */
 MW_TEST_CASE(E32LoraDeviceDiscardsQueuedFrameAfterWriteError)
 {
@@ -422,9 +474,8 @@ MW_TEST_CASE(E32LoraDeviceDiscardsQueuedFrameAfterWriteError)
 }
 
 /**
- * Scenario: Supply one valid peer frame through the byte stream and receive it through the public device.
- * Expected: Success changes every receive
- * output to the decoded sender, payload bytes, and byte count.
+ * Motivation: Supply one valid peer frame through the byte stream and receive it through the public device.
+ * Responsibilities: Success changes every receive.
  */
 MW_TEST_CASE(E32LoraDeviceDeliversValidReceivedFrameTransactionally)
 {
@@ -457,9 +508,8 @@ MW_TEST_CASE(E32LoraDeviceDeliversValidReceivedFrameTransactionally)
 }
 
 /**
- * Scenario: Poll an initialized device whose byte stream has no queued data.
- * Expected: Unavailable leaves every caller-owned receive output
- * unchanged.
+ * Motivation: Poll an initialized device whose byte stream has no queued data.
+ * Responsibilities: Unavailable leaves every caller-owned receive output.
  */
 MW_TEST_CASE(E32LoraDeviceNoDataReceivePreservesOutputs)
 {
@@ -488,8 +538,8 @@ MW_TEST_CASE(E32LoraDeviceNoDataReceivePreservesOutputs)
 }
 
 /**
- * Scenario: Hold one decoded frame, reject a short and null destination, then retry with sufficient storage.
- * Expected: Both rejections preserve caller outputs and retain the frame; the later valid retry delivers it.
+ * Motivation: Hold one decoded frame, reject a short and null destination, then retry with sufficient storage.
+ * Responsibilities: Both rejections preserve caller outputs and retain the frame; the later valid retry delivers it.
  */
 MW_TEST_CASE(E32LoraDeviceRetainsDecodedFrameAcrossFullAndInvalidDestinations)
 {
@@ -537,8 +587,9 @@ MW_TEST_CASE(E32LoraDeviceRetainsDecodedFrameAcrossFullAndInvalidDestinations)
 }
 
 /**
- * Scenario: Feed a CRC-corrupt frame immediately followed by a valid peer frame.
- * Expected: The corrupt candidate is discarded and the public device resynchronizes to deliver the later valid frame.
+ * Motivation: Feed a CRC-corrupt frame immediately followed by a valid peer frame.
+ * Responsibilities: The corrupt candidate is discarded and the public device resynchronizes to deliver the later valid
+ *   frame.
  */
 MW_TEST_CASE(E32LoraDeviceResynchronizesAfterCorruptFrame)
 {
@@ -578,8 +629,9 @@ MW_TEST_CASE(E32LoraDeviceResynchronizesAfterCorruptFrame)
 }
 
 /**
- * Scenario: Queue exactly one receive budget of garbage before a complete valid frame and poll twice.
- * Expected: The first poll consumes no more than the budget and preserves outputs; the second poll delivers the frame.
+ * Motivation: Queue exactly one receive budget of garbage before a complete valid frame and poll twice.
+ * Responsibilities: The first poll consumes no more than the budget and preserves outputs; the second poll delivers the
+ *   frame.
  */
 MW_TEST_CASE(E32LoraDeviceCapsReceivePumpBeforeLaterFrameDelivery)
 {
@@ -633,8 +685,8 @@ MW_TEST_CASE(E32LoraDeviceCapsReceivePumpBeforeLaterFrameDelivery)
 }
 
 /**
- * Scenario: Make the UART return a hard read error while caller outputs contain sentinels.
- * Expected: The device maps the error to Invalid and preserves every caller-owned receive output.
+ * Motivation: Make the UART return a hard read error while caller outputs contain sentinels.
+ * Responsibilities: The device maps the error to Invalid and preserves every caller-owned receive output.
  */
 MW_TEST_CASE(E32LoraDeviceReadErrorPreservesReceiveOutputs)
 {
@@ -664,9 +716,10 @@ MW_TEST_CASE(E32LoraDeviceReadErrorPreservesReceiveOutputs)
 }
 
 /**
- * Scenario: Queue a packet on one initialized public device, advance it over a fake UART, and feed those exact bytes to another public device.
- *
- * Expected: The receiving device decodes the real emitted frame and delivers the original sender, payload, and byte count.
+ * Motivation: Queue a packet on one initialized public device, advance it over a fake UART, and feed those exact
+ *   bytes to another public device.
+ * Responsibilities: The receiving device decodes the real emitted frame and delivers the original sender, payload, and
+ *   byte count.
  */
 MW_TEST_CASE(E32LoraDevicesExchangeOneRealEncodedFrame)
 {

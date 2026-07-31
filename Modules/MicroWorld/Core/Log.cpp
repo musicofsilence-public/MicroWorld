@@ -9,7 +9,7 @@ namespace MicroWorld::Core
 namespace
 {
 
-	/** Holds the one process-global output device; nullptr means every log call is a no-op. */
+	/** Motivation: Holds the one process-global output device; nullptr means every log call is a no-op. */
 	FOutputDeviceFunction WriteRecord = nullptr;
 
 } // namespace

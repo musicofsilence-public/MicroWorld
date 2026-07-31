@@ -12,10 +12,14 @@ namespace MicroWorld::Core
 {
 
 /**
- * Supplies reusable aligned storage with fixed caller-selected capacity.
- *
- * @tparam StorageCapacityBytes Number of caller-usable bytes retained by the arena.
- * @tparam GuaranteedAlignmentBytes Maximum power-of-two alignment guaranteed by the arena.
+ * Motivation: Gives a fixed-capacity owner one memory resource that supplies reusable aligned
+ *   storage from caller-selected bytes, so allocation never falls back to a heap.
+ * Responsibilities: Track free and used ranges with packed boundary markers, allocate the first
+ *   fitting aligned range, and release only an exact active block, without compaction or fallback.
+ * Example:
+ *   TFixedArena<256, 8> Arena;
+ *   FMemoryBlock Block{};
+ *   Arena.TryAllocate(16, 4, Block);
  */
 template<std::size_t StorageCapacityBytes, std::size_t GuaranteedAlignmentBytes>
 class TFixedArena final : public IMemoryResource
@@ -29,25 +33,46 @@ class TFixedArena final : public IMemoryResource
 		"A fixed arena's aligned backing storage must fit in size_t.");
 
 public:
-	/** Creates an empty resource whose storage and metadata are caller-owned. */
+	/**
+	 * Motivation: Lets an owner declare an empty arena whose storage and metadata are caller-owned.
+	 * Responsibilities: Produce zero active bytes over the reserved fixed storage.
+	 */
 	TFixedArena() noexcept = default;
 
-	/** Preserves resource identity used by every outstanding block. */
+	/**
+	 * Motivation: Preserves the resource identity every outstanding block depends on.
+	 * Responsibilities: Reject copy construction so outstanding block addresses stay valid.
+	 */
 	TFixedArena(const TFixedArena&) = delete;
 
-	/** Prevents assigning storage identity across resource boundaries. */
+	/**
+	 * Motivation: Prevents assigning storage identity across resource boundaries.
+	 * Responsibilities: Reject copy assignment so outstanding block addresses stay valid.
+	 */
 	TFixedArena& operator=(const TFixedArena&) = delete;
 
-	/** Preserves addresses returned from this caller-owned arena. */
+	/**
+	 * Motivation: Preserves addresses returned from this caller-owned arena.
+	 * Responsibilities: Reject move construction so outstanding block addresses stay valid.
+	 */
 	TFixedArena(TFixedArena&&) = delete;
 
-	/** Prevents moving storage behind outstanding block addresses. */
+	/**
+	 * Motivation: Prevents moving storage behind outstanding block addresses.
+	 * Responsibilities: Reject move assignment so outstanding block addresses stay valid.
+	 */
 	TFixedArena& operator=(TFixedArena&&) = delete;
 
-	/** Ends the resource lifetime without assuming ownership of constructed objects. */
+	/**
+	 * Motivation: Lets an owner end the resource without owning the objects constructed in it.
+	 * Responsibilities: Destroy resource identity without touching constructed object lifetimes.
+	 */
 	~TFixedArena() noexcept override = default;
 
-	/** Allocates the first fitting aligned free range without fallback or compaction. */
+	/**
+	 * Motivation: Lets a caller reserve one aligned range when capacity allows.
+	 * Responsibilities: Reject unsupported alignment and exhaustion, then commit the first fitting free range into OutBlock.
+	 */
 	EMemoryResult TryAllocate(const std::size_t InSizeBytes, const std::size_t InAlignmentBytes, FMemoryBlock& OutBlock) noexcept override
 	{
 		OutBlock = {};
@@ -65,7 +90,10 @@ public:
 		return EMemoryResult::Success;
 	}
 
-	/** Releases only an exact active range belonging to this arena. */
+	/**
+	 * Motivation: Lets a caller return one range to the free pool without freeing another's bytes.
+	 * Responsibilities: Release only an exact active range that belongs to this arena, rejecting anything else.
+	 */
 	EMemoryResult Deallocate(const FMemoryBlock InBlock) noexcept override
 	{
 		std::size_t AllocationStart = 0;
@@ -88,14 +116,23 @@ public:
 		return EMemoryResult::Success;
 	}
 
-	/** Reports the compile-time caller-usable capacity without marker storage. */
+	/**
+	 * Motivation: Lets a caller test a request against the fixed limit without magic numbers.
+	 * Responsibilities: Report the compile-time caller-usable capacity without marker storage.
+	 */
 	std::size_t CapacityBytes() const noexcept override { return StorageCapacityBytes; }
 
-	/** Reports the exact payload bytes retained by active allocations. */
+	/**
+	 * Motivation: Keeps exhaustion observable so a caller can react before allocation fails.
+	 * Responsibilities: Report the exact payload bytes retained by active allocations.
+	 */
 	std::size_t UsedBytes() const noexcept override { return UsedSizeBytes; }
 
 private:
-	/** Rejects an unsupported alignment or a size that cannot fit the remaining capacity. */
+	/**
+	 * Motivation: Lets TryAllocate reject a bad request before scanning the storage.
+	 * Responsibilities: Report unsupported alignment or a size that cannot fit the remaining capacity.
+	 */
 	EMemoryResult ValidateAllocationRequest(const std::size_t InSizeBytes, const std::size_t InAlignmentBytes) const noexcept
 	{
 		if (!IsSupportedAlignment(InAlignmentBytes))
@@ -109,7 +146,10 @@ private:
 		return EMemoryResult::Success;
 	}
 
-	/** Scans for the first aligned run of SizeBytes free bytes and reports its start offset. */
+	/**
+	 * Motivation: Lets TryAllocate choose where the next range starts without per-allocation linked lists.
+	 * Responsibilities: Scan for the first aligned run of InSizeBytes free bytes and report its start offset.
+	 */
 	bool FindAlignedFreeRange(const std::size_t InSizeBytes, const std::size_t InAlignmentBytes, std::size_t& OutStartOffset) const noexcept
 	{
 		bool bInsideAllocation = false;
@@ -147,7 +187,10 @@ private:
 		return false;
 	}
 
-	/** Marks the found range as one allocation and hands its address back to the caller. */
+	/**
+	 * Motivation: Lets TryAllocate turn a found range into a live block atomically.
+	 * Responsibilities: Mark the range boundaries, account for its bytes, and hand its address back to the caller.
+	 */
 	void CommitAllocation(const std::size_t InStartOffset, const std::size_t InSizeBytes, FMemoryBlock& OutBlock) noexcept
 	{
 		const std::size_t AllocationEnd = InStartOffset + InSizeBytes - 1U;
@@ -158,7 +201,10 @@ private:
 		OutBlock.SizeBytes = InSizeBytes;
 	}
 
-	/** Maps a block back to its owned byte range, rejecting anything not exactly allocated here. */
+	/**
+	 * Motivation: Lets Deallocate prove a block belongs to this arena before releasing it.
+	 * Responsibilities: Map the block to its owned byte range, rejecting anything not exactly allocated here.
+	 */
 	EMemoryResult LocateOwnedAllocation(const FMemoryBlock InBlock, std::size_t& OutStart, std::size_t& OutEnd) noexcept
 	{
 		if (InBlock.Address == nullptr || InBlock.SizeBytes == 0)
@@ -187,7 +233,10 @@ private:
 		return EMemoryResult::Success;
 	}
 
-	/** Confirms no other allocation boundary falls inside the block's byte range. */
+	/**
+	 * Motivation: Stops Deallocate from freeing bytes shared with a neighboring allocation.
+	 * Responsibilities: Reject when any other allocation boundary falls inside the block's byte range.
+	 */
 	EMemoryResult ValidateExactBlockBoundaries(const std::size_t InAllocationStart, const std::size_t InAllocationEnd) const noexcept
 	{
 		for (std::size_t Offset = InAllocationStart; Offset <= InAllocationEnd; ++Offset)
@@ -202,7 +251,10 @@ private:
 		return EMemoryResult::Success;
 	}
 
-	/** Clears the block's boundary markers and returns its bytes to the free pool. */
+	/**
+	 * Motivation: Lets Deallocate return one block to the free pool cleanly.
+	 * Responsibilities: Clear the block's boundary markers and subtract its bytes from the used count.
+	 */
 	void ReleaseMarkedRange(const std::size_t InAllocationStart, const std::size_t InAllocationEnd, const std::size_t InSizeBytes) noexcept
 	{
 		WriteMarker(AllocationStartMarkers, InAllocationStart, false);
@@ -210,13 +262,16 @@ private:
 		UsedSizeBytes -= InSizeBytes;
 	}
 
-	/** Packs one allocation-boundary bit per usable byte into bounded metadata. */
+	/** Motivation: Sizes the boundary-marker storage so one bit covers every usable byte. */
 	static constexpr std::size_t MarkerStorageBytes = (StorageCapacityBytes + (BitsPerByte - 1)) / BitsPerByte;
 
-	/** Reserves enough local bytes to expose StorageCapacityBytes after aligning the first usable byte. */
+	/** Motivation: Reserves enough local bytes to expose StorageCapacityBytes after aligning the first usable byte. */
 	static constexpr std::size_t RawStorageSizeBytes = StorageCapacityBytes + GuaranteedAlignmentBytes - 1U;
 
-	/** Finds the stable aligned start without requiring padding around the virtual base. */
+	/**
+	 * Motivation: Gives every allocation a stable aligned address without padding around the base.
+	 * Responsibilities: Return the first guaranteed-aligned byte of the backing storage.
+	 */
 	std::byte* StorageBegin() noexcept
 	{
 		const std::uintptr_t RawAddress = reinterpret_cast<std::uintptr_t>(Storage.data());
@@ -225,7 +280,10 @@ private:
 		return Storage.data() + AlignmentAdjustment;
 	}
 
-	/** Confirms the arena can guarantee the requested power-of-two alignment. */
+	/**
+	 * Motivation: Lets validation reject alignments the arena cannot guarantee.
+	 * Responsibilities: Confirm the alignment is a positive power of two at most the guaranteed value.
+	 */
 	static bool IsSupportedAlignment(const std::size_t InAlignmentBytes) noexcept
 	{
 		const bool bIsPositive = InAlignmentBytes > 0;
@@ -234,20 +292,29 @@ private:
 		return bIsPositive && bIsPowerOfTwo && bFitsGuarantee;
 	}
 
-	/** Reports whether a non-zero allocation request still fits the unused capacity. */
+	/**
+	 * Motivation: Lets TryAllocate reject a request that cannot possibly fit.
+	 * Responsibilities: Report whether a non-zero request still fits the unused capacity.
+	 */
 	bool FitsFreeCapacity(const std::size_t InSizeBytes) const noexcept
 	{
 		return InSizeBytes != 0 && InSizeBytes <= StorageCapacityBytes - UsedSizeBytes;
 	}
 
-	/** Reports whether a block address falls within the arena's aligned storage window. */
+	/**
+	 * Motivation: Lets LocateOwnedAllocation reject a foreign block before touching markers.
+	 * Responsibilities: Report whether a block address falls within the arena's aligned storage window.
+	 */
 	static bool IsBlockInRange(
 		const std::uintptr_t InBlockAddress, const std::uintptr_t InStorageAddress, const std::uintptr_t InStorageEndAddress) noexcept
 	{
 		return InBlockAddress >= InStorageAddress && InBlockAddress < InStorageEndAddress;
 	}
 
-	/** Reads one boundary marker without exposing bookkeeping to callers. */
+	/**
+	 * Motivation: Lets the scanner inspect one allocation boundary without exposing bookkeeping.
+	 * Responsibilities: Return the boundary bit packed at InOffset, BitsPerByte markers per byte.
+	 */
 	static bool ReadMarker(const std::array<std::uint8_t, MarkerStorageBytes>& InMarkers, const std::size_t InOffset) noexcept
 	{
 		// Hand-rolled bitset: one bit per usable byte, packed BitsPerByte to a std::uint8_t
@@ -257,7 +324,10 @@ private:
 		return (InMarkers[MarkerByte] & MarkerMask) != 0;
 	}
 
-	/** Changes one boundary marker while leaving unrelated allocations intact. */
+	/**
+	 * Motivation: Lets Commit and Release change one boundary without disturbing neighbors.
+	 * Responsibilities: Set or clear the boundary bit at InOffset while leaving the rest of the markers intact.
+	 */
 	static void WriteMarker(std::array<std::uint8_t, MarkerStorageBytes>& InMarkers, const std::size_t InOffset, const bool bInValue) noexcept
 	{
 		const std::size_t MarkerByte = InOffset / BitsPerByte;
@@ -270,16 +340,16 @@ private:
 		InMarkers[MarkerByte] = static_cast<std::uint8_t>(InMarkers[MarkerByte] & ~MarkerMask);
 	}
 
-	/** Retains caller-owned capacity plus bounded space for the aligned usable start. */
+	/** Motivation: Retains caller-owned capacity plus bounded space for the aligned usable start. */
 	std::array<std::byte, RawStorageSizeBytes> Storage{};
 
-	/** Identifies each active block's first byte without consuming payload capacity. */
+	/** Motivation: Identifies each active block's first byte without consuming payload capacity. */
 	std::array<std::uint8_t, MarkerStorageBytes> AllocationStartMarkers{};
 
-	/** Identifies each active block's last byte for exact-size validation. */
+	/** Motivation: Identifies each active block's last byte for exact-size validation. */
 	std::array<std::uint8_t, MarkerStorageBytes> AllocationEndMarkers{};
 
-	/** Makes active payload usage observable without rescanning allocation markers. */
+	/** Motivation: Makes active payload usage observable without rescanning allocation markers. */
 	std::size_t UsedSizeBytes{0};
 };
 

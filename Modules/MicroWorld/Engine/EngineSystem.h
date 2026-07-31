@@ -9,78 +9,113 @@ namespace MicroWorld::Engine
 {
 
 /**
- * Adapts one caller-owned network host to IPlaySystem by forwarding lifecycle
- * turns to Start/Stop and frame turns to PumpReceive/PumpSend,
- * discarding each
- * result exactly as the engine already discards timer and collector step results.
- *
- * THost is deduced at the call site, so the
- * engine binds a network host without
- * naming its concrete type or including its package. The host must outlive this
- * adapter, and the adapter
- * must outlive the TEngine it is bound to.
+ * Motivation: Lets a caller-owned network host be driven by the engine as a Core::IPlaySystem without the engine naming
+ *   or including the host's concrete type.
+ * Responsibilities: Forward lifecycle turns to Start/Stop and frame turns to PumpReceive/PumpSend, discarding each result
+ *   just as the engine already discards timer and collector step results; the host must outlive the adapter, which must
+ *   outlive the TEngine it binds.
+ * Example:
+ *   THostPlaySystem<FTransportHost> System(TransportHost);
+ *   Engine.Bind(System);
  */
 template<typename THost>
 class THostPlaySystem final : public Core::IPlaySystem
 {
 public:
-	/** Binds this adapter to one externally owned network host for its lifetime. */
+	/**
+	 * Motivation: Binds this adapter to one externally owned network host for its lifetime.
+	 * Responsibilities: Store the host reference without taking ownership.
+	 */
 	explicit THostPlaySystem(THost& InHost) noexcept : Host(InHost) {}
 
-	/** Opens the bound host session at the engine's canonical play-start time. */
+	/**
+	 * Motivation: Opens the bound host session at the engine's canonical play-start time.
+	 * Responsibilities: Forward to Host.Start and discard its result.
+	 */
 	void BeginPlay(const Core::TimePointMilliseconds InNowMilliseconds) noexcept override { (void)Host.Start(InNowMilliseconds); }
 
-	/** Forwards the frame's inbound step to the bound host. */
+	/**
+	 * Motivation: Forwards the frame's inbound step to the bound host.
+	 * Responsibilities: Call Host.PumpReceive and discard its result.
+	 */
 	void PreAdvance(const Core::TimePointMilliseconds InNowMilliseconds) noexcept override { (void)Host.PumpReceive(InNowMilliseconds); }
 
-	/** Forwards the frame's outbound step to the bound host. */
+	/**
+	 * Motivation: Forwards the frame's outbound step to the bound host.
+	 * Responsibilities: Call Host.PumpSend and discard its result.
+	 */
 	void PostAdvance(const Core::TimePointMilliseconds InNowMilliseconds) noexcept override { (void)Host.PumpSend(InNowMilliseconds); }
 
-	/** Closes the bound host session after the engine world has ended. */
+	/**
+	 * Motivation: Closes the bound host session after the engine world has ended.
+	 * Responsibilities: Forward to Host.Stop.
+	 */
 	void EndPlay() noexcept override { Host.Stop(); }
 
 private:
-	/** The externally owned network host this adapter drives; never owned here. */
+	/** Motivation: The externally owned network host this adapter drives; never owned here. */
 	THost& Host;
 };
 
 /**
- * Pumps several caller-owned systems as one bound IPlaySystem (roadmap D3):
- * lifecycle start and inbound dispatch run in add-order, while
- * lifecycle end
- * and outbound flush run in reverse add-order. This lets a transport host deliver
- * inbound traffic before a router handles it, then lets
- * the router queue
- * outbound traffic before the transport host sends it.
- *
- * The set only stores pointers to caller-owned systems, so it never
- * allocates
- * and never owns their lifetime; every added system must outlive this set.
+ * Motivation: Lets several caller-owned systems be pumped together as one bound IPlaySystem so, for example, a transport
+ *   host can deliver inbound traffic before a router handles it and queue outbound traffic before the transport sends it.
+ * Responsibilities: Run lifecycle start and inbound dispatch in add-order and lifecycle end and outbound flush in reverse
+ *   add-order, store only caller-owned pointers so it never allocates or owns a lifetime, and require every added system
+ *   to outlive this set.
+ * Example:
+ *   TPlaySystemSet<4> Set;
+ *   (void)Set.Add(Transport); (void)Set.Add(Router);
+ *   Engine.Bind(Set);
  */
 template<std::size_t MaxFrames>
 class TPlaySystemSet final : public Core::IPlaySystem
 {
 public:
-	/** Creates a set with no frames added. */
+	/**
+	 * Motivation: Lets a caller create a set with no frames added.
+	 * Responsibilities: Produce an empty set that does nothing on every turn.
+	 */
 	TPlaySystemSet() noexcept = default;
 
-	/** Virtual destructor via the base; the set owns no frame, so there is nothing else to release. */
+	/**
+	 * Motivation: Ensures destruction through the base interface releases no frame, since the set owns none.
+	 * Responsibilities: Default-destroy without touching any added system.
+	 */
 	~TPlaySystemSet() noexcept override = default;
 
 	// TEngine holds this set by IPlaySystem&, and each added frame is captured by raw
 	// pointer; relocating the set would dangle both references, so copy and move are deleted
 	// (the same fixed-identity rule TMessageRouter and TMessageChannelBinding already follow).
+	/**
+	 * Motivation: Prevents relocating this set from dangling the IPlaySystem& an engine holds and the raw pointers it captures.
+	 * Responsibilities: Reject copy construction so the set keeps a fixed identity.
+	 */
 	TPlaySystemSet(const TPlaySystemSet&) = delete;
+
+	/**
+	 * Motivation: Prevents relocating this set from dangling the IPlaySystem& an engine holds and the raw pointers it captures.
+	 * Responsibilities: Reject copy assignment so the set keeps a fixed identity.
+	 */
 	TPlaySystemSet& operator=(const TPlaySystemSet&) = delete;
+
+	/**
+	 * Motivation: Prevents relocating this set from dangling the IPlaySystem& an engine holds and the raw pointers it captures.
+	 * Responsibilities: Reject move construction so the set keeps a fixed identity.
+	 */
 	TPlaySystemSet(TPlaySystemSet&&) = delete;
+
+	/**
+	 * Motivation: Prevents relocating this set from dangling the IPlaySystem& an engine holds and the raw pointers it captures.
+	 * Responsibilities: Reject move assignment so the set keeps a fixed identity.
+	 */
 	TPlaySystemSet& operator=(TPlaySystemSet&&) = delete;
 
 	/**
-	 * Adds one caller-owned system; the order of Add calls becomes the BeginPlay
-	 * and PreAdvance order. Rejects a system already present as
-	 * Duplicate (matched
-	 * by pointer identity) and a full
-	 * set as CapacityExceeded, leaving the set unchanged in both cases.
+	 * Motivation: Lets a caller add systems in the order they should start and dispatch, so Add order becomes BeginPlay and
+	 *   PreAdvance order.
+	 * Responsibilities: Reject a system already present (by pointer identity) as Duplicate and a full set as
+	 *   CapacityExceeded, leaving the set unchanged in both cases.
 	 */
 	EEngineResult Add(Core::IPlaySystem& InFrame) noexcept
 	{
@@ -101,7 +136,10 @@ public:
 		return EEngineResult::Success;
 	}
 
-	/** Starts every added system in add-order. An empty set does nothing. */
+	/**
+	 * Motivation: Starts every added system in add-order during the engine's BeginPlay.
+	 * Responsibilities: Forward BeginPlay to each frame in order; an empty set does nothing.
+	 */
 	void BeginPlay(const Core::TimePointMilliseconds InNowMilliseconds) noexcept override
 	{
 		for (std::size_t Index = 0; Index < Count; ++Index)
@@ -110,7 +148,10 @@ public:
 		}
 	}
 
-	/** Dispatches every added system's inbound step in add-order. An empty set does nothing. */
+	/**
+	 * Motivation: Dispatches every added system's inbound step in add-order during each frame.
+	 * Responsibilities: Forward PreAdvance to each frame in order; an empty set does nothing.
+	 */
 	void PreAdvance(const Core::TimePointMilliseconds InNowMilliseconds) noexcept override
 	{
 		for (std::size_t Index = 0; Index < Count; ++Index)
@@ -119,7 +160,10 @@ public:
 		}
 	}
 
-	/** Flushes every added system's outbound step in reverse add-order. An empty set does nothing. */
+	/**
+	 * Motivation: Flushes every added system's outbound step in reverse add-order so a router queues before a transport sends.
+	 * Responsibilities: Forward PostAdvance to each frame in reverse order; an empty set does nothing.
+	 */
 	void PostAdvance(const Core::TimePointMilliseconds InNowMilliseconds) noexcept override
 	{
 		for (std::size_t Index = Count; Index > 0; --Index)
@@ -128,7 +172,10 @@ public:
 		}
 	}
 
-	/** Ends every added system in reverse add-order. An empty set does nothing. */
+	/**
+	 * Motivation: Ends every added system in reverse add-order so cleanup mirrors startup.
+	 * Responsibilities: Forward EndPlay to each frame in reverse order; an empty set does nothing.
+	 */
 	void EndPlay() noexcept override
 	{
 		for (std::size_t Index = Count; Index > 0; --Index)
@@ -137,14 +184,17 @@ public:
 		}
 	}
 
-	/** Reports how many frames have been added so far. */
+	/**
+	 * Motivation: Lets a caller report how many frames have been added so far.
+	 * Responsibilities: Return the current frame count.
+	 */
 	std::size_t FrameCount() const noexcept { return Count; }
 
 private:
-	/** Caller-owned systems in add-order; never owned here. */
+	/** Motivation: Caller-owned systems in add-order; never owned here. */
 	Core::IPlaySystem* Frames[MaxFrames == 0 ? 1 : MaxFrames]{};
 
-	/** Number of occupied entries at the front of Frames. */
+	/** Motivation: Number of occupied entries at the front of Frames. */
 	std::size_t Count{0};
 };
 

@@ -11,10 +11,13 @@ namespace
 using MicroWorld::Core::TimePointMilliseconds;
 using MicroWorld::Platform::Host::FHostTimeSource;
 
-/** Iteration count large enough that two Now() readings are reliably separated on the host steady clock. */
+/** Motivation: Iteration count large enough that two Now() readings are reliably separated on the host steady clock. */
 constexpr std::uint64_t MonotonicProbeIterations = 100000;
 
-/** Bounded busy work that exercises the clock without sleeping or allocating. */
+/**
+ * Motivation: Bounded busy work that exercises the clock without sleeping or allocating.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ */
 TimePointMilliseconds BurnCyclesAndRead(FHostTimeSource& Clock) noexcept
 {
 	volatile std::uint64_t Sink = 0;
@@ -29,8 +32,8 @@ TimePointMilliseconds BurnCyclesAndRead(FHostTimeSource& Clock) noexcept
 } // namespace
 
 /**
- * Scenario: Read Now() before and after a bounded span of synchronous work driven against the host steady clock.
- * Expected: The second Now() reading never moves backward relative to the first across the bounded work.
+ * Motivation: Read Now() before and after a bounded span of synchronous work driven against the host steady clock.
+ * Responsibilities: The second Now() reading never moves backward relative to the first across the bounded work.
  */
 MW_TEST_CASE(HostTimeSourceNowIsNonDecreasingAcrossBoundedWork)
 {

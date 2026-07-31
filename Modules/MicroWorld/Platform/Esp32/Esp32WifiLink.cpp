@@ -10,13 +10,17 @@ namespace MicroWorld::Platform::Esp32
 namespace
 {
 
-	/** WPA2's shortest allowed passphrase length, in characters. */
+	/** Motivation: WPA2's shortest allowed passphrase length, in characters. */
 	constexpr std::size_t MinimumWpa2PasswordLength = 8;
 
-	/** One slice of the station join wait; the poll sums these until the timeout budget is spent. */
+	/** Motivation: One slice of the station join wait; the poll sums these until the timeout budget is spent. */
 	constexpr Core::DurationMilliseconds JoinWaitSliceMilliseconds = 100;
 
-	/** Reports the first reason a SoftAP config cannot be used, or `Success`. */
+	/**
+	 * Motivation: Guards StartAccessPoint against an unusable config before any radio call so a rejection is truly
+	 *   transactional.
+	 * Responsibilities: Return the first reason a SoftAP config cannot be used, or Success.
+	 */
 	Transport::ETransportResult ValidateAccessPointConfig(const FEsp32AccessPointConfig& InConfig) noexcept
 	{
 		if (InConfig.Ssid == nullptr || InConfig.Ssid[0] == '\0')
@@ -30,7 +34,11 @@ namespace
 		return Transport::ETransportResult::Success;
 	}
 
-	/** Reports the first reason a station config cannot be used, or `Success`. */
+	/**
+	 * Motivation: Guards JoinAccessPoint against an unusable config before any radio call so a rejection is truly
+	 *   transactional.
+	 * Responsibilities: Return the first reason a station config cannot be used, or Success.
+	 */
 	Transport::ETransportResult ValidateStationConfig(const FEsp32StationConfig& InConfig) noexcept
 	{
 		if (InConfig.Ssid == nullptr || InConfig.Ssid[0] == '\0')
