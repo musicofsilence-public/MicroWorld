@@ -25,16 +25,16 @@ namespace
 	using FLoopback = MicroWorld::THostLoopback<2, 8, 256>;
 
 	/** Uses the default two-device and four-channel profile for normal composition tests. */
-	using FSystem = MicroWorld::TNetworking<>;
+	using FSystem = MicroWorld::Networking::TNetworking<>;
 
 	/** Makes device exhaustion observable with one fixed slot. */
-	struct FOneDeviceTraits : MicroWorld::FDefaultNetworkingTraits
+	struct FOneDeviceTraits : MicroWorld::Networking::FDefaultNetworkingTraits
 	{
 		static constexpr std::size_t MaxDevices = 1;
 	};
 
 	/** Makes channel exhaustion observable with one router and system channel slot. */
-	struct FOneChannelTraits : MicroWorld::FDefaultNetworkingTraits
+	struct FOneChannelTraits : MicroWorld::Networking::FDefaultNetworkingTraits
 	{
 		static constexpr std::size_t MaxRouterChannels = 1;
 		static constexpr std::size_t MaxChannels = 1;
@@ -169,8 +169,8 @@ MW_TEST_CASE(Networking_AddDeviceAcceptsTwoDevices)
 	const MicroWorld::FTransportHostConfig Config = MakeConfig();
 
 	// Act
-	const MicroWorld::FDeviceHandle FirstDevice = System.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::Standalone, Config);
-	const MicroWorld::FDeviceHandle SecondDevice = System.AddDevice(Loopback.Port(1), MicroWorld::ENetworkMode::Standalone, Config);
+	const MicroWorld::Networking::FDeviceHandle FirstDevice = System.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::Standalone, Config);
+	const MicroWorld::Networking::FDeviceHandle SecondDevice = System.AddDevice(Loopback.Port(1), MicroWorld::ENetworkMode::Standalone, Config);
 	const bool bFirstDeviceValid = FirstDevice.IsValid();
 	const bool bSecondDeviceValid = SecondDevice.IsValid();
 	const bool bDistinctSlots = FirstDevice.Index != SecondDevice.Index;
@@ -191,13 +191,13 @@ MW_TEST_CASE(Networking_AddChannelAcceptsBestEffortAndGuaranteedOnOneDevice)
 	FLoopback Loopback;
 	FSystem System;
 	const MicroWorld::FTransportHostConfig Config = MakeConfig();
-	const MicroWorld::FDeviceHandle Device = System.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::Standalone, Config);
+	const MicroWorld::Networking::FDeviceHandle Device = System.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::Standalone, Config);
 
 	// Act
-	const MicroWorld::FChannelHandle BestEffort =
-		System.AddChannel(Device, MicroWorld::FMessageChannelId{1}, MicroWorld::EChannelReliability::BestEffort);
-	const MicroWorld::FChannelHandle Guaranteed =
-		System.AddChannel(Device, MicroWorld::FMessageChannelId{2}, MicroWorld::EChannelReliability::Guaranteed);
+	const MicroWorld::Networking::FChannelHandle BestEffort =
+		System.AddChannel(Device, MicroWorld::FMessageChannelId{1}, MicroWorld::Networking::EChannelReliability::BestEffort);
+	const MicroWorld::Networking::FChannelHandle Guaranteed =
+		System.AddChannel(Device, MicroWorld::FMessageChannelId{2}, MicroWorld::Networking::EChannelReliability::Guaranteed);
 	const bool bDeviceValid = Device.IsValid();
 	const bool bBestEffortValid = BestEffort.IsValid();
 	const bool bGuaranteedValid = Guaranteed.IsValid();
@@ -218,14 +218,14 @@ MW_TEST_CASE(Networking_AddChannelRejectsForgedDeviceGeneration)
 	FLoopback Loopback;
 	FSystem System;
 	const MicroWorld::FTransportHostConfig Config = MakeConfig();
-	const MicroWorld::FDeviceHandle Device = System.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::Standalone, Config);
-	const MicroWorld::FDeviceHandle StaleDevice{Device.Index, static_cast<std::uint8_t>(Device.Generation + 1)};
+	const MicroWorld::Networking::FDeviceHandle Device = System.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::Standalone, Config);
+	const MicroWorld::Networking::FDeviceHandle StaleDevice{Device.Index, static_cast<std::uint8_t>(Device.Generation + 1)};
 
 	// Act
-	const MicroWorld::FChannelHandle RejectedChannel =
-		System.AddChannel(StaleDevice, MicroWorld::FMessageChannelId{1}, MicroWorld::EChannelReliability::BestEffort);
-	const MicroWorld::FChannelHandle CurrentChannel =
-		System.AddChannel(Device, MicroWorld::FMessageChannelId{1}, MicroWorld::EChannelReliability::BestEffort);
+	const MicroWorld::Networking::FChannelHandle RejectedChannel =
+		System.AddChannel(StaleDevice, MicroWorld::FMessageChannelId{1}, MicroWorld::Networking::EChannelReliability::BestEffort);
+	const MicroWorld::Networking::FChannelHandle CurrentChannel =
+		System.AddChannel(Device, MicroWorld::FMessageChannelId{1}, MicroWorld::Networking::EChannelReliability::BestEffort);
 	const bool bDeviceValid = Device.IsValid();
 	const bool bRejectedChannelValid = RejectedChannel.IsValid();
 	const bool bCurrentChannelValid = CurrentChannel.IsValid();
@@ -244,12 +244,12 @@ MW_TEST_CASE(Networking_AddDeviceRejectsCapacityExhaustion)
 {
 	// Arrange
 	FLoopback Loopback;
-	MicroWorld::TNetworking<FOneDeviceTraits> System;
+	MicroWorld::Networking::TNetworking<FOneDeviceTraits> System;
 	const MicroWorld::FTransportHostConfig Config = MakeConfig();
 
 	// Act
-	const MicroWorld::FDeviceHandle AcceptedDevice = System.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::Standalone, Config);
-	const MicroWorld::FDeviceHandle RejectedDevice = System.AddDevice(Loopback.Port(1), MicroWorld::ENetworkMode::Standalone, Config);
+	const MicroWorld::Networking::FDeviceHandle AcceptedDevice = System.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::Standalone, Config);
+	const MicroWorld::Networking::FDeviceHandle RejectedDevice = System.AddDevice(Loopback.Port(1), MicroWorld::ENetworkMode::Standalone, Config);
 	const bool bAcceptedDeviceValid = AcceptedDevice.IsValid();
 	const bool bRejectedDeviceValid = RejectedDevice.IsValid();
 
@@ -266,15 +266,15 @@ MW_TEST_CASE(Networking_AddChannelRejectsCapacityExhaustion)
 {
 	// Arrange
 	FLoopback Loopback;
-	MicroWorld::TNetworking<FOneChannelTraits> System;
+	MicroWorld::Networking::TNetworking<FOneChannelTraits> System;
 	const MicroWorld::FTransportHostConfig Config = MakeConfig();
-	const MicroWorld::FDeviceHandle Device = System.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::Standalone, Config);
+	const MicroWorld::Networking::FDeviceHandle Device = System.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::Standalone, Config);
 
 	// Act
-	const MicroWorld::FChannelHandle AcceptedChannel =
-		System.AddChannel(Device, MicroWorld::FMessageChannelId{1}, MicroWorld::EChannelReliability::BestEffort);
-	const MicroWorld::FChannelHandle RejectedChannel =
-		System.AddChannel(Device, MicroWorld::FMessageChannelId{2}, MicroWorld::EChannelReliability::BestEffort);
+	const MicroWorld::Networking::FChannelHandle AcceptedChannel =
+		System.AddChannel(Device, MicroWorld::FMessageChannelId{1}, MicroWorld::Networking::EChannelReliability::BestEffort);
+	const MicroWorld::Networking::FChannelHandle RejectedChannel =
+		System.AddChannel(Device, MicroWorld::FMessageChannelId{2}, MicroWorld::Networking::EChannelReliability::BestEffort);
 	const bool bDeviceValid = Device.IsValid();
 	const bool bAcceptedChannelValid = AcceptedChannel.IsValid();
 	const bool bRejectedChannelValid = RejectedChannel.IsValid();
@@ -296,9 +296,9 @@ MW_TEST_CASE(Networking_BeginPlayFinalizesCompositionAndDefersHostStart)
 	FSystem System;
 	MicroWorld::FTransportHostConfig ClientConfig = MakeConfig();
 	ClientConfig.ServerAddress = MicroWorld::MakeLoopbackAddress(1);
-	const MicroWorld::FDeviceHandle Device = System.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::Client, ClientConfig);
-	const MicroWorld::FChannelHandle InitialChannel =
-		System.AddChannel(Device, MicroWorld::FMessageChannelId{1}, MicroWorld::EChannelReliability::BestEffort);
+	const MicroWorld::Networking::FDeviceHandle Device = System.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::Client, ClientConfig);
+	const MicroWorld::Networking::FChannelHandle InitialChannel =
+		System.AddChannel(Device, MicroWorld::FMessageChannelId{1}, MicroWorld::Networking::EChannelReliability::BestEffort);
 
 	// Act: pump before BeginPlay and confirm no packet has crossed the transport yet.
 	System.PreAdvance(10);
@@ -307,9 +307,9 @@ MW_TEST_CASE(Networking_BeginPlayFinalizesCompositionAndDefersHostStart)
 
 	// Act: close composition with BeginPlay, attempt late composition, and pump once more.
 	System.BeginPlay(20);
-	const MicroWorld::FChannelHandle LateChannel =
-		System.AddChannel(Device, MicroWorld::FMessageChannelId{2}, MicroWorld::EChannelReliability::BestEffort);
-	const MicroWorld::FDeviceHandle LateDevice = System.AddDevice(Loopback.Port(1), MicroWorld::ENetworkMode::Standalone, MakeConfig());
+	const MicroWorld::Networking::FChannelHandle LateChannel =
+		System.AddChannel(Device, MicroWorld::FMessageChannelId{2}, MicroWorld::Networking::EChannelReliability::BestEffort);
+	const MicroWorld::Networking::FDeviceHandle LateDevice = System.AddDevice(Loopback.Port(1), MicroWorld::ENetworkMode::Standalone, MakeConfig());
 	System.PostAdvance(20);
 	const bool bPacketQueuedAfterBeginPlay = !Loopback.IsEmpty(1);
 	const bool bDeviceValid = Device.IsValid();
@@ -342,8 +342,8 @@ MW_TEST_CASE(Networking_CoreLifecyclePumpsDevicesInForwardAndReverseOrder)
 	MicroWorld::FTransportHostConfig Config = MakeConfig();
 	Config.ServerAddress = MicroWorld::MakeLoopbackAddress(0);
 
-	const MicroWorld::FDeviceHandle FirstHandle = System.AddDevice(FirstDevice, MicroWorld::ENetworkMode::Client, Config);
-	const MicroWorld::FDeviceHandle SecondHandle = System.AddDevice(SecondDevice, MicroWorld::ENetworkMode::Client, Config);
+	const MicroWorld::Networking::FDeviceHandle FirstHandle = System.AddDevice(FirstDevice, MicroWorld::ENetworkMode::Client, Config);
+	const MicroWorld::Networking::FDeviceHandle SecondHandle = System.AddDevice(SecondDevice, MicroWorld::ENetworkMode::Client, Config);
 	MicroWorld::IPlaySystem& Lifecycle = System;
 
 	// Act: one BeginPlay plus one PreAdvance/PostAdvance cycle pumps every recording device.
@@ -397,8 +397,8 @@ MW_TEST_CASE(Networking_PostAdvanceAdvancesIdleAndFullDevices)
 	MicroWorld::FTransportHostConfig ClientConfig = MakeConfig();
 	ClientConfig.ServerAddress = MicroWorld::MakeLoopbackAddress(0);
 
-	const MicroWorld::FDeviceHandle IdleHandle = System.AddDevice(IdleDevice, MicroWorld::ENetworkMode::DedicatedServer, MakeConfig());
-	const MicroWorld::FDeviceHandle FullHandle = System.AddDevice(FullDevice, MicroWorld::ENetworkMode::Client, ClientConfig);
+	const MicroWorld::Networking::FDeviceHandle IdleHandle = System.AddDevice(IdleDevice, MicroWorld::ENetworkMode::DedicatedServer, MakeConfig());
+	const MicroWorld::Networking::FDeviceHandle FullHandle = System.AddDevice(FullDevice, MicroWorld::ENetworkMode::Client, ClientConfig);
 
 	// Act: one BeginPlay plus one PostAdvance exposes both the idle and full-device pump paths.
 	System.BeginPlay(0);
@@ -475,7 +475,7 @@ MW_TEST_CASE(Networking_EndPlayStopsClientBeforeFuturePostAdvance)
 	FSystem System;
 	MicroWorld::FTransportHostConfig Config = MakeConfig();
 	Config.ServerAddress = MicroWorld::MakeLoopbackAddress(0);
-	const MicroWorld::FDeviceHandle DeviceHandle = System.AddDevice(Device, MicroWorld::ENetworkMode::Client, Config);
+	const MicroWorld::Networking::FDeviceHandle DeviceHandle = System.AddDevice(Device, MicroWorld::ENetworkMode::Client, Config);
 	MicroWorld::IPlaySystem& Lifecycle = System;
 
 	// Act: BeginPlay and one PostAdvance flush the initial connection hello.
@@ -507,12 +507,14 @@ MW_TEST_CASE(Networking_PreAdvanceAndPostAdvancePumpRoutedMessageInOrder)
 	const MicroWorld::FTransportHostConfig ServerConfig = MakeConfig();
 	MicroWorld::FTransportHostConfig ClientConfig = MakeConfig();
 	ClientConfig.ServerAddress = MicroWorld::MakeLoopbackAddress(0);
-	const MicroWorld::FDeviceHandle ServerDevice = ServerSystem.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::DedicatedServer, ServerConfig);
-	const MicroWorld::FDeviceHandle ClientDevice = ClientSystem.AddDevice(Loopback.Port(1), MicroWorld::ENetworkMode::Client, ClientConfig);
-	const MicroWorld::FChannelHandle ServerChannel =
-		ServerSystem.AddChannel(ServerDevice, MicroWorld::FMessageChannelId{1}, MicroWorld::EChannelReliability::BestEffort);
-	const MicroWorld::FChannelHandle ClientChannel =
-		ClientSystem.AddChannel(ClientDevice, MicroWorld::FMessageChannelId{1}, MicroWorld::EChannelReliability::BestEffort);
+	const MicroWorld::Networking::FDeviceHandle ServerDevice =
+		ServerSystem.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::DedicatedServer, ServerConfig);
+	const MicroWorld::Networking::FDeviceHandle ClientDevice =
+		ClientSystem.AddDevice(Loopback.Port(1), MicroWorld::ENetworkMode::Client, ClientConfig);
+	const MicroWorld::Networking::FChannelHandle ServerChannel =
+		ServerSystem.AddChannel(ServerDevice, MicroWorld::FMessageChannelId{1}, MicroWorld::Networking::EChannelReliability::BestEffort);
+	const MicroWorld::Networking::FChannelHandle ClientChannel =
+		ClientSystem.AddChannel(ClientDevice, MicroWorld::FMessageChannelId{1}, MicroWorld::Networking::EChannelReliability::BestEffort);
 	int DeliveryCount = 0;
 	MicroWorld::FMessageHandlerBinding Handler;
 	Handler.Bind([&DeliveryCount](const MicroWorld::FMessageView&) noexcept { ++DeliveryCount; });

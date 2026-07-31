@@ -13,7 +13,7 @@
 #include <new>
 #include <utility>
 
-namespace MicroWorld
+namespace MicroWorld::Networking
 {
 
 /** Selects whether a TNetworking channel resends unacknowledged messages or sends best-effort once. */
@@ -484,4 +484,4 @@ private:
 	bool bCompositionClosed{false};
 };
 
-} // namespace MicroWorld
+} // namespace MicroWorld::Networking
