@@ -12,8 +12,8 @@
 #include <MicroWorld/Messaging/ReliableChannel.h>
 #include <MicroWorld/Engine/World.h>
 #include <MicroWorld/Core/Log.h>
-#include <MicroWorld/Transport/NetHost.h>
-#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Transport/TransportHost.h>
+#include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Engine/GarbageCollector.h>
 #include <MicroWorld/Engine/ObjectPtr.h>
@@ -127,7 +127,8 @@ private:
 void RunServer() noexcept
 {
 	static FEsp32WifiLink WifiLink;
-	if (WifiLink.StartAccessPoint(FEsp32AccessPointConfig{DemoApSsid, DemoApPassword, /*WifiChannel*/ 1, /*MaxStations*/ 4}) != ENetResult::Success)
+	if (WifiLink.StartAccessPoint(FEsp32AccessPointConfig{DemoApSsid, DemoApPassword, /*WifiChannel*/ 1, /*MaxStations*/ 4})
+		!= ETransportResult::Success)
 	{
 		MW_LOG(Error, "ex25", "wifi failed; halting");
 		return;
@@ -144,25 +145,25 @@ void RunServer() noexcept
 	}
 
 	// All composition objects are static (the ESP32-S3 stack lesson, §2.2).
-	static FWorldNet Net{UdpDriver};
+	static FWorldTransport Transport{UdpDriver};
 	static FWorldRouter Router;
 
 	// Best-effort channel: a plain binding straight to the router, no reliable wrapper.
-	static FChannelBinding BestEffortWire{Net, BestEffortWireChannelByte, BestEffortChannelId, EChannelSendTarget::AllPeers, Router};
+	static FChannelBinding BestEffortWire{Transport, BestEffortWireChannelByte, BestEffortChannelId, EChannelSendTarget::AllPeers, Router};
 
 	// Guaranteed channel: same cycle-break order as the client -- construct the reliable wrapper
 	// (forward sink = Router), construct the binding (inbound sink = the wrapper), then bind the
 	// wrapper to the binding via SetInnerChannel (ReliableChannel.h).
 	static FGuaranteedChannel Guaranteed{Router, FReliableChannelConfig{}};
-	static FChannelBinding GuaranteedWire{Net, GuaranteedWireChannelByte, GuaranteedChannelId, EChannelSendTarget::AllPeers, Guaranteed};
+	static FChannelBinding GuaranteedWire{Transport, GuaranteedWireChannelByte, GuaranteedChannelId, EChannelSendTarget::AllPeers, Guaranteed};
 	Guaranteed.SetInnerChannel(GuaranteedWire);
 
-	static FNetFrame NetFrame{Net};
+	static FHostPlay HostPlay{Transport};
 
 	// D3 frame-set order: net first, reliable channel second, router last -- see
 	// GuaranteedDeliveryShared.h's FWorldFrameSet alias.
 	static FWorldFrameSet Frames;
-	if (Frames.Add(NetFrame) != EEngineResult::Success || Frames.Add(Guaranteed) != EEngineResult::Success
+	if (Frames.Add(HostPlay) != EEngineResult::Success || Frames.Add(Guaranteed) != EEngineResult::Success
 		|| Frames.Add(Router) != EEngineResult::Success)
 	{
 		MW_LOG(Error, "ex25", "server frame set rejected a frame; halting");
@@ -202,8 +203,8 @@ void RunServer() noexcept
 		return;
 	}
 
-	(void)Net.Configure(ENetMode::DedicatedServer, MakeHostConfig());
-	(void)Net.Start(GTimeSource.Now());
+	(void)Transport.Configure(ENetworkMode::DedicatedServer, MakeHostConfig());
+	(void)Transport.Start(GTimeSource.Now());
 
 	const TimePointMilliseconds BootTime = GTimeSource.Now();
 	if (Engine.BeginPlay(BootTime) != ERuntimeResult::Success)

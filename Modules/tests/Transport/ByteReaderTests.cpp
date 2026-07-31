@@ -2,7 +2,7 @@
 
 #include <MicroWorld/Core/Containers/Span.h>
 #include <MicroWorld/Transport/ByteReader.h>
-#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Transport/TransportResult.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -10,7 +10,7 @@
 namespace
 {
 
-using MicroWorld::ENetResult;
+using MicroWorld::ETransportResult;
 using MicroWorld::FByteReader;
 using MicroWorld::TSpan;
 
@@ -75,8 +75,8 @@ MW_TEST_CASE(ByteReaderReturnsOrderedBytes)
 	std::uint8_t FirstByte = 0;
 	std::uint8_t SecondByte = 0;
 	// Act
-	MW_EXPECT_EQ(Test, ENetResult::Success, Reader.ReadByte(FirstByte), "First byte read must succeed");
-	MW_EXPECT_EQ(Test, ENetResult::Success, Reader.ReadByte(SecondByte), "Second byte read must succeed");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, Reader.ReadByte(FirstByte), "First byte read must succeed");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, Reader.ReadByte(SecondByte), "Second byte read must succeed");
 	MW_EXPECT_EQ(Test, TwoByteSourceCount, Reader.Position(), "Two reads must advance the cursor by two");
 
 	// Assert
@@ -96,10 +96,10 @@ MW_TEST_CASE(ByteReaderCopiesOrderedSpan)
 
 	std::uint8_t Destination[TwoByteSourceCount] = {DestinationPrefillByte, DestinationPrefillByte};
 	// Act
-	const ENetResult SpanResult = Reader.Read(TSpan<std::uint8_t>(Destination, TwoByteSourceCount));
+	const ETransportResult SpanResult = Reader.Read(TSpan<std::uint8_t>(Destination, TwoByteSourceCount));
 
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Success, SpanResult, "Span read within remaining must succeed");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, SpanResult, "Span read within remaining must succeed");
 	MW_EXPECT_EQ(Test, TwoByteSourceCount, Reader.Position(), "Cursor must advance by the read length");
 	MW_EXPECT_EQ(Test, SourceByte01, Destination[0], "First destination byte must match source order");
 	MW_EXPECT_EQ(Test, SourceByte02, Destination[1], "Second destination byte must match source order");
@@ -118,16 +118,16 @@ MW_TEST_CASE(ByteReaderAcceptsExactBoundaryThenReportsInvalid)
 	std::uint8_t FirstByte = 0;
 	std::uint8_t SecondByte = 0;
 	// Act
-	MW_EXPECT_EQ(Test, ENetResult::Success, Reader.ReadByte(FirstByte), "Read at start must succeed");
-	MW_EXPECT_EQ(Test, ENetResult::Success, Reader.ReadByte(SecondByte), "Read at exact boundary must succeed");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, Reader.ReadByte(FirstByte), "Read at start must succeed");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, Reader.ReadByte(SecondByte), "Read at exact boundary must succeed");
 	// Assert
 	MW_EXPECT_EQ(Test, std::size_t{0}, Reader.Remaining(), "Remaining must be zero at the boundary");
 
 	std::uint8_t UnusedByte = UntouchedOutputByte;
 	// Act
-	const ENetResult OverflowResult = Reader.ReadByte(UnusedByte);
+	const ETransportResult OverflowResult = Reader.ReadByte(UnusedByte);
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Invalid, OverflowResult, "A read past the source must return Invalid (truncated request)");
+	MW_EXPECT_EQ(Test, ETransportResult::Invalid, OverflowResult, "A read past the source must return Invalid (truncated request)");
 	MW_EXPECT_EQ(Test, UntouchedOutputByte, UnusedByte, "Failed read must not modify the output parameter");
 	MW_EXPECT_EQ(Test, TwoByteSourceCount, Reader.Position(), "Failed read must not advance the cursor");
 }
@@ -144,10 +144,10 @@ MW_TEST_CASE(ByteReaderTruncatedSpanReadLeavesCursorAndOutputUnchanged)
 
 	std::uint8_t Destination[FourByteSourceCount] = {DestinationPrefillByte, DestinationPrefillByte, DestinationPrefillByte, DestinationPrefillByte};
 	// Act
-	const ENetResult TruncatedResult = Reader.Read(TSpan<std::uint8_t>(Destination, FourByteSourceCount));
+	const ETransportResult TruncatedResult = Reader.Read(TSpan<std::uint8_t>(Destination, FourByteSourceCount));
 
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Invalid, TruncatedResult, "A read larger than remaining must return Invalid (truncated)");
+	MW_EXPECT_EQ(Test, ETransportResult::Invalid, TruncatedResult, "A read larger than remaining must return Invalid (truncated)");
 	MW_EXPECT_EQ(Test, std::size_t{0}, Reader.Position(), "Truncated read must not advance the cursor");
 	MW_EXPECT_EQ(Test, DestinationPrefillByte, Destination[0], "Truncated read must not modify the destination");
 	MW_EXPECT_EQ(Test, DestinationPrefillByte, Destination[1], "Truncated read must not modify the destination");
@@ -164,9 +164,9 @@ MW_TEST_CASE(ByteReaderRejectsNullDestinationWithNonzeroLength)
 	FByteReader Reader(TSpan<const std::uint8_t>(Source, FourByteSourceCount));
 
 	// Act
-	const ENetResult NullResult = Reader.Read(TSpan<std::uint8_t>(nullptr, TwoByteSourceCount));
+	const ETransportResult NullResult = Reader.Read(TSpan<std::uint8_t>(nullptr, TwoByteSourceCount));
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Invalid, NullResult, "Null destination with nonzero length must return Invalid");
+	MW_EXPECT_EQ(Test, ETransportResult::Invalid, NullResult, "Null destination with nonzero length must return Invalid");
 	MW_EXPECT_EQ(Test, std::size_t{0}, Reader.Position(), "Invalid read must not advance the cursor");
 }
 
@@ -181,9 +181,9 @@ MW_TEST_CASE(ByteReaderAcceptsEmptyDestinationAsNoOp)
 	FByteReader Reader(TSpan<const std::uint8_t>(Source, TwoByteSourceCount));
 
 	// Act
-	const ENetResult EmptyResult = Reader.Read(TSpan<std::uint8_t>(nullptr, 0));
+	const ETransportResult EmptyResult = Reader.Read(TSpan<std::uint8_t>(nullptr, 0));
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Success, EmptyResult, "An empty destination must be a valid no-op");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, EmptyResult, "An empty destination must be a valid no-op");
 	MW_EXPECT_EQ(Test, std::size_t{0}, Reader.Position(), "Empty destination must not advance the cursor");
 }
 
@@ -199,15 +199,15 @@ MW_TEST_CASE(ByteReaderPeeksWithoutAdvancing)
 
 	std::uint8_t Peeked = 0;
 	// Act
-	const ENetResult PeekResult = Reader.PeekByte(Peeked);
+	const ETransportResult PeekResult = Reader.PeekByte(Peeked);
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Success, PeekResult, "Peek at a non-empty source must succeed");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, PeekResult, "Peek at a non-empty source must succeed");
 	MW_EXPECT_EQ(Test, SourceByte42, Peeked, "Peek must return the first source byte");
 	MW_EXPECT_EQ(Test, std::size_t{0}, Reader.Position(), "Peek must not advance the cursor");
 
 	std::uint8_t PeekedAgain = 0;
 	// Act
-	MW_EXPECT_EQ(Test, ENetResult::Success, Reader.PeekByte(PeekedAgain), "Second peek at the same cursor must succeed");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, Reader.PeekByte(PeekedAgain), "Second peek at the same cursor must succeed");
 	// Assert
 	MW_EXPECT_EQ(Test, SourceByte42, PeekedAgain, "Second peek must return the same byte");
 }
@@ -227,9 +227,9 @@ MW_TEST_CASE(ByteReaderPeekPastSourceReturnsInvalid)
 
 	std::uint8_t Peeked = UntouchedOutputByte;
 	// Act
-	const ENetResult PeekResult = Reader.PeekByte(Peeked);
+	const ETransportResult PeekResult = Reader.PeekByte(Peeked);
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Invalid, PeekResult, "Peek past the source must return Invalid");
+	MW_EXPECT_EQ(Test, ETransportResult::Invalid, PeekResult, "Peek past the source must return Invalid");
 	MW_EXPECT_EQ(Test, UntouchedOutputByte, Peeked, "Failed peek must not modify its output");
 }
 
@@ -251,7 +251,7 @@ MW_TEST_CASE(ByteReaderResetAllowsSourceReparse)
 	// Assert
 	MW_EXPECT_EQ(Test, std::size_t{0}, Reader.Position(), "Reset must return the cursor to zero");
 	std::uint8_t ReRead = 0;
-	MW_EXPECT_EQ(Test, ENetResult::Success, Reader.ReadByte(ReRead), "Read after reset must succeed");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, Reader.ReadByte(ReRead), "Read after reset must succeed");
 	MW_EXPECT_EQ(Test, SourceByte55, ReRead, "Read after reset must return the first source byte again");
 }
 
@@ -296,17 +296,17 @@ MW_TEST_CASE(ByteReaderInvalidBackingSourceNeverDereferencesNull)
 
 	// Assert - consuming operations must return Invalid without advancing the cursor or modifying outputs.
 	std::uint8_t OutByte = UntouchedOutputByte;
-	MW_EXPECT_EQ(Test, ENetResult::Invalid, Reader.ReadByte(OutByte), "ReadByte on an invalid source must return Invalid");
+	MW_EXPECT_EQ(Test, ETransportResult::Invalid, Reader.ReadByte(OutByte), "ReadByte on an invalid source must return Invalid");
 	MW_EXPECT_EQ(Test, UntouchedOutputByte, OutByte, "ReadByte must not modify its output on an invalid source");
 	MW_EXPECT_EQ(Test, std::size_t{0}, Reader.Position(), "Invalid source must never advance the cursor");
 
 	std::uint8_t Peeked = UntouchedOutputByte;
-	MW_EXPECT_EQ(Test, ENetResult::Invalid, Reader.PeekByte(Peeked), "PeekByte on an invalid source must return Invalid");
+	MW_EXPECT_EQ(Test, ETransportResult::Invalid, Reader.PeekByte(Peeked), "PeekByte on an invalid source must return Invalid");
 	MW_EXPECT_EQ(Test, UntouchedOutputByte, Peeked, "PeekByte must not modify its output on an invalid source");
 
 	std::uint8_t Destination[TwoByteSourceCount] = {DestinationPrefillByte, DestinationPrefillByte};
-	const ENetResult SpanResult = Reader.Read(TSpan<std::uint8_t>(Destination, TwoByteSourceCount));
-	MW_EXPECT_EQ(Test, ENetResult::Invalid, SpanResult, "Read on an invalid source must return Invalid");
+	const ETransportResult SpanResult = Reader.Read(TSpan<std::uint8_t>(Destination, TwoByteSourceCount));
+	MW_EXPECT_EQ(Test, ETransportResult::Invalid, SpanResult, "Read on an invalid source must return Invalid");
 	MW_EXPECT_EQ(Test, DestinationPrefillByte, Destination[0], "Read must not modify the destination on an invalid source");
 	MW_EXPECT_EQ(Test, DestinationPrefillByte, Destination[1], "Read must not modify the destination on an invalid source");
 }
@@ -334,7 +334,7 @@ MW_TEST_CASE(ByteReaderValidEmptySourceReturnsEmptyRemainingBytes)
 
 	// Assert - consuming operations must still return Invalid because no byte remains, without dereferencing null.
 	std::uint8_t OutByte = UntouchedOutputByte;
-	MW_EXPECT_EQ(Test, ENetResult::Invalid, Reader.ReadByte(OutByte), "ReadByte on a valid empty source must return Invalid");
+	MW_EXPECT_EQ(Test, ETransportResult::Invalid, Reader.ReadByte(OutByte), "ReadByte on a valid empty source must return Invalid");
 	MW_EXPECT_EQ(Test, UntouchedOutputByte, OutByte, "ReadByte must not modify its output on a valid empty source");
 }
 

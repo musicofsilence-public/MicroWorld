@@ -17,31 +17,31 @@ namespace
 	constexpr DurationMilliseconds JoinWaitSliceMilliseconds = 100;
 
 	/** Reports the first reason a SoftAP config cannot be used, or `Success`. */
-	ENetResult ValidateAccessPointConfig(const FEsp32AccessPointConfig& InConfig) noexcept
+	ETransportResult ValidateAccessPointConfig(const FEsp32AccessPointConfig& InConfig) noexcept
 	{
 		if (InConfig.Ssid == nullptr || InConfig.Ssid[0] == '\0')
 		{
-			return ENetResult::Invalid;
+			return ETransportResult::Invalid;
 		}
 		if (InConfig.Password == nullptr || std::strlen(InConfig.Password) < MinimumWpa2PasswordLength)
 		{
-			return ENetResult::Invalid;
+			return ETransportResult::Invalid;
 		}
-		return ENetResult::Success;
+		return ETransportResult::Success;
 	}
 
 	/** Reports the first reason a station config cannot be used, or `Success`. */
-	ENetResult ValidateStationConfig(const FEsp32StationConfig& InConfig) noexcept
+	ETransportResult ValidateStationConfig(const FEsp32StationConfig& InConfig) noexcept
 	{
 		if (InConfig.Ssid == nullptr || InConfig.Ssid[0] == '\0')
 		{
-			return ENetResult::Invalid;
+			return ETransportResult::Invalid;
 		}
 		if (InConfig.Password == nullptr)
 		{
-			return ENetResult::Invalid;
+			return ETransportResult::Invalid;
 		}
-		return ENetResult::Success;
+		return ETransportResult::Success;
 	}
 
 } // namespace
@@ -53,66 +53,66 @@ FEsp32WifiLink::~FEsp32WifiLink() noexcept
 	Stop();
 }
 
-ENetResult FEsp32WifiLink::StartAccessPoint(const FEsp32AccessPointConfig& InConfig) noexcept
+ETransportResult FEsp32WifiLink::StartAccessPoint(const FEsp32AccessPointConfig& InConfig) noexcept
 {
-	const ENetResult ValidationResult = ValidateAccessPointConfig(InConfig);
-	if (ValidationResult != ENetResult::Success)
+	const ETransportResult ValidationResult = ValidateAccessPointConfig(InConfig);
+	if (ValidationResult != ETransportResult::Success)
 	{
 		return ValidationResult;
 	}
 
 	if (!Detail::InitNetworkStack())
 	{
-		return ENetResult::Unavailable;
+		return ETransportResult::Unavailable;
 	}
 	esp_netif_create_default_wifi_ap();
 
 	wifi_init_config_t InitConfig = WIFI_INIT_CONFIG_DEFAULT();
 	if (esp_wifi_init(&InitConfig) != ESP_OK)
 	{
-		return ENetResult::Unavailable;
+		return ETransportResult::Unavailable;
 	}
 
 	wifi_config_t ApConfig = Detail::MakeAccessPointConfig(InConfig.Ssid, InConfig.Password, InConfig.WifiChannel, InConfig.MaxStations);
 	if (esp_wifi_set_mode(WIFI_MODE_AP) != ESP_OK || esp_wifi_set_config(WIFI_IF_AP, &ApConfig) != ESP_OK || esp_wifi_start() != ESP_OK)
 	{
-		return ENetResult::Unavailable;
+		return ETransportResult::Unavailable;
 	}
 
 	bIsUp = true;
-	return ENetResult::Success;
+	return ETransportResult::Success;
 }
 
-ENetResult FEsp32WifiLink::JoinAccessPoint(const FEsp32StationConfig& InConfig) noexcept
+ETransportResult FEsp32WifiLink::JoinAccessPoint(const FEsp32StationConfig& InConfig) noexcept
 {
-	const ENetResult ValidationResult = ValidateStationConfig(InConfig);
-	if (ValidationResult != ENetResult::Success)
+	const ETransportResult ValidationResult = ValidateStationConfig(InConfig);
+	if (ValidationResult != ETransportResult::Success)
 	{
 		return ValidationResult;
 	}
 
 	if (!Detail::InitNetworkStack())
 	{
-		return ENetResult::Unavailable;
+		return ETransportResult::Unavailable;
 	}
 	esp_netif_create_default_wifi_sta();
 
 	wifi_init_config_t InitConfig = WIFI_INIT_CONFIG_DEFAULT();
 	if (esp_wifi_init(&InitConfig) != ESP_OK)
 	{
-		return ENetResult::Unavailable;
+		return ETransportResult::Unavailable;
 	}
 
 	if (esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &Detail::OnStationEvent, nullptr, nullptr) != ESP_OK
 		|| esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &Detail::OnStationEvent, nullptr, nullptr) != ESP_OK)
 	{
-		return ENetResult::Unavailable;
+		return ETransportResult::Unavailable;
 	}
 
 	wifi_config_t StaConfig = Detail::MakeStationConfig(InConfig.Ssid, InConfig.Password);
 	if (esp_wifi_set_mode(WIFI_MODE_STA) != ESP_OK || esp_wifi_set_config(WIFI_IF_STA, &StaConfig) != ESP_OK || esp_wifi_start() != ESP_OK)
 	{
-		return ENetResult::Unavailable;
+		return ETransportResult::Unavailable;
 	}
 
 	// Bounded poll: sleep in fixed 100 ms slices, checking the got-IP flag each slice, until either
@@ -127,11 +127,11 @@ ENetResult FEsp32WifiLink::JoinAccessPoint(const FEsp32StationConfig& InConfig) 
 	}
 	if (!Detail::GGotStationIpAddress)
 	{
-		return ENetResult::Unavailable;
+		return ETransportResult::Unavailable;
 	}
 
 	bIsUp = true;
-	return ENetResult::Success;
+	return ETransportResult::Success;
 }
 
 bool FEsp32WifiLink::IsUp() const noexcept

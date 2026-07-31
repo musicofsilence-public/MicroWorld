@@ -1,6 +1,6 @@
 #pragma once
 
-#include <MicroWorld/Transport/NetHost.h>
+#include <MicroWorld/Transport/TransportHost.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
 
 #include <cstdint>
@@ -12,7 +12,7 @@
  * are defined exactly once — DRY within this one example.
  *
  * There is no node id here (unlike the UART example 19): a UDP peer is
- * identified by its socket address, so `TNetHost` learns each peer from the
+ * identified by its socket address, so `TTransportHost` learns each peer from the
  * datagram it arrives on rather than from a driver-stamped node id.
  */
 namespace Ex16
@@ -52,9 +52,9 @@ constexpr MicroWorld::FTypeId DemoSpawnedActorTypeId{0x00080001u};
 constexpr unsigned PollPacingMilliseconds = 20;
 
 /** Builds the shared session config; heartbeats keep the peer alive between explicit sends. */
-inline MicroWorld::FNetHostConfig MakeHostConfig() noexcept
+inline MicroWorld::FTransportHostConfig MakeHostConfig() noexcept
 {
-	MicroWorld::FNetHostConfig Config{};
+	MicroWorld::FTransportHostConfig Config{};
 	Config.HeartbeatIntervalMilliseconds = 1000;
 	Config.PeerTimeoutMilliseconds = 5000;
 	Config.ProtocolVersion = ProtocolVersion;

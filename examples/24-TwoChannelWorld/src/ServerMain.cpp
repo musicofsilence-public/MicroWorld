@@ -7,9 +7,9 @@
 #include <MicroWorld/Engine/EngineResult.h>
 #include <MicroWorld/Messaging/Message.h>
 #include <MicroWorld/Engine/World.h>
-#include <MicroWorld/Networking/NetSystem.h>
+#include <MicroWorld/Networking/Networking.h>
 #include <MicroWorld/Core/Log.h>
-#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Engine/GarbageCollector.h>
 #include <MicroWorld/Engine/ObjectPtr.h>
@@ -128,12 +128,13 @@ private:
 
 /**
  * Server board: hosts the WiFi SoftAP and runs FTelemetrySinkActor + FCommanderActor over the
- * shared router owned by one TNetSystem. Its two drivers carry UDP telemetry and UART commands.
+ * shared router owned by one TNetworking. Its two drivers carry UDP telemetry and UART commands.
  */
 void RunServer() noexcept
 {
 	static FEsp32WifiLink WifiLink;
-	if (WifiLink.StartAccessPoint(FEsp32AccessPointConfig{DemoApSsid, DemoApPassword, /*WifiChannel*/ 1, /*MaxStations*/ 4}) != ENetResult::Success)
+	if (WifiLink.StartAccessPoint(FEsp32AccessPointConfig{DemoApSsid, DemoApPassword, /*WifiChannel*/ 1, /*MaxStations*/ 4})
+		!= ETransportResult::Success)
 	{
 		MW_LOG(Error, "ex24", "wifi failed; halting");
 		return;
@@ -157,23 +158,23 @@ void RunServer() noexcept
 		return;
 	}
 
-	// TNetSystem owns all hosts, bindings, and the shared router; the engine starts the hosts at BeginPlay.
-	static FWorldNetSystem NetSystem;
-	const FNetDriverHandle TelemetryHandle = NetSystem.AddNetDriver(TelemetryDriver, ENetMode::DedicatedServer, MakeHostConfig());
-	const FNetDriverHandle CommandHandle = NetSystem.AddNetDriver(CommandDriver, ENetMode::DedicatedServer, MakeHostConfig());
+	// TNetworking owns all hosts, bindings, and the shared router; the engine starts the hosts at BeginPlay.
+	static FWorldNetworking Networking;
+	const FDeviceHandle TelemetryHandle = Networking.AddDevice(TelemetryDriver, ENetworkMode::DedicatedServer, MakeHostConfig());
+	const FDeviceHandle CommandHandle = Networking.AddDevice(CommandDriver, ENetworkMode::DedicatedServer, MakeHostConfig());
 	if (!TelemetryHandle.IsValid() || !CommandHandle.IsValid())
 	{
 		MW_LOG(Error, "ex24", "server net system rejected a driver; halting");
 		return;
 	}
-	const FChannelHandle TelemetryChannel = NetSystem.AddChannel(TelemetryHandle, TelemetryChannelId, EChannelReliability::BestEffort);
-	const FChannelHandle CommandsChannel = NetSystem.AddChannel(CommandHandle, CommandsChannelId, EChannelReliability::BestEffort);
+	const FChannelHandle TelemetryChannel = Networking.AddChannel(TelemetryHandle, TelemetryChannelId, EChannelReliability::BestEffort);
+	const FChannelHandle CommandsChannel = Networking.AddChannel(CommandHandle, CommandsChannelId, EChannelReliability::BestEffort);
 	if (!TelemetryChannel.IsValid() || !CommandsChannel.IsValid())
 	{
 		MW_LOG(Error, "ex24", "server net system rejected a channel; halting");
 		return;
 	}
-	static FWorldEngine Engine{FGarbageCollectionBudget{1, 4, 8}, NetSystem};
+	static FWorldEngine Engine{FGarbageCollectionBudget{1, 4, 8}, Networking};
 
 	if (Engine.RegisterClass<FTelemetrySinkActor>(TelemetrySinkActorTypeId, "TelemetrySinkActor") != EObjectResult::Success
 		|| Engine.RegisterClass<FCommanderActor>(CommanderActorTypeId, "CommanderActor") != EObjectResult::Success)
@@ -183,8 +184,8 @@ void RunServer() noexcept
 	}
 
 	const TObjectPtr<UWorld> World = Engine.CreateWorld();
-	const TObjectPtr<FTelemetrySinkActor> Sink = Engine.CreateObject<FTelemetrySinkActor>(TelemetrySinkActorTypeId, NetSystem.GetRouter()).Object;
-	const TObjectPtr<FCommanderActor> Commander = Engine.CreateObject<FCommanderActor>(CommanderActorTypeId, NetSystem.GetRouter()).Object;
+	const TObjectPtr<FTelemetrySinkActor> Sink = Engine.CreateObject<FTelemetrySinkActor>(TelemetrySinkActorTypeId, Networking.GetRouter()).Object;
+	const TObjectPtr<FCommanderActor> Commander = Engine.CreateObject<FCommanderActor>(CommanderActorTypeId, Networking.GetRouter()).Object;
 	if (World.Get() == nullptr || Sink.Get() == nullptr || Commander.Get() == nullptr)
 	{
 		MW_LOG(Error, "ex24", "server world or actor creation failed; halting");

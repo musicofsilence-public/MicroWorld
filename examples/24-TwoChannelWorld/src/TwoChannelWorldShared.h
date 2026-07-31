@@ -2,7 +2,7 @@
 
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Messaging/Message.h>
-#include <MicroWorld/Networking/NetSystem.h>
+#include <MicroWorld/Networking/Networking.h>
 #include <MicroWorld/Transport/UdpAddressCodec.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Platform/Esp32/Esp32UartDriver.h>
@@ -17,7 +17,7 @@
  * 24's two roles.
  *
  * Both role translation units (ServerMain.cpp, ClientMain.cpp) include this so the
- * message/actor/channel ids, UART/WiFi/UDP configuration, and the TNetSystem
+ * message/actor/channel ids, UART/WiFi/UDP configuration, and the TNetworking
  * and engine shapes are defined exactly once -- DRY within this one example.
  */
 namespace Ex24
@@ -94,11 +94,11 @@ constexpr MicroWorld::FTypeId TelemetrySinkActorTypeId{0x00180002u};
 /** Stable descriptor id for the managed FCommanderActor type. */
 constexpr MicroWorld::FTypeId CommanderActorTypeId{0x00180003u};
 
-/** Sizes the one TNetSystem for two links, two router channels, and the example's existing 96-byte messages. */
-struct FWorldNetSystemTraits : MicroWorld::FDefaultNetSystemTraits
+/** Sizes the one TNetworking for two links, two router channels, and the example's existing 96-byte messages. */
+struct FWorldNetworkingTraits : MicroWorld::FDefaultNetworkingTraits
 {
 	/** The example configures one UDP and one UART driver. */
-	static constexpr std::size_t MaxNetDrivers = 2;
+	static constexpr std::size_t MaxDevices = 2;
 
 	/** The shared router owns exactly the telemetry and command channels. */
 	static constexpr std::size_t MaxRouterChannels = 2;
@@ -108,7 +108,7 @@ struct FWorldNetSystemTraits : MicroWorld::FDefaultNetSystemTraits
 };
 
 /** The one networked engine system both roles compose before their engine begins play. */
-using FWorldNetSystem = MicroWorld::TNetSystem<FWorldNetSystemTraits>;
+using FWorldNetworking = MicroWorld::TNetworking<FWorldNetworkingTraits>;
 
 /** The engine both roles compose; sized for one world with a couple of small actors using direct component storage. */
 using FWorldEngine = MicroWorld::TEngine<>;
@@ -126,9 +126,9 @@ inline MicroWorld::FEsp32UartConfig MakeUartConfig(const std::uint8_t NodeId) no
 }
 
 /** Builds the shared session config; heartbeats keep each point-to-point peer alive between sends. */
-inline MicroWorld::FNetHostConfig MakeHostConfig() noexcept
+inline MicroWorld::FTransportHostConfig MakeHostConfig() noexcept
 {
-	MicroWorld::FNetHostConfig Config{};
+	MicroWorld::FTransportHostConfig Config{};
 	Config.HeartbeatIntervalMilliseconds = 1000;
 	Config.PeerTimeoutMilliseconds = 5000;
 	Config.ProtocolVersion = ProtocolVersion;

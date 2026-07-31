@@ -39,38 +39,38 @@ namespace
 {
 
 	/** Maps one UART write outcome to the shared driver result. */
-	ENetResult MapUartWriteOutcome(const Detail::EUartWriteOutcome InOutcome) noexcept
+	ETransportResult MapUartWriteOutcome(const Detail::EUartWriteOutcome InOutcome) noexcept
 	{
 		switch (InOutcome)
 		{
 			case Detail::EUartWriteOutcome::Sent:
-				return ENetResult::Success;
+				return ETransportResult::Success;
 			case Detail::EUartWriteOutcome::WouldBlock:
-				return ENetResult::Full;
+				return ETransportResult::Full;
 			case Detail::EUartWriteOutcome::Error:
 			default:
-				return ENetResult::Invalid;
+				return ETransportResult::Invalid;
 		}
 	}
 
 } // namespace
 
-ENetResult FEsp32UartDriver::TrySend(const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
+ETransportResult FEsp32UartDriver::TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
 {
 	if (!bOpen)
 	{
-		return ENetResult::Unavailable;
+		return ETransportResult::Unavailable;
 	}
-	const ENetResult Validation = ValidateOutgoingPacket(InTo, InPacket);
-	if (Validation != ENetResult::Success)
+	const ETransportResult Validation = ValidateOutgoingPacket(InTo, InPacket);
+	if (Validation != ETransportResult::Success)
 	{
 		return Validation;
 	}
 	// The codec is transactional on failure.
 	std::uint8_t Frame[UartMaxPayloadBytes + FrameOverheadBytes];
 	std::size_t Written = 0;
-	const ENetResult EncodeResult = EncodeFrame(LocalNodeIdValue, InPacket, TSpan<std::uint8_t>(Frame, sizeof(Frame)), Written);
-	if (EncodeResult != ENetResult::Success)
+	const ETransportResult EncodeResult = EncodeFrame(LocalNodeIdValue, InPacket, TSpan<std::uint8_t>(Frame, sizeof(Frame)), Written);
+	if (EncodeResult != ETransportResult::Success)
 	{
 		return EncodeResult;
 	}
@@ -78,36 +78,36 @@ ENetResult FEsp32UartDriver::TrySend(const FNetAddress& InTo, TSpan<const std::u
 	return MapUartWriteOutcome(Outcome);
 }
 
-ENetResult FEsp32UartDriver::ValidateOutgoingPacket(const FNetAddress& InTo, const TSpan<const std::uint8_t> InPacket) const noexcept
+ETransportResult FEsp32UartDriver::ValidateOutgoingPacket(const FDeviceAddress& InTo, const TSpan<const std::uint8_t> InPacket) const noexcept
 {
 	// Validate every argument before any syscall so a rejection is truly transactional.
 	if (!IsUartAddress(InTo))
 	{
-		return ENetResult::Invalid;
+		return ETransportResult::Invalid;
 	}
 	const std::size_t PacketSize = InPacket.Size();
 	if (PacketSize > UartMaxPayloadBytes)
 	{
-		return ENetResult::Invalid;
+		return ETransportResult::Invalid;
 	}
 	if (PacketSize != 0 && InPacket.Data() == nullptr)
 	{
-		return ENetResult::Invalid;
+		return ETransportResult::Invalid;
 	}
-	return ENetResult::Success;
+	return ETransportResult::Success;
 }
 
-ENetResult FEsp32UartDriver::TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept
+ETransportResult FEsp32UartDriver::TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
 {
 	// Reject a null destination with nonzero length before any UART read.
 	const std::size_t Capacity = InDestination.Size();
 	if (Capacity != 0 && InDestination.Data() == nullptr)
 	{
-		return ENetResult::Invalid;
+		return ETransportResult::Invalid;
 	}
 	if (!bOpen)
 	{
-		return ENetResult::Unavailable;
+		return ETransportResult::Unavailable;
 	}
 	// A frame held from a prior Full is delivered first so the decoder precondition is honored.
 	if (Decoder.HasFrame())
@@ -117,23 +117,24 @@ ENetResult FEsp32UartDriver::TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t
 	return PumpDecoderForFrame(InDestination, OutFrom, OutResult);
 }
 
-ENetResult FEsp32UartDriver::DeliverFrameToDestination(TSpan<std::uint8_t> InDestination, FNetAddress& OutFrom, FNetReceiveResult& OutResult) noexcept
+ETransportResult FEsp32UartDriver::DeliverFrameToDestination(
+	TSpan<std::uint8_t> InDestination, FDeviceAddress& OutFrom, FReceiveResult& OutResult) noexcept
 {
 	// On Full the destination is untouched and the frame stays held for the next
 	// call, so a receive that cannot fit is transactional.
 	const std::size_t HeldLength = Decoder.FramePayload().Size();
 	if (HeldLength > InDestination.Size())
 	{
-		return ENetResult::Full;
+		return ETransportResult::Full;
 	}
 	std::memcpy(InDestination.Data(), Decoder.FramePayload().Data(), HeldLength);
 	OutFrom = MakeUartAddress(Decoder.FrameNodeId());
 	OutResult.BytesReceived = HeldLength;
 	Decoder.ClearFrame();
-	return ENetResult::Success;
+	return ETransportResult::Success;
 }
 
-ENetResult FEsp32UartDriver::PumpDecoderForFrame(TSpan<std::uint8_t> InDestination, FNetAddress& OutFrom, FNetReceiveResult& OutResult) noexcept
+ETransportResult FEsp32UartDriver::PumpDecoderForFrame(TSpan<std::uint8_t> InDestination, FDeviceAddress& OutFrom, FReceiveResult& OutResult) noexcept
 {
 	// Pump available UART bytes one at a time, bounded so a flood cannot starve the caller.
 	const std::size_t PumpByteCap = 2u * (UartMaxPayloadBytes + FrameOverheadBytes);
@@ -148,7 +149,7 @@ ENetResult FEsp32UartDriver::PumpDecoderForFrame(TSpan<std::uint8_t> InDestinati
 		}
 		if (Status == Detail::EUartReadStatus::Error)
 		{
-			return ENetResult::Invalid;
+			return ETransportResult::Invalid;
 		}
 		const EFrameEvent Event = Decoder.PushByte(IncomingByte);
 		if (Event == EFrameEvent::FrameReady)
@@ -161,7 +162,7 @@ ENetResult FEsp32UartDriver::PumpDecoderForFrame(TSpan<std::uint8_t> InDestinati
 			MW_LOG_MSG(Warning, "Uart", "decoder discarded a candidate frame (bad length or CRC)");
 		}
 	}
-	return ENetResult::Unavailable;
+	return ETransportResult::Unavailable;
 }
 
 std::size_t FEsp32UartDriver::MaxPacketBytes() const noexcept

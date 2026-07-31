@@ -1,6 +1,6 @@
 #pragma once
 
-#include <MicroWorld/Transport/NetAddress.h>
+#include <MicroWorld/Transport/DeviceAddress.h>
 
 #include <cstdint>
 
@@ -8,20 +8,20 @@ namespace MicroWorld
 {
 
 /**
- * Encodes a UART node id into an opaque one-byte `FNetAddress`.
+ * Encodes a UART node id into an opaque one-byte `FDeviceAddress`.
  *
  * The byte carries a node id: the local id stamped on an outgoing frame, or the SENDER's id read
  * from a received frame. The UART link is point-to-point, so the address never selects a
  * destination on the wire — it only stamps and reports identity, exactly as the LoRa encoding does.
- * The encoding is owned here because `FNetAddress` ascribes no meaning to its bytes and is shared
+ * The encoding is owned here because `FDeviceAddress` ascribes no meaning to its bytes and is shared
  * with the UDP, loopback, and LoRa encodings.
  *
  * @param InNodeId Node id of the sender or recipient this address names.
  * @return One-byte address carrying the node id.
  */
-constexpr FNetAddress MakeUartAddress(const std::uint8_t InNodeId) noexcept
+constexpr FDeviceAddress MakeUartAddress(const std::uint8_t InNodeId) noexcept
 {
-	FNetAddress Address{};
+	FDeviceAddress Address{};
 	Address.Bytes[0] = InNodeId;
 	Address.Size = 1;
 	return Address;
@@ -38,7 +38,7 @@ constexpr FNetAddress MakeUartAddress(const std::uint8_t InNodeId) noexcept
  * @param InAddress Address whose encoding to test.
  * @return True when the active length is exactly one byte.
  */
-constexpr bool IsUartAddress(const FNetAddress& InAddress) noexcept
+constexpr bool IsUartAddress(const FDeviceAddress& InAddress) noexcept
 {
 	return InAddress.Size == 1;
 }
@@ -53,7 +53,7 @@ constexpr bool IsUartAddress(const FNetAddress& InAddress) noexcept
  * @param InAddress Address whose first byte holds the node id.
  * @return Node id carried by the address.
  */
-constexpr std::uint8_t UartAddressNodeId(const FNetAddress& InAddress) noexcept
+constexpr std::uint8_t UartAddressNodeId(const FDeviceAddress& InAddress) noexcept
 {
 	return InAddress.Bytes[0];
 }

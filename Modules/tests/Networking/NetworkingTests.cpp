@@ -4,12 +4,12 @@
 #include <MicroWorld/Core/Delegates/Delegate.h>
 #include <MicroWorld/Core/PlaySystem.h>
 #include <MicroWorld/Messaging/Message.h>
-#include <MicroWorld/Networking/NetSystem.h>
+#include <MicroWorld/Networking/Networking.h>
 #include <MicroWorld/Transport/HostLoopback.h>
-#include <MicroWorld/Transport/NetAddress.h>
-#include <MicroWorld/Transport/NetDriver.h>
-#include <MicroWorld/Transport/NetHost.h>
-#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Transport/DeviceAddress.h>
+#include <MicroWorld/Transport/Device.h>
+#include <MicroWorld/Transport/TransportHost.h>
+#include <MicroWorld/Transport/TransportResult.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -25,16 +25,16 @@ namespace
 	using FLoopback = MicroWorld::THostLoopback<2, 8, 256>;
 
 	/** Uses the default two-driver and four-channel profile for normal composition tests. */
-	using FSystem = MicroWorld::TNetSystem<>;
+	using FSystem = MicroWorld::TNetworking<>;
 
 	/** Makes driver exhaustion observable with one fixed slot. */
-	struct FOneDriverTraits : MicroWorld::FDefaultNetSystemTraits
+	struct FOneDriverTraits : MicroWorld::FDefaultNetworkingTraits
 	{
-		static constexpr std::size_t MaxNetDrivers = 1;
+		static constexpr std::size_t MaxDevices = 1;
 	};
 
 	/** Makes channel exhaustion observable with one router and system channel slot. */
-	struct FOneChannelTraits : MicroWorld::FDefaultNetSystemTraits
+	struct FOneChannelTraits : MicroWorld::FDefaultNetworkingTraits
 	{
 		static constexpr std::size_t MaxRouterChannels = 1;
 		static constexpr std::size_t MaxChannels = 1;
@@ -56,9 +56,9 @@ namespace
 	constexpr std::uint8_t CrossSystemPayloadByte{0x7A};
 
 	/** Builds a host configuration accepted by both loopback roles. */
-	MicroWorld::FNetHostConfig MakeConfig() noexcept
+	MicroWorld::FTransportHostConfig MakeConfig() noexcept
 	{
-		return MicroWorld::FNetHostConfig{};
+		return MicroWorld::FTransportHostConfig{};
 	}
 
 	/** Supplies a shared monotonic order source so each driver's first pump is directly observable. */
@@ -95,21 +95,21 @@ namespace
 		std::uint32_t FirstAdvanceOrder{0};
 	};
 
-	/** Provides a deterministic client transport whose observable operations reveal TNetSystem's driver pump order. */
-	class FRecordingDriver final : public MicroWorld::INetDriver
+	/** Provides a deterministic client transport whose observable operations reveal TNetworking's driver pump order. */
+	class FRecordingDriver final : public MicroWorld::IDevice
 	{
 	public:
 		/** Binds the driver to caller-owned observability and a deterministic logical-send outcome. */
 		FRecordingDriver(
 			FDriverPumpRecord& InRecord,
 			FDriverPumpSequence& InSequence,
-			const MicroWorld::ENetResult InSendResult = MicroWorld::ENetResult::Success) noexcept
+			const MicroWorld::ETransportResult InSendResult = MicroWorld::ETransportResult::Success) noexcept
 			: Record(InRecord), Sequence(InSequence), SendResult(InSendResult)
 		{
 		}
 
 		/** Records each outbound transport attempt and accepts it without a real network. */
-		MicroWorld::ENetResult TrySend(const MicroWorld::FNetAddress&, MicroWorld::TSpan<const std::uint8_t>) noexcept override
+		MicroWorld::ETransportResult TrySend(const MicroWorld::FDeviceAddress&, MicroWorld::TSpan<const std::uint8_t>) noexcept override
 		{
 			++Record.SendCount;
 			if (Record.FirstSendOrder == 0)
@@ -120,14 +120,15 @@ namespace
 		}
 
 		/** Records each inbound transport attempt and reports the deterministic empty state. */
-		MicroWorld::ENetResult TryReceive(MicroWorld::FNetAddress&, MicroWorld::TSpan<std::uint8_t>, MicroWorld::FNetReceiveResult&) noexcept override
+		MicroWorld::ETransportResult TryReceive(
+			MicroWorld::FDeviceAddress&, MicroWorld::TSpan<std::uint8_t>, MicroWorld::FReceiveResult&) noexcept override
 		{
 			++Record.ReceiveCount;
 			if (Record.FirstReceiveOrder == 0)
 			{
 				Record.FirstReceiveOrder = Sequence.Next();
 			}
-			return MicroWorld::ENetResult::Unavailable;
+			return MicroWorld::ETransportResult::Unavailable;
 		}
 
 		/** Records one bounded physical-transmit advancement after the host's logical outbound drain. */
@@ -151,7 +152,7 @@ namespace
 		FDriverPumpSequence& Sequence;
 
 		/** Makes full-driver lifecycle progress observable without a real transport. */
-		MicroWorld::ENetResult SendResult;
+		MicroWorld::ETransportResult SendResult;
 	};
 
 } // namespace
@@ -160,16 +161,16 @@ namespace
  * Scenario: Configure two drivers on one system over a loopback with two ports.
  * Expected: Each driver receives a valid handle with a distinct slot identity.
  */
-MW_TEST_CASE(NetSystem_AddNetDriverAcceptsTwoDrivers)
+MW_TEST_CASE(Networking_AddDeviceAcceptsTwoDrivers)
 {
 	// Arrange
 	FLoopback Loopback;
 	FSystem System;
-	const MicroWorld::FNetHostConfig Config = MakeConfig();
+	const MicroWorld::FTransportHostConfig Config = MakeConfig();
 
 	// Act
-	const MicroWorld::FNetDriverHandle FirstDriver = System.AddNetDriver(Loopback.Port(0), MicroWorld::ENetMode::Standalone, Config);
-	const MicroWorld::FNetDriverHandle SecondDriver = System.AddNetDriver(Loopback.Port(1), MicroWorld::ENetMode::Standalone, Config);
+	const MicroWorld::FDeviceHandle FirstDriver = System.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::Standalone, Config);
+	const MicroWorld::FDeviceHandle SecondDriver = System.AddDevice(Loopback.Port(1), MicroWorld::ENetworkMode::Standalone, Config);
 	const bool bFirstDriverValid = FirstDriver.IsValid();
 	const bool bSecondDriverValid = SecondDriver.IsValid();
 	const bool bDistinctSlots = FirstDriver.Index != SecondDriver.Index;
@@ -184,13 +185,13 @@ MW_TEST_CASE(NetSystem_AddNetDriverAcceptsTwoDrivers)
  * Scenario: Add a best-effort and a guaranteed channel on one configured driver.
  * Expected: Each reliability mode receives a valid channel handle without exposing internal wrappers.
  */
-MW_TEST_CASE(NetSystem_AddChannelAcceptsBestEffortAndGuaranteedOnOneDriver)
+MW_TEST_CASE(Networking_AddChannelAcceptsBestEffortAndGuaranteedOnOneDriver)
 {
 	// Arrange
 	FLoopback Loopback;
 	FSystem System;
-	const MicroWorld::FNetHostConfig Config = MakeConfig();
-	const MicroWorld::FNetDriverHandle Driver = System.AddNetDriver(Loopback.Port(0), MicroWorld::ENetMode::Standalone, Config);
+	const MicroWorld::FTransportHostConfig Config = MakeConfig();
+	const MicroWorld::FDeviceHandle Driver = System.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::Standalone, Config);
 
 	// Act
 	const MicroWorld::FChannelHandle BestEffort =
@@ -211,14 +212,14 @@ MW_TEST_CASE(NetSystem_AddChannelAcceptsBestEffortAndGuaranteedOnOneDriver)
  * Scenario: Forge a driver handle with a mismatched generation and attempt to add a channel, then add a channel on the current driver.
  * Expected: The forged-generation request is rejected and leaves the current driver slot usable.
  */
-MW_TEST_CASE(NetSystem_AddChannelRejectsForgedDriverGeneration)
+MW_TEST_CASE(Networking_AddChannelRejectsForgedDriverGeneration)
 {
 	// Arrange
 	FLoopback Loopback;
 	FSystem System;
-	const MicroWorld::FNetHostConfig Config = MakeConfig();
-	const MicroWorld::FNetDriverHandle Driver = System.AddNetDriver(Loopback.Port(0), MicroWorld::ENetMode::Standalone, Config);
-	const MicroWorld::FNetDriverHandle StaleDriver{Driver.Index, static_cast<std::uint8_t>(Driver.Generation + 1)};
+	const MicroWorld::FTransportHostConfig Config = MakeConfig();
+	const MicroWorld::FDeviceHandle Driver = System.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::Standalone, Config);
+	const MicroWorld::FDeviceHandle StaleDriver{Driver.Index, static_cast<std::uint8_t>(Driver.Generation + 1)};
 
 	// Act
 	const MicroWorld::FChannelHandle RejectedChannel =
@@ -239,16 +240,16 @@ MW_TEST_CASE(NetSystem_AddChannelRejectsForgedDriverGeneration)
  * Scenario: Fill a one-driver system and attempt to add a second driver.
  * Expected: The driver beyond fixed capacity is rejected with an invalid handle.
  */
-MW_TEST_CASE(NetSystem_AddNetDriverRejectsCapacityExhaustion)
+MW_TEST_CASE(Networking_AddDeviceRejectsCapacityExhaustion)
 {
 	// Arrange
 	FLoopback Loopback;
-	MicroWorld::TNetSystem<FOneDriverTraits> System;
-	const MicroWorld::FNetHostConfig Config = MakeConfig();
+	MicroWorld::TNetworking<FOneDriverTraits> System;
+	const MicroWorld::FTransportHostConfig Config = MakeConfig();
 
 	// Act
-	const MicroWorld::FNetDriverHandle AcceptedDriver = System.AddNetDriver(Loopback.Port(0), MicroWorld::ENetMode::Standalone, Config);
-	const MicroWorld::FNetDriverHandle RejectedDriver = System.AddNetDriver(Loopback.Port(1), MicroWorld::ENetMode::Standalone, Config);
+	const MicroWorld::FDeviceHandle AcceptedDriver = System.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::Standalone, Config);
+	const MicroWorld::FDeviceHandle RejectedDriver = System.AddDevice(Loopback.Port(1), MicroWorld::ENetworkMode::Standalone, Config);
 	const bool bAcceptedDriverValid = AcceptedDriver.IsValid();
 	const bool bRejectedDriverValid = RejectedDriver.IsValid();
 
@@ -261,13 +262,13 @@ MW_TEST_CASE(NetSystem_AddNetDriverRejectsCapacityExhaustion)
  * Scenario: Fill a one-channel driver and attempt to add a second channel.
  * Expected: The channel beyond fixed capacity is rejected with an invalid handle and does not disturb the accepted predecessor.
  */
-MW_TEST_CASE(NetSystem_AddChannelRejectsCapacityExhaustion)
+MW_TEST_CASE(Networking_AddChannelRejectsCapacityExhaustion)
 {
 	// Arrange
 	FLoopback Loopback;
-	MicroWorld::TNetSystem<FOneChannelTraits> System;
-	const MicroWorld::FNetHostConfig Config = MakeConfig();
-	const MicroWorld::FNetDriverHandle Driver = System.AddNetDriver(Loopback.Port(0), MicroWorld::ENetMode::Standalone, Config);
+	MicroWorld::TNetworking<FOneChannelTraits> System;
+	const MicroWorld::FTransportHostConfig Config = MakeConfig();
+	const MicroWorld::FDeviceHandle Driver = System.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::Standalone, Config);
 
 	// Act
 	const MicroWorld::FChannelHandle AcceptedChannel =
@@ -288,14 +289,14 @@ MW_TEST_CASE(NetSystem_AddChannelRejectsCapacityExhaustion)
  * Scenario: Configure a client driver and channel, pump before BeginPlay, then close composition with BeginPlay, attempt late composition, and pump
  * once more. Expected: No packet crosses the transport before BeginPlay; afterward composition is frozen and the host starts to emit packets.
  */
-MW_TEST_CASE(NetSystem_BeginPlayFinalizesCompositionAndDefersHostStart)
+MW_TEST_CASE(Networking_BeginPlayFinalizesCompositionAndDefersHostStart)
 {
 	// Arrange
 	FLoopback Loopback;
 	FSystem System;
-	MicroWorld::FNetHostConfig ClientConfig = MakeConfig();
+	MicroWorld::FTransportHostConfig ClientConfig = MakeConfig();
 	ClientConfig.ServerAddress = MicroWorld::MakeLoopbackAddress(1);
-	const MicroWorld::FNetDriverHandle Driver = System.AddNetDriver(Loopback.Port(0), MicroWorld::ENetMode::Client, ClientConfig);
+	const MicroWorld::FDeviceHandle Driver = System.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::Client, ClientConfig);
 	const MicroWorld::FChannelHandle InitialChannel =
 		System.AddChannel(Driver, MicroWorld::FMessageChannelId{1}, MicroWorld::EChannelReliability::BestEffort);
 
@@ -308,7 +309,7 @@ MW_TEST_CASE(NetSystem_BeginPlayFinalizesCompositionAndDefersHostStart)
 	System.BeginPlay(20);
 	const MicroWorld::FChannelHandle LateChannel =
 		System.AddChannel(Driver, MicroWorld::FMessageChannelId{2}, MicroWorld::EChannelReliability::BestEffort);
-	const MicroWorld::FNetDriverHandle LateDriver = System.AddNetDriver(Loopback.Port(1), MicroWorld::ENetMode::Standalone, MakeConfig());
+	const MicroWorld::FDeviceHandle LateDriver = System.AddDevice(Loopback.Port(1), MicroWorld::ENetworkMode::Standalone, MakeConfig());
 	System.PostAdvance(20);
 	const bool bPacketQueuedAfterBeginPlay = !Loopback.IsEmpty(1);
 	const bool bDriverValid = Driver.IsValid();
@@ -329,7 +330,7 @@ MW_TEST_CASE(NetSystem_BeginPlayFinalizesCompositionAndDefersHostStart)
  * Scenario: Compose two recording drivers and run one BeginPlay plus one PreAdvance/PostAdvance cycle.
  * Expected: Inbound pumps run in forward add order, and outbound and physical-progress pumps run in reverse add order.
  */
-MW_TEST_CASE(NetSystem_CoreLifecyclePumpsDriversInForwardAndReverseOrder)
+MW_TEST_CASE(Networking_CoreLifecyclePumpsDriversInForwardAndReverseOrder)
 {
 	// Arrange
 	FDriverPumpSequence Sequence;
@@ -338,11 +339,11 @@ MW_TEST_CASE(NetSystem_CoreLifecyclePumpsDriversInForwardAndReverseOrder)
 	FRecordingDriver FirstDriver{FirstRecord, Sequence};
 	FRecordingDriver SecondDriver{SecondRecord, Sequence};
 	FSystem System;
-	MicroWorld::FNetHostConfig Config = MakeConfig();
+	MicroWorld::FTransportHostConfig Config = MakeConfig();
 	Config.ServerAddress = MicroWorld::MakeLoopbackAddress(0);
 
-	const MicroWorld::FNetDriverHandle FirstHandle = System.AddNetDriver(FirstDriver, MicroWorld::ENetMode::Client, Config);
-	const MicroWorld::FNetDriverHandle SecondHandle = System.AddNetDriver(SecondDriver, MicroWorld::ENetMode::Client, Config);
+	const MicroWorld::FDeviceHandle FirstHandle = System.AddDevice(FirstDriver, MicroWorld::ENetworkMode::Client, Config);
+	const MicroWorld::FDeviceHandle SecondHandle = System.AddDevice(SecondDriver, MicroWorld::ENetworkMode::Client, Config);
 	MicroWorld::IPlaySystem& Lifecycle = System;
 
 	// Act: one BeginPlay plus one PreAdvance/PostAdvance cycle pumps every recording driver.
@@ -384,20 +385,20 @@ MW_TEST_CASE(NetSystem_CoreLifecyclePumpsDriversInForwardAndReverseOrder)
  * Scenario: Compose an idle dedicated server driver and a full client driver, then run one BeginPlay plus one PostAdvance.
  * Expected: Each non-standalone driver advances transport even when it has no packet or its driver is full.
  */
-MW_TEST_CASE(NetSystem_PostAdvanceAdvancesIdleAndFullDrivers)
+MW_TEST_CASE(Networking_PostAdvanceAdvancesIdleAndFullDrivers)
 {
 	// Arrange
 	FDriverPumpSequence Sequence;
 	FDriverPumpRecord IdleRecord{};
 	FDriverPumpRecord FullRecord{};
 	FRecordingDriver IdleDriver{IdleRecord, Sequence};
-	FRecordingDriver FullDriver{FullRecord, Sequence, MicroWorld::ENetResult::Full};
+	FRecordingDriver FullDriver{FullRecord, Sequence, MicroWorld::ETransportResult::Full};
 	FSystem System;
-	MicroWorld::FNetHostConfig ClientConfig = MakeConfig();
+	MicroWorld::FTransportHostConfig ClientConfig = MakeConfig();
 	ClientConfig.ServerAddress = MicroWorld::MakeLoopbackAddress(0);
 
-	const MicroWorld::FNetDriverHandle IdleHandle = System.AddNetDriver(IdleDriver, MicroWorld::ENetMode::DedicatedServer, MakeConfig());
-	const MicroWorld::FNetDriverHandle FullHandle = System.AddNetDriver(FullDriver, MicroWorld::ENetMode::Client, ClientConfig);
+	const MicroWorld::FDeviceHandle IdleHandle = System.AddDevice(IdleDriver, MicroWorld::ENetworkMode::DedicatedServer, MakeConfig());
+	const MicroWorld::FDeviceHandle FullHandle = System.AddDevice(FullDriver, MicroWorld::ENetworkMode::Client, ClientConfig);
 
 	// Act: one BeginPlay plus one PostAdvance exposes both the idle and full-driver pump paths.
 	System.BeginPlay(0);
@@ -423,7 +424,7 @@ MW_TEST_CASE(NetSystem_PostAdvanceAdvancesIdleAndFullDrivers)
  * Scenario: Register a router handler, queue a local broadcast, pump before BeginPlay, then open composition with BeginPlay and pump again.
  * Expected: Pre-BeginPlay pumps leave the queued message undelivered; the first post-BeginPlay pump delivers it without emitting transport packets.
  */
-MW_TEST_CASE(NetSystem_PreBeginPlayPumpsLeaveQueuedLocalRouterMessageUndelivered)
+MW_TEST_CASE(Networking_PreBeginPlayPumpsLeaveQueuedLocalRouterMessageUndelivered)
 {
 	// Arrange
 	FLoopback Loopback;
@@ -465,16 +466,16 @@ MW_TEST_CASE(NetSystem_PreBeginPlayPumpsLeaveQueuedLocalRouterMessageUndelivered
  * Scenario: BeginPlay and one PostAdvance flush a client's initial hello, then EndPlay runs before a later PostAdvance.
  * Expected: The later PostAdvance cannot emit another connection hello after EndPlay stops the client.
  */
-MW_TEST_CASE(NetSystem_EndPlayStopsClientBeforeFuturePostAdvance)
+MW_TEST_CASE(Networking_EndPlayStopsClientBeforeFuturePostAdvance)
 {
 	// Arrange
 	FDriverPumpSequence Sequence;
 	FDriverPumpRecord Record{};
 	FRecordingDriver Driver{Record, Sequence};
 	FSystem System;
-	MicroWorld::FNetHostConfig Config = MakeConfig();
+	MicroWorld::FTransportHostConfig Config = MakeConfig();
 	Config.ServerAddress = MicroWorld::MakeLoopbackAddress(0);
-	const MicroWorld::FNetDriverHandle DriverHandle = System.AddNetDriver(Driver, MicroWorld::ENetMode::Client, Config);
+	const MicroWorld::FDeviceHandle DriverHandle = System.AddDevice(Driver, MicroWorld::ENetworkMode::Client, Config);
 	MicroWorld::IPlaySystem& Lifecycle = System;
 
 	// Act: BeginPlay and one PostAdvance flush the initial connection hello.
@@ -497,18 +498,17 @@ MW_TEST_CASE(NetSystem_EndPlayStopsClientBeforeFuturePostAdvance)
  * Scenario: Connect a client and server system, register a server router handler, broadcast from the client, and alternate PreAdvance/PostAdvance
  * turns. Expected: The client's PostAdvance sends the routed message before the remote server's PreAdvance delivers it exactly once.
  */
-MW_TEST_CASE(NetSystem_PreAdvanceAndPostAdvancePumpRoutedMessageInOrder)
+MW_TEST_CASE(Networking_PreAdvanceAndPostAdvancePumpRoutedMessageInOrder)
 {
 	// Arrange
 	FLoopback Loopback;
 	FSystem ServerSystem;
 	FSystem ClientSystem;
-	const MicroWorld::FNetHostConfig ServerConfig = MakeConfig();
-	MicroWorld::FNetHostConfig ClientConfig = MakeConfig();
+	const MicroWorld::FTransportHostConfig ServerConfig = MakeConfig();
+	MicroWorld::FTransportHostConfig ClientConfig = MakeConfig();
 	ClientConfig.ServerAddress = MicroWorld::MakeLoopbackAddress(0);
-	const MicroWorld::FNetDriverHandle ServerDriver =
-		ServerSystem.AddNetDriver(Loopback.Port(0), MicroWorld::ENetMode::DedicatedServer, ServerConfig);
-	const MicroWorld::FNetDriverHandle ClientDriver = ClientSystem.AddNetDriver(Loopback.Port(1), MicroWorld::ENetMode::Client, ClientConfig);
+	const MicroWorld::FDeviceHandle ServerDriver = ServerSystem.AddDevice(Loopback.Port(0), MicroWorld::ENetworkMode::DedicatedServer, ServerConfig);
+	const MicroWorld::FDeviceHandle ClientDriver = ClientSystem.AddDevice(Loopback.Port(1), MicroWorld::ENetworkMode::Client, ClientConfig);
 	const MicroWorld::FChannelHandle ServerChannel =
 		ServerSystem.AddChannel(ServerDriver, MicroWorld::FMessageChannelId{1}, MicroWorld::EChannelReliability::BestEffort);
 	const MicroWorld::FChannelHandle ClientChannel =

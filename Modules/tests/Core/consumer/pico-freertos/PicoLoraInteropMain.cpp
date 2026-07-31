@@ -1,6 +1,6 @@
 #include <MicroWorld/Transport/E32Lora.h>
-#include <MicroWorld/Transport/NetDriver.h>
-#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Transport/Device.h>
+#include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Platform/Pico/PicoE32LoraDriver.h>
 
 #include <FreeRTOS.h>
@@ -104,8 +104,8 @@ StackType_t LoraTaskStack[LoraTaskStackDepth];
 #if !defined(MICROWORLD_LORA_PAYLOAD_REGRESSION)
 /** Checks one decoded packet is the expected five-byte reply from ESP32 node B. */
 bool IsExpectedPeerPayload(
-	const MicroWorld::FNetAddress& InFrom,
-	const MicroWorld::FNetReceiveResult& InResult,
+	const MicroWorld::FDeviceAddress& InFrom,
+	const MicroWorld::FReceiveResult& InResult,
 	const std::uint8_t (&InPayload)[MicroWorld::E32MaxPayloadBytes]) noexcept
 {
 	return MicroWorld::IsLoraAddress(InFrom) && MicroWorld::LoraAddressNodeId(InFrom) == PeerNodeId && InResult.BytesReceived == VolleyPayloadBytes
@@ -125,12 +125,12 @@ void RunLoraInteropTask(void* const InContext)
 	{
 		LoraDriver.AdvanceTransmit();
 
-		MicroWorld::FNetAddress From{};
-		MicroWorld::FNetReceiveResult Received{};
-		const MicroWorld::ENetResult ReceiveResult =
+		MicroWorld::FDeviceAddress From{};
+		MicroWorld::FReceiveResult Received{};
+		const MicroWorld::ETransportResult ReceiveResult =
 			LoraDriver.TryReceive(From, MicroWorld::TSpan<std::uint8_t>(ReceiveBuffer, sizeof(ReceiveBuffer)), Received);
 		const TickType_t Now = xTaskGetTickCount();
-		if (ReceiveResult == MicroWorld::ENetResult::Success && IsExpectedPeerPayload(From, Received, ReceiveBuffer))
+		if (ReceiveResult == MicroWorld::ETransportResult::Success && IsExpectedPeerPayload(From, Received, ReceiveBuffer))
 		{
 			bHasPendingTransmit = true;
 			PendingCounter = ReadVolleyCounter(ReceiveBuffer) + 1u;
@@ -141,9 +141,9 @@ void RunLoraInteropTask(void* const InContext)
 		{
 			std::uint8_t Payload[VolleyPayloadBytes]{};
 			WriteVolleyPayload(Payload, LocalNodeId, PendingCounter);
-			const MicroWorld::ENetResult SendResult =
+			const MicroWorld::ETransportResult SendResult =
 				LoraDriver.TrySend(MicroWorld::MakeLoraAddress(PeerNodeId), MicroWorld::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
-			if (SendResult == MicroWorld::ENetResult::Success)
+			if (SendResult == MicroWorld::ETransportResult::Success)
 			{
 				// Success transfers the complete frame into the driver slot; later task iterations advance it onto UART.
 				bHasPendingTransmit = false;
@@ -171,8 +171,8 @@ constexpr TickType_t EmptyRetryPeriodTicks = VolleyPeriodTicks;
 
 /** Checks the sender address, exact length, and canonical bytes before accepting one regression frame. */
 bool IsExpectedRegressionPayload(
-	const MicroWorld::FNetAddress& InFrom,
-	const MicroWorld::FNetReceiveResult& InResult,
+	const MicroWorld::FDeviceAddress& InFrom,
+	const MicroWorld::FReceiveResult& InResult,
 	const std::uint8_t (&InPayload)[MicroWorld::E32MaxPayloadBytes],
 	const MicroWorld::Example17::EPayloadRegressionCase InExpectedCase) noexcept
 {
@@ -183,8 +183,8 @@ bool IsExpectedRegressionPayload(
 /** Advances only when the received peer frame matches the payload case expected by the current exchange state. */
 void AdvancePayloadRegressionReceiveState(
 	EPayloadRegressionState& InOutState,
-	const MicroWorld::FNetAddress& InFrom,
-	const MicroWorld::FNetReceiveResult& InResult,
+	const MicroWorld::FDeviceAddress& InFrom,
+	const MicroWorld::FReceiveResult& InResult,
 	const std::uint8_t (&InPayload)[MicroWorld::E32MaxPayloadBytes]) noexcept
 {
 	switch (InOutState)
@@ -237,9 +237,9 @@ void QueuePendingPayloadRegressionTransmit(
 
 	MicroWorld::Example17::FillCanonicalPayload(TransmitCase, InOutPayloadBuffer);
 	const std::size_t PayloadBytes = MicroWorld::Example17::PayloadRegressionByteCount(TransmitCase);
-	const MicroWorld::ENetResult SendResult =
+	const MicroWorld::ETransportResult SendResult =
 		InDriver.TrySend(MicroWorld::MakeLoraAddress(PeerNodeId), MicroWorld::TSpan<const std::uint8_t>(InOutPayloadBuffer, PayloadBytes));
-	if (SendResult != MicroWorld::ENetResult::Success)
+	if (SendResult != MicroWorld::ETransportResult::Success)
 	{
 		return;
 	}
@@ -271,11 +271,11 @@ void RunLoraInteropTask(void* const InContext)
 
 	for (;;)
 	{
-		MicroWorld::FNetAddress From{};
-		MicroWorld::FNetReceiveResult Received{};
-		const MicroWorld::ENetResult ReceiveResult =
+		MicroWorld::FDeviceAddress From{};
+		MicroWorld::FReceiveResult Received{};
+		const MicroWorld::ETransportResult ReceiveResult =
 			LoraDriver.TryReceive(From, MicroWorld::TSpan<std::uint8_t>(PayloadBuffer, sizeof(PayloadBuffer)), Received);
-		if (ReceiveResult == MicroWorld::ENetResult::Success)
+		if (ReceiveResult == MicroWorld::ETransportResult::Success)
 		{
 			AdvancePayloadRegressionReceiveState(State, From, Received, PayloadBuffer);
 		}
@@ -301,7 +301,7 @@ void RunLoraInteropTask(void* const InContext)
 int main()
 {
 	MicroWorld::FPicoE32LoraDriver LoraDriver;
-	if (LoraDriver.Initialize(LoraConfig) != MicroWorld::ENetResult::Success)
+	if (LoraDriver.Initialize(LoraConfig) != MicroWorld::ETransportResult::Success)
 	{
 		return 1;
 	}

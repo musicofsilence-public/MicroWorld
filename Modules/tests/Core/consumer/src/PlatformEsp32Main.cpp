@@ -2,8 +2,8 @@
 //
 // This translation unit composes the full MicroWorld stack on ESP32-S3:
 // FEsp32TimeSource (esp_timer, the single real clock) + FEsp32UdpDriver (lwIP
-// non-blocking UDP) + TNetHost<4,256> (dedicated server) bound into TEngine
-// via the TNetHostSystem/IPlaySystem interface from Phase 4.4, then ticks it at a
+// non-blocking UDP) + TTransportHost<4,256> (dedicated server) bound into TEngine
+// via the THostPlaySystem/IPlaySystem interface from Phase 4.4, then ticks it at a
 // fixed 20 ms cadence from app_main. This is a composition proof: the lwIP
 // stack is initialized so the UDP socket is valid, but no WiFi is associated,
 // so no UDP datagram can flow. A real deployment associates WiFi first and
@@ -15,7 +15,7 @@
 #include <MicroWorld/Engine/EngineSystem.h>
 #include <MicroWorld/Engine/EngineStorage.h>
 #include <MicroWorld/Core/Log.h>
-#include <MicroWorld/Transport/NetHost.h>
+#include <MicroWorld/Transport/TransportHost.h>
 #include <MicroWorld/Engine/GarbageCollector.h>
 #include <MicroWorld/Engine/ObjectStore.h>
 #include <MicroWorld/Platform/Esp32/Esp32OutputDevice.h>
@@ -70,7 +70,7 @@ volatile int PlatformEsp32CompositionResult = -1;
  * Composes the full ESP32 stack and ticks the engine host at a fixed cadence.
  *
  * This is a compile/composition proof: the dedicated-server network host is
- * wired through the `TNetHostSystem` interface but no netif/WiFi is brought up, so the loop
+ * wired through the `THostPlaySystem` interface but no netif/WiFi is brought up, so the loop
  * exercises only the host's plumbing. Flashing this image to hardware requires
  * explicit authorization that is out of scope for Phase 5.2.
  */
@@ -116,12 +116,12 @@ extern "C" void app_main()
 	(void)WifiLink.IsUp();
 
 	// 4. A dedicated-server session host over that driver, started at the current boot time.
-	static TNetHost<4, 256> Net(Driver);
-	(void)Net.Configure(ENetMode::DedicatedServer, FNetHostConfig{});
-	Net.Start(Clock.Now());
+	static TTransportHost<4, 256> Transport(Driver);
+	(void)Transport.Configure(ENetworkMode::DedicatedServer, FTransportHostConfig{});
+	Transport.Start(Clock.Now());
 
-	// 5. Adapt the host to the engine's `TNetHostSystem` interface (Phase 4.4).
-	static TNetHostSystem<TNetHost<4, 256>> Frame(Net);
+	// 5. Adapt the host to the engine's `THostPlaySystem` interface (Phase 4.4).
+	static THostPlaySystem<TTransportHost<4, 256>> Frame(Transport);
 
 	// 6. The composition root: same capacities as the Engine profile probe + the live frame.
 	using FDemoHost = TEngine<FDemoHostTraits>;

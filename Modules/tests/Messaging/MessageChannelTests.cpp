@@ -9,9 +9,9 @@
 #include <MicroWorld/Engine/EngineSystem.h>
 #include <MicroWorld/Messaging/ReliableChannel.h>
 #include <MicroWorld/Transport/HostLoopback.h>
-#include <MicroWorld/Transport/NetAddress.h>
-#include <MicroWorld/Transport/NetHost.h>
-#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Transport/DeviceAddress.h>
+#include <MicroWorld/Transport/TransportHost.h>
+#include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Transport/PacketDropDriver.h>
 #include <MicroWorld/Engine/GarbageCollector.h>
 #include <MicroWorld/Engine/ObjectPtr.h>
@@ -28,10 +28,10 @@ using MicroWorld::DurationMilliseconds;
 using MicroWorld::EChannelSendTarget;
 using MicroWorld::EEngineResult;
 using MicroWorld::EMessageResult;
-using MicroWorld::ENetHostState;
-using MicroWorld::ENetMode;
-using MicroWorld::ENetResult;
+using MicroWorld::ENetworkMode;
 using MicroWorld::ERuntimeResult;
+using MicroWorld::ETransportHostState;
+using MicroWorld::ETransportResult;
 using MicroWorld::FDefaultEngineTraits;
 using MicroWorld::FGarbageCollectionBudget;
 using MicroWorld::FMessageActorId;
@@ -40,23 +40,23 @@ using MicroWorld::FMessageHandlerBinding;
 using MicroWorld::FMessageHandlerHandle;
 using MicroWorld::FMessageTypeId;
 using MicroWorld::FMessageView;
-using MicroWorld::FNetHostConfig;
 using MicroWorld::FPacketDropDriver;
 using MicroWorld::FReliableChannelConfig;
+using MicroWorld::FTransportHostConfig;
 using MicroWorld::IEncodedMessageSink;
 using MicroWorld::LocalChannelId;
 using MicroWorld::MakeLoopbackAddress;
 using MicroWorld::ReliableHeaderBytes;
 using MicroWorld::TEngine;
 using MicroWorld::THostLoopback;
+using MicroWorld::THostPlaySystem;
 using MicroWorld::TimePointMilliseconds;
 using MicroWorld::TMessageChannelBinding;
 using MicroWorld::TMessageRouter;
-using MicroWorld::TNetHost;
-using MicroWorld::TNetHostSystem;
 using MicroWorld::TPlaySystemSet;
 using MicroWorld::TReliableChannel;
 using MicroWorld::TSpan;
+using MicroWorld::TTransportHost;
 
 /** Asserts a messaging operation returned Success without discarding the result. */
 #define MW_EXPECT_SUCCESS(TestContext, Result, Message) MW_EXPECT_EQ(TestContext, EMessageResult::Success, Result, Message)
@@ -71,7 +71,7 @@ constexpr int MaxHandshakeFrames = 8;
  */
 constexpr FMessageChannelId AppChannelId = 1;
 
-/** The TNetHost wire-level channel byte the bindings under test read and write. */
+/** The TTransportHost wire-level channel byte the bindings under test read and write. */
 constexpr std::uint8_t AppWireChannelByte = 5;
 
 /** A second wire-level channel byte on the same hosts, used only to prove a binding ignores traffic addressed to some other channel. */
@@ -114,13 +114,13 @@ constexpr std::uint32_t TestMarkOperations = 4;
 constexpr std::uint32_t TestSweepOperations = 8;
 
 /** The network host type every case wires a channel binding to. */
-using FNet = TNetHost<2, 64>;
+using FTransport = TTransportHost<2, 64>;
 
-/** Adapts FNet to the engine's per-frame network slot, matching EngineNetHostTests.cpp's wiring. */
-using FNetFrame = TNetHostSystem<FNet>;
+/** Adapts FTransport to the engine's per-frame network slot, matching EngineHostTests.cpp's wiring. */
+using FHostPlay = THostPlaySystem<FTransport>;
 
-/** The channel binding under test, duck-typed on FNet. */
-using FBinding = TMessageChannelBinding<FNet>;
+/** The channel binding under test, duck-typed on FTransport. */
+using FBinding = TMessageChannelBinding<FTransport>;
 
 /** Carries the exact capacities FHost sized before the traits refactor, so the test store is unchanged. */
 struct FHostTraits : FDefaultEngineTraits
@@ -152,9 +152,9 @@ constexpr std::size_t MultiChannelCapacity = 2;
 using FMultiChannelRouter = TMessageRouter<HandlerCapacity, OutboundQueueCapacity, MessageByteCapacity, MultiChannelCapacity>;
 
 /** Builds the shared fast-heartbeat, short-timeout config every case's hosts use for deterministic frames. */
-FNetHostConfig MakeConfig() noexcept
+FTransportHostConfig MakeConfig() noexcept
 {
-	FNetHostConfig Config{};
+	FTransportHostConfig Config{};
 	Config.HeartbeatIntervalMilliseconds = 100;
 	Config.PeerTimeoutMilliseconds = 500;
 	Config.ProtocolVersion = 1;
@@ -314,18 +314,18 @@ void PumpSide(FHost& InHost, const TimePointMilliseconds InNowMilliseconds) noex
 	(void)InHost.Tick(InNowMilliseconds);
 }
 
-/** Drives both sides through PumpSide until the client's NetHost reports Connected or the frame budget runs out, mirroring EngineNetHostTests.cpp's
- * handshake loop. */
+/** Drives both sides through PumpSide until the client's TransportHost reports Connected or the frame budget runs out, mirroring
+ * EngineHostTests.cpp's handshake loop. */
 TimePointMilliseconds ConnectClientToServer(
-	FHost& InClientHost, FNet& InClientNet, FHost& InServerHost, TimePointMilliseconds InNowMilliseconds) noexcept
+	FHost& InClientHost, FTransport& InClientTransport, FHost& InServerHost, TimePointMilliseconds InNowMilliseconds) noexcept
 {
-	bool bClientConnected = InClientNet.GetState() == ENetHostState::Connected;
+	bool bClientConnected = InClientTransport.GetState() == ETransportHostState::Connected;
 	for (int Frame = 0; Frame < MaxHandshakeFrames && !bClientConnected; ++Frame)
 	{
 		InNowMilliseconds += FrameStepMilliseconds;
 		PumpSide(InClientHost, InNowMilliseconds);
 		PumpSide(InServerHost, InNowMilliseconds);
-		bClientConnected = InClientNet.GetState() == ENetHostState::Connected;
+		bClientConnected = InClientTransport.GetState() == ETransportHostState::Connected;
 	}
 	return InNowMilliseconds;
 }
@@ -336,15 +336,21 @@ TimePointMilliseconds ConnectClientToServer(
  * of that side's net frames through its frame set.
  */
 TimePointMilliseconds ConnectClientToServerOverTwoWires(
-	FHost& InClientHost, FNet& InClientNetA, FNet& InClientNetB, FHost& InServerHost, TimePointMilliseconds InNowMilliseconds) noexcept
+	FHost& InClientHost,
+	FTransport& InClientTransportA,
+	FTransport& InClientTransportB,
+	FHost& InServerHost,
+	TimePointMilliseconds InNowMilliseconds) noexcept
 {
-	bool bBothClientsConnected = InClientNetA.GetState() == ENetHostState::Connected && InClientNetB.GetState() == ENetHostState::Connected;
+	bool bBothClientsConnected =
+		InClientTransportA.GetState() == ETransportHostState::Connected && InClientTransportB.GetState() == ETransportHostState::Connected;
 	for (int Frame = 0; Frame < MaxHandshakeFrames && !bBothClientsConnected; ++Frame)
 	{
 		InNowMilliseconds += FrameStepMilliseconds;
 		PumpSide(InClientHost, InNowMilliseconds);
 		PumpSide(InServerHost, InNowMilliseconds);
-		bBothClientsConnected = InClientNetA.GetState() == ENetHostState::Connected && InClientNetB.GetState() == ENetHostState::Connected;
+		bBothClientsConnected =
+			InClientTransportA.GetState() == ETransportHostState::Connected && InClientTransportB.GetState() == ETransportHostState::Connected;
 	}
 	return InNowMilliseconds;
 }
@@ -357,10 +363,10 @@ MW_TEST_CASE(EngineMessageChannel_ClientToServerTargetedSendReachesServerHandler
 {
 	// Arrange
 	THostLoopback<2, 8, 64> Network;
-	FNet ServerNet(Network.Port(0));
-	FNet ClientNet(Network.Port(1));
-	FNetFrame ServerFrame{ServerNet};
-	FNetFrame ClientFrame{ClientNet};
+	FTransport ServerTransport(Network.Port(0));
+	FTransport ClientTransport(Network.Port(1));
+	FHostPlay ServerFrame{ServerTransport};
+	FHostPlay ClientFrame{ClientTransport};
 	FTestRouter ClientRouter;
 	FTestRouter ServerRouter;
 	FFrameSet ServerSet;
@@ -371,8 +377,8 @@ MW_TEST_CASE(EngineMessageChannel_ClientToServerTargetedSendReachesServerHandler
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ClientSet.Add(ClientRouter), "The client's frame set must accept its router last (D3 order)");
 	FHost ServerHost{FGarbageCollectionBudget{TestRootOperations, TestMarkOperations, TestSweepOperations}, ServerSet};
 	FHost ClientHost{FGarbageCollectionBudget{TestRootOperations, TestMarkOperations, TestSweepOperations}, ClientSet};
-	FBinding ClientBinding(ClientNet, AppWireChannelByte, AppChannelId, EChannelSendTarget::Server, ClientRouter);
-	FBinding ServerBinding(ServerNet, AppWireChannelByte, AppChannelId, EChannelSendTarget::AllPeers, ServerRouter);
+	FBinding ClientBinding(ClientTransport, AppWireChannelByte, AppChannelId, EChannelSendTarget::Server, ClientRouter);
+	FBinding ServerBinding(ServerTransport, AppWireChannelByte, AppChannelId, EChannelSendTarget::AllPeers, ServerRouter);
 
 	MW_EXPECT_TRUE(Test, ClientBinding.IsAttached(), "The client binding must register its inbound handler");
 	MW_EXPECT_TRUE(Test, ServerBinding.IsAttached(), "The server binding must register its inbound handler");
@@ -391,15 +397,15 @@ MW_TEST_CASE(EngineMessageChannel_ClientToServerTargetedSendReachesServerHandler
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, ServerHost.BeginPlay(0), "The server world begins play at the baseline");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, ClientHost.BeginPlay(0), "The client world begins play at the baseline");
 
-	FNetHostConfig ClientConfig = MakeConfig();
+	FTransportHostConfig ClientConfig = MakeConfig();
 	ClientConfig.ServerAddress = MakeLoopbackAddress(0);
-	(void)ServerNet.Configure(ENetMode::DedicatedServer, MakeConfig());
-	(void)ClientNet.Configure(ENetMode::Client, ClientConfig);
-	(void)ServerNet.Start(0);
-	(void)ClientNet.Start(0);
+	(void)ServerTransport.Configure(ENetworkMode::DedicatedServer, MakeConfig());
+	(void)ClientTransport.Configure(ENetworkMode::Client, ClientConfig);
+	(void)ServerTransport.Start(0);
+	(void)ClientTransport.Start(0);
 
-	const TimePointMilliseconds ConnectedAt = ConnectClientToServer(ClientHost, ClientNet, ServerHost, 0);
-	MW_EXPECT_EQ(Test, ENetHostState::Connected, ClientNet.GetState(), "The client must connect through the frame-set-driven pump order");
+	const TimePointMilliseconds ConnectedAt = ConnectClientToServer(ClientHost, ClientTransport, ServerHost, 0);
+	MW_EXPECT_EQ(Test, ETransportHostState::Connected, ClientTransport.GetState(), "The client must connect through the frame-set-driven pump order");
 
 	// Act
 	const std::array<std::uint8_t, 1> Payload{0x11};
@@ -430,10 +436,10 @@ MW_TEST_CASE(EngineMessageChannel_ServerBroadcastReachesClientHandler)
 {
 	// Arrange
 	THostLoopback<2, 8, 64> Network;
-	FNet ServerNet(Network.Port(0));
-	FNet ClientNet(Network.Port(1));
-	FNetFrame ServerFrame{ServerNet};
-	FNetFrame ClientFrame{ClientNet};
+	FTransport ServerTransport(Network.Port(0));
+	FTransport ClientTransport(Network.Port(1));
+	FHostPlay ServerFrame{ServerTransport};
+	FHostPlay ClientFrame{ClientTransport};
 	FTestRouter ClientRouter;
 	FTestRouter ServerRouter;
 	FFrameSet ServerSet;
@@ -444,8 +450,8 @@ MW_TEST_CASE(EngineMessageChannel_ServerBroadcastReachesClientHandler)
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ClientSet.Add(ClientRouter), "The client's frame set must accept its router last (D3 order)");
 	FHost ServerHost{FGarbageCollectionBudget{TestRootOperations, TestMarkOperations, TestSweepOperations}, ServerSet};
 	FHost ClientHost{FGarbageCollectionBudget{TestRootOperations, TestMarkOperations, TestSweepOperations}, ClientSet};
-	FBinding ClientBinding(ClientNet, AppWireChannelByte, AppChannelId, EChannelSendTarget::Server, ClientRouter);
-	FBinding ServerBinding(ServerNet, AppWireChannelByte, AppChannelId, EChannelSendTarget::AllPeers, ServerRouter);
+	FBinding ClientBinding(ClientTransport, AppWireChannelByte, AppChannelId, EChannelSendTarget::Server, ClientRouter);
+	FBinding ServerBinding(ServerTransport, AppWireChannelByte, AppChannelId, EChannelSendTarget::AllPeers, ServerRouter);
 
 	MW_EXPECT_TRUE(Test, ClientBinding.IsAttached(), "The client binding must register its inbound handler");
 	MW_EXPECT_TRUE(Test, ServerBinding.IsAttached(), "The server binding must register its inbound handler");
@@ -464,15 +470,15 @@ MW_TEST_CASE(EngineMessageChannel_ServerBroadcastReachesClientHandler)
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, ServerHost.BeginPlay(0), "The server world begins play at the baseline");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, ClientHost.BeginPlay(0), "The client world begins play at the baseline");
 
-	FNetHostConfig ClientConfig = MakeConfig();
+	FTransportHostConfig ClientConfig = MakeConfig();
 	ClientConfig.ServerAddress = MakeLoopbackAddress(0);
-	(void)ServerNet.Configure(ENetMode::DedicatedServer, MakeConfig());
-	(void)ClientNet.Configure(ENetMode::Client, ClientConfig);
-	(void)ServerNet.Start(0);
-	(void)ClientNet.Start(0);
+	(void)ServerTransport.Configure(ENetworkMode::DedicatedServer, MakeConfig());
+	(void)ClientTransport.Configure(ENetworkMode::Client, ClientConfig);
+	(void)ServerTransport.Start(0);
+	(void)ClientTransport.Start(0);
 
-	const TimePointMilliseconds ConnectedAt = ConnectClientToServer(ClientHost, ClientNet, ServerHost, 0);
-	MW_EXPECT_EQ(Test, ENetHostState::Connected, ClientNet.GetState(), "The client must connect through the frame-set-driven pump order");
+	const TimePointMilliseconds ConnectedAt = ConnectClientToServer(ClientHost, ClientTransport, ServerHost, 0);
+	MW_EXPECT_EQ(Test, ETransportHostState::Connected, ClientTransport.GetState(), "The client must connect through the frame-set-driven pump order");
 
 	// Act
 	const std::array<std::uint8_t, 1> Payload{0x22};
@@ -501,10 +507,10 @@ MW_TEST_CASE(EngineMessageChannel_ForeignWireChannelNeverReachesBoundSink)
 {
 	// Arrange
 	THostLoopback<2, 8, 64> Network;
-	FNet ServerNet(Network.Port(0));
-	FNet ClientNet(Network.Port(1));
-	FNetFrame ServerFrame{ServerNet};
-	FNetFrame ClientFrame{ClientNet};
+	FTransport ServerTransport(Network.Port(0));
+	FTransport ClientTransport(Network.Port(1));
+	FHostPlay ServerFrame{ServerTransport};
+	FHostPlay ClientFrame{ClientTransport};
 	FTestRouter ServerRouter;
 	FFrameSet ServerSet;
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ServerSet.Add(ServerFrame), "The server's frame set must accept its net frame first (D3 order)");
@@ -513,7 +519,7 @@ MW_TEST_CASE(EngineMessageChannel_ForeignWireChannelNeverReachesBoundSink)
 	// The client in this case has no router at all (it sends raw wire bytes directly below), so it
 	// keeps the bare net frame instead of a frame set.
 	FHost ClientHost{FGarbageCollectionBudget{TestRootOperations, TestMarkOperations, TestSweepOperations}, ClientFrame};
-	FBinding ServerBinding(ServerNet, AppWireChannelByte, AppChannelId, EChannelSendTarget::AllPeers, ServerRouter);
+	FBinding ServerBinding(ServerTransport, AppWireChannelByte, AppChannelId, EChannelSendTarget::AllPeers, ServerRouter);
 
 	MW_EXPECT_TRUE(Test, ServerBinding.IsAttached(), "The server binding must register its inbound handler");
 	MW_EXPECT_SUCCESS(Test, ServerRouter.AddChannel(ServerBinding), "The server router must accept its wired channel");
@@ -530,30 +536,32 @@ MW_TEST_CASE(EngineMessageChannel_ForeignWireChannelNeverReachesBoundSink)
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, ServerHost.BeginPlay(0), "The server world begins play at the baseline");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, ClientHost.BeginPlay(0), "The client world begins play at the baseline");
 
-	FNetHostConfig ClientConfig = MakeConfig();
+	FTransportHostConfig ClientConfig = MakeConfig();
 	ClientConfig.ServerAddress = MakeLoopbackAddress(0);
-	(void)ServerNet.Configure(ENetMode::DedicatedServer, MakeConfig());
-	(void)ClientNet.Configure(ENetMode::Client, ClientConfig);
-	(void)ServerNet.Start(0);
-	(void)ClientNet.Start(0);
+	(void)ServerTransport.Configure(ENetworkMode::DedicatedServer, MakeConfig());
+	(void)ClientTransport.Configure(ENetworkMode::Client, ClientConfig);
+	(void)ServerTransport.Start(0);
+	(void)ClientTransport.Start(0);
 
 	// The client sends raw wire bytes directly (bypassing any router), so only the server binding's
 	// own channel filter is exercised; the client side needs no router pumped alongside its tick.
 	TimePointMilliseconds Now = 0;
-	bool bClientConnected = ClientNet.GetState() == ENetHostState::Connected;
+	bool bClientConnected = ClientTransport.GetState() == ETransportHostState::Connected;
 	for (int Frame = 0; Frame < MaxHandshakeFrames && !bClientConnected; ++Frame)
 	{
 		Now += FrameStepMilliseconds;
 		(void)ClientHost.Tick(Now);
 		PumpSide(ServerHost, Now);
-		bClientConnected = ClientNet.GetState() == ENetHostState::Connected;
+		bClientConnected = ClientTransport.GetState() == ETransportHostState::Connected;
 	}
-	MW_EXPECT_EQ(Test, ENetHostState::Connected, ClientNet.GetState(), "The client must connect before sending the foreign-channel message");
+	MW_EXPECT_EQ(
+		Test, ETransportHostState::Connected, ClientTransport.GetState(), "The client must connect before sending the foreign-channel message");
 
 	// Act
 	const std::array<std::uint8_t, 1> Payload{0x33};
-	const ENetResult SendResult = ClientNet.SendTo(ClientNet.GetServerPeer(), ForeignWireChannelByte, TSpan<const std::uint8_t>(Payload.data(), 1));
-	MW_EXPECT_EQ(Test, ENetResult::Success, SendResult, "A connected client can queue raw bytes on any non-zero wire channel");
+	const ETransportResult SendResult =
+		ClientTransport.SendTo(ClientTransport.GetServerPeer(), ForeignWireChannelByte, TSpan<const std::uint8_t>(Payload.data(), 1));
+	MW_EXPECT_EQ(Test, ETransportResult::Success, SendResult, "A connected client can queue raw bytes on any non-zero wire channel");
 
 	Now += FrameStepMilliseconds;
 	(void)ClientHost.Tick(Now);
@@ -578,10 +586,10 @@ MW_TEST_CASE(EngineMessageChannel_SendBeforeConnectReportsUnavailableThenDeliver
 {
 	// Arrange
 	THostLoopback<2, 8, 64> Network;
-	FNet ServerNet(Network.Port(0));
-	FNet ClientNet(Network.Port(1));
-	FNetFrame ServerFrame{ServerNet};
-	FNetFrame ClientFrame{ClientNet};
+	FTransport ServerTransport(Network.Port(0));
+	FTransport ClientTransport(Network.Port(1));
+	FHostPlay ServerFrame{ServerTransport};
+	FHostPlay ClientFrame{ClientTransport};
 	FTestRouter ClientRouter;
 	FTestRouter ServerRouter;
 	FFrameSet ServerSet;
@@ -592,8 +600,8 @@ MW_TEST_CASE(EngineMessageChannel_SendBeforeConnectReportsUnavailableThenDeliver
 	MW_EXPECT_EQ(Test, EEngineResult::Success, ClientSet.Add(ClientRouter), "The client's frame set must accept its router last (D3 order)");
 	FHost ServerHost{FGarbageCollectionBudget{TestRootOperations, TestMarkOperations, TestSweepOperations}, ServerSet};
 	FHost ClientHost{FGarbageCollectionBudget{TestRootOperations, TestMarkOperations, TestSweepOperations}, ClientSet};
-	FBinding ClientBinding(ClientNet, AppWireChannelByte, AppChannelId, EChannelSendTarget::Server, ClientRouter);
-	FBinding ServerBinding(ServerNet, AppWireChannelByte, AppChannelId, EChannelSendTarget::AllPeers, ServerRouter);
+	FBinding ClientBinding(ClientTransport, AppWireChannelByte, AppChannelId, EChannelSendTarget::Server, ClientRouter);
+	FBinding ServerBinding(ServerTransport, AppWireChannelByte, AppChannelId, EChannelSendTarget::AllPeers, ServerRouter);
 
 	MW_EXPECT_TRUE(Test, ClientBinding.IsAttached(), "The client binding must register its inbound handler");
 	MW_EXPECT_TRUE(Test, ServerBinding.IsAttached(), "The server binding must register its inbound handler");
@@ -612,12 +620,12 @@ MW_TEST_CASE(EngineMessageChannel_SendBeforeConnectReportsUnavailableThenDeliver
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, ServerHost.BeginPlay(0), "The server world begins play at the baseline");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, ClientHost.BeginPlay(0), "The client world begins play at the baseline");
 
-	FNetHostConfig ClientConfig = MakeConfig();
+	FTransportHostConfig ClientConfig = MakeConfig();
 	ClientConfig.ServerAddress = MakeLoopbackAddress(0);
-	(void)ServerNet.Configure(ENetMode::DedicatedServer, MakeConfig());
-	(void)ClientNet.Configure(ENetMode::Client, ClientConfig);
-	(void)ServerNet.Start(0);
-	(void)ClientNet.Start(0);
+	(void)ServerTransport.Configure(ENetworkMode::DedicatedServer, MakeConfig());
+	(void)ClientTransport.Configure(ENetworkMode::Client, ClientConfig);
+	(void)ServerTransport.Start(0);
+	(void)ClientTransport.Start(0);
 
 	// Act: queue the message while no peer is connected, then pump once.
 	const std::array<std::uint8_t, 1> Payload{0x44};
@@ -643,10 +651,10 @@ MW_TEST_CASE(EngineMessageChannel_SendBeforeConnectReportsUnavailableThenDeliver
 	// after the tick's own dispatch step (both inside one Host.Tick), so the very connecting frame whose
 	// dispatch admits the client also flushes and delivers the retained message within that same
 	// ConnectClientToServer iteration - one frame earlier than before.
-	Now = ConnectClientToServer(ClientHost, ClientNet, ServerHost, Now);
+	Now = ConnectClientToServer(ClientHost, ClientTransport, ServerHost, Now);
 
 	// Assert
-	MW_EXPECT_EQ(Test, ENetHostState::Connected, ClientNet.GetState(), "The client must connect through the frame-set-driven pump order");
+	MW_EXPECT_EQ(Test, ETransportHostState::Connected, ClientTransport.GetState(), "The client must connect through the frame-set-driven pump order");
 	MW_EXPECT_EQ(
 		Test,
 		std::size_t{0},
@@ -669,13 +677,16 @@ MW_TEST_CASE(EngineMessageChannel_SendBeforeConnectReportsUnavailableThenDeliver
  */
 MW_TEST_CASE(EngineMessageChannel_RejectingSinkIncrementsDroppedInboundCount)
 {
-	// Arrange: a listen server's Broadcast dispatches to its own local peer synchronously (TNetHost::SendToLocalPeer),
+	// Arrange: a listen server's Broadcast dispatches to its own local peer synchronously (TTransportHost::SendToLocalPeer),
 	// so this case never crosses the loopback network and needs no engine tick or pumping at all.
 	THostLoopback<1, 4, 64> Network;
-	FNet ListenServerHost(Network.Port(0));
+	FTransport ListenServerHost(Network.Port(0));
 	MW_EXPECT_EQ(
-		Test, ENetResult::Success, ListenServerHost.Configure(ENetMode::ListenServer, MakeConfig()), "Configuring an idle host must succeed");
-	MW_EXPECT_EQ(Test, ENetResult::Success, ListenServerHost.Start(0), "Starting an idle host must succeed");
+		Test,
+		ETransportResult::Success,
+		ListenServerHost.Configure(ENetworkMode::ListenServer, MakeConfig()),
+		"Configuring an idle host must succeed");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, ListenServerHost.Start(0), "Starting an idle host must succeed");
 
 	FToggleableSink Sink;
 	FBinding Binding(ListenServerHost, AppWireChannelByte, AppChannelId, EChannelSendTarget::AllPeers, Sink);
@@ -692,15 +703,15 @@ MW_TEST_CASE(EngineMessageChannel_RejectingSinkIncrementsDroppedInboundCount)
 
 	// Act
 	Sink.SetRejectInbound(true);
-	const ENetResult FirstRejectResult = ListenServerHost.Broadcast(AppWireChannelByte, PayloadView);
+	const ETransportResult FirstRejectResult = ListenServerHost.Broadcast(AppWireChannelByte, PayloadView);
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Success, FirstRejectResult, "The transport still succeeds; only the sink rejects");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, FirstRejectResult, "The transport still succeeds; only the sink rejects");
 	MW_EXPECT_EQ(Test, std::uint32_t{1}, Binding.DroppedInboundCount(), "A rejecting sink must increment DroppedInboundCount");
 
 	// Act
-	const ENetResult SecondRejectResult = ListenServerHost.Broadcast(AppWireChannelByte, PayloadView);
+	const ETransportResult SecondRejectResult = ListenServerHost.Broadcast(AppWireChannelByte, PayloadView);
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Success, SecondRejectResult, "A second rejected broadcast must still be accepted by the transport");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, SecondRejectResult, "A second rejected broadcast must still be accepted by the transport");
 	MW_EXPECT_EQ(Test, std::uint32_t{2}, Binding.DroppedInboundCount(), "A second rejection must climb the counter again, staying consistent");
 	MW_EXPECT_EQ(Test, std::size_t{3}, Sink.ReceivedCallCount(), "All three broadcasts must reach the sink after passing the channel filter");
 }
@@ -715,14 +726,14 @@ MW_TEST_CASE(EngineMessageChannel_MultiChannelIsolationDeliversBothInOneFrame)
 	// Arrange
 	THostLoopback<2, 8, 64> TelemetryNetwork;
 	THostLoopback<2, 8, 64> CommandNetwork;
-	FNet TelemetryServerNet(TelemetryNetwork.Port(0));
-	FNet TelemetryClientNet(TelemetryNetwork.Port(1));
-	FNet CommandServerNet(CommandNetwork.Port(0));
-	FNet CommandClientNet(CommandNetwork.Port(1));
-	FNetFrame TelemetryServerFrame{TelemetryServerNet};
-	FNetFrame TelemetryClientFrame{TelemetryClientNet};
-	FNetFrame CommandServerFrame{CommandServerNet};
-	FNetFrame CommandClientFrame{CommandClientNet};
+	FTransport TelemetryServerTransport(TelemetryNetwork.Port(0));
+	FTransport TelemetryClientTransport(TelemetryNetwork.Port(1));
+	FTransport CommandServerTransport(CommandNetwork.Port(0));
+	FTransport CommandClientTransport(CommandNetwork.Port(1));
+	FHostPlay TelemetryServerFrame{TelemetryServerTransport};
+	FHostPlay TelemetryClientFrame{TelemetryClientTransport};
+	FHostPlay CommandServerFrame{CommandServerTransport};
+	FHostPlay CommandClientFrame{CommandClientTransport};
 	FMultiChannelRouter ClientRouter;
 	FMultiChannelRouter ServerRouter;
 
@@ -753,10 +764,11 @@ MW_TEST_CASE(EngineMessageChannel_MultiChannelIsolationDeliversBothInOneFrame)
 	FHost ServerHost{FGarbageCollectionBudget{TestRootOperations, TestMarkOperations, TestSweepOperations}, ServerSet};
 	FHost ClientHost{FGarbageCollectionBudget{TestRootOperations, TestMarkOperations, TestSweepOperations}, ClientSet};
 
-	FBinding TelemetryClientBinding(TelemetryClientNet, TelemetryWireChannelByte, TelemetryChannelId, EChannelSendTarget::Server, ClientRouter);
-	FBinding TelemetryServerBinding(TelemetryServerNet, TelemetryWireChannelByte, TelemetryChannelId, EChannelSendTarget::AllPeers, ServerRouter);
-	FBinding CommandClientBinding(CommandClientNet, CommandWireChannelByte, CommandChannelId, EChannelSendTarget::Server, ClientRouter);
-	FBinding CommandServerBinding(CommandServerNet, CommandWireChannelByte, CommandChannelId, EChannelSendTarget::AllPeers, ServerRouter);
+	FBinding TelemetryClientBinding(TelemetryClientTransport, TelemetryWireChannelByte, TelemetryChannelId, EChannelSendTarget::Server, ClientRouter);
+	FBinding TelemetryServerBinding(
+		TelemetryServerTransport, TelemetryWireChannelByte, TelemetryChannelId, EChannelSendTarget::AllPeers, ServerRouter);
+	FBinding CommandClientBinding(CommandClientTransport, CommandWireChannelByte, CommandChannelId, EChannelSendTarget::Server, ClientRouter);
+	FBinding CommandServerBinding(CommandServerTransport, CommandWireChannelByte, CommandChannelId, EChannelSendTarget::AllPeers, ServerRouter);
 
 	MW_EXPECT_TRUE(Test, TelemetryClientBinding.IsAttached(), "The telemetry client binding must register its inbound handler");
 	MW_EXPECT_TRUE(Test, TelemetryServerBinding.IsAttached(), "The telemetry server binding must register its inbound handler");
@@ -781,24 +793,31 @@ MW_TEST_CASE(EngineMessageChannel_MultiChannelIsolationDeliversBothInOneFrame)
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, ServerHost.BeginPlay(0), "The server world begins play at the baseline");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, ClientHost.BeginPlay(0), "The client world begins play at the baseline");
 
-	FNetHostConfig TelemetryClientConfig = MakeConfig();
+	FTransportHostConfig TelemetryClientConfig = MakeConfig();
 	TelemetryClientConfig.ServerAddress = MakeLoopbackAddress(0);
-	FNetHostConfig CommandClientConfig = MakeConfig();
+	FTransportHostConfig CommandClientConfig = MakeConfig();
 	CommandClientConfig.ServerAddress = MakeLoopbackAddress(0);
-	(void)TelemetryServerNet.Configure(ENetMode::DedicatedServer, MakeConfig());
-	(void)TelemetryClientNet.Configure(ENetMode::Client, TelemetryClientConfig);
-	(void)CommandServerNet.Configure(ENetMode::DedicatedServer, MakeConfig());
-	(void)CommandClientNet.Configure(ENetMode::Client, CommandClientConfig);
-	(void)TelemetryServerNet.Start(0);
-	(void)TelemetryClientNet.Start(0);
-	(void)CommandServerNet.Start(0);
-	(void)CommandClientNet.Start(0);
+	(void)TelemetryServerTransport.Configure(ENetworkMode::DedicatedServer, MakeConfig());
+	(void)TelemetryClientTransport.Configure(ENetworkMode::Client, TelemetryClientConfig);
+	(void)CommandServerTransport.Configure(ENetworkMode::DedicatedServer, MakeConfig());
+	(void)CommandClientTransport.Configure(ENetworkMode::Client, CommandClientConfig);
+	(void)TelemetryServerTransport.Start(0);
+	(void)TelemetryClientTransport.Start(0);
+	(void)CommandServerTransport.Start(0);
+	(void)CommandClientTransport.Start(0);
 
-	const TimePointMilliseconds ConnectedAt = ConnectClientToServerOverTwoWires(ClientHost, TelemetryClientNet, CommandClientNet, ServerHost, 0);
+	const TimePointMilliseconds ConnectedAt =
+		ConnectClientToServerOverTwoWires(ClientHost, TelemetryClientTransport, CommandClientTransport, ServerHost, 0);
 	MW_EXPECT_EQ(
-		Test, ENetHostState::Connected, TelemetryClientNet.GetState(), "The telemetry wire must connect through the frame-set-driven pump order");
+		Test,
+		ETransportHostState::Connected,
+		TelemetryClientTransport.GetState(),
+		"The telemetry wire must connect through the frame-set-driven pump order");
 	MW_EXPECT_EQ(
-		Test, ENetHostState::Connected, CommandClientNet.GetState(), "The command wire must connect through the frame-set-driven pump order");
+		Test,
+		ETransportHostState::Connected,
+		CommandClientTransport.GetState(),
+		"The command wire must connect through the frame-set-driven pump order");
 
 	// Act
 	const std::array<std::uint8_t, 1> TelemetryPayload{0xAA};
@@ -842,14 +861,14 @@ MW_TEST_CASE(EngineMessageChannel_StalledChannelRetainsRouterHead)
 	// Arrange
 	THostLoopback<2, 8, 64> TelemetryNetwork;
 	THostLoopback<2, 8, 64> CommandNetwork;
-	FNet TelemetryServerNet(TelemetryNetwork.Port(0));
-	FNet TelemetryClientNet(TelemetryNetwork.Port(1));
-	FNet CommandServerNet(CommandNetwork.Port(0));
-	FNet CommandClientNet(CommandNetwork.Port(1));
-	FNetFrame TelemetryServerFrame{TelemetryServerNet};
-	FNetFrame TelemetryClientFrame{TelemetryClientNet};
-	FNetFrame CommandServerFrame{CommandServerNet};
-	FNetFrame CommandClientFrame{CommandClientNet};
+	FTransport TelemetryServerTransport(TelemetryNetwork.Port(0));
+	FTransport TelemetryClientTransport(TelemetryNetwork.Port(1));
+	FTransport CommandServerTransport(CommandNetwork.Port(0));
+	FTransport CommandClientTransport(CommandNetwork.Port(1));
+	FHostPlay TelemetryServerFrame{TelemetryServerTransport};
+	FHostPlay TelemetryClientFrame{TelemetryClientTransport};
+	FHostPlay CommandServerFrame{CommandServerTransport};
+	FHostPlay CommandClientFrame{CommandClientTransport};
 	FMultiChannelRouter ClientRouter;
 	FMultiChannelRouter ServerRouter;
 
@@ -880,10 +899,11 @@ MW_TEST_CASE(EngineMessageChannel_StalledChannelRetainsRouterHead)
 	FHost ServerHost{FGarbageCollectionBudget{TestRootOperations, TestMarkOperations, TestSweepOperations}, ServerSet};
 	FHost ClientHost{FGarbageCollectionBudget{TestRootOperations, TestMarkOperations, TestSweepOperations}, ClientSet};
 
-	FBinding TelemetryClientBinding(TelemetryClientNet, TelemetryWireChannelByte, TelemetryChannelId, EChannelSendTarget::Server, ClientRouter);
-	FBinding TelemetryServerBinding(TelemetryServerNet, TelemetryWireChannelByte, TelemetryChannelId, EChannelSendTarget::AllPeers, ServerRouter);
-	FBinding CommandClientBinding(CommandClientNet, CommandWireChannelByte, CommandChannelId, EChannelSendTarget::Server, ClientRouter);
-	FBinding CommandServerBinding(CommandServerNet, CommandWireChannelByte, CommandChannelId, EChannelSendTarget::AllPeers, ServerRouter);
+	FBinding TelemetryClientBinding(TelemetryClientTransport, TelemetryWireChannelByte, TelemetryChannelId, EChannelSendTarget::Server, ClientRouter);
+	FBinding TelemetryServerBinding(
+		TelemetryServerTransport, TelemetryWireChannelByte, TelemetryChannelId, EChannelSendTarget::AllPeers, ServerRouter);
+	FBinding CommandClientBinding(CommandClientTransport, CommandWireChannelByte, CommandChannelId, EChannelSendTarget::Server, ClientRouter);
+	FBinding CommandServerBinding(CommandServerTransport, CommandWireChannelByte, CommandChannelId, EChannelSendTarget::AllPeers, ServerRouter);
 
 	MW_EXPECT_TRUE(Test, TelemetryClientBinding.IsAttached(), "The telemetry client binding must register its inbound handler");
 	MW_EXPECT_TRUE(Test, TelemetryServerBinding.IsAttached(), "The telemetry server binding must register its inbound handler");
@@ -901,53 +921,58 @@ MW_TEST_CASE(EngineMessageChannel_StalledChannelRetainsRouterHead)
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, ServerHost.BeginPlay(0), "The server world begins play at the baseline");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, ClientHost.BeginPlay(0), "The client world begins play at the baseline");
 
-	FNetHostConfig TelemetryClientConfig = MakeConfig();
+	FTransportHostConfig TelemetryClientConfig = MakeConfig();
 	TelemetryClientConfig.ServerAddress = MakeLoopbackAddress(0);
-	FNetHostConfig CommandClientConfig = MakeConfig();
+	FTransportHostConfig CommandClientConfig = MakeConfig();
 	CommandClientConfig.ServerAddress = MakeLoopbackAddress(0);
-	(void)TelemetryServerNet.Configure(ENetMode::DedicatedServer, MakeConfig());
-	(void)TelemetryClientNet.Configure(ENetMode::Client, TelemetryClientConfig);
-	(void)CommandServerNet.Configure(ENetMode::DedicatedServer, MakeConfig());
-	(void)CommandClientNet.Configure(ENetMode::Client, CommandClientConfig);
-	(void)TelemetryServerNet.Start(0);
-	(void)TelemetryClientNet.Start(0);
-	(void)CommandServerNet.Start(0);
-	(void)CommandClientNet.Start(0);
+	(void)TelemetryServerTransport.Configure(ENetworkMode::DedicatedServer, MakeConfig());
+	(void)TelemetryClientTransport.Configure(ENetworkMode::Client, TelemetryClientConfig);
+	(void)CommandServerTransport.Configure(ENetworkMode::DedicatedServer, MakeConfig());
+	(void)CommandClientTransport.Configure(ENetworkMode::Client, CommandClientConfig);
+	(void)TelemetryServerTransport.Start(0);
+	(void)TelemetryClientTransport.Start(0);
+	(void)CommandServerTransport.Start(0);
+	(void)CommandClientTransport.Start(0);
 
-	const TimePointMilliseconds ConnectedAt = ConnectClientToServerOverTwoWires(ClientHost, TelemetryClientNet, CommandClientNet, ServerHost, 0);
-	MW_EXPECT_EQ(Test, ENetHostState::Connected, CommandClientNet.GetState(), "The command wire must connect before its outbound FIFO can be primed");
+	const TimePointMilliseconds ConnectedAt =
+		ConnectClientToServerOverTwoWires(ClientHost, TelemetryClientTransport, CommandClientTransport, ServerHost, 0);
+	MW_EXPECT_EQ(
+		Test,
+		ETransportHostState::Connected,
+		CommandClientTransport.GetState(),
+		"The command wire must connect before its outbound FIFO can be primed");
 
-	// auto: this test names no Net peer-id type, matching TMessageChannelBinding::TrySendEncodedMessage's own convention.
-	const auto CommandServerPeer = CommandClientNet.GetServerPeer();
+	// auto: this test names no Transport peer-id type, matching TMessageChannelBinding::TrySendEncodedMessage's own convention.
+	const auto CommandServerPeer = CommandClientTransport.GetServerPeer();
 	MW_EXPECT_TRUE(Test, CommandServerPeer.IsValid(), "The client must resolve its server peer on the command wire before priming");
 
-	// (1) Prime the client's own command-wire TNetHost outbound FIFO to exactly its capacity via raw
+	// (1) Prime the client's own command-wire TTransportHost outbound FIFO to exactly its capacity via raw
 	// SendTo calls that bypass the router entirely; no Tick runs between these calls, so nothing drains
 	// and no heartbeat timer advances.
 	const std::array<std::uint8_t, 1> FifoPrimerPayload{0xF0};
-	for (std::size_t Index = 0; Index < FNet::SendQueueDepth; ++Index)
+	for (std::size_t Index = 0; Index < FTransport::SendQueueDepth; ++Index)
 	{
 		MW_EXPECT_EQ(
 			Test,
-			ENetResult::Success,
-			CommandClientNet.SendTo(CommandServerPeer, CommandWireChannelByte, TSpan<const std::uint8_t>(FifoPrimerPayload.data(), 1)),
+			ETransportResult::Success,
+			CommandClientTransport.SendTo(CommandServerPeer, CommandWireChannelByte, TSpan<const std::uint8_t>(FifoPrimerPayload.data(), 1)),
 			"Priming the client's own outbound FIFO must succeed while it still has a free slot");
 	}
 
-	// (2) Fill the server's command mailbox directly (bypassing both routers and both TNetHosts), one
+	// (2) Fill the server's command mailbox directly (bypassing both routers and both TTransportHosts), one
 	// raw packet at a time, until one more than MailboxCapacityValue() reports Full.
 	const std::array<std::uint8_t, 1> MailboxFillerPayload{0xF1};
 	for (std::size_t Index = 0; Index < CommandNetwork.MailboxCapacityValue(); ++Index)
 	{
 		MW_EXPECT_EQ(
 			Test,
-			ENetResult::Success,
+			ETransportResult::Success,
 			CommandNetwork.Port(1).TrySend(MakeLoopbackAddress(0), TSpan<const std::uint8_t>(MailboxFillerPayload.data(), 1)),
 			"Each raw packet up to the server's command mailbox capacity must be accepted");
 	}
 	MW_EXPECT_EQ(
 		Test,
-		ENetResult::Full,
+		ETransportResult::Full,
 		CommandNetwork.Port(1).TrySend(MakeLoopbackAddress(0), TSpan<const std::uint8_t>(MailboxFillerPayload.data(), 1)),
 		"One packet beyond MailboxCapacityValue() must report Full: the server's command mailbox is now saturated");
 
@@ -978,7 +1003,7 @@ MW_TEST_CASE(EngineMessageChannel_StalledChannelRetainsRouterHead)
 		ClientRouter.QueuedOutboundCount(),
 		"Accepted v1 cross-channel head-of-line caveat: a stalled channel at the head of the router's one shared outbound queue retains both "
 		"itself and the healthy channel's message queued behind it, because TMessageRouter::PostAdvance stops the whole tick on the first "
-		"non-Success send (matching TNetManager::AdvanceSend's retained-head discipline from Task 2.2)");
+		"non-Success send (matching TTransportManager::AdvanceSend's retained-head discipline from Task 2.2)");
 }
 
 /**
@@ -1001,10 +1026,10 @@ MW_TEST_CASE(EngineMessageChannel_ReliableChannelSurvivesPacketDropsDeliveringEx
 
 	THostLoopback<2, 8, 64> Network;
 	FPacketDropDriver ClientDropDriver(Network.Port(1), DropEveryNthSend);
-	FNet ServerNet(Network.Port(0));
-	FNet ClientNet(ClientDropDriver);
-	FNetFrame ServerFrame{ServerNet};
-	FNetFrame ClientFrame{ClientNet};
+	FTransport ServerTransport(Network.Port(0));
+	FTransport ClientTransport(ClientDropDriver);
+	FHostPlay ServerFrame{ServerTransport};
+	FHostPlay ClientFrame{ClientTransport};
 
 	FTestRouter ClientRouter;
 	FRecordingReliableForwardSink ServerForwardSink;
@@ -1015,8 +1040,8 @@ MW_TEST_CASE(EngineMessageChannel_ReliableChannelSurvivesPacketDropsDeliveringEx
 	FReliableChannel ClientReliable(ClientRouter, ReliableConfig);
 	FReliableChannel ServerReliable(ServerForwardSink, ReliableConfig);
 
-	FBinding ClientBinding(ClientNet, AppWireChannelByte, AppChannelId, EChannelSendTarget::Server, ClientReliable);
-	FBinding ServerBinding(ServerNet, AppWireChannelByte, AppChannelId, EChannelSendTarget::AllPeers, ServerReliable);
+	FBinding ClientBinding(ClientTransport, AppWireChannelByte, AppChannelId, EChannelSendTarget::Server, ClientReliable);
+	FBinding ServerBinding(ServerTransport, AppWireChannelByte, AppChannelId, EChannelSendTarget::AllPeers, ServerReliable);
 	ClientReliable.SetInnerChannel(ClientBinding);
 	ServerReliable.SetInnerChannel(ServerBinding);
 
@@ -1047,18 +1072,18 @@ MW_TEST_CASE(EngineMessageChannel_ReliableChannelSurvivesPacketDropsDeliveringEx
 	// A heartbeat/timeout window far longer than this case's whole run keeps every raw send call
 	// attributable to the client's one-time Hello plus the reliable channel's own Data/retry traffic,
 	// so the deterministic every-3rd-call drop is guaranteed to land on a message send at some point.
-	FNetHostConfig SharedConfig = MakeConfig();
+	FTransportHostConfig SharedConfig = MakeConfig();
 	SharedConfig.HeartbeatIntervalMilliseconds = 1'000'000;
 	SharedConfig.PeerTimeoutMilliseconds = 2'000'000;
-	FNetHostConfig ClientConfig = SharedConfig;
+	FTransportHostConfig ClientConfig = SharedConfig;
 	ClientConfig.ServerAddress = MakeLoopbackAddress(0);
-	(void)ServerNet.Configure(ENetMode::DedicatedServer, SharedConfig);
-	(void)ClientNet.Configure(ENetMode::Client, ClientConfig);
-	(void)ServerNet.Start(0);
-	(void)ClientNet.Start(0);
+	(void)ServerTransport.Configure(ENetworkMode::DedicatedServer, SharedConfig);
+	(void)ClientTransport.Configure(ENetworkMode::Client, ClientConfig);
+	(void)ServerTransport.Start(0);
+	(void)ClientTransport.Start(0);
 
-	TimePointMilliseconds Now = ConnectClientToServer(ClientHost, ClientNet, ServerHost, 0);
-	MW_EXPECT_EQ(Test, ENetHostState::Connected, ClientNet.GetState(), "The client must connect before the drop-injected sends begin");
+	TimePointMilliseconds Now = ConnectClientToServer(ClientHost, ClientTransport, ServerHost, 0);
+	MW_EXPECT_EQ(Test, ETransportHostState::Connected, ClientTransport.GetState(), "The client must connect before the drop-injected sends begin");
 
 	// Act: send each guaranteed message and pump until it is fully acknowledged, recovering from every injected drop.
 	for (std::size_t MessageIndex = 0; MessageIndex < MessagesToSend; ++MessageIndex)

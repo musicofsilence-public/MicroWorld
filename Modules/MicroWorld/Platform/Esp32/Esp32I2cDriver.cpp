@@ -40,57 +40,57 @@ namespace
 {
 
 	/** Maps one I2C write outcome to the shared driver result (mirrors the UART driver's mapping). */
-	ENetResult MapI2cWriteOutcome(const Detail::EI2cWriteOutcome InOutcome) noexcept
+	ETransportResult MapI2cWriteOutcome(const Detail::EI2cWriteOutcome InOutcome) noexcept
 	{
 		switch (InOutcome)
 		{
 			case Detail::EI2cWriteOutcome::Sent:
-				return ENetResult::Success;
+				return ETransportResult::Success;
 			case Detail::EI2cWriteOutcome::WouldBlock:
-				return ENetResult::Full;
+				return ETransportResult::Full;
 			case Detail::EI2cWriteOutcome::Error:
 			default:
-				return ENetResult::Invalid;
+				return ETransportResult::Invalid;
 		}
 	}
 
 	/** Reports the first reason an outgoing packet cannot be framed and sent, or `Success`. */
-	ENetResult ValidateOutgoingI2cPacket(const FNetAddress& InTo, const TSpan<const std::uint8_t> InPacket) noexcept
+	ETransportResult ValidateOutgoingI2cPacket(const FDeviceAddress& InTo, const TSpan<const std::uint8_t> InPacket) noexcept
 	{
 		// Validate every argument before any syscall so a rejection is truly transactional.
 		if (!IsI2cAddress(InTo))
 		{
-			return ENetResult::Invalid;
+			return ETransportResult::Invalid;
 		}
 		const std::size_t PacketSize = InPacket.Size();
 		if (PacketSize > I2cMaxPayloadBytes)
 		{
-			return ENetResult::Invalid;
+			return ETransportResult::Invalid;
 		}
 		if (PacketSize != 0 && InPacket.Data() == nullptr)
 		{
-			return ENetResult::Invalid;
+			return ETransportResult::Invalid;
 		}
-		return ENetResult::Success;
+		return ETransportResult::Success;
 	}
 
 	/** Copies the decoder's held frame into the destination and clears it, or returns `Full`
 	 * (leaving the frame held) when the payload exceeds the destination. */
-	ENetResult DeliverFrameFromDecoder(
-		TFrameDecoder<I2cMaxPayloadBytes>& InDecoder, TSpan<std::uint8_t> InDestination, FNetAddress& OutFrom, FNetReceiveResult& OutResult) noexcept
+	ETransportResult DeliverFrameFromDecoder(
+		TFrameDecoder<I2cMaxPayloadBytes>& InDecoder, TSpan<std::uint8_t> InDestination, FDeviceAddress& OutFrom, FReceiveResult& OutResult) noexcept
 	{
 		// On Full the destination is untouched and the frame stays held for the next call, so a
 		// receive that cannot fit is transactional.
 		const std::size_t HeldLength = InDecoder.FramePayload().Size();
 		if (HeldLength > InDestination.Size())
 		{
-			return ENetResult::Full;
+			return ETransportResult::Full;
 		}
 		std::memcpy(InDestination.Data(), InDecoder.FramePayload().Data(), HeldLength);
 		OutFrom = MakeI2cAddress(InDecoder.FrameNodeId());
 		OutResult.BytesReceived = HeldLength;
 		InDecoder.ClearFrame();
-		return ENetResult::Success;
+		return ETransportResult::Success;
 	}
 
 } // namespace
@@ -121,22 +121,22 @@ FEsp32I2cMasterDriver::~FEsp32I2cMasterDriver() noexcept
 	}
 }
 
-ENetResult FEsp32I2cMasterDriver::TrySend(const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
+ETransportResult FEsp32I2cMasterDriver::TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
 {
 	if (!bOpen)
 	{
-		return ENetResult::Unavailable;
+		return ETransportResult::Unavailable;
 	}
-	const ENetResult Validation = ValidateOutgoingI2cPacket(InTo, InPacket);
-	if (Validation != ENetResult::Success)
+	const ETransportResult Validation = ValidateOutgoingI2cPacket(InTo, InPacket);
+	if (Validation != ETransportResult::Success)
 	{
 		return Validation;
 	}
 	// The codec is transactional on failure.
 	std::uint8_t Frame[I2cTransactionWindowBytes];
 	std::size_t Written = 0;
-	const ENetResult EncodeResult = EncodeFrame(LocalNodeIdValue, InPacket, TSpan<std::uint8_t>(Frame, sizeof(Frame)), Written);
-	if (EncodeResult != ENetResult::Success)
+	const ETransportResult EncodeResult = EncodeFrame(LocalNodeIdValue, InPacket, TSpan<std::uint8_t>(Frame, sizeof(Frame)), Written);
+	if (EncodeResult != ETransportResult::Success)
 	{
 		return EncodeResult;
 	}
@@ -144,17 +144,17 @@ ENetResult FEsp32I2cMasterDriver::TrySend(const FNetAddress& InTo, TSpan<const s
 	return MapI2cWriteOutcome(Outcome);
 }
 
-ENetResult FEsp32I2cMasterDriver::TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept
+ETransportResult FEsp32I2cMasterDriver::TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
 {
 	// Reject a null destination with nonzero length before any bus read.
 	const std::size_t Capacity = InDestination.Size();
 	if (Capacity != 0 && InDestination.Data() == nullptr)
 	{
-		return ENetResult::Invalid;
+		return ETransportResult::Invalid;
 	}
 	if (!bOpen)
 	{
-		return ENetResult::Unavailable;
+		return ETransportResult::Unavailable;
 	}
 	// A frame held from a prior Full is delivered first so the decoder precondition is honored.
 	if (Decoder.HasFrame())
@@ -166,11 +166,11 @@ ENetResult FEsp32I2cMasterDriver::TryReceive(FNetAddress& OutFrom, TSpan<std::ui
 	const Detail::EI2cReadOutcome Outcome = Detail::ReadI2cMaster(static_cast<i2c_master_dev_handle_t>(DeviceHandle), Window, sizeof(Window));
 	if (Outcome == Detail::EI2cReadOutcome::WouldBlock)
 	{
-		return ENetResult::Unavailable;
+		return ETransportResult::Unavailable;
 	}
 	if (Outcome == Detail::EI2cReadOutcome::Error)
 	{
-		return ENetResult::Invalid;
+		return ETransportResult::Invalid;
 	}
 	for (std::size_t Index = 0; Index < sizeof(Window); ++Index)
 	{
@@ -185,7 +185,7 @@ ENetResult FEsp32I2cMasterDriver::TryReceive(FNetAddress& OutFrom, TSpan<std::ui
 			MW_LOG_MSG(Warning, "I2c", "master decoder discarded a candidate frame (bad length or CRC)");
 		}
 	}
-	return ENetResult::Unavailable;
+	return ETransportResult::Unavailable;
 }
 
 std::size_t FEsp32I2cMasterDriver::MaxPacketBytes() const noexcept
@@ -222,22 +222,22 @@ FEsp32I2cSlaveDriver::~FEsp32I2cSlaveDriver() noexcept
 	}
 }
 
-ENetResult FEsp32I2cSlaveDriver::TrySend(const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
+ETransportResult FEsp32I2cSlaveDriver::TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
 {
 	if (!bOpen)
 	{
-		return ENetResult::Unavailable;
+		return ETransportResult::Unavailable;
 	}
-	const ENetResult Validation = ValidateOutgoingI2cPacket(InTo, InPacket);
-	if (Validation != ENetResult::Success)
+	const ETransportResult Validation = ValidateOutgoingI2cPacket(InTo, InPacket);
+	if (Validation != ETransportResult::Success)
 	{
 		return Validation;
 	}
 	// The codec is transactional on failure.
 	std::uint8_t Frame[I2cTransactionWindowBytes];
 	std::size_t Written = 0;
-	const ENetResult EncodeResult = EncodeFrame(LocalNodeIdValue, InPacket, TSpan<std::uint8_t>(Frame, sizeof(Frame)), Written);
-	if (EncodeResult != ENetResult::Success)
+	const ETransportResult EncodeResult = EncodeFrame(LocalNodeIdValue, InPacket, TSpan<std::uint8_t>(Frame, sizeof(Frame)), Written);
+	if (EncodeResult != ETransportResult::Success)
 	{
 		return EncodeResult;
 	}
@@ -245,17 +245,17 @@ ENetResult FEsp32I2cSlaveDriver::TrySend(const FNetAddress& InTo, TSpan<const st
 	return MapI2cWriteOutcome(Outcome);
 }
 
-ENetResult FEsp32I2cSlaveDriver::TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept
+ETransportResult FEsp32I2cSlaveDriver::TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
 {
 	// Reject a null destination with nonzero length before any inbox read.
 	const std::size_t Capacity = InDestination.Size();
 	if (Capacity != 0 && InDestination.Data() == nullptr)
 	{
-		return ENetResult::Invalid;
+		return ETransportResult::Invalid;
 	}
 	if (!bOpen)
 	{
-		return ENetResult::Unavailable;
+		return ETransportResult::Unavailable;
 	}
 	// A frame held from a prior Full is delivered first so the decoder precondition is honored.
 	if (Decoder.HasFrame())
@@ -282,7 +282,7 @@ ENetResult FEsp32I2cSlaveDriver::TryReceive(FNetAddress& OutFrom, TSpan<std::uin
 			MW_LOG_MSG(Warning, "I2c", "slave decoder discarded a candidate frame (bad length or CRC)");
 		}
 	}
-	return ENetResult::Unavailable;
+	return ETransportResult::Unavailable;
 }
 
 std::size_t FEsp32I2cSlaveDriver::MaxPacketBytes() const noexcept

@@ -129,7 +129,7 @@ namespace Detail
 
 /**
  * Logs a printf-style record at the given level and category, e.g.
- * MW_LOG(Warning, "Net", "peer %u timed out", Index). Stripped to nothing when
+ * MW_LOG(Warning, "Transport", "peer %u timed out", Index). Stripped to nothing when
  * the level is below MW_LOG_MIN_LEVEL. Use MW_LOG_MSG for a runtime string that
  * may itself contain '%'.
  */

@@ -1,9 +1,9 @@
 #pragma once
 
 #include <MicroWorld/Transport/FrameCodec.h>
-#include <MicroWorld/Transport/NetAddress.h>
-#include <MicroWorld/Transport/NetDriver.h>
-#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Transport/DeviceAddress.h>
+#include <MicroWorld/Transport/Device.h>
+#include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Platform/Esp32/UartAddress.h>
 
 #include <cstddef>
@@ -47,7 +47,7 @@ struct FEsp32UartConfig
 };
 
 /**
- * Non-blocking point-to-point wired `INetDriver` that frames traffic over one ESP-IDF UART.
+ * Non-blocking point-to-point wired `IDevice` that frames traffic over one ESP-IDF UART.
  *
  * Functionally the E32 LoRa driver minus the radio: encodes each packet with the portable `FrameCodec`
  * (magic, source node id, big-endian length, payload, CRC-16/CCITT-FALSE) and writes the whole frame to
@@ -56,7 +56,7 @@ struct FEsp32UartConfig
  * outputs unchanged on any non-`Success` result, and exercises no UART traffic until this driver's example
  * hardware checkpoint passes (§1.2).
  */
-class FEsp32UartDriver final : public INetDriver
+class FEsp32UartDriver final : public IDevice
 {
 public:
 	/**
@@ -96,7 +96,7 @@ public:
 	 * @param InPacket Caller-owned payload bytes framed and sent as one message.
 	 * @return Normalized outcome of the single send attempt.
 	 */
-	ENetResult TrySend(const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override;
+	ETransportResult TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
 	 * Receives at most one framed message into the caller-owned destination, transactionally.
@@ -111,7 +111,7 @@ public:
 	 * @param OutResult Filled with the received byte count only on `Success`.
 	 * @return Normalized outcome of the single receive attempt.
 	 */
-	ENetResult TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept override;
+	ETransportResult TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept override;
 
 	/** Reports the largest payload, in bytes, one send accepts (excludes framing overhead). */
 	std::size_t MaxPacketBytes() const noexcept override;
@@ -122,14 +122,14 @@ public:
 private:
 	/** Copies the decoder's held frame into the destination and clears it, or returns
 	 * `Full` (leaving the frame held) when the payload exceeds the destination. */
-	ENetResult DeliverFrameToDestination(TSpan<std::uint8_t> InDestination, FNetAddress& OutFrom, FNetReceiveResult& OutResult) noexcept;
+	ETransportResult DeliverFrameToDestination(TSpan<std::uint8_t> InDestination, FDeviceAddress& OutFrom, FReceiveResult& OutResult) noexcept;
 
 	/** Pumps the bounded UART byte budget through the decoder and delivers the first
 	 * completed frame; returns `Unavailable` when the budget drains with no frame ready. */
-	ENetResult PumpDecoderForFrame(TSpan<std::uint8_t> InDestination, FNetAddress& OutFrom, FNetReceiveResult& OutResult) noexcept;
+	ETransportResult PumpDecoderForFrame(TSpan<std::uint8_t> InDestination, FDeviceAddress& OutFrom, FReceiveResult& OutResult) noexcept;
 
 	/** Reports the first reason an outgoing packet cannot be framed and sent, or `Success`. */
-	ENetResult ValidateOutgoingPacket(const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket) const noexcept;
+	ETransportResult ValidateOutgoingPacket(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) const noexcept;
 
 	/** Bounded RX deframer held by value; its capacity matches `UartMaxPayloadBytes`. */
 	TFrameDecoder<UartMaxPayloadBytes> Decoder{};

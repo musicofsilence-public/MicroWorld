@@ -4,7 +4,7 @@
 #include <MicroWorld/Core/Containers/Span.h>
 #include <MicroWorld/Transport/ByteReader.h>
 #include <MicroWorld/Transport/ByteWriter.h>
-#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Transport/TransportResult.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -102,27 +102,27 @@ namespace Detail
 	 * @param InFrame Caller-owned destination whose capacity is checked before any write.
 	 * @return Invalid for a null-with-length span or an oversize payload, Full for a destination too small, else Success.
 	 */
-	inline ENetResult ValidateEncodeInputs(const TSpan<const std::uint8_t> InPayload, const TSpan<std::uint8_t> InFrame) noexcept
+	inline ETransportResult ValidateEncodeInputs(const TSpan<const std::uint8_t> InPayload, const TSpan<std::uint8_t> InFrame) noexcept
 	{
 		const std::size_t PayloadSize = InPayload.Size();
 		if (PayloadSize != 0 && InPayload.Data() == nullptr)
 		{
-			return ENetResult::Invalid;
+			return ETransportResult::Invalid;
 		}
 		if (InFrame.Size() != 0 && InFrame.Data() == nullptr)
 		{
-			return ENetResult::Invalid;
+			return ETransportResult::Invalid;
 		}
 		if (PayloadSize > Uint16Max)
 		{
 			// Oversize input can never fit the 16-bit length field, so it can never succeed on retry (D7).
-			return ENetResult::Invalid;
+			return ETransportResult::Invalid;
 		}
 		if (PayloadSize + FrameOverheadBytes > InFrame.Size())
 		{
-			return ENetResult::Full;
+			return ETransportResult::Full;
 		}
-		return ENetResult::Success;
+		return ETransportResult::Success;
 	}
 
 	/** Writes the fixed frame header: magic byte, source node id, then the payload length as two big-endian bytes. */
@@ -166,14 +166,14 @@ namespace Detail
  * @param OutWritten Filled with the byte count written only on Success.
  * @return Outcome of the single encode attempt.
  */
-inline ENetResult EncodeFrame(
+inline ETransportResult EncodeFrame(
 	const std::uint8_t InSourceNodeId,
 	const TSpan<const std::uint8_t> InPayload,
 	const TSpan<std::uint8_t> OutFrame,
 	std::size_t& OutWritten) noexcept
 {
-	const ENetResult ValidationResult = Detail::ValidateEncodeInputs(InPayload, OutFrame);
-	if (ValidationResult != ENetResult::Success)
+	const ETransportResult ValidationResult = Detail::ValidateEncodeInputs(InPayload, OutFrame);
+	if (ValidationResult != ETransportResult::Success)
 	{
 		return ValidationResult;
 	}
@@ -181,7 +181,7 @@ inline ENetResult EncodeFrame(
 	Detail::WriteFrameHeader(InSourceNodeId, PayloadSize, OutFrame);
 	Detail::AppendPayloadAndChecksum(InPayload, OutFrame);
 	OutWritten = PayloadSize + FrameOverheadBytes;
-	return ENetResult::Success;
+	return ETransportResult::Success;
 }
 
 /** Classifies the result of feeding one byte to a frame decoder. */

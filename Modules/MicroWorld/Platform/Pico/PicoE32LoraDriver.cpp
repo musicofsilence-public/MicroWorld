@@ -7,21 +7,21 @@ FPicoE32LoraDriver::FPicoE32LoraDriver(Detail::IPicoE32LoraPlatform& InPlatform)
 
 FPicoE32LoraDriver::~FPicoE32LoraDriver() noexcept = default;
 
-ENetResult FPicoE32LoraDriver::Initialize(const FPicoE32LoraConfig& InConfig) noexcept
+ETransportResult FPicoE32LoraDriver::Initialize(const FPicoE32LoraConfig& InConfig) noexcept
 {
 	if (IsOpen())
 	{
-		return ENetResult::Unavailable;
+		return ETransportResult::Unavailable;
 	}
 
 	const Detail::FPicoUartConfig UartConfig{InConfig.UartIndex, InConfig.TxGpio, InConfig.RxGpio, InConfig.BaudRate};
 	if (!ByteStream.Open(UartConfig))
 	{
-		return ENetResult::Invalid;
+		return ETransportResult::Invalid;
 	}
 
-	const ENetResult InitializeResult = RadioDriver.Initialize(InConfig.LocalNodeId);
-	if (InitializeResult != ENetResult::Success)
+	const ETransportResult InitializeResult = RadioDriver.Initialize(InConfig.LocalNodeId);
+	if (InitializeResult != ETransportResult::Success)
 	{
 		ByteStream.Close();
 	}
@@ -29,12 +29,12 @@ ENetResult FPicoE32LoraDriver::Initialize(const FPicoE32LoraConfig& InConfig) no
 	return InitializeResult;
 }
 
-ENetResult FPicoE32LoraDriver::TrySend(const FNetAddress& InTo, const TSpan<const std::uint8_t> InPacket) noexcept
+ETransportResult FPicoE32LoraDriver::TrySend(const FDeviceAddress& InTo, const TSpan<const std::uint8_t> InPacket) noexcept
 {
 	return RadioDriver.TrySend(InTo, InPacket);
 }
 
-ENetResult FPicoE32LoraDriver::TryReceive(FNetAddress& OutFrom, const TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept
+ETransportResult FPicoE32LoraDriver::TryReceive(FDeviceAddress& OutFrom, const TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
 {
 	return RadioDriver.TryReceive(OutFrom, InDestination, OutResult);
 }

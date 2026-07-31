@@ -107,7 +107,7 @@ MW_TEST_CASE(Log_FormattedRecordExpandsPrintfArguments)
 	SetOutputDevice(&CaptureLogRecord);
 
 	// Act
-	MW_LOG(Warning, "Net", "peer %u timed out", 7u);
+	MW_LOG(Warning, "Transport", "peer %u timed out", 7u);
 	const bool bMessageMatches = std::strcmp(GCapture.Message, "peer 7 timed out") == 0;
 
 	// Assert

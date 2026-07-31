@@ -1,9 +1,9 @@
 #pragma once
 
 #include <MicroWorld/Core/Containers/Span.h>
-#include <MicroWorld/Transport/NetAddress.h>
-#include <MicroWorld/Transport/NetDriver.h>
-#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Transport/DeviceAddress.h>
+#include <MicroWorld/Transport/Device.h>
+#include <MicroWorld/Transport/TransportResult.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -16,11 +16,11 @@ namespace MicroWorld
  * A dropped send returns `Success` without touching the inner driver or inspecting the packet,
  * modeling a packet that left the wire and was lost; receives and `MaxPacketBytes` always pass through.
  */
-class FPacketDropDriver final : public INetDriver
+class FPacketDropDriver final : public IDevice
 {
 public:
 	/** Binds the driver to wrap and the drop interval; `DropEveryNthSend == 0` disables dropping. */
-	FPacketDropDriver(INetDriver& InInnerDriver, std::uint32_t InDropEveryNthSend) noexcept;
+	FPacketDropDriver(IDevice& InInnerDriver, std::uint32_t InDropEveryNthSend) noexcept;
 
 	/** Deleted: this driver holds `InnerDriver` by reference and is itself held by reference, so copying would risk dangling. */
 	FPacketDropDriver(const FPacketDropDriver&) = delete;
@@ -34,17 +34,17 @@ public:
 	/** Deleted: this driver holds `InnerDriver` by reference and is itself held by reference, so relocating it would risk dangling. */
 	FPacketDropDriver& operator=(FPacketDropDriver&&) = delete;
 
-	/** Anchors the vtable in one translation unit, matching `INetDriver`'s out-of-line destructor rule. */
+	/** Anchors the vtable in one translation unit, matching `IDevice`'s out-of-line destructor rule. */
 	~FPacketDropDriver() noexcept override;
 
 	/**
 	 * Counts this call and, on every `DropEveryNthSend`-th call, drops the packet by returning
 	 * `Success` without forwarding it; every other call forwards verbatim to the inner driver.
 	 */
-	ENetResult TrySend(const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override;
+	ETransportResult TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/** Forwards verbatim to the inner driver; receives are never counted or dropped. */
-	ENetResult TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept override;
+	ETransportResult TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept override;
 
 	/** Forwards bounded physical transmit progress so wrapped staged drivers cannot stall behind loss injection. */
 	void AdvanceTransmit() noexcept override { InnerDriver.AdvanceTransmit(); }
@@ -57,7 +57,7 @@ public:
 
 private:
 	/** The wrapped driver every non-dropped send and every receive forwards to. */
-	INetDriver& InnerDriver;
+	IDevice& InnerDriver;
 
 	/** Every `DropEveryNthSend`-th send is dropped; zero disables dropping entirely. */
 	const std::uint32_t DropEveryNthSend;

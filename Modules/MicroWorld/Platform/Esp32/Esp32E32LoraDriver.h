@@ -34,13 +34,13 @@ struct FEsp32E32LoraConfig
 };
 
 /**
- * Header-defined ESP32 compatibility facade for the portable E32 LoRa `INetDriver`.
+ * Header-defined ESP32 compatibility facade for the portable E32 LoRa `IDevice`.
  *
  * The facade owns ESP-IDF UART lifetime through its internal byte stream while `FRadioE32Driver` owns portable
  * framing and bounded progress. Keeping all methods inline means PlatformEsp32 consumers resolve RadioE32 only when
  * they include this E32 header; non-LoRa PlatformEsp32 consumers remain independent of the optional package.
  */
-class FEsp32E32LoraDriver final : public INetDriver
+class FEsp32E32LoraDriver final : public IDevice
 {
 public:
 	/**
@@ -63,8 +63,8 @@ public:
 			return;
 		}
 
-		const ENetResult InitializeResult = RadioDriver.Initialize(InConfig.LocalNodeId);
-		if (InitializeResult != ENetResult::Success)
+		const ETransportResult InitializeResult = RadioDriver.Initialize(InConfig.LocalNodeId);
+		if (InitializeResult != ETransportResult::Success)
 		{
 			ByteStream.Close();
 		}
@@ -89,14 +89,17 @@ public:
 	 * Queues one complete framed packet for later bounded UART progress.
 	 *
 	 * `Success` means the facade accepted the complete encoded frame into its fixed slot, not that the frame was
-	 * physically emitted. Direct callers must invoke `AdvanceTransmit` regularly; `TNetHost` already does so after
+	 * physically emitted. Direct callers must invoke `AdvanceTransmit` regularly; `TTransportHost` already does so after
 	 * each outbound FIFO drain. Invalid address/span and capacity outcomes follow `FRadioE32Driver` unchanged.
 	 *
 	 * @param InTo Driver-relative one-byte destination metadata; transparent mode does not route it on air.
 	 * @param InPacket Caller-owned payload to frame and queue.
 	 * @return Outcome of the portable frame-acceptance attempt.
 	 */
-	ENetResult TrySend(const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override { return RadioDriver.TrySend(InTo, InPacket); }
+	ETransportResult TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override
+	{
+		return RadioDriver.TrySend(InTo, InPacket);
+	}
 
 	/**
 	 * Pumps bounded UART input and transactionally delivers at most one decoded frame.
@@ -107,9 +110,9 @@ public:
 	 * @param OutFrom Filled with the sender's E32 address only on `Success`.
 	 * @param InDestination Caller-owned destination for one decoded payload.
 	 * @param OutResult Filled with the delivered byte count only on `Success`.
-	 * @return `Success`, `Unavailable`, `Full`, or `Invalid` under `INetDriver`.
+	 * @return `Success`, `Unavailable`, `Full`, or `Invalid` under `IDevice`.
 	 */
-	ENetResult TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept override
+	ETransportResult TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept override
 	{
 		return RadioDriver.TryReceive(OutFrom, InDestination, OutResult);
 	}

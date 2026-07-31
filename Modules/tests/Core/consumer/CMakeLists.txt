@@ -21,8 +21,8 @@ option(
     OFF
 )
 option(
-    MICROWORLD_STANDALONE_NET_CONSUMER
-    "Build the host Core+Net consumer without PlatformIO/ESP-IDF"
+    MICROWORLD_STANDALONE_TRANSPORT_CONSUMER
+    "Build the host Core+Transport consumer without PlatformIO/ESP-IDF"
     OFF
 )
 
@@ -31,7 +31,7 @@ if(
     OR MICROWORLD_STANDALONE_MEMORY_CONSUMER
     OR MICROWORLD_STANDALONE_OBJECT_CONSUMER
     OR MICROWORLD_STANDALONE_ENGINE_CONSUMER
-    OR MICROWORLD_STANDALONE_NET_CONSUMER
+    OR MICROWORLD_STANDALONE_TRANSPORT_CONSUMER
 )
     project(microworld_standalone_consumer LANGUAGES CXX)
 
@@ -46,7 +46,7 @@ if(
     set(MICROWORLD_BUILD_TESTS OFF CACHE BOOL "" FORCE)
     set(MICROWORLD_BUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
     # The single Modules package defines every per-system target and alias
-    # (Core, Engine, Messaging, Transport/Net, Networking, Application) in one
+    # (Core, Engine, Messaging, Transport, Networking, Application) in one
     # add, so each consumer below links its alias directly — no per-package
     # add_subdirectory remains. ../.. resolves from Modules/tests/Core/consumer
     # to Modules/, the consolidated package root.
@@ -143,10 +143,10 @@ if(
         )
     endif()
 
-    if(MICROWORLD_STANDALONE_NET_CONSUMER)
+    if(MICROWORLD_STANDALONE_TRANSPORT_CONSUMER)
         add_executable(
             microworld_transport_consumer
-            src/NetNativeMain.cpp
+            src/TransportNativeMain.cpp
         )
         target_link_libraries(
             microworld_transport_consumer

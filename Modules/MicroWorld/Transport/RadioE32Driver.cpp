@@ -22,37 +22,37 @@ namespace
 
 FRadioE32Driver::FRadioE32Driver(IUartByteStream& InByteStream) noexcept : ByteStream(InByteStream) {}
 
-ENetResult FRadioE32Driver::Initialize(const std::uint8_t InLocalNodeId) noexcept
+ETransportResult FRadioE32Driver::Initialize(const std::uint8_t InLocalNodeId) noexcept
 {
 	if (bInitialized)
 	{
-		return ENetResult::Unavailable;
+		return ETransportResult::Unavailable;
 	}
 
 	LocalNodeIdValue = InLocalNodeId;
 	bInitialized = true;
-	return ENetResult::Success;
+	return ETransportResult::Success;
 }
 
-ENetResult FRadioE32Driver::TrySend(const FNetAddress& InTo, const TSpan<const std::uint8_t> InPacket) noexcept
+ETransportResult FRadioE32Driver::TrySend(const FDeviceAddress& InTo, const TSpan<const std::uint8_t> InPacket) noexcept
 {
 	if (!bInitialized)
 	{
-		return ENetResult::Unavailable;
+		return ETransportResult::Unavailable;
 	}
 
 	return TransportState.TryQueueFrame(LocalNodeIdValue, InTo, InPacket);
 }
 
-ENetResult FRadioE32Driver::TryReceive(FNetAddress& OutFrom, const TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept
+ETransportResult FRadioE32Driver::TryReceive(FDeviceAddress& OutFrom, const TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
 {
 	if (InDestination.Size() != 0 && InDestination.Data() == nullptr)
 	{
-		return ENetResult::Invalid;
+		return ETransportResult::Invalid;
 	}
 	if (!bInitialized)
 	{
-		return ENetResult::Unavailable;
+		return ETransportResult::Unavailable;
 	}
 	if (TransportState.HasReceivedFrame())
 	{
@@ -65,11 +65,11 @@ ENetResult FRadioE32Driver::TryReceive(FNetAddress& OutFrom, const TSpan<std::ui
 		const EUartByteStreamResult ReadResult = ByteStream.TryReadByte(ReceivedByte);
 		if (ReadResult == EUartByteStreamResult::Unavailable)
 		{
-			return ENetResult::Unavailable;
+			return ETransportResult::Unavailable;
 		}
 		if (ReadResult == EUartByteStreamResult::Error)
 		{
-			return ENetResult::Invalid;
+			return ETransportResult::Invalid;
 		}
 
 		const EFrameEvent Event = TransportState.PushReceivedByte(ReceivedByte);
@@ -79,7 +79,7 @@ ENetResult FRadioE32Driver::TryReceive(FNetAddress& OutFrom, const TSpan<std::ui
 		}
 	}
 
-	return ENetResult::Unavailable;
+	return ETransportResult::Unavailable;
 }
 
 std::size_t FRadioE32Driver::MaxPacketBytes() const noexcept

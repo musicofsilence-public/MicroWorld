@@ -3,7 +3,7 @@
  * @brief Phase 6.1 two-node UDP acceptance demo.
  *
  * One host executable hosts TWO independent MicroWorld nodes — a dedicated
- * server built on a full TEngine and a bare TNetHost client — talking over
+ * server built on a full TEngine and a bare TTransportHost client — talking over
  * real localhost UDP. A client input event spawns an actor in the server's
  * world; the server broadcasts world state each step. The two nodes live in one
  * process and are driven in one deterministic interleaved loop so the printed
@@ -18,9 +18,9 @@
 #include <MicroWorld/Engine/EngineStorage.h>
 #include <MicroWorld/Engine/EngineSystem.h>
 #include <MicroWorld/Engine/World.h>
-#include <MicroWorld/Transport/NetAddress.h>
-#include <MicroWorld/Transport/NetHost.h>
-#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Transport/DeviceAddress.h>
+#include <MicroWorld/Transport/TransportHost.h>
+#include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Engine/GarbageCollector.h>
 #include <MicroWorld/Engine/ObjectPtr.h>
@@ -71,7 +71,7 @@ constexpr FTypeId DemoSpawnedActorTypeId{0x00080001u};
  * tick: MaxRoots(1) <= MaxRootOperations(1) and MaxObjects(8) <=
  * MaxSweepOperations(8). Without that invariant the store stays mid-cycle
  * (ActiveCollector set) across ticks, and a spawn arriving in that window fails
- * CreateObject under LifecycleLocked. This mirrors the proven EngineNetHostTests
+ * CreateObject under LifecycleLocked. This mirrors the proven EngineHostTests
  * profile; MaxActors leaves headroom above the demo's two spawns.
  */
 /** Server engine traits: carries the exact capacities FServerEngine sized before the traits refactor. */
@@ -87,10 +87,10 @@ struct FServerEngineTraits : FDefaultEngineTraits
 using FServerEngine = TEngine<FServerEngineTraits>;
 
 /** Server network host bound to one UDP driver; capacity fits one client peer. */
-using FServerNet = TNetHost<2 /*MaxPeers*/, 256 /*MaxPacketBytes*/>;
+using FServerTransport = TTransportHost<2 /*MaxPeers*/, 256 /*MaxPacketBytes*/>;
 
 /** Client network host bound to its own UDP driver; capacity fits one server peer. */
-using FClientNet = TNetHost<1 /*MaxPeers*/, 256 /*MaxPacketBytes*/>;
+using FClientTransport = TTransportHost<1 /*MaxPeers*/, 256 /*MaxPacketBytes*/>;
 
 /**
  * A minimal actor the server spawns on demand to prove a remote input event
@@ -152,9 +152,9 @@ struct FDemoStateCapture
  * heartbeat datagram fires and the only wire traffic is the two explicit input
  * events and the three broadcasts.
  */
-FNetHostConfig MakeDemoConfig() noexcept
+FTransportHostConfig MakeDemoConfig() noexcept
 {
-	FNetHostConfig Config{};
+	FTransportHostConfig Config{};
 	Config.HeartbeatIntervalMilliseconds = 10000;
 	Config.PeerTimeoutMilliseconds = 60000;
 	Config.ProtocolVersion = 1;
@@ -171,7 +171,7 @@ bool RunHandshake(
 	FHostUdpDriver& ServerDriver,
 	FHostUdpDriver& ClientDriver,
 	FServerEngine& ServerHost,
-	FClientNet& Client,
+	FClientTransport& Client,
 	TimePointMilliseconds& LogicalClockMilliseconds) noexcept
 {
 	for (int Iteration = 0; Iteration < HandshakeIterationCap; ++Iteration)
@@ -186,7 +186,7 @@ bool RunHandshake(
 		{
 			(void)Client.PumpReceive(LogicalClockMilliseconds);
 		}
-		if (Client.GetState() == ENetHostState::Connected)
+		if (Client.GetState() == ETransportHostState::Connected)
 		{
 			return true;
 		}
@@ -273,12 +273,13 @@ void HandleClientSpawnRequest(FDemoSpawnContext& SpawnContext, int& SpawnedBegin
  * HandleClientSpawnRequest, keeping the capture list separate from the handler
  * logic it invokes.
  */
-bool InstallServerSpawnHandler(FServerNet& ServerNet, FDemoSpawnContext& SpawnContext, int& SpawnedBeginCount, FDelegateHandle& OutHandle) noexcept
+bool InstallServerSpawnHandler(
+	FServerTransport& ServerTransport, FDemoSpawnContext& SpawnContext, int& SpawnedBeginCount, FDelegateHandle& OutHandle) noexcept
 {
-	FServerNet::FMessageHandlerBinding Binding;
+	FServerTransport::FMessageHandlerBinding Binding;
 	Binding.Bind([&SpawnContext, &SpawnedBeginCount](const FPeerId, const std::uint8_t, TSpan<const std::uint8_t>) noexcept
 				 { HandleClientSpawnRequest(SpawnContext, SpawnedBeginCount); });
-	return ServerNet.AddMessageHandler(std::move(Binding), OutHandle) == EDelegateResult::Success;
+	return ServerTransport.AddMessageHandler(std::move(Binding), OutHandle) == EDelegateResult::Success;
 }
 
 /**
@@ -305,12 +306,12 @@ void HandleServerStateBroadcast(FDemoStateCapture& StateCapture, TSpan<const std
  * HandleServerStateBroadcast, keeping the capture list separate from the
  * handler logic it invokes.
  */
-bool InstallClientStateHandler(FClientNet& ClientNet, FDemoStateCapture& StateCapture, FDelegateHandle& OutHandle) noexcept
+bool InstallClientStateHandler(FClientTransport& ClientTransport, FDemoStateCapture& StateCapture, FDelegateHandle& OutHandle) noexcept
 {
-	FClientNet::FMessageHandlerBinding Binding;
+	FClientTransport::FMessageHandlerBinding Binding;
 	Binding.Bind([&StateCapture](const FPeerId, const std::uint8_t, TSpan<const std::uint8_t> Payload) noexcept
 				 { HandleServerStateBroadcast(StateCapture, Payload); });
-	return ClientNet.AddMessageHandler(std::move(Binding), OutHandle) == EDelegateResult::Success;
+	return ClientTransport.AddMessageHandler(std::move(Binding), OutHandle) == EDelegateResult::Success;
 }
 
 /**
@@ -319,24 +320,24 @@ bool InstallClientStateHandler(FClientNet& ClientNet, FDemoStateCapture& StateCa
  * trace lines. Returns false on the first failing step so main can abort
  * before BeginPlay runs against a half-started session.
  */
-bool ConfigureAndStartHosts(FServerNet& ServerNet, FClientNet& ClientNet, const FHostUdpDriver& ServerDriver) noexcept
+bool ConfigureAndStartHosts(FServerTransport& ServerTransport, FClientTransport& ClientTransport, const FHostUdpDriver& ServerDriver) noexcept
 {
-	FNetHostConfig ClientConfig = MakeDemoConfig();
+	FTransportHostConfig ClientConfig = MakeDemoConfig();
 	ClientConfig.ServerAddress =
 		MakeUdpAddress(LoopbackIpv4Octets[0], LoopbackIpv4Octets[1], LoopbackIpv4Octets[2], LoopbackIpv4Octets[3], ServerDriver.BoundPort());
-	if (ServerNet.Configure(ENetMode::DedicatedServer, MakeDemoConfig()) != ENetResult::Success)
+	if (ServerTransport.Configure(ENetworkMode::DedicatedServer, MakeDemoConfig()) != ETransportResult::Success)
 	{
 		return false;
 	}
-	if (ClientNet.Configure(ENetMode::Client, ClientConfig) != ENetResult::Success)
+	if (ClientTransport.Configure(ENetworkMode::Client, ClientConfig) != ETransportResult::Success)
 	{
 		return false;
 	}
-	if (ServerNet.Start(0) != ENetResult::Success)
+	if (ServerTransport.Start(0) != ETransportResult::Success)
 	{
 		return false;
 	}
-	if (ClientNet.Start(0) != ENetResult::Success)
+	if (ClientTransport.Start(0) != ETransportResult::Success)
 	{
 		return false;
 	}
@@ -362,19 +363,20 @@ bool IsSpawnRequestDue(int StateTick) noexcept
  * every tick, not only when a request was sent, so the logical clock and wire
  * state stay in lockstep regardless of whether this tick issued a request.
  */
-bool SendSpawnRequestIfDue(FClientNet& ClientNet, bool bSpawnRequestDue, TimePointMilliseconds& LogicalClockMilliseconds) noexcept
+bool SendSpawnRequestIfDue(FClientTransport& ClientTransport, bool bSpawnRequestDue, TimePointMilliseconds& LogicalClockMilliseconds) noexcept
 {
 	if (bSpawnRequestDue)
 	{
 		const std::uint8_t Payload[1] = {SpawnRequestOpcode};
-		if (ClientNet.SendTo(ClientNet.GetServerPeer(), InputEventChannel, TSpan<const std::uint8_t>(Payload, 1)) != ENetResult::Success)
+		if (ClientTransport.SendTo(ClientTransport.GetServerPeer(), InputEventChannel, TSpan<const std::uint8_t>(Payload, 1))
+			!= ETransportResult::Success)
 		{
 			return false;
 		}
 		std::printf("[client] sending spawn request (input event)\n");
 	}
 	LogicalClockMilliseconds += LogicalClockStepMilliseconds;
-	(void)ClientNet.PumpSend(LogicalClockMilliseconds);
+	(void)ClientTransport.PumpSend(LogicalClockMilliseconds);
 	return true;
 }
 
@@ -401,10 +403,14 @@ bool AdvanceServerFrame(
  * broadcast onto the wire.
  */
 bool BroadcastServerState(
-	FServerNet& ServerNet, FServerEngine& ServerHost, int StateTick, int WorldActorCount, TimePointMilliseconds& LogicalClockMilliseconds) noexcept
+	FServerTransport& ServerTransport,
+	FServerEngine& ServerHost,
+	int StateTick,
+	int WorldActorCount,
+	TimePointMilliseconds& LogicalClockMilliseconds) noexcept
 {
 	const std::uint8_t StatePayload[2] = {static_cast<std::uint8_t>(StateTick), static_cast<std::uint8_t>(WorldActorCount)};
-	if (ServerNet.Broadcast(StateBroadcastChannel, TSpan<const std::uint8_t>(StatePayload, 2)) != ENetResult::Success)
+	if (ServerTransport.Broadcast(StateBroadcastChannel, TSpan<const std::uint8_t>(StatePayload, 2)) != ETransportResult::Success)
 	{
 		return false;
 	}
@@ -419,11 +425,11 @@ bool BroadcastServerState(
  * broadcast to the client's state handler, which prints the received-state
  * trace line.
  */
-void DeliverToClient(FClientNet& ClientNet, FHostUdpDriver& ClientDriver, TimePointMilliseconds& LogicalClockMilliseconds) noexcept
+void DeliverToClient(FClientTransport& ClientTransport, FHostUdpDriver& ClientDriver, TimePointMilliseconds& LogicalClockMilliseconds) noexcept
 {
 	(void)ClientDriver.PollReadable(ReadinessWaitMilliseconds);
 	LogicalClockMilliseconds += LogicalClockStepMilliseconds;
-	(void)ClientNet.PumpReceive(LogicalClockMilliseconds);
+	(void)ClientTransport.PumpReceive(LogicalClockMilliseconds);
 }
 
 /**
@@ -433,8 +439,8 @@ void DeliverToClient(FClientNet& ClientNet, FHostUdpDriver& ClientDriver, TimePo
  * Returns false on the first step that reports a hard failure.
  */
 bool RunStateBroadcastLoop(
-	FClientNet& ClientNet,
-	FServerNet& ServerNet,
+	FClientTransport& ClientTransport,
+	FServerTransport& ServerTransport,
 	FServerEngine& ServerHost,
 	FHostUdpDriver& ServerDriver,
 	FHostUdpDriver& ClientDriver,
@@ -445,7 +451,7 @@ bool RunStateBroadcastLoop(
 	for (int StateTick = 1; StateTick <= StateBroadcastStepCount; ++StateTick)
 	{
 		const bool bSpawnRequestDue = IsSpawnRequestDue(StateTick);
-		if (!SendSpawnRequestIfDue(ClientNet, bSpawnRequestDue, LogicalClockMilliseconds))
+		if (!SendSpawnRequestIfDue(ClientTransport, bSpawnRequestDue, LogicalClockMilliseconds))
 		{
 			return false;
 		}
@@ -453,11 +459,11 @@ bool RunStateBroadcastLoop(
 		{
 			return false;
 		}
-		if (!BroadcastServerState(ServerNet, ServerHost, StateTick, WorldActorCount, LogicalClockMilliseconds))
+		if (!BroadcastServerState(ServerTransport, ServerHost, StateTick, WorldActorCount, LogicalClockMilliseconds))
 		{
 			return false;
 		}
-		DeliverToClient(ClientNet, ClientDriver, LogicalClockMilliseconds);
+		DeliverToClient(ClientTransport, ClientDriver, LogicalClockMilliseconds);
 	}
 	return true;
 }
@@ -475,9 +481,9 @@ int main()
 
 	FHostUdpDriver ServerDriver(0);
 	FHostUdpDriver ClientDriver(0);
-	FServerNet ServerNet(ServerDriver);
-	FClientNet ClientNet(ClientDriver);
-	TNetHostSystem<FServerNet> ServerFrame{ServerNet};
+	FServerTransport ServerTransport(ServerDriver);
+	FClientTransport ClientTransport(ClientDriver);
+	THostPlaySystem<FServerTransport> ServerFrame{ServerTransport};
 
 	int SpawnSequence = 0;
 	int SpawnedBeginCount = 0;
@@ -498,15 +504,15 @@ int main()
 	{
 		return 1;
 	}
-	if (!InstallServerSpawnHandler(ServerNet, SpawnContext, SpawnedBeginCount, SpawnHandle))
+	if (!InstallServerSpawnHandler(ServerTransport, SpawnContext, SpawnedBeginCount, SpawnHandle))
 	{
 		return 1;
 	}
-	if (!InstallClientStateHandler(ClientNet, StateCapture, StateHandle))
+	if (!InstallClientStateHandler(ClientTransport, StateCapture, StateHandle))
 	{
 		return 1;
 	}
-	if (!ConfigureAndStartHosts(ServerNet, ClientNet, ServerDriver))
+	if (!ConfigureAndStartHosts(ServerTransport, ClientTransport, ServerDriver))
 	{
 		return 1;
 	}
@@ -515,13 +521,13 @@ int main()
 	{
 		return 1;
 	}
-	if (!RunHandshake(ServerDriver, ClientDriver, ServerHost, ClientNet, LogicalClockMilliseconds))
+	if (!RunHandshake(ServerDriver, ClientDriver, ServerHost, ClientTransport, LogicalClockMilliseconds))
 	{
 		return 1;
 	}
 	std::printf("[client] connected\n");
 
-	if (!RunStateBroadcastLoop(ClientNet, ServerNet, ServerHost, ServerDriver, ClientDriver, WorldActorCount, LogicalClockMilliseconds))
+	if (!RunStateBroadcastLoop(ClientTransport, ServerTransport, ServerHost, ServerDriver, ClientDriver, WorldActorCount, LogicalClockMilliseconds))
 	{
 		return 1;
 	}

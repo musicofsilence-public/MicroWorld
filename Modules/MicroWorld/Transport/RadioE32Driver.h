@@ -1,7 +1,7 @@
 #pragma once
 
 #include <MicroWorld/Core/IO/UartByteStream.h>
-#include <MicroWorld/Transport/NetDriver.h>
+#include <MicroWorld/Transport/Device.h>
 #include <MicroWorld/Transport/Detail/E32LoraTransportState.h>
 
 #include <cstddef>
@@ -11,12 +11,12 @@ namespace MicroWorld
 {
 
 /**
- * Fixed-capacity, non-blocking E32 LoRa `INetDriver` over a platform-provided UART byte stream.
+ * Fixed-capacity, non-blocking E32 LoRa `IDevice` over a platform-provided UART byte stream.
  *
  * Construction and initialization perform no I/O. Platform adapters own UART configuration and lifetime, while this
  * driver owns portable framing, bounded physical progress, and transactional delivery over the borrowed byte stream.
  */
-class FRadioE32Driver final : public INetDriver
+class FRadioE32Driver final : public IDevice
 {
 public:
 	/** Creates an inert driver that borrows a byte stream the platform adapter keeps alive. */
@@ -30,7 +30,7 @@ public:
 	 * @param InLocalNodeId Source node id stamped into every queued frame.
 	 * @return `Success` on first initialization or `Unavailable` when already initialized.
 	 */
-	ENetResult Initialize(std::uint8_t InLocalNodeId) noexcept;
+	ETransportResult Initialize(std::uint8_t InLocalNodeId) noexcept;
 
 	/**
 	 * Transactionally accepts one complete packet into the fixed transmit slot.
@@ -42,7 +42,7 @@ public:
 	 * @param InPacket Payload to frame and queue.
 	 * @return Outcome of the acceptance attempt.
 	 */
-	ENetResult TrySend(const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override;
+	ETransportResult TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
 	 * Pumps a bounded number of UART bytes and transactionally delivers at most one decoded frame.
@@ -54,9 +54,9 @@ public:
 	 * @param OutFrom Filled with the sender's E32 address only on `Success`.
 	 * @param InDestination Destination for one decoded payload.
 	 * @param OutResult Filled with the delivered byte count only on `Success`.
-	 * @return `Success`, `Unavailable`, `Full`, or `Invalid` under the shared `INetDriver` contract.
+	 * @return `Success`, `Unavailable`, `Full`, or `Invalid` under the shared `IDevice` contract.
 	 */
-	ENetResult TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept override;
+	ETransportResult TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept override;
 
 	/** Reports the shared E32 payload capacity, excluding framing overhead. */
 	std::size_t MaxPacketBytes() const noexcept override;

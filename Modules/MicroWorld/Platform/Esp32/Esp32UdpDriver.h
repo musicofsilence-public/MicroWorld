@@ -1,8 +1,8 @@
 #pragma once
 
-#include <MicroWorld/Transport/NetAddress.h>
-#include <MicroWorld/Transport/NetDriver.h>
-#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Transport/DeviceAddress.h>
+#include <MicroWorld/Transport/Device.h>
+#include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Platform/Esp32/UdpAddress.h>
 #include <MicroWorld/Core/Time.h>
 
@@ -13,15 +13,15 @@ namespace MicroWorld
 {
 
 /**
- * Non-blocking UDP `INetDriver` that carries traffic over one real lwIP socket.
+ * Non-blocking UDP `IDevice` that carries traffic over one real lwIP socket.
  *
  * Owns a single `SOCK_DGRAM` socket bound to an IPv4 port and maps each lwIP
- * outcome to the shared `ENetResult` so callers poll without blocking. It
+ * outcome to the shared `ETransportResult` so callers poll without blocking. It
  * validates every argument before any syscall and leaves caller-owned outputs
  * unchanged on any non-`Success` result, and is the ESP32 sibling of the host
  * adapter shipped in Phase 5.1.
  */
-class FEsp32UdpDriver final : public INetDriver
+class FEsp32UdpDriver final : public IDevice
 {
 public:
 	/** Largest UDP payload one send accepts and one receive destination may exceed. */
@@ -66,7 +66,7 @@ public:
 	 * @param InPacket Caller-owned bytes to deliver as one complete datagram.
 	 * @return Normalized outcome of the single send attempt.
 	 */
-	ENetResult TrySend(const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override;
+	ETransportResult TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
 	 * Receives at most one datagram into the caller-owned destination, transactionally.
@@ -82,7 +82,7 @@ public:
 	 * @param OutResult Filled with the received byte count only on `Success`.
 	 * @return Normalized outcome of the single receive attempt.
 	 */
-	ENetResult TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept override;
+	ETransportResult TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept override;
 
 	/** Reports the largest datagram, in bytes, one send accepts. */
 	std::size_t MaxPacketBytes() const noexcept override;

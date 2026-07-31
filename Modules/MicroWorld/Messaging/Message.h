@@ -206,7 +206,7 @@ struct FMessageView
 	TSpan<const std::uint8_t> Payload;
 };
 
-/** Inline byte budget for one message-handler callable (TNetHost precedent). */
+/** Inline byte budget for one message-handler callable (TTransportHost precedent). */
 inline constexpr std::size_t MessageHandlerInlineBytes = 32;
 
 /** Callback type actors bind to receive messages. */

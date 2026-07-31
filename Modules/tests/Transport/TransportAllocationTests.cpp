@@ -1,16 +1,16 @@
-#include "NetAllocationCounters.h"
+#include "TransportAllocationCounters.h"
 #include "TestSupport.h"
 
 #include <MicroWorld/Core/Containers/Span.h>
 #include <MicroWorld/Transport/ByteReader.h>
 #include <MicroWorld/Transport/ByteWriter.h>
 #include <MicroWorld/Transport/HostLoopback.h>
-#include <MicroWorld/Transport/NetAddress.h>
-#include <MicroWorld/Transport/NetDriver.h>
-#include <MicroWorld/Transport/NetManager.h>
-#include <MicroWorld/Transport/NetPacketStorage.h>
-#include <MicroWorld/Transport/NetProtocol.h>
-#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Transport/DeviceAddress.h>
+#include <MicroWorld/Transport/Device.h>
+#include <MicroWorld/Transport/TransportManager.h>
+#include <MicroWorld/Transport/TransportPacketStorage.h>
+#include <MicroWorld/Transport/TransportProtocol.h>
+#include <MicroWorld/Transport/TransportResult.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -19,21 +19,21 @@ namespace
 {
 
 using MicroWorld::EControlMessageType;
-using MicroWorld::ENetResult;
+using MicroWorld::ETransportResult;
 using MicroWorld::FByteReader;
 using MicroWorld::FByteWriter;
 using MicroWorld::FControlMessage;
+using MicroWorld::FDeviceAddress;
 using MicroWorld::FMessageHeader;
-using MicroWorld::FNetAddress;
-using MicroWorld::FNetReceiveResult;
-using MicroWorld::INetDriver;
+using MicroWorld::FReceiveResult;
+using MicroWorld::IDevice;
 using MicroWorld::MakeLoopbackAddress;
 using MicroWorld::ReadControlMessage;
 using MicroWorld::ReadMessage;
 using MicroWorld::THostLoopback;
-using MicroWorld::TNetManager;
-using MicroWorld::TNetPacketStorage;
 using MicroWorld::TSpan;
+using MicroWorld::TTransportManager;
+using MicroWorld::TTransportPacketStorage;
 using MicroWorld::WriteControlMessage;
 using MicroWorld::WriteMessage;
 using MicroWorld::Tests::GlobalAllocationCount;
@@ -80,10 +80,10 @@ constexpr std::uint8_t FullFifoPacket[2] = {0xAA, 0xBB};
 
 /**
  * Scenario: Capture the allocation counter after construction, then drive byte writer/reader operations, manager queue/send-advance/receive, loopback
- * delivery, full, unavailable, drain, and reuse paths, and message-framing control round trips. Expected: Every steady-state Net path performs no
- * observable heap allocation, proving the bounded fixed-storage contract holds across the public API.
+ * delivery, full, unavailable, drain, and reuse paths, and message-framing control round trips. Expected: Every steady-state Transport path performs
+ * no observable heap allocation, proving the bounded fixed-storage contract holds across the public API.
  */
-MW_TEST_CASE(NetOperationsPerformNoObservableAllocation)
+MW_TEST_CASE(TransportOperationsPerformNoObservableAllocation)
 {
 	// Arrange
 	std::uint8_t WriterStorage[BufferByteCount] = {};
@@ -92,9 +92,9 @@ MW_TEST_CASE(NetOperationsPerformNoObservableAllocation)
 	FByteReader Reader(TSpan<const std::uint8_t>(ReaderSourceBytes, sizeof(ReaderSourceBytes)));
 	// A two-port loopback with port 0 sending to its own mailbox reproduces the single-link FIFO.
 	THostLoopback<LoopbackPortCount, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
-	const FNetAddress Port0 = MakeLoopbackAddress(SourcePort);
-	TNetPacketStorage<2, 8> ManagerStorage;
-	TNetManager<2, 8> Manager(Loopback.Port(SourcePort), ManagerStorage);
+	const FDeviceAddress Port0 = MakeLoopbackAddress(SourcePort);
+	TTransportPacketStorage<2, 8> ManagerStorage;
+	TTransportManager<2, 8> Manager(Loopback.Port(SourcePort), ManagerStorage);
 	// Framing buffers live outside the counted region so only steady-state framing work is measured.
 	std::uint8_t FramingBuffer[FramingBufferCapacity] = {};
 
@@ -121,17 +121,17 @@ MW_TEST_CASE(NetOperationsPerformNoObservableAllocation)
 	(void)Manager.AdvanceSend();
 
 	std::uint8_t ReceiveDestination[BufferByteCount] = {};
-	FNetReceiveResult FirstReceive{};
-	FNetAddress FirstFrom{};
+	FReceiveResult FirstReceive{};
+	FDeviceAddress FirstFrom{};
 	(void)Manager.Receive(FirstFrom, TSpan<std::uint8_t>(ReceiveDestination, sizeof(ReceiveDestination)), FirstReceive);
-	FNetReceiveResult SecondReceive{};
-	FNetAddress SecondFrom{};
+	FReceiveResult SecondReceive{};
+	FDeviceAddress SecondFrom{};
 	(void)Manager.Receive(SecondFrom, TSpan<std::uint8_t>(ReceiveDestination, sizeof(ReceiveDestination)), SecondReceive);
 
 	// Act - exercise the empty and full paths: advance an empty FIFO and queue into a full one.
 	(void)Manager.AdvanceSend();
-	TNetPacketStorage<FullQueueSlotCount, FourBytePacketCapacity> FullManagerStorage;
-	TNetManager<FullQueueSlotCount, FourBytePacketCapacity> FullManager(Loopback.Port(SourcePort), FullManagerStorage);
+	TTransportPacketStorage<FullQueueSlotCount, FourBytePacketCapacity> FullManagerStorage;
+	TTransportManager<FullQueueSlotCount, FourBytePacketCapacity> FullManager(Loopback.Port(SourcePort), FullManagerStorage);
 	(void)FullManager.QueueSend(Port0, TSpan<const std::uint8_t>(FullFifoPacket, sizeof(FullFifoPacket)));
 	(void)FullManager.QueueSend(Port0, TSpan<const std::uint8_t>(FullFifoPacket, sizeof(FullFifoPacket)));
 
@@ -140,9 +140,9 @@ MW_TEST_CASE(NetOperationsPerformNoObservableAllocation)
 	(void)Loopback.Port(SourcePort).TrySend(Port0, TSpan<const std::uint8_t>(FullFifoPacket, sizeof(FullFifoPacket)));
 
 	// Act - exercise the unavailable receive path on a drained loopback.
-	FNetReceiveResult EmptyReceive{UntouchedBytesReceivedSentinel};
+	FReceiveResult EmptyReceive{UntouchedBytesReceivedSentinel};
 	std::uint8_t EmptyDestination[FourBytePacketCapacity] = {};
-	FNetAddress EmptyFrom{};
+	FDeviceAddress EmptyFrom{};
 	(void)Loopback.Port(SourcePort).TryReceive(EmptyFrom, TSpan<std::uint8_t>(EmptyDestination, sizeof(EmptyDestination)), EmptyReceive);
 
 	// Act - exercise the message-framing path: write/read an application message and a control message.
@@ -167,7 +167,7 @@ MW_TEST_CASE(NetOperationsPerformNoObservableAllocation)
 
 	const std::uint32_t AllocationsAfter = GlobalAllocationCount;
 	// Assert
-	MW_EXPECT_EQ(Test, AllocationsBefore, AllocationsAfter, "Steady-state Net operations must not allocate");
+	MW_EXPECT_EQ(Test, AllocationsBefore, AllocationsAfter, "Steady-state Transport operations must not allocate");
 }
 
 } // namespace

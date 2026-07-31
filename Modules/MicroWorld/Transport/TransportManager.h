@@ -1,9 +1,9 @@
 #pragma once
 
 #include <MicroWorld/Core/Containers/Span.h>
-#include <MicroWorld/Transport/NetDriver.h>
-#include <MicroWorld/Transport/NetPacketStorage.h>
-#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Transport/Device.h>
+#include <MicroWorld/Transport/TransportPacketStorage.h>
+#include <MicroWorld/Transport/TransportResult.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -13,32 +13,35 @@ namespace MicroWorld
 {
 
 /**
- * Fixed-capacity outbound queue and direct receive over one externally referenced `INetDriver`.
+ * Fixed-capacity outbound queue and direct receive over one externally referenced `IDevice`.
  *
- * The manager holds one driver and one `TNetPacketStorage` by reference; the
+ * The manager holds one driver and one `TTransportPacketStorage` by reference; the
  * caller owns both. `QueueSend` copies a complete accepted packet into the
  * caller-owned FIFO tail, one `AdvanceSend` attempts at most the head (retaining
  * it on any driver failure), and `Receive` performs at most one direct driver
  * receive without building an inbound queue.
  */
 template<std::size_t MaxPackets, std::size_t MaxPacketBytes>
-class TNetManager final
+class TTransportManager final
 {
-	static_assert(MaxPackets > 0, "TNetManager requires at least one packet slot.");
-	static_assert(MaxPacketBytes > 0, "TNetManager requires a nonzero per-packet byte capacity.");
+	static_assert(MaxPackets > 0, "TTransportManager requires at least one packet slot.");
+	static_assert(MaxPacketBytes > 0, "TTransportManager requires a nonzero per-packet byte capacity.");
 
 public:
 	/** Binds the manager to one externally referenced driver and caller-owned packet storage. */
-	TNetManager(INetDriver& InDriver, TNetPacketStorage<MaxPackets, MaxPacketBytes>& InStorage) noexcept : Driver(InDriver), Storage(InStorage) {}
+	TTransportManager(IDevice& InDriver, TTransportPacketStorage<MaxPackets, MaxPacketBytes>& InStorage) noexcept
+		: Driver(InDriver), Storage(InStorage)
+	{
+	}
 
 	/** Prevents copying so one manager value binds one driver and one storage instance. */
-	TNetManager(const TNetManager&) = delete;
+	TTransportManager(const TTransportManager&) = delete;
 
 	/** Prevents copying so one manager value binds one driver and one storage instance. */
-	TNetManager& operator=(const TNetManager&) = delete;
+	TTransportManager& operator=(const TTransportManager&) = delete;
 
 	/** Defaulted so a manager with automatic storage destructs without side effects. */
-	~TNetManager() noexcept = default;
+	~TTransportManager() noexcept = default;
 
 	/**
 	 * Copies one complete packet with its destination address into the outbound FIFO tail.
@@ -47,7 +50,7 @@ public:
 	 * (it can never fit). Returns `Full` when the FIFO has no free slot. A non-success
 	 * result leaves the FIFO contents and order unchanged.
 	 */
-	ENetResult QueueSend(const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
+	ETransportResult QueueSend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
 	{
 		const std::size_t PacketSize = InPacket.Size();
 		if (PacketSize == 0)
@@ -56,12 +59,12 @@ public:
 		}
 		if (InPacket.Data() == nullptr)
 		{
-			return ENetResult::Invalid;
+			return ETransportResult::Invalid;
 		}
 		if (PacketSize > MaxPacketBytes)
 		{
 			// The packet can never fit a slot; the request is malformed.
-			return ENetResult::Invalid;
+			return ETransportResult::Invalid;
 		}
 		return EnqueuePacket(InTo, InPacket);
 	}
@@ -74,15 +77,15 @@ public:
 	 * Returns `Unavailable` when the FIFO is empty, so a caller can distinguish
 	 * "nothing to send" from a transient driver rejection.
 	 */
-	ENetResult AdvanceSend() noexcept
+	ETransportResult AdvanceSend() noexcept
 	{
 		if (QueuedPacketCount == 0)
 		{
-			return ENetResult::Unavailable;
+			return ETransportResult::Unavailable;
 		}
 		const TSpan<const std::uint8_t> HeadPacket(Storage.PacketBytes[HeadIndex].data(), Storage.PacketLengths[HeadIndex]);
-		const ENetResult SendResult = Driver.TrySend(Storage.Destinations[HeadIndex], HeadPacket);
-		if (SendResult != ENetResult::Success)
+		const ETransportResult SendResult = Driver.TrySend(Storage.Destinations[HeadIndex], HeadPacket);
+		if (SendResult != ETransportResult::Success)
 		{
 			// Retain the head and preserve order; the caller retries on the next advance.
 			return SendResult;
@@ -90,7 +93,7 @@ public:
 		Storage.PacketLengths[HeadIndex] = 0;
 		HeadIndex = (HeadIndex + 1) % MaxPackets;
 		--QueuedPacketCount;
-		return ENetResult::Success;
+		return ETransportResult::Success;
 	}
 
 	/**
@@ -99,7 +102,7 @@ public:
 	 * destination, `OutResult.BytesReceived`, and `OutFrom` are unchanged. The
 	 * manager never queues inbound packets.
 	 */
-	ENetResult Receive(FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept
+	ETransportResult Receive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
 	{
 		return Driver.TryReceive(OutFrom, InDestination, OutResult);
 	}
@@ -121,20 +124,20 @@ public:
 
 private:
 	/** Copies one already-validated packet into the FIFO tail, or `Full` when no slot is free. */
-	ENetResult EnqueuePacket(const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
+	ETransportResult EnqueuePacket(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept
 	{
 		if (QueuedPacketCount >= MaxPackets)
 		{
-			return ENetResult::Full;
+			return ETransportResult::Full;
 		}
 		StorePacketAt(TailIndex, InTo, InPacket, InPacket.Size());
 		AdvanceTail();
-		return ENetResult::Success;
+		return ETransportResult::Success;
 	}
 
 	/** Copies one accepted packet, its length, and its destination address into the slot at `InIndex`. */
 	void StorePacketAt(
-		const std::size_t InIndex, const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket, const std::size_t InPacketSize) noexcept
+		const std::size_t InIndex, const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket, const std::size_t InPacketSize) noexcept
 	{
 		if (InPacketSize > 0)
 		{
@@ -152,10 +155,10 @@ private:
 	}
 
 	/** Holds the externally referenced driver; the caller owns its lifetime. */
-	INetDriver& Driver;
+	IDevice& Driver;
 
 	/** Holds the externally referenced caller-owned packet storage. */
-	TNetPacketStorage<MaxPackets, MaxPacketBytes>& Storage;
+	TTransportPacketStorage<MaxPackets, MaxPacketBytes>& Storage;
 
 	/** Indexes the next packet to send so the FIFO order is preserved. */
 	std::size_t HeadIndex{0};

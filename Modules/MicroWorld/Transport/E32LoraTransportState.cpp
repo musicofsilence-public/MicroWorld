@@ -5,33 +5,34 @@
 namespace MicroWorld::Detail
 {
 
-ENetResult FE32LoraTransportState::TryQueueFrame(
-	const std::uint8_t InLocalNodeId, const FNetAddress& InTo, const TSpan<const std::uint8_t> InPacket) noexcept
+ETransportResult FE32LoraTransportState::TryQueueFrame(
+	const std::uint8_t InLocalNodeId, const FDeviceAddress& InTo, const TSpan<const std::uint8_t> InPacket) noexcept
 {
 	if (!IsLoraAddress(InTo))
 	{
-		return ENetResult::Invalid;
+		return ETransportResult::Invalid;
 	}
 	const std::size_t PacketSize = InPacket.Size();
 	if (PacketSize > E32MaxPayloadBytes || (PacketSize != 0 && InPacket.Data() == nullptr))
 	{
-		return ENetResult::Invalid;
+		return ETransportResult::Invalid;
 	}
 	if (HasPendingTransmit())
 	{
-		return ENetResult::Full;
+		return ETransportResult::Full;
 	}
 
 	std::size_t WrittenBytes = 0;
-	const ENetResult EncodeResult = EncodeFrame(InLocalNodeId, InPacket, TSpan<std::uint8_t>(TransmitFrame, sizeof(TransmitFrame)), WrittenBytes);
-	if (EncodeResult != ENetResult::Success)
+	const ETransportResult EncodeResult =
+		EncodeFrame(InLocalNodeId, InPacket, TSpan<std::uint8_t>(TransmitFrame, sizeof(TransmitFrame)), WrittenBytes);
+	if (EncodeResult != ETransportResult::Success)
 	{
 		return EncodeResult;
 	}
 
 	TransmitFrameLength = WrittenBytes;
 	NextTransmitByteIndex = 0;
-	return ENetResult::Success;
+	return ETransportResult::Success;
 }
 
 bool FE32LoraTransportState::TryPeekTransmitByte(std::uint8_t& OutByte) const noexcept
@@ -84,26 +85,26 @@ bool FE32LoraTransportState::HasReceivedFrame() const noexcept
 	return Decoder.HasFrame();
 }
 
-ENetResult FE32LoraTransportState::TryDeliverReceivedFrame(
-	FNetAddress& OutFrom, const TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept
+ETransportResult FE32LoraTransportState::TryDeliverReceivedFrame(
+	FDeviceAddress& OutFrom, const TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
 {
 	if (InDestination.Size() != 0 && InDestination.Data() == nullptr)
 	{
-		return ENetResult::Invalid;
+		return ETransportResult::Invalid;
 	}
 	if (!Decoder.HasFrame())
 	{
-		return ENetResult::Unavailable;
+		return ETransportResult::Unavailable;
 	}
 
 	const TSpan<const std::uint8_t> Payload = Decoder.FramePayload();
 	const std::size_t PayloadBytes = Payload.Size();
 	if (PayloadBytes > InDestination.Size())
 	{
-		return ENetResult::Full;
+		return ETransportResult::Full;
 	}
 
-	const FNetAddress Sender = MakeLoraAddress(Decoder.FrameNodeId());
+	const FDeviceAddress Sender = MakeLoraAddress(Decoder.FrameNodeId());
 	if (PayloadBytes != 0)
 	{
 		std::memcpy(InDestination.Data(), Payload.Data(), PayloadBytes);
@@ -111,7 +112,7 @@ ENetResult FE32LoraTransportState::TryDeliverReceivedFrame(
 	OutFrom = Sender;
 	OutResult.BytesReceived = PayloadBytes;
 	Decoder.ClearFrame();
-	return ENetResult::Success;
+	return ETransportResult::Success;
 }
 
 } // namespace MicroWorld::Detail

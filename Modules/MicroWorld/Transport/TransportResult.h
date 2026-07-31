@@ -6,13 +6,13 @@ namespace MicroWorld
 {
 
 /**
- * Reports the complete portable outcome of one Net byte, queue, packet, or driver operation.
+ * Reports the complete portable outcome of one Transport byte, queue, packet, or driver operation.
  *
  * Byte I/O, the manager, and every driver share one result enum with one normalized
  * meaning per value so a caller never confuses a transient "try again later" with a
  * permanent rejection or vice versa.
  */
-enum class ENetResult : std::uint8_t
+enum class ETransportResult : std::uint8_t
 {
 	/**
 	 * The complete operation succeeded.

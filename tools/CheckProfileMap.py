@@ -9,16 +9,16 @@ import tempfile
 from pathlib import Path
 
 
-# Profile names describe package bundles. Net is an independent overlay above
-# Core: it never pulls Object or Engine, and no Engine-Net Integration profile
+# Profile names describe package bundles. Transport is an independent overlay above
+# Core: it never pulls Object or Engine, and no Engine-Transport Integration profile
 # is retained because that coupling is deferred until a real application needs
 # it. Memory folded into Core, so no Memory package or archive marker remains.
 PROFILE_MODULES = {
     "Core": {"Core"},
     "Object": {"Core", "Object"},
-    "Core+Net": {"Core", "Net"},
+    "Core+Transport": {"Core", "Transport"},
     "Managed": {"Core", "Object", "Engine"},
-    "Managed+Net": {"Core", "Object", "Engine", "Net"},
+    "Managed+Transport": {"Core", "Object", "Engine", "Transport"},
     "Application": {"Core", "Object", "Engine", "Application"},
 }
 
@@ -60,18 +60,18 @@ MODULE_MARKERS = {
         "/microworld/serialization/",
         "fbytearchive",
     ),
-    "Net": (
+    "Transport": (
         "microworld_transport",
-        "microworld-net",
-        "/microworld/net/",
-        "fnetmanager",
-        "inetdriver",
+        "microworld-transport",
+        "/microworld/transport/",
+        "ttransportmanager",
+        "idevice",
     ),
     "Integration": (
         "microworld_networking",
         "microworld-integration",
         "/microworld/integration/",
-        "tnetsystem",
+        "tnetworking",
     ),
     "Application": (
         "microworld_application",
@@ -100,14 +100,14 @@ OBJECT_ARCHIVE_MARKERS = (
     "libmicroworldobject.a",
 )
 
-# Net profiles must link their separate package archive. Header-only byte I/O
-# evidence does not prove that the INetDriver out-of-line destructor participated.
-NET_ARCHIVE_MARKERS = (
+# Transport profiles must link their separate package archive. Header-only byte I/O
+# evidence does not prove that the IDevice out-of-line destructor participated.
+TRANSPORT_ARCHIVE_MARKERS = (
     "microworld_transport:",
     "microworld_transport.lib",
     "libmicroworld_transport.a",
-    "libmicroworld-net.a",
-    "libmicroworldnet.a",
+    "libmicroworld-transport.a",
+    "libmicroworldtransport.a",
 )
 
 # Application profiles must link their separate package archive. The engine-
@@ -163,12 +163,12 @@ def analyze_map(
             f"({', '.join(OBJECT_ARCHIVE_MARKERS)})"
         )
 
-    if "Net" in selected_modules and not any(
-        marker in normalized_text for marker in NET_ARCHIVE_MARKERS
+    if "Transport" in selected_modules and not any(
+        marker in normalized_text for marker in TRANSPORT_ARCHIVE_MARKERS
     ):
         errors.append(
-            "map does not contain the MicroWorld Net archive "
-            f"({', '.join(NET_ARCHIVE_MARKERS)})"
+            "map does not contain the MicroWorld Transport archive "
+            f"({', '.join(TRANSPORT_ARCHIVE_MARKERS)})"
         )
 
     if "Application" in selected_modules and not any(
@@ -252,13 +252,13 @@ def run_self_test() -> int:
 
     invalid_map = (
         "microworld.lib\n"
-        "libmicroworld_transport.a(NetManager.o)\n"
-        "MicroWorld::TNetManager\n"
+        "libmicroworld_transport.a(TransportManager.o)\n"
+        "MicroWorld::TTransportManager\n"
     )
     invalid_errors = analyze_map(invalid_map, "Core", [], [])
-    if not any("unselected Net" in error for error in invalid_errors):
+    if not any("unselected Transport" in error for error in invalid_errors):
         print(
-            "Self-test did not detect an unselected Net module.",
+            "Self-test did not detect an unselected Transport module.",
             file=sys.stderr,
         )
         return 1
@@ -271,45 +271,45 @@ def run_self_test() -> int:
         )
         return 1
 
-    # A valid Core+Net map links the Core and Net archives without pulling
-    # Object or Engine, proving the Net overlay is independent of them.
-    valid_core_net_map = (
+    # A valid Core+Transport map links the Core and Transport archives without pulling
+    # Object or Engine, proving the Transport overlay is independent of them.
+    valid_core_transport_map = (
         "libmicroworld.a(TickFunction.o)\n"
-        "libmicroworld_transport:NetDriver.obj\n"
-        "MicroWorld::TNetManager\n"
+        "libmicroworld_transport:Device.obj\n"
+        "MicroWorld::TTransportManager\n"
     )
-    valid_core_net_errors = analyze_map(valid_core_net_map, "Core+Net", [], [])
-    if valid_core_net_errors:
-        for error in valid_core_net_errors:
+    valid_core_transport_errors = analyze_map(valid_core_transport_map, "Core+Transport", [], [])
+    if valid_core_transport_errors:
+        for error in valid_core_transport_errors:
             print(
-                f"Valid Core+Net-map self-test failed: {error}",
+                f"Valid Core+Transport-map self-test failed: {error}",
                 file=sys.stderr,
             )
         return 1
 
-    # A Core+Net map lacking the Net archive must fail, proving header-only
-    # evidence cannot satisfy the Net profile.
-    missing_net_errors = analyze_map(valid_core_map, "Core+Net", [], [])
-    if not any("Net archive" in error for error in missing_net_errors):
+    # A Core+Transport map lacking the Transport archive must fail, proving header-only
+    # evidence cannot satisfy the Transport profile.
+    missing_transport_errors = analyze_map(valid_core_map, "Core+Transport", [], [])
+    if not any("Transport archive" in error for error in missing_transport_errors):
         print(
-            "Self-test did not detect missing Net archive evidence.",
+            "Self-test did not detect missing Transport archive evidence.",
             file=sys.stderr,
         )
         return 1
 
-    # A Core+Net map pulling Engine code must fail as an unselected module,
-    # proving Net stays independent of the managed runtime.
-    outward_core_net_map = (
-        f"{valid_core_net_map}"
+    # A Core+Transport map pulling Engine code must fail as an unselected module,
+    # proving Transport stays independent of the managed runtime.
+    outward_core_transport_map = (
+        f"{valid_core_transport_map}"
         "libmicroworld_engine.a(World.o)\n"
         "MicroWorld::UWorld\n"
     )
-    outward_core_net_errors = analyze_map(outward_core_net_map, "Core+Net", [], [])
+    outward_core_transport_errors = analyze_map(outward_core_transport_map, "Core+Transport", [], [])
     if not any(
-        "unselected Engine" in error for error in outward_core_net_errors
+        "unselected Engine" in error for error in outward_core_transport_errors
     ):
         print(
-            "Self-test did not detect Engine code in a Core+Net profile.",
+            "Self-test did not detect Engine code in a Core+Transport profile.",
             file=sys.stderr,
         )
         return 1

@@ -1,9 +1,9 @@
 #pragma once
 
 #include <MicroWorld/Core/Containers/Span.h>
-#include <MicroWorld/Transport/NetAddress.h>
-#include <MicroWorld/Transport/NetDriver.h>
-#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Transport/DeviceAddress.h>
+#include <MicroWorld/Transport/Device.h>
+#include <MicroWorld/Transport/TransportResult.h>
 
 #include <array>
 #include <cstddef>
@@ -40,10 +40,10 @@ namespace Detail
 		 * `To` must be a 1-byte address whose value is a valid port index, else `Invalid`.
 		 * Then applies the same null/oversized/full validation as the single-link loopback.
 		 */
-		ENetResult Deliver(const FNetAddress& InTo, const FNetAddress& InFrom, TSpan<const std::uint8_t> InPacket) noexcept
+		ETransportResult Deliver(const FDeviceAddress& InTo, const FDeviceAddress& InFrom, TSpan<const std::uint8_t> InPacket) noexcept
 		{
-			const ENetResult AddressResult = ValidateDeliverAddress(InTo);
-			if (AddressResult != ENetResult::Success)
+			const ETransportResult AddressResult = ValidateDeliverAddress(InTo);
+			if (AddressResult != ETransportResult::Success)
 			{
 				return AddressResult;
 			}
@@ -56,12 +56,12 @@ namespace Detail
 			}
 			if (InPacket.Data() == nullptr)
 			{
-				return ENetResult::Invalid;
+				return ETransportResult::Invalid;
 			}
 			if (PacketSize > PacketBytes)
 			{
 				// The packet can never fit a slot; the request is malformed.
-				return ENetResult::Invalid;
+				return ETransportResult::Invalid;
 			}
 			return EnqueuePacket(Target, InFrom, InPacket);
 		}
@@ -72,27 +72,27 @@ namespace Detail
 		 * stored sender). On Full/Invalid/Unavailable leaves destination, OutResult, and
 		 * OutFrom UNCHANGED. Same null-dest / empty / too-small rules as the single link.
 		 */
-		ENetResult Receive(
-			const std::uint8_t InLocalPort, FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept
+		ETransportResult Receive(
+			const std::uint8_t InLocalPort, FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
 		{
-			const ENetResult DestinationResult = ValidateReceiveDestination(InDestination);
-			if (DestinationResult != ENetResult::Success)
+			const ETransportResult DestinationResult = ValidateReceiveDestination(InDestination);
+			if (DestinationResult != ETransportResult::Success)
 			{
 				return DestinationResult;
 			}
 			FMailbox& Mailbox = Mailboxes[InLocalPort];
 			if (Mailbox.QueuedCount == 0)
 			{
-				return ENetResult::Unavailable;
+				return ETransportResult::Unavailable;
 			}
 			const std::size_t HeadSize = Mailbox.PacketLengths[Mailbox.HeadIndex];
 			if (!HeadFitsDestination(HeadSize, InDestination.Size()))
 			{
 				// Keep the head packet so the caller can retry with a larger buffer.
-				return ENetResult::Full;
+				return ETransportResult::Full;
 			}
 			PopHeadInto(Mailbox, HeadSize, OutFrom, InDestination, OutResult);
-			return ENetResult::Success;
+			return ETransportResult::Success;
 		}
 
 		/** Distinguishes an empty mailbox without inspecting packet storage. */
@@ -134,7 +134,7 @@ namespace Detail
 			std::array<std::size_t, MailboxCapacity> PacketLengths{};
 
 			/** Records the sender address stamped on each queued packet so receive can report it. */
-			std::array<FNetAddress, MailboxCapacity> SenderAddresses{};
+			std::array<FDeviceAddress, MailboxCapacity> SenderAddresses{};
 
 			/** Indexes the next packet to receive so the FIFO order is preserved. */
 			std::size_t HeadIndex{0};
@@ -147,38 +147,38 @@ namespace Detail
 		};
 
 		/** Validates a loopback destination: it must be exactly one byte naming a valid port. */
-		static ENetResult ValidateDeliverAddress(const FNetAddress& InTo) noexcept
+		static ETransportResult ValidateDeliverAddress(const FDeviceAddress& InTo) noexcept
 		{
 			if (InTo.Size != LoopbackPortAddressBytes || InTo.Bytes[0] >= MaxPorts)
 			{
-				return ENetResult::Invalid;
+				return ETransportResult::Invalid;
 			}
-			return ENetResult::Success;
+			return ETransportResult::Success;
 		}
 
 		/** Enqueues one already-validated packet at the tail, or `Full` when the mailbox has no free slot. */
-		static ENetResult EnqueuePacket(FMailbox& InTarget, const FNetAddress& InFrom, TSpan<const std::uint8_t> InPacket) noexcept
+		static ETransportResult EnqueuePacket(FMailbox& InTarget, const FDeviceAddress& InFrom, TSpan<const std::uint8_t> InPacket) noexcept
 		{
 			if (InTarget.QueuedCount >= MailboxCapacity)
 			{
-				return ENetResult::Full;
+				return ETransportResult::Full;
 			}
 			StorePacketAt(InTarget, InTarget.TailIndex, InFrom, InPacket, InPacket.Size());
 			AdvanceTail(InTarget);
-			return ENetResult::Success;
+			return ETransportResult::Success;
 		}
 
 		/** Rejects a null destination with nonzero length before the mailbox state is consulted. */
-		static ENetResult ValidateReceiveDestination(TSpan<std::uint8_t> InDestination) noexcept
+		static ETransportResult ValidateReceiveDestination(TSpan<std::uint8_t> InDestination) noexcept
 		{
 			// A null destination with nonzero length is an invalid request independent of the
 			// mailbox state: validate it before the empty check so an empty mailbox still
 			// returns Invalid for a malformed destination.
 			if (InDestination.Size() != 0 && InDestination.Data() == nullptr)
 			{
-				return ENetResult::Invalid;
+				return ETransportResult::Invalid;
 			}
-			return ENetResult::Success;
+			return ETransportResult::Success;
 		}
 
 		/** Reports whether the head packet fits the caller destination; false means the caller must retry larger. */
@@ -200,9 +200,9 @@ namespace Detail
 		static void PopHeadInto(
 			FMailbox& InMailbox,
 			const std::size_t InHeadSize,
-			FNetAddress& OutFrom,
+			FDeviceAddress& OutFrom,
 			TSpan<std::uint8_t> InDestination,
-			FNetReceiveResult& OutResult) noexcept
+			FReceiveResult& OutResult) noexcept
 		{
 			if (InHeadSize > 0)
 			{
@@ -220,7 +220,7 @@ namespace Detail
 		static void StorePacketAt(
 			FMailbox& InMailbox,
 			const std::size_t InIndex,
-			const FNetAddress& InFrom,
+			const FDeviceAddress& InFrom,
 			TSpan<const std::uint8_t> InPacket,
 			const std::size_t InPacketSize) noexcept
 		{
@@ -248,7 +248,7 @@ namespace Detail
 /**
  * Deterministic in-process multi-port loopback network for host tests.
  *
- * Owns N mailboxes and N embedded per-port `INetDriver`s; `Port(index)` hands out
+ * Owns N mailboxes and N embedded per-port `IDevice`s; `Port(index)` hands out
  * the driver bound to the 1-byte loopback address equal to `index`. Two hosts
  * share one `THostLoopback` and each drive their own `Port(i)`; the ports live
  * inside the network, so their lifetimes track it automatically.
@@ -261,7 +261,7 @@ class THostLoopback final
 	static_assert(PacketBytes > 0, "THostLoopback requires a nonzero per-packet byte capacity.");
 
 	/** One port's driver view: forwards send/receive to the shared mailboxes using its bound index. */
-	class FPort final : public INetDriver
+	class FPort final : public IDevice
 	{
 	public:
 		/** Default-constructed then bound by the enclosing network's constructor. */
@@ -278,13 +278,13 @@ class THostLoopback final
 		}
 
 		/** Delivers one packet to `InTo`'s mailbox stamped with this port's address. */
-		ENetResult TrySend(const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override
+		ETransportResult TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override
 		{
 			return Mailboxes->Deliver(InTo, MakeLoopbackAddress(LocalIndex), InPacket);
 		}
 
 		/** Pops one packet from this port's mailbox, reporting the sender via OutFrom. */
-		ENetResult TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept override
+		ETransportResult TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept override
 		{
 			return Mailboxes->Receive(LocalIndex, OutFrom, InDestination, OutResult);
 		}
@@ -320,7 +320,7 @@ public:
 	~THostLoopback() noexcept = default;
 
 	/** Returns the driver bound to `InIndex`; `InIndex` must be < MaxPorts (caller contract). */
-	INetDriver& Port(const std::uint8_t InIndex) noexcept { return Ports[InIndex]; }
+	IDevice& Port(const std::uint8_t InIndex) noexcept { return Ports[InIndex]; }
 
 	/** Reports the fixed number of ports this network exposes. */
 	static constexpr std::size_t PortCount() noexcept { return MaxPorts; }

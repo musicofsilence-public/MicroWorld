@@ -2,9 +2,9 @@
 
 #include <MicroWorld/Core/Containers/Span.h>
 #include <MicroWorld/Transport/HostLoopback.h>
-#include <MicroWorld/Transport/NetAddress.h>
-#include <MicroWorld/Transport/NetDriver.h>
-#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Transport/DeviceAddress.h>
+#include <MicroWorld/Transport/Device.h>
+#include <MicroWorld/Transport/TransportResult.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -12,10 +12,10 @@
 namespace
 {
 
-using MicroWorld::ENetResult;
-using MicroWorld::FNetAddress;
-using MicroWorld::FNetReceiveResult;
-using MicroWorld::INetDriver;
+using MicroWorld::ETransportResult;
+using MicroWorld::FDeviceAddress;
+using MicroWorld::FReceiveResult;
+using MicroWorld::IDevice;
 using MicroWorld::MakeLoopbackAddress;
 using MicroWorld::THostLoopback;
 using MicroWorld::TSpan;
@@ -75,7 +75,7 @@ constexpr std::uint8_t DrainReusePacket[2] = {0x55, 0x66};
 constexpr std::uint8_t OversizedPacket[4] = {0x01, 0x02, 0x03, 0x04};
 /** Two-byte packet the null-destination-retains-head case queues as the head. */
 constexpr std::uint8_t NullDestHeadPacket[2] = {0x11, 0x22};
-/** Two-byte packet the INetDriver interface case threads through the loopback. */
+/** Two-byte packet the IDevice interface case threads through the loopback. */
 constexpr std::uint8_t InterfacePacket[2] = {0x07, 0x08};
 /** Single-byte packet the multi-port routing case delivers to port 1. */
 constexpr std::uint8_t ToPort1Packet[1] = {0x01};
@@ -117,29 +117,29 @@ MW_TEST_CASE(HostLoopbackDeliversPacketsInFifoOrder)
 {
 	// Arrange
 	THostLoopback<SinglePortCount, TwoSlotMailbox, FourBytePacketCapacity> Loopback;
-	const FNetAddress Port0 = MakeLoopbackAddress(SourcePort);
+	const FDeviceAddress Port0 = MakeLoopbackAddress(SourcePort);
 
 	// Act - queue two packets
 	MW_EXPECT_EQ(
 		Test,
-		ENetResult::Success,
+		ETransportResult::Success,
 		Loopback.Port(SourcePort).TrySend(Port0, TSpan<const std::uint8_t>(FifoFirstPacket, sizeof(FifoFirstPacket))),
 		"First send must succeed");
 	MW_EXPECT_EQ(
 		Test,
-		ENetResult::Success,
+		ETransportResult::Success,
 		Loopback.Port(SourcePort).TrySend(Port0, TSpan<const std::uint8_t>(FifoSecondPacket, sizeof(FifoSecondPacket))),
 		"Second send must succeed");
 	// Assert
 	MW_EXPECT_EQ(Test, TwoSlotMailbox, Loopback.QueuedCount(SourcePort), "Two sends must queue two packets");
 
 	std::uint8_t Destination[FourBytePacketCapacity] = {};
-	FNetReceiveResult FirstReceive{};
-	FNetAddress FirstFrom{UntouchedAddressByte};
+	FReceiveResult FirstReceive{};
+	FDeviceAddress FirstFrom{UntouchedAddressByte};
 	// Act - receive the head packet
 	MW_EXPECT_EQ(
 		Test,
-		ENetResult::Success,
+		ETransportResult::Success,
 		Loopback.Port(SourcePort).TryReceive(FirstFrom, TSpan<std::uint8_t>(Destination, sizeof(Destination)), FirstReceive),
 		"First receive must succeed");
 	// Assert
@@ -149,12 +149,12 @@ MW_TEST_CASE(HostLoopbackDeliversPacketsInFifoOrder)
 	MW_EXPECT_EQ(Test, true, FirstFrom == Port0, "First receive must report the sender as port 0");
 
 	std::uint8_t SecondDestination[FourBytePacketCapacity] = {};
-	FNetReceiveResult SecondReceive{};
-	FNetAddress SecondFrom{UntouchedAddressByte};
+	FReceiveResult SecondReceive{};
+	FDeviceAddress SecondFrom{UntouchedAddressByte};
 	// Act - receive the next packet
 	MW_EXPECT_EQ(
 		Test,
-		ENetResult::Success,
+		ETransportResult::Success,
 		Loopback.Port(SourcePort).TryReceive(SecondFrom, TSpan<std::uint8_t>(SecondDestination, sizeof(SecondDestination)), SecondReceive),
 		"Second receive must succeed");
 	// Assert
@@ -172,27 +172,27 @@ MW_TEST_CASE(HostLoopbackFullQueueDoesNotOverwriteAcceptedPackets)
 {
 	// Arrange
 	THostLoopback<SinglePortCount, OneSlotMailbox, FourBytePacketCapacity> Loopback;
-	const FNetAddress Port0 = MakeLoopbackAddress(SourcePort);
+	const FDeviceAddress Port0 = MakeLoopbackAddress(SourcePort);
 
 	// Act
 	MW_EXPECT_EQ(
 		Test,
-		ENetResult::Success,
+		ETransportResult::Success,
 		Loopback.Port(SourcePort).TrySend(Port0, TSpan<const std::uint8_t>(FullQueueAcceptedPacket, sizeof(FullQueueAcceptedPacket))),
 		"Send into an empty queue must succeed");
 	// Assert
 	MW_EXPECT_EQ(Test, true, Loopback.IsFull(SourcePort), "A one-slot queue must be full after one send");
 
 	// Act
-	const ENetResult OverflowResult =
+	const ETransportResult OverflowResult =
 		Loopback.Port(SourcePort).TrySend(Port0, TSpan<const std::uint8_t>(FullQueueRejectedPacket, sizeof(FullQueueRejectedPacket)));
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Full, OverflowResult, "Send into a full queue must return Full");
+	MW_EXPECT_EQ(Test, ETransportResult::Full, OverflowResult, "Send into a full queue must return Full");
 	MW_EXPECT_EQ(Test, OneSlotMailbox, Loopback.QueuedCount(SourcePort), "Overflow must not change the queued count");
 
 	std::uint8_t Destination[FourBytePacketCapacity] = {};
-	FNetReceiveResult ReceiveResult{};
-	FNetAddress ReceiveFrom{};
+	FReceiveResult ReceiveResult{};
+	FDeviceAddress ReceiveFrom{};
 	// Act - drain to prove the accepted head survived
 	Loopback.Port(SourcePort).TryReceive(ReceiveFrom, TSpan<std::uint8_t>(Destination, sizeof(Destination)), ReceiveResult);
 	// Assert
@@ -211,14 +211,14 @@ MW_TEST_CASE(HostLoopbackEmptyReceiveReturnsUnavailable)
 
 	std::uint8_t Destination[FourBytePacketCapacity] = {
 		DestinationPrefillByte, DestinationPrefillByte, DestinationPrefillByte, DestinationPrefillByte};
-	FNetReceiveResult ReceiveResult{UntouchedBytesReceivedSentinel};
-	FNetAddress ReceiveFrom{UntouchedAddressByte};
+	FReceiveResult ReceiveResult{UntouchedBytesReceivedSentinel};
+	FDeviceAddress ReceiveFrom{UntouchedAddressByte};
 	// Act
-	const ENetResult EmptyResult =
+	const ETransportResult EmptyResult =
 		Loopback.Port(SourcePort).TryReceive(ReceiveFrom, TSpan<std::uint8_t>(Destination, sizeof(Destination)), ReceiveResult);
 
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Unavailable, EmptyResult, "Receive from an empty loopback must return Unavailable");
+	MW_EXPECT_EQ(Test, ETransportResult::Unavailable, EmptyResult, "Receive from an empty loopback must return Unavailable");
 	MW_EXPECT_EQ(Test, UntouchedBytesReceivedSentinel, ReceiveResult.BytesReceived, "Failed receive must leave BytesReceived unchanged");
 	MW_EXPECT_EQ(Test, DestinationPrefillByte, Destination[0], "Failed receive must not modify the destination");
 	MW_EXPECT_EQ(Test, UntouchedAddressByte, ReceiveFrom.Bytes[0], "Failed receive must leave OutFrom unchanged");
@@ -233,31 +233,32 @@ MW_TEST_CASE(HostLoopbackTooSmallDestinationRetainsHeadPacket)
 {
 	// Arrange
 	THostLoopback<SinglePortCount, OneSlotMailbox, FourBytePacketCapacity> Loopback;
-	const FNetAddress Port0 = MakeLoopbackAddress(SourcePort);
+	const FDeviceAddress Port0 = MakeLoopbackAddress(SourcePort);
 
 	Loopback.Port(SourcePort).TrySend(Port0, TSpan<const std::uint8_t>(TooSmallHeadPacket, sizeof(TooSmallHeadPacket)));
 
 	std::uint8_t TooSmall[2] = {DestinationPrefillByte, DestinationPrefillByte};
-	FNetReceiveResult ReceiveResult{UntouchedBytesReceivedSentinel};
-	FNetAddress ReceiveFrom{UntouchedAddressByte};
+	FReceiveResult ReceiveResult{UntouchedBytesReceivedSentinel};
+	FDeviceAddress ReceiveFrom{UntouchedAddressByte};
 	// Act
-	const ENetResult SmallResult = Loopback.Port(SourcePort).TryReceive(ReceiveFrom, TSpan<std::uint8_t>(TooSmall, sizeof(TooSmall)), ReceiveResult);
+	const ETransportResult SmallResult =
+		Loopback.Port(SourcePort).TryReceive(ReceiveFrom, TSpan<std::uint8_t>(TooSmall, sizeof(TooSmall)), ReceiveResult);
 
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Full, SmallResult, "A destination too small for the head must return Full");
+	MW_EXPECT_EQ(Test, ETransportResult::Full, SmallResult, "A destination too small for the head must return Full");
 	MW_EXPECT_EQ(Test, UntouchedBytesReceivedSentinel, ReceiveResult.BytesReceived, "Failed receive must leave BytesReceived unchanged");
 	MW_EXPECT_EQ(Test, DestinationPrefillByte, TooSmall[0], "Failed receive must not modify the destination");
 	MW_EXPECT_EQ(Test, UntouchedAddressByte, ReceiveFrom.Bytes[0], "Failed receive must leave OutFrom unchanged");
 	MW_EXPECT_EQ(Test, OneSlotMailbox, Loopback.QueuedCount(SourcePort), "Too-small receive must retain the head packet");
 
 	std::uint8_t LargeDestination[FourBytePacketCapacity] = {};
-	FNetReceiveResult RetryResult{UntouchedBytesReceivedSentinel};
-	FNetAddress RetryFrom{UntouchedAddressByte};
+	FReceiveResult RetryResult{UntouchedBytesReceivedSentinel};
+	FDeviceAddress RetryFrom{UntouchedAddressByte};
 	// Act - retry with a large enough destination
-	const ENetResult RetrySendResult =
+	const ETransportResult RetrySendResult =
 		Loopback.Port(SourcePort).TryReceive(RetryFrom, TSpan<std::uint8_t>(LargeDestination, sizeof(LargeDestination)), RetryResult);
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Success, RetrySendResult, "Retry with a larger destination must succeed");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, RetrySendResult, "Retry with a larger destination must succeed");
 	MW_EXPECT_EQ(Test, sizeof(TooSmallHeadPacket), RetryResult.BytesReceived, "Retained head must deliver its original length");
 	MW_EXPECT_EQ(Test, TooSmallHeadPacket[0], LargeDestination[0], "Retained head must deliver its original bytes");
 	MW_EXPECT_EQ(Test, true, RetryFrom == Port0, "Retained head receive must report the sender as port 0");
@@ -271,7 +272,7 @@ MW_TEST_CASE(HostLoopbackDrainRestoresCapacityForReuse)
 {
 	// Arrange
 	THostLoopback<SinglePortCount, TwoSlotMailbox, TwoBytePacketCapacity> Loopback;
-	const FNetAddress Port0 = MakeLoopbackAddress(SourcePort);
+	const FDeviceAddress Port0 = MakeLoopbackAddress(SourcePort);
 
 	// Act - fill the mailbox
 	Loopback.Port(SourcePort).TrySend(Port0, TSpan<const std::uint8_t>(DrainFirstPacket, sizeof(DrainFirstPacket)));
@@ -288,7 +289,7 @@ MW_TEST_CASE(HostLoopbackDrainRestoresCapacityForReuse)
 	// Act / Assert
 	MW_EXPECT_EQ(
 		Test,
-		ENetResult::Success,
+		ETransportResult::Success,
 		Loopback.Port(SourcePort).TrySend(Port0, TSpan<const std::uint8_t>(DrainReusePacket, sizeof(DrainReusePacket))),
 		"Send after drain must reuse the freed capacity");
 }
@@ -302,22 +303,22 @@ MW_TEST_CASE(HostLoopbackAcceptsZeroLengthPacketRoundTrip)
 {
 	// Arrange
 	THostLoopback<SinglePortCount, OneSlotMailbox, TwoBytePacketCapacity> Loopback;
-	const FNetAddress Port0 = MakeLoopbackAddress(SourcePort);
+	const FDeviceAddress Port0 = MakeLoopbackAddress(SourcePort);
 
 	// Act
-	const ENetResult ZeroSendResult = Loopback.Port(SourcePort).TrySend(Port0, TSpan<const std::uint8_t>(nullptr, 0));
+	const ETransportResult ZeroSendResult = Loopback.Port(SourcePort).TrySend(Port0, TSpan<const std::uint8_t>(nullptr, 0));
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Success, ZeroSendResult, "A zero-length send must succeed as a valid no-op");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, ZeroSendResult, "A zero-length send must succeed as a valid no-op");
 	MW_EXPECT_EQ(Test, OneSlotMailbox, Loopback.QueuedCount(SourcePort), "Zero-length send must still occupy one slot");
 
 	std::uint8_t Destination[2] = {DestinationPrefillByte, DestinationPrefillByte};
-	FNetReceiveResult ReceiveResult{};
-	FNetAddress ReceiveFrom{UntouchedAddressByte};
+	FReceiveResult ReceiveResult{};
+	FDeviceAddress ReceiveFrom{UntouchedAddressByte};
 	// Act
-	const ENetResult ZeroReceiveResult =
+	const ETransportResult ZeroReceiveResult =
 		Loopback.Port(SourcePort).TryReceive(ReceiveFrom, TSpan<std::uint8_t>(Destination, sizeof(Destination)), ReceiveResult);
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Success, ZeroReceiveResult, "Receive of a queued zero-length packet must succeed");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, ZeroReceiveResult, "Receive of a queued zero-length packet must succeed");
 	MW_EXPECT_EQ(Test, std::size_t{0}, ReceiveResult.BytesReceived, "Zero-length receive must report zero bytes");
 	MW_EXPECT_EQ(Test, DestinationPrefillByte, Destination[0], "Zero-length receive must not modify the destination");
 	MW_EXPECT_EQ(Test, true, ReceiveFrom == Port0, "Zero-length receive must still report the sender as port 0");
@@ -331,12 +332,13 @@ MW_TEST_CASE(HostLoopbackRejectsOversizedPacket)
 {
 	// Arrange
 	THostLoopback<SinglePortCount, TwoSlotMailbox, TwoBytePacketCapacity> Loopback;
-	const FNetAddress Port0 = MakeLoopbackAddress(SourcePort);
+	const FDeviceAddress Port0 = MakeLoopbackAddress(SourcePort);
 
 	// Act
-	const ENetResult OversizedResult = Loopback.Port(SourcePort).TrySend(Port0, TSpan<const std::uint8_t>(OversizedPacket, sizeof(OversizedPacket)));
+	const ETransportResult OversizedResult =
+		Loopback.Port(SourcePort).TrySend(Port0, TSpan<const std::uint8_t>(OversizedPacket, sizeof(OversizedPacket)));
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Invalid, OversizedResult, "A packet larger than MaximumPacketBytes must return Invalid");
+	MW_EXPECT_EQ(Test, ETransportResult::Invalid, OversizedResult, "A packet larger than MaximumPacketBytes must return Invalid");
 	MW_EXPECT_EQ(Test, true, Loopback.IsEmpty(SourcePort), "Oversized send must not queue a packet");
 }
 
@@ -348,12 +350,12 @@ MW_TEST_CASE(HostLoopbackRejectsNullPacketWithNonzeroLength)
 {
 	// Arrange
 	THostLoopback<SinglePortCount, TwoSlotMailbox, FourBytePacketCapacity> Loopback;
-	const FNetAddress Port0 = MakeLoopbackAddress(SourcePort);
+	const FDeviceAddress Port0 = MakeLoopbackAddress(SourcePort);
 
 	// Act
-	const ENetResult NullResult = Loopback.Port(SourcePort).TrySend(Port0, TSpan<const std::uint8_t>(nullptr, TwoBytePacketCapacity));
+	const ETransportResult NullResult = Loopback.Port(SourcePort).TrySend(Port0, TSpan<const std::uint8_t>(nullptr, TwoBytePacketCapacity));
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Invalid, NullResult, "Null data with nonzero length must return Invalid");
+	MW_EXPECT_EQ(Test, ETransportResult::Invalid, NullResult, "Null data with nonzero length must return Invalid");
 	MW_EXPECT_EQ(Test, true, Loopback.IsEmpty(SourcePort), "Invalid send must not queue a packet");
 }
 
@@ -370,15 +372,15 @@ MW_TEST_CASE(HostLoopbackEmptyReceiveNullDestinationReturnsInvalid)
 	// Sentinel output bytes, BytesReceived, and OutFrom so an unchanged failure is provable.
 	std::uint8_t Destination[FourBytePacketCapacity] = {
 		DestinationPrefillByte, DestinationPrefillByte, DestinationPrefillByte, DestinationPrefillByte};
-	FNetReceiveResult ReceiveResult{UntouchedBytesReceivedSentinel};
-	FNetAddress ReceiveFrom{UntouchedAddressByte};
+	FReceiveResult ReceiveResult{UntouchedBytesReceivedSentinel};
+	FDeviceAddress ReceiveFrom{UntouchedAddressByte};
 
 	// Act
-	const ENetResult NullResult =
+	const ETransportResult NullResult =
 		Loopback.Port(SourcePort).TryReceive(ReceiveFrom, TSpan<std::uint8_t>(nullptr, FourBytePacketCapacity), ReceiveResult);
 
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Invalid, NullResult, "A null destination with nonzero length must return Invalid even on an empty loopback");
+	MW_EXPECT_EQ(Test, ETransportResult::Invalid, NullResult, "A null destination with nonzero length must return Invalid even on an empty loopback");
 	MW_EXPECT_EQ(Test, UntouchedBytesReceivedSentinel, ReceiveResult.BytesReceived, "Invalid receive must leave BytesReceived unchanged");
 	MW_EXPECT_EQ(Test, true, Loopback.IsEmpty(SourcePort), "Invalid receive must not change the queue state");
 	MW_EXPECT_EQ(Test, std::size_t{0}, Loopback.QueuedCount(SourcePort), "Invalid receive must not change the queued count");
@@ -398,22 +400,22 @@ MW_TEST_CASE(HostLoopbackNullDestinationRetainsHeadPacketAndOutputs)
 {
 	// Arrange
 	THostLoopback<SinglePortCount, OneSlotMailbox, FourBytePacketCapacity> Loopback;
-	const FNetAddress Port0 = MakeLoopbackAddress(SourcePort);
+	const FDeviceAddress Port0 = MakeLoopbackAddress(SourcePort);
 
 	Loopback.Port(SourcePort).TrySend(Port0, TSpan<const std::uint8_t>(NullDestHeadPacket, sizeof(NullDestHeadPacket)));
 	MW_EXPECT_EQ(Test, OneSlotMailbox, Loopback.QueuedCount(SourcePort), "Precondition: the head packet must be queued");
 
 	std::uint8_t Destination[FourBytePacketCapacity] = {
 		DestinationPrefillByte, DestinationPrefillByte, DestinationPrefillByte, DestinationPrefillByte};
-	FNetReceiveResult ReceiveResult{UntouchedBytesReceivedSentinel};
-	FNetAddress ReceiveFrom{UntouchedAddressByte};
+	FReceiveResult ReceiveResult{UntouchedBytesReceivedSentinel};
+	FDeviceAddress ReceiveFrom{UntouchedAddressByte};
 
 	// Act
-	const ENetResult NullResult =
+	const ETransportResult NullResult =
 		Loopback.Port(SourcePort).TryReceive(ReceiveFrom, TSpan<std::uint8_t>(nullptr, FourBytePacketCapacity), ReceiveResult);
 
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Invalid, NullResult, "A null destination with nonzero length must return Invalid even with a queued head");
+	MW_EXPECT_EQ(Test, ETransportResult::Invalid, NullResult, "A null destination with nonzero length must return Invalid even with a queued head");
 	MW_EXPECT_EQ(Test, UntouchedBytesReceivedSentinel, ReceiveResult.BytesReceived, "Invalid receive must leave BytesReceived unchanged");
 	MW_EXPECT_EQ(Test, DestinationPrefillByte, Destination[0], "Invalid receive must not modify the destination");
 	MW_EXPECT_EQ(Test, UntouchedAddressByte, ReceiveFrom.Bytes[0], "Invalid receive must leave OutFrom unchanged");
@@ -421,42 +423,42 @@ MW_TEST_CASE(HostLoopbackNullDestinationRetainsHeadPacketAndOutputs)
 
 	// Act - the retained head must still be deliverable to a valid destination.
 	std::uint8_t RetryDestination[FourBytePacketCapacity] = {0};
-	FNetReceiveResult RetryResult{UntouchedBytesReceivedSentinel};
-	FNetAddress RetryFrom{UntouchedAddressByte};
-	const ENetResult RetryResultValue =
+	FReceiveResult RetryResult{UntouchedBytesReceivedSentinel};
+	FDeviceAddress RetryFrom{UntouchedAddressByte};
+	const ETransportResult RetryResultValue =
 		Loopback.Port(SourcePort).TryReceive(RetryFrom, TSpan<std::uint8_t>(RetryDestination, sizeof(RetryDestination)), RetryResult);
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Success, RetryResultValue, "Retained head must be deliverable to a valid destination");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, RetryResultValue, "Retained head must be deliverable to a valid destination");
 	MW_EXPECT_EQ(Test, sizeof(NullDestHeadPacket), RetryResult.BytesReceived, "Retained head must deliver its original length");
 	MW_EXPECT_EQ(Test, NullDestHeadPacket[0], RetryDestination[0], "Retained head must deliver its original first byte");
 	MW_EXPECT_EQ(Test, true, RetryFrom == Port0, "Retained head receive must report the sender as port 0");
 }
 
 /**
- * Scenario: Send and receive through an INetDriver reference bound to a loopback port.
+ * Scenario: Send and receive through an IDevice reference bound to a loopback port.
  * Expected: The interface send and receive route to the loopback mailbox, delivering the head packet length and the correct sender.
  */
-MW_TEST_CASE(HostLoopbackSatisfiesINetDriverInterface)
+MW_TEST_CASE(HostLoopbackSatisfiesIDeviceInterface)
 {
 	// Arrange
 	THostLoopback<SinglePortCount, OneSlotMailbox, FourBytePacketCapacity> Loopback;
-	const FNetAddress Port0 = MakeLoopbackAddress(SourcePort);
-	INetDriver& Driver = Loopback.Port(SourcePort);
+	const FDeviceAddress Port0 = MakeLoopbackAddress(SourcePort);
+	IDevice& Driver = Loopback.Port(SourcePort);
 
 	// Act
 	MW_EXPECT_EQ(
 		Test,
-		ENetResult::Success,
+		ETransportResult::Success,
 		Driver.TrySend(Port0, TSpan<const std::uint8_t>(InterfacePacket, sizeof(InterfacePacket))),
 		"Interface send must route to the loopback mailbox");
 
 	std::uint8_t Destination[FourBytePacketCapacity] = {};
-	FNetReceiveResult ReceiveResult{};
-	FNetAddress ReceiveFrom{UntouchedAddressByte};
+	FReceiveResult ReceiveResult{};
+	FDeviceAddress ReceiveFrom{UntouchedAddressByte};
 	// Act / Assert
 	MW_EXPECT_EQ(
 		Test,
-		ENetResult::Success,
+		ETransportResult::Success,
 		Driver.TryReceive(ReceiveFrom, TSpan<std::uint8_t>(Destination, sizeof(Destination)), ReceiveResult),
 		"Interface receive must route to the loopback mailbox");
 	MW_EXPECT_EQ(Test, sizeof(InterfacePacket), ReceiveResult.BytesReceived, "Interface receive must report the head packet length");
@@ -472,22 +474,22 @@ MW_TEST_CASE(HostLoopbackRoutesDistinctPacketsToEachTargetPort)
 {
 	// Arrange
 	THostLoopback<FourPortCount, TwoSlotMailbox, FourBytePacketCapacity> Loopback;
-	const FNetAddress Port0 = MakeLoopbackAddress(SourcePort);
+	const FDeviceAddress Port0 = MakeLoopbackAddress(SourcePort);
 
 	// Act - port 0 sends a distinct 1-byte packet to each of ports 1, 2, and 3.
 	MW_EXPECT_EQ(
 		Test,
-		ENetResult::Success,
+		ETransportResult::Success,
 		Loopback.Port(SourcePort).TrySend(MakeLoopbackAddress(1), TSpan<const std::uint8_t>(ToPort1Packet, sizeof(ToPort1Packet))),
 		"Send to port 1 must succeed");
 	MW_EXPECT_EQ(
 		Test,
-		ENetResult::Success,
+		ETransportResult::Success,
 		Loopback.Port(SourcePort).TrySend(MakeLoopbackAddress(2), TSpan<const std::uint8_t>(ToPort2Packet, sizeof(ToPort2Packet))),
 		"Send to port 2 must succeed");
 	MW_EXPECT_EQ(
 		Test,
-		ENetResult::Success,
+		ETransportResult::Success,
 		Loopback.Port(SourcePort).TrySend(MakeLoopbackAddress(3), TSpan<const std::uint8_t>(ToPort3Packet, sizeof(ToPort3Packet))),
 		"Send to port 3 must succeed");
 
@@ -499,11 +501,12 @@ MW_TEST_CASE(HostLoopbackRoutesDistinctPacketsToEachTargetPort)
 	const std::uint8_t DistinctPackets[TargetPortCount] = {ToPort1Packet[0], ToPort2Packet[0], ToPort3Packet[0]};
 	for (std::uint8_t Target = FirstTargetPort; Target < FirstTargetPort + TargetPortCount; ++Target)
 	{
-		FNetReceiveResult ReceiveResult{};
-		FNetAddress ReceiveFrom{UntouchedAddressByte};
+		FReceiveResult ReceiveResult{};
+		FDeviceAddress ReceiveFrom{UntouchedAddressByte};
 		Destination[0] = DestinationResetMarker;
-		const ENetResult Result = Loopback.Port(Target).TryReceive(ReceiveFrom, TSpan<std::uint8_t>(Destination, sizeof(Destination)), ReceiveResult);
-		MW_EXPECT_EQ(Test, ENetResult::Success, Result, "Each target must deliver its queued packet");
+		const ETransportResult Result =
+			Loopback.Port(Target).TryReceive(ReceiveFrom, TSpan<std::uint8_t>(Destination, sizeof(Destination)), ReceiveResult);
+		MW_EXPECT_EQ(Test, ETransportResult::Success, Result, "Each target must deliver its queued packet");
 		MW_EXPECT_EQ(Test, OneSlotMailbox, ReceiveResult.BytesReceived, "Each target must report one received byte");
 		MW_EXPECT_EQ(Test, DistinctPackets[Target - FirstTargetPort], Destination[0], "Each target must receive exactly its own packet");
 		MW_EXPECT_EQ(Test, true, ReceiveFrom == Port0, "Each target must report the sender as port 0");
@@ -519,23 +522,23 @@ MW_TEST_CASE(HostLoopbackSupportsTwoWayReplyWithCorrectSender)
 {
 	// Arrange
 	THostLoopback<FourPortCount, TwoSlotMailbox, FourBytePacketCapacity> Loopback;
-	const FNetAddress Port0 = MakeLoopbackAddress(SourcePort);
-	const FNetAddress Port1 = MakeLoopbackAddress(FirstTargetPort);
+	const FDeviceAddress Port0 = MakeLoopbackAddress(SourcePort);
+	const FDeviceAddress Port1 = MakeLoopbackAddress(FirstTargetPort);
 
 	// Act - port 0 sends to port 1; port 1 receives and then replies back to port 0.
 	MW_EXPECT_EQ(
 		Test,
-		ENetResult::Success,
+		ETransportResult::Success,
 		Loopback.Port(SourcePort).TrySend(Port1, TSpan<const std::uint8_t>(TwoWayRequestPacket, sizeof(TwoWayRequestPacket))),
 		"Port 0 sending to port 1 must succeed");
 
 	std::uint8_t RequestDestination[FourBytePacketCapacity] = {};
-	FNetReceiveResult RequestReceive{};
-	FNetAddress RequestFrom{UntouchedAddressByte};
+	FReceiveResult RequestReceive{};
+	FDeviceAddress RequestFrom{UntouchedAddressByte};
 	// Act / Assert
 	MW_EXPECT_EQ(
 		Test,
-		ENetResult::Success,
+		ETransportResult::Success,
 		Loopback.Port(FirstTargetPort).TryReceive(RequestFrom, TSpan<std::uint8_t>(RequestDestination, sizeof(RequestDestination)), RequestReceive),
 		"Port 1 must receive the request");
 	MW_EXPECT_EQ(Test, true, RequestFrom == Port0, "Port 1 must see the request sender as port 0");
@@ -543,17 +546,17 @@ MW_TEST_CASE(HostLoopbackSupportsTwoWayReplyWithCorrectSender)
 	// Act
 	MW_EXPECT_EQ(
 		Test,
-		ENetResult::Success,
+		ETransportResult::Success,
 		Loopback.Port(FirstTargetPort).TrySend(Port0, TSpan<const std::uint8_t>(TwoWayReplyPacket, sizeof(TwoWayReplyPacket))),
 		"Port 1 replying to port 0 must succeed");
 
 	std::uint8_t ReplyDestination[FourBytePacketCapacity] = {};
-	FNetReceiveResult ReplyReceive{};
-	FNetAddress ReplyFrom{UntouchedAddressByte};
+	FReceiveResult ReplyReceive{};
+	FDeviceAddress ReplyFrom{UntouchedAddressByte};
 	// Act / Assert
 	MW_EXPECT_EQ(
 		Test,
-		ENetResult::Success,
+		ETransportResult::Success,
 		Loopback.Port(SourcePort).TryReceive(ReplyFrom, TSpan<std::uint8_t>(ReplyDestination, sizeof(ReplyDestination)), ReplyReceive),
 		"Port 0 must receive the reply");
 	MW_EXPECT_EQ(Test, TwoWayReplyPacket[0], ReplyDestination[0], "Port 0 must receive the reply bytes");
@@ -570,30 +573,30 @@ MW_TEST_CASE(HostLoopbackRejectsUnroutableDestinationAddress)
 	THostLoopback<FourPortCount, TwoSlotMailbox, FourBytePacketCapacity> Loopback;
 
 	// Act / Assert - out-of-range port index (the loopback exposes only ports 0..3).
-	const ENetResult OverRangeResult =
+	const ETransportResult OverRangeResult =
 		Loopback.Port(SourcePort)
 			.TrySend(MakeLoopbackAddress(OverRangePortIndex), TSpan<const std::uint8_t>(UnroutablePacket, sizeof(UnroutablePacket)));
-	MW_EXPECT_EQ(Test, ENetResult::Invalid, OverRangeResult, "A destination port index above MaxPorts-1 must return Invalid");
+	MW_EXPECT_EQ(Test, ETransportResult::Invalid, OverRangeResult, "A destination port index above MaxPorts-1 must return Invalid");
 
 	// A zero-size address carries no port index at all.
-	FNetAddress EmptyAddress{};
+	FDeviceAddress EmptyAddress{};
 	EmptyAddress.Size = 0;
 	// Act
-	const ENetResult EmptySizeResult =
+	const ETransportResult EmptySizeResult =
 		Loopback.Port(SourcePort).TrySend(EmptyAddress, TSpan<const std::uint8_t>(UnroutablePacket, sizeof(UnroutablePacket)));
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Invalid, EmptySizeResult, "A zero-size address must return Invalid");
+	MW_EXPECT_EQ(Test, ETransportResult::Invalid, EmptySizeResult, "A zero-size address must return Invalid");
 
 	// A two-byte address is the wrong encoding for this driver.
-	FNetAddress TwoByteAddress{};
+	FDeviceAddress TwoByteAddress{};
 	TwoByteAddress.Bytes[0] = 1;
 	TwoByteAddress.Bytes[1] = 0;
 	TwoByteAddress.Size = 2;
 	// Act
-	const ENetResult TwoByteResult =
+	const ETransportResult TwoByteResult =
 		Loopback.Port(SourcePort).TrySend(TwoByteAddress, TSpan<const std::uint8_t>(UnroutablePacket, sizeof(UnroutablePacket)));
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Invalid, TwoByteResult, "A two-byte address must return Invalid");
+	MW_EXPECT_EQ(Test, ETransportResult::Invalid, TwoByteResult, "A two-byte address must return Invalid");
 
 	// Assert - no mailbox may have absorbed any packet from the rejected sends.
 	for (std::uint8_t Port = 0; Port < FourPortCount; ++Port)
@@ -611,10 +614,10 @@ MW_TEST_CASE(HostLoopbackReportsMaxPacketBytesAndRetainsHeadOnTooSmallReceive)
 {
 	// Arrange
 	THostLoopback<FourPortCount, OneSlotMailbox, FourBytePacketCapacity> Loopback;
-	const FNetAddress Port0 = MakeLoopbackAddress(SourcePort);
+	const FDeviceAddress Port0 = MakeLoopbackAddress(SourcePort);
 
 	// Assert - the per-port driver reports the network's per-packet byte capacity.
-	INetDriver& Driver = Loopback.Port(ReportedDriverPort);
+	IDevice& Driver = Loopback.Port(ReportedDriverPort);
 	MW_EXPECT_EQ(Test, FourBytePacketCapacity, Driver.MaxPacketBytes(), "MaxPacketBytes must report the template packet byte capacity");
 	MW_EXPECT_EQ(Test, FourBytePacketCapacity, Loopback.MaximumPacketBytes(), "MaximumPacketBytes must report the template packet byte capacity");
 
@@ -622,13 +625,13 @@ MW_TEST_CASE(HostLoopbackReportsMaxPacketBytesAndRetainsHeadOnTooSmallReceive)
 	Loopback.Port(SourcePort).TrySend(Port0, TSpan<const std::uint8_t>(CapacityReportHeadPacket, sizeof(CapacityReportHeadPacket)));
 
 	std::uint8_t TooSmall[2] = {DestinationPrefillByte, DestinationPrefillByte};
-	FNetReceiveResult TooSmallReceive{UntouchedBytesReceivedSentinel};
-	FNetAddress TooSmallFrom{UntouchedAddressByte};
+	FReceiveResult TooSmallReceive{UntouchedBytesReceivedSentinel};
+	FDeviceAddress TooSmallFrom{UntouchedAddressByte};
 	// Act
-	const ENetResult TooSmallResult =
+	const ETransportResult TooSmallResult =
 		Loopback.Port(SourcePort).TryReceive(TooSmallFrom, TSpan<std::uint8_t>(TooSmall, sizeof(TooSmall)), TooSmallReceive);
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Full, TooSmallResult, "A destination too small for the head must return Full");
+	MW_EXPECT_EQ(Test, ETransportResult::Full, TooSmallResult, "A destination too small for the head must return Full");
 	MW_EXPECT_EQ(Test, UntouchedBytesReceivedSentinel, TooSmallReceive.BytesReceived, "Failed receive must leave BytesReceived unchanged");
 	MW_EXPECT_EQ(Test, UntouchedAddressByte, TooSmallFrom.Bytes[0], "Failed receive must leave OutFrom unchanged");
 	MW_EXPECT_EQ(Test, OneSlotMailbox, Loopback.QueuedCount(SourcePort), "Too-small receive must retain the head packet");

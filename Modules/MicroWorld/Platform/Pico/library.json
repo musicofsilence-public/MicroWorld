@@ -1,7 +1,7 @@
 {
   "name": "MicroWorldPlatformPico",
   "version": "0.4.0",
-  "description": "MicroWorld PlatformPico: native Pico SDK E32 LoRa UART INetDriver for RP2040 CMake builds",
+  "description": "MicroWorld PlatformPico: native Pico SDK E32 LoRa UART IDevice for RP2040 CMake builds",
   "keywords": [
     "embedded",
     "rp2040",

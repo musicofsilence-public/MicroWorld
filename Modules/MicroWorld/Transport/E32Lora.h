@@ -1,6 +1,6 @@
 #pragma once
 
-#include <MicroWorld/Transport/NetAddress.h>
+#include <MicroWorld/Transport/DeviceAddress.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -17,7 +17,7 @@ namespace MicroWorld
 constexpr std::size_t E32MaxPayloadBytes = 58;
 
 /**
- * Encodes an E32 node id into an opaque one-byte `FNetAddress`.
+ * Encodes an E32 node id into an opaque one-byte `FDeviceAddress`.
  *
  * The byte names the sender carried by a received MicroWorld frame. Transparent-mode E32 transmission is broadcast,
  * so a destination address is driver-relative metadata rather than an on-air routing command.
@@ -25,9 +25,9 @@ constexpr std::size_t E32MaxPayloadBytes = 58;
  * @param InNodeId Node id this address names.
  * @return One-byte address carrying the node id.
  */
-constexpr FNetAddress MakeLoraAddress(const std::uint8_t InNodeId) noexcept
+constexpr FDeviceAddress MakeLoraAddress(const std::uint8_t InNodeId) noexcept
 {
-	FNetAddress Address{};
+	FDeviceAddress Address{};
 	Address.Bytes[0] = InNodeId;
 	Address.Size = 1;
 	return Address;
@@ -42,7 +42,7 @@ constexpr FNetAddress MakeLoraAddress(const std::uint8_t InNodeId) noexcept
  * @param InAddress Address whose active length to test.
  * @return True when the active length is exactly one byte.
  */
-constexpr bool IsLoraAddress(const FNetAddress& InAddress) noexcept
+constexpr bool IsLoraAddress(const FDeviceAddress& InAddress) noexcept
 {
 	return InAddress.Size == 1;
 }
@@ -56,7 +56,7 @@ constexpr bool IsLoraAddress(const FNetAddress& InAddress) noexcept
  * @param InAddress Validated one-byte E32 address.
  * @return Node id carried by the address.
  */
-constexpr std::uint8_t LoraAddressNodeId(const FNetAddress& InAddress) noexcept
+constexpr std::uint8_t LoraAddressNodeId(const FDeviceAddress& InAddress) noexcept
 {
 	return InAddress.Bytes[0];
 }

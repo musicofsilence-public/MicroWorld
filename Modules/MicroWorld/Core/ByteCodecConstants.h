@@ -7,10 +7,10 @@ namespace MicroWorld
 {
 
 /**
- * Numeric constants shared by every byte-level codec (Net framing and Messaging encode/decode).
+ * Numeric constants shared by every byte-level codec (Transport framing and Messaging encode/decode).
  *
  * These name the values that would otherwise appear as bare literals in shifts, masks, and bounds
- * checks across Net and Messaging, both of which depend on Core. Module-specific sentinels such as
+ * checks across Transport and Messaging, both of which depend on Core. Module-specific sentinels such as
  * CRC polynomials or sequence-number half spaces stay local to the module that owns them.
  */
 

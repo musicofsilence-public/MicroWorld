@@ -5,7 +5,7 @@
 #include <MicroWorld/Messaging/MessageChannelBinding.h>
 #include <MicroWorld/Messaging/MessageRouter.h>
 #include <MicroWorld/Engine/EngineSystem.h>
-#include <MicroWorld/Transport/NetHost.h>
+#include <MicroWorld/Transport/TransportHost.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Platform/Esp32/Esp32UartDriver.h>
 
@@ -17,7 +17,7 @@
  *
  * Both role translation units (ServerMain.cpp, ClientMain.cpp) include this so the
  * message ids, actor ids, node ids, UART/session configuration, and the
- * TNetHost/TMessageRouter/TEngine shapes are defined exactly once — DRY within
+ * TTransportHost/TMessageRouter/TEngine shapes are defined exactly once — DRY within
  * this one example (mirrors 19-UartMessaging's UartMessagingShared.h).
  */
 namespace Ex23
@@ -40,7 +40,7 @@ inline constexpr MicroWorld::FMessageActorId DisplayActorId = 12;
 /** Router-facing channel id both roles register their TMessageChannelBinding under. */
 inline constexpr MicroWorld::FMessageChannelId AppChannelId = 1;
 
-/** TNetHost wire-level channel byte the binding reads and writes (channel 0 is reserved control). */
+/** TTransportHost wire-level channel byte the binding reads and writes (channel 0 is reserved control). */
 inline constexpr std::uint8_t AppWireChannelByte = 1;
 
 /** Server stamps frames with node id 1; the client greets that id as its server. */
@@ -73,16 +73,16 @@ constexpr MicroWorld::FTypeId DisplayActorTypeId{0x00170002u};
 constexpr MicroWorld::FTypeId SwitchActorTypeId{0x00170003u};
 
 /** The wired network host both roles compose their board's UART link through. */
-using FWireNet = MicroWorld::TNetHost<2, 120>;
+using FWireTransport = MicroWorld::TTransportHost<2, 120>;
 
 /** The local actor-message router both roles compose, sized for this example's one channel and few handlers. */
 using FWireRouter = MicroWorld::TMessageRouter<16, 8, 96, 1>;
 
-/** Adapts FWireNet to the engine's per-frame network slot (only PreAdvance/PostAdvance; the router is pumped separately, see §4). */
-using FWireFrame = MicroWorld::TNetHostSystem<FWireNet>;
+/** Adapts FWireTransport to the engine's per-frame network slot (only PreAdvance/PostAdvance; the router is pumped separately, see §4). */
+using FWireFrame = MicroWorld::THostPlaySystem<FWireTransport>;
 
-/** Two-way adapter binding one FWireNet wire channel to the local FWireRouter. */
-using FWireBinding = MicroWorld::TMessageChannelBinding<FWireNet>;
+/** Two-way adapter binding one FWireTransport wire channel to the local FWireRouter. */
+using FWireBinding = MicroWorld::TMessageChannelBinding<FWireTransport>;
 
 /** The engine both roles compose; sized for one world with a couple of small actors using direct component storage. */
 using FWireEngine = MicroWorld::TEngine<>;
@@ -100,9 +100,9 @@ inline MicroWorld::FEsp32UartConfig MakeUartConfig(const std::uint8_t NodeId) no
 }
 
 /** Builds the shared session config; heartbeats keep the point-to-point peer alive between sends. */
-inline MicroWorld::FNetHostConfig MakeHostConfig() noexcept
+inline MicroWorld::FTransportHostConfig MakeHostConfig() noexcept
 {
-	MicroWorld::FNetHostConfig Config{};
+	MicroWorld::FTransportHostConfig Config{};
 	Config.HeartbeatIntervalMilliseconds = 1000;
 	Config.PeerTimeoutMilliseconds = 5000;
 	Config.ProtocolVersion = ProtocolVersion;
@@ -115,7 +115,7 @@ inline MicroWorld::FNetHostConfig MakeHostConfig() noexcept
  * Manual frame composition (Phase 4.1 folds this into TPlaySystemSet): flushes Router's outbound
  * queue to the wire before the engine tick, then dispatches its inbound queue after -- the same order
  * EngineMessageChannelTests.cpp's PumpSide proved correct. TEngine holds exactly one
- * IPlaySystem (the bound TNetHostSystem), so the router itself is pumped here rather than through
+ * IPlaySystem (the bound THostPlaySystem), so the router itself is pumped here rather than through
  * the engine.
  */
 inline void PumpOneFrame(FWireRouter& Router, FWireEngine& Engine, const MicroWorld::TimePointMilliseconds NowMilliseconds) noexcept

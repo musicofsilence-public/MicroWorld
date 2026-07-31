@@ -4,12 +4,12 @@
 #include <MicroWorld/Core/Delegates/Delegate.h>
 #include <MicroWorld/Core/Log.h>
 #include <MicroWorld/Transport/ByteWriter.h>
-#include <MicroWorld/Transport/NetAddress.h>
-#include <MicroWorld/Transport/NetDriver.h>
-#include <MicroWorld/Transport/NetManager.h>
-#include <MicroWorld/Transport/NetPacketStorage.h>
-#include <MicroWorld/Transport/NetProtocol.h>
-#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Transport/DeviceAddress.h>
+#include <MicroWorld/Transport/Device.h>
+#include <MicroWorld/Transport/TransportManager.h>
+#include <MicroWorld/Transport/TransportPacketStorage.h>
+#include <MicroWorld/Transport/TransportProtocol.h>
+#include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Core/Time.h>
 
 #include <array>
@@ -22,7 +22,7 @@ namespace MicroWorld
 {
 
 /** The UE5-style role this host plays; selects which session traffic it originates and accepts. */
-enum class ENetMode : std::uint8_t
+enum class ENetworkMode : std::uint8_t
 {
 	/** Runs no driver traffic; every send reports `Unavailable`. */
 	Standalone,
@@ -38,7 +38,7 @@ enum class ENetMode : std::uint8_t
 };
 
 /** Observable session state, primarily meaningful to a `Client` tracking admission. */
-enum class ENetHostState : std::uint8_t
+enum class ETransportHostState : std::uint8_t
 {
 	/** Not started, standalone, or stopped; no session is in progress. */
 	Idle,
@@ -53,17 +53,17 @@ enum class ENetHostState : std::uint8_t
 	Listening,
 };
 
-/** Default heartbeat cadence used when a caller does not override `FNetHostConfig`. */
+/** Default heartbeat cadence used when a caller does not override `FTransportHostConfig`. */
 inline constexpr DurationMilliseconds DefaultHeartbeatIntervalMilliseconds = 1000;
 
-/** Default peer eviction window used when a caller does not override `FNetHostConfig`. */
+/** Default peer eviction window used when a caller does not override `FTransportHostConfig`. */
 inline constexpr DurationMilliseconds DefaultPeerTimeoutMilliseconds = 5000;
 
 /** Default protocol version advertised in `Hello`/`Welcome` when a caller does not override it. */
 inline constexpr std::uint8_t DefaultProtocolVersion = 1;
 
 /** Session timing and identity supplied once before `Start`. */
-struct FNetHostConfig
+struct FTransportHostConfig
 {
 	/** Interval between outgoing heartbeats (and client `Hello` retries while connecting). */
 	DurationMilliseconds HeartbeatIntervalMilliseconds{DefaultHeartbeatIntervalMilliseconds};
@@ -72,7 +72,7 @@ struct FNetHostConfig
 	DurationMilliseconds PeerTimeoutMilliseconds{DefaultPeerTimeoutMilliseconds};
 
 	/** Address the client greets with `Hello`; ignored by every non-client mode. */
-	FNetAddress ServerAddress{};
+	FDeviceAddress ServerAddress{};
 
 	/** Protocol version advertised in `Hello`/`Welcome`; a mismatch is ignored, not admitted. */
 	std::uint8_t ProtocolVersion{DefaultProtocolVersion};
@@ -107,7 +107,7 @@ constexpr bool operator!=(const FPeerId InLeft, const FPeerId InRight) noexcept
 }
 
 /**
- * Bounded session host over one `INetDriver`, delivering the UE5 dedicated/listen/client roles.
+ * Bounded session host over one `IDevice`, delivering the UE5 dedicated/listen/client roles.
  *
  * Owns a fixed peer table, an outbound FIFO, and one message handler; drives the
  * protocol only through explicit `PumpReceive`/`PumpSend` ticks so it samples no
@@ -115,12 +115,13 @@ constexpr bool operator!=(const FPeerId InLeft, const FPeerId InRight) noexcept
  * heartbeats, timeout eviction); channels 1..255 dispatch to the registered handler.
  */
 template<std::size_t MaxPeers, std::size_t MaxPacketBytes>
-class TNetHost final
+class TTransportHost final
 {
-	static_assert(MaxPeers > 0, "TNetHost requires at least one peer slot.");
-	static_assert(MaxPeers < 0xFE, "TNetHost reserves peer indices 0xFE (local) and 0xFF (invalid).");
+	static_assert(MaxPeers > 0, "TTransportHost requires at least one peer slot.");
+	static_assert(MaxPeers < 0xFE, "TTransportHost reserves peer indices 0xFE (local) and 0xFF (invalid).");
 	static_assert(
-		MaxPacketBytes >= MessageHeaderBytes + MaxControlPayloadBytes, "TNetHost packets must fit the largest control frame (header + Welcome).");
+		MaxPacketBytes >= MessageHeaderBytes + MaxControlPayloadBytes,
+		"TTransportHost packets must fit the largest control frame (header + Welcome).");
 
 public:
 	/** Number of packets one full peer broadcast occupies in the outbound FIFO. */
@@ -161,64 +162,64 @@ public:
 	using FMessageHandlerBinding = TDelegate<void(FPeerId, std::uint8_t, TSpan<const std::uint8_t>), MessageHandlerInlineBytes>;
 
 	/** Binds the host to one externally owned driver; mode and config follow via `Configure`. */
-	explicit TNetHost(INetDriver& InDriver) noexcept : Driver(InDriver), OutboundManager(InDriver, OutboundStorage) {}
+	explicit TTransportHost(IDevice& InDriver) noexcept : Driver(InDriver), OutboundManager(InDriver, OutboundStorage) {}
 
 	/** Prevents copying so one host value binds one driver, table, and handler. */
-	TNetHost(const TNetHost&) = delete;
+	TTransportHost(const TTransportHost&) = delete;
 
 	/** Prevents copying so one host value binds one driver, table, and handler. */
-	TNetHost& operator=(const TNetHost&) = delete;
+	TTransportHost& operator=(const TTransportHost&) = delete;
 
 	/** Prevents moving so the owned manager's driver reference and handler slots stay fixed. */
-	TNetHost(TNetHost&&) = delete;
+	TTransportHost(TTransportHost&&) = delete;
 
 	/** Prevents moving so the owned manager's driver reference and handler slots stay fixed. */
-	TNetHost& operator=(TNetHost&&) = delete;
+	TTransportHost& operator=(TTransportHost&&) = delete;
 
 	/** Defaulted; the host holds only fixed inline storage and no external resource. */
-	~TNetHost() noexcept = default;
+	~TTransportHost() noexcept = default;
 
 	/**
 	 * Sets the role and session parameters before the host starts.
 	 * Returns `Invalid` without changing anything when the host is not `Idle`, so a
 	 * running session cannot be silently reconfigured.
 	 */
-	ENetResult Configure(const ENetMode InMode, const FNetHostConfig& InConfig) noexcept
+	ETransportResult Configure(const ENetworkMode InMode, const FTransportHostConfig& InConfig) noexcept
 	{
-		if (State != ENetHostState::Idle)
+		if (State != ETransportHostState::Idle)
 		{
-			return ENetResult::Invalid;
+			return ETransportResult::Invalid;
 		}
 		Mode = InMode;
 		Config = InConfig;
-		return ENetResult::Success;
+		return ETransportResult::Success;
 	}
 
 	/**
 	 * Begins the session: a client enters `Connecting` (and greets on the next `PumpSend`),
 	 * a server enters `Listening`, standalone stays `Idle`. Returns `Invalid` when already started.
 	 */
-	ENetResult Start(const TimePointMilliseconds InNowMilliseconds) noexcept
+	ETransportResult Start(const TimePointMilliseconds InNowMilliseconds) noexcept
 	{
-		if (State != ENetHostState::Idle)
+		if (State != ETransportHostState::Idle)
 		{
-			return ENetResult::Invalid;
+			return ETransportResult::Invalid;
 		}
 		switch (Mode)
 		{
-			case ENetMode::Client:
-				State = ENetHostState::Connecting;
+			case ENetworkMode::Client:
+				State = ETransportHostState::Connecting;
 				LastHelloSendMilliseconds = InNowMilliseconds;
 				bHelloDue = true;
 				break;
-			case ENetMode::ListenServer:
-			case ENetMode::DedicatedServer:
-				State = ENetHostState::Listening;
+			case ENetworkMode::ListenServer:
+			case ENetworkMode::DedicatedServer:
+				State = ETransportHostState::Listening;
 				break;
-			case ENetMode::Standalone:
+			case ENetworkMode::Standalone:
 				break;
 		}
-		return ENetResult::Success;
+		return ETransportResult::Success;
 	}
 
 	/**
@@ -234,7 +235,7 @@ public:
 	{
 		SendByeToAllActivePeers();
 		EvictAllPeers();
-		State = ENetHostState::Idle;
+		State = ETransportHostState::Idle;
 		bHelloDue = false;
 	}
 
@@ -243,32 +244,32 @@ public:
 	 * dispatching application messages, then evicts peers past the timeout window.
 	 * A standalone host does no driver traffic and returns immediately.
 	 */
-	ENetResult PumpReceive(const TimePointMilliseconds InNowMilliseconds) noexcept
+	ETransportResult PumpReceive(const TimePointMilliseconds InNowMilliseconds) noexcept
 	{
-		if (Mode == ENetMode::Standalone)
+		if (Mode == ENetworkMode::Standalone)
 		{
-			return ENetResult::Success;
+			return ETransportResult::Success;
 		}
 		DrainInboundPackets(InNowMilliseconds);
 		EvictTimedOutPeers(InNowMilliseconds);
-		return ENetResult::Success;
+		return ETransportResult::Success;
 	}
 
 	/**
 	 * Emits due heartbeats (and client `Hello` retries), then drains the outbound FIFO.
 	 * A standalone host does no driver traffic and returns immediately.
 	 */
-	ENetResult PumpSend(const TimePointMilliseconds InNowMilliseconds) noexcept
+	ETransportResult PumpSend(const TimePointMilliseconds InNowMilliseconds) noexcept
 	{
-		if (Mode == ENetMode::Standalone)
+		if (Mode == ENetworkMode::Standalone)
 		{
-			return ENetResult::Success;
+			return ETransportResult::Success;
 		}
 		SendClientHelloIfDue(InNowMilliseconds);
 		SendDueHeartbeats(InNowMilliseconds);
 		DrainOutbound();
 		Driver.AdvanceTransmit();
-		return ENetResult::Success;
+		return ETransportResult::Success;
 	}
 
 	/**
@@ -277,24 +278,24 @@ public:
 	 * without the driver. Returns `Unavailable` for a standalone host, `Invalid` for
 	 * channel 0 or an unresolved peer, or the framing/queue result otherwise.
 	 */
-	ENetResult SendTo(const FPeerId InPeer, const std::uint8_t InChannel, TSpan<const std::uint8_t> InPayload) noexcept
+	ETransportResult SendTo(const FPeerId InPeer, const std::uint8_t InChannel, TSpan<const std::uint8_t> InPayload) noexcept
 	{
-		if (Mode == ENetMode::Standalone)
+		if (Mode == ENetworkMode::Standalone)
 		{
-			return ENetResult::Unavailable;
+			return ETransportResult::Unavailable;
 		}
 		if (InChannel == ControlChannel)
 		{
-			return ENetResult::Invalid;
+			return ETransportResult::Invalid;
 		}
 		if (InPeer.Index == LocalPeerIndex)
 		{
 			return SendToLocalPeer(InChannel, InPayload);
 		}
-		const FNetPeerSlot* const Slot = ResolvePeer(InPeer);
+		const FTransportPeerSlot* const Slot = ResolvePeer(InPeer);
 		if (Slot == nullptr)
 		{
-			return ENetResult::Invalid;
+			return ETransportResult::Invalid;
 		}
 		return QueueAppMessage(Slot->Address, InChannel, InPayload);
 	}
@@ -304,29 +305,29 @@ public:
 	 * A listen server also dispatches to its local peer directly. Best-effort: returns
 	 * `Success` when every active peer queued, otherwise the first failure result.
 	 */
-	ENetResult Broadcast(const std::uint8_t InChannel, TSpan<const std::uint8_t> InPayload) noexcept
+	ETransportResult Broadcast(const std::uint8_t InChannel, TSpan<const std::uint8_t> InPayload) noexcept
 	{
-		if (Mode == ENetMode::Standalone)
+		if (Mode == ENetworkMode::Standalone)
 		{
-			return ENetResult::Unavailable;
+			return ETransportResult::Unavailable;
 		}
 		if (InChannel == ControlChannel)
 		{
-			return ENetResult::Invalid;
+			return ETransportResult::Invalid;
 		}
-		if (Mode == ENetMode::ListenServer)
+		if (Mode == ENetworkMode::ListenServer)
 		{
 			DispatchToHandler(GetLocalPeer(), InChannel, InPayload);
 		}
-		ENetResult Outcome = ENetResult::Success;
+		ETransportResult Outcome = ETransportResult::Success;
 		for (std::size_t Index = 0; Index < MaxPeers; ++Index)
 		{
 			if (!Peers[Index].bActive)
 			{
 				continue;
 			}
-			const ENetResult SlotResult = QueueAppMessage(Peers[Index].Address, InChannel, InPayload);
-			if (SlotResult != ENetResult::Success && Outcome == ENetResult::Success)
+			const ETransportResult SlotResult = QueueAppMessage(Peers[Index].Address, InChannel, InPayload);
+			if (SlotResult != ETransportResult::Success && Outcome == ETransportResult::Success)
 			{
 				Outcome = SlotResult;
 			}
@@ -344,10 +345,10 @@ public:
 	EDelegateResult RemoveMessageHandler(const FDelegateHandle InHandle) noexcept { return MessageHandler.Remove(InHandle); }
 
 	/** Reports the observable session state. */
-	ENetHostState GetState() const noexcept { return State; }
+	ETransportHostState GetState() const noexcept { return State; }
 
 	/** Reports the configured role. */
-	ENetMode GetMode() const noexcept { return Mode; }
+	ENetworkMode GetMode() const noexcept { return Mode; }
 
 	/** Reports the listen server's local-peer identity; only meaningful in `ListenServer` mode. */
 	constexpr FPeerId GetLocalPeer() const noexcept { return FPeerId{LocalPeerIndex, LocalPeerGeneration}; }
@@ -355,7 +356,7 @@ public:
 	/** Reports a connected client's server-peer identity, or an invalid id when not connected. */
 	FPeerId GetServerPeer() const noexcept
 	{
-		if (Mode != ENetMode::Client || State != ENetHostState::Connected)
+		if (Mode != ENetworkMode::Client || State != ETransportHostState::Connected)
 		{
 			return FPeerId{};
 		}
@@ -381,10 +382,10 @@ public:
 
 private:
 	/** One remote peer's address, liveness timestamps, and reuse generation. */
-	struct FNetPeerSlot
+	struct FTransportPeerSlot
 	{
 		/** Transport address to reach this peer; empty while the slot is free. */
-		FNetAddress Address{};
+		FDeviceAddress Address{};
 
 		/** Time of the last packet received from this peer; drives timeout eviction. */
 		TimePointMilliseconds LastReceiveMilliseconds{0};
@@ -415,22 +416,22 @@ private:
 	}
 
 	/** Reports whether an active peer has been silent past the configured eviction window. */
-	bool IsPeerTimedOut(const FNetPeerSlot& InSlot, const TimePointMilliseconds InNowMilliseconds) const noexcept
+	bool IsPeerTimedOut(const FTransportPeerSlot& InSlot, const TimePointMilliseconds InNowMilliseconds) const noexcept
 	{
 		return ElapsedSince(InNowMilliseconds, InSlot.LastReceiveMilliseconds) > Config.PeerTimeoutMilliseconds;
 	}
 
 	/** Reports whether a peer's last send is older than the heartbeat cadence. */
-	bool IsHeartbeatDue(const FNetPeerSlot& InSlot, const TimePointMilliseconds InNowMilliseconds) const noexcept
+	bool IsHeartbeatDue(const FTransportPeerSlot& InSlot, const TimePointMilliseconds InNowMilliseconds) const noexcept
 	{
 		return ElapsedSince(InNowMilliseconds, InSlot.LastSendMilliseconds) >= Config.HeartbeatIntervalMilliseconds;
 	}
 
 	/** Reports whether this host admits remote peers. */
-	constexpr bool IsServer() const noexcept { return Mode == ENetMode::ListenServer || Mode == ENetMode::DedicatedServer; }
+	constexpr bool IsServer() const noexcept { return Mode == ENetworkMode::ListenServer || Mode == ENetworkMode::DedicatedServer; }
 
 	/** Finds the active peer at `InAddress`, or `MaxPeers` when none matches. */
-	std::size_t FindActivePeerIndexByAddress(const FNetAddress& InAddress) const noexcept
+	std::size_t FindActivePeerIndexByAddress(const FDeviceAddress& InAddress) const noexcept
 	{
 		for (std::size_t Index = 0; Index < MaxPeers; ++Index)
 		{
@@ -459,13 +460,13 @@ private:
 	FPeerId MakePeerId(const std::size_t InIndex) const noexcept { return FPeerId{static_cast<std::uint8_t>(InIndex), Peers[InIndex].Generation}; }
 
 	/** Resolves a remote peer id to its live slot, or `nullptr` when unknown or stale. */
-	const FNetPeerSlot* ResolvePeer(const FPeerId InPeer) const noexcept
+	const FTransportPeerSlot* ResolvePeer(const FPeerId InPeer) const noexcept
 	{
 		if (InPeer.Index >= MaxPeers)
 		{
 			return nullptr;
 		}
-		const FNetPeerSlot& Slot = Peers[InPeer.Index];
+		const FTransportPeerSlot& Slot = Peers[InPeer.Index];
 		if (!Slot.bActive || Slot.Generation != InPeer.Generation)
 		{
 			return nullptr;
@@ -476,21 +477,21 @@ private:
 	/** Frees the slot at `InIndex` and bumps its generation so outstanding ids go stale. */
 	void EvictPeer(const std::size_t InIndex) noexcept
 	{
-		FNetPeerSlot& Slot = Peers[InIndex];
+		FTransportPeerSlot& Slot = Peers[InIndex];
 		Slot.bActive = false;
 		// Generation is u8, so it wraps after 256 evictions of this slot; a stale
 		// id from exactly 256 evictions ago would re-match -- an accepted,
 		// practically-unreachable window.
 		Slot.Generation = static_cast<std::uint8_t>(Slot.Generation + 1);
-		Slot.Address = FNetAddress{};
+		Slot.Address = FDeviceAddress{};
 	}
 
 	/** Returns a disconnected client to `Connecting` so it re-greets the server on the next send. */
 	void OnPeerLost(const std::size_t InIndex) noexcept
 	{
-		if (Mode == ENetMode::Client && InIndex == ServerPeerSlotIndex)
+		if (Mode == ENetworkMode::Client && InIndex == ServerPeerSlotIndex)
 		{
-			State = ENetHostState::Connecting;
+			State = ETransportHostState::Connecting;
 			bHelloDue = true;
 		}
 	}
@@ -500,14 +501,14 @@ private:
 	{
 		for (std::size_t Index = 0; Index < MaxPeers; ++Index)
 		{
-			FNetPeerSlot& Slot = Peers[Index];
+			FTransportPeerSlot& Slot = Peers[Index];
 			if (!Slot.bActive)
 			{
 				continue;
 			}
 			if (IsPeerTimedOut(Slot, InNowMilliseconds))
 			{
-				MW_LOG(Log, "NetHost", "evicting peer %u (timeout)", static_cast<unsigned>(Index));
+				MW_LOG(Log, "TransportHost", "evicting peer %u (timeout)", static_cast<unsigned>(Index));
 				EvictPeer(Index);
 				OnPeerLost(Index);
 			}
@@ -515,13 +516,13 @@ private:
 	}
 
 	/** Parses one inbound packet, routing control internally and application messages to the handler. */
-	void HandleInboundPacket(const FNetAddress& InFrom, TSpan<const std::uint8_t> InPacket, const TimePointMilliseconds InNowMilliseconds) noexcept
+	void HandleInboundPacket(const FDeviceAddress& InFrom, TSpan<const std::uint8_t> InPacket, const TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		FMessageHeader Header{};
 		TSpan<const std::uint8_t> Payload{};
-		if (ReadMessage(InPacket, Header, Payload) != ENetResult::Success)
+		if (ReadMessage(InPacket, Header, Payload) != ETransportResult::Success)
 		{
-			MW_LOG_MSG(Log, "NetHost", "dropped malformed inbound packet");
+			MW_LOG_MSG(Log, "TransportHost", "dropped malformed inbound packet");
 			return;
 		}
 		if (Header.Channel == ControlChannel)
@@ -532,7 +533,7 @@ private:
 		const std::size_t Index = FindActivePeerIndexByAddress(InFrom);
 		if (Index == MaxPeers)
 		{
-			MW_LOG_MSG(Log, "NetHost", "dropped application message from unknown peer");
+			MW_LOG_MSG(Log, "TransportHost", "dropped application message from unknown peer");
 			return;
 		}
 		Peers[Index].LastReceiveMilliseconds = InNowMilliseconds;
@@ -540,12 +541,13 @@ private:
 	}
 
 	/** Decodes one channel-0 control payload and dispatches it by type. */
-	void HandleControlMessage(const FNetAddress& InFrom, TSpan<const std::uint8_t> InPayload, const TimePointMilliseconds InNowMilliseconds) noexcept
+	void HandleControlMessage(
+		const FDeviceAddress& InFrom, TSpan<const std::uint8_t> InPayload, const TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		FControlMessage Control{};
-		if (ReadControlMessage(InPayload, Control) != ENetResult::Success)
+		if (ReadControlMessage(InPayload, Control) != ETransportResult::Success)
 		{
-			MW_LOG_MSG(Log, "NetHost", "dropped unknown or malformed control message");
+			MW_LOG_MSG(Log, "TransportHost", "dropped unknown or malformed control message");
 			return;
 		}
 		switch (Control.Type)
@@ -566,7 +568,7 @@ private:
 	}
 
 	/** Admits a client on `Hello` (idempotent per address), or ignores it on wrong version or a full table. */
-	void HandleHello(const FNetAddress& InFrom, const FControlMessage& InControl, const TimePointMilliseconds InNowMilliseconds) noexcept
+	void HandleHello(const FDeviceAddress& InFrom, const FControlMessage& InControl, const TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		if (!IsServer())
 		{
@@ -576,7 +578,7 @@ private:
 		{
 			MW_LOG(
 				Warning,
-				"NetHost",
+				"TransportHost",
 				"ignored Hello: protocol version %u != %u",
 				static_cast<unsigned>(InControl.ProtocolVersion),
 				static_cast<unsigned>(Config.ProtocolVersion));
@@ -591,9 +593,9 @@ private:
 	}
 
 	/** Records the server as a connected client's single peer and enters `Connected`. */
-	void HandleWelcome(const FNetAddress& InFrom, const FControlMessage& InControl, const TimePointMilliseconds InNowMilliseconds) noexcept
+	void HandleWelcome(const FDeviceAddress& InFrom, const FControlMessage& InControl, const TimePointMilliseconds InNowMilliseconds) noexcept
 	{
-		if (Mode != ENetMode::Client)
+		if (Mode != ENetworkMode::Client)
 		{
 			return;
 		}
@@ -601,35 +603,35 @@ private:
 		{
 			MW_LOG(
 				Warning,
-				"NetHost",
+				"TransportHost",
 				"ignored Welcome: server version %u != %u",
 				static_cast<unsigned>(InControl.ProtocolVersion),
 				static_cast<unsigned>(Config.ProtocolVersion));
 			return;
 		}
-		FNetPeerSlot& Server = Peers[ServerPeerSlotIndex];
+		FTransportPeerSlot& Server = Peers[ServerPeerSlotIndex];
 		Server.Address = InFrom;
 		Server.LastReceiveMilliseconds = InNowMilliseconds;
 		Server.LastSendMilliseconds = InNowMilliseconds;
 		Server.bActive = true;
 		AssignedPeer = FPeerId{InControl.PeerIndex, InControl.PeerGeneration};
-		State = ENetHostState::Connected;
+		State = ETransportHostState::Connected;
 	}
 
 	/** Refreshes a known peer's liveness on `Heartbeat`; ignores heartbeats from strangers. */
-	void HandleHeartbeat(const FNetAddress& InFrom, const TimePointMilliseconds InNowMilliseconds) noexcept
+	void HandleHeartbeat(const FDeviceAddress& InFrom, const TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		const std::size_t Index = FindActivePeerIndexByAddress(InFrom);
 		if (Index == MaxPeers)
 		{
-			MW_LOG_MSG(Log, "NetHost", "ignored heartbeat from unknown peer");
+			MW_LOG_MSG(Log, "TransportHost", "ignored heartbeat from unknown peer");
 			return;
 		}
 		Peers[Index].LastReceiveMilliseconds = InNowMilliseconds;
 	}
 
 	/** Evicts a peer on `Bye`; a client whose server departs returns to `Connecting`. */
-	void HandleBye(const FNetAddress& InFrom) noexcept
+	void HandleBye(const FDeviceAddress& InFrom) noexcept
 	{
 		const std::size_t Index = FindActivePeerIndexByAddress(InFrom);
 		if (Index == MaxPeers)
@@ -641,16 +643,16 @@ private:
 	}
 
 	/** Queues a `Welcome` carrying the assigned index and generation to a newly admitted client. */
-	void SendWelcome(const std::size_t InPeerIndex, const FNetAddress& InTo) noexcept
+	void SendWelcome(const std::size_t InPeerIndex, const FDeviceAddress& InTo) noexcept
 	{
 		FControlMessage Welcome{};
 		Welcome.Type = EControlMessageType::Welcome;
 		Welcome.ProtocolVersion = Config.ProtocolVersion;
 		Welcome.PeerIndex = static_cast<std::uint8_t>(InPeerIndex);
 		Welcome.PeerGeneration = Peers[InPeerIndex].Generation;
-		if (QueueControl(InTo, Welcome) != ENetResult::Success)
+		if (QueueControl(InTo, Welcome) != ETransportResult::Success)
 		{
-			MW_LOG_MSG(Warning, "NetHost", "Welcome not queued: outbound queue full");
+			MW_LOG_MSG(Warning, "TransportHost", "Welcome not queued: outbound queue full");
 		}
 	}
 
@@ -660,19 +662,19 @@ private:
 		FControlMessage Hello{};
 		Hello.Type = EControlMessageType::Hello;
 		Hello.ProtocolVersion = Config.ProtocolVersion;
-		if (QueueControl(Config.ServerAddress, Hello) != ENetResult::Success)
+		if (QueueControl(Config.ServerAddress, Hello) != ETransportResult::Success)
 		{
-			MW_LOG_MSG(Warning, "NetHost", "Hello not queued: outbound queue full");
+			MW_LOG_MSG(Warning, "TransportHost", "Hello not queued: outbound queue full");
 		}
 	}
 
 	/** Frames one control message and queues it to `InTo`; returns the framing or queue result. */
-	ENetResult QueueControl(const FNetAddress& InTo, const FControlMessage& InControl) noexcept
+	ETransportResult QueueControl(const FDeviceAddress& InTo, const FControlMessage& InControl) noexcept
 	{
 		std::array<std::uint8_t, MessageHeaderBytes + MaxControlPayloadBytes> FrameBuffer{};
 		FByteWriter Writer(TSpan<std::uint8_t>(FrameBuffer.data(), FrameBuffer.size()));
-		const ENetResult WriteResult = WriteControlMessage(Writer, InControl);
-		if (WriteResult != ENetResult::Success)
+		const ETransportResult WriteResult = WriteControlMessage(Writer, InControl);
+		if (WriteResult != ETransportResult::Success)
 		{
 			return WriteResult;
 		}
@@ -680,12 +682,12 @@ private:
 	}
 
 	/** Frames one application message and queues it to `InTo`; returns the framing or queue result. */
-	ENetResult QueueAppMessage(const FNetAddress& InTo, const std::uint8_t InChannel, TSpan<const std::uint8_t> InPayload) noexcept
+	ETransportResult QueueAppMessage(const FDeviceAddress& InTo, const std::uint8_t InChannel, TSpan<const std::uint8_t> InPayload) noexcept
 	{
 		std::array<std::uint8_t, MaxPacketBytes> FrameBuffer{};
 		FByteWriter Writer(TSpan<std::uint8_t>(FrameBuffer.data(), FrameBuffer.size()));
-		const ENetResult WriteResult = WriteMessage(Writer, InChannel, InPayload);
-		if (WriteResult != ENetResult::Success)
+		const ETransportResult WriteResult = WriteMessage(Writer, InChannel, InPayload);
+		if (WriteResult != ETransportResult::Success)
 		{
 			return WriteResult;
 		}
@@ -703,7 +705,7 @@ private:
 	{
 		for (std::size_t Count = 0; Count < SendQueueDepth; ++Count)
 		{
-			if (OutboundManager.AdvanceSend() != ENetResult::Success)
+			if (OutboundManager.AdvanceSend() != ETransportResult::Success)
 			{
 				// Unavailable means the FIFO is empty; a driver failure retains the head for a later drain.
 				break;
@@ -718,10 +720,11 @@ private:
 		const std::size_t MaxReceives = MaxPeers + PumpSlackPackets;
 		for (std::size_t Count = 0; Count < MaxReceives; ++Count)
 		{
-			FNetAddress From{};
-			FNetReceiveResult Result{};
-			const ENetResult ReceiveResult = OutboundManager.Receive(From, TSpan<std::uint8_t>(ReceiveBuffer.data(), ReceiveBuffer.size()), Result);
-			if (ReceiveResult != ENetResult::Success)
+			FDeviceAddress From{};
+			FReceiveResult Result{};
+			const ETransportResult ReceiveResult =
+				OutboundManager.Receive(From, TSpan<std::uint8_t>(ReceiveBuffer.data(), ReceiveBuffer.size()), Result);
+			if (ReceiveResult != ETransportResult::Success)
 			{
 				// Unavailable means the transport is drained; any other failure cannot make progress now.
 				break;
@@ -733,7 +736,7 @@ private:
 	/** Client-only: greets the server on the first connecting pump and on each heartbeat interval afterward. */
 	void SendClientHelloIfDue(const TimePointMilliseconds InNowMilliseconds) noexcept
 	{
-		if (Mode != ENetMode::Client || State != ENetHostState::Connecting)
+		if (Mode != ENetworkMode::Client || State != ETransportHostState::Connecting)
 		{
 			return;
 		}
@@ -750,7 +753,7 @@ private:
 	{
 		for (std::size_t Index = 0; Index < MaxPeers; ++Index)
 		{
-			FNetPeerSlot& Slot = Peers[Index];
+			FTransportPeerSlot& Slot = Peers[Index];
 			if (Slot.bActive && IsHeartbeatDue(Slot, InNowMilliseconds))
 			{
 				FControlMessage HeartbeatMessage{};
@@ -764,7 +767,7 @@ private:
 	/** Best-effort `Bye` to every active peer, then drains the outbound FIFO without waiting for physical transmission. */
 	void SendByeToAllActivePeers() noexcept
 	{
-		if (Mode == ENetMode::Standalone)
+		if (Mode == ENetworkMode::Standalone)
 		{
 			return;
 		}
@@ -793,18 +796,18 @@ private:
 	}
 
 	/** Dispatches an application message directly to the listen server's local peer; `Invalid` in any other mode. */
-	ENetResult SendToLocalPeer(const std::uint8_t InChannel, TSpan<const std::uint8_t> InPayload) noexcept
+	ETransportResult SendToLocalPeer(const std::uint8_t InChannel, TSpan<const std::uint8_t> InPayload) noexcept
 	{
-		if (Mode != ENetMode::ListenServer)
+		if (Mode != ENetworkMode::ListenServer)
 		{
-			return ENetResult::Invalid;
+			return ETransportResult::Invalid;
 		}
 		DispatchToHandler(GetLocalPeer(), InChannel, InPayload);
-		return ENetResult::Success;
+		return ETransportResult::Success;
 	}
 
 	/** Finds this address's peer or allocates a free slot, refreshing liveness; returns `MaxPeers` when the table is full. */
-	std::size_t AdmitPeer(const FNetAddress& InFrom, const TimePointMilliseconds InNowMilliseconds) noexcept
+	std::size_t AdmitPeer(const FDeviceAddress& InFrom, const TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		std::size_t Index = FindActivePeerIndexByAddress(InFrom);
 		if (Index == MaxPeers)
@@ -812,10 +815,10 @@ private:
 			Index = FindFreePeerSlot();
 			if (Index == MaxPeers)
 			{
-				MW_LOG_MSG(Warning, "NetHost", "rejected Hello: peer table full");
+				MW_LOG_MSG(Warning, "TransportHost", "rejected Hello: peer table full");
 				return MaxPeers;
 			}
-			FNetPeerSlot& Slot = Peers[Index];
+			FTransportPeerSlot& Slot = Peers[Index];
 			Slot.Address = InFrom;
 			Slot.LastReceiveMilliseconds = InNowMilliseconds;
 			Slot.LastSendMilliseconds = InNowMilliseconds;
@@ -829,28 +832,28 @@ private:
 	}
 
 	/** Driver borrowed for one host lifetime; progresses pending physical transmission after each outbound pump. */
-	INetDriver& Driver;
+	IDevice& Driver;
 
 	/** Owns the outbound packet bytes, lengths, and destinations for the FIFO. */
-	TNetPacketStorage<SendQueueDepth, MaxPacketBytes> OutboundStorage{};
+	TTransportPacketStorage<SendQueueDepth, MaxPacketBytes> OutboundStorage{};
 
 	/** Owns the outbound FIFO over the driver; reused rather than re-implementing queue mechanics. */
-	TNetManager<SendQueueDepth, MaxPacketBytes> OutboundManager;
+	TTransportManager<SendQueueDepth, MaxPacketBytes> OutboundManager;
 
 	/** Dispatches application messages to every registered handler. */
 	FMessageHandler MessageHandler{};
 
 	/** Fixed table of remote peer slots. */
-	std::array<FNetPeerSlot, MaxPeers> Peers{};
+	std::array<FTransportPeerSlot, MaxPeers> Peers{};
 
 	/** Session timing and identity set by `Configure`. */
-	FNetHostConfig Config{};
+	FTransportHostConfig Config{};
 
 	/** Configured role. */
-	ENetMode Mode{ENetMode::Standalone};
+	ENetworkMode Mode{ENetworkMode::Standalone};
 
 	/** Observable session state. */
-	ENetHostState State{ENetHostState::Idle};
+	ETransportHostState State{ETransportHostState::Idle};
 
 	/** Identity a `Welcome` assigned to this client within the server's table. */
 	FPeerId AssignedPeer{};

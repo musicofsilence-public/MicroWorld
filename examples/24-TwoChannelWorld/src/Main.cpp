@@ -5,7 +5,7 @@
 // compile -- ServerMain.cpp and ClientMain.cpp are always built -- and this
 // define only selects which one runs; never build_src_filter, which ESP-IDF
 // ignores. This example runs one world's router over TWO simultaneous physical
-// links (WiFi UDP telemetry + a UART command wire) behind one TNetSystem.
+// links (WiFi UDP telemetry + a UART command wire) behind one TNetworking.
 #ifndef MICROWORLD_EXAMPLE_SERVER
 #error "Define MICROWORLD_EXAMPLE_SERVER=1 (server) or 0 (client) via the build environment."
 #endif

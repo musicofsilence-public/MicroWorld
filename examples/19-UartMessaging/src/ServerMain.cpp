@@ -9,8 +9,8 @@
 #include <MicroWorld/Engine/EngineSystem.h>
 #include <MicroWorld/Engine/World.h>
 #include <MicroWorld/Core/Log.h>
-#include <MicroWorld/Transport/NetHost.h>
-#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Transport/TransportHost.h>
+#include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Engine/GarbageCollector.h>
 #include <MicroWorld/Engine/ObjectPtr.h>
@@ -32,7 +32,7 @@ FEsp32TimeSource GTimeSource{};
 /** Server engine traits: carries the exact capacities FServerEngine sized before the
  *  traits refactor, so the server store is unchanged. Bounds tuned so one GC slice
  *  {1,4,8} finishes a full cycle each tick, so a spawn arriving mid-tick never fails
- *  LifecycleLocked (the proven EngineNetHostTests / two-node-demo profile). */
+ *  LifecycleLocked (the proven EngineHostTests / two-node-demo profile). */
 struct FServerEngineTraits : FDefaultEngineTraits
 {
 	static constexpr std::size_t MaxClasses = 6;
@@ -45,7 +45,7 @@ struct FServerEngineTraits : FDefaultEngineTraits
 using FServerEngine = TEngine<FServerEngineTraits>;
 
 /** Server session host; two peer slots leave headroom above the single wired client. */
-using FServerNet = TNetHost<2, 120>;
+using FServerTransport = TTransportHost<2, 120>;
 
 /** Minimal actor spawned on demand so a remote input event visibly changes the world. */
 class FDemoSpawnedActor final : public AActor
@@ -79,8 +79,8 @@ void RunServer() noexcept
 	}
 
 	// All composition objects are static (the ESP32-S3 stack lesson, §2.2).
-	static FServerNet ServerNet{Driver};
-	static TNetHostSystem<FServerNet> ServerFrame{ServerNet};
+	static FServerTransport ServerTransport{Driver};
+	static THostPlaySystem<FServerTransport> ServerFrame{ServerTransport};
 	static FServerEngine ServerHost{FGarbageCollectionBudget{1, 4, 8}, ServerFrame};
 	static int SpawnSequence = 0;
 	static int SpawnedBeginCount = 0;
@@ -95,7 +95,7 @@ void RunServer() noexcept
 
 	// Channel-1 spawn handler. The lambda captures nothing: it names the static
 	// run-loop state directly, which keeps it inside the delegate's inline budget.
-	FServerNet::FMessageHandlerBinding Binding;
+	FServerTransport::FMessageHandlerBinding Binding;
 	Binding.Bind(
 		[](const FPeerId, const std::uint8_t Channel, TSpan<const std::uint8_t> Payload) noexcept
 		{
@@ -114,10 +114,10 @@ void RunServer() noexcept
 			MW_LOG(Log, "ex19", "server spawned actor -> world actor count=%d", WorldActorCount);
 		});
 	FDelegateHandle Handle{};
-	(void)ServerNet.AddMessageHandler(std::move(Binding), Handle);
+	(void)ServerTransport.AddMessageHandler(std::move(Binding), Handle);
 
-	(void)ServerNet.Configure(ENetMode::DedicatedServer, MakeHostConfig());
-	(void)ServerNet.Start(GTimeSource.Now());
+	(void)ServerTransport.Configure(ENetworkMode::DedicatedServer, MakeHostConfig());
+	(void)ServerTransport.Start(GTimeSource.Now());
 	(void)ServerHost.BeginPlay(GTimeSource.Now());
 	MW_LOG(Log, "ex19", "server listening (no WiFi -- UART only)");
 
@@ -130,7 +130,7 @@ void RunServer() noexcept
 		(void)ServerHost.Tick(GTimeSource.Now());
 		++StateTick;
 		const std::uint8_t StatePayload[2] = {StateTick, static_cast<std::uint8_t>(WorldActorCount)};
-		(void)ServerNet.Broadcast(StateBroadcastChannel, TSpan<const std::uint8_t>(StatePayload, sizeof(StatePayload)));
+		(void)ServerTransport.Broadcast(StateBroadcastChannel, TSpan<const std::uint8_t>(StatePayload, sizeof(StatePayload)));
 		if (!bDoneAnnounced && WorldActorCount >= MaxSpawns)
 		{
 			MW_LOG(Log, "ex19", "done (server spawned %d actors)", WorldActorCount);

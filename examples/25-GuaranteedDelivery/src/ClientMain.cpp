@@ -11,8 +11,8 @@
 #include <MicroWorld/Messaging/ReliableChannel.h>
 #include <MicroWorld/Engine/World.h>
 #include <MicroWorld/Core/Log.h>
-#include <MicroWorld/Transport/NetHost.h>
-#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Transport/TransportHost.h>
+#include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Transport/PacketDropDriver.h>
 #include <MicroWorld/Transport/UdpAddressCodec.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
@@ -105,14 +105,14 @@ private:
 void RunClient() noexcept
 {
 	static FEsp32WifiLink WifiLink;
-	if (WifiLink.JoinAccessPoint(FEsp32StationConfig{DemoApSsid, DemoApPassword, /*ConnectTimeoutMilliseconds*/ 15000}) != ENetResult::Success)
+	if (WifiLink.JoinAccessPoint(FEsp32StationConfig{DemoApSsid, DemoApPassword, /*ConnectTimeoutMilliseconds*/ 15000}) != ETransportResult::Success)
 	{
 		MW_LOG(Error, "ex25", "wifi failed; halting");
 		return;
 	}
 	MW_LOG(Log, "ex25", "wifi joined AP");
 
-	// The client binds an ephemeral local port (0): it only needs to reach the server, and TNetHost
+	// The client binds an ephemeral local port (0): it only needs to reach the server, and TTransportHost
 	// learns the client's address server-side from its Hello.
 	static FEsp32UdpDriver UdpDriver(0);
 	MW_LOG(Log, "ex25", "udp open=%d", UdpDriver.IsOpen() ? 1 : 0);
@@ -125,26 +125,26 @@ void RunClient() noexcept
 	// All composition objects are static (the ESP32-S3 stack lesson, §2.2). The drop driver wraps
 	// the real UDP driver, so the net below sends and receives through the loss injector.
 	static FPacketDropDriver DropDriver{UdpDriver, DropEveryNthSend};
-	static FWorldNet Net{DropDriver};
+	static FWorldTransport Transport{DropDriver};
 	static FWorldRouter Router;
 
 	// Best-effort channel: a plain binding straight to the router, no reliable wrapper.
-	static FChannelBinding BestEffortWire{Net, BestEffortWireChannelByte, BestEffortChannelId, EChannelSendTarget::Server, Router};
+	static FChannelBinding BestEffortWire{Transport, BestEffortWireChannelByte, BestEffortChannelId, EChannelSendTarget::Server, Router};
 
 	// Guaranteed channel: break the wrapper<->binding reference cycle in this exact order --
 	// construct the reliable wrapper (forward sink = Router), construct the binding (inbound sink =
 	// the wrapper), then bind the wrapper to the binding via SetInnerChannel (ReliableChannel.h).
 	static FGuaranteedChannel Guaranteed{Router, FReliableChannelConfig{}};
-	static FChannelBinding GuaranteedWire{Net, GuaranteedWireChannelByte, GuaranteedChannelId, EChannelSendTarget::Server, Guaranteed};
+	static FChannelBinding GuaranteedWire{Transport, GuaranteedWireChannelByte, GuaranteedChannelId, EChannelSendTarget::Server, Guaranteed};
 	Guaranteed.SetInnerChannel(GuaranteedWire);
 
-	static FNetFrame NetFrame{Net};
+	static FHostPlay HostPlay{Transport};
 
 	// D3 frame-set order: net first (delivers inbound traffic), reliable channel second (its
 	// PostAdvance paces retries), router last (dispatches what the net and the reliable channel just
 	// delivered) -- see GuaranteedDeliveryShared.h's FWorldFrameSet alias.
 	static FWorldFrameSet Frames;
-	if (Frames.Add(NetFrame) != EEngineResult::Success || Frames.Add(Guaranteed) != EEngineResult::Success
+	if (Frames.Add(HostPlay) != EEngineResult::Success || Frames.Add(Guaranteed) != EEngineResult::Success
 		|| Frames.Add(Router) != EEngineResult::Success)
 	{
 		MW_LOG(Error, "ex25", "client frame set rejected a frame; halting");
@@ -184,10 +184,10 @@ void RunClient() noexcept
 		return;
 	}
 
-	FNetHostConfig Config = MakeHostConfig();
+	FTransportHostConfig Config = MakeHostConfig();
 	Config.ServerAddress = MakeUdpAddress(ServerIpv4[0], ServerIpv4[1], ServerIpv4[2], ServerIpv4[3], ServerPort);
-	(void)Net.Configure(ENetMode::Client, Config);
-	(void)Net.Start(GTimeSource.Now());
+	(void)Transport.Configure(ENetworkMode::Client, Config);
+	(void)Transport.Start(GTimeSource.Now());
 
 	const TimePointMilliseconds BootTime = GTimeSource.Now();
 	if (Engine.BeginPlay(BootTime) != ERuntimeResult::Success)

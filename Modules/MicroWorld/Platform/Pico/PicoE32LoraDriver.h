@@ -41,7 +41,7 @@ struct FPicoE32LoraConfig
  * portable framing. `TrySend(Success)` queues one complete frame for `AdvanceTransmit`, while transparent-mode
  * destination addresses remain shape-checked metadata rather than on-air routing.
  */
-class FPicoE32LoraDriver final : public INetDriver
+class FPicoE32LoraDriver final : public IDevice
 {
 public:
 	/** Creates a closed driver that borrows the production Pico SDK UART binding. */
@@ -74,7 +74,7 @@ public:
 	 * @param InConfig UART identity, GPIO routing, baud rate, and local node id.
 	 * @return Outcome of the initialization attempt.
 	 */
-	ENetResult Initialize(const FPicoE32LoraConfig& InConfig) noexcept;
+	ETransportResult Initialize(const FPicoE32LoraConfig& InConfig) noexcept;
 
 	/**
 	 * Transactionally accepts one complete packet into the delegated fixed transmit slot.
@@ -87,7 +87,7 @@ public:
 	 * @param InPacket Payload to frame and queue.
 	 * @return Outcome of the acceptance attempt.
 	 */
-	ENetResult TrySend(const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override;
+	ETransportResult TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
 	 * Pumps a bounded number of UART bytes and transactionally delivers at most one frame.
@@ -98,9 +98,9 @@ public:
 	 * @param OutFrom Filled with the sender's E32 address only on `Success`.
 	 * @param InDestination Destination for one decoded payload.
 	 * @param OutResult Filled with the delivered byte count only on `Success`.
-	 * @return `Success`, `Unavailable`, `Full`, or `Invalid` under the shared `INetDriver` contract.
+	 * @return `Success`, `Unavailable`, `Full`, or `Invalid` under the shared `IDevice` contract.
 	 */
-	ENetResult TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept override;
+	ETransportResult TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept override;
 
 	/** Reports the delegated shared E32 payload capacity, excluding framing overhead. */
 	std::size_t MaxPacketBytes() const noexcept override;

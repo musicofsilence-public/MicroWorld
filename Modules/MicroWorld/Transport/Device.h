@@ -1,8 +1,8 @@
 #pragma once
 
 #include <MicroWorld/Core/Containers/Span.h>
-#include <MicroWorld/Transport/NetAddress.h>
-#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Transport/DeviceAddress.h>
+#include <MicroWorld/Transport/TransportResult.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -18,7 +18,7 @@ namespace MicroWorld
  * never confuses a failed receive with a short successful read. Only a `Success`
  * result writes a received byte count and (possibly zero) destination bytes.
  */
-struct FNetReceiveResult
+struct FReceiveResult
 {
 	/**
 	 * Bytes written to the caller-owned destination.
@@ -31,13 +31,13 @@ struct FNetReceiveResult
  * Bounds one non-blocking addressed byte transport behind a single reference-held interface.
  *
  * Each call performs at most one transport operation and returns an explicit
- * `ENetResult` so a caller can poll without blocking and distinguish transient
+ * `ETransportResult` so a caller can poll without blocking and distinguish transient
  * unavailability from permanent rejection. The interface owns no scheduler,
  * clock, thread, retry policy, peer identity, session, or protocol behavior;
  * those concerns belong to the caller or to a higher layer that this package
  * intentionally does not provide.
  */
-class INetDriver
+class IDevice
 {
 public:
 	/**
@@ -48,7 +48,7 @@ public:
 	 * destination address the driver cannot route. A non-success result leaves
 	 * the transport state unchanged.
 	 */
-	virtual ENetResult TrySend(const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept = 0;
+	virtual ETransportResult TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept = 0;
 
 	/**
 	 * Receives at most one packet into the caller-owned destination.
@@ -59,7 +59,7 @@ public:
 	 * no packet is ready, `Full` when the destination is too small for the queued
 	 * head packet, and `Invalid` for a null destination with nonzero length.
 	 */
-	virtual ENetResult TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept = 0;
+	virtual ETransportResult TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept = 0;
 
 	/**
 	 * Advances one bounded unit of pending outbound transport work.
@@ -75,17 +75,17 @@ public:
 	virtual std::size_t MaxPacketBytes() const noexcept = 0;
 
 	/** Gives every concrete driver one stable virtual destructor out of line. */
-	virtual ~INetDriver() noexcept;
+	virtual ~IDevice() noexcept;
 
 	/** Prevents slicing through the interface; drivers are held by reference. */
-	INetDriver(const INetDriver&) = delete;
+	IDevice(const IDevice&) = delete;
 
 	/** Prevents slicing through the interface; drivers are held by reference. */
-	INetDriver& operator=(const INetDriver&) = delete;
+	IDevice& operator=(const IDevice&) = delete;
 
 protected:
 	/** Lets concrete drivers construct without exposing the interface as instantiable. */
-	INetDriver() noexcept = default;
+	IDevice() noexcept = default;
 };
 
 } // namespace MicroWorld

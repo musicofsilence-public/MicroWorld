@@ -2,7 +2,7 @@
 
 #include <MicroWorld/Core/ByteCodecConstants.h>
 #include <MicroWorld/Core/Containers/Span.h>
-#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Transport/TransportResult.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -55,15 +55,15 @@ public:
 	 * Returns `Invalid` without modifying `OutValue` when the source is an invalid
 	 * `{nullptr, nonzero}` view or when no byte remains to satisfy the request.
 	 */
-	ENetResult ReadByte(std::uint8_t& OutValue) noexcept
+	ETransportResult ReadByte(std::uint8_t& OutValue) noexcept
 	{
 		if (!HasValidStorage() || ReadPosition >= Buffer.Size())
 		{
-			return ENetResult::Invalid;
+			return ETransportResult::Invalid;
 		}
 		OutValue = Buffer[ReadPosition];
 		++ReadPosition;
-		return ENetResult::Success;
+		return ETransportResult::Success;
 	}
 
 	/**
@@ -73,29 +73,29 @@ public:
 	 * `Invalid` (a truncated request) without modifying the destination or advancing.
 	 * A source bound to `{nullptr, nonzero}` returns `Invalid` for any nonzero read.
 	 */
-	ENetResult Read(TSpan<std::uint8_t> InDestination) noexcept
+	ETransportResult Read(TSpan<std::uint8_t> InDestination) noexcept
 	{
 		const std::size_t RequestedSize = InDestination.Size();
 		if (RequestedSize == 0)
 		{
-			return ENetResult::Success;
+			return ETransportResult::Success;
 		}
 		if (InDestination.Data() == nullptr)
 		{
-			return ENetResult::Invalid;
+			return ETransportResult::Invalid;
 		}
 		if (!HasValidStorage())
 		{
-			return ENetResult::Invalid;
+			return ETransportResult::Invalid;
 		}
 		if (RequestedSize > Buffer.Size() - ReadPosition)
 		{
 			// The request exceeds the remaining source; treat it as a truncated request.
-			return ENetResult::Invalid;
+			return ETransportResult::Invalid;
 		}
 		std::memcpy(InDestination.Data(), Buffer.Data() + ReadPosition, RequestedSize);
 		ReadPosition += RequestedSize;
-		return ENetResult::Success;
+		return ETransportResult::Success;
 	}
 
 	/**
@@ -103,14 +103,14 @@ public:
 	 * Returns `Invalid` without modifying `OutValue` when the source is an invalid
 	 * `{nullptr, nonzero}` view or when no byte remains to observe.
 	 */
-	ENetResult PeekByte(std::uint8_t& OutValue) const noexcept
+	ETransportResult PeekByte(std::uint8_t& OutValue) const noexcept
 	{
 		if (!HasValidStorage() || ReadPosition >= Buffer.Size())
 		{
-			return ENetResult::Invalid;
+			return ETransportResult::Invalid;
 		}
 		OutValue = Buffer[ReadPosition];
-		return ENetResult::Success;
+		return ETransportResult::Success;
 	}
 
 	/** Reports the caller-owned source length observed at construction. */

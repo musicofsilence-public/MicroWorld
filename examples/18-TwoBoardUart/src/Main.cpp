@@ -1,5 +1,5 @@
 #include <MicroWorld/Core/Log.h>
-#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Platform/Esp32/Esp32OutputDevice.h>
 #include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
 #include <MicroWorld/Platform/Esp32/Esp32TimeSource.h>
@@ -47,17 +47,17 @@ constexpr unsigned PollPacingMilliseconds = 10;
 constexpr std::size_t VolleyPayloadBytes = 5;
 
 /** Renders one driver outcome as a short label so the serial trace reads plainly. */
-const char* ToText(const MicroWorld::ENetResult Result) noexcept
+const char* ToText(const MicroWorld::ETransportResult Result) noexcept
 {
 	switch (Result)
 	{
-		case MicroWorld::ENetResult::Success:
+		case MicroWorld::ETransportResult::Success:
 			return "Success";
-		case MicroWorld::ENetResult::Full:
+		case MicroWorld::ETransportResult::Full:
 			return "Full";
-		case MicroWorld::ENetResult::Invalid:
+		case MicroWorld::ETransportResult::Invalid:
 			return "Invalid";
-		case MicroWorld::ENetResult::Unavailable:
+		case MicroWorld::ETransportResult::Unavailable:
 			return "Unavailable";
 		default:
 			return "unknown";
@@ -121,10 +121,10 @@ extern "C" void app_main(void)
 		const std::uint64_t Now = GTimeSource.Now();
 
 		// Receive at most one frame; a completed volley schedules the reply (counter + 1).
-		MicroWorld::FNetAddress From{};
-		MicroWorld::FNetReceiveResult Received{};
-		const MicroWorld::ENetResult RxResult = Driver.TryReceive(From, MicroWorld::TSpan<std::uint8_t>(RxBuffer, sizeof(RxBuffer)), Received);
-		if (RxResult == MicroWorld::ENetResult::Success && Received.BytesReceived == VolleyPayloadBytes)
+		MicroWorld::FDeviceAddress From{};
+		MicroWorld::FReceiveResult Received{};
+		const MicroWorld::ETransportResult RxResult = Driver.TryReceive(From, MicroWorld::TSpan<std::uint8_t>(RxBuffer, sizeof(RxBuffer)), Received);
+		if (RxResult == MicroWorld::ETransportResult::Success && Received.BytesReceived == VolleyPayloadBytes)
 		{
 			const std::uint32_t Counter = ReadVolleyCounter(RxBuffer);
 			const std::uint8_t FromId = MicroWorld::UartAddressNodeId(From);
@@ -139,10 +139,10 @@ extern "C" void app_main(void)
 		{
 			std::uint8_t Payload[VolleyPayloadBytes];
 			WriteVolleyPayload(Payload, LocalNodeId, PendingCounter);
-			const MicroWorld::ENetResult TxResult =
+			const MicroWorld::ETransportResult TxResult =
 				Driver.TrySend(MicroWorld::MakeUartAddress(PeerNodeId), MicroWorld::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
 			MW_LOG(Log, "ex18", "tx n=%u result=%s", static_cast<unsigned>(PendingCounter), ToText(TxResult));
-			if (TxResult == MicroWorld::ENetResult::Success)
+			if (TxResult == MicroWorld::ETransportResult::Success)
 			{
 				bHasPendingTx = false;
 			}

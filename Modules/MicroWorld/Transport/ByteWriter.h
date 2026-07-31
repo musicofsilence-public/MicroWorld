@@ -2,7 +2,7 @@
 
 #include <MicroWorld/Core/ByteCodecConstants.h>
 #include <MicroWorld/Core/Containers/Span.h>
-#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Transport/TransportResult.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -54,19 +54,19 @@ public:
 	 * Returns `Invalid` without advancing when the backing buffer is an invalid `{nullptr, nonzero}` view.
 	 * Returns `Full` without advancing when a valid buffer has no remaining capacity.
 	 */
-	ENetResult WriteByte(const std::uint8_t InValue) noexcept
+	ETransportResult WriteByte(const std::uint8_t InValue) noexcept
 	{
 		if (!HasValidStorage())
 		{
-			return ENetResult::Invalid;
+			return ETransportResult::Invalid;
 		}
 		if (WritePosition >= Buffer.Size())
 		{
-			return ENetResult::Full;
+			return ETransportResult::Full;
 		}
 		Buffer[WritePosition] = InValue;
 		++WritePosition;
-		return ENetResult::Success;
+		return ETransportResult::Success;
 	}
 
 	/**
@@ -76,37 +76,37 @@ public:
 	 * A span that fits the total capacity but exceeds remaining capacity returns `Full`.
 	 * None of these failures advances the cursor or alters accepted bytes.
 	 */
-	ENetResult Write(TSpan<const std::uint8_t> InBytes) noexcept
+	ETransportResult Write(TSpan<const std::uint8_t> InBytes) noexcept
 	{
 		const std::size_t IncomingSize = InBytes.Size();
 		if (IncomingSize == 0)
 		{
 			// An empty span is a valid no-op whether or not its data pointer is null.
-			return ENetResult::Success;
+			return ETransportResult::Success;
 		}
 		if (InBytes.Data() == nullptr)
 		{
 			// A null source with nonzero length cannot be copied honestly.
-			return ENetResult::Invalid;
+			return ETransportResult::Invalid;
 		}
 		if (!HasValidStorage())
 		{
 			// A null destination with nonzero capacity cannot accept any byte honestly.
-			return ENetResult::Invalid;
+			return ETransportResult::Invalid;
 		}
 		if (IncomingSize > Buffer.Size())
 		{
 			// The span can never fit the total buffer; the request is malformed.
-			return ENetResult::Invalid;
+			return ETransportResult::Invalid;
 		}
 		if (IncomingSize > Buffer.Size() - WritePosition)
 		{
 			// The span fits the total buffer but not the remaining capacity.
-			return ENetResult::Full;
+			return ETransportResult::Full;
 		}
 		std::memcpy(Buffer.Data() + WritePosition, InBytes.Data(), IncomingSize);
 		WritePosition += IncomingSize;
-		return ENetResult::Success;
+		return ETransportResult::Success;
 	}
 
 	/** Reports the caller-owned buffer capacity observed at construction. */

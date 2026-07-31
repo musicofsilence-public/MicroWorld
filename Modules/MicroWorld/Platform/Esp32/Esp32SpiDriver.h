@@ -1,9 +1,9 @@
 #pragma once
 
 #include <MicroWorld/Transport/FrameCodec.h>
-#include <MicroWorld/Transport/NetAddress.h>
-#include <MicroWorld/Transport/NetDriver.h>
-#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Transport/DeviceAddress.h>
+#include <MicroWorld/Transport/Device.h>
+#include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Platform/Esp32/SpiAddress.h>
 
 #include <cstddef>
@@ -97,7 +97,7 @@ struct FEsp32SpiSlaveConfig
 };
 
 /**
- * Non-blocking wired `INetDriver` for the master side of a point-to-point SPI link.
+ * Non-blocking wired `IDevice` for the master side of a point-to-point SPI link.
  *
  * It clocks the bus with fixed-size full-duplex transactions: because every transaction moves both
  * directions, both `TrySend` and `TryReceive` feed the received window into a bounded `TFrameDecoder`, and
@@ -105,7 +105,7 @@ struct FEsp32SpiSlaveConfig
  * outputs unchanged on any non-`Success` result, and exercises no bus traffic until example 21's hardware
  * checkpoint passes (§1.2).
  */
-class FEsp32SpiMasterDriver final : public INetDriver
+class FEsp32SpiMasterDriver final : public IDevice
 {
 public:
 	/**
@@ -146,7 +146,7 @@ public:
 	 * @param InPacket Caller-owned payload bytes framed and sent as one message.
 	 * @return Normalized outcome of the single send attempt.
 	 */
-	ENetResult TrySend(const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override;
+	ETransportResult TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
 	 * Receives at most one framed message by clocking one idle full-duplex transaction, transactionally.
@@ -161,7 +161,7 @@ public:
 	 * @param OutResult Filled with the received byte count only on `Success`.
 	 * @return Normalized outcome of the single receive attempt.
 	 */
-	ENetResult TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept override;
+	ETransportResult TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept override;
 
 	/** Reports the largest payload, in bytes, one send accepts (excludes framing overhead). */
 	std::size_t MaxPacketBytes() const noexcept override;
@@ -172,7 +172,7 @@ public:
 private:
 	/** Runs one full-duplex transaction with the given transmit window and pumps the received window into
 	 * the decoder (only while no frame is already held); returns the transaction's send outcome. */
-	ENetResult ExchangeAndPump(const std::uint8_t* InTransmitWindow) noexcept;
+	ETransportResult ExchangeAndPump(const std::uint8_t* InTransmitWindow) noexcept;
 
 	/** Bounded RX deframer held by value; its capacity matches `SpiMaxPayloadBytes`. */
 	TFrameDecoder<SpiMaxPayloadBytes> Decoder{};
@@ -200,7 +200,7 @@ private:
 };
 
 /**
- * Non-blocking wired `INetDriver` for the slave side of a point-to-point SPI link.
+ * Non-blocking wired `IDevice` for the slave side of a point-to-point SPI link.
  *
  * The master clocks every transfer, so `TrySend` stages one framed packet for the next queued transaction
  * and `TryReceive` harvests a completed transaction and drains its received window through a bounded
@@ -208,7 +208,7 @@ private:
  * leaves caller outputs unchanged on any non-`Success` result, and exercises no bus traffic until example
  * 21's hardware checkpoint passes (§1.2).
  */
-class FEsp32SpiSlaveDriver final : public INetDriver
+class FEsp32SpiSlaveDriver final : public IDevice
 {
 public:
 	/**
@@ -248,7 +248,7 @@ public:
 	 * @param InPacket Caller-owned payload bytes framed and staged as one message.
 	 * @return Normalized outcome of the single send attempt.
 	 */
-	ENetResult TrySend(const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override;
+	ETransportResult TrySend(const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
 	 * Receives at most one framed message by harvesting a completed transaction, transactionally.
@@ -263,7 +263,7 @@ public:
 	 * @param OutResult Filled with the received byte count only on `Success`.
 	 * @return Normalized outcome of the single receive attempt.
 	 */
-	ENetResult TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept override;
+	ETransportResult TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept override;
 
 	/** Reports the largest payload, in bytes, one send accepts (excludes framing overhead). */
 	std::size_t MaxPacketBytes() const noexcept override;

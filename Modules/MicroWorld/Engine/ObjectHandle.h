@@ -86,7 +86,7 @@ constexpr bool operator!=(const FObjectHandle InLeft, const FObjectHandle InRigh
 /**
  * Provides a type-safe local diagnostic identifier.
  *
- * This value and FObjectHandle are process-local and must never become Net or
+ * This value and FObjectHandle are process-local and must never become Transport or
  * serialized identities.
  */
 struct FObjectId

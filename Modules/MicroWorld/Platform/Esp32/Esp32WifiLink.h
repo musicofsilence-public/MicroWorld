@@ -1,6 +1,6 @@
 #pragma once
 
-#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Core/Time.h>
 
 #include <cstdint>
@@ -78,7 +78,7 @@ public:
 	 * @param InConfig SoftAP SSID, password, channel, and station limit.
 	 * @return `Success` once the SoftAP is broadcasting; `Invalid` or `Unavailable` otherwise.
 	 */
-	ENetResult StartAccessPoint(const FEsp32AccessPointConfig& InConfig) noexcept;
+	ETransportResult StartAccessPoint(const FEsp32AccessPointConfig& InConfig) noexcept;
 
 	/**
 	 * Joins an existing network as a station and waits for an IPv4 lease, transactionally.
@@ -93,7 +93,7 @@ public:
 	 * @param InConfig Target SSID, password, and connect timeout.
 	 * @return `Success` once an IPv4 lease is held; `Invalid` or `Unavailable` otherwise.
 	 */
-	ENetResult JoinAccessPoint(const FEsp32StationConfig& InConfig) noexcept;
+	ETransportResult JoinAccessPoint(const FEsp32StationConfig& InConfig) noexcept;
 
 	/** Reports whether a prior `StartAccessPoint`/`JoinAccessPoint` call is still up. */
 	bool IsUp() const noexcept;

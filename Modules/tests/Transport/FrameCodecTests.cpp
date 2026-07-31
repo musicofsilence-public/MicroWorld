@@ -1,10 +1,10 @@
 #include "TestSupport.h"
 
-#include "NetAllocationCounters.h"
+#include "TransportAllocationCounters.h"
 
 #include <MicroWorld/Core/Containers/Span.h>
 #include <MicroWorld/Transport/FrameCodec.h>
-#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Transport/TransportResult.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -15,7 +15,7 @@ namespace
 using MicroWorld::ComputeCrc16Ccitt;
 using MicroWorld::EFrameEvent;
 using MicroWorld::EncodeFrame;
-using MicroWorld::ENetResult;
+using MicroWorld::ETransportResult;
 using MicroWorld::FrameMagicByte;
 using MicroWorld::FrameOverheadBytes;
 using MicroWorld::TFrameDecoder;
@@ -188,10 +188,10 @@ MW_TEST_CASE(FrameCodec_RoundTripsPayloadSizesZeroOneAndMax)
 		std::uint8_t Frame[FrameBufferCapacity] = {};
 		std::size_t Written = 0;
 		// Act
-		const ENetResult EncodeResult =
+		const ETransportResult EncodeResult =
 			EncodeFrame(NodeId07, TSpan<const std::uint8_t>(Payload, PayloadSize), TSpan<std::uint8_t>(Frame, sizeof(Frame)), Written);
 		// Assert
-		MW_EXPECT_EQ(Test, ENetResult::Success, EncodeResult, "Encode must succeed for every in-capacity payload size");
+		MW_EXPECT_EQ(Test, ETransportResult::Success, EncodeResult, "Encode must succeed for every in-capacity payload size");
 		MW_EXPECT_EQ(Test, PayloadSize + FrameOverheadBytes, Written, "Written must equal payload plus overhead");
 
 		FDecoder Decoder;
@@ -220,10 +220,10 @@ MW_TEST_CASE(FrameCodec_EncodeRejectsInvalidAndFullCases)
 	// Null payload with nonzero length must return Invalid without touching outputs.
 	std::size_t Written = UntouchedWrittenSentinel;
 	// Act
-	ENetResult Result =
+	ETransportResult Result =
 		EncodeFrame(NodeId01, TSpan<const std::uint8_t>(nullptr, sizeof(EncodeRejectsPayload)), TSpan<std::uint8_t>(Frame, sizeof(Frame)), Written);
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Invalid, Result, "A null payload with nonzero length must return Invalid");
+	MW_EXPECT_EQ(Test, ETransportResult::Invalid, Result, "A null payload with nonzero length must return Invalid");
 	MW_EXPECT_EQ(Test, UntouchedWrittenSentinel, Written, "Invalid must leave OutWritten unchanged");
 
 	// A destination too small for the framed payload must return Full without touching outputs.
@@ -236,7 +236,7 @@ MW_TEST_CASE(FrameCodec_EncodeRejectsInvalidAndFullCases)
 		TSpan<std::uint8_t>(TooSmall, sizeof(TooSmall)),
 		Written);
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Full, Result, "A destination smaller than payload plus overhead must return Full");
+	MW_EXPECT_EQ(Test, ETransportResult::Full, Result, "A destination smaller than payload plus overhead must return Full");
 	MW_EXPECT_EQ(Test, UntouchedWrittenSentinel, Written, "Full must leave OutWritten unchanged");
 
 	// A null destination with nonzero length must return Invalid without touching outputs.
@@ -248,7 +248,7 @@ MW_TEST_CASE(FrameCodec_EncodeRejectsInvalidAndFullCases)
 		TSpan<std::uint8_t>(nullptr, NullDestinationLength),
 		Written);
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Invalid, Result, "A null destination with nonzero length must return Invalid");
+	MW_EXPECT_EQ(Test, ETransportResult::Invalid, Result, "A null destination with nonzero length must return Invalid");
 	MW_EXPECT_EQ(Test, UntouchedWrittenSentinel, Written, "Invalid must leave OutWritten unchanged");
 
 	// A payload larger than the 16-bit length field can never fit any frame, so it is Invalid, not Full (D7).
@@ -259,7 +259,7 @@ MW_TEST_CASE(FrameCodec_EncodeRejectsInvalidAndFullCases)
 	Result = EncodeFrame(
 		NodeId01, TSpan<const std::uint8_t>(&OversizePayloadByte, OversizePayloadLength), TSpan<std::uint8_t>(Frame, sizeof(Frame)), Written);
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Invalid, Result, "A payload larger than the 16-bit length field must return Invalid");
+	MW_EXPECT_EQ(Test, ETransportResult::Invalid, Result, "A payload larger than the 16-bit length field must return Invalid");
 	MW_EXPECT_EQ(Test, UntouchedWrittenSentinel, Written, "Invalid must leave OutWritten unchanged");
 }
 

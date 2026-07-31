@@ -11,8 +11,8 @@
 #include <MicroWorld/Engine/EngineSystem.h>
 #include <MicroWorld/Engine/World.h>
 #include <MicroWorld/Core/Log.h>
-#include <MicroWorld/Transport/NetHost.h>
-#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Transport/TransportHost.h>
+#include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Engine/GarbageCollector.h>
 #include <MicroWorld/Engine/ObjectPtr.h>
@@ -137,7 +137,7 @@ private:
 } // namespace
 
 /**
- * Server board (node 1): FLampActor + FDisplayActor over a TMessageRouter wired to TNetHost
+ * Server board (node 1): FLampActor + FDisplayActor over a TMessageRouter wired to TTransportHost
  * (DedicatedServer) through TMessageChannelBinding, with the engine holding the net frame and the
  * loop pumping the router manually (Phase 4.1 will fold this into TPlaySystemSet — see §4).
  */
@@ -152,11 +152,11 @@ void RunServer() noexcept
 	}
 
 	// All composition objects are static (the ESP32-S3 stack lesson, §2.2).
-	static FWireNet Net{Driver};
+	static FWireTransport Transport{Driver};
 	static FWireRouter Router;
-	static FWireBinding Wire{Net, AppWireChannelByte, AppChannelId, EChannelSendTarget::AllPeers, Router};
-	static FWireFrame NetFrame{Net};
-	static FWireEngine Engine{FGarbageCollectionBudget{1, 4, 8}, NetFrame};
+	static FWireBinding Wire{Transport, AppWireChannelByte, AppChannelId, EChannelSendTarget::AllPeers, Router};
+	static FWireFrame WireFrame{Transport};
+	static FWireEngine Engine{FGarbageCollectionBudget{1, 4, 8}, WireFrame};
 
 	if (!Wire.IsAttached())
 	{
@@ -192,8 +192,8 @@ void RunServer() noexcept
 		return;
 	}
 
-	(void)Net.Configure(ENetMode::DedicatedServer, MakeHostConfig());
-	(void)Net.Start(GTimeSource.Now());
+	(void)Transport.Configure(ENetworkMode::DedicatedServer, MakeHostConfig());
+	(void)Transport.Start(GTimeSource.Now());
 
 	const TimePointMilliseconds BootTime = GTimeSource.Now();
 	if (Engine.BeginPlay(BootTime) != ERuntimeResult::Success)

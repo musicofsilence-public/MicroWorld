@@ -8,14 +8,14 @@ namespace MicroWorld
 {
 
 /**
- * Opaque fixed-size transport address shared by every Net driver.
+ * Opaque fixed-size transport address shared by every Transport driver.
  *
  * Holds up to `MaxBytes` driver-defined bytes plus an active length, so one type
  * spans a 6-byte UDP IPv4+port, a 1-2 byte LoRa node id, and a 1-byte loopback
  * port index without allocating. The address ascribes no meaning to the bytes;
  * each driver documents the encoding it writes and reads.
  */
-struct FNetAddress
+struct FDeviceAddress
 {
 	/** Maximum address bytes any driver may store; sized for IPv4+port with headroom. */
 	static constexpr std::size_t MaxBytes = 12;
@@ -28,7 +28,7 @@ struct FNetAddress
 };
 
 /** Compares two addresses by active length and the leading `Size` bytes only. */
-constexpr bool operator==(const FNetAddress& InLeft, const FNetAddress& InRight) noexcept
+constexpr bool operator==(const FDeviceAddress& InLeft, const FDeviceAddress& InRight) noexcept
 {
 	if (InLeft.Size != InRight.Size)
 	{
@@ -45,15 +45,15 @@ constexpr bool operator==(const FNetAddress& InLeft, const FNetAddress& InRight)
 }
 
 /** Negates `operator==` so callers can test address inequality directly. */
-constexpr bool operator!=(const FNetAddress& InLeft, const FNetAddress& InRight) noexcept
+constexpr bool operator!=(const FDeviceAddress& InLeft, const FDeviceAddress& InRight) noexcept
 {
 	return !(InLeft == InRight);
 }
 
 /** Builds a 1-byte loopback address whose single byte is the destination port index. */
-constexpr FNetAddress MakeLoopbackAddress(const std::uint8_t InPortIndex) noexcept
+constexpr FDeviceAddress MakeLoopbackAddress(const std::uint8_t InPortIndex) noexcept
 {
-	FNetAddress Address{};
+	FDeviceAddress Address{};
 	Address.Bytes[0] = InPortIndex;
 	Address.Size = 1;
 	return Address;

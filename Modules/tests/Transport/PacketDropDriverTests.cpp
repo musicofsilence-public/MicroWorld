@@ -2,9 +2,9 @@
 
 #include <MicroWorld/Core/Containers/Span.h>
 #include <MicroWorld/Transport/HostLoopback.h>
-#include <MicroWorld/Transport/NetAddress.h>
-#include <MicroWorld/Transport/NetDriver.h>
-#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Transport/DeviceAddress.h>
+#include <MicroWorld/Transport/Device.h>
+#include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Transport/PacketDropDriver.h>
 
 #include <array>
@@ -14,10 +14,10 @@
 namespace
 {
 
-using MicroWorld::ENetResult;
-using MicroWorld::FNetAddress;
-using MicroWorld::FNetReceiveResult;
+using MicroWorld::ETransportResult;
+using MicroWorld::FDeviceAddress;
 using MicroWorld::FPacketDropDriver;
+using MicroWorld::FReceiveResult;
 using MicroWorld::MakeLoopbackAddress;
 using MicroWorld::THostLoopback;
 using MicroWorld::TSpan;
@@ -61,17 +61,17 @@ constexpr std::uint8_t DroppedSendPayloadByte = 0x42;
 constexpr std::uint8_t PassthroughPacketBytes[2] = {0xAA, 0xBB};
 
 /** Records transport progress without requiring a real transport, isolating the decorator forwarding contract. */
-class FAdvanceRecordingDriver final : public MicroWorld::INetDriver
+class FAdvanceRecordingDriver final : public MicroWorld::IDevice
 {
 public:
 	/** Records the bounded progress command that a wrapping decorator must preserve. */
 	void AdvanceTransmit() noexcept override { ++AdvanceCount; }
 
 	/** Remains inert because this fake only observes transport progress. */
-	ENetResult TrySend(const FNetAddress&, TSpan<const std::uint8_t>) noexcept override { return ENetResult::Unavailable; }
+	ETransportResult TrySend(const FDeviceAddress&, TSpan<const std::uint8_t>) noexcept override { return ETransportResult::Unavailable; }
 
 	/** Remains inert because this fake only observes transport progress. */
-	ENetResult TryReceive(FNetAddress&, TSpan<std::uint8_t>, FNetReceiveResult&) noexcept override { return ENetResult::Unavailable; }
+	ETransportResult TryReceive(FDeviceAddress&, TSpan<std::uint8_t>, FReceiveResult&) noexcept override { return ETransportResult::Unavailable; }
 
 	/** Supplies a valid fixed capacity for the complete driver contract. */
 	std::size_t MaxPacketBytes() const noexcept override { return 1; }
@@ -111,7 +111,7 @@ MW_TEST_CASE(PacketDropDriver_DropsEveryThirdSendDeliveringTheRest)
 	// Arrange
 	THostLoopback<LoopbackPortCount, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
 	FPacketDropDriver Dropper(Loopback.Port(SenderPortIndex), DropEveryThirdInterval);
-	const FNetAddress ReceiverAddress = MakeLoopbackAddress(ReceiverPortIndex);
+	const FDeviceAddress ReceiverAddress = MakeLoopbackAddress(ReceiverPortIndex);
 
 	// Act - send every marker; each call must report Success whether or not it was dropped.
 	for (const std::uint8_t Marker : DropEveryThirdMarkers)
@@ -119,7 +119,7 @@ MW_TEST_CASE(PacketDropDriver_DropsEveryThirdSendDeliveringTheRest)
 		const std::array<std::uint8_t, 1> Packet{Marker};
 		MW_EXPECT_EQ(
 			Test,
-			ENetResult::Success,
+			ETransportResult::Success,
 			Dropper.TrySend(ReceiverAddress, TSpan<const std::uint8_t>(Packet.data(), Packet.size())),
 			"Every send, dropped or not, must report Success");
 	}
@@ -129,13 +129,13 @@ MW_TEST_CASE(PacketDropDriver_DropsEveryThirdSendDeliveringTheRest)
 	std::array<std::uint8_t, DropEveryThirdSendCount> DeliveredMarkers{};
 	std::size_t DeliveredCount = 0;
 	std::array<std::uint8_t, LoopbackPacketBytes> Destination{};
-	FNetReceiveResult ReceiveResult{};
-	FNetAddress ReceiveFrom{};
+	FReceiveResult ReceiveResult{};
+	FDeviceAddress ReceiveFrom{};
 	while (DeliveredCount < DeliveredMarkers.size())
 	{
-		const ENetResult ReceiveOutcome =
+		const ETransportResult ReceiveOutcome =
 			Loopback.Port(ReceiverPortIndex).TryReceive(ReceiveFrom, TSpan<std::uint8_t>(Destination.data(), Destination.size()), ReceiveResult);
-		if (ReceiveOutcome != ENetResult::Success)
+		if (ReceiveOutcome != ETransportResult::Success)
 		{
 			break;
 		}
@@ -160,7 +160,7 @@ MW_TEST_CASE(PacketDropDriver_ZeroIntervalForwardsEverySend)
 	// Arrange
 	THostLoopback<LoopbackPortCount, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
 	FPacketDropDriver Dropper(Loopback.Port(SenderPortIndex), DropNeverInterval);
-	const FNetAddress ReceiverAddress = MakeLoopbackAddress(ReceiverPortIndex);
+	const FDeviceAddress ReceiverAddress = MakeLoopbackAddress(ReceiverPortIndex);
 
 	// Act - send every marker; with N=0 none are dropped.
 	for (const std::uint8_t Marker : NoLossMarkers)
@@ -168,7 +168,7 @@ MW_TEST_CASE(PacketDropDriver_ZeroIntervalForwardsEverySend)
 		const std::array<std::uint8_t, 1> Packet{Marker};
 		MW_EXPECT_EQ(
 			Test,
-			ENetResult::Success,
+			ETransportResult::Success,
 			Dropper.TrySend(ReceiverAddress, TSpan<const std::uint8_t>(Packet.data(), Packet.size())),
 			"Every send with N=0 must succeed");
 	}
@@ -177,14 +177,14 @@ MW_TEST_CASE(PacketDropDriver_ZeroIntervalForwardsEverySend)
 	MW_EXPECT_EQ(Test, NoLossSendCount, Loopback.QueuedCount(ReceiverPortIndex), "N=0 must deliver every send to the receiver mailbox");
 
 	std::array<std::uint8_t, LoopbackPacketBytes> Destination{};
-	FNetReceiveResult ReceiveResult{};
-	FNetAddress ReceiveFrom{};
+	FReceiveResult ReceiveResult{};
+	FDeviceAddress ReceiveFrom{};
 	// Act / Assert - each delivered packet must carry its original marker unmodified.
 	for (const std::uint8_t ExpectedMarker : NoLossMarkers)
 	{
 		MW_EXPECT_EQ(
 			Test,
-			ENetResult::Success,
+			ETransportResult::Success,
 			Loopback.Port(ReceiverPortIndex).TryReceive(ReceiveFrom, TSpan<std::uint8_t>(Destination.data(), Destination.size()), ReceiveResult),
 			"Each queued packet must be receivable");
 		MW_EXPECT_EQ(Test, ExpectedMarker, Destination[0], "Each delivered packet must carry its original marker unmodified");
@@ -200,14 +200,14 @@ MW_TEST_CASE(PacketDropDriver_DroppedSendReturnsSuccessWithoutReachingInner)
 	// Arrange
 	THostLoopback<LoopbackPortCount, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
 	FPacketDropDriver Dropper(Loopback.Port(SenderPortIndex), DropEverySendInterval);
-	const FNetAddress ReceiverAddress = MakeLoopbackAddress(ReceiverPortIndex);
+	const FDeviceAddress ReceiverAddress = MakeLoopbackAddress(ReceiverPortIndex);
 
 	const std::array<std::uint8_t, 1> Packet{DroppedSendPayloadByte};
 	// Act
-	const ENetResult SendResult = Dropper.TrySend(ReceiverAddress, TSpan<const std::uint8_t>(Packet.data(), Packet.size()));
+	const ETransportResult SendResult = Dropper.TrySend(ReceiverAddress, TSpan<const std::uint8_t>(Packet.data(), Packet.size()));
 
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Success, SendResult, "N=1 drops every send yet still reports Success");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, SendResult, "N=1 drops every send yet still reports Success");
 	MW_EXPECT_EQ(Test, DropEverySendInterval, Dropper.DroppedSendCount(), "The one send under N=1 must be counted as dropped");
 	MW_EXPECT_EQ(Test, true, Loopback.IsEmpty(ReceiverPortIndex), "A dropped send must never reach the inner driver's wire");
 	MW_EXPECT_EQ(Test, static_cast<std::size_t>(0), Loopback.QueuedCount(ReceiverPortIndex), "A dropped send must leave the receiver mailbox empty");
@@ -222,39 +222,40 @@ MW_TEST_CASE(PacketDropDriver_ReceivePathIsBitIdenticalPassthrough)
 {
 	// Arrange
 	THostLoopback<LoopbackPortCount, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
-	const FNetAddress SenderAddress = MakeLoopbackAddress(SenderPortIndex);
-	const FNetAddress ReceiverAddress = MakeLoopbackAddress(ReceiverPortIndex);
+	const FDeviceAddress SenderAddress = MakeLoopbackAddress(SenderPortIndex);
+	const FDeviceAddress ReceiverAddress = MakeLoopbackAddress(ReceiverPortIndex);
 	FPacketDropDriver Dropper(Loopback.Port(ReceiverPortIndex), DropEveryThirdInterval);
 
 	const std::array<std::uint8_t, 2> SentPacket{PassthroughPacketBytes[0], PassthroughPacketBytes[1]};
 	// Act - setup send queues one packet for the receiver.
 	MW_EXPECT_EQ(
 		Test,
-		ENetResult::Success,
+		ETransportResult::Success,
 		Loopback.Port(SenderPortIndex).TrySend(ReceiverAddress, TSpan<const std::uint8_t>(SentPacket.data(), SentPacket.size())),
 		"Setup send must queue one packet for the receiver");
 
 	std::array<std::uint8_t, LoopbackPacketBytes> Destination{};
-	FNetReceiveResult ReceiveResult{};
-	FNetAddress ReceiveFrom{};
+	FReceiveResult ReceiveResult{};
+	FDeviceAddress ReceiveFrom{};
 	// Act
-	const ENetResult ReceiveOutcome = Dropper.TryReceive(ReceiveFrom, TSpan<std::uint8_t>(Destination.data(), Destination.size()), ReceiveResult);
+	const ETransportResult ReceiveOutcome =
+		Dropper.TryReceive(ReceiveFrom, TSpan<std::uint8_t>(Destination.data(), Destination.size()), ReceiveResult);
 
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Success, ReceiveOutcome, "A queued packet must receive as Success, exactly like the inner driver");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, ReceiveOutcome, "A queued packet must receive as Success, exactly like the inner driver");
 	MW_EXPECT_EQ(Test, static_cast<std::size_t>(2), ReceiveResult.BytesReceived, "BytesReceived must match the inner driver's own report");
 	MW_EXPECT_EQ(Test, PassthroughPacketBytes[0], Destination[0], "Received bytes must be bit-identical to the sent packet");
 	MW_EXPECT_EQ(Test, PassthroughPacketBytes[1], Destination[1], "Received bytes must be bit-identical to the sent packet");
 	MW_EXPECT_EQ(Test, true, ReceiveFrom == SenderAddress, "Sender address must pass through unchanged");
 	MW_EXPECT_EQ(Test, static_cast<std::uint32_t>(DropNeverInterval), Dropper.DroppedSendCount(), "A receive must never change the drop count");
 
-	FNetReceiveResult SecondReceiveResult{};
-	FNetAddress SecondReceiveFrom{};
+	FReceiveResult SecondReceiveResult{};
+	FDeviceAddress SecondReceiveFrom{};
 	// Act - a second receive finds an empty queue.
-	const ENetResult EmptyOutcome =
+	const ETransportResult EmptyOutcome =
 		Dropper.TryReceive(SecondReceiveFrom, TSpan<std::uint8_t>(Destination.data(), Destination.size()), SecondReceiveResult);
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Unavailable, EmptyOutcome, "An empty queue must forward Unavailable, exactly like the inner driver");
+	MW_EXPECT_EQ(Test, ETransportResult::Unavailable, EmptyOutcome, "An empty queue must forward Unavailable, exactly like the inner driver");
 	MW_EXPECT_EQ(
 		Test, static_cast<std::uint32_t>(DropNeverInterval), Dropper.DroppedSendCount(), "A second receive must still never change the drop count");
 }

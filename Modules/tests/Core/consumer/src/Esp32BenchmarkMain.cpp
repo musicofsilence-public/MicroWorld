@@ -10,7 +10,7 @@
 //   1. Tick duration — Host.Tick over 1000 iterations (min/mean/max us).
 //   2. GC pause per budget unit — isolated Advance slice on a standalone
 //      FObjectStore + FGarbageCollector (min/mean/max us per slice).
-//   3. Net pump cost — PumpReceive + PumpSend with NO netif/traffic (mean us).
+//   3. Transport pump cost — PumpReceive + PumpSend with NO netif/traffic (mean us).
 //   4. Memory — free heap before/after setup, stack high-water mark after setup.
 //
 // GC-slice isolation uses a SEPARATE bounded store + collector, not the host's
@@ -26,7 +26,7 @@
 #include <MicroWorld/Engine/EngineStorage.h>
 #include <MicroWorld/Engine/EngineSystem.h>
 #include <MicroWorld/Core/Log.h>
-#include <MicroWorld/Transport/NetHost.h>
+#include <MicroWorld/Transport/TransportHost.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Engine/GarbageCollector.h>
 #include <MicroWorld/Engine/Object.h>
@@ -84,10 +84,10 @@ constexpr std::uint32_t TickMeasurementIterations = 1000;
 constexpr std::uint32_t TickWarmupIterations = 100;
 
 /** Iterations timed for the no-traffic net pump measurement. */
-constexpr std::uint32_t NetPumpMeasurementIterations = 1000;
+constexpr std::uint32_t TransportPumpMeasurementIterations = 1000;
 
 /** Warm-up pump cycles before timing so the driver and host settle. */
-constexpr std::uint32_t NetPumpWarmupIterations = 100;
+constexpr std::uint32_t TransportPumpWarmupIterations = 100;
 
 /**
  * Concrete managed component representative of steady-state per-frame component work.
@@ -149,7 +149,7 @@ struct FBenchmarkHostTraits : MicroWorld::FDefaultEngineTraits
 using FBenchmarkHost = MicroWorld::TEngine<FBenchmarkHostTraits>;
 
 /** Dedicated server net host sized identically to the PlatformEsp32Main proof. */
-using FBenchmarkNet = MicroWorld::TNetHost<4, 256>;
+using FBenchmarkTransport = MicroWorld::TTransportHost<4, 256>;
 
 /** Delegate type matching the host's timer manager so Schedule accepts a bound callback. */
 using FBenchTimerDelegate = MicroWorld::TDelegate<void(), 64>;
@@ -401,12 +401,12 @@ extern "C" void app_main()
 	static FEsp32UdpDriver Driver(5000);
 
 	// 3. A dedicated-server session host over that driver, started at boot time.
-	static FBenchmarkNet Net(Driver);
-	(void)Net.Configure(ENetMode::DedicatedServer, FNetHostConfig{});
-	Net.Start(Clock.Now());
+	static FBenchmarkTransport Transport(Driver);
+	(void)Transport.Configure(ENetworkMode::DedicatedServer, FTransportHostConfig{});
+	Transport.Start(Clock.Now());
 
-	// 4. Adapt the host to the engine's `TNetHostSystem` interface.
-	static TNetHostSystem<FBenchmarkNet> Frame(Net);
+	// 4. Adapt the host to the engine's `THostPlaySystem` interface.
+	static THostPlaySystem<FBenchmarkTransport> Frame(Transport);
 
 	// 5. Composition root. Budget {1,4,32}: MaxSweepOperations(32) >= MaxObjects(32) so one
 	//    Tick completes a full GC cycle each frame — no mid-cycle mutation lock during the
@@ -564,25 +564,25 @@ extern "C" void app_main()
 		static_cast<long long>(GcSliceStats.MaxMicroseconds));
 
 	// --- Measurement 3: net pump cost (NO netif/traffic — overhead only) ---
-	for (std::uint32_t Warmup = 0; Warmup < NetPumpWarmupIterations; ++Warmup)
+	for (std::uint32_t Warmup = 0; Warmup < TransportPumpWarmupIterations; ++Warmup)
 	{
-		(void)Net.PumpReceive(Clock.Now());
-		(void)Net.PumpSend(Clock.Now());
+		(void)Transport.PumpReceive(Clock.Now());
+		(void)Transport.PumpSend(Clock.Now());
 	}
-	FBenchStats NetPumpStats;
-	for (std::uint32_t Iteration = 0; Iteration < NetPumpMeasurementIterations; ++Iteration)
+	FBenchStats TransportPumpStats;
+	for (std::uint32_t Iteration = 0; Iteration < TransportPumpMeasurementIterations; ++Iteration)
 	{
 		const std::int64_t Begin = esp_timer_get_time();
-		(void)Net.PumpReceive(Clock.Now());
-		(void)Net.PumpSend(Clock.Now());
+		(void)Transport.PumpReceive(Clock.Now());
+		(void)Transport.PumpSend(Clock.Now());
 		const std::int64_t End = esp_timer_get_time();
-		NetPumpStats.Record(End - Begin);
+		TransportPumpStats.Record(End - Begin);
 	}
 	ESP_LOGI(
 		BenchmarkTag,
 		"net_pump: no_traffic_overhead iterations=%u mean=%lld us (live datagram cost needs a peer — out of scope)",
-		static_cast<unsigned>(NetPumpMeasurementIterations),
-		static_cast<long long>(NetPumpStats.MeanMicroseconds()));
+		static_cast<unsigned>(TransportPumpMeasurementIterations),
+		static_cast<long long>(TransportPumpStats.MeanMicroseconds()));
 
 	// --- Measurement 4 (static): RAM/flash are cited from the build output in the deliverable. ---
 	ESP_LOGI(BenchmarkTag, "image: static RAM/Flash figures are read from the pio build summary, not measured in code");

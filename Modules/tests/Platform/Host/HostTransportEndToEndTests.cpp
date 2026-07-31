@@ -1,10 +1,10 @@
 #include "TestSupport.h"
 
 #include <MicroWorld/Core/Containers/Span.h>
-#include <MicroWorld/Transport/NetAddress.h>
-#include <MicroWorld/Transport/NetDriver.h>
-#include <MicroWorld/Transport/NetHost.h>
-#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Transport/DeviceAddress.h>
+#include <MicroWorld/Transport/Device.h>
+#include <MicroWorld/Transport/TransportHost.h>
+#include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Platform/Host/HostTimeSource.h>
 #include <MicroWorld/Platform/Host/HostUdpDriver.h>
 #include <MicroWorld/Platform/Host/UdpAddress.h>
@@ -42,11 +42,11 @@ constexpr std::uint8_t OctetB = 0;
 constexpr std::uint8_t OctetC = 0;
 constexpr std::uint8_t OctetD = 1;
 
-/** TNetHost peer capacity shared by the client and server fixtures in the end-to-end demo. */
-constexpr std::size_t NetHostPeerCapacity = 4;
+/** TTransportHost peer capacity shared by the client and server fixtures in the end-to-end demo. */
+constexpr std::size_t TransportHostPeerCapacity = 4;
 
-/** TNetHost per-message scratch capacity the demo's short application payload must stay within. */
-constexpr std::size_t NetHostScratchBytes = 256;
+/** TTransportHost per-message scratch capacity the demo's short application payload must stay within. */
+constexpr std::size_t TransportHostScratchBytes = 256;
 
 /** Application payload delivered after the handshake; kept short so the host's 256-byte scratch is never exceeded. */
 const std::array<std::uint8_t, 4> AppPayload = {0x10, 0x20, 0x30, 0x40};
@@ -68,8 +68,8 @@ constexpr std::uint8_t ApplicationChannel = 1;
 void PumpHandshake(
 	FHostUdpDriver& ServerDriver,
 	FHostUdpDriver& ClientDriver,
-	TNetHost<NetHostPeerCapacity, NetHostScratchBytes>& Server,
-	TNetHost<NetHostPeerCapacity, NetHostScratchBytes>& Client,
+	TTransportHost<TransportHostPeerCapacity, TransportHostScratchBytes>& Server,
+	TTransportHost<TransportHostPeerCapacity, TransportHostScratchBytes>& Client,
 	const TimePointMilliseconds Now) noexcept
 {
 	for (int Iteration = 0; Iteration < HandshakeIterationCap; ++Iteration)
@@ -86,7 +86,7 @@ void PumpHandshake(
 		{
 			(void)Client.PumpReceive(Now);
 		}
-		const bool bClientConnected = Client.GetState() == ENetHostState::Connected;
+		const bool bClientConnected = Client.GetState() == ETransportHostState::Connected;
 		if (bClientConnected)
 		{
 			break;
@@ -97,11 +97,11 @@ void PumpHandshake(
 } // namespace
 
 /**
- * Scenario: Drive a TNetHost client and dedicated server through the Hello/Welcome handshake over real UDP localhost, then send one application
+ * Scenario: Drive a TTransportHost client and dedicated server through the Hello/Welcome handshake over real UDP localhost, then send one application
  * message. Expected: The client reaches Connected; the server admits exactly one peer; the server handler observes one message on the requested
  * channel carrying the sent payload's first byte.
  */
-MW_TEST_CASE(HostNetHandshakeAndApplicationMessageCrossRealUdp)
+MW_TEST_CASE(HostTransportHandshakeAndApplicationMessageCrossRealUdp)
 {
 	// Arrange
 	FHostUdpDriver ServerDriver(0);
@@ -109,22 +109,26 @@ MW_TEST_CASE(HostNetHandshakeAndApplicationMessageCrossRealUdp)
 	MW_EXPECT_TRUE(Test, ServerDriver.IsOpen(), "The server UDP driver opened");
 	MW_EXPECT_TRUE(Test, ClientDriver.IsOpen(), "The client UDP driver opened");
 
-	TNetHost<NetHostPeerCapacity, NetHostScratchBytes> Server(ServerDriver);
-	TNetHost<NetHostPeerCapacity, NetHostScratchBytes> Client(ClientDriver);
-	FNetHostConfig ServerConfig{};
-	MW_EXPECT_EQ(Test, ENetResult::Success, Server.Configure(ENetMode::DedicatedServer, ServerConfig), "The server configures as dedicated");
-	FNetHostConfig ClientConfig{};
+	TTransportHost<TransportHostPeerCapacity, TransportHostScratchBytes> Server(ServerDriver);
+	TTransportHost<TransportHostPeerCapacity, TransportHostScratchBytes> Client(ClientDriver);
+	FTransportHostConfig ServerConfig{};
+	MW_EXPECT_EQ(
+		Test, ETransportResult::Success, Server.Configure(ENetworkMode::DedicatedServer, ServerConfig), "The server configures as dedicated");
+	FTransportHostConfig ClientConfig{};
 	ClientConfig.ServerAddress = MakeUdpAddress(OctetA, OctetB, OctetC, OctetD, ServerDriver.BoundPort());
 	MW_EXPECT_EQ(
-		Test, ENetResult::Success, Client.Configure(ENetMode::Client, ClientConfig), "The client configures against the server's UDP address");
+		Test,
+		ETransportResult::Success,
+		Client.Configure(ENetworkMode::Client, ClientConfig),
+		"The client configures against the server's UDP address");
 
 	FHostTimeSource Clock;
 	const TimePointMilliseconds Now = Clock.Now();
-	MW_EXPECT_EQ(Test, ENetResult::Success, Server.Start(Now), "The server starts listening");
-	MW_EXPECT_EQ(Test, ENetResult::Success, Client.Start(Now), "The client starts connecting");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, Server.Start(Now), "The server starts listening");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, Client.Start(Now), "The client starts connecting");
 
 	FServerCapture Capture{};
-	TNetHost<NetHostPeerCapacity, NetHostScratchBytes>::FMessageHandlerBinding Binding;
+	TTransportHost<TransportHostPeerCapacity, TransportHostScratchBytes>::FMessageHandlerBinding Binding;
 	Binding.Bind(
 		[&Capture](const FPeerId From, const std::uint8_t Channel, TSpan<const std::uint8_t> Payload) noexcept
 		{
@@ -138,14 +142,14 @@ MW_TEST_CASE(HostNetHandshakeAndApplicationMessageCrossRealUdp)
 
 	// Act
 	PumpHandshake(ServerDriver, ClientDriver, Server, Client, Now);
-	MW_EXPECT_EQ(Test, ENetHostState::Connected, Client.GetState(), "The client reached Connected over UDP");
+	MW_EXPECT_EQ(Test, ETransportHostState::Connected, Client.GetState(), "The client reached Connected over UDP");
 	MW_EXPECT_EQ(Test, std::size_t{1}, Server.ActivePeerCount(), "The server admitted exactly one peer");
 
 	const FPeerId ServerPeer = Client.GetServerPeer();
 	MW_EXPECT_TRUE(Test, ServerPeer.IsValid(), "The client resolves its server peer after connecting");
 	MW_EXPECT_EQ(
 		Test,
-		ENetResult::Success,
+		ETransportResult::Success,
 		Client.SendTo(ServerPeer, ApplicationChannel, TSpan<const std::uint8_t>(AppPayload.data(), AppPayload.size())),
 		"The client queues one channel-1 message to the server");
 	(void)Client.PumpSend(Now);

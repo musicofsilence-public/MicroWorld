@@ -2,7 +2,7 @@
 
 #include <MicroWorld/Core/Containers/Span.h>
 #include <MicroWorld/Transport/ByteWriter.h>
-#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Transport/TransportResult.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -10,7 +10,7 @@
 namespace
 {
 
-using MicroWorld::ENetResult;
+using MicroWorld::ETransportResult;
 using MicroWorld::FByteWriter;
 using MicroWorld::TSpan;
 
@@ -71,8 +71,8 @@ MW_TEST_CASE(ByteWriterAppendsOrderedBytes)
 	FByteWriter Writer(TSpan<std::uint8_t>(Storage, ThreeByteBufferCount));
 
 	// Act
-	MW_EXPECT_EQ(Test, ENetResult::Success, Writer.WriteByte(WriteByte10), "First byte write must succeed");
-	MW_EXPECT_EQ(Test, ENetResult::Success, Writer.WriteByte(WriteByte20), "Second byte write must succeed");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, Writer.WriteByte(WriteByte10), "First byte write must succeed");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, Writer.WriteByte(WriteByte20), "Second byte write must succeed");
 	MW_EXPECT_EQ(Test, TwoByteBufferCount, Writer.Position(), "Two writes must advance the cursor by two");
 
 	// Assert
@@ -95,10 +95,10 @@ MW_TEST_CASE(ByteWriterAppendsOrderedSpan)
 	Writer.WriteByte(WriteByte01);
 	const std::uint8_t SpanData[TwoByteBufferCount] = {WriteByte02, WriteByte03};
 	// Act
-	const ENetResult SpanResult = Writer.Write(TSpan<const std::uint8_t>(SpanData, TwoByteBufferCount));
+	const ETransportResult SpanResult = Writer.Write(TSpan<const std::uint8_t>(SpanData, TwoByteBufferCount));
 
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Success, SpanResult, "Span write within remaining capacity must succeed");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, SpanResult, "Span write within remaining capacity must succeed");
 	MW_EXPECT_EQ(Test, ThreeByteBufferCount, Writer.Position(), "Cursor must advance by the accepted span length");
 
 	MW_EXPECT_EQ(Test, WriteByte01, Storage[0], "Prior byte must survive a later span write");
@@ -118,15 +118,15 @@ MW_TEST_CASE(ByteWriterAcceptsExactCapacityThenReportsFull)
 	FByteWriter Writer(TSpan<std::uint8_t>(Storage, TwoByteBufferCount));
 
 	// Act
-	MW_EXPECT_EQ(Test, ENetResult::Success, Writer.WriteByte(WriteByteAA), "First byte at a 2-byte buffer must succeed");
-	MW_EXPECT_EQ(Test, ENetResult::Success, Writer.WriteByte(WriteByteBB), "Second byte filling the buffer must succeed");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, Writer.WriteByte(WriteByteAA), "First byte at a 2-byte buffer must succeed");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, Writer.WriteByte(WriteByteBB), "Second byte filling the buffer must succeed");
 	// Assert
 	MW_EXPECT_EQ(Test, std::size_t{0}, Writer.Remaining(), "Remaining must be zero at exact capacity");
 
 	// Act
-	const ENetResult OverflowResult = Writer.WriteByte(WriteByteCC);
+	const ETransportResult OverflowResult = Writer.WriteByte(WriteByteCC);
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Full, OverflowResult, "A byte write past capacity must return Full");
+	MW_EXPECT_EQ(Test, ETransportResult::Full, OverflowResult, "A byte write past capacity must return Full");
 	MW_EXPECT_EQ(Test, TwoByteBufferCount, Writer.Position(), "Failed write must not advance the cursor");
 	MW_EXPECT_EQ(Test, WriteByteAA, Storage[0], "Accepted bytes must survive a failed overflow write");
 	MW_EXPECT_EQ(Test, WriteByteBB, Storage[1], "Accepted bytes must survive a failed overflow write");
@@ -145,10 +145,10 @@ MW_TEST_CASE(ByteWriterSpanLargerThanTotalCapacityReturnsInvalid)
 
 	const std::uint8_t TooLargeForTotal[FourByteBufferCount] = {WriteByte22, WriteByte33, WriteByte44, WriteByte55};
 	// Act
-	const ENetResult OversizedResult = Writer.Write(TSpan<const std::uint8_t>(TooLargeForTotal, FourByteBufferCount));
+	const ETransportResult OversizedResult = Writer.Write(TSpan<const std::uint8_t>(TooLargeForTotal, FourByteBufferCount));
 
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Invalid, OversizedResult, "A span larger than total capacity must return Invalid");
+	MW_EXPECT_EQ(Test, ETransportResult::Invalid, OversizedResult, "A span larger than total capacity must return Invalid");
 	MW_EXPECT_EQ(Test, PositionBefore, Writer.Position(), "Oversized span must not advance the cursor");
 	MW_EXPECT_EQ(Test, UntouchedStorageByte, Storage[0], "Storage must remain untouched by an oversized span");
 	MW_EXPECT_EQ(Test, UntouchedStorageByte, Storage[2], "Storage must remain untouched by an oversized span");
@@ -170,10 +170,10 @@ MW_TEST_CASE(ByteWriterSpanExceedingRemainingReturnsFullWithoutPartialProgress)
 	// A 3-byte span fits the total capacity but only 2 bytes remain.
 	const std::uint8_t FitsTotal[ThreeByteBufferCount] = {WriteByte22, WriteByte33, WriteByte44};
 	// Act
-	const ENetResult FullResult = Writer.Write(TSpan<const std::uint8_t>(FitsTotal, ThreeByteBufferCount));
+	const ETransportResult FullResult = Writer.Write(TSpan<const std::uint8_t>(FitsTotal, ThreeByteBufferCount));
 
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Full, FullResult, "A span exceeding remaining but fitting total must return Full");
+	MW_EXPECT_EQ(Test, ETransportResult::Full, FullResult, "A span exceeding remaining but fitting total must return Full");
 	MW_EXPECT_EQ(Test, PositionBefore, Writer.Position(), "Full must not advance the cursor");
 	MW_EXPECT_EQ(Test, WriteByte11, Storage[0], "Accepted prefix must survive Full");
 	MW_EXPECT_EQ(Test, UntouchedStorageByte, Storage[1], "Untouched tail must survive Full");
@@ -192,9 +192,9 @@ MW_TEST_CASE(ByteWriterRejectsNullSourceWithNonzeroLength)
 	Writer.WriteByte(WriteByte77);
 
 	// Act
-	const ENetResult NullResult = Writer.Write(TSpan<const std::uint8_t>(nullptr, ThreeByteBufferCount));
+	const ETransportResult NullResult = Writer.Write(TSpan<const std::uint8_t>(nullptr, ThreeByteBufferCount));
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Invalid, NullResult, "Null data with nonzero length must return Invalid");
+	MW_EXPECT_EQ(Test, ETransportResult::Invalid, NullResult, "Null data with nonzero length must return Invalid");
 	MW_EXPECT_EQ(Test, OneByteBufferCount, Writer.Position(), "Invalid write must not advance the cursor");
 	MW_EXPECT_EQ(Test, WriteByte77, Storage[0], "Accepted bytes must survive an invalid write");
 }
@@ -211,15 +211,15 @@ MW_TEST_CASE(ByteWriterAcceptsEmptySpanAsNoOp)
 	Writer.WriteByte(WriteByte42);
 
 	// Act
-	const ENetResult EmptyDataResult = Writer.Write(TSpan<const std::uint8_t>(Storage, 0));
+	const ETransportResult EmptyDataResult = Writer.Write(TSpan<const std::uint8_t>(Storage, 0));
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Success, EmptyDataResult, "An empty span with non-null data must be a valid no-op");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, EmptyDataResult, "An empty span with non-null data must be a valid no-op");
 	MW_EXPECT_EQ(Test, OneByteBufferCount, Writer.Position(), "Empty span must not advance the cursor");
 
 	// Act
-	const ENetResult NullEmptyResult = Writer.Write(TSpan<const std::uint8_t>(nullptr, 0));
+	const ETransportResult NullEmptyResult = Writer.Write(TSpan<const std::uint8_t>(nullptr, 0));
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Success, NullEmptyResult, "An empty span with null data must be a valid no-op");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, NullEmptyResult, "An empty span with null data must be a valid no-op");
 	MW_EXPECT_EQ(Test, OneByteBufferCount, Writer.Position(), "Empty null span must not advance the cursor");
 }
 
@@ -243,9 +243,9 @@ MW_TEST_CASE(ByteWriterResetAllowsBufferReuse)
 	MW_EXPECT_EQ(Test, TwoByteBufferCount, Writer.Remaining(), "Reset must restore remaining to capacity");
 
 	// Act
-	const ENetResult RewriteResult = Writer.WriteByte(WriteByte99);
+	const ETransportResult RewriteResult = Writer.WriteByte(WriteByte99);
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Success, RewriteResult, "A byte write after reset must succeed");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, RewriteResult, "A byte write after reset must succeed");
 	MW_EXPECT_EQ(Test, WriteByte99, Storage[0], "Rewrite must overwrite the first storage byte");
 	MW_EXPECT_EQ(Test, WriteByte02, Storage[1], "Prior second byte must remain untouched by reset");
 }
@@ -286,13 +286,13 @@ MW_TEST_CASE(ByteWriterInvalidBackingBufferNeverDereferencesNull)
 	MW_EXPECT_EQ(Test, true, Writer.WrittenBytes().IsEmpty(), "WrittenBytes must return an empty view for an invalid buffer");
 
 	// Assert - mutating operations must return Invalid without advancing the cursor or touching storage.
-	MW_EXPECT_EQ(Test, ENetResult::Invalid, Writer.WriteByte(WriteByte01), "WriteByte on an invalid buffer must return Invalid");
+	MW_EXPECT_EQ(Test, ETransportResult::Invalid, Writer.WriteByte(WriteByte01), "WriteByte on an invalid buffer must return Invalid");
 	MW_EXPECT_EQ(Test, std::size_t{0}, Writer.Position(), "Invalid buffer must never advance the cursor");
 
 	const std::uint8_t Packet[TwoByteBufferCount] = {WriteByte02, WriteByte03};
 	MW_EXPECT_EQ(
 		Test,
-		ENetResult::Invalid,
+		ETransportResult::Invalid,
 		Writer.Write(TSpan<const std::uint8_t>(Packet, TwoByteBufferCount)),
 		"Write on an invalid buffer must return Invalid");
 	MW_EXPECT_EQ(Test, std::size_t{0}, Writer.Position(), "Invalid buffer must never advance the cursor on span write");
@@ -315,12 +315,15 @@ MW_TEST_CASE(ByteWriterValidEmptyBufferAcceptsOnlyEmptySpans)
 
 	// Act / Assert - an empty span is the only accepted write.
 	MW_EXPECT_EQ(
-		Test, ENetResult::Success, Writer.Write(TSpan<const std::uint8_t>(nullptr, 0)), "An empty span is a valid no-op on a zero-capacity buffer");
-	MW_EXPECT_EQ(Test, ENetResult::Full, Writer.WriteByte(WriteByte01), "WriteByte on a zero-capacity buffer must return Full");
+		Test,
+		ETransportResult::Success,
+		Writer.Write(TSpan<const std::uint8_t>(nullptr, 0)),
+		"An empty span is a valid no-op on a zero-capacity buffer");
+	MW_EXPECT_EQ(Test, ETransportResult::Full, Writer.WriteByte(WriteByte01), "WriteByte on a zero-capacity buffer must return Full");
 	const std::uint8_t OneByte[OneByteBufferCount] = {WriteByte02};
 	MW_EXPECT_EQ(
 		Test,
-		ENetResult::Invalid,
+		ETransportResult::Invalid,
 		Writer.Write(TSpan<const std::uint8_t>(OneByte, OneByteBufferCount)),
 		"A span larger than total capacity must return Invalid");
 }

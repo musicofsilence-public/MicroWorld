@@ -7,9 +7,9 @@
 #include <MicroWorld/Engine/EngineResult.h>
 #include <MicroWorld/Messaging/Message.h>
 #include <MicroWorld/Engine/World.h>
-#include <MicroWorld/Networking/NetSystem.h>
+#include <MicroWorld/Networking/Networking.h>
 #include <MicroWorld/Core/Log.h>
-#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Transport/UdpAddressCodec.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Engine/GarbageCollector.h>
@@ -124,19 +124,19 @@ private:
 
 /**
  * Client board: joins the WiFi SoftAP and runs FSensorActor over the shared router owned by one
- * TNetSystem. Its two client drivers carry UDP telemetry and UART commands.
+ * TNetworking. Its two client drivers carry UDP telemetry and UART commands.
  */
 void RunClient() noexcept
 {
 	static FEsp32WifiLink WifiLink;
-	if (WifiLink.JoinAccessPoint(FEsp32StationConfig{DemoApSsid, DemoApPassword, /*ConnectTimeoutMilliseconds*/ 15000}) != ENetResult::Success)
+	if (WifiLink.JoinAccessPoint(FEsp32StationConfig{DemoApSsid, DemoApPassword, /*ConnectTimeoutMilliseconds*/ 15000}) != ETransportResult::Success)
 	{
 		MW_LOG(Error, "ex24", "wifi failed; halting");
 		return;
 	}
 	MW_LOG(Log, "ex24", "wifi joined AP");
 
-	// The client binds an ephemeral local port (0): it only needs to reach the server, and TNetHost
+	// The client binds an ephemeral local port (0): it only needs to reach the server, and TTransportHost
 	// learns the client's address server-side from its Hello.
 	static FEsp32UdpDriver TelemetryDriver(0);
 	MW_LOG(Log, "ex24", "telemetry open=%d", TelemetryDriver.IsOpen() ? 1 : 0);
@@ -154,28 +154,28 @@ void RunClient() noexcept
 		return;
 	}
 
-	FNetHostConfig TelemetryConfig = MakeHostConfig();
+	FTransportHostConfig TelemetryConfig = MakeHostConfig();
 	TelemetryConfig.ServerAddress = MakeUdpAddress(ServerIpv4[0], ServerIpv4[1], ServerIpv4[2], ServerIpv4[3], ServerPort);
-	FNetHostConfig CommandConfig = MakeHostConfig();
+	FTransportHostConfig CommandConfig = MakeHostConfig();
 	CommandConfig.ServerAddress = MakeUartAddress(ServerNodeId);
 
-	// TNetSystem owns all hosts, bindings, and the shared router; the engine starts the hosts at BeginPlay.
-	static FWorldNetSystem NetSystem;
-	const FNetDriverHandle TelemetryHandle = NetSystem.AddNetDriver(TelemetryDriver, ENetMode::Client, TelemetryConfig);
-	const FNetDriverHandle CommandHandle = NetSystem.AddNetDriver(CommandDriver, ENetMode::Client, CommandConfig);
+	// TNetworking owns all hosts, bindings, and the shared router; the engine starts the hosts at BeginPlay.
+	static FWorldNetworking Networking;
+	const FDeviceHandle TelemetryHandle = Networking.AddDevice(TelemetryDriver, ENetworkMode::Client, TelemetryConfig);
+	const FDeviceHandle CommandHandle = Networking.AddDevice(CommandDriver, ENetworkMode::Client, CommandConfig);
 	if (!TelemetryHandle.IsValid() || !CommandHandle.IsValid())
 	{
 		MW_LOG(Error, "ex24", "client net system rejected a driver; halting");
 		return;
 	}
-	const FChannelHandle TelemetryChannel = NetSystem.AddChannel(TelemetryHandle, TelemetryChannelId, EChannelReliability::BestEffort);
-	const FChannelHandle CommandsChannel = NetSystem.AddChannel(CommandHandle, CommandsChannelId, EChannelReliability::BestEffort);
+	const FChannelHandle TelemetryChannel = Networking.AddChannel(TelemetryHandle, TelemetryChannelId, EChannelReliability::BestEffort);
+	const FChannelHandle CommandsChannel = Networking.AddChannel(CommandHandle, CommandsChannelId, EChannelReliability::BestEffort);
 	if (!TelemetryChannel.IsValid() || !CommandsChannel.IsValid())
 	{
 		MW_LOG(Error, "ex24", "client net system rejected a channel; halting");
 		return;
 	}
-	static FWorldEngine Engine{FGarbageCollectionBudget{1, 4, 8}, NetSystem};
+	static FWorldEngine Engine{FGarbageCollectionBudget{1, 4, 8}, Networking};
 
 	if (Engine.RegisterClass<FSensorActor>(SensorActorTypeId, "SensorActor") != EObjectResult::Success)
 	{
@@ -184,7 +184,7 @@ void RunClient() noexcept
 	}
 
 	const TObjectPtr<UWorld> World = Engine.CreateWorld();
-	const TObjectPtr<FSensorActor> Sensor = Engine.CreateObject<FSensorActor>(SensorActorTypeId, NetSystem.GetRouter()).Object;
+	const TObjectPtr<FSensorActor> Sensor = Engine.CreateObject<FSensorActor>(SensorActorTypeId, Networking.GetRouter()).Object;
 	if (World.Get() == nullptr || Sensor.Get() == nullptr)
 	{
 		MW_LOG(Error, "ex24", "client world or actor creation failed; halting");

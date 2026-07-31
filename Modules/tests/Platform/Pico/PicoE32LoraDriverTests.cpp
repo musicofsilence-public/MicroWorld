@@ -2,7 +2,7 @@
 
 #include <MicroWorld/Transport/E32Lora.h>
 #include <MicroWorld/Transport/FrameCodec.h>
-#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Platform/Pico/Detail/PicoE32LoraPlatform.h>
 #include <MicroWorld/Platform/Pico/Detail/PicoUartPlatform.h>
 #include <MicroWorld/Platform/Pico/PicoE32LoraDriver.h>
@@ -15,7 +15,7 @@ namespace
 {
 
 using MicroWorld::E32MaxPayloadBytes;
-using MicroWorld::ENetResult;
+using MicroWorld::ETransportResult;
 using MicroWorld::FPicoE32LoraConfig;
 using MicroWorld::FPicoE32LoraDriver;
 using MicroWorld::FrameOverheadBytes;
@@ -153,10 +153,10 @@ MW_TEST_CASE(PicoE32FacadeRejectsInvalidConfigBeforeOpeningUart)
 	InvalidConfig.TxGpio = 2;
 
 	// Act
-	const ENetResult InitializeResult = Driver.Initialize(InvalidConfig);
+	const ETransportResult InitializeResult = Driver.Initialize(InvalidConfig);
 
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Invalid, InitializeResult, "Unsupported Pico UART routing must be invalid");
+	MW_EXPECT_EQ(Test, ETransportResult::Invalid, InitializeResult, "Unsupported Pico UART routing must be invalid");
 	MW_EXPECT_TRUE(Test, !Driver.IsOpen(), "Invalid configuration must leave the facade closed");
 	MW_EXPECT_EQ(Test, std::size_t{0}, Platform.OpenCallCount, "Invalid configuration must not acquire a UART");
 	MW_EXPECT_EQ(Test, std::size_t{0}, Platform.CloseCallCount, "Invalid configuration must not release an unopened UART");
@@ -179,10 +179,10 @@ MW_TEST_CASE(PicoE32FacadeDelegatesExactUartOpenConfiguration)
 	Platform.AchievedBaudRate = Config.BaudRate;
 
 	// Act
-	const ENetResult InitializeResult = Driver.Initialize(Config);
+	const ETransportResult InitializeResult = Driver.Initialize(Config);
 
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Success, InitializeResult, "A supported exact configuration must initialize");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, InitializeResult, "A supported exact configuration must initialize");
 	MW_EXPECT_TRUE(Test, Driver.IsOpen(), "Successful initialization must open the facade");
 	MW_EXPECT_EQ(Test, std::size_t{1}, Platform.OpenCallCount, "Initialization must delegate exactly one UART open");
 	MW_EXPECT_EQ(Test, Config.UartIndex, Platform.LastOpenedUartIndex, "The UART index must reach the platform unchanged");
@@ -204,10 +204,10 @@ MW_TEST_CASE(PicoE32FacadeRollsBackMismatchedBaudRate)
 	const FPicoE32LoraConfig Config = MakeValidConfig();
 
 	// Act
-	const ENetResult InitializeResult = Driver.Initialize(Config);
+	const ETransportResult InitializeResult = Driver.Initialize(Config);
 
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Invalid, InitializeResult, "Inexact baud must reject facade initialization");
+	MW_EXPECT_EQ(Test, ETransportResult::Invalid, InitializeResult, "Inexact baud must reject facade initialization");
 	MW_EXPECT_TRUE(Test, !Driver.IsOpen(), "Inexact baud must leave the facade closed");
 	MW_EXPECT_EQ(Test, std::size_t{1}, Platform.OpenCallCount, "Valid routing must reach one platform open attempt");
 	MW_EXPECT_EQ(Test, std::size_t{1}, Platform.CloseCallCount, "Inexact baud must release the initialized UART");
@@ -226,12 +226,12 @@ MW_TEST_CASE(PicoE32FacadeRejectsDoubleInitializationWithoutReopening)
 	const FPicoE32LoraConfig Config = MakeValidConfig();
 
 	// Act
-	const ENetResult FirstInitializeResult = Driver.Initialize(Config);
-	const ENetResult SecondInitializeResult = Driver.Initialize(Config);
+	const ETransportResult FirstInitializeResult = Driver.Initialize(Config);
+	const ETransportResult SecondInitializeResult = Driver.Initialize(Config);
 
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Success, FirstInitializeResult, "The first valid initialization must succeed");
-	MW_EXPECT_EQ(Test, ENetResult::Unavailable, SecondInitializeResult, "The second initialization must be unavailable");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, FirstInitializeResult, "The first valid initialization must succeed");
+	MW_EXPECT_EQ(Test, ETransportResult::Unavailable, SecondInitializeResult, "The second initialization must be unavailable");
 	MW_EXPECT_TRUE(Test, Driver.IsOpen(), "Rejected reinitialization must retain the original open facade");
 	MW_EXPECT_EQ(Test, std::size_t{1}, Platform.OpenCallCount, "Rejected reinitialization must not reopen the UART");
 	MW_EXPECT_EQ(Test, std::size_t{0}, Platform.CloseCallCount, "Rejected reinitialization must not close the owned UART");
@@ -246,7 +246,7 @@ MW_TEST_CASE(PicoE32FacadeClosesOpenedUartOnDestruction)
 	// Arrange
 	FFakePicoUartPlatform Platform;
 	const FPicoE32LoraConfig Config = MakeValidConfig();
-	ENetResult InitializeResult = ENetResult::Unavailable;
+	ETransportResult InitializeResult = ETransportResult::Unavailable;
 
 	// Act
 	{
@@ -255,7 +255,7 @@ MW_TEST_CASE(PicoE32FacadeClosesOpenedUartOnDestruction)
 	}
 
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Success, InitializeResult, "The destruction fixture must initialize successfully");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, InitializeResult, "The destruction fixture must initialize successfully");
 	MW_EXPECT_EQ(Test, std::size_t{1}, Platform.OpenCallCount, "The facade must acquire one UART before destruction");
 	MW_EXPECT_EQ(Test, std::size_t{1}, Platform.CloseCallCount, "Facade destruction must release its open UART");
 	MW_EXPECT_EQ(Test, Config.UartIndex, Platform.LastClosedUartIndex, "Destruction must release the initialized UART identity");
@@ -289,21 +289,21 @@ MW_TEST_CASE(PicoE32FacadeAdvanceTransmitDelegatesBoundedFrameBurst)
 	FFakePicoUartPlatform Platform;
 	FPicoE32LoraDriver Driver(Platform);
 	const FPicoE32LoraConfig Config = MakeValidConfig();
-	const MicroWorld::FNetAddress Destination = MakeLoraAddress(PeerNodeId);
+	const MicroWorld::FDeviceAddress Destination = MakeLoraAddress(PeerNodeId);
 	const std::uint8_t Payload[] = {0xA5};
-	const ENetResult InitializeResult = Driver.Initialize(Config);
-	const ENetResult FirstSendResult = Driver.TrySend(Destination, TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
+	const ETransportResult InitializeResult = Driver.Initialize(Config);
+	const ETransportResult FirstSendResult = Driver.TrySend(Destination, TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
 
 	// Act
 	Driver.AdvanceTransmit();
 	const std::size_t WrittenBytes = Platform.WrittenByteCount;
-	const ENetResult RetrySendResult = Driver.TrySend(Destination, TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
+	const ETransportResult RetrySendResult = Driver.TrySend(Destination, TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
 
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Success, InitializeResult, "The transmit fixture must initialize successfully");
-	MW_EXPECT_EQ(Test, ENetResult::Success, FirstSendResult, "The transmit fixture must queue one packet");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, InitializeResult, "The transmit fixture must initialize successfully");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, FirstSendResult, "The transmit fixture must queue one packet");
 	MW_EXPECT_TRUE(Test, WrittenBytes > std::size_t{1}, "One facade advance must delegate more than one byte of bounded progress");
-	MW_EXPECT_EQ(Test, ENetResult::Success, RetrySendResult, "The bounded burst must release its complete queued frame slot");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, RetrySendResult, "The bounded burst must release its complete queued frame slot");
 	MW_EXPECT_EQ(Test, Config.UartIndex, Platform.LastWritableUartIndex, "Transmit progress must use the configured UART identity");
 	MW_EXPECT_EQ(Test, Config.UartIndex, Platform.LastWrittenUartIndex, "Delegated writes must use the configured UART identity");
 }
@@ -318,24 +318,24 @@ MW_TEST_CASE(PicoE32FacadeEmitsEmptyFrameAndReleasesTransmitSlot)
 	FFakePicoUartPlatform Platform;
 	FPicoE32LoraDriver Driver(Platform);
 	const FPicoE32LoraConfig Config = MakeValidConfig();
-	const MicroWorld::FNetAddress Destination = MakeLoraAddress(PeerNodeId);
+	const MicroWorld::FDeviceAddress Destination = MakeLoraAddress(PeerNodeId);
 	const TSpan<const std::uint8_t> EmptyPayload(nullptr, 0);
 	std::uint8_t ExpectedFrame[EncodedFrameCapacity]{};
 	std::size_t ExpectedFrameBytes = 0;
-	const ENetResult EncodeResult =
+	const ETransportResult EncodeResult =
 		MicroWorld::EncodeFrame(LocalNodeId, EmptyPayload, TSpan<std::uint8_t>(ExpectedFrame, sizeof(ExpectedFrame)), ExpectedFrameBytes);
 
 	// Act
-	const ENetResult InitializeResult = Driver.Initialize(Config);
-	const ENetResult FirstSendResult = Driver.TrySend(Destination, EmptyPayload);
+	const ETransportResult InitializeResult = Driver.Initialize(Config);
+	const ETransportResult FirstSendResult = Driver.TrySend(Destination, EmptyPayload);
 	Driver.AdvanceTransmit();
 	const std::size_t WrittenFrameBytes = Platform.WrittenByteCount;
-	const ENetResult RetrySendResult = Driver.TrySend(Destination, EmptyPayload);
+	const ETransportResult RetrySendResult = Driver.TrySend(Destination, EmptyPayload);
 
 	// Assert
-	MW_EXPECT_EQ(Test, ENetResult::Success, EncodeResult, "The empty-frame fixture must encode successfully");
-	MW_EXPECT_EQ(Test, ENetResult::Success, InitializeResult, "The empty-frame facade fixture must initialize successfully");
-	MW_EXPECT_EQ(Test, ENetResult::Success, FirstSendResult, "An empty payload must queue in an available transmit slot");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, EncodeResult, "The empty-frame fixture must encode successfully");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, InitializeResult, "The empty-frame facade fixture must initialize successfully");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, FirstSendResult, "An empty payload must queue in an available transmit slot");
 	MW_EXPECT_EQ(Test, ExpectedFrameBytes, WrittenFrameBytes, "One advance must emit every encoded empty-frame byte");
 	for (std::size_t ByteIndex = 0; ByteIndex < ExpectedFrameBytes; ++ByteIndex)
 	{
@@ -343,7 +343,7 @@ MW_TEST_CASE(PicoE32FacadeEmitsEmptyFrameAndReleasesTransmitSlot)
 		const std::uint8_t WrittenByte = Platform.WrittenBytes[ByteIndex];
 		MW_EXPECT_EQ(Test, ExpectedByte, WrittenByte, "The platform byte stream must preserve encoded empty-frame byte order");
 	}
-	MW_EXPECT_EQ(Test, ENetResult::Success, RetrySendResult, "Completing the empty frame must release the transmit slot for another send");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, RetrySendResult, "Completing the empty frame must release the transmit slot for another send");
 }
 
 } // namespace

@@ -50,7 +50,7 @@ enum class EUartWriteOutcome : std::uint8_t
  * Writes one complete framed message to the UART.
  *
  * Hands the whole span to one `uart_write_bytes` call; the outcome classifies only whether it was fully
- * accepted, partially accepted, or failed, so the driver can map it to the shared `ENetResult`. The
+ * accepted, partially accepted, or failed, so the driver can map it to the shared `ETransportResult`. The
  * full-accept path is runtime-verified (example 18, 2026-07-23); the short-write would-block branch stays
  * unexercised, so a short write is still mapped to `WouldBlock` to treat the UART as transiently full.
  *

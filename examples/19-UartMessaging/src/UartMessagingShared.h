@@ -1,6 +1,6 @@
 #pragma once
 
-#include <MicroWorld/Transport/NetHost.h>
+#include <MicroWorld/Transport/TransportHost.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Platform/Esp32/Esp32UartDriver.h>
 
@@ -63,9 +63,9 @@ inline MicroWorld::FEsp32UartConfig MakeUartConfig(const std::uint8_t NodeId) no
 }
 
 /** Builds the shared session config; heartbeats keep the point-to-point peer alive between sends. */
-inline MicroWorld::FNetHostConfig MakeHostConfig() noexcept
+inline MicroWorld::FTransportHostConfig MakeHostConfig() noexcept
 {
-	MicroWorld::FNetHostConfig Config{};
+	MicroWorld::FTransportHostConfig Config{};
 	Config.HeartbeatIntervalMilliseconds = 1000;
 	Config.PeerTimeoutMilliseconds = 5000;
 	Config.ProtocolVersion = ProtocolVersion;

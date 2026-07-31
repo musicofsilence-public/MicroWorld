@@ -235,7 +235,7 @@ public:
 	 * queue; a wired entry is handed to its channel. On any failure (inbound full, or the channel
 	 * returning non-Success) the head entry is retained and flushing stops for this tick, so a
 	 * stalled channel also holds back every later entry queued for a different channel (accepted v1
-	 * head-of-line behavior, matching TNetManager::AdvanceSend's retained-head discipline).
+	 * head-of-line behavior, matching TTransportManager::AdvanceSend's retained-head discipline).
 	 */
 	void PostAdvance(const TimePointMilliseconds InNowMilliseconds) noexcept override
 	{

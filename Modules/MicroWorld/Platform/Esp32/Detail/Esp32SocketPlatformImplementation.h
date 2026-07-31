@@ -150,7 +150,7 @@ enum class ESendOutcome : std::uint8_t
  *
  * The whole span is handed to one `sendto`; the outcome classifies only whether
  * it was fully accepted, would block, or failed, so the driver can map it to the
- * shared `ENetResult` without inspecting lwIP error codes.
+ * shared `ETransportResult` without inspecting lwIP error codes.
  *
  * @param InSocket Open non-blocking socket.
  * @param InDatagramBytes First byte of the datagram to send.

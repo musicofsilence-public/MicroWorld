@@ -3,9 +3,9 @@
 #include <MicroWorld/Core/Containers/Span.h>
 #include <MicroWorld/Transport/E32Lora.h>
 #include <MicroWorld/Transport/FrameCodec.h>
-#include <MicroWorld/Transport/NetAddress.h>
-#include <MicroWorld/Transport/NetDriver.h>
-#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Transport/DeviceAddress.h>
+#include <MicroWorld/Transport/Device.h>
+#include <MicroWorld/Transport/TransportResult.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -52,7 +52,7 @@ public:
 	 * @param InPacket Payload to encode into the single transmit slot.
 	 * @return Outcome of the acceptance attempt.
 	 */
-	ENetResult TryQueueFrame(std::uint8_t InLocalNodeId, const FNetAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept;
+	ETransportResult TryQueueFrame(std::uint8_t InLocalNodeId, const FDeviceAddress& InTo, TSpan<const std::uint8_t> InPacket) noexcept;
 
 	/**
 	 * Reads the next queued transmit byte without advancing state.
@@ -96,7 +96,7 @@ public:
 	 * @param OutResult Filled with the delivered byte count only on `Success`.
 	 * @return Outcome of the delivery attempt.
 	 */
-	ENetResult TryDeliverReceivedFrame(FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept;
+	ETransportResult TryDeliverReceivedFrame(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept;
 
 private:
 	/** Owns bounded receive assembly and retains one complete frame across a `Full` retry. */

@@ -6,11 +6,11 @@
 #include <MicroWorld/Transport/ByteReader.h>
 #include <MicroWorld/Transport/ByteWriter.h>
 #include <MicroWorld/Transport/HostLoopback.h>
-#include <MicroWorld/Transport/NetAddress.h>
-#include <MicroWorld/Transport/NetDriver.h>
-#include <MicroWorld/Transport/NetManager.h>
-#include <MicroWorld/Transport/NetPacketStorage.h>
-#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Transport/DeviceAddress.h>
+#include <MicroWorld/Transport/Device.h>
+#include <MicroWorld/Transport/TransportManager.h>
+#include <MicroWorld/Transport/TransportPacketStorage.h>
+#include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Core/Version.h>
 
 #include <cstddef>
@@ -22,18 +22,18 @@ static_assert(MicroWorld::Version.Minor == 4);
 static_assert(MicroWorld::Version.Patch == 0);
 
 #if defined(__cpp_exceptions) || defined(_CPPUNWIND)
-#error "The MicroWorld Net consumer must compile with exceptions disabled."
+#error "The MicroWorld Transport consumer must compile with exceptions disabled."
 #endif
 
 #if defined(__GXX_RTTI) || defined(_CPPRTTI)
-#error "The MicroWorld Net consumer must compile with RTTI disabled."
+#error "The MicroWorld Transport consumer must compile with RTTI disabled."
 #endif
 
 namespace MicroWorldConsumer
 {
 
-/** Stable process exit codes that identify the exact Net public-API probe failure. */
-enum class ENetConsumerExitCode : int
+/** Stable process exit codes that identify the exact Transport public-API probe failure. */
+enum class ETransportConsumerExitCode : int
 {
 	Success = 0,
 	ByteWriterOverflowDidNotReturnFull = 1,
@@ -52,7 +52,7 @@ enum class ENetConsumerExitCode : int
 	MemoryProfileFailureOffset = 100,
 };
 
-/** Literal byte values used as test inputs across the Net consumer probe. */
+/** Literal byte values used as test inputs across the Transport consumer probe. */
 inline constexpr std::uint8_t ByteValue01 = 0x01;
 inline constexpr std::uint8_t ByteValue02 = 0x02;
 inline constexpr std::uint8_t ByteValue03 = 0x03;
@@ -84,38 +84,38 @@ inline constexpr std::size_t EmptyReceiveByteCount = 0;
 
 } // namespace MicroWorldConsumer
 
-/** Exercises representative Core+Net public APIs without platform I/O. */
-inline int RunNetConsumerProbe() noexcept
+/** Exercises representative Core+Transport public APIs without platform I/O. */
+inline int RunTransportConsumerProbe() noexcept
 {
 	using namespace MicroWorld;
-	using MicroWorldConsumer::ENetConsumerExitCode;
+	using MicroWorldConsumer::ETransportConsumerExitCode;
 
 	const int MemoryProfileResult = RunMemoryConsumerProbe();
 	if (MemoryProfileResult != 0)
 	{
-		return static_cast<int>(ENetConsumerExitCode::MemoryProfileFailureOffset) + MemoryProfileResult;
+		return static_cast<int>(ETransportConsumerExitCode::MemoryProfileFailureOffset) + MemoryProfileResult;
 	}
 
 	// Byte writer: fill, observe Full past capacity, prove accepted bytes survive.
 	std::uint8_t WriterStorage[MicroWorldConsumer::SmallWriterByteCount]{};
 	MicroWorld::FByteWriter Writer(TSpan<std::uint8_t>(WriterStorage, MicroWorldConsumer::SmallWriterByteCount));
-	const bool bAllWritesAccepted = Writer.WriteByte(MicroWorldConsumer::ByteValue01) == ENetResult::Success
-		&& Writer.WriteByte(MicroWorldConsumer::ByteValue02) == ENetResult::Success
-		&& Writer.WriteByte(MicroWorldConsumer::ByteValue03) == ENetResult::Success
-		&& Writer.WriteByte(MicroWorldConsumer::ByteValue04) == ENetResult::Success;
+	const bool bAllWritesAccepted = Writer.WriteByte(MicroWorldConsumer::ByteValue01) == ETransportResult::Success
+		&& Writer.WriteByte(MicroWorldConsumer::ByteValue02) == ETransportResult::Success
+		&& Writer.WriteByte(MicroWorldConsumer::ByteValue03) == ETransportResult::Success
+		&& Writer.WriteByte(MicroWorldConsumer::ByteValue04) == ETransportResult::Success;
 	if (!bAllWritesAccepted)
 	{
-		return static_cast<int>(ENetConsumerExitCode::ByteWriterOverflowDidNotReturnFull);
+		return static_cast<int>(ETransportConsumerExitCode::ByteWriterOverflowDidNotReturnFull);
 	}
-	const bool bOverflowReportsFull = Writer.Remaining() == 0 && Writer.WriteByte(MicroWorldConsumer::FullByteMarker) == ENetResult::Full;
+	const bool bOverflowReportsFull = Writer.Remaining() == 0 && Writer.WriteByte(MicroWorldConsumer::FullByteMarker) == ETransportResult::Full;
 	if (!bOverflowReportsFull)
 	{
-		return static_cast<int>(ENetConsumerExitCode::ByteWriterOverflowDidNotReturnFull);
+		return static_cast<int>(ETransportConsumerExitCode::ByteWriterOverflowDidNotReturnFull);
 	}
 	const bool bAcceptedPrefixIntact = WriterStorage[0] == MicroWorldConsumer::ByteValue01 && WriterStorage[3] == MicroWorldConsumer::ByteValue04;
 	if (!bAcceptedPrefixIntact)
 	{
-		return static_cast<int>(ENetConsumerExitCode::ByteWriterAcceptedPrefixAltered);
+		return static_cast<int>(ETransportConsumerExitCode::ByteWriterAcceptedPrefixAltered);
 	}
 
 	// Byte reader: consume, observe Unavailable past source, prove output untouched on failure.
@@ -123,144 +123,147 @@ inline int RunNetConsumerProbe() noexcept
 		MicroWorldConsumer::ByteValue10, MicroWorldConsumer::ByteValue20, MicroWorldConsumer::ByteValue30, MicroWorldConsumer::ByteValue40};
 	MicroWorld::FByteReader Reader(TSpan<const std::uint8_t>(ReaderSource, MicroWorldConsumer::SmallWriterByteCount));
 	std::uint8_t ReadDestination[MicroWorldConsumer::SmallWriterByteCount]{};
-	const ENetResult ReadResult = Reader.Read(TSpan<std::uint8_t>(ReadDestination, MicroWorldConsumer::SmallWriterByteCount));
-	if (ReadResult != ENetResult::Success)
+	const ETransportResult ReadResult = Reader.Read(TSpan<std::uint8_t>(ReadDestination, MicroWorldConsumer::SmallWriterByteCount));
+	if (ReadResult != ETransportResult::Success)
 	{
-		return static_cast<int>(ENetConsumerExitCode::ByteReaderTruncatedDidNotReturnUnavailable);
+		return static_cast<int>(ETransportConsumerExitCode::ByteReaderTruncatedDidNotReturnUnavailable);
 	}
 	std::uint8_t UnusedByte = MicroWorldConsumer::UntouchedByteMarker;
-	const ENetResult OverflowReadResult = Reader.ReadByte(UnusedByte);
-	const bool bFailureLeavesOutputUntouched = OverflowReadResult == ENetResult::Invalid && UnusedByte == MicroWorldConsumer::UntouchedByteMarker;
+	const ETransportResult OverflowReadResult = Reader.ReadByte(UnusedByte);
+	const bool bFailureLeavesOutputUntouched =
+		OverflowReadResult == ETransportResult::Invalid && UnusedByte == MicroWorldConsumer::UntouchedByteMarker;
 	if (!bFailureLeavesOutputUntouched)
 	{
-		return static_cast<int>(ENetConsumerExitCode::ByteReaderOutputModifiedOnFailure);
+		return static_cast<int>(ETransportConsumerExitCode::ByteReaderOutputModifiedOnFailure);
 	}
 
 	// Loopback: FIFO delivery, full backpressure, empty unavailable, too-small full.
 	// A two-port loopback with port 0 sending to its own mailbox reproduces the single-link FIFO.
 	THostLoopback<2, 2, 4> Loopback;
-	const FNetAddress LoopbackPort0 = MakeLoopbackAddress(0);
+	const FDeviceAddress LoopbackPort0 = MakeLoopbackAddress(0);
 	const std::uint8_t FirstPacket[MicroWorldConsumer::SmallPacketByteCount] = {MicroWorldConsumer::ByteValueAA, MicroWorldConsumer::ByteValueBB};
 	const std::uint8_t SecondPacket[MicroWorldConsumer::SmallPacketByteCount] = {MicroWorldConsumer::ByteValueCC, MicroWorldConsumer::ByteValueDD};
 	const bool bBothSendsAccepted =
 		Loopback.Port(0).TrySend(LoopbackPort0, TSpan<const std::uint8_t>(FirstPacket, MicroWorldConsumer::SmallPacketByteCount))
-			== ENetResult::Success
+			== ETransportResult::Success
 		&& Loopback.Port(0).TrySend(LoopbackPort0, TSpan<const std::uint8_t>(SecondPacket, MicroWorldConsumer::SmallPacketByteCount))
-			== ENetResult::Success;
+			== ETransportResult::Success;
 	if (!bBothSendsAccepted)
 	{
-		return static_cast<int>(ENetConsumerExitCode::LoopbackFifoOrderBroken);
+		return static_cast<int>(ETransportConsumerExitCode::LoopbackFifoOrderBroken);
 	}
 
 	std::uint8_t LoopbackDestination[MicroWorldConsumer::LoopbackDestinationByteCount]{};
-	FNetReceiveResult FirstReceive{};
-	FNetAddress FirstFrom{MicroWorldConsumer::UntouchedAddressByte};
-	const ENetResult FirstReceiveResult = Loopback.Port(0).TryReceive(
+	FReceiveResult FirstReceive{};
+	FDeviceAddress FirstFrom{MicroWorldConsumer::UntouchedAddressByte};
+	const ETransportResult FirstReceiveResult = Loopback.Port(0).TryReceive(
 		FirstFrom, TSpan<std::uint8_t>(LoopbackDestination, MicroWorldConsumer::LoopbackDestinationByteCount), FirstReceive);
-	const bool bFirstPacketIsExpected = FirstReceiveResult == ENetResult::Success
+	const bool bFirstPacketIsExpected = FirstReceiveResult == ETransportResult::Success
 		&& FirstReceive.BytesReceived == MicroWorldConsumer::ExpectedReceivedByteCount && LoopbackDestination[0] == MicroWorldConsumer::ByteValueAA
 		&& FirstFrom == LoopbackPort0;
 	if (!bFirstPacketIsExpected)
 	{
-		return static_cast<int>(ENetConsumerExitCode::LoopbackFifoOrderBroken);
+		return static_cast<int>(ETransportConsumerExitCode::LoopbackFifoOrderBroken);
 	}
 
 	std::uint8_t SecondDestination[MicroWorldConsumer::LoopbackDestinationByteCount]{};
-	FNetReceiveResult SecondReceive{};
-	FNetAddress SecondFrom{MicroWorldConsumer::UntouchedAddressByte};
-	const ENetResult SecondReceiveResult = Loopback.Port(0).TryReceive(
+	FReceiveResult SecondReceive{};
+	FDeviceAddress SecondFrom{MicroWorldConsumer::UntouchedAddressByte};
+	const ETransportResult SecondReceiveResult = Loopback.Port(0).TryReceive(
 		SecondFrom, TSpan<std::uint8_t>(SecondDestination, MicroWorldConsumer::LoopbackDestinationByteCount), SecondReceive);
-	const bool bSecondPacketIsExpected = SecondReceiveResult == ENetResult::Success
+	const bool bSecondPacketIsExpected = SecondReceiveResult == ETransportResult::Success
 		&& SecondReceive.BytesReceived == MicroWorldConsumer::ExpectedReceivedByteCount && SecondDestination[0] == MicroWorldConsumer::ByteValueCC
 		&& SecondFrom == LoopbackPort0;
 	if (!bSecondPacketIsExpected)
 	{
-		return static_cast<int>(ENetConsumerExitCode::LoopbackFifoOrderBroken);
+		return static_cast<int>(ETransportConsumerExitCode::LoopbackFifoOrderBroken);
 	}
 
-	FNetReceiveResult EmptyReceive{};
-	FNetAddress EmptyFrom{MicroWorldConsumer::UntouchedAddressByte};
-	const ENetResult EmptyReceiveResult = Loopback.Port(0).TryReceive(
+	FReceiveResult EmptyReceive{};
+	FDeviceAddress EmptyFrom{MicroWorldConsumer::UntouchedAddressByte};
+	const ETransportResult EmptyReceiveResult = Loopback.Port(0).TryReceive(
 		EmptyFrom, TSpan<std::uint8_t>(LoopbackDestination, MicroWorldConsumer::LoopbackDestinationByteCount), EmptyReceive);
-	if (EmptyReceiveResult != ENetResult::Unavailable)
+	if (EmptyReceiveResult != ETransportResult::Unavailable)
 	{
-		return static_cast<int>(ENetConsumerExitCode::LoopbackEmptyDidNotReturnUnavailable);
+		return static_cast<int>(ETransportConsumerExitCode::LoopbackEmptyDidNotReturnUnavailable);
 	}
 
 	// Full backpressure: a one-slot mailbox must reject the second send and retain the head.
 	THostLoopback<2, 1, 4> SingleLoopback;
-	const ENetResult SingleFirstSendResult =
+	const ETransportResult SingleFirstSendResult =
 		SingleLoopback.Port(0).TrySend(LoopbackPort0, TSpan<const std::uint8_t>(FirstPacket, MicroWorldConsumer::SmallPacketByteCount));
-	const ENetResult SingleSecondSendResult =
+	const ETransportResult SingleSecondSendResult =
 		SingleLoopback.Port(0).TrySend(LoopbackPort0, TSpan<const std::uint8_t>(SecondPacket, MicroWorldConsumer::SmallPacketByteCount));
-	const bool bHeadRetainedUnderBackpressure = SingleFirstSendResult == ENetResult::Success && SingleSecondSendResult == ENetResult::Full;
+	const bool bHeadRetainedUnderBackpressure =
+		SingleFirstSendResult == ETransportResult::Success && SingleSecondSendResult == ETransportResult::Full;
 	if (!bHeadRetainedUnderBackpressure)
 	{
-		return static_cast<int>(ENetConsumerExitCode::LoopbackFullOverwroteHead);
+		return static_cast<int>(ETransportConsumerExitCode::LoopbackFullOverwroteHead);
 	}
 
 	// Too-small destination: head packet must be retained for a larger retry.
 	std::uint8_t TooSmall[MicroWorldConsumer::TooSmallDestinationByteCount]{};
-	FNetReceiveResult TooSmallReceive{};
-	FNetAddress TooSmallFrom{MicroWorldConsumer::UntouchedAddressByte};
-	const ENetResult TooSmallReceiveResult = SingleLoopback.Port(0).TryReceive(
+	FReceiveResult TooSmallReceive{};
+	FDeviceAddress TooSmallFrom{MicroWorldConsumer::UntouchedAddressByte};
+	const ETransportResult TooSmallReceiveResult = SingleLoopback.Port(0).TryReceive(
 		TooSmallFrom, TSpan<std::uint8_t>(TooSmall, MicroWorldConsumer::TooSmallDestinationByteCount), TooSmallReceive);
-	if (TooSmallReceiveResult != ENetResult::Full)
+	if (TooSmallReceiveResult != ETransportResult::Full)
 	{
-		return static_cast<int>(ENetConsumerExitCode::LoopbackTooSmallDidNotReturnFull);
+		return static_cast<int>(ETransportConsumerExitCode::LoopbackTooSmallDidNotReturnFull);
 	}
 
 	// Manager: queue, advance once (success), observe backpressure retention, recover, receive.
-	MicroWorld::TNetPacketStorage<2, 4> ManagerStorage;
-	TNetManager<2, 4> Manager(Loopback.Port(0), ManagerStorage);
+	MicroWorld::TTransportPacketStorage<2, 4> ManagerStorage;
+	TTransportManager<2, 4> Manager(Loopback.Port(0), ManagerStorage);
 	const std::uint8_t QueuePacket[MicroWorldConsumer::QueuePacketByteCount] = {
 		MicroWorldConsumer::ByteValue01, MicroWorldConsumer::ByteValue02, MicroWorldConsumer::ByteValue03};
-	const ENetResult QueueResult = Manager.QueueSend(LoopbackPort0, TSpan<const std::uint8_t>(QueuePacket, MicroWorldConsumer::QueuePacketByteCount));
-	if (QueueResult != ENetResult::Success)
+	const ETransportResult QueueResult =
+		Manager.QueueSend(LoopbackPort0, TSpan<const std::uint8_t>(QueuePacket, MicroWorldConsumer::QueuePacketByteCount));
+	if (QueueResult != ETransportResult::Success)
 	{
-		return static_cast<int>(ENetConsumerExitCode::ManagerQueueDidNotAcceptPacket);
+		return static_cast<int>(ETransportConsumerExitCode::ManagerQueueDidNotAcceptPacket);
 	}
-	if (Manager.AdvanceSend() != ENetResult::Success)
+	if (Manager.AdvanceSend() != ETransportResult::Success)
 	{
-		return static_cast<int>(ENetConsumerExitCode::ManagerAdvanceDidNotSendHead);
+		return static_cast<int>(ETransportConsumerExitCode::ManagerAdvanceDidNotSendHead);
 	}
 
 	// Backpressure: fill the driver, then observe the manager retain its head across a Full advance.
 	THostLoopback<2, 1, 4> BackpressureDriver;
-	MicroWorld::TNetPacketStorage<1, 4> BackpressureStorage;
-	TNetManager<1, 4> BackpressureManager(BackpressureDriver.Port(0), BackpressureStorage);
+	MicroWorld::TTransportPacketStorage<1, 4> BackpressureStorage;
+	TTransportManager<1, 4> BackpressureManager(BackpressureDriver.Port(0), BackpressureStorage);
 	const std::uint8_t BackpressurePacket[MicroWorldConsumer::SmallPacketByteCount] = {
 		MicroWorldConsumer::ByteValue55, MicroWorldConsumer::ByteValue66};
 	BackpressureDriver.Port(0).TrySend(LoopbackPort0, TSpan<const std::uint8_t>(BackpressurePacket, MicroWorldConsumer::SmallPacketByteCount));
 	BackpressureManager.QueueSend(LoopbackPort0, TSpan<const std::uint8_t>(BackpressurePacket, MicroWorldConsumer::SmallPacketByteCount));
-	const ENetResult BackpressureAdvanceResult = BackpressureManager.AdvanceSend();
-	const bool bRetainsHeadOnFull = BackpressureAdvanceResult == ENetResult::Full && !BackpressureManager.IsEmpty();
+	const ETransportResult BackpressureAdvanceResult = BackpressureManager.AdvanceSend();
+	const bool bRetainsHeadOnFull = BackpressureAdvanceResult == ETransportResult::Full && !BackpressureManager.IsEmpty();
 	if (!bRetainsHeadOnFull)
 	{
 		// The manager must still hold its queued packet when the driver reports Full.
-		return static_cast<int>(ENetConsumerExitCode::ManagerDriverFullDidNotRetainHead);
+		return static_cast<int>(ETransportConsumerExitCode::ManagerDriverFullDidNotRetainHead);
 	}
 	// Clear backpressure and observe recovery: drain the driver, then advance must succeed.
 	BackpressureDriver.Drain(0);
-	const ENetResult RecoveryResult = BackpressureManager.AdvanceSend();
-	const bool bRecoveredAfterDrain = RecoveryResult == ENetResult::Success && BackpressureManager.IsEmpty();
+	const ETransportResult RecoveryResult = BackpressureManager.AdvanceSend();
+	const bool bRecoveredAfterDrain = RecoveryResult == ETransportResult::Success && BackpressureManager.IsEmpty();
 	if (!bRecoveredAfterDrain)
 	{
-		return static_cast<int>(ENetConsumerExitCode::ManagerRecoveryDidNotClearBackpressure);
+		return static_cast<int>(ETransportConsumerExitCode::ManagerRecoveryDidNotClearBackpressure);
 	}
 
 	// Direct receive: the manager must propagate the driver success and byte count.
 	std::uint8_t ReceiveDestination[MicroWorldConsumer::LoopbackDestinationByteCount]{};
-	FNetReceiveResult ReceiveResult{};
-	FNetAddress ReceiveFrom{};
-	const ENetResult ManagerReceiveResult =
+	FReceiveResult ReceiveResult{};
+	FDeviceAddress ReceiveFrom{};
+	const ETransportResult ManagerReceiveResult =
 		Manager.Receive(ReceiveFrom, TSpan<std::uint8_t>(ReceiveDestination, MicroWorldConsumer::LoopbackDestinationByteCount), ReceiveResult);
 	const bool bReceivePropagated =
-		ManagerReceiveResult == ENetResult::Success && ReceiveResult.BytesReceived != MicroWorldConsumer::EmptyReceiveByteCount;
+		ManagerReceiveResult == ETransportResult::Success && ReceiveResult.BytesReceived != MicroWorldConsumer::EmptyReceiveByteCount;
 	if (!bReceivePropagated)
 	{
-		return static_cast<int>(ENetConsumerExitCode::ManagerReceiveDidNotPropagateSuccess);
+		return static_cast<int>(ETransportConsumerExitCode::ManagerReceiveDidNotPropagateSuccess);
 	}
 
-	return static_cast<int>(ENetConsumerExitCode::Success);
+	return static_cast<int>(ETransportConsumerExitCode::Success);
 }

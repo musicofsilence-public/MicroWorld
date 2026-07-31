@@ -1,9 +1,9 @@
 #include "UdpEchoShared.h"
 
 #include <MicroWorld/Core/Log.h>
-#include <MicroWorld/Transport/NetAddress.h>
-#include <MicroWorld/Transport/NetDriver.h>
-#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Transport/DeviceAddress.h>
+#include <MicroWorld/Transport/Device.h>
+#include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Transport/UdpAddressCodec.h>
 #include <MicroWorld/Platform/Esp32/Esp32OutputDevice.h>
 #include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
@@ -30,9 +30,9 @@ extern "C" void app_main(void)
 	SetOutputDevice(&WriteEsp32LogRecord);
 
 	static FEsp32WifiLink WifiLink;
-	const ENetResult WifiResult =
+	const ETransportResult WifiResult =
 		WifiLink.StartAccessPoint(FEsp32AccessPointConfig{DemoApSsid, DemoApPassword, /*WifiChannel*/ 1, /*MaxStations*/ 4});
-	if (WifiResult != ENetResult::Success)
+	if (WifiResult != ETransportResult::Success)
 	{
 		MW_LOG(Error, "ex15", "wifi failed result=%d; halting", static_cast<int>(WifiResult));
 		return;
@@ -55,10 +55,10 @@ extern "C" void app_main(void)
 	{
 		if (Driver.PollReadable(PollReadinessMilliseconds))
 		{
-			FNetAddress From{};
-			FNetReceiveResult Received{};
-			const ENetResult Result = Driver.TryReceive(From, TSpan<std::uint8_t>(RxBuffer, sizeof(RxBuffer)), Received);
-			if (Result == ENetResult::Success)
+			FDeviceAddress From{};
+			FReceiveResult Received{};
+			const ETransportResult Result = Driver.TryReceive(From, TSpan<std::uint8_t>(RxBuffer, sizeof(RxBuffer)), Received);
+			if (Result == ETransportResult::Success)
 			{
 				MW_LOG(
 					Log,
@@ -66,10 +66,10 @@ extern "C" void app_main(void)
 					"rx bytes=%u from_port=%u",
 					static_cast<unsigned>(Received.BytesReceived),
 					static_cast<unsigned>(UdpAddressPort(From)));
-				const ENetResult Sent = Driver.TrySend(From, TSpan<const std::uint8_t>(RxBuffer, Received.BytesReceived));
+				const ETransportResult Sent = Driver.TrySend(From, TSpan<const std::uint8_t>(RxBuffer, Received.BytesReceived));
 				MW_LOG(Log, "ex15", "echo result=%d", static_cast<int>(Sent));
 			}
-			else if (Result == ENetResult::Full)
+			else if (Result == ETransportResult::Full)
 			{
 				// Oversize datagram: larger than the buffer, so the driver kept it queued
 				// rather than truncating. A single one can wedge later polls.

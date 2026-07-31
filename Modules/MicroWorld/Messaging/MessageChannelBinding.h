@@ -22,16 +22,16 @@ enum class EChannelSendTarget : std::uint8_t
 };
 
 /**
- * Two-way adapter binding one TNetHost wire channel to one message sink.
+ * Two-way adapter binding one TTransportHost wire channel to one message sink.
  *
  * Outbound sends go to the host (SendTo for a Server target, Broadcast for AllPeers) with the
  * transport result mapped onto EMessageResult, while inbound payloads on the matching wire-channel
  * byte are handed to the sink and a foreign wire channel on the same host is ignored. Duck-typed on
- * TNet exactly like TNetHostSystem (see Engine/EngineSystem.h), so this header names no Net type and
- * microworld-engine keeps zero dependency on microworld-net; the Net types resolve only where a
- * caller instantiates this template against a concrete TNetHost.
+ * THost exactly like THostPlaySystem (see Engine/EngineSystem.h), so this header names no Transport type and
+ * microworld-engine keeps zero dependency on microworld-transport; the Transport types resolve only where a
+ * caller instantiates this template against a concrete TTransportHost.
  */
-template<typename TNet>
+template<typename THost>
 class TMessageChannelBinding final : public IMessageChannel
 {
 public:
@@ -41,14 +41,14 @@ public:
 	 * afterward, since a binding that failed to attach never receives inbound traffic.
 	 */
 	TMessageChannelBinding(
-		TNet& InHost,
+		THost& InHost,
 		const std::uint8_t InWireChannelByte,
 		const FMessageChannelId InChannelId,
 		const EChannelSendTarget InSendTarget,
 		IEncodedMessageSink& InSink) noexcept
 		: Host(InHost), WireChannelByte(InWireChannelByte), ChannelId(InChannelId), SendTarget(InSendTarget), Sink(InSink)
 	{
-		typename TNet::FMessageHandlerBinding InboundHandler;
+		typename THost::FMessageHandlerBinding InboundHandler;
 		const EDelegateResult BindResult =
 			InboundHandler.Bind([this](auto /*Peer*/, const std::uint8_t Channel, const TSpan<const std::uint8_t> Payload) noexcept
 								{ this->OnWireBytesReceived(Channel, Payload); });
@@ -88,8 +88,8 @@ public:
 	/** Returns this binding's configured router-facing channel id. */
 	FMessageChannelId GetChannelId() const noexcept override { return ChannelId; }
 
-	/** Returns the largest encoded message TNet's packet budget can carry in one send. */
-	std::size_t MaxEncodedMessageBytes() const noexcept override { return TNet::MaxMessageBytes; }
+	/** Returns the largest encoded message THost's packet budget can carry in one send. */
+	std::size_t MaxEncodedMessageBytes() const noexcept override { return THost::MaxMessageBytes; }
 
 	/**
 	 * Sends one already-encoded message over the wire.
@@ -100,39 +100,39 @@ public:
 	{
 		if (SendTarget == EChannelSendTarget::Server)
 		{
-			const auto ServerPeer = Host.GetServerPeer(); // auto: never names the Net peer-id type
+			const auto ServerPeer = Host.GetServerPeer(); // auto: never names the Transport peer-id type
 			if (!ServerPeer.IsValid())
 			{
 				return EMessageResult::Unavailable;
 			}
-			return MapNetSendResult(Host.SendTo(ServerPeer, WireChannelByte, InEncoded));
+			return MapTransportSendResult(Host.SendTo(ServerPeer, WireChannelByte, InEncoded));
 		}
-		return MapNetSendResult(Host.Broadcast(WireChannelByte, InEncoded));
+		return MapTransportSendResult(Host.Broadcast(WireChannelByte, InEncoded));
 	}
 
 private:
 	/**
-	 * Maps a duck-typed TNet transport result onto EMessageResult (roadmap §4.3's normative
-	 * table) without naming the transport's result enum in this engine header: TNetResult is this
-	 * function template's own parameter, so `TNetResult::Success` etc. are dependent names resolved
-	 * only when a caller instantiates TMessageChannelBinding against a concrete TNet.
+	 * Maps a duck-typed THost transport result onto EMessageResult (roadmap §4.3's normative
+	 * table) without naming the transport's result enum in this engine header: TTransportResult is this
+	 * function template's own parameter, so `TTransportResult::Success` etc. are dependent names resolved
+	 * only when a caller instantiates TMessageChannelBinding against a concrete THost.
 	 */
-	template<typename TNetResult>
-	static EMessageResult MapNetSendResult(const TNetResult InResult) noexcept
+	template<typename TTransportResult>
+	static EMessageResult MapTransportSendResult(const TTransportResult InResult) noexcept
 	{
-		if (InResult == TNetResult::Success)
+		if (InResult == TTransportResult::Success)
 		{
 			return EMessageResult::Success;
 		}
-		if (InResult == TNetResult::Full)
+		if (InResult == TTransportResult::Full)
 		{
 			return EMessageResult::CapacityExceeded;
 		}
-		if (InResult == TNetResult::Invalid)
+		if (InResult == TTransportResult::Invalid)
 		{
 			return EMessageResult::PayloadTooLarge;
 		}
-		return EMessageResult::Unavailable; // TNetResult::Unavailable is the only value left.
+		return EMessageResult::Unavailable; // TTransportResult::Unavailable is the only value left.
 	}
 
 	/**
@@ -153,9 +153,9 @@ private:
 	}
 
 	/** Externally owned network host this binding registers with and sends through; never owned here. */
-	TNet& Host;
+	THost& Host;
 
-	/** Wire-level channel byte (TNetHost channel 1..255) this binding reads and writes. */
+	/** Wire-level channel byte (TTransportHost channel 1..255) this binding reads and writes. */
 	std::uint8_t WireChannelByte;
 
 	/** Router-facing channel id this binding is registered under (IMessageChannel::GetChannelId). */

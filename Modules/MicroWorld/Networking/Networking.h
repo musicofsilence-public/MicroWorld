@@ -5,7 +5,7 @@
 #include <MicroWorld/Messaging/MessageChannelBinding.h>
 #include <MicroWorld/Messaging/MessageRouter.h>
 #include <MicroWorld/Messaging/ReliableChannel.h>
-#include <MicroWorld/Transport/NetHost.h>
+#include <MicroWorld/Transport/TransportHost.h>
 
 #include <array>
 #include <cstddef>
@@ -16,7 +16,7 @@
 namespace MicroWorld
 {
 
-/** Selects whether a TNetSystem channel resends unacknowledged messages or sends best-effort once. */
+/** Selects whether a TNetworking channel resends unacknowledged messages or sends best-effort once. */
 enum class EChannelReliability : std::uint8_t
 {
 	/** Send once; packet loss drops the message. The channel binding forwards directly to the router. */
@@ -27,20 +27,20 @@ enum class EChannelReliability : std::uint8_t
 };
 
 /**
- * Carries the fixed capacities a TNetSystem sizes itself with: how many net drivers it accepts,
- * the peer and packet sizing every TNetHost shares, the shared router sizing, the reliable-channel
+ * Carries the fixed capacities a TNetworking sizes itself with: how many net drivers it accepts,
+ * the peer and packet sizing every TTransportHost shares, the shared router sizing, the reliable-channel
  * retry sizing, and how many channels one system accepts in total. Every member is a compile-time
  * capacity so the system never allocates.
  */
-struct FDefaultNetSystemTraits
+struct FDefaultNetworkingTraits
 {
-	/** Maximum net drivers (one TNetHost each) the system accepts through AddNetDriver. */
-	static constexpr std::size_t MaxNetDrivers = 2;
+	/** Maximum net drivers (one TTransportHost each) the system accepts through AddDevice. */
+	static constexpr std::size_t MaxDevices = 2;
 
-	/** Peer slots each TNetHost owns; reserved indices 0xFE/0xFF keep this below 0xFE. */
+	/** Peer slots each TTransportHost owns; reserved indices 0xFE/0xFF keep this below 0xFE. */
 	static constexpr std::size_t MaxPeers = 2;
 
-	/** Packet byte budget each TNetHost owns; must fit the largest control frame. */
+	/** Packet byte budget each TTransportHost owns; must fit the largest control frame. */
 	static constexpr std::size_t MaxPacketBytes = 256;
 
 	/** Maximum handlers the shared router accepts. */
@@ -69,10 +69,10 @@ struct FDefaultNetSystemTraits
 };
 
 /**
- * Generation-checked identity of one net driver added to a TNetSystem. The index addresses the
+ * Generation-checked identity of one net driver added to a TNetworking. The index addresses the
  * fixed slot and the generation prevents a stale identity from addressing a later occupant.
  */
-struct FNetDriverHandle
+struct FDeviceHandle
 {
 	/** Reserved index that names no driver; the default handle is deliberately invalid. */
 	static constexpr std::uint8_t InvalidIndex = 0xFF;
@@ -88,7 +88,7 @@ struct FNetDriverHandle
 };
 
 /**
- * Generation-checked identity of one channel added to a TNetSystem. It mirrors FNetDriverHandle
+ * Generation-checked identity of one channel added to a TNetworking. It mirrors FDeviceHandle
  * so a stale channel identity cannot address a future slot occupant.
  */
 struct FChannelHandle
@@ -108,29 +108,28 @@ struct FChannelHandle
 
 /**
  * One object that turns drivers into a working networked engine, owning fixed-capacity hosts,
- * bindings, reliable wrappers, and a shared router. AddNetDriver and AddChannel compose it;
+ * bindings, reliable wrappers, and a shared router. AddDevice and AddChannel compose it;
  * BeginPlay closes composition and starts hosts at the engine's canonical time, while direct
  * frame pumping preserves the net -> reliable -> router ordering without adapter objects.
  */
-template<typename TTraits = FDefaultNetSystemTraits>
-class TNetSystem final : public IPlaySystem
+template<typename TTraits = FDefaultNetworkingTraits>
+class TNetworking final : public IPlaySystem
 {
 	/** Prevents a valid handle index from colliding with the reserved invalid sentinel. */
-	static_assert(
-		TTraits::MaxNetDrivers <= FNetDriverHandle::InvalidIndex, "TNetSystem driver capacity must fit below FNetDriverHandle::InvalidIndex.");
+	static_assert(TTraits::MaxDevices <= FDeviceHandle::InvalidIndex, "TNetworking driver capacity must fit below FDeviceHandle::InvalidIndex.");
 
 	/** Prevents a valid handle index from colliding with the reserved invalid sentinel. */
-	static_assert(TTraits::MaxChannels <= FChannelHandle::InvalidIndex, "TNetSystem channel capacity must fit below FChannelHandle::InvalidIndex.");
+	static_assert(TTraits::MaxChannels <= FChannelHandle::InvalidIndex, "TNetworking channel capacity must fit below FChannelHandle::InvalidIndex.");
 
-	/** TNetHost itself requires a bounded, nonzero peer table. */
-	static_assert(TTraits::MaxPeers > 0, "TNetSystem requires at least one peer per driver.");
+	/** TTransportHost itself requires a bounded, nonzero peer table. */
+	static_assert(TTraits::MaxPeers > 0, "TNetworking requires at least one peer per driver.");
 
 private:
 	/** Names the concrete host type every driver slot stores. */
-	using FNetHost = TNetHost<TTraits::MaxPeers, TTraits::MaxPacketBytes>;
+	using FTransportHost = TTransportHost<TTraits::MaxPeers, TTraits::MaxPacketBytes>;
 
 	/** Names the binding that connects one host wire channel to the shared router. */
-	using FChannelBinding = TMessageChannelBinding<FNetHost>;
+	using FChannelBinding = TMessageChannelBinding<FTransportHost>;
 
 	/** Names the one shared actor-message router. */
 	using FRouter =
@@ -141,16 +140,16 @@ private:
 
 public:
 	/** Creates an empty system; callers finish its driver and channel composition before engine BeginPlay. */
-	TNetSystem() noexcept = default;
+	TNetworking() noexcept = default;
 
 	/** Stable in-place ownership keeps host and channel addresses valid for their bound relationships, so a net system cannot copy or relocate. */
-	TNetSystem(const TNetSystem&) = delete;
-	TNetSystem& operator=(const TNetSystem&) = delete;
-	TNetSystem(TNetSystem&&) = delete;
-	TNetSystem& operator=(TNetSystem&&) = delete;
+	TNetworking(const TNetworking&) = delete;
+	TNetworking& operator=(const TNetworking&) = delete;
+	TNetworking(TNetworking&&) = delete;
+	TNetworking& operator=(TNetworking&&) = delete;
 
 	/** Removes channel bindings before their hosts, preserving each host-handler registration's lifetime boundary. */
-	~TNetSystem() noexcept override
+	~TNetworking() noexcept override
 	{
 		for (FChannelSlot& Slot : ChannelSlots)
 		{
@@ -164,12 +163,12 @@ public:
 
 	/**
 	 * Adds one driver-backed host and configures its role/session policy. This only performs
-	 * TNetHost::Configure: host start is deferred to BeginPlay's engine lifecycle turn.
+	 * TTransportHost::Configure: host start is deferred to BeginPlay's engine lifecycle turn.
 	 *
 	 * @return A generation-checked driver handle, or an invalid handle on closed composition,
 	 *         exhausted capacity, or a rejected host configuration.
 	 */
-	FNetDriverHandle AddNetDriver(INetDriver& InDriver, ENetMode InMode, const FNetHostConfig& InConfig) noexcept
+	FDeviceHandle AddDevice(IDevice& InDriver, ENetworkMode InMode, const FTransportHostConfig& InConfig) noexcept
 	{
 		if (bCompositionClosed)
 		{
@@ -181,14 +180,14 @@ public:
 		{
 			return {};
 		}
-		if (Slot->Host->Configure(InMode, InConfig) != ENetResult::Success)
+		if (Slot->Host->Configure(InMode, InConfig) != ETransportResult::Success)
 		{
 			ReleaseDriverSlot(*Slot);
 			return {};
 		}
 
 		Slot->Mode = InMode;
-		return FNetDriverHandle{static_cast<std::uint8_t>(Slot - DriverSlots.data()), Slot->Generation};
+		return FDeviceHandle{static_cast<std::uint8_t>(Slot - DriverSlots.data()), Slot->Generation};
 	}
 
 	/**
@@ -199,7 +198,7 @@ public:
 	 * @return A generation-checked channel handle, or an invalid handle for an invalid/stale driver,
 	 *         closed composition, invalid channel id, or any fixed-capacity registration failure.
 	 */
-	FChannelHandle AddChannel(FNetDriverHandle InDriver, FMessageChannelId InChannel, EChannelReliability InReliability) noexcept
+	FChannelHandle AddChannel(FDeviceHandle InDriver, FMessageChannelId InChannel, EChannelReliability InReliability) noexcept
 	{
 		if (bCompositionClosed || InChannel == LocalChannelId)
 		{
@@ -337,13 +336,13 @@ private:
 		bool bLive{false};
 
 		/** Configured host role, retained so AddChannel can derive its outbound peer target. */
-		ENetMode Mode{ENetMode::Standalone};
+		ENetworkMode Mode{ENetworkMode::Standalone};
 
 		/** Storage for the host, whose address must remain fixed while bindings reference it. */
-		alignas(FNetHost) std::byte HostStorage[sizeof(FNetHost)]{};
+		alignas(FTransportHost) std::byte HostStorage[sizeof(FTransportHost)]{};
 
 		/** Points at the host constructed in HostStorage while the slot is live. */
-		FNetHost* Host{nullptr};
+		FTransportHost* Host{nullptr};
 	};
 
 	/** Owns one binding and, only for guaranteed delivery, its reliable wrapper in stable storage. */
@@ -373,13 +372,13 @@ private:
 #endif
 
 	/** Constructs a host in the first free slot, or returns null when driver capacity is exhausted. */
-	FDriverSlot* AcquireDriverSlot(INetDriver& InDriver) noexcept
+	FDriverSlot* AcquireDriverSlot(IDevice& InDriver) noexcept
 	{
 		for (FDriverSlot& Slot : DriverSlots)
 		{
 			if (!Slot.bLive)
 			{
-				Slot.Host = new (&Slot.HostStorage) FNetHost(InDriver);
+				Slot.Host = new (&Slot.HostStorage) FTransportHost(InDriver);
 				Slot.bLive = true;
 				return &Slot;
 			}
@@ -396,7 +395,7 @@ private:
 		}
 		if (InSlot.Host != nullptr)
 		{
-			InSlot.Host->~FNetHost();
+			InSlot.Host->~FTransportHost();
 			InSlot.Host = nullptr;
 		}
 		InSlot.bLive = false;
@@ -439,7 +438,7 @@ private:
 	}
 
 	/** Resolves a generation-checked driver handle to its live slot, rejecting forged or stale identities. */
-	FDriverSlot* ResolveDriver(FNetDriverHandle InHandle) noexcept
+	FDriverSlot* ResolveDriver(FDeviceHandle InHandle) noexcept
 	{
 		if (!InHandle.IsValid() || InHandle.Index >= DriverSlots.size())
 		{
@@ -451,9 +450,9 @@ private:
 	}
 
 	/** Maps the configured role to the only valid outbound target for its bindings. */
-	static constexpr EChannelSendTarget GetSendTarget(ENetMode InMode) noexcept
+	static constexpr EChannelSendTarget GetSendTarget(ENetworkMode InMode) noexcept
 	{
-		return InMode == ENetMode::Client ? EChannelSendTarget::Server : EChannelSendTarget::AllPeers;
+		return InMode == ENetworkMode::Client ? EChannelSendTarget::Server : EChannelSendTarget::AllPeers;
 	}
 
 	/** Creates a guaranteed wrapper before router registration, or registers a best-effort binding directly. */
@@ -475,7 +474,7 @@ private:
 	FRouter Router;
 
 	/** Fixed slots that own all configured driver hosts. */
-	std::array<FDriverSlot, TTraits::MaxNetDrivers> DriverSlots{};
+	std::array<FDriverSlot, TTraits::MaxDevices> DriverSlots{};
 
 	/** Fixed slots that own all configured bindings and optional reliable wrappers. */
 	std::array<FChannelSlot, TTraits::MaxChannels> ChannelSlots{};

@@ -14,7 +14,7 @@ option(MICROWORLD_BUILD_TESTS "Build MicroWorld host tests" ON)
 option(MICROWORLD_BUILD_BENCHMARKS "Build MicroWorld host benchmarks" OFF)
 
 # Transport may be built without its radio (RadioE32) or IP/protocol (the UDP
-# Net sources) subsets. RP2040 builds omit the IP sources to fit 264 KB RAM; a
+# sources) subsets. RP2040 builds omit the IP sources to fit 264 KB RAM; a
 # radio-less build omits the E32 framing. Both are link-time facts expressed as
 # options, not folders, so the merged Transport system keeps one home.
 option(MICROWORLD_TRANSPORT_RADIO "Include the RadioE32 transport sources" ON)
@@ -129,13 +129,13 @@ target_link_libraries(microworld_messaging INTERFACE MicroWorld::Core)
 add_library(MicroWorld::Messaging ALIAS microworld_messaging)
 
 # ---------------------------------------------------------------------------
-# Transport: byte I/O, frame codec, TNetHost (the former Net package) plus the
+# Transport: byte I/O, frame codec, TTransportHost (the former Net package) plus the
 # optional portable RadioE32 framing. The IP and radio subsets are toggled by
 # MICROWORLD_TRANSPORT_IP / MICROWORLD_TRANSPORT_RADIO so a Pico build can omit
 # the IP/protocol sources and a radio-less build can omit the E32 sources.
 # ---------------------------------------------------------------------------
 set(MICROWORLD_TRANSPORT_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Transport/NetDriver.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Transport/Device.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Transport/PacketDropDriver.cpp"
 )
 if(MICROWORLD_TRANSPORT_RADIO)
@@ -156,7 +156,7 @@ microworld_enable_strict_portable_options(microworld_transport)
 microworld_disable_exceptions_and_rtti("${MICROWORLD_TRANSPORT_SOURCES}")
 
 # ---------------------------------------------------------------------------
-# Networking (was Integration): TNetSystem — Messaging + Transport behind
+# Networking (was Integration): TNetworking — Messaging + Transport behind
 # IPlaySystem. Header-only; Engine is deliberately absent.
 # ---------------------------------------------------------------------------
 add_library(microworld_networking INTERFACE)
@@ -363,17 +363,17 @@ if(MICROWORLD_BUILD_TESTS)
     # --- Transport tests (was Net + RadioE32) ---
     set(microworld_transport_TEST_SOURCES
         "${MICROWORLD_TESTS_ROOT}/Core/TestMain.cpp"
-        "${MICROWORLD_TESTS_ROOT}/Transport/NetAllocationCounters.cpp"
+        "${MICROWORLD_TESTS_ROOT}/Transport/TransportAllocationCounters.cpp"
         "${MICROWORLD_TESTS_ROOT}/Transport/ByteWriterTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Transport/ByteReaderTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Transport/E32LoraTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Transport/FrameCodecTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Transport/HostLoopbackTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Transport/PacketDropDriverTests.cpp"
-        "${MICROWORLD_TESTS_ROOT}/Transport/NetManagerTests.cpp"
-        "${MICROWORLD_TESTS_ROOT}/Transport/NetProtocolTests.cpp"
-        "${MICROWORLD_TESTS_ROOT}/Transport/NetHostTests.cpp"
-        "${MICROWORLD_TESTS_ROOT}/Transport/NetAllocationTests.cpp"
+        "${MICROWORLD_TESTS_ROOT}/Transport/TransportManagerTests.cpp"
+        "${MICROWORLD_TESTS_ROOT}/Transport/TransportProtocolTests.cpp"
+        "${MICROWORLD_TESTS_ROOT}/Transport/TransportHostTests.cpp"
+        "${MICROWORLD_TESTS_ROOT}/Transport/TransportAllocationTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Transport/RadioE32DriverTests.cpp"
     )
     add_executable(microworld_transport_tests ${microworld_transport_TEST_SOURCES})
@@ -388,8 +388,8 @@ if(MICROWORLD_BUILD_TESTS)
     # --- Networking tests (was Integration) ---
     set(microworld_networking_TEST_SOURCES
         "${MICROWORLD_TESTS_ROOT}/Core/TestMain.cpp"
-        "${MICROWORLD_TESTS_ROOT}/Networking/EngineNetHostTests.cpp"
-        "${MICROWORLD_TESTS_ROOT}/Networking/NetSystemTests.cpp"
+        "${MICROWORLD_TESTS_ROOT}/Networking/EngineHostTests.cpp"
+        "${MICROWORLD_TESTS_ROOT}/Networking/NetworkingTests.cpp"
     )
     add_executable(microworld_networking_tests ${microworld_networking_TEST_SOURCES})
     target_include_directories(microworld_networking_tests PRIVATE
@@ -423,7 +423,7 @@ if(MICROWORLD_BUILD_TESTS)
         "${MICROWORLD_TESTS_ROOT}/Core/TestMain.cpp"
         "${MICROWORLD_TESTS_ROOT}/Platform/Host/HostTimeSourceTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Platform/Host/HostUdpDriverTests.cpp"
-        "${MICROWORLD_TESTS_ROOT}/Platform/Host/HostNetEndToEndTests.cpp"
+        "${MICROWORLD_TESTS_ROOT}/Platform/Host/HostTransportEndToEndTests.cpp"
     )
     add_executable(microworld_platform_host_tests ${MICROWORLD_PLATFORM_HOST_TEST_SOURCES})
     target_include_directories(microworld_platform_host_tests PRIVATE

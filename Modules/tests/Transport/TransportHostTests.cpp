@@ -1,11 +1,11 @@
-#include "NetAllocationCounters.h"
+#include "TransportAllocationCounters.h"
 #include "TestSupport.h"
 
 #include <MicroWorld/Core/Containers/Span.h>
 #include <MicroWorld/Transport/HostLoopback.h>
-#include <MicroWorld/Transport/NetAddress.h>
-#include <MicroWorld/Transport/NetHost.h>
-#include <MicroWorld/Transport/NetResult.h>
+#include <MicroWorld/Transport/DeviceAddress.h>
+#include <MicroWorld/Transport/TransportHost.h>
+#include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Core/Time.h>
 
 #include <cstddef>
@@ -15,20 +15,20 @@
 namespace
 {
 
-using MicroWorld::ENetHostState;
-using MicroWorld::ENetMode;
-using MicroWorld::ENetResult;
+using MicroWorld::ENetworkMode;
+using MicroWorld::ETransportHostState;
+using MicroWorld::ETransportResult;
 using MicroWorld::FDelegateHandle;
-using MicroWorld::FNetAddress;
-using MicroWorld::FNetHostConfig;
-using MicroWorld::FNetReceiveResult;
+using MicroWorld::FDeviceAddress;
 using MicroWorld::FPeerId;
-using MicroWorld::INetDriver;
+using MicroWorld::FReceiveResult;
+using MicroWorld::FTransportHostConfig;
+using MicroWorld::IDevice;
 using MicroWorld::MakeLoopbackAddress;
 using MicroWorld::THostLoopback;
 using MicroWorld::TimePointMilliseconds;
-using MicroWorld::TNetHost;
 using MicroWorld::TSpan;
+using MicroWorld::TTransportHost;
 using MicroWorld::Tests::GlobalAllocationCount;
 
 /** Heartbeat interval (ms) the deterministic host config stamps so timed cases advance in fixed steps. */
@@ -80,7 +80,7 @@ constexpr std::uint8_t WelcomePeerGeneration = 3;
 constexpr std::size_t LoopbackMailboxDepth = 8;
 /** Loopback per-packet byte capacity every host config case uses. */
 constexpr std::size_t LoopbackPacketBytes = 64;
-/** Per-host packet byte capacity every TNetHost instantiation uses. */
+/** Per-host packet byte capacity every TTransportHost instantiation uses. */
 constexpr std::size_t HostPacketBytes = 64;
 /** Number of remote peers the rejection-when-full case admits (matches MaxPeers). */
 constexpr std::size_t FullPeerCount = 2;
@@ -139,9 +139,9 @@ struct FHandlerCapture
 };
 
 /** Builds a fast-heartbeat host config with a short timeout window for deterministic tests. */
-FNetHostConfig MakeHostConfig(const std::uint8_t InProtocolVersion) noexcept
+FTransportHostConfig MakeHostConfig(const std::uint8_t InProtocolVersion) noexcept
 {
-	FNetHostConfig Config{};
+	FTransportHostConfig Config{};
 	Config.HeartbeatIntervalMilliseconds = HeartbeatIntervalMs;
 	Config.PeerTimeoutMilliseconds = PeerTimeoutMs;
 	Config.ProtocolVersion = InProtocolVersion;
@@ -149,9 +149,9 @@ FNetHostConfig MakeHostConfig(const std::uint8_t InProtocolVersion) noexcept
 }
 
 /** Builds a client config that greets the loopback port `InServerPort`. */
-FNetHostConfig MakeClientConfig(const std::uint8_t InProtocolVersion, const std::uint8_t InServerPort) noexcept
+FTransportHostConfig MakeClientConfig(const std::uint8_t InProtocolVersion, const std::uint8_t InServerPort) noexcept
 {
-	FNetHostConfig Config = MakeHostConfig(InProtocolVersion);
+	FTransportHostConfig Config = MakeHostConfig(InProtocolVersion);
 	Config.ServerAddress = MakeLoopbackAddress(InServerPort);
 	return Config;
 }
@@ -188,14 +188,14 @@ void RunHandshake(ServerType& InServer, ClientType& InClient, const TimePointMil
  * Scenario: Drive one Hello from the client to a started server, then have the server send Welcome back.
  * Expected: The server admits one peer on the Hello and the client reaches Connected once it receives the Welcome.
  */
-MW_TEST_CASE(NetHostServerAdmitsClientOnHello)
+MW_TEST_CASE(TransportHostServerAdmitsClientOnHello)
 {
 	// Arrange
 	THostLoopback<2, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
-	TNetHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
-	TNetHost<1, HostPacketBytes> Client(Loopback.Port(FirstClientPortIndex));
-	(void)Server.Configure(ENetMode::DedicatedServer, MakeHostConfig(MatchedProtocolVersion));
-	(void)Client.Configure(ENetMode::Client, MakeClientConfig(MatchedProtocolVersion, ServerPortIndex));
+	TTransportHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
+	TTransportHost<1, HostPacketBytes> Client(Loopback.Port(FirstClientPortIndex));
+	(void)Server.Configure(ENetworkMode::DedicatedServer, MakeHostConfig(MatchedProtocolVersion));
+	(void)Client.Configure(ENetworkMode::Client, MakeClientConfig(MatchedProtocolVersion, ServerPortIndex));
 	(void)Server.Start(0);
 	(void)Client.Start(0);
 
@@ -209,51 +209,51 @@ MW_TEST_CASE(NetHostServerAdmitsClientOnHello)
 	Server.PumpSend(0);
 	Client.PumpReceive(0);
 	// Assert
-	MW_EXPECT_EQ(Test, ENetHostState::Connected, Client.GetState(), "Client connects once it receives the Welcome");
+	MW_EXPECT_EQ(Test, ETransportHostState::Connected, Client.GetState(), "Client connects once it receives the Welcome");
 }
 
 /**
  * Scenario: Configure a client but leave it unstarted, then start it, then run the handshake.
  * Expected: The client state advances Idle to Connecting on Start and reaches Connected after the handshake.
  */
-MW_TEST_CASE(NetHostClientAdvancesThroughConnectingToConnected)
+MW_TEST_CASE(TransportHostClientAdvancesThroughConnectingToConnected)
 {
 	// Arrange
 	THostLoopback<2, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
-	TNetHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
-	TNetHost<1, HostPacketBytes> Client(Loopback.Port(FirstClientPortIndex));
-	(void)Server.Configure(ENetMode::DedicatedServer, MakeHostConfig(MatchedProtocolVersion));
-	(void)Client.Configure(ENetMode::Client, MakeClientConfig(MatchedProtocolVersion, ServerPortIndex));
+	TTransportHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
+	TTransportHost<1, HostPacketBytes> Client(Loopback.Port(FirstClientPortIndex));
+	(void)Server.Configure(ENetworkMode::DedicatedServer, MakeHostConfig(MatchedProtocolVersion));
+	(void)Client.Configure(ENetworkMode::Client, MakeClientConfig(MatchedProtocolVersion, ServerPortIndex));
 	(void)Server.Start(0);
 
 	// Assert - a configured but unstarted client is Idle
-	MW_EXPECT_EQ(Test, ENetHostState::Idle, Client.GetState(), "A configured but unstarted client is Idle");
+	MW_EXPECT_EQ(Test, ETransportHostState::Idle, Client.GetState(), "A configured but unstarted client is Idle");
 	// Act
 	(void)Client.Start(0);
 	// Assert - a started client is Connecting
-	MW_EXPECT_EQ(Test, ENetHostState::Connecting, Client.GetState(), "A started client is Connecting");
+	MW_EXPECT_EQ(Test, ETransportHostState::Connecting, Client.GetState(), "A started client is Connecting");
 	// Act
 	RunHandshake(Server, Client, 0);
 	// Assert
-	MW_EXPECT_EQ(Test, ENetHostState::Connected, Client.GetState(), "The client reaches Connected after the handshake");
+	MW_EXPECT_EQ(Test, ETransportHostState::Connected, Client.GetState(), "The client reaches Connected after the handshake");
 }
 
 /**
  * Scenario: Start three clients against a two-peer-capacity server and have each client send Hello.
  * Expected: The server admits exactly its peer capacity and rejects the overflow Hello.
  */
-MW_TEST_CASE(NetHostRejectsHelloWhenPeerTableFull)
+MW_TEST_CASE(TransportHostRejectsHelloWhenPeerTableFull)
 {
 	// Arrange
 	THostLoopback<4, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
-	TNetHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
-	TNetHost<1, HostPacketBytes> FirstClient(Loopback.Port(FirstClientPortIndex));
-	TNetHost<1, HostPacketBytes> SecondClient(Loopback.Port(SecondClientPortIndex));
-	TNetHost<1, HostPacketBytes> ThirdClient(Loopback.Port(ThirdClientPortIndex));
-	(void)Server.Configure(ENetMode::DedicatedServer, MakeHostConfig(MatchedProtocolVersion));
-	(void)FirstClient.Configure(ENetMode::Client, MakeClientConfig(MatchedProtocolVersion, ServerPortIndex));
-	(void)SecondClient.Configure(ENetMode::Client, MakeClientConfig(MatchedProtocolVersion, ServerPortIndex));
-	(void)ThirdClient.Configure(ENetMode::Client, MakeClientConfig(MatchedProtocolVersion, ServerPortIndex));
+	TTransportHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
+	TTransportHost<1, HostPacketBytes> FirstClient(Loopback.Port(FirstClientPortIndex));
+	TTransportHost<1, HostPacketBytes> SecondClient(Loopback.Port(SecondClientPortIndex));
+	TTransportHost<1, HostPacketBytes> ThirdClient(Loopback.Port(ThirdClientPortIndex));
+	(void)Server.Configure(ENetworkMode::DedicatedServer, MakeHostConfig(MatchedProtocolVersion));
+	(void)FirstClient.Configure(ENetworkMode::Client, MakeClientConfig(MatchedProtocolVersion, ServerPortIndex));
+	(void)SecondClient.Configure(ENetworkMode::Client, MakeClientConfig(MatchedProtocolVersion, ServerPortIndex));
+	(void)ThirdClient.Configure(ENetworkMode::Client, MakeClientConfig(MatchedProtocolVersion, ServerPortIndex));
 	(void)Server.Start(0);
 	(void)FirstClient.Start(0);
 	(void)SecondClient.Start(0);
@@ -273,14 +273,14 @@ MW_TEST_CASE(NetHostRejectsHelloWhenPeerTableFull)
  * Scenario: Complete a handshake, then drive client heartbeats every interval well past the timeout window.
  * Expected: Heartbeats received within the window keep the peer alive beyond the timeout.
  */
-MW_TEST_CASE(NetHostHeartbeatKeepsPeerAlive)
+MW_TEST_CASE(TransportHostHeartbeatKeepsPeerAlive)
 {
 	// Arrange
 	THostLoopback<2, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
-	TNetHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
-	TNetHost<1, HostPacketBytes> Client(Loopback.Port(FirstClientPortIndex));
-	(void)Server.Configure(ENetMode::DedicatedServer, MakeHostConfig(MatchedProtocolVersion));
-	(void)Client.Configure(ENetMode::Client, MakeClientConfig(MatchedProtocolVersion, ServerPortIndex));
+	TTransportHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
+	TTransportHost<1, HostPacketBytes> Client(Loopback.Port(FirstClientPortIndex));
+	(void)Server.Configure(ENetworkMode::DedicatedServer, MakeHostConfig(MatchedProtocolVersion));
+	(void)Client.Configure(ENetworkMode::Client, MakeClientConfig(MatchedProtocolVersion, ServerPortIndex));
 	(void)Server.Start(0);
 	(void)Client.Start(0);
 	RunHandshake(Server, Client, 0);
@@ -300,14 +300,14 @@ MW_TEST_CASE(NetHostHeartbeatKeepsPeerAlive)
  * Scenario: Complete a handshake, then send no further client traffic while advancing the server past the timeout window.
  * Expected: The peer is evicted after missing heartbeats past the timeout.
  */
-MW_TEST_CASE(NetHostEvictsPeerAfterTimeout)
+MW_TEST_CASE(TransportHostEvictsPeerAfterTimeout)
 {
 	// Arrange
 	THostLoopback<2, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
-	TNetHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
-	TNetHost<1, HostPacketBytes> Client(Loopback.Port(FirstClientPortIndex));
-	(void)Server.Configure(ENetMode::DedicatedServer, MakeHostConfig(MatchedProtocolVersion));
-	(void)Client.Configure(ENetMode::Client, MakeClientConfig(MatchedProtocolVersion, ServerPortIndex));
+	TTransportHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
+	TTransportHost<1, HostPacketBytes> Client(Loopback.Port(FirstClientPortIndex));
+	(void)Server.Configure(ENetworkMode::DedicatedServer, MakeHostConfig(MatchedProtocolVersion));
+	(void)Client.Configure(ENetworkMode::Client, MakeClientConfig(MatchedProtocolVersion, ServerPortIndex));
 	(void)Server.Start(0);
 	(void)Client.Start(0);
 	RunHandshake(Server, Client, 0);
@@ -323,16 +323,16 @@ MW_TEST_CASE(NetHostEvictsPeerAfterTimeout)
  * Scenario: Admit a first client, evict it by timeout, then admit a second client into the freed slot and send to both the stale and fresh peer ids.
  * Expected: Eviction bumps the slot generation; the stale id fails to send while the freshly assigned id resolves the reused slot.
  */
-MW_TEST_CASE(NetHostBumpsGenerationSoStaleIdFailsAfterReadmission)
+MW_TEST_CASE(TransportHostBumpsGenerationSoStaleIdFailsAfterReadmission)
 {
 	// Arrange
 	THostLoopback<3, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
-	TNetHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
-	TNetHost<1, HostPacketBytes> FirstClient(Loopback.Port(FirstClientPortIndex));
-	TNetHost<1, HostPacketBytes> SecondClient(Loopback.Port(SecondClientPortIndex));
-	(void)Server.Configure(ENetMode::DedicatedServer, MakeHostConfig(MatchedProtocolVersion));
-	(void)FirstClient.Configure(ENetMode::Client, MakeClientConfig(MatchedProtocolVersion, ServerPortIndex));
-	(void)SecondClient.Configure(ENetMode::Client, MakeClientConfig(MatchedProtocolVersion, ServerPortIndex));
+	TTransportHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
+	TTransportHost<1, HostPacketBytes> FirstClient(Loopback.Port(FirstClientPortIndex));
+	TTransportHost<1, HostPacketBytes> SecondClient(Loopback.Port(SecondClientPortIndex));
+	(void)Server.Configure(ENetworkMode::DedicatedServer, MakeHostConfig(MatchedProtocolVersion));
+	(void)FirstClient.Configure(ENetworkMode::Client, MakeClientConfig(MatchedProtocolVersion, ServerPortIndex));
+	(void)SecondClient.Configure(ENetworkMode::Client, MakeClientConfig(MatchedProtocolVersion, ServerPortIndex));
 	(void)Server.Start(0);
 	(void)FirstClient.Start(0);
 
@@ -353,12 +353,12 @@ MW_TEST_CASE(NetHostBumpsGenerationSoStaleIdFailsAfterReadmission)
 	// Act / Assert - the stale id must fail and the fresh id must succeed on the reused slot.
 	MW_EXPECT_EQ(
 		Test,
-		ENetResult::Invalid,
+		ETransportResult::Invalid,
 		Server.SendTo(StaleId, SendChannel, TSpan<const std::uint8_t>(Payload, sizeof(Payload))),
 		"A stale peer id no longer matches the reused slot");
 	MW_EXPECT_EQ(
 		Test,
-		ENetResult::Success,
+		ETransportResult::Success,
 		Server.SendTo(FreshId, SendChannel, TSpan<const std::uint8_t>(Payload, sizeof(Payload))),
 		"The freshly assigned peer id resolves the reused slot");
 }
@@ -367,16 +367,16 @@ MW_TEST_CASE(NetHostBumpsGenerationSoStaleIdFailsAfterReadmission)
  * Scenario: Connect two clients, broadcast a payload from the server, and pump delivery to both.
  * Expected: Each connected client receives the broadcast exactly once with the broadcast payload byte.
  */
-MW_TEST_CASE(NetHostBroadcastReachesEveryConnectedPeer)
+MW_TEST_CASE(TransportHostBroadcastReachesEveryConnectedPeer)
 {
 	// Arrange
 	THostLoopback<3, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
-	TNetHost<3, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
-	TNetHost<1, HostPacketBytes> FirstClient(Loopback.Port(FirstClientPortIndex));
-	TNetHost<1, HostPacketBytes> SecondClient(Loopback.Port(SecondClientPortIndex));
-	(void)Server.Configure(ENetMode::DedicatedServer, MakeHostConfig(MatchedProtocolVersion));
-	(void)FirstClient.Configure(ENetMode::Client, MakeClientConfig(MatchedProtocolVersion, ServerPortIndex));
-	(void)SecondClient.Configure(ENetMode::Client, MakeClientConfig(MatchedProtocolVersion, ServerPortIndex));
+	TTransportHost<3, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
+	TTransportHost<1, HostPacketBytes> FirstClient(Loopback.Port(FirstClientPortIndex));
+	TTransportHost<1, HostPacketBytes> SecondClient(Loopback.Port(SecondClientPortIndex));
+	(void)Server.Configure(ENetworkMode::DedicatedServer, MakeHostConfig(MatchedProtocolVersion));
+	(void)FirstClient.Configure(ENetworkMode::Client, MakeClientConfig(MatchedProtocolVersion, ServerPortIndex));
+	(void)SecondClient.Configure(ENetworkMode::Client, MakeClientConfig(MatchedProtocolVersion, ServerPortIndex));
 	(void)Server.Start(0);
 	(void)FirstClient.Start(0);
 	(void)SecondClient.Start(0);
@@ -394,7 +394,7 @@ MW_TEST_CASE(NetHostBroadcastReachesEveryConnectedPeer)
 	// Act
 	MW_EXPECT_EQ(
 		Test,
-		ENetResult::Success,
+		ETransportResult::Success,
 		Server.Broadcast(BroadcastChannel, TSpan<const std::uint8_t>(Payload, sizeof(Payload))),
 		"Broadcast queues for every peer");
 	Server.PumpSend(0);
@@ -412,14 +412,14 @@ MW_TEST_CASE(NetHostBroadcastReachesEveryConnectedPeer)
  * Scenario: Connect a client, send a payload to its peer id on a chosen channel, and pump delivery.
  * Expected: The addressed peer receives exactly one message on the requested channel carrying the sent payload.
  */
-MW_TEST_CASE(NetHostSendToDeliversToTheAddressedPeer)
+MW_TEST_CASE(TransportHostSendToDeliversToTheAddressedPeer)
 {
 	// Arrange
 	THostLoopback<2, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
-	TNetHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
-	TNetHost<1, HostPacketBytes> Client(Loopback.Port(FirstClientPortIndex));
-	(void)Server.Configure(ENetMode::DedicatedServer, MakeHostConfig(MatchedProtocolVersion));
-	(void)Client.Configure(ENetMode::Client, MakeClientConfig(MatchedProtocolVersion, ServerPortIndex));
+	TTransportHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
+	TTransportHost<1, HostPacketBytes> Client(Loopback.Port(FirstClientPortIndex));
+	(void)Server.Configure(ENetworkMode::DedicatedServer, MakeHostConfig(MatchedProtocolVersion));
+	(void)Client.Configure(ENetworkMode::Client, MakeClientConfig(MatchedProtocolVersion, ServerPortIndex));
 	(void)Server.Start(0);
 	(void)Client.Start(0);
 
@@ -432,7 +432,7 @@ MW_TEST_CASE(NetHostSendToDeliversToTheAddressedPeer)
 	// Act
 	MW_EXPECT_EQ(
 		Test,
-		ENetResult::Success,
+		ETransportResult::Success,
 		Server.SendTo(ClientId, SendToChannel, TSpan<const std::uint8_t>(Payload, sizeof(Payload))),
 		"SendTo queues to the addressed peer");
 	Server.PumpSend(0);
@@ -449,12 +449,12 @@ MW_TEST_CASE(NetHostSendToDeliversToTheAddressedPeer)
  * Expected: The local-peer message dispatches synchronously to the handler with no driver pump, attributed to the local peer id with its channel and
  * payload.
  */
-MW_TEST_CASE(NetHostListenServerDispatchesToLocalPeerWithoutDriver)
+MW_TEST_CASE(TransportHostListenServerDispatchesToLocalPeerWithoutDriver)
 {
 	// Arrange
 	THostLoopback<1, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
-	TNetHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
-	(void)Server.Configure(ENetMode::ListenServer, MakeHostConfig(MatchedProtocolVersion));
+	TTransportHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
+	(void)Server.Configure(ENetworkMode::ListenServer, MakeHostConfig(MatchedProtocolVersion));
 	(void)Server.Start(0);
 
 	FHandlerCapture LocalCapture{};
@@ -464,7 +464,7 @@ MW_TEST_CASE(NetHostListenServerDispatchesToLocalPeerWithoutDriver)
 	// Act / Assert
 	MW_EXPECT_EQ(
 		Test,
-		ENetResult::Success,
+		ETransportResult::Success,
 		Server.SendTo(Server.GetLocalPeer(), LocalDispatchChannel, TSpan<const std::uint8_t>(Payload, sizeof(Payload))),
 		"A local-peer send reports success");
 	MW_EXPECT_EQ(Test, AdmittedPeerCount, LocalCapture.Count, "The local peer receives exactly one message, synchronously without a pump");
@@ -477,37 +477,37 @@ MW_TEST_CASE(NetHostListenServerDispatchesToLocalPeerWithoutDriver)
  * Scenario: Complete a handshake, then leave the server silent while advancing the client past its timeout window.
  * Expected: The client returns to Connecting when the server times out.
  */
-MW_TEST_CASE(NetHostClientReturnsToConnectingOnServerTimeout)
+MW_TEST_CASE(TransportHostClientReturnsToConnectingOnServerTimeout)
 {
 	// Arrange
 	THostLoopback<2, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
-	TNetHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
-	TNetHost<1, HostPacketBytes> Client(Loopback.Port(FirstClientPortIndex));
-	(void)Server.Configure(ENetMode::DedicatedServer, MakeHostConfig(MatchedProtocolVersion));
-	(void)Client.Configure(ENetMode::Client, MakeClientConfig(MatchedProtocolVersion, ServerPortIndex));
+	TTransportHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
+	TTransportHost<1, HostPacketBytes> Client(Loopback.Port(FirstClientPortIndex));
+	(void)Server.Configure(ENetworkMode::DedicatedServer, MakeHostConfig(MatchedProtocolVersion));
+	(void)Client.Configure(ENetworkMode::Client, MakeClientConfig(MatchedProtocolVersion, ServerPortIndex));
 	(void)Server.Start(0);
 	(void)Client.Start(0);
 	RunHandshake(Server, Client, 0);
-	MW_EXPECT_EQ(Test, ENetHostState::Connected, Client.GetState(), "Client is connected after the handshake");
+	MW_EXPECT_EQ(Test, ETransportHostState::Connected, Client.GetState(), "Client is connected after the handshake");
 
 	// Act - the server goes silent; advance the client past its timeout window.
 	Client.PumpReceive(ClientServerTimeoutMs);
 	// Assert
-	MW_EXPECT_EQ(Test, ENetHostState::Connecting, Client.GetState(), "Client re-enters Connecting when the server times out");
+	MW_EXPECT_EQ(Test, ETransportHostState::Connecting, Client.GetState(), "Client re-enters Connecting when the server times out");
 }
 
 /**
  * Scenario: Admit a client with a first Hello, then send a second Hello from the same address without consuming the Welcome.
  * Expected: The repeated Hello re-welcomes the client and reuses the same slot instead of allocating another.
  */
-MW_TEST_CASE(NetHostRepeatedHelloReusesTheSameSlot)
+MW_TEST_CASE(TransportHostRepeatedHelloReusesTheSameSlot)
 {
 	// Arrange
 	THostLoopback<2, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
-	TNetHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
-	TNetHost<1, HostPacketBytes> Client(Loopback.Port(FirstClientPortIndex));
-	(void)Server.Configure(ENetMode::DedicatedServer, MakeHostConfig(MatchedProtocolVersion));
-	(void)Client.Configure(ENetMode::Client, MakeClientConfig(MatchedProtocolVersion, ServerPortIndex));
+	TTransportHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
+	TTransportHost<1, HostPacketBytes> Client(Loopback.Port(FirstClientPortIndex));
+	(void)Server.Configure(ENetworkMode::DedicatedServer, MakeHostConfig(MatchedProtocolVersion));
+	(void)Client.Configure(ENetworkMode::Client, MakeClientConfig(MatchedProtocolVersion, ServerPortIndex));
 	(void)Server.Start(0);
 	(void)Client.Start(0);
 
@@ -528,14 +528,14 @@ MW_TEST_CASE(NetHostRepeatedHelloReusesTheSameSlot)
  * Scenario: Complete a handshake, stop the client to send a Bye, then have the server process it.
  * Expected: The Bye frees the peer's slot.
  */
-MW_TEST_CASE(NetHostByeEvictsPeer)
+MW_TEST_CASE(TransportHostByeEvictsPeer)
 {
 	// Arrange
 	THostLoopback<2, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
-	TNetHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
-	TNetHost<1, HostPacketBytes> Client(Loopback.Port(FirstClientPortIndex));
-	(void)Server.Configure(ENetMode::DedicatedServer, MakeHostConfig(MatchedProtocolVersion));
-	(void)Client.Configure(ENetMode::Client, MakeClientConfig(MatchedProtocolVersion, ServerPortIndex));
+	TTransportHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
+	TTransportHost<1, HostPacketBytes> Client(Loopback.Port(FirstClientPortIndex));
+	(void)Server.Configure(ENetworkMode::DedicatedServer, MakeHostConfig(MatchedProtocolVersion));
+	(void)Client.Configure(ENetworkMode::Client, MakeClientConfig(MatchedProtocolVersion, ServerPortIndex));
 	(void)Server.Start(0);
 	(void)Client.Start(0);
 	RunHandshake(Server, Client, 0);
@@ -552,14 +552,14 @@ MW_TEST_CASE(NetHostByeEvictsPeer)
  * Scenario: Have a client with a mismatched protocol version send Hello to the server, then pump both directions.
  * Expected: The server ignores the version-mismatched Hello and the rejected client never leaves Connecting.
  */
-MW_TEST_CASE(NetHostIgnoresHelloWithWrongProtocolVersion)
+MW_TEST_CASE(TransportHostIgnoresHelloWithWrongProtocolVersion)
 {
 	// Arrange
 	THostLoopback<2, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
-	TNetHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
-	TNetHost<1, HostPacketBytes> Client(Loopback.Port(FirstClientPortIndex));
-	(void)Server.Configure(ENetMode::DedicatedServer, MakeHostConfig(MatchedProtocolVersion));
-	(void)Client.Configure(ENetMode::Client, MakeClientConfig(MismatchedProtocolVersion, ServerPortIndex));
+	TTransportHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
+	TTransportHost<1, HostPacketBytes> Client(Loopback.Port(FirstClientPortIndex));
+	(void)Server.Configure(ENetworkMode::DedicatedServer, MakeHostConfig(MatchedProtocolVersion));
+	(void)Client.Configure(ENetworkMode::Client, MakeClientConfig(MismatchedProtocolVersion, ServerPortIndex));
 	(void)Server.Start(0);
 	(void)Client.Start(0);
 
@@ -571,19 +571,19 @@ MW_TEST_CASE(NetHostIgnoresHelloWithWrongProtocolVersion)
 	// Act / Assert
 	Server.PumpSend(0);
 	Client.PumpReceive(0);
-	MW_EXPECT_EQ(Test, ENetHostState::Connecting, Client.GetState(), "The rejected client never leaves Connecting");
+	MW_EXPECT_EQ(Test, ETransportHostState::Connecting, Client.GetState(), "The rejected client never leaves Connecting");
 }
 
 /**
  * Scenario: Deliver a control frame whose payload byte names an undefined control type to a started server.
  * Expected: The unknown control message is dropped and no peer is admitted.
  */
-MW_TEST_CASE(NetHostDropsUnknownControlMessage)
+MW_TEST_CASE(TransportHostDropsUnknownControlMessage)
 {
 	// Arrange
 	THostLoopback<2, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
-	TNetHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
-	(void)Server.Configure(ENetMode::DedicatedServer, MakeHostConfig(MatchedProtocolVersion));
+	TTransportHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
+	(void)Server.Configure(ENetworkMode::DedicatedServer, MakeHostConfig(MatchedProtocolVersion));
 	(void)Server.Start(0);
 
 	// Act - a payload byte whose control type (0x09) names no defined control message.
@@ -599,41 +599,41 @@ MW_TEST_CASE(NetHostDropsUnknownControlMessage)
  * Scenario: Configure and start a standalone host, then attempt SendTo and Broadcast.
  * Expected: Both sends return Unavailable and the host stays Idle after Start.
  */
-MW_TEST_CASE(NetHostStandaloneReportsUnavailableOnSend)
+MW_TEST_CASE(TransportHostStandaloneReportsUnavailableOnSend)
 {
 	// Arrange
 	THostLoopback<1, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
-	TNetHost<2, HostPacketBytes> Host(Loopback.Port(ServerPortIndex));
-	(void)Host.Configure(ENetMode::Standalone, MakeHostConfig(MatchedProtocolVersion));
+	TTransportHost<2, HostPacketBytes> Host(Loopback.Port(ServerPortIndex));
+	(void)Host.Configure(ENetworkMode::Standalone, MakeHostConfig(MatchedProtocolVersion));
 	(void)Host.Start(0);
 
 	const std::uint8_t Payload[1] = {StandalonePayloadByte};
 	// Act / Assert
 	MW_EXPECT_EQ(
 		Test,
-		ENetResult::Unavailable,
+		ETransportResult::Unavailable,
 		Host.SendTo(FPeerId{0, 0}, SendChannel, TSpan<const std::uint8_t>(Payload, sizeof(Payload))),
 		"Standalone SendTo is Unavailable");
 	MW_EXPECT_EQ(
 		Test,
-		ENetResult::Unavailable,
+		ETransportResult::Unavailable,
 		Host.Broadcast(BroadcastChannel, TSpan<const std::uint8_t>(Payload, sizeof(Payload))),
 		"Standalone Broadcast is Unavailable");
-	MW_EXPECT_EQ(Test, ENetHostState::Idle, Host.GetState(), "Standalone stays Idle after Start");
+	MW_EXPECT_EQ(Test, ETransportHostState::Idle, Host.GetState(), "Standalone stays Idle after Start");
 }
 
 /**
  * Scenario: Capture the allocation counter after construction, then run a full handshake plus unicast and broadcast round trips.
  * Expected: The full client/server session performs no observable heap allocation.
  */
-MW_TEST_CASE(NetHostSessionPerformsNoObservableAllocation)
+MW_TEST_CASE(TransportHostSessionPerformsNoObservableAllocation)
 {
 	// Arrange
 	THostLoopback<2, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
-	TNetHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
-	TNetHost<1, HostPacketBytes> Client(Loopback.Port(FirstClientPortIndex));
-	(void)Server.Configure(ENetMode::DedicatedServer, MakeHostConfig(MatchedProtocolVersion));
-	(void)Client.Configure(ENetMode::Client, MakeClientConfig(MatchedProtocolVersion, ServerPortIndex));
+	TTransportHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
+	TTransportHost<1, HostPacketBytes> Client(Loopback.Port(FirstClientPortIndex));
+	(void)Server.Configure(ENetworkMode::DedicatedServer, MakeHostConfig(MatchedProtocolVersion));
+	(void)Client.Configure(ENetworkMode::Client, MakeClientConfig(MatchedProtocolVersion, ServerPortIndex));
 
 	FHandlerCapture ClientCapture{};
 	(void)InstallCapture(Client, ClientCapture);
@@ -655,19 +655,19 @@ MW_TEST_CASE(NetHostSessionPerformsNoObservableAllocation)
 
 	const std::uint32_t AllocationsAfter = GlobalAllocationCount;
 	// Assert
-	MW_EXPECT_EQ(Test, AllocationsBefore, AllocationsAfter, "A full TNetHost session must not allocate");
+	MW_EXPECT_EQ(Test, AllocationsBefore, AllocationsAfter, "A full TTransportHost session must not allocate");
 }
 
 /**
  * Scenario: Configure and start a dedicated server, then attempt a local SendTo and a Broadcast with no peers.
  * Expected: A dedicated server rejects a send to the local peer as Invalid, succeeds with Broadcast, and dispatches nothing locally.
  */
-MW_TEST_CASE(NetHostDedicatedServerHasNoLocalDispatch)
+MW_TEST_CASE(TransportHostDedicatedServerHasNoLocalDispatch)
 {
 	// Arrange
 	THostLoopback<1, LoopbackMailboxDepth, LoopbackPacketBytes> Loopback;
-	TNetHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
-	(void)Server.Configure(ENetMode::DedicatedServer, MakeHostConfig(MatchedProtocolVersion));
+	TTransportHost<2, HostPacketBytes> Server(Loopback.Port(ServerPortIndex));
+	(void)Server.Configure(ENetworkMode::DedicatedServer, MakeHostConfig(MatchedProtocolVersion));
 	(void)Server.Start(0);
 
 	FHandlerCapture Capture{};
@@ -677,12 +677,12 @@ MW_TEST_CASE(NetHostDedicatedServerHasNoLocalDispatch)
 	// Act / Assert
 	MW_EXPECT_EQ(
 		Test,
-		ENetResult::Invalid,
+		ETransportResult::Invalid,
 		Server.SendTo(Server.GetLocalPeer(), SendChannel, TSpan<const std::uint8_t>(Payload, sizeof(Payload))),
 		"A dedicated server rejects a send to the local peer");
 	MW_EXPECT_EQ(
 		Test,
-		ENetResult::Success,
+		ETransportResult::Success,
 		Server.Broadcast(BroadcastChannel, TSpan<const std::uint8_t>(Payload, sizeof(Payload))),
 		"Broadcast with no peers succeeds");
 	MW_EXPECT_EQ(Test, EmptyPeerCount, Capture.Count, "A dedicated server performs no local dispatch");
@@ -694,18 +694,18 @@ MW_TEST_CASE(NetHostDedicatedServerHasNoLocalDispatch)
  * Every `TryReceive` delivers a minimal empty control frame and reports `Success`, so a
  * `PumpReceive` would loop forever were it not bounded; `TrySend` is a no-op success.
  */
-class FFloodDriver final : public INetDriver
+class FFloodDriver final : public IDevice
 {
 public:
 	/** Accepts and discards every send. */
-	ENetResult TrySend(const FNetAddress&, TSpan<const std::uint8_t>) noexcept override { return ENetResult::Success; }
+	ETransportResult TrySend(const FDeviceAddress&, TSpan<const std::uint8_t>) noexcept override { return ETransportResult::Success; }
 
 	/** Delivers one empty control frame per call and counts the call. */
-	ENetResult TryReceive(FNetAddress& OutFrom, TSpan<std::uint8_t> InDestination, FNetReceiveResult& OutResult) noexcept override
+	ETransportResult TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept override
 	{
 		if (InDestination.Size() < FloodReceivedByteCount)
 		{
-			return ENetResult::Unavailable;
+			return ETransportResult::Unavailable;
 		}
 		++ReceiveCallCount;
 		OutFrom = MakeLoopbackAddress(FloodSenderPortIndex);
@@ -714,7 +714,7 @@ public:
 		InDestination[2] = EmptyControlFrameByte;
 		InDestination[3] = EmptyControlFrameByte;
 		OutResult.BytesReceived = FloodReceivedByteCount;
-		return ENetResult::Success;
+		return ETransportResult::Success;
 	}
 
 	/** Reports the fixed maximum packet size. */
@@ -728,12 +728,12 @@ public:
  * Scenario: Pump a started server whose driver never runs dry of empty control frames.
  * Expected: One pump is bounded to MaxPeers plus four receives, so a flood cannot starve the frame.
  */
-MW_TEST_CASE(NetHostPumpReceiveIsBoundedUnderFlood)
+MW_TEST_CASE(TransportHostPumpReceiveIsBoundedUnderFlood)
 {
 	// Arrange
 	FFloodDriver Driver;
-	TNetHost<3, HostPacketBytes> Server(Driver);
-	(void)Server.Configure(ENetMode::DedicatedServer, MakeHostConfig(MatchedProtocolVersion));
+	TTransportHost<3, HostPacketBytes> Server(Driver);
+	(void)Server.Configure(ENetworkMode::DedicatedServer, MakeHostConfig(MatchedProtocolVersion));
 	(void)Server.Start(0);
 
 	// Act

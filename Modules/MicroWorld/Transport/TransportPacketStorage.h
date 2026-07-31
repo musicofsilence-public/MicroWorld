@@ -1,6 +1,6 @@
 #pragma once
 
-#include <MicroWorld/Transport/NetAddress.h>
+#include <MicroWorld/Transport/DeviceAddress.h>
 
 #include <array>
 #include <cstddef>
@@ -10,36 +10,36 @@ namespace MicroWorld
 {
 
 template<std::size_t MaxPackets, std::size_t MaxPacketBytes>
-class TNetManager;
+class TTransportManager;
 
 /**
- * Fixed-capacity backing storage for one `TNetManager` outbound FIFO.
+ * Fixed-capacity backing storage for one `TTransportManager` outbound FIFO.
  *
  * The manager never owns packet storage: the caller constructs one
- * `TNetPacketStorage` with the exact packet count and per-packet byte capacity
+ * `TTransportPacketStorage` with the exact packet count and per-packet byte capacity
  * the application needs, then lends it to the manager by reference, and only
- * the matching `TNetManager` specialization observes the private packet arrays.
+ * the matching `TTransportManager` specialization observes the private packet arrays.
  * Both template capacities must be nonzero; a zero-packet or zero-byte FIFO has
  * no useful contract and is rejected at compile time.
  */
 template<std::size_t MaxPackets, std::size_t MaxPacketBytes>
-class TNetPacketStorage final
+class TTransportPacketStorage final
 {
-	static_assert(MaxPackets > 0, "TNetPacketStorage requires at least one packet slot.");
-	static_assert(MaxPacketBytes > 0, "TNetPacketStorage requires a nonzero per-packet byte capacity.");
+	static_assert(MaxPackets > 0, "TTransportPacketStorage requires at least one packet slot.");
+	static_assert(MaxPacketBytes > 0, "TTransportPacketStorage requires a nonzero per-packet byte capacity.");
 
 public:
 	/** Defaulted so the storage can live in automatic or static storage without side effects. */
-	TNetPacketStorage() noexcept = default;
+	TTransportPacketStorage() noexcept = default;
 
 	/** Prevents copying so one storage instance backs exactly one manager FIFO. */
-	TNetPacketStorage(const TNetPacketStorage&) = delete;
+	TTransportPacketStorage(const TTransportPacketStorage&) = delete;
 
 	/** Prevents copying so one storage instance backs exactly one manager FIFO. */
-	TNetPacketStorage& operator=(const TNetPacketStorage&) = delete;
+	TTransportPacketStorage& operator=(const TTransportPacketStorage&) = delete;
 
 	/** Defaulted so storage with automatic storage destructs without side effects. */
-	~TNetPacketStorage() noexcept = default;
+	~TTransportPacketStorage() noexcept = default;
 
 	/** Reports the fixed packet-slot capacity of this storage. */
 	static constexpr std::size_t Capacity() noexcept { return MaxPackets; }
@@ -49,10 +49,10 @@ public:
 
 private:
 	// Storage and manager are deliberately separate types: caller-owned storage is the
-	// repo-wide pattern, and keeping the FIFO mechanics in TNetManager lets one manager
+	// repo-wide pattern, and keeping the FIFO mechanics in TTransportManager lets one manager
 	// implementation be reused over any caller-provided backing (D8).
 	/** Grants the manager holding the same template parameters exclusive access to its FIFO slots. */
-	friend class TNetManager<MaxPackets, MaxPacketBytes>;
+	friend class TTransportManager<MaxPackets, MaxPacketBytes>;
 
 	/** Fixed per-packet byte storage; only the leading `PacketLengths[i]` bytes are valid. */
 	std::array<std::array<std::uint8_t, MaxPacketBytes>, MaxPackets> PacketBytes{};
@@ -61,7 +61,7 @@ private:
 	std::array<std::size_t, MaxPackets> PacketLengths{};
 
 	/** Records the destination address queued with each packet so AdvanceSend routes it correctly. */
-	std::array<FNetAddress, MaxPackets> Destinations{};
+	std::array<FDeviceAddress, MaxPackets> Destinations{};
 };
 
 } // namespace MicroWorld

@@ -6,7 +6,7 @@
 #include <MicroWorld/Messaging/MessageRouter.h>
 #include <MicroWorld/Engine/EngineSystem.h>
 #include <MicroWorld/Messaging/ReliableChannel.h>
-#include <MicroWorld/Transport/NetHost.h>
+#include <MicroWorld/Transport/TransportHost.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
 
 #include <cstdint>
@@ -14,7 +14,7 @@
 /**
  * Shared protocol ids, config, and composition-type aliases for example 25's two roles.
  * Both role translation units include this so the message/actor/channel ids, WiFi/UDP
- * configuration, and the TNetHost/TMessageRouter/TReliableChannel/TEngine/
+ * configuration, and the TTransportHost/TMessageRouter/TReliableChannel/TEngine/
  * TPlaySystemSet shapes are defined exactly once (DRY within this one example).
  */
 namespace Ex25
@@ -79,16 +79,16 @@ constexpr MicroWorld::FTypeId CounterActorTypeId{0x00190001u};
 constexpr MicroWorld::FTypeId LedgerActorTypeId{0x00190002u};
 
 /** The one WiFi-backed network host both roles compose (256-byte packet, matching example 16/24). */
-using FWorldNet = MicroWorld::TNetHost<2, 256>;
+using FWorldTransport = MicroWorld::TTransportHost<2, 256>;
 
 /** The one local actor-message router both roles compose, sized for this example's two channels. */
 using FWorldRouter = MicroWorld::TMessageRouter<16, 8, 96, 2>;
 
-/** Adapts FWorldNet to the engine's per-frame network slot inside the frame set. */
-using FNetFrame = MicroWorld::TNetHostSystem<FWorldNet>;
+/** Adapts FWorldTransport to the engine's per-frame network slot inside the frame set. */
+using FHostPlay = MicroWorld::THostPlaySystem<FWorldTransport>;
 
 /** Two-way adapter binding one wire channel to the shared router; both channels use this type. */
-using FChannelBinding = MicroWorld::TMessageChannelBinding<FWorldNet>;
+using FChannelBinding = MicroWorld::TMessageChannelBinding<FWorldTransport>;
 
 /** Guaranteed-delivery wrapper for channel 2 (8 pending slots, 96-byte wrapped-packet budget). */
 using FGuaranteedChannel = MicroWorld::TReliableChannel<8, 96>;
@@ -100,9 +100,9 @@ using FWorldFrameSet = MicroWorld::TPlaySystemSet<3>;
 using FWorldEngine = MicroWorld::TEngine<>;
 
 /** Builds the shared session config; heartbeats keep the point-to-point peer alive between sends. */
-inline MicroWorld::FNetHostConfig MakeHostConfig() noexcept
+inline MicroWorld::FTransportHostConfig MakeHostConfig() noexcept
 {
-	MicroWorld::FNetHostConfig Config{};
+	MicroWorld::FTransportHostConfig Config{};
 	Config.HeartbeatIntervalMilliseconds = 1000;
 	Config.PeerTimeoutMilliseconds = 5000;
 	Config.ProtocolVersion = ProtocolVersion;

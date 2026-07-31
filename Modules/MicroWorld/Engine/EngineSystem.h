@@ -14,18 +14,18 @@ namespace MicroWorld
  * discarding each
  * result exactly as the engine already discards timer and collector step results.
  *
- * TNet is deduced at the call site, so the
+ * THost is deduced at the call site, so the
  * engine binds a network host without
  * naming its concrete type or including its package. The host must outlive this
  * adapter, and the adapter
  * must outlive the TEngine it is bound to.
  */
-template<typename TNet>
-class TNetHostSystem final : public IPlaySystem
+template<typename THost>
+class THostPlaySystem final : public IPlaySystem
 {
 public:
 	/** Binds this adapter to one externally owned network host for its lifetime. */
-	explicit TNetHostSystem(TNet& InHost) noexcept : Host(InHost) {}
+	explicit THostPlaySystem(THost& InHost) noexcept : Host(InHost) {}
 
 	/** Opens the bound host session at the engine's canonical play-start time. */
 	void BeginPlay(const TimePointMilliseconds InNowMilliseconds) noexcept override { (void)Host.Start(InNowMilliseconds); }
@@ -41,7 +41,7 @@ public:
 
 private:
 	/** The externally owned network host this adapter drives; never owned here. */
-	TNet& Host;
+	THost& Host;
 };
 
 /**
