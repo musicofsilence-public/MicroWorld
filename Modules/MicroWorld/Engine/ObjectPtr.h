@@ -10,27 +10,22 @@ namespace MicroWorld
 
 class FObjectStore;
 
-namespace ObjectDetail
+/** Enables conversions only after both complete endpoints prove managed ancestry. */
+template<typename From, typename To, typename = void>
+struct TIsManagedObjectPointerConversion : std::false_type
 {
+};
 
-	/** Enables conversions only after both complete endpoints prove managed ancestry. */
-	template<typename From, typename To, typename = void>
-	struct TIsManagedObjectPointerConversion : std::false_type
-	{
-	};
-
-	/** Accepts an accessible derived-to-base or same-type conversion between managed types. */
-	template<typename From, typename To>
-	struct TIsManagedObjectPointerConversion<
-		From,
-		To,
-		std::void_t<
-			decltype(static_cast<UObject*>(std::declval<typename std::remove_cv<From>::type*>())),
-			decltype(static_cast<UObject*>(std::declval<typename std::remove_cv<To>::type*>()))>> : std::is_convertible<From*, To*>
-	{
-	};
-
-} // namespace ObjectDetail
+/** Accepts an accessible derived-to-base or same-type conversion between managed types. */
+template<typename From, typename To>
+struct TIsManagedObjectPointerConversion<
+	From,
+	To,
+	std::void_t<
+		decltype(static_cast<UObject*>(std::declval<typename std::remove_cv<From>::type*>())),
+		decltype(static_cast<UObject*>(std::declval<typename std::remove_cv<To>::type*>()))>> : std::is_convertible<From*, To*>
+{
+};
 
 /** Resolves one generation-checked handle without changing object-store state. */
 UObject* ResolveObjectHandle(const FObjectStore& InStore, FObjectHandle InHandle) noexcept;
@@ -62,7 +57,7 @@ public:
 	 * static type conversion to managed same-type or derived-to-base endpoints;
 	 * it does not perform runtime narrowing or reflection.
 	 */
-	template<typename U, typename = std::enable_if_t<ObjectDetail::TIsManagedObjectPointerConversion<U, T>::value>>
+	template<typename U, typename = std::enable_if_t<TIsManagedObjectPointerConversion<U, T>::value>>
 	TObjectPtr(const TObjectPtr<U>& InOther) noexcept : Store(InOther.Store), TargetHandle(InOther.TargetHandle)
 	{
 	}

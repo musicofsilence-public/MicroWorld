@@ -93,84 +93,78 @@ struct TDeferredActorSpawnCaptureTraits<TObjectPtr<T>>
 	static void Visit(const TObjectPtr<T>& InReference, FReferenceCollector& InCollector) noexcept { InCollector.AddReferencedObject(InReference); }
 };
 
-namespace DeferredActorSpawnDetail
+/** Type-erases invocation, destruction, reference tracing, and descriptor resolution for one inline factory. */
+struct FFactoryOperations final
 {
+	using FInvoke = TObjectCreationResult<AActor> (*)(void*, FObjectStore&, const FClassDescriptor&) noexcept;
+	using FDestroy = void (*)(void*) noexcept;
+	using FVisitReferences = void (*)(const void*, FReferenceCollector&) noexcept;
+	using FResolveDescriptor = EObjectResult (*)(FClassRegistryRegistrationView, const FClassDescriptor*&) noexcept;
 
-	/** Type-erases invocation, destruction, reference tracing, and descriptor resolution for one inline factory. */
-	struct FFactoryOperations final
+	FInvoke Invoke{nullptr};
+	FDestroy Destroy{nullptr};
+	FVisitReferences VisitReferences{nullptr};
+	FResolveDescriptor ResolveDescriptor{nullptr};
+};
+
+/** Owns decayed constructor values until a safe world barrier performs managed construction. */
+template<typename TActor, typename... TArguments>
+class TActorFactory final
+{
+public:
+	/** Captures decayed constructor values only after every non-mutating queue preflight has passed. */
+	explicit TActorFactory(TArguments... InArguments) noexcept : Arguments(std::move(InArguments)...) {}
+
+	/** Uses the canonical registered descriptor to construct the actor in the world's store. */
+	static TObjectCreationResult<AActor> Invoke(void* const InFactory, FObjectStore& InStore, const FClassDescriptor& InDescriptor) noexcept
 	{
-		using FInvoke = TObjectCreationResult<AActor> (*)(void*, FObjectStore&, const FClassDescriptor&) noexcept;
-		using FDestroy = void (*)(void*) noexcept;
-		using FVisitReferences = void (*)(const void*, FReferenceCollector&) noexcept;
-		using FResolveDescriptor = EObjectResult (*)(FClassRegistryRegistrationView, const FClassDescriptor*&) noexcept;
+		TActorFactory& Factory = *static_cast<TActorFactory*>(InFactory);
+		return InvokeWithArguments(Factory, InStore, InDescriptor, std::index_sequence_for<TArguments...>{});
+	}
 
-		FInvoke Invoke{nullptr};
-		FDestroy Destroy{nullptr};
-		FVisitReferences VisitReferences{nullptr};
-		FResolveDescriptor ResolveDescriptor{nullptr};
-	};
+	/** Destroys moved constructor values exactly once after construction or terminal failure. */
+	static void Destroy(void* const InFactory) noexcept { static_cast<TActorFactory*>(InFactory)->~TActorFactory(); }
 
-	/** Owns decayed constructor values until a safe world barrier performs managed construction. */
-	template<typename TActor, typename... TArguments>
-	class TActorFactory final
+	/** Traces direct managed pointer captures while the queued factory owns them. */
+	static void VisitReferences(const void* const InFactory, FReferenceCollector& InCollector) noexcept
 	{
-	public:
-		/** Captures decayed constructor values only after every non-mutating queue preflight has passed. */
-		explicit TActorFactory(TArguments... InArguments) noexcept : Arguments(std::move(InArguments)...) {}
+		const TActorFactory& Factory = *static_cast<const TActorFactory*>(InFactory);
+		std::apply(
+			[&InCollector](const TArguments&... InCapturedArguments) noexcept
+			{ (TDeferredActorSpawnCaptureTraits<TArguments>::Visit(InCapturedArguments, InCollector), ...); },
+			Factory.Arguments);
+	}
 
-		/** Uses the canonical registered descriptor to construct the actor in the world's store. */
-		static TObjectCreationResult<AActor> Invoke(void* const InFactory, FObjectStore& InStore, const FClassDescriptor& InDescriptor) noexcept
+	/** Reuses a manually registered descriptor or registers a direct AActor child with a local automatic ID. */
+	static EObjectResult ResolveDescriptor(const FClassRegistryRegistrationView InClasses, const FClassDescriptor*& OutDescriptor) noexcept
+	{
+		OutDescriptor = InClasses.FindByTypeToken(ManagedObjectTypeToken<TActor>());
+		if (OutDescriptor != nullptr)
 		{
-			TActorFactory& Factory = *static_cast<TActorFactory*>(InFactory);
-			return InvokeWithArguments(Factory, InStore, InDescriptor, std::index_sequence_for<TArguments...>{});
+			return EObjectResult::Success;
 		}
-
-		/** Destroys moved constructor values exactly once after construction or terminal failure. */
-		static void Destroy(void* const InFactory) noexcept { static_cast<TActorFactory*>(InFactory)->~TActorFactory(); }
-
-		/** Traces direct managed pointer captures while the queued factory owns them. */
-		static void VisitReferences(const void* const InFactory, FReferenceCollector& InCollector) noexcept
+		const FClassDescriptor* const ActorDescriptor = InClasses.Find(AActorClassId);
+		if (ActorDescriptor == nullptr)
 		{
-			const TActorFactory& Factory = *static_cast<const TActorFactory*>(InFactory);
-			std::apply(
-				[&InCollector](const TArguments&... InCapturedArguments) noexcept
-				{ (TDeferredActorSpawnCaptureTraits<TArguments>::Visit(InCapturedArguments, InCollector), ...); },
-				Factory.Arguments);
+			return EObjectResult::UnknownClass;
 		}
+		const FClassDescriptor Candidate = MakeClassDescriptor<TActor>(0, "DeferredActor", ActorDescriptor, &TraceManagedObjectReferences);
+		return InClasses.RegisterAutomatic(Candidate, OutDescriptor);
+	}
 
-		/** Reuses a manually registered descriptor or registers a direct AActor child with a local automatic ID. */
-		static EObjectResult ResolveDescriptor(const FClassRegistryRegistrationView InClasses, const FClassDescriptor*& OutDescriptor) noexcept
-		{
-			OutDescriptor = InClasses.FindByTypeToken(ManagedObjectTypeToken<TActor>());
-			if (OutDescriptor != nullptr)
-			{
-				return EObjectResult::Success;
-			}
-			const FClassDescriptor* const ActorDescriptor = InClasses.Find(AActorClassId);
-			if (ActorDescriptor == nullptr)
-			{
-				return EObjectResult::UnknownClass;
-			}
-			const FClassDescriptor Candidate = MakeClassDescriptor<TActor>(0, "DeferredActor", ActorDescriptor, &TraceManagedObjectReferences);
-			return InClasses.RegisterAutomatic(Candidate, OutDescriptor);
-		}
+private:
+	/** Expands the retained tuple at the only safe managed-construction point. */
+	template<std::size_t... Indices>
+	static TObjectCreationResult<AActor> InvokeWithArguments(
+		TActorFactory& InFactory, FObjectStore& InStore, const FClassDescriptor& InDescriptor, std::index_sequence<Indices...>) noexcept
+	{
+		const TObjectCreationResult<TActor> Creation = InStore.NewObject<TActor>(InDescriptor, std::move(std::get<Indices>(InFactory.Arguments))...);
+		return TObjectCreationResult<AActor>{Creation.Result, TObjectPtr<AActor>{Creation.Object}};
+	}
 
-	private:
-		/** Expands the retained tuple at the only safe managed-construction point. */
-		template<std::size_t... Indices>
-		static TObjectCreationResult<AActor> InvokeWithArguments(
-			TActorFactory& InFactory, FObjectStore& InStore, const FClassDescriptor& InDescriptor, std::index_sequence<Indices...>) noexcept
-		{
-			const TObjectCreationResult<TActor> Creation =
-				InStore.NewObject<TActor>(InDescriptor, std::move(std::get<Indices>(InFactory.Arguments))...);
-			return TObjectCreationResult<AActor>{Creation.Result, TObjectPtr<AActor>{Creation.Object}};
-		}
-
-		/** Holds decayed constructor values across the caller callback and barrier boundary. */
-		std::tuple<TArguments...> Arguments;
-	};
-
-} // namespace DeferredActorSpawnDetail
+	/** Holds decayed constructor values across the caller callback and barrier boundary. */
+	std::tuple<TArguments...> Arguments;
+};
 
 /** Defines the non-template storage operations UWorld needs after factory type erasure. */
 class IDeferredActorSpawnStorage
@@ -183,7 +177,7 @@ public:
 	virtual FActorSpawnHandle Reserve() noexcept = 0;
 
 	/** Publishes erased operations for a factory already placement-constructed in the reserved slot. */
-	virtual void Activate(FActorSpawnHandle InHandle, const DeferredActorSpawnDetail::FFactoryOperations& InOperations) noexcept = 0;
+	virtual void Activate(FActorSpawnHandle InHandle, const FFactoryOperations& InOperations) noexcept = 0;
 
 	/** Reports requests that still consume future actor-registry capacity. */
 	virtual std::size_t PendingCount() const noexcept = 0;
@@ -263,7 +257,7 @@ public:
 	void* GetFactoryStorage(const FActorSpawnHandle InHandle) noexcept { return Storage != nullptr ? Storage->GetFactoryStorage(InHandle) : nullptr; }
 
 	/** Publishes type-erased factory behavior after placement capture succeeds. */
-	void Activate(const FActorSpawnHandle InHandle, const DeferredActorSpawnDetail::FFactoryOperations& InOperations) noexcept
+	void Activate(const FActorSpawnHandle InHandle, const FFactoryOperations& InOperations) noexcept
 	{
 		if (Storage != nullptr)
 		{
@@ -453,7 +447,7 @@ public:
 	}
 
 	/** Activates one factory and appends its immutable handle to the next barrier FIFO. */
-	void Activate(const FActorSpawnHandle InHandle, const DeferredActorSpawnDetail::FFactoryOperations& InOperations) noexcept override
+	void Activate(const FActorSpawnHandle InHandle, const FFactoryOperations& InOperations) noexcept override
 	{
 		FSlot* const Slot = FindSlot(InHandle);
 		if (Slot == nullptr || Slot->State != ESlotState::Queued)
@@ -682,7 +676,7 @@ private:
 		TObjectPtr<AActor> Actor{};
 
 		/** Erases factory behavior without extending Core delegate policy. */
-		DeferredActorSpawnDetail::FFactoryOperations Operations{};
+		FFactoryOperations Operations{};
 
 		/** Holds one caller-selected-size factory without heap allocation. */
 		std::array<std::byte, InlineFactoryBytes> FactoryBytes{};

@@ -107,7 +107,7 @@ public:
 	[[nodiscard]] FActorSpawnRequest SpawnActor(TArguments&&... InArguments) noexcept
 	{
 		static_assert(std::is_base_of<AActor, TActor>::value, "Deferred SpawnActor requires an AActor-derived type.");
-		using TFactory = DeferredActorSpawnDetail::TActorFactory<TActor, std::decay_t<TArguments>...>;
+		using TFactory = TActorFactory<TActor, std::decay_t<TArguments>...>;
 		static_assert(std::is_nothrow_constructible<TActor, std::decay_t<TArguments>...>::value, "Deferred actor construction must be noexcept.");
 		static_assert(std::is_nothrow_constructible<TFactory, TArguments...>::value, "Deferred actor factory capture must be noexcept.");
 
@@ -134,7 +134,7 @@ public:
 		::new (FactoryStorage) TFactory(std::forward<TArguments>(InArguments)...);
 		DeferredSpawns.Activate(
 			SpawnHandle,
-			DeferredActorSpawnDetail::FFactoryOperations{
+			FFactoryOperations{
 				&TFactory::Invoke,
 				&TFactory::Destroy,
 				&TFactory::VisitReferences,
