@@ -24,7 +24,7 @@ table.
   E32 facade delegates portable framing to RadioE32 (now inside Transport) while
   portable code never reaches ESP-IDF, lwIP, or vendor headers directly.
 - All lwIP, ESP-IDF, `<driver/uart.h>`, `<driver/i2c_*.h>`, and `<driver/spi_*.h>`
-  headers are confined to the `Detail/*PlatformImplementation.h` private headers;
+  headers are confined to the `Internal/*PlatformImplementation.h` private headers;
   public declarations stay platform-neutral.
 - `FEsp32WifiLink` is the one-per-firmware SoftAP/station bring-up facade, with
   every `esp_wifi`/`esp_netif`/`nvs`/event-loop include confined to one private
@@ -34,7 +34,7 @@ table.
 - Compile success on this family is a compile-only proof, never a runtime,
   timing, heap, stack, radio, or wired-link claim; see `benchmarks/Results/` for
   the measured evidence that closes that gap.
-- Each driver's `Detail/*PlatformImplementation.h` header opens with a comment
+- Each driver's `Internal/*PlatformImplementation.h` header opens with a comment
   stating exactly which branches real hardware has exercised and which stay
   unverified. A new driver says "UNVERIFIED at runtime" there until its example's
   hardware checkpoint passes.

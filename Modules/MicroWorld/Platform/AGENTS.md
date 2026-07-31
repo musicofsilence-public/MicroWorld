@@ -22,7 +22,7 @@ reverse.
 - Each family ships adapter interfaces behind the portable `IDevice`,
   `TimePointMilliseconds`, and output-device contracts described in
   `../../docs/Porting.md`; portable code never reaches OS/SDK headers directly.
-- All OS/SDK headers are confined to `Detail/` implementation headers; public
+- All OS/SDK headers are confined to `Internal/` implementation headers; public
   declarations stay platform-neutral.
 - Compile success on a platform family is a compile-only proof, never a runtime,
   timing, heap, stack, radio, or wired-link claim; see each family's

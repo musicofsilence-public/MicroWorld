@@ -1,6 +1,6 @@
 #pragma once
 
-#include <MicroWorld/Platform/Esp32/Detail/Esp32UartByteStream.h>
+#include <MicroWorld/Platform/Esp32/Internal/Esp32UartByteStream.h>
 #include <MicroWorld/Transport/Lora/RadioE32Driver.h>
 
 #include <cstddef>
@@ -53,7 +53,7 @@ public:
 	 */
 	explicit FEsp32E32LoraDriver(const FEsp32E32LoraConfig& InConfig) noexcept
 	{
-		Detail::FEsp32UartByteStreamConfig StreamConfig{};
+		FEsp32UartByteStreamConfig StreamConfig{};
 		StreamConfig.UartPort = InConfig.UartPort;
 		StreamConfig.TxGpio = InConfig.TxGpio;
 		StreamConfig.RxGpio = InConfig.RxGpio;
@@ -128,7 +128,7 @@ public:
 
 private:
 	/** Owns ESP-IDF UART configuration and lifetime while exposing only Core's non-blocking `IUartByteStream` interface. */
-	Detail::FEsp32UartByteStream ByteStream{};
+	FEsp32UartByteStream ByteStream{};
 
 	/** Owns portable E32 framing and retains a reference to ByteStream for its full facade lifetime. */
 	FRadioE32Driver RadioDriver{ByteStream};

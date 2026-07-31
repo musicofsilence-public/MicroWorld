@@ -1,6 +1,6 @@
 #include <MicroWorld/Platform/Esp32/Esp32WifiLink.h>
 
-#include "Detail/Esp32WifiPlatformImplementation.h"
+#include "Internal/Esp32WifiPlatformImplementation.h"
 
 #include <cstring>
 
@@ -61,7 +61,7 @@ ETransportResult FEsp32WifiLink::StartAccessPoint(const FEsp32AccessPointConfig&
 		return ValidationResult;
 	}
 
-	if (!Detail::InitNetworkStack())
+	if (!InitNetworkStack())
 	{
 		return ETransportResult::Unavailable;
 	}
@@ -73,7 +73,7 @@ ETransportResult FEsp32WifiLink::StartAccessPoint(const FEsp32AccessPointConfig&
 		return ETransportResult::Unavailable;
 	}
 
-	wifi_config_t ApConfig = Detail::MakeAccessPointConfig(InConfig.Ssid, InConfig.Password, InConfig.WifiChannel, InConfig.MaxStations);
+	wifi_config_t ApConfig = MakeAccessPointConfig(InConfig.Ssid, InConfig.Password, InConfig.WifiChannel, InConfig.MaxStations);
 	if (esp_wifi_set_mode(WIFI_MODE_AP) != ESP_OK || esp_wifi_set_config(WIFI_IF_AP, &ApConfig) != ESP_OK || esp_wifi_start() != ESP_OK)
 	{
 		return ETransportResult::Unavailable;
@@ -91,7 +91,7 @@ ETransportResult FEsp32WifiLink::JoinAccessPoint(const FEsp32StationConfig& InCo
 		return ValidationResult;
 	}
 
-	if (!Detail::InitNetworkStack())
+	if (!InitNetworkStack())
 	{
 		return ETransportResult::Unavailable;
 	}
@@ -103,13 +103,13 @@ ETransportResult FEsp32WifiLink::JoinAccessPoint(const FEsp32StationConfig& InCo
 		return ETransportResult::Unavailable;
 	}
 
-	if (esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &Detail::OnStationEvent, nullptr, nullptr) != ESP_OK
-		|| esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &Detail::OnStationEvent, nullptr, nullptr) != ESP_OK)
+	if (esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &OnStationEvent, nullptr, nullptr) != ESP_OK
+		|| esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &OnStationEvent, nullptr, nullptr) != ESP_OK)
 	{
 		return ETransportResult::Unavailable;
 	}
 
-	wifi_config_t StaConfig = Detail::MakeStationConfig(InConfig.Ssid, InConfig.Password);
+	wifi_config_t StaConfig = MakeStationConfig(InConfig.Ssid, InConfig.Password);
 	if (esp_wifi_set_mode(WIFI_MODE_STA) != ESP_OK || esp_wifi_set_config(WIFI_IF_STA, &StaConfig) != ESP_OK || esp_wifi_start() != ESP_OK)
 	{
 		return ETransportResult::Unavailable;
@@ -118,14 +118,14 @@ ETransportResult FEsp32WifiLink::JoinAccessPoint(const FEsp32StationConfig& InCo
 	// Bounded poll: sleep in fixed 100 ms slices, checking the got-IP flag each slice, until either
 	// the flag latches or the accumulated wait reaches the caller's timeout budget. The slice count
 	// is the budget; no real clock is read.
-	Detail::GGotStationIpAddress = false;
+	GGotStationIpAddress = false;
 	DurationMilliseconds ElapsedMilliseconds = 0;
-	while (!Detail::GGotStationIpAddress && ElapsedMilliseconds < InConfig.ConnectTimeoutMilliseconds)
+	while (!GGotStationIpAddress && ElapsedMilliseconds < InConfig.ConnectTimeoutMilliseconds)
 	{
 		vTaskDelay(pdMS_TO_TICKS(JoinWaitSliceMilliseconds));
 		ElapsedMilliseconds += JoinWaitSliceMilliseconds;
 	}
-	if (!Detail::GGotStationIpAddress)
+	if (!GGotStationIpAddress)
 	{
 		return ETransportResult::Unavailable;
 	}

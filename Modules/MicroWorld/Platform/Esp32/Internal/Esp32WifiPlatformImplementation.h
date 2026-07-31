@@ -18,7 +18,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 
-namespace MicroWorld::Detail
+namespace MicroWorld
 {
 
 /**
@@ -130,4 +130,4 @@ inline wifi_config_t MakeStationConfig(const char* const InSsid, const char* con
 	return Config;
 }
 
-} // namespace MicroWorld::Detail
+} // namespace MicroWorld

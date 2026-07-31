@@ -1,7 +1,7 @@
 #include <MicroWorld/Platform/Pico/PicoE32LoraDriver.h>
 
-#include <MicroWorld/Platform/Pico/Detail/PicoUartByteStream.h>
-#include <MicroWorld/Platform/Pico/Detail/PicoUartPlatform.h>
+#include <MicroWorld/Platform/Pico/Internal/PicoUartByteStream.h>
+#include <MicroWorld/Platform/Pico/Internal/PicoUartPlatform.h>
 
 #include <hardware/gpio.h>
 #include <hardware/uart.h>
@@ -26,7 +26,7 @@ uart_inst_t* ResolveUart(const std::uint8_t InUartIndex) noexcept
 }
 
 /** Pico SDK implementation whose process-lifetime storage keeps the default byte-stream binding valid. */
-class FPicoUartPlatform final : public MicroWorld::Detail::IPicoUartPlatform
+class FPicoUartPlatform final : public MicroWorld::IPicoUartPlatform
 {
 public:
 	/** Opens the requested UART and configures its pins after the requested baud rate was accepted. */
@@ -97,7 +97,7 @@ public:
 
 } // namespace
 
-namespace MicroWorld::Detail
+namespace MicroWorld
 {
 
 IPicoUartPlatform& GetPicoUartPlatform() noexcept
@@ -108,7 +108,7 @@ IPicoUartPlatform& GetPicoUartPlatform() noexcept
 
 FPicoUartByteStream::FPicoUartByteStream() noexcept : FPicoUartByteStream(GetPicoUartPlatform()) {}
 
-} // namespace MicroWorld::Detail
+} // namespace MicroWorld
 
 namespace MicroWorld
 {

@@ -21,7 +21,7 @@ These sources are optional. `MICROWORLD_TRANSPORT_RADIO` (declared in
 a radio-less build links Transport without the E32 framing at all. Nothing
 outside this directory may assume the sources are present.
 
-`Detail/` holds the transport state header the driver composes; consumers depend
+`Internal/` holds the transport state header the driver composes; consumers depend
 on the public driver and address headers only.
 
 ## Concepts and boundaries

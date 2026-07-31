@@ -1,6 +1,6 @@
 #include <MicroWorld/Platform/Esp32/Esp32SpiDriver.h>
 
-#include "Detail/SpiPlatformImplementation.h"
+#include "Internal/SpiPlatformImplementation.h"
 
 #include <MicroWorld/Core/Log.h>
 #include <MicroWorld/Transport/FrameCodec.h>
@@ -22,15 +22,15 @@ namespace
 {
 
 	/** Maps one SPI transmit outcome to the shared driver result (mirrors the UART/I2C drivers' mapping). */
-	ETransportResult MapSpiTransmitOutcome(const Detail::ESpiTransmitOutcome InOutcome) noexcept
+	ETransportResult MapSpiTransmitOutcome(const ESpiTransmitOutcome InOutcome) noexcept
 	{
 		switch (InOutcome)
 		{
-			case Detail::ESpiTransmitOutcome::Sent:
+			case ESpiTransmitOutcome::Sent:
 				return ETransportResult::Success;
-			case Detail::ESpiTransmitOutcome::WouldBlock:
+			case ESpiTransmitOutcome::WouldBlock:
 				return ETransportResult::Full;
-			case Detail::ESpiTransmitOutcome::Error:
+			case ESpiTransmitOutcome::Error:
 			default:
 				return ETransportResult::Invalid;
 		}
@@ -97,8 +97,8 @@ namespace
 
 FEsp32SpiMasterDriver::FEsp32SpiMasterDriver(const FEsp32SpiMasterConfig& InConfig) noexcept
 {
-	const Detail::FOpenedSpiMaster Opened =
-		Detail::OpenConfiguredSpiMaster(InConfig.SpiHost, InConfig.MosiGpio, InConfig.MisoGpio, InConfig.SclkGpio, InConfig.CsGpio, InConfig.ClockHz);
+	const FOpenedSpiMaster Opened =
+		OpenConfiguredSpiMaster(InConfig.SpiHost, InConfig.MosiGpio, InConfig.MisoGpio, InConfig.SclkGpio, InConfig.CsGpio, InConfig.ClockHz);
 	if (!Opened.bOpen)
 	{
 		DeviceHandle = nullptr;
@@ -117,14 +117,14 @@ FEsp32SpiMasterDriver::~FEsp32SpiMasterDriver() noexcept
 {
 	if (bOpen)
 	{
-		Detail::CloseSpiMaster(SpiHostValue, static_cast<spi_device_handle_t>(DeviceHandle));
+		CloseSpiMaster(SpiHostValue, static_cast<spi_device_handle_t>(DeviceHandle));
 	}
 }
 
 ETransportResult FEsp32SpiMasterDriver::ExchangeAndPump(const std::uint8_t* const InTransmitWindow) noexcept
 {
-	const Detail::ESpiTransmitOutcome Outcome =
-		Detail::TransmitSpiMaster(static_cast<spi_device_handle_t>(DeviceHandle), InTransmitWindow, ReceiveWindow, SpiTransactionWindowBytes);
+	const ESpiTransmitOutcome Outcome =
+		TransmitSpiMaster(static_cast<spi_device_handle_t>(DeviceHandle), InTransmitWindow, ReceiveWindow, SpiTransactionWindowBytes);
 	const ETransportResult Result = MapSpiTransmitOutcome(Outcome);
 	// SPI is full-duplex: the received window holds the slave's simultaneous output, so feed it to the
 	// decoder rather than discard it. Only pump when no frame is already held (the decoder precondition).
@@ -200,8 +200,7 @@ bool FEsp32SpiMasterDriver::IsOpen() const noexcept
 
 FEsp32SpiSlaveDriver::FEsp32SpiSlaveDriver(const FEsp32SpiSlaveConfig& InConfig) noexcept
 {
-	const Detail::FOpenedSpiSlave Opened =
-		Detail::OpenConfiguredSpiSlave(InConfig.SpiHost, InConfig.MosiGpio, InConfig.MisoGpio, InConfig.SclkGpio, InConfig.CsGpio);
+	const FOpenedSpiSlave Opened = OpenConfiguredSpiSlave(InConfig.SpiHost, InConfig.MosiGpio, InConfig.MisoGpio, InConfig.SclkGpio, InConfig.CsGpio);
 	if (!Opened.bOpen)
 	{
 		SpiHostValue = 0;
@@ -222,7 +221,7 @@ FEsp32SpiSlaveDriver::~FEsp32SpiSlaveDriver() noexcept
 {
 	if (bOpen)
 	{
-		Detail::CloseSpiSlave(SpiHostValue);
+		CloseSpiSlave(SpiHostValue);
 	}
 }
 
@@ -239,7 +238,7 @@ void FEsp32SpiSlaveDriver::QueueNextTransaction() noexcept
 		std::memset(TransmitWindow, 0, SpiTransactionWindowBytes);
 	}
 	spi_slave_transaction_t* const Transaction = static_cast<spi_slave_transaction_t*>(TransactionPtr);
-	bTransactionQueued = Detail::QueueSpiSlave(SpiHostValue, Transaction, TransmitWindow, ReceiveWindow, SpiTransactionWindowBytes);
+	bTransactionQueued = QueueSpiSlave(SpiHostValue, Transaction, TransmitWindow, ReceiveWindow, SpiTransactionWindowBytes);
 	if (!bTransactionQueued)
 	{
 		MW_LOG_MSG(Warning, "Spi", "slave failed to queue a transaction");
@@ -298,7 +297,7 @@ ETransportResult FEsp32SpiSlaveDriver::TryReceive(FDeviceAddress& OutFrom, TSpan
 		QueueNextTransaction();
 	}
 	// Harvest one completed transaction (the master clocked it); nothing done yet means Unavailable.
-	if (!Detail::HarvestSpiSlave(SpiHostValue))
+	if (!HarvestSpiSlave(SpiHostValue))
 	{
 		return ETransportResult::Unavailable;
 	}

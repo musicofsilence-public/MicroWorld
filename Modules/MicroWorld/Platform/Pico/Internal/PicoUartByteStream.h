@@ -1,11 +1,11 @@
 #pragma once
 
 #include <MicroWorld/Core/IO/UartByteStream.h>
-#include <MicroWorld/Platform/Pico/Detail/PicoUartPlatform.h>
+#include <MicroWorld/Platform/Pico/Internal/PicoUartPlatform.h>
 
 #include <cstdint>
 
-namespace MicroWorld::Detail
+namespace MicroWorld
 {
 
 /**
@@ -99,4 +99,4 @@ private:
 	bool bOpen{false};
 };
 
-} // namespace MicroWorld::Detail
+} // namespace MicroWorld

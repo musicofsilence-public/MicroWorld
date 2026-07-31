@@ -27,7 +27,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace MicroWorld::Detail
+namespace MicroWorld
 {
 
 /** Milliseconds one blocking bus transaction may take before it is reported transiently full (100 kHz clocks one whole frame in ~13 ms). */
@@ -321,4 +321,4 @@ inline void CloseI2cSlave(const i2c_slave_dev_handle_t InDevice) noexcept
 	}
 }
 
-} // namespace MicroWorld::Detail
+} // namespace MicroWorld

@@ -3,7 +3,7 @@
 namespace MicroWorld
 {
 
-FPicoE32LoraDriver::FPicoE32LoraDriver(Detail::IPicoE32LoraPlatform& InPlatform) noexcept : ByteStream(InPlatform), RadioDriver(ByteStream) {}
+FPicoE32LoraDriver::FPicoE32LoraDriver(IPicoE32LoraPlatform& InPlatform) noexcept : ByteStream(InPlatform), RadioDriver(ByteStream) {}
 
 FPicoE32LoraDriver::~FPicoE32LoraDriver() noexcept = default;
 
@@ -14,7 +14,7 @@ ETransportResult FPicoE32LoraDriver::Initialize(const FPicoE32LoraConfig& InConf
 		return ETransportResult::Unavailable;
 	}
 
-	const Detail::FPicoUartConfig UartConfig{InConfig.UartIndex, InConfig.TxGpio, InConfig.RxGpio, InConfig.BaudRate};
+	const FPicoUartConfig UartConfig{InConfig.UartIndex, InConfig.TxGpio, InConfig.RxGpio, InConfig.BaudRate};
 	if (!ByteStream.Open(UartConfig))
 	{
 		return ETransportResult::Invalid;

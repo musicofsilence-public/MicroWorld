@@ -1,6 +1,6 @@
 #include <MicroWorld/Platform/Esp32/Esp32UartDriver.h>
 
-#include "Detail/UartPlatformImplementation.h"
+#include "Internal/UartPlatformImplementation.h"
 
 #include <MicroWorld/Core/Log.h>
 #include <MicroWorld/Transport/FrameCodec.h>
@@ -13,8 +13,8 @@ namespace MicroWorld
 
 FEsp32UartDriver::FEsp32UartDriver(const FEsp32UartConfig& InConfig) noexcept
 {
-	const Detail::FUartPort Port = Detail::AsUartPort(InConfig.UartPort);
-	const Detail::FOpenedUart Opened = Detail::OpenConfiguredUartPort(Port, InConfig.TxGpio, InConfig.RxGpio, InConfig.BaudRate);
+	const FUartPort Port = AsUartPort(InConfig.UartPort);
+	const FOpenedUart Opened = OpenConfiguredUartPort(Port, InConfig.TxGpio, InConfig.RxGpio, InConfig.BaudRate);
 	if (!Opened.bOpen)
 	{
 		UartPortNumber = 0;
@@ -31,7 +31,7 @@ FEsp32UartDriver::~FEsp32UartDriver() noexcept
 {
 	if (bOpen)
 	{
-		Detail::CloseUart(Detail::AsUartPort(UartPortNumber));
+		CloseUart(AsUartPort(UartPortNumber));
 	}
 }
 
@@ -39,15 +39,15 @@ namespace
 {
 
 	/** Maps one UART write outcome to the shared driver result. */
-	ETransportResult MapUartWriteOutcome(const Detail::EUartWriteOutcome InOutcome) noexcept
+	ETransportResult MapUartWriteOutcome(const EUartWriteOutcome InOutcome) noexcept
 	{
 		switch (InOutcome)
 		{
-			case Detail::EUartWriteOutcome::Sent:
+			case EUartWriteOutcome::Sent:
 				return ETransportResult::Success;
-			case Detail::EUartWriteOutcome::WouldBlock:
+			case EUartWriteOutcome::WouldBlock:
 				return ETransportResult::Full;
-			case Detail::EUartWriteOutcome::Error:
+			case EUartWriteOutcome::Error:
 			default:
 				return ETransportResult::Invalid;
 		}
@@ -74,7 +74,7 @@ ETransportResult FEsp32UartDriver::TrySend(const FDeviceAddress& InTo, TSpan<con
 	{
 		return EncodeResult;
 	}
-	const Detail::EUartWriteOutcome Outcome = Detail::WriteUart(Detail::AsUartPort(UartPortNumber), Frame, Written);
+	const EUartWriteOutcome Outcome = WriteUart(AsUartPort(UartPortNumber), Frame, Written);
 	return MapUartWriteOutcome(Outcome);
 }
 
@@ -138,16 +138,16 @@ ETransportResult FEsp32UartDriver::PumpDecoderForFrame(TSpan<std::uint8_t> InDes
 {
 	// Pump available UART bytes one at a time, bounded so a flood cannot starve the caller.
 	const std::size_t PumpByteCap = 2u * (UartMaxPayloadBytes + FrameOverheadBytes);
-	const Detail::FUartPort Port = Detail::AsUartPort(UartPortNumber);
+	const FUartPort Port = AsUartPort(UartPortNumber);
 	for (std::size_t Pumped = 0; Pumped < PumpByteCap; ++Pumped)
 	{
 		std::uint8_t IncomingByte = 0;
-		const Detail::EUartReadStatus Status = Detail::ReadUartByte(Port, IncomingByte);
-		if (Status == Detail::EUartReadStatus::WouldBlock)
+		const EUartReadStatus Status = ReadUartByte(Port, IncomingByte);
+		if (Status == EUartReadStatus::WouldBlock)
 		{
 			break;
 		}
-		if (Status == Detail::EUartReadStatus::Error)
+		if (Status == EUartReadStatus::Error)
 		{
 			return ETransportResult::Invalid;
 		}

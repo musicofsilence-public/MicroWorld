@@ -136,7 +136,7 @@ public:
 		else
 		{
 			Reset();
-			Detail::ConstructAt<FStoredCallable>(StorageAddress(), std::forward<CallableType>(InCallable));
+			RawStorage::ConstructAt<FStoredCallable>(StorageAddress(), std::forward<CallableType>(InCallable));
 			InstallErasedOperations<FStoredCallable>();
 			return EDelegateResult::Success;
 		}
@@ -198,7 +198,7 @@ private:
 	template<typename CallableType>
 	static CallableType* CallableAt(void* const InStorage) noexcept
 	{
-		return Detail::LaunderedPointer<CallableType>(InStorage);
+		return RawStorage::LaunderedPointer<CallableType>(InStorage);
 	}
 
 	/** Invokes one concrete callable while preserving the declared single-cast argument categories. */
@@ -213,15 +213,15 @@ private:
 	static void Move(void* const InDestinationStorage, void* const InSourceStorage) noexcept
 	{
 		CallableType* const SourceCallable = CallableAt<CallableType>(InSourceStorage);
-		Detail::ConstructAt<CallableType>(InDestinationStorage, std::move(*SourceCallable));
-		Detail::DestroyAt(SourceCallable);
+		RawStorage::ConstructAt<CallableType>(InDestinationStorage, std::move(*SourceCallable));
+		RawStorage::DestroyAt(SourceCallable);
 	}
 
 	/** Destroys one concrete callable held by this delegate. */
 	template<typename CallableType>
 	static void Destroy(void* const InStorage) noexcept
 	{
-		Detail::DestroyAt(CallableAt<CallableType>(InStorage));
+		RawStorage::DestroyAt(CallableAt<CallableType>(InStorage));
 	}
 
 	/** Points the erased operations at the concrete callable's invoke/move/destroy. */

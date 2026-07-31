@@ -90,23 +90,18 @@ struct FActorMessageHeader
 	FMessageActorId SenderActorId{0};
 };
 
-namespace Detail
+/** Writes one 16-bit value into two bytes, least-significant byte first. */
+inline void WriteMessageUint16LittleEndian(const std::uint16_t InValue, std::uint8_t* const OutBytes) noexcept
 {
+	OutBytes[0] = static_cast<std::uint8_t>(InValue & LowByteMask);
+	OutBytes[1] = static_cast<std::uint8_t>((InValue >> HighByteShift) & LowByteMask);
+}
 
-	/** Writes one 16-bit value into two bytes, least-significant byte first. */
-	inline void WriteMessageUint16LittleEndian(const std::uint16_t InValue, std::uint8_t* const OutBytes) noexcept
-	{
-		OutBytes[0] = static_cast<std::uint8_t>(InValue & LowByteMask);
-		OutBytes[1] = static_cast<std::uint8_t>((InValue >> HighByteShift) & LowByteMask);
-	}
-
-	/** Reads one 16-bit value from two bytes, least-significant byte first. */
-	inline std::uint16_t ReadMessageUint16LittleEndian(const std::uint8_t* const InBytes) noexcept
-	{
-		return static_cast<std::uint16_t>(static_cast<std::uint16_t>(InBytes[0]) | (static_cast<std::uint16_t>(InBytes[1]) << HighByteShift));
-	}
-
-} // namespace Detail
+/** Reads one 16-bit value from two bytes, least-significant byte first. */
+inline std::uint16_t ReadMessageUint16LittleEndian(const std::uint8_t* const InBytes) noexcept
+{
+	return static_cast<std::uint16_t>(static_cast<std::uint16_t>(InBytes[0]) | (static_cast<std::uint16_t>(InBytes[1]) << HighByteShift));
+}
 
 /**
  * Writes one actor-message header and payload little-endian into OutEncoded.
@@ -142,9 +137,9 @@ inline EMessageResult EncodeActorMessage(
 	}
 
 	std::uint8_t* const Destination = InEncoded.Data();
-	Detail::WriteMessageUint16LittleEndian(InHeader.MessageTypeId, &Destination[MessageTypeIdOffset]);
-	Detail::WriteMessageUint16LittleEndian(InHeader.TargetActorId, &Destination[TargetActorIdOffset]);
-	Detail::WriteMessageUint16LittleEndian(InHeader.SenderActorId, &Destination[SenderActorIdOffset]);
+	WriteMessageUint16LittleEndian(InHeader.MessageTypeId, &Destination[MessageTypeIdOffset]);
+	WriteMessageUint16LittleEndian(InHeader.TargetActorId, &Destination[TargetActorIdOffset]);
+	WriteMessageUint16LittleEndian(InHeader.SenderActorId, &Destination[SenderActorIdOffset]);
 
 	const std::uint8_t* const PayloadData = InPayload.Data();
 	for (std::size_t Index = 0; Index < InPayload.Size(); ++Index)
@@ -180,9 +175,9 @@ inline EMessageResult DecodeActorMessage(
 
 	const std::uint8_t* const Source = InEncoded.Data();
 	FActorMessageHeader DecodedHeader;
-	DecodedHeader.MessageTypeId = Detail::ReadMessageUint16LittleEndian(&Source[MessageTypeIdOffset]);
-	DecodedHeader.TargetActorId = Detail::ReadMessageUint16LittleEndian(&Source[TargetActorIdOffset]);
-	DecodedHeader.SenderActorId = Detail::ReadMessageUint16LittleEndian(&Source[SenderActorIdOffset]);
+	DecodedHeader.MessageTypeId = ReadMessageUint16LittleEndian(&Source[MessageTypeIdOffset]);
+	DecodedHeader.TargetActorId = ReadMessageUint16LittleEndian(&Source[TargetActorIdOffset]);
+	DecodedHeader.SenderActorId = ReadMessageUint16LittleEndian(&Source[SenderActorIdOffset]);
 	if (DecodedHeader.MessageTypeId == 0)
 	{
 		return EMessageResult::InvalidType;

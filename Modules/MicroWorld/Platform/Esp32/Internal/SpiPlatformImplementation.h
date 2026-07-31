@@ -28,7 +28,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace MicroWorld::Detail
+namespace MicroWorld
 {
 
 /** Normalized result of one full-duplex SPI master transaction. */
@@ -260,4 +260,4 @@ inline void CloseSpiSlave(const int InHost) noexcept
 	(void)spi_slave_free(AsSpiHost(InHost));
 }
 
-} // namespace MicroWorld::Detail
+} // namespace MicroWorld

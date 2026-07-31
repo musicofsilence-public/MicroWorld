@@ -2,7 +2,7 @@
 
 #include <MicroWorld/Core/IO/UartByteStream.h>
 #include <MicroWorld/Transport/Device.h>
-#include <MicroWorld/Transport/Lora/Detail/E32LoraTransportState.h>
+#include <MicroWorld/Transport/Lora/Internal/E32LoraTransportState.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -77,7 +77,7 @@ private:
 	IUartByteStream& ByteStream;
 
 	/** Owns fixed transmit framing, receive assembly, and retained decoded-frame state. */
-	Detail::FE32LoraTransportState TransportState{};
+	FE32LoraTransportState TransportState{};
 
 	/** Stamps every queued frame with the initialized local E32 node id. */
 	std::uint8_t LocalNodeIdValue{0};

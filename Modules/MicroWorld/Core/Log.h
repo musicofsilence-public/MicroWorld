@@ -16,7 +16,7 @@
  *     single-threaded).
  *
  * Worked expansion of MW_LOG(Log, "Boot", "x=%d", X):
- *   * level enabled  ->  ::MicroWorld::Detail::DispatchLogFormatted(
+ *   * level enabled  ->  ::MicroWorld::DispatchLogFormatted(
  *                         ::MicroWorld::ELogLevel::Log, ("Boot"), "x=%d", X)
  *   * below floor    ->  ((void)0)      // X is never evaluated
  */
@@ -101,16 +101,11 @@ using FOutputDeviceFunction = void (*)(ELogLevel InLevel, const char* InCategory
 /** Installs the process-global output device; pass nullptr (the default) to disable logging. */
 void SetOutputDevice(FOutputDeviceFunction InOutputDevice) noexcept;
 
-namespace Detail
-{
+/** Forwards a ready-made message to the installed output device, doing nothing when none is set. */
+void DispatchLogMessage(ELogLevel InLevel, const char* InCategory, const char* InMessage) noexcept;
 
-	/** Forwards a ready-made message to the installed output device, doing nothing when none is set. */
-	void DispatchLogMessage(ELogLevel InLevel, const char* InCategory, const char* InMessage) noexcept;
-
-	/** Formats into a bounded stack buffer then forwards to the output device, skipping work when none is set. */
-	void DispatchLogFormatted(ELogLevel InLevel, const char* InCategory, const char* InFormat, ...) noexcept MW_LOG_PRINTF_FORMAT;
-
-} // namespace Detail
+/** Formats into a bounded stack buffer then forwards to the output device, skipping work when none is set. */
+void DispatchLogFormatted(ELogLevel InLevel, const char* InCategory, const char* InFormat, ...) noexcept MW_LOG_PRINTF_FORMAT;
 
 } // namespace MicroWorld
 
@@ -120,12 +115,10 @@ namespace Detail
 
 // A below-floor call drops its arguments UNEVALUATED; an enabled one dispatches.
 #define MW_LOG_EMIT_FORMATTED_0(Level, Category, ...) ((void)0)
-#define MW_LOG_EMIT_FORMATTED_1(Level, Category, ...) \
-	::MicroWorld::Detail::DispatchLogFormatted(::MicroWorld::ELogLevel::Level, (Category), __VA_ARGS__)
+#define MW_LOG_EMIT_FORMATTED_1(Level, Category, ...) ::MicroWorld::DispatchLogFormatted(::MicroWorld::ELogLevel::Level, (Category), __VA_ARGS__)
 
 #define MW_LOG_EMIT_MESSAGE_0(Level, Category, Message) ((void)0)
-#define MW_LOG_EMIT_MESSAGE_1(Level, Category, Message) \
-	::MicroWorld::Detail::DispatchLogMessage(::MicroWorld::ELogLevel::Level, (Category), (Message))
+#define MW_LOG_EMIT_MESSAGE_1(Level, Category, Message) ::MicroWorld::DispatchLogMessage(::MicroWorld::ELogLevel::Level, (Category), (Message))
 
 /**
  * Logs a printf-style record at the given level and category, e.g.

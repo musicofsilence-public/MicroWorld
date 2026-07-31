@@ -1,8 +1,8 @@
-#include <MicroWorld/Transport/Lora/Detail/E32LoraTransportState.h>
+#include <MicroWorld/Transport/Lora/Internal/E32LoraTransportState.h>
 
 #include <cstring>
 
-namespace MicroWorld::Detail
+namespace MicroWorld
 {
 
 ETransportResult FE32LoraTransportState::TryQueueFrame(
@@ -115,4 +115,4 @@ ETransportResult FE32LoraTransportState::TryDeliverReceivedFrame(
 	return ETransportResult::Success;
 }
 
-} // namespace MicroWorld::Detail
+} // namespace MicroWorld

@@ -3,8 +3,8 @@
 #include <MicroWorld/Transport/Lora/E32Lora.h>
 #include <MicroWorld/Transport/FrameCodec.h>
 #include <MicroWorld/Transport/TransportResult.h>
-#include <MicroWorld/Platform/Pico/Detail/PicoE32LoraPlatform.h>
-#include <MicroWorld/Platform/Pico/Detail/PicoUartPlatform.h>
+#include <MicroWorld/Platform/Pico/Internal/PicoE32LoraPlatform.h>
+#include <MicroWorld/Platform/Pico/Internal/PicoUartPlatform.h>
 #include <MicroWorld/Platform/Pico/PicoE32LoraDriver.h>
 
 #include <cstddef>
@@ -19,10 +19,10 @@ using MicroWorld::ETransportResult;
 using MicroWorld::FPicoE32LoraConfig;
 using MicroWorld::FPicoE32LoraDriver;
 using MicroWorld::FrameOverheadBytes;
+using MicroWorld::IPicoE32LoraPlatform;
+using MicroWorld::IPicoUartPlatform;
 using MicroWorld::MakeLoraAddress;
 using MicroWorld::TSpan;
-using MicroWorld::Detail::IPicoE32LoraPlatform;
-using MicroWorld::Detail::IPicoUartPlatform;
 
 /** Exact UART rate returned by a successful fake platform open. */
 constexpr std::uint32_t ExpectedBaudRate = 9600;

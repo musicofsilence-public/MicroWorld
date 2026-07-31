@@ -10,7 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace MicroWorld::Detail
+namespace MicroWorld
 {
 
 /**
@@ -112,4 +112,4 @@ private:
 	std::size_t NextTransmitByteIndex{0};
 };
 
-} // namespace MicroWorld::Detail
+} // namespace MicroWorld

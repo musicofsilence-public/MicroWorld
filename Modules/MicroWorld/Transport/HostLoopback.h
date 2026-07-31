@@ -12,11 +12,21 @@
 
 namespace MicroWorld
 {
-namespace Detail
-{
 
-	/** Active byte count of a loopback port address: one byte naming the destination port index. */
-	inline constexpr std::uint8_t LoopbackPortAddressBytes = 1;
+/**
+ * Deterministic in-process multi-port loopback network for host tests.
+ *
+ * Owns N mailboxes and N embedded per-port `IDevice`s; `Port(index)` hands out
+ * the driver bound to the 1-byte loopback address equal to `index`. Two hosts
+ * share one `THostLoopback` and each drive their own `Port(i)`; the ports live
+ * inside the network, so their lifetimes track it automatically.
+ */
+template<std::size_t MaxPorts, std::size_t MailboxCapacity, std::size_t PacketBytes>
+class THostLoopback final
+{
+	static_assert(MaxPorts > 0, "THostLoopback requires at least one port.");
+	static_assert(MailboxCapacity > 0, "THostLoopback requires a nonzero per-mailbox capacity.");
+	static_assert(PacketBytes > 0, "THostLoopback requires a nonzero per-packet byte capacity.");
 
 	/**
 	 * Owns the N per-port inbound mailboxes and the address-keyed routing for one
@@ -124,6 +134,9 @@ namespace Detail
 		}
 
 	private:
+		/** Active byte count of a loopback port address: one byte naming the destination port index. */
+		static constexpr std::uint8_t LoopbackPortAddressBytes = 1;
+
 		/** One bounded FIFO mailbox: fixed byte storage, per-slot length, per-slot sender, indices. */
 		struct FMailbox
 		{
@@ -243,23 +256,6 @@ namespace Detail
 		std::array<FMailbox, MaxPorts> Mailboxes{};
 	};
 
-} // namespace Detail
-
-/**
- * Deterministic in-process multi-port loopback network for host tests.
- *
- * Owns N mailboxes and N embedded per-port `IDevice`s; `Port(index)` hands out
- * the driver bound to the 1-byte loopback address equal to `index`. Two hosts
- * share one `THostLoopback` and each drive their own `Port(i)`; the ports live
- * inside the network, so their lifetimes track it automatically.
- */
-template<std::size_t MaxPorts, std::size_t MailboxCapacity, std::size_t PacketBytes>
-class THostLoopback final
-{
-	static_assert(MaxPorts > 0, "THostLoopback requires at least one port.");
-	static_assert(MailboxCapacity > 0, "THostLoopback requires a nonzero per-mailbox capacity.");
-	static_assert(PacketBytes > 0, "THostLoopback requires a nonzero per-packet byte capacity.");
-
 	/** One port's driver view: forwards send/receive to the shared mailboxes using its bound index. */
 	class FPort final : public IDevice
 	{
@@ -271,7 +267,7 @@ class THostLoopback final
 		~FPort() noexcept override = default;
 
 		/** Binds this port to the shared mailboxes and its own 1-byte address; called once at construction. */
-		void Bind(Detail::TLoopbackMailboxes<MaxPorts, MailboxCapacity, PacketBytes>* InMailboxes, const std::uint8_t InLocalIndex) noexcept
+		void Bind(TLoopbackMailboxes<MaxPorts, MailboxCapacity, PacketBytes>* InMailboxes, const std::uint8_t InLocalIndex) noexcept
 		{
 			Mailboxes = InMailboxes;
 			LocalIndex = InLocalIndex;
@@ -294,7 +290,7 @@ class THostLoopback final
 
 	private:
 		/** Shared mailboxes owned by the enclosing network; never owned here. */
-		Detail::TLoopbackMailboxes<MaxPorts, MailboxCapacity, PacketBytes>* Mailboxes{nullptr};
+		TLoopbackMailboxes<MaxPorts, MailboxCapacity, PacketBytes>* Mailboxes{nullptr};
 
 		/** This port's 1-byte loopback address value. */
 		std::uint8_t LocalIndex{0};
@@ -348,7 +344,7 @@ public:
 
 private:
 	/** The shared mailboxes; declared before Ports so it is fully constructed when ports bind. */
-	Detail::TLoopbackMailboxes<MaxPorts, MailboxCapacity, PacketBytes> Mailboxes{};
+	TLoopbackMailboxes<MaxPorts, MailboxCapacity, PacketBytes> Mailboxes{};
 
 	/** The N embedded per-port drivers handed out by Port(). */
 	std::array<FPort, MaxPorts> Ports{};

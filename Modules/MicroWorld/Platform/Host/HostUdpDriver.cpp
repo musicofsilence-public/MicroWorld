@@ -1,6 +1,6 @@
 #include <MicroWorld/Platform/Host/HostUdpDriver.h>
 
-#include "Detail/UdpSocketPlatformImplementation.h"
+#include "Internal/UdpSocketPlatformImplementation.h"
 
 #include <cstdint>
 
@@ -46,7 +46,7 @@ FWinSockScope::~FWinSockScope() noexcept
 
 FHostUdpDriver::FHostUdpDriver(const std::uint16_t InBindPort) noexcept
 {
-	const Detail::FOpenedSocket Opened = Detail::OpenBoundLoopbackUdpSocket(InBindPort);
+	const FOpenedSocket Opened = OpenBoundLoopbackUdpSocket(InBindPort);
 	if (!Opened.bOpen)
 	{
 		SocketHandle = 0;
@@ -54,7 +54,7 @@ FHostUdpDriver::FHostUdpDriver(const std::uint16_t InBindPort) noexcept
 		bOpen = false;
 		return;
 	}
-	SocketHandle = Detail::AsOpaqueHandle(Opened.Handle);
+	SocketHandle = AsOpaqueHandle(Opened.Handle);
 	BoundPortValue = Opened.BoundPort;
 	bOpen = true;
 }
@@ -63,7 +63,7 @@ FHostUdpDriver::~FHostUdpDriver() noexcept
 {
 	if (bOpen)
 	{
-		Detail::CloseSocket(Detail::AsSocketHandle(SocketHandle));
+		CloseSocket(AsSocketHandle(SocketHandle));
 	}
 }
 
@@ -87,15 +87,15 @@ ETransportResult FHostUdpDriver::TrySend(const FDeviceAddress& InTo, TSpan<const
 	{
 		return ETransportResult::Invalid;
 	}
-	const sockaddr_in Destination = Detail::MakeSockAddrIn(InTo.Bytes[0], InTo.Bytes[1], InTo.Bytes[2], InTo.Bytes[3], UdpAddressPort(InTo));
-	const Detail::ESendOutcome Outcome = Detail::SendDatagram(Detail::AsSocketHandle(SocketHandle), InPacket.Data(), PacketSize, Destination);
+	const sockaddr_in Destination = MakeSockAddrIn(InTo.Bytes[0], InTo.Bytes[1], InTo.Bytes[2], InTo.Bytes[3], UdpAddressPort(InTo));
+	const ESendOutcome Outcome = SendDatagram(AsSocketHandle(SocketHandle), InPacket.Data(), PacketSize, Destination);
 	switch (Outcome)
 	{
-		case Detail::ESendOutcome::Success:
+		case ESendOutcome::Success:
 			return ETransportResult::Success;
-		case Detail::ESendOutcome::WouldBlock:
+		case ESendOutcome::WouldBlock:
 			return ETransportResult::Full;
-		case Detail::ESendOutcome::Error:
+		case ESendOutcome::Error:
 		default:
 			return ETransportResult::Invalid;
 	}
@@ -112,16 +112,16 @@ namespace
 	 * datagram is left unconsumed so the receive stays transactional). `Success`
 	 * means a datagram is ready and fits, so the caller should consume it next.
 	 */
-	ETransportResult ProbeAndClassify(const Detail::FSocketHandle InSocket, const std::size_t InCapacity) noexcept
+	ETransportResult ProbeAndClassify(const FSocketHandle InSocket, const std::size_t InCapacity) noexcept
 	{
-		const Detail::FPeekProbe Probe = Detail::ProbeReadableDatagram(InSocket);
+		const FPeekProbe Probe = ProbeReadableDatagram(InSocket);
 		switch (Probe.Status)
 		{
-			case Detail::EPeekStatus::WouldBlock:
+			case EPeekStatus::WouldBlock:
 				return ETransportResult::Unavailable;
-			case Detail::EPeekStatus::Error:
+			case EPeekStatus::Error:
 				return ETransportResult::Invalid;
-			case Detail::EPeekStatus::Ready:
+			case EPeekStatus::Ready:
 				break;
 		}
 		// Single fits-vs-Full decision: the caller's destination is untouched on Full.
@@ -137,7 +137,7 @@ namespace
 ETransportResult FHostUdpDriver::TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept
 {
 	// Keep the sizing scratch and the advertised max in lockstep; both are 1200.
-	static_assert(Detail::PeekScratchBytes == FHostUdpDriver::UdpMaxPacketBytes, "Peek scratch must match the advertised packet maximum.");
+	static_assert(PeekScratchBytes == FHostUdpDriver::UdpMaxPacketBytes, "Peek scratch must match the advertised packet maximum.");
 
 	if (!bOpen)
 	{
@@ -149,7 +149,7 @@ ETransportResult FHostUdpDriver::TryReceive(FDeviceAddress& OutFrom, TSpan<std::
 	{
 		return ETransportResult::Invalid;
 	}
-	const ETransportResult Classification = ProbeAndClassify(Detail::AsSocketHandle(SocketHandle), Capacity);
+	const ETransportResult Classification = ProbeAndClassify(AsSocketHandle(SocketHandle), Capacity);
 	if (Classification != ETransportResult::Success)
 	{
 		return Classification;
@@ -157,7 +157,7 @@ ETransportResult FHostUdpDriver::TryReceive(FDeviceAddress& OutFrom, TSpan<std::
 	// The fits check already passed on the peeked head datagram; this consuming
 	// read removes exactly that datagram.
 	sockaddr_in Sender{};
-	const Detail::FConsumeResult Consumed = Detail::ConsumeDatagram(Detail::AsSocketHandle(SocketHandle), InDestination.Data(), Capacity, Sender);
+	const FConsumeResult Consumed = ConsumeDatagram(AsSocketHandle(SocketHandle), InDestination.Data(), Capacity, Sender);
 	if (!Consumed.bSuccess)
 	{
 		// A peer may have evicted the probed datagram; treat that race as transient.
@@ -190,7 +190,7 @@ bool FHostUdpDriver::PollReadable(const DurationMilliseconds InTimeoutMillisecon
 	{
 		return false;
 	}
-	return Detail::WaitForReadable(Detail::AsSocketHandle(SocketHandle), InTimeoutMilliseconds);
+	return WaitForReadable(AsSocketHandle(SocketHandle), InTimeoutMilliseconds);
 }
 
 } // namespace MicroWorld

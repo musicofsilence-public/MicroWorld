@@ -6,7 +6,7 @@ Inherits `../../../AGENTS.md`.
 
 `Platform/Pico` is the non-portable native Pico SDK edge for RP2040. Its public
 `FPicoE32LoraDriver` is a compatibility facade over optional RadioE32 (now inside
-Transport); Pico SDK UART/GPIO headers remain behind the `Detail/` implementation
+Transport); Pico SDK UART/GPIO headers remain behind the `Internal/` implementation
 headers. It is excluded from `CheckDependencyBoundaries.py`.
 
 ## Concepts

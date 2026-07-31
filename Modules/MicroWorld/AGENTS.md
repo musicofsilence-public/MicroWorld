@@ -21,7 +21,7 @@ Core, Engine <- Application
 `Platform/Host`, `Platform/Esp32`, and `Platform/Pico` are the non-portable
 edges; only they may reach OS/SDK headers. Headers and sources sit side by side
 within each system directory; `include/` and `src/` are gone. Private
-implementation headers live under each system's `Detail/` subfolder.
+implementation headers live under each system's `Internal/` subfolder.
 
 ## Concepts
 

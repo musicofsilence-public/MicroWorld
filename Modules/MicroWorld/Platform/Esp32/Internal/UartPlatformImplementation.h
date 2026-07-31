@@ -15,7 +15,7 @@
 #include <cstddef>
 #include <cstdint>
 
-namespace MicroWorld::Detail
+namespace MicroWorld
 {
 
 /** UART port number type matching the ESP-IDF enum so call sites need no implicit conversion. */
@@ -200,4 +200,4 @@ inline void CloseUart(const FUartPort InPort) noexcept
 	(void)uart_driver_delete(InPort);
 }
 
-} // namespace MicroWorld::Detail
+} // namespace MicroWorld

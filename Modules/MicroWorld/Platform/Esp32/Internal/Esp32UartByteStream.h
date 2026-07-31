@@ -4,7 +4,7 @@
 
 #include <cstdint>
 
-namespace MicroWorld::Detail
+namespace MicroWorld
 {
 
 /**
@@ -86,4 +86,4 @@ private:
 	bool bOpen{false};
 };
 
-} // namespace MicroWorld::Detail
+} // namespace MicroWorld

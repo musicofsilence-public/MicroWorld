@@ -25,7 +25,7 @@ sources and the RadioE32 sources are toggled by the `MICROWORLD_TRANSPORT_IP` an
 `MICROWORLD_TRANSPORT_RADIO` CMake options so a Pico build can omit IP code and a
 radio-less build can omit the E32 framing.
 
-`Lora/Detail/` holds fixed transport state and other implementation mechanics (the
+`Lora/Internal/` holds fixed transport state and other implementation mechanics (the
 portable E32 transport state); consumers must not depend on those headers.
 
 ## Concepts and boundaries
@@ -46,7 +46,7 @@ portable E32 transport state); consumers must not depend on those headers.
   their drivers share one definition without breaching the `Core <- Transport`
   boundary.
 - `Lora/E32Lora.h` owns the one-byte E32 node-address shape and payload limit;
-  `Lora/Detail/E32LoraTransportState.h` owns the portable E32 state, and
+  `Lora/Internal/E32LoraTransportState.h` owns the portable E32 state, and
   `Lora/RadioE32Driver.h` owns the driver that uses it over `IUartByteStream`.
 - `IDevice` exposes one bounded non-blocking `TrySend` and one bounded
   non-blocking `TryReceive`. Every receive is transactional: on `Full`,

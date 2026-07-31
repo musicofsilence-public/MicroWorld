@@ -1,6 +1,6 @@
 #include <MicroWorld/Platform/Esp32/Esp32I2cDriver.h>
 
-#include "Detail/I2cPlatformImplementation.h"
+#include "Internal/I2cPlatformImplementation.h"
 
 #include <MicroWorld/Core/Log.h>
 #include <MicroWorld/Transport/FrameCodec.h>
@@ -40,15 +40,15 @@ namespace
 {
 
 	/** Maps one I2C write outcome to the shared driver result (mirrors the UART driver's mapping). */
-	ETransportResult MapI2cWriteOutcome(const Detail::EI2cWriteOutcome InOutcome) noexcept
+	ETransportResult MapI2cWriteOutcome(const EI2cWriteOutcome InOutcome) noexcept
 	{
 		switch (InOutcome)
 		{
-			case Detail::EI2cWriteOutcome::Sent:
+			case EI2cWriteOutcome::Sent:
 				return ETransportResult::Success;
-			case Detail::EI2cWriteOutcome::WouldBlock:
+			case EI2cWriteOutcome::WouldBlock:
 				return ETransportResult::Full;
-			case Detail::EI2cWriteOutcome::Error:
+			case EI2cWriteOutcome::Error:
 			default:
 				return ETransportResult::Invalid;
 		}
@@ -97,8 +97,8 @@ namespace
 
 FEsp32I2cMasterDriver::FEsp32I2cMasterDriver(const FEsp32I2cMasterConfig& InConfig) noexcept
 {
-	const Detail::FOpenedI2cMaster Opened =
-		Detail::OpenConfiguredI2cMaster(InConfig.I2cPort, InConfig.SdaGpio, InConfig.SclGpio, InConfig.SclSpeedHz, InConfig.SlaveAddress);
+	const FOpenedI2cMaster Opened =
+		OpenConfiguredI2cMaster(InConfig.I2cPort, InConfig.SdaGpio, InConfig.SclGpio, InConfig.SclSpeedHz, InConfig.SlaveAddress);
 	if (!Opened.bOpen)
 	{
 		BusHandle = nullptr;
@@ -117,7 +117,7 @@ FEsp32I2cMasterDriver::~FEsp32I2cMasterDriver() noexcept
 {
 	if (bOpen)
 	{
-		Detail::CloseI2cMaster(static_cast<i2c_master_bus_handle_t>(BusHandle), static_cast<i2c_master_dev_handle_t>(DeviceHandle));
+		CloseI2cMaster(static_cast<i2c_master_bus_handle_t>(BusHandle), static_cast<i2c_master_dev_handle_t>(DeviceHandle));
 	}
 }
 
@@ -140,7 +140,7 @@ ETransportResult FEsp32I2cMasterDriver::TrySend(const FDeviceAddress& InTo, TSpa
 	{
 		return EncodeResult;
 	}
-	const Detail::EI2cWriteOutcome Outcome = Detail::WriteI2cMaster(static_cast<i2c_master_dev_handle_t>(DeviceHandle), Frame, Written);
+	const EI2cWriteOutcome Outcome = WriteI2cMaster(static_cast<i2c_master_dev_handle_t>(DeviceHandle), Frame, Written);
 	return MapI2cWriteOutcome(Outcome);
 }
 
@@ -163,12 +163,12 @@ ETransportResult FEsp32I2cMasterDriver::TryReceive(FDeviceAddress& OutFrom, TSpa
 	}
 	// One bounded read transaction harvests a whole-frame window, then its bytes are pumped (ADR Appendix A5).
 	std::uint8_t Window[I2cTransactionWindowBytes];
-	const Detail::EI2cReadOutcome Outcome = Detail::ReadI2cMaster(static_cast<i2c_master_dev_handle_t>(DeviceHandle), Window, sizeof(Window));
-	if (Outcome == Detail::EI2cReadOutcome::WouldBlock)
+	const EI2cReadOutcome Outcome = ReadI2cMaster(static_cast<i2c_master_dev_handle_t>(DeviceHandle), Window, sizeof(Window));
+	if (Outcome == EI2cReadOutcome::WouldBlock)
 	{
 		return ETransportResult::Unavailable;
 	}
-	if (Outcome == Detail::EI2cReadOutcome::Error)
+	if (Outcome == EI2cReadOutcome::Error)
 	{
 		return ETransportResult::Invalid;
 	}
@@ -200,8 +200,7 @@ bool FEsp32I2cMasterDriver::IsOpen() const noexcept
 
 FEsp32I2cSlaveDriver::FEsp32I2cSlaveDriver(const FEsp32I2cSlaveConfig& InConfig) noexcept
 {
-	const Detail::FOpenedI2cSlave Opened =
-		Detail::OpenConfiguredI2cSlave(InConfig.I2cPort, InConfig.SdaGpio, InConfig.SclGpio, InConfig.SlaveAddress, Inbox);
+	const FOpenedI2cSlave Opened = OpenConfiguredI2cSlave(InConfig.I2cPort, InConfig.SdaGpio, InConfig.SclGpio, InConfig.SlaveAddress, Inbox);
 	if (!Opened.bOpen)
 	{
 		SlaveHandle = nullptr;
@@ -218,7 +217,7 @@ FEsp32I2cSlaveDriver::~FEsp32I2cSlaveDriver() noexcept
 {
 	if (bOpen)
 	{
-		Detail::CloseI2cSlave(static_cast<i2c_slave_dev_handle_t>(SlaveHandle));
+		CloseI2cSlave(static_cast<i2c_slave_dev_handle_t>(SlaveHandle));
 	}
 }
 
@@ -241,7 +240,7 @@ ETransportResult FEsp32I2cSlaveDriver::TrySend(const FDeviceAddress& InTo, TSpan
 	{
 		return EncodeResult;
 	}
-	const Detail::EI2cWriteOutcome Outcome = Detail::WriteI2cSlave(static_cast<i2c_slave_dev_handle_t>(SlaveHandle), Frame, Written);
+	const EI2cWriteOutcome Outcome = WriteI2cSlave(static_cast<i2c_slave_dev_handle_t>(SlaveHandle), Frame, Written);
 	return MapI2cWriteOutcome(Outcome);
 }
 

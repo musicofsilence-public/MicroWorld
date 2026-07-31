@@ -60,7 +60,7 @@ public:
 		}
 
 		void* const ElementStorage = static_cast<void*>(&Storage[ElementCount]);
-		Detail::ConstructAt<ElementType>(ElementStorage, std::forward<ArgumentTypes>(Arguments)...);
+		RawStorage::ConstructAt<ElementType>(ElementStorage, std::forward<ArgumentTypes>(Arguments)...);
 		++ElementCount;
 		return ERuntimeResult::Success;
 	}
@@ -72,7 +72,7 @@ public:
 		while (ElementCount > 0)
 		{
 			--ElementCount;
-			Detail::DestroyAt(ElementAt(ElementCount));
+			RawStorage::DestroyAt(ElementAt(ElementCount));
 		}
 	}
 
@@ -142,10 +142,10 @@ private:
 	static_assert(sizeof(FStorageSlot) == sizeof(ElementType), "TStaticVector requires storage slots with no inter-element padding");
 
 	/** Resolves a live element after placement construction has begun its lifetime. */
-	ElementType* ElementAt(const std::size_t InIndex) noexcept { return Detail::LaunderedPointer<ElementType>(&Storage[InIndex]); }
+	ElementType* ElementAt(const std::size_t InIndex) noexcept { return RawStorage::LaunderedPointer<ElementType>(&Storage[InIndex]); }
 
 	/** Resolves a live element after placement construction has begun its lifetime. */
-	const ElementType* ElementAt(const std::size_t InIndex) const noexcept { return Detail::LaunderedPointer<ElementType>(&Storage[InIndex]); }
+	const ElementType* ElementAt(const std::size_t InIndex) const noexcept { return RawStorage::LaunderedPointer<ElementType>(&Storage[InIndex]); }
 
 	/** Reserves a compile-time-bounded set of slots without constructing or allocating elements. */
 	// C++ forbids zero-length arrays; one dummy slot keeps a zero-capacity

@@ -58,7 +58,7 @@ private:
 				return;
 			}
 
-			Detail::DestroyAt(InValue);
+			RawStorage::DestroyAt(InValue);
 			if (Resource != nullptr)
 			{
 				static_cast<void>(Resource->Deallocate(Allocation));
@@ -147,7 +147,7 @@ TUniquePointerResult<ValueType> MakeUnique(IMemoryResource& InResource, Construc
 		return FailedResult;
 	}
 
-	ValueType* const Value = Detail::ConstructAt<ValueType>(Allocation.Address, std::forward<ConstructorArgumentTypes>(Arguments)...);
+	ValueType* const Value = RawStorage::ConstructAt<ValueType>(Allocation.Address, std::forward<ConstructorArgumentTypes>(Arguments)...);
 
 	TUniquePointerResult<ValueType> SuccessfulResult{};
 	SuccessfulResult.Result = EMemoryResult::Success;

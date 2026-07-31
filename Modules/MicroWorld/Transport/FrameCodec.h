@@ -39,32 +39,27 @@ constexpr std::uint16_t Crc16CcittPolynomial = 0x1021u;
 
 static_assert(FrameOverheadBytes == FrameHeaderBytes + 2, "Frame overhead is the header plus the two trailing CRC bytes.");
 
-namespace Detail
+/**
+ * Advances a CRC-16/CCITT-FALSE accumulator by one byte.
+ *
+ * @param InOutCrc Accumulator updated in place; initialize to 0xFFFF before the first byte.
+ * @param InByte Next byte covered by the checksum.
+ */
+inline void UpdateCrc16Byte(std::uint16_t& InOutCrc, const std::uint8_t InByte) noexcept
 {
-
-	/**
-	 * Advances a CRC-16/CCITT-FALSE accumulator by one byte.
-	 *
-	 * @param InOutCrc Accumulator updated in place; initialize to 0xFFFF before the first byte.
-	 * @param InByte Next byte covered by the checksum.
-	 */
-	inline void UpdateCrc16Byte(std::uint16_t& InOutCrc, const std::uint8_t InByte) noexcept
+	InOutCrc = static_cast<std::uint16_t>(InOutCrc ^ static_cast<std::uint16_t>(static_cast<std::uint16_t>(InByte) << HighByteShift));
+	for (int Bit = 0; Bit < BitsPerByte; ++Bit)
 	{
-		InOutCrc = static_cast<std::uint16_t>(InOutCrc ^ static_cast<std::uint16_t>(static_cast<std::uint16_t>(InByte) << HighByteShift));
-		for (int Bit = 0; Bit < BitsPerByte; ++Bit)
+		if ((InOutCrc & Crc16TopBitMask) != 0u)
 		{
-			if ((InOutCrc & Crc16TopBitMask) != 0u)
-			{
-				InOutCrc = static_cast<std::uint16_t>(static_cast<std::uint16_t>(InOutCrc << 1) ^ Crc16CcittPolynomial);
-			}
-			else
-			{
-				InOutCrc = static_cast<std::uint16_t>(InOutCrc << 1);
-			}
+			InOutCrc = static_cast<std::uint16_t>(static_cast<std::uint16_t>(InOutCrc << 1) ^ Crc16CcittPolynomial);
+		}
+		else
+		{
+			InOutCrc = static_cast<std::uint16_t>(InOutCrc << 1);
 		}
 	}
-
-} // namespace Detail
+}
 
 /**
  * Computes a CRC-16/CCITT-FALSE checksum over a byte span without allocating or throwing.
@@ -87,69 +82,64 @@ inline std::uint16_t ComputeCrc16Ccitt(const TSpan<const std::uint8_t> InBytes) 
 	}
 	for (std::size_t Index = 0; Index < ByteCount; ++Index)
 	{
-		Detail::UpdateCrc16Byte(Crc, ChecksumBytes[Index]);
+		UpdateCrc16Byte(Crc, ChecksumBytes[Index]);
 	}
 	return Crc;
 }
 
-namespace Detail
+/**
+ * Rejects every invalid encode input before the destination is touched, so a rejection is transactional.
+ *
+ * @param InPayload Caller-owned payload bytes to frame.
+ * @param InFrame Caller-owned destination whose capacity is checked before any write.
+ * @return Invalid for a null-with-length span or an oversize payload, Full for a destination too small, else Success.
+ */
+inline ETransportResult ValidateEncodeInputs(const TSpan<const std::uint8_t> InPayload, const TSpan<std::uint8_t> InFrame) noexcept
 {
-
-	/**
-	 * Rejects every invalid encode input before the destination is touched, so a rejection is transactional.
-	 *
-	 * @param InPayload Caller-owned payload bytes to frame.
-	 * @param InFrame Caller-owned destination whose capacity is checked before any write.
-	 * @return Invalid for a null-with-length span or an oversize payload, Full for a destination too small, else Success.
-	 */
-	inline ETransportResult ValidateEncodeInputs(const TSpan<const std::uint8_t> InPayload, const TSpan<std::uint8_t> InFrame) noexcept
+	const std::size_t PayloadSize = InPayload.Size();
+	if (PayloadSize != 0 && InPayload.Data() == nullptr)
 	{
-		const std::size_t PayloadSize = InPayload.Size();
-		if (PayloadSize != 0 && InPayload.Data() == nullptr)
-		{
-			return ETransportResult::Invalid;
-		}
-		if (InFrame.Size() != 0 && InFrame.Data() == nullptr)
-		{
-			return ETransportResult::Invalid;
-		}
-		if (PayloadSize > Uint16Max)
-		{
-			// Oversize input can never fit the 16-bit length field, so it can never succeed on retry (D7).
-			return ETransportResult::Invalid;
-		}
-		if (PayloadSize + FrameOverheadBytes > InFrame.Size())
-		{
-			return ETransportResult::Full;
-		}
-		return ETransportResult::Success;
+		return ETransportResult::Invalid;
 	}
-
-	/** Writes the fixed frame header: magic byte, source node id, then the payload length as two big-endian bytes. */
-	inline void WriteFrameHeader(const std::uint8_t InSourceNodeId, const std::size_t InPayloadSize, const TSpan<std::uint8_t> OutFrame) noexcept
+	if (InFrame.Size() != 0 && InFrame.Data() == nullptr)
 	{
-		OutFrame[0] = FrameMagicByte;
-		OutFrame[1] = InSourceNodeId;
-		// The frame length is big-endian (high byte first) so a LoRa packet sniffer shows it in on-air reading order (D6).
-		WriteUint16BigEndian(static_cast<std::uint16_t>(InPayloadSize), &OutFrame[2]);
+		return ETransportResult::Invalid;
 	}
-
-	/** Copies the payload after the header, then appends the CRC-16 over the source id, length, and payload. */
-	inline void AppendPayloadAndChecksum(const TSpan<const std::uint8_t> InPayload, const TSpan<std::uint8_t> OutFrame) noexcept
+	if (PayloadSize > Uint16Max)
 	{
-		const std::size_t PayloadSize = InPayload.Size();
-		if (PayloadSize != 0)
-		{
-			std::memcpy(&OutFrame[FrameHeaderBytes], InPayload.Data(), PayloadSize);
-		}
-		// CRC covers the source node id, both length bytes, and the payload; magic and CRC are excluded.
-		const std::uint16_t Crc =
-			ComputeCrc16Ccitt(TSpan<const std::uint8_t>(&OutFrame[FrameSourceNodeIdByteIndex], FrameCrcCoveredPrefixBytes + PayloadSize));
-		OutFrame[FrameHeaderBytes + PayloadSize] = static_cast<std::uint8_t>(Crc >> HighByteShift);
-		OutFrame[FrameHeaderBytes + PayloadSize + 1] = static_cast<std::uint8_t>(Crc & LowByteMask);
+		// Oversize input can never fit the 16-bit length field, so it can never succeed on retry (D7).
+		return ETransportResult::Invalid;
 	}
+	if (PayloadSize + FrameOverheadBytes > InFrame.Size())
+	{
+		return ETransportResult::Full;
+	}
+	return ETransportResult::Success;
+}
 
-} // namespace Detail
+/** Writes the fixed frame header: magic byte, source node id, then the payload length as two big-endian bytes. */
+inline void WriteFrameHeader(const std::uint8_t InSourceNodeId, const std::size_t InPayloadSize, const TSpan<std::uint8_t> OutFrame) noexcept
+{
+	OutFrame[0] = FrameMagicByte;
+	OutFrame[1] = InSourceNodeId;
+	// The frame length is big-endian (high byte first) so a LoRa packet sniffer shows it in on-air reading order (D6).
+	WriteUint16BigEndian(static_cast<std::uint16_t>(InPayloadSize), &OutFrame[2]);
+}
+
+/** Copies the payload after the header, then appends the CRC-16 over the source id, length, and payload. */
+inline void AppendPayloadAndChecksum(const TSpan<const std::uint8_t> InPayload, const TSpan<std::uint8_t> OutFrame) noexcept
+{
+	const std::size_t PayloadSize = InPayload.Size();
+	if (PayloadSize != 0)
+	{
+		std::memcpy(&OutFrame[FrameHeaderBytes], InPayload.Data(), PayloadSize);
+	}
+	// CRC covers the source node id, both length bytes, and the payload; magic and CRC are excluded.
+	const std::uint16_t Crc =
+		ComputeCrc16Ccitt(TSpan<const std::uint8_t>(&OutFrame[FrameSourceNodeIdByteIndex], FrameCrcCoveredPrefixBytes + PayloadSize));
+	OutFrame[FrameHeaderBytes + PayloadSize] = static_cast<std::uint8_t>(Crc >> HighByteShift);
+	OutFrame[FrameHeaderBytes + PayloadSize + 1] = static_cast<std::uint8_t>(Crc & LowByteMask);
+}
 
 /**
  * Encodes one complete framed message transactionally.
@@ -172,14 +162,14 @@ inline ETransportResult EncodeFrame(
 	const TSpan<std::uint8_t> OutFrame,
 	std::size_t& OutWritten) noexcept
 {
-	const ETransportResult ValidationResult = Detail::ValidateEncodeInputs(InPayload, OutFrame);
+	const ETransportResult ValidationResult = ValidateEncodeInputs(InPayload, OutFrame);
 	if (ValidationResult != ETransportResult::Success)
 	{
 		return ValidationResult;
 	}
 	const std::size_t PayloadSize = InPayload.Size();
-	Detail::WriteFrameHeader(InSourceNodeId, PayloadSize, OutFrame);
-	Detail::AppendPayloadAndChecksum(InPayload, OutFrame);
+	WriteFrameHeader(InSourceNodeId, PayloadSize, OutFrame);
+	AppendPayloadAndChecksum(InPayload, OutFrame);
 	OutWritten = PayloadSize + FrameOverheadBytes;
 	return ETransportResult::Success;
 }
@@ -308,7 +298,7 @@ private:
 	EFrameEvent CaptureSourceNodeId(const std::uint8_t InByte) noexcept
 	{
 		PendingSourceNodeId = InByte;
-		Detail::UpdateCrc16Byte(RunningCrc, InByte);
+		UpdateCrc16Byte(RunningCrc, InByte);
 		State = EState::ReadingLengthHighByte;
 		return EFrameEvent::None;
 	}
@@ -317,7 +307,7 @@ private:
 	EFrameEvent CaptureLengthHighByte(const std::uint8_t InByte) noexcept
 	{
 		PendingLengthHighByte = InByte;
-		Detail::UpdateCrc16Byte(RunningCrc, InByte);
+		UpdateCrc16Byte(RunningCrc, InByte);
 		State = EState::ReadingLengthLowByte;
 		return EFrameEvent::None;
 	}
@@ -326,7 +316,7 @@ private:
 	 * assembly or straight to the CRC when the length is zero. */
 	EFrameEvent CaptureLengthLowByte(const std::uint8_t InByte) noexcept
 	{
-		Detail::UpdateCrc16Byte(RunningCrc, InByte);
+		UpdateCrc16Byte(RunningCrc, InByte);
 		// The frame length is big-endian on the wire (high byte first) for LoRa sniffer readability (D6).
 		const std::uint8_t DeclaredLengthBytes[2] = {PendingLengthHighByte, InByte};
 		const std::uint16_t DeclaredLength = ReadUint16BigEndian(DeclaredLengthBytes);
@@ -347,7 +337,7 @@ private:
 	{
 		PayloadStorage[PayloadIndex] = InByte;
 		++PayloadIndex;
-		Detail::UpdateCrc16Byte(RunningCrc, InByte);
+		UpdateCrc16Byte(RunningCrc, InByte);
 		if (PayloadIndex >= PendingLength)
 		{
 			State = EState::ReadingCrcHighByte;

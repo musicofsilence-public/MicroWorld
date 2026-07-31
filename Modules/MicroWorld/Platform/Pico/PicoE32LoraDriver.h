@@ -1,7 +1,7 @@
 #pragma once
 
-#include <MicroWorld/Platform/Pico/Detail/PicoE32LoraPlatform.h>
-#include <MicroWorld/Platform/Pico/Detail/PicoUartByteStream.h>
+#include <MicroWorld/Platform/Pico/Internal/PicoE32LoraPlatform.h>
+#include <MicroWorld/Platform/Pico/Internal/PicoUartByteStream.h>
 #include <MicroWorld/Transport/Lora/RadioE32Driver.h>
 
 #include <cstddef>
@@ -48,7 +48,7 @@ public:
 	FPicoE32LoraDriver() noexcept;
 
 	/** Creates a closed driver that borrows the supplied binding for host policy tests or alternate Pico wiring. */
-	explicit FPicoE32LoraDriver(Detail::IPicoE32LoraPlatform& InPlatform) noexcept;
+	explicit FPicoE32LoraDriver(IPicoE32LoraPlatform& InPlatform) noexcept;
 
 	/** Releases the delegated byte stream, which deinitializes the exclusively owned UART when initialization succeeded. */
 	~FPicoE32LoraDriver() noexcept override;
@@ -113,7 +113,7 @@ public:
 
 private:
 	/** Owns the configured RP2040 UART lifetime and provides bounded SDK-free byte operations to RadioE32. */
-	Detail::FPicoUartByteStream ByteStream{};
+	FPicoUartByteStream ByteStream{};
 
 	/** Owns portable E32 framing while borrowing the preceding byte stream for its full facade lifetime. */
 	FRadioE32Driver RadioDriver{ByteStream};

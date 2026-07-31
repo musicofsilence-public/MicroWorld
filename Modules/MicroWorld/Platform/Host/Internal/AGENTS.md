@@ -1,4 +1,4 @@
-# Platform/Host Detail
+# Platform/Host Internal
 
 Inherits `../../../../AGENTS.md`.
 

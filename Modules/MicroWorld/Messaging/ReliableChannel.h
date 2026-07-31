@@ -305,13 +305,13 @@ private:
 	static void WriteReliableHeader(std::uint8_t* const OutBytes, const EReliablePacketKind InKind, const std::uint16_t InSequence) noexcept
 	{
 		OutBytes[ReliableKindByteIndex] = static_cast<std::uint8_t>(InKind);
-		Detail::WriteMessageUint16LittleEndian(InSequence, &OutBytes[ReliableSequenceFieldByteIndex]);
+		WriteMessageUint16LittleEndian(InSequence, &OutBytes[ReliableSequenceFieldByteIndex]);
 	}
 
 	/** Reads the little-endian Sequence field starting at byte index 1 of a reliable-header-prefixed payload. */
 	static std::uint16_t ReadSequence(const std::uint8_t* const InBytes) noexcept
 	{
-		return Detail::ReadMessageUint16LittleEndian(&InBytes[ReliableSequenceFieldByteIndex]);
+		return ReadMessageUint16LittleEndian(&InBytes[ReliableSequenceFieldByteIndex]);
 	}
 
 	/** Copies InLength bytes from InSource to OutDestination; InLength may be 0. */
