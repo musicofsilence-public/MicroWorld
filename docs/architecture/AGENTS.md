@@ -9,7 +9,7 @@ the part that cannot be re-derived from the tool or the DSL.
 
 ## Architecture
 
-- `specification.c4` — the vocabulary. Nine element kinds, one tag (`optional`),
+- `specification.c4` — the vocabulary. Eight element kinds, one tag (`optional`),
   seven relationship kinds.
 - `model.c4` — elements, evidence-backed relationships. One `model { }` block; no
   deployment block (hardware is the `device` kind).
@@ -223,11 +223,11 @@ at all.
 
 ### An interface is its own kind, and it replaced a tag
 
-`Engine Interface` and `Device Interface` were `subsystem` elements carrying a
-`#contract` tag. Both halves were wrong. A subsystem is a *narrower responsibility* —
-examined alone it would be a system — and an interface does not do work; it declares
-the shape others satisfy. `entity` is no better: that kind means a stateful concept
-with identity and a lifetime, which an interface has neither of.
+`Engine Interface` and `Device Interface` could be mistaken for `component` elements
+and once carried a `#contract` tag. Neither representation was honest. A `component`
+does work; an interface only declares the shape others satisfy. `entity` is no better:
+that kind means a stateful concept with identity and a lifetime, which an interface
+has neither of.
 
 So `interface` is a kind. It cost nothing to add, because `#contract` marked exactly
 those two elements — identical membership means the tag and the kind were one
@@ -259,10 +259,10 @@ and a lifetime, which is what that kind means and what `component` does not.
 ### "Device" is overloaded on purpose
 
 `device` is an element **kind** meaning hardware — ESP32-S3, RP2040 — and the C3
-Transport elements are `subsystem`s titled `Wi-Fi Device`, `LoRa Device` and so on.
+Transport elements are `component`s titled `Wi-Fi Device`, `LoRa Device` and so on.
 The collision is deliberate: the owner's own code says `FWifiDevice`, and this file's
 first rule is that systems carry the team's words. The subtitle prefix disambiguates
-(`[subsystem: …]` against `[device: microcontroller]`), and the two never share a
+(`[component: …]` against `[device: microcontroller]`), and the two never share a
 view — hardware lives at C1, media at C3.
 
 ### One element per medium, not per class
@@ -284,8 +284,8 @@ than a board box and a host box. The platform difference is real, and it is on t
 arrows below the element — which is where a difference that does not change the
 medium belongs.
 
-Medium subtitles name the medium, never the platform: `[subsystem: UART, I2C, SPI]`,
-not `[subsystem: ESP-IDF UART, I2C, SPI]`. They used to name the SDK, and once the
+Medium subtitles name the medium, never the platform: `[component: UART, I2C, SPI]`,
+not `[component: ESP-IDF UART, I2C, SPI]`. They used to name the SDK, and once the
 platform elements existed that was the same fact written twice — with the weaker copy
 in the more prominent slot.
 
@@ -302,7 +302,7 @@ Three earlier attempts were weaker and all were rejected:
 
 | Attempt | Why it failed |
 | --- | --- |
-| name the SDK in the **subtitle** (`[subsystem: ESP-IDF UART, I2C, SPI]`) | a fragment of a label carrying a claim this size; the reader has to notice and interpret it |
+| name the SDK in the **subtitle** (`[component: ESP-IDF UART, I2C, SPI]`) | a fragment of a label carrying a claim this size; the reader has to notice and interpret it |
 | a `#nonPortable` **tag** | invisible without a view style rule, and says nothing a subtitle does not |
 | a **colour** on the media | a second lever on elements that already carry an icon |
 
@@ -313,6 +313,10 @@ The arrows are the payoff, and they are asymmetric on purpose — that asymmetry
 - **Host OS** realises only Wi-Fi, which is why a development host runs UDP tests and
   nothing else.
 - **Pico SDK** reaches only LoRa.
+
+Core reaches two of them as well — ESP-IDF for `Time` and `Log`, Host OS for `Time`
+— because a frame loop needs a clock before any medium exists. Pico SDK is absent
+there: that edge ships only the byte stream underneath LoRa.
 
 And **LoRa's arrows read differently from every other medium's**: it is not *realised
 by* a platform, it *takes a byte stream from* one. The E32 protocol is ours and

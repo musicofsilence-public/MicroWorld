@@ -118,11 +118,12 @@ model {
                 description 'Constructs actors only at safe points.'
             }
 
-            objectStore = subsystem 'Object Store' {
-                technology '[subsystem: FObjectStore, generation-checked handles]'
+            objectStore = component 'Object Store' {
+                technology '[component: FObjectStore, generation-checked handles]'
                 description 'Resolves handles and detects stale ones.'
                 style {
                     shape storage
+                    icon none
                 }
             }
 
@@ -176,9 +177,9 @@ model {
                 description 'Recovers message boundaries from a byte stream.'
             }
 
-            wifiDevice = subsystem 'Wi-Fi Device' {
+            wifiDevice = component 'Wi-Fi Device' {
                 #optional
-                technology '[subsystem: UDP datagrams]'
+                technology '[component: UDP datagrams]'
                 description 'Carries data over Wi-Fi and desktop sockets.'
                 style {
                     icon ./icon-ip.svg
@@ -188,18 +189,18 @@ model {
                 }
             }
 
-            bluetoothDevice = subsystem 'Bluetooth Device' {
+            bluetoothDevice = component 'Bluetooth Device' {
                 #optional
-                technology '[subsystem: paired-link datagrams]'
+                technology '[component: paired-link datagrams]'
                 description 'Carries data over Bluetooth to one peer.'
                 style {
                     icon ./icon-bluetooth.svg
                 }
             }
 
-            loraDevice = subsystem 'LoRa Device' {
+            loraDevice = component 'LoRa Device' {
                 #optional
-                technology '[subsystem: E32 on a byte stream]'
+                technology '[component: E32 on a byte stream]'
                 description 'Carries data over long-range radio.'
                 style {
                     icon ./icon-radio.svg
@@ -209,9 +210,9 @@ model {
                 }
             }
 
-            wiredDevice = subsystem 'Wired Device' {
+            wiredDevice = component 'Wired Device' {
                 #optional
-                technology '[subsystem: UART, I2C, SPI]'
+                technology '[component: UART, I2C, SPI]'
                 description 'Carries data board-to-board over a bus.'
                 style {
                     icon ./icon-wired.svg
@@ -300,6 +301,9 @@ model {
     microworld.transport.loraDevice -[uses]-> microworld.transport.frameCodec 'recovers message boundaries with'
     microworld.transport.wiredDevice -[uses]-> microworld.transport.frameCodec 'recovers message boundaries with'
 
+
+    microworld.core -[dependsOn]-> espIdf 'Time and Log realised by'
+    microworld.core -[dependsOn]-> hostOs 'Time realised by'
 
     // 'realised by' for three media, 'takes a byte stream from' for one: LoRa is the
     // only medium whose protocol we own, so its platform dependency stops at the wire.

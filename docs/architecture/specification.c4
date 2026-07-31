@@ -27,14 +27,6 @@ specification {
         }
     }
 
-    // Narrower responsibility owned by a parent, and relative: examined alone, a
-    // subsystem is a system.
-    element subsystem {
-        style {
-            shape component
-        }
-    }
-
     // The declared shape others write code against. It declares rather than does, so
     // it is neither a responsibility nor a stateful concept. No shape depicts one.
     element interface {
@@ -51,8 +43,9 @@ specification {
         }
     }
 
-    // Cohesive functions and classes serving one purpose, too small to be a subsystem
-    // of its own. Never a generic manager.
+    // In-process grouping of related implementation functionality behind a clear
+    // boundary. Used at C3 when its responsibility or relationships matter. Never
+    // a generic manager.
     element component {
         style {
             shape component
