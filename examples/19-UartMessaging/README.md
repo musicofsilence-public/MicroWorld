@@ -1,6 +1,6 @@
 # 19-UartMessaging
 
-**Feature:** the full MicroWorld message design — a dedicated-server `TEngineHost`
+**Feature:** the full MicroWorld message design — a dedicated-server `TEngine`
 bound to `TTransportHost` through the `THostPlaySystem` interface, and a bare `TTransportHost`
 client — running over a plain wire with **zero WiFi**. **Same application
 protocol as example 16 — only the driver construction changed.**
@@ -9,7 +9,7 @@ protocol as example 16 — only the driver construction changed.**
 
 ## What it does
 
-1. The **server** board (`node=1`) composes a `TEngineHost` + `THostPlaySystem` +
+1. The **server** board (`node=1`) composes a `TEngine` + `THostPlaySystem` +
    `TTransportHost` in `DedicatedServer` mode over one `FEsp32UartDriver`, registers a
    spawnable actor class, creates its world, and ticks forever. Each tick it
    broadcasts the world actor count on channel 2.
@@ -31,8 +31,8 @@ demonstration.
 - `TTransportHost` (`Configure` / `Start` / `PumpReceive` / `PumpSend` / `SendTo` /
   `Broadcast` / `GetState` / `GetServerPeer`, message-handler multicast),
   `ENetworkMode`, `ETransportHostState`, `FTransportHostConfig`, `FPeerId`
-- `THostPlaySystem` / `IPlaySystem` and the `TEngineHost` network-frame constructor
-- `TEngineHost` (`RegisterClass` / `CreateWorld` / `CreateObject` / `BeginPlay` /
+- `THostPlaySystem` / `IPlaySystem` and the `TEngine` network-frame constructor
+- `TEngine` (`RegisterClass` / `CreateWorld` / `CreateObject` / `BeginPlay` /
   `Tick` / `GetWorld`), `UWorld::SpawnActor`, `AActor`, `FGarbageCollectionBudget`
 - `FEsp32UartDriver`, `FEsp32UartConfig`, `MakeUartAddress`
 - `FEsp32TimeSource::Now`

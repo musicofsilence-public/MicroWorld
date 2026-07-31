@@ -43,7 +43,7 @@ tree names the architecture directly.
 ## Verification
 
 Build the engine from the repo root; Networking is the `microworld_networking`
-INTERFACE target (with `MicroWorld::Networking` and `MicroWorld::Networking`
-aliases). Run the dependency-boundary checker with the Networking system root
+INTERFACE target (with the `MicroWorld::Networking` alias). Run the
+dependency-boundary checker with the Networking system root
 and the Networking behavior tests after changes. This guide owns durable
 boundaries; the system's headers and tests define its current behavior.

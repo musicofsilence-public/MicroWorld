@@ -1,6 +1,6 @@
 # 26-MessagingOverLora
 
-**Feature:** the full MicroWorld message design — a dedicated-server `TEngineHost`
+**Feature:** the full MicroWorld message design — a dedicated-server `TEngine`
 bound to `TTransportHost` through the `THostPlaySystem` interface, and a bare `TTransportHost`
 client — running over an E32 LoRa radio. **Same application protocol as
 example 19 — only the driver construction and the D8 session profile differ.**
@@ -18,7 +18,7 @@ progress, so this example has no direct `AdvanceTransmit` call.
 
 ## What it does
 
-1. The **server** board (`node=1`) composes a `TEngineHost` + `THostPlaySystem` +
+1. The **server** board (`node=1`) composes a `TEngine` + `THostPlaySystem` +
    `TTransportHost` in `DedicatedServer` mode over one `FEsp32E32LoraDriver`,
    registers a spawnable actor class, creates its world, and ticks forever.
    It broadcasts the world actor count on channel 2 **every 1 s** (not every
@@ -49,8 +49,8 @@ broadcast would congest the channel and time peers out over the air.
 - `TTransportHost` (`Configure` / `Start` / `PumpReceive` / `PumpSend` / `SendTo` /
   `Broadcast` / `GetState` / `GetServerPeer`, message-handler multicast),
   `ENetworkMode`, `ETransportHostState`, `FTransportHostConfig`, `FPeerId`
-- `THostPlaySystem` / `IPlaySystem` and the `TEngineHost` network-frame constructor
-- `TEngineHost` (`RegisterClass` / `CreateWorld` / `CreateObject` / `BeginPlay` /
+- `THostPlaySystem` / `IPlaySystem` and the `TEngine` network-frame constructor
+- `TEngine` (`RegisterClass` / `CreateWorld` / `CreateObject` / `BeginPlay` /
   `Tick` / `GetWorld`), `UWorld::SpawnActor`, `AActor`, `FGarbageCollectionBudget`
 - `FEsp32E32LoraDriver`, `FEsp32E32LoraConfig`, `MakeLoraAddress`
 - `FEsp32TimeSource::Now`

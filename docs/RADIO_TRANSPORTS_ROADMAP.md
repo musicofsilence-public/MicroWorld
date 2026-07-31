@@ -198,11 +198,11 @@ join the allowed industry vocabulary alongside `Udp`/`Uart`), format with
   (26 LoraMessaging, 27 TwoBoardBle, 28 BleMessaging, 29 WirelessWorld).
   Registration happens only in `examples/README.md` (§1.5).
 - **D10 — Phase 5's messaging gate is satisfied.** It required actor messaging
-  over a wire plus `TNetworkFrameSet`, because example 29 always composes two
-  channels. `TMessageRouter`, `TMessageChannelBinding`, `TNetworkFrameSet` and
+  over a wire plus `TPlaySystemSet`, because example 29 always composes two
+  channels. `TMessageRouter`, `TMessageChannelBinding`, `TPlaySystemSet` and
   `TReliableChannel` all shipped, and examples 22–25 exercise them. Everything
   in Phases 0–4 here uses only shipped API (`TTransportHost`, `THostPlaySystem`,
-  `TEngineHost`).
+  `TEngine`).
 - **D11 — BLE builds extend sdkconfig additively.** The shared
   `examples/esp32-common/sdkconfig.defaults` is frozen; BLE examples pass a
   **second** defaults file (`examples/esp32-common/sdkconfig.ble.defaults`,
@@ -480,7 +480,7 @@ bench, first as a raw volley, then under the full engine.
   2026-07-24 two-ESP32 traces remain historical pre-refactor evidence.
 
 - [x] **1.3 Example `26-MessagingOverLora` (the payoff demo).** Copy example 19's
-  shape (`examples/19-UartMessaging` — server board: `TEngineHost` +
+  shape (`examples/19-UartMessaging` — server board: `TEngine` +
   `TTransportHost` DedicatedServer + `THostPlaySystem`, channel-1 message spawns an
   actor, channel-2 state broadcast; client board: bare client `TTransportHost`)
   with the D8/§4.3 LoRa profile: `TTransportHost<2, 58>`, heartbeat 3000 /
@@ -652,7 +652,7 @@ bench, first as a raw volley, then under the full engine.
 ### Phase 5 — Wireless actor-messaging world ⬜
 
 **Gate (open):** the messaging API this phase needs has shipped —
-`TMessageRouter`, `TMessageChannelBinding`, `TNetworkFrameSet`, and
+`TMessageRouter`, `TMessageChannelBinding`, `TPlaySystemSet`, and
 `TReliableChannel`, all exercised by examples 22–25. Nothing blocks 5.x but the
 BLE work in Phases 2–4.
 

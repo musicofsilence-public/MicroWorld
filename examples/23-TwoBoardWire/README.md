@@ -32,7 +32,7 @@ over WiFi.
   `AllPeers` on the server)
 - `TTransportHost` (`Configure` / `Start`), `THostPlaySystem`, `ENetworkMode`
 - `FEsp32UartDriver`, `FEsp32UartConfig`, `MakeUartAddress`
-- `TEngineHost` (`RegisterClass` / `CreateWorld` / `CreateObject` /
+- `TEngine` (`RegisterClass` / `CreateWorld` / `CreateObject` /
   `BeginPlay` / `Tick`), `AActor`, `UWorld::RegisterActor`
 - `FEsp32TimeSource::Now`, `SleepMilliseconds`, `WriteEsp32LogRecord`, `MW_LOG`
 
@@ -110,7 +110,7 @@ I (nnnn) ex23: switch broadcast heartbeat=3
 ## Image size
 
 From `pio run` (release build, ESP32-S3-DevKitC-1). Both role environments
-carry the same engine/object/GC stack (each board runs a full `TEngineHost`),
+carry the same engine/object/GC stack (each board runs a full `TEngine`),
 so the two images are nearly identical:
 
 ```text

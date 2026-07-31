@@ -70,7 +70,7 @@ private:
 };
 } // namespace
 
-/** Server board: engine host + host play system + transport host (DedicatedServer) over one UDP socket. */
+/** Server board: engine + host play system + transport host (DedicatedServer) over one UDP socket. */
 void RunServer() noexcept
 {
 	static FEsp32WifiLink WifiLink;

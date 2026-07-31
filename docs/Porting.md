@@ -14,7 +14,7 @@ The runtime never reads a clock. Every lifecycle, tick, timer, GC, and transport
 deadline takes a caller-supplied
 [`TimePointMilliseconds`](../Modules/MicroWorld/Core/Time.h) (`std::uint64_t`
 monotonic milliseconds). An adapter reads the real clock and feeds that value
-into `TEngineHost::Tick(Now)` (or the lower-level `Advance(Now)` calls).
+into `TEngine::Tick(Now)` (or the lower-level `Advance(Now)` calls).
 
 - ESP32 reference:
   [`FEsp32TimeSource`](../Modules/MicroWorld/Platform/Esp32/Esp32TimeSource.h)

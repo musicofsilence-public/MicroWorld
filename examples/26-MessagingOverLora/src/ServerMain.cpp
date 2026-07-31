@@ -67,7 +67,7 @@ private:
 };
 } // namespace
 
-/** Server board: engine host + host play system + transport host (DedicatedServer) over one E32 LoRa radio. */
+/** Server board: engine + host play system + transport host (DedicatedServer) over one E32 LoRa radio. */
 void RunServer() noexcept
 {
 	static FEsp32E32LoraDriver Driver{MakeLoraConfig(ServerNodeId)};

@@ -75,7 +75,7 @@ portable E32 transport state); consumers must not depend on those headers.
 ## Verification
 
 Build the engine from the repo root; Transport is the `microworld_transport` target
-(with `MicroWorld::Transport` and `MicroWorld::Transport` aliases). Run the
+(with the `MicroWorld::Transport` alias). Run the
 dependency-boundary checker with the Transport system root and the Transport
 behavior tests after changes. Keep Transport absent from Engine-only and
 Engine/Messaging-only profiles. This guide owns durable boundaries; the system's

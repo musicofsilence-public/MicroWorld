@@ -165,7 +165,7 @@ private:
 /** Everything a server message handler needs to spawn one actor in the server host's world. */
 struct FServerSpawnContext
 {
-	/** The server engine host whose world receives the spawned actor. */
+	/** The server engine whose world receives the spawned actor. */
 	FHost& Host;
 
 	/** Counts how many application messages the server handler observed. */

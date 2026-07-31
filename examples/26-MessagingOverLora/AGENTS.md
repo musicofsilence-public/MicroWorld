@@ -9,7 +9,7 @@ calls `RunServer()` or `RunClient()` by the `-DMICROWORLD_EXAMPLE_SERVER`
 define; `ServerMain.cpp` and `ClientMain.cpp` hold the two roles and are both
 always compiled (matching example 19's structure), and `LoraMessagingShared.h`
 defines the channels, opcode, node ids, and config builders once. The server is
-a full `TEngineHost` + `THostPlaySystem` + `TTransportHost` (DedicatedServer); the
+a full `TEngine` + `THostPlaySystem` + `TTransportHost` (DedicatedServer); the
 client is a bare `TTransportHost` (Client). Both run over `FEsp32E32LoraDriver`.
 
 ## Concepts

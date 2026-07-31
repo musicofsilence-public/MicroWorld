@@ -5,7 +5,7 @@ Inherits `../AGENTS.md` and `../../AGENTS.md`.
 ## Architecture
 
 This directory records immutable observations for an exact source,
-environment, toolchain, configuration, and `TEngineHost` workload. It does not
+environment, toolchain, configuration, and `TEngine` workload. It does not
 own live status, target acceptance, or release promotion.
 
 ## Concepts

@@ -389,7 +389,7 @@ extern "C" void app_main()
 	// 1. The single real clock; esp_timer feeds the engine's caller-supplied monotonic time.
 	FEsp32TimeSource Clock;
 
-	// The composition objects below (UDP driver, transport host, frame, engine host, and the GC probe)
+	// The composition objects below (UDP driver, transport host, frame, engine, and the GC probe)
 	// are placed in STATIC storage, not on the stack. The ESP-IDF main task stack is only 3584
 	// bytes, but TEngine embeds its fixed object storage inline (MaxObjects * SlotBytes) and
 	// the GC probe embeds its own slot bytes, which together far exceed that; a stack frame this

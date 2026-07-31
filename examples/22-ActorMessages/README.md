@@ -27,7 +27,7 @@ construction (D9): a broadcast reading and a targeted calibrate reply.
 
 ## The one-frame latency teaching point
 
-A "frame" here means one call to `TEngineHost::Tick`, not one 500 ms sensor
+A "frame" here means one call to `TEngine::Tick`, not one 500 ms sensor
 cadence — the two are independent. Within a single `Tick` call the canonical
 order is fixed: **(1) `PreAdvance`** delivers whatever is already queued,
 **(3) the world advances** (components tick, then actors tick — this is when
@@ -56,7 +56,7 @@ followed one poll later by `calibrated`.
 - `FMessageView`, `FMessageHandlerBinding`
 - `LocalChannelId`, `BroadcastActorId`
 - `AActor`, `UActorComponent`
-- `TEngineHost` (network-frame constructor, `RegisterClass` / `CreateWorld` /
+- `TEngine` (network-frame constructor, `RegisterClass` / `CreateWorld` /
   `CreateObject` / `RegisterComponent` / `BeginPlay` / `Tick` / `EndPlay`)
 - `FEsp32TimeSource`, `WriteEsp32LogRecord`, `SleepMilliseconds`
 

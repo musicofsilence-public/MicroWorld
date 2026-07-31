@@ -67,7 +67,7 @@ volatile int PlatformEsp32CompositionResult = -1;
 } // namespace
 
 /**
- * Composes the full ESP32 stack and ticks the engine host at a fixed cadence.
+ * Composes the full ESP32 stack and ticks the engine at a fixed cadence.
  *
  * This is a compile/composition proof: the dedicated-server network host is
  * wired through the `THostPlaySystem` interface but no netif/WiFi is brought up, so the loop

@@ -66,7 +66,7 @@ constexpr int MaxSpawns = 2;
 constexpr FTypeId DemoSpawnedActorTypeId{0x00080001u};
 
 /**
- * The server engine host profile. Bounds are deliberately small, fixed, and
+ * The server engine profile. Bounds are deliberately small, fixed, and
  * tuned so one bounded GC slice {1,4,8} completes a full mark/sweep cycle every
  * tick: MaxRoots(1) <= MaxRootOperations(1) and MaxObjects(8) <=
  * MaxSweepOperations(8). Without that invariant the store stays mid-cycle
@@ -122,7 +122,7 @@ private:
  */
 struct FDemoSpawnContext
 {
-	/** The server engine host whose world receives the spawned actor. */
+	/** The server engine whose world receives the spawned actor. */
 	FServerEngine& Host;
 
 	/** Monotonic count of input events handled; enforces the bounded spawn limit. */
@@ -223,7 +223,7 @@ bool BothLoopbackDriversOpen(const FHostUdpDriver& ServerDriver, const FHostUdpD
 /**
  * Registers the demo's one spawnable actor class and creates the server's
  * world. Returns false on the first failing step so main can abort before any
- * handler or session work depends on a half-built engine host.
+ * handler or session work depends on a half-built engine.
  */
 bool RegisterDemoWorld(FServerEngine& ServerHost) noexcept
 {
@@ -471,7 +471,7 @@ bool RunStateBroadcastLoop(
 } // namespace
 
 /**
- * Composes the server engine host and bare client transport host over real localhost
+ * Composes the server engine and bare client transport host over real localhost
  * UDP, drives them through one deterministic interleaved loop, and prints a
  * byte-identical trace across runs. Returns 0 on success and 1 on any failure.
  */

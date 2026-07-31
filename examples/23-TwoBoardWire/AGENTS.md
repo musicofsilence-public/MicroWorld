@@ -9,12 +9,12 @@ Two role worlds, one source tree. `Main.cpp` is a thin dispatcher whose
 `-DMICROWORLD_EXAMPLE_SERVER` define; `ServerMain.cpp` and `ClientMain.cpp`
 hold the two roles and are both always compiled, and `TwoBoardWireShared.h`
 defines the message/actor ids, node ids, UART/session config builders, and the
-`TTransportHost`/`TMessageRouter`/`TEngineHost` type shapes once (DRY within this one
+`TTransportHost`/`TMessageRouter`/`TEngine` type shapes once (DRY within this one
 example). Per board: a `TTransportHost` over `FEsp32UartDriver`, a `TMessageRouter`,
 and a `TMessageChannelBinding` wiring the two together. The engine holds the
 `THostPlaySystem` as its per-frame network slot; the run loop pumps the router
 manually (`PostAdvance` before `Engine.Tick`, `PreAdvance` after) because
-`TPlaySystemSet` does not exist until Phase 4.1 and `TEngineHost` holds
+`TPlaySystemSet` does not exist until Phase 4.1 and `TEngine` holds
 exactly one `IPlaySystem`. Every composition object is `static`,
 allocation-free, sized at compile time.
 

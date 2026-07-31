@@ -323,7 +323,7 @@ constexpr unsigned PollPacingMilliseconds = 10;
 } // namespace
 
 /**
- * Composition root: wires one router, one engine host, one sensor, and two actors,
+ * Composition root: wires one router, one engine, one sensor, and two actors,
  * then drives a bounded run that demonstrates local actor messaging end to end --
  * a broadcast reading, a display that counts them, and a targeted calibrate reply.
  */

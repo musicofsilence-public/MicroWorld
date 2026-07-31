@@ -50,7 +50,7 @@ gap positions as illustrative, not fixed.
 - `TTransportHost` (`Configure` / `Start`), `THostPlaySystem`, `ENetworkMode`
 - `FEsp32WifiLink` (`StartAccessPoint` / `JoinAccessPoint`), `FEsp32UdpDriver`,
   `MakeUdpAddress`
-- `TEngineHost` (`RegisterClass` / `CreateWorld` / `CreateObject` /
+- `TEngine` (`RegisterClass` / `CreateWorld` / `CreateObject` /
   `BeginPlay` / `Tick`), `AActor`, `UWorld::RegisterActor`
 - `FEsp32TimeSource::Now`, `SleepMilliseconds`, `WriteEsp32LogRecord`, `MW_LOG`
 

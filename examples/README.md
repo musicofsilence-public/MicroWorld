@@ -69,7 +69,7 @@ Status: ⬜ planned · 🟨 built (compiles) · ✅ hardware-verified
 | 07 | `07-MemoryDelegates` | `TDelegate` + `TMulticastDelegate` fixed dispatch | — | ⬜ |
 | 08 | `08-ObjectStore` | managed identity: store, handles, object pointers | — | ⬜ |
 | 09 | `09-ObjectGarbageCollector` | rooted tracing + budgeted incremental collection | — | ⬜ |
-| 10 | `10-EngineWorld` | `UWorld` / `AActor` / `UActorComponent` via `TEngineHost` | — | ⬜ |
+| 10 | `10-EngineWorld` | `UWorld` / `AActor` / `UActorComponent` via `TEngine` | — | ⬜ |
 | 11 | `11-EngineTimers` | `TTimerManager` one-shot / looping / cancel | — | ⬜ |
 | 12 | `12-NetBytes` | `FByteWriter` / `FByteReader` transactional byte I/O | — | ⬜ |
 | 13 | `13-NetLoopback` | `TTransportManager` FIFO over `THostLoopback` | — | ⬜ |

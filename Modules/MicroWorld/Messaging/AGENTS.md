@@ -38,11 +38,11 @@ Four shapes cover every wiring this system supports. Frame order is the rule
 that makes them work: **host play systems are added before the router**, so inbound
 bytes are decoded in the same tick they are routed.
 
-Standalone world, local messaging only — the router *is* the network frame:
+Standalone world, local messaging only — the router *is* the play system:
 
 ```cpp
 static TMessageRouter<16, 8, 96, 1> Router;              // handlers, queue, bytes, channels
-static TEngineHost<8, 16, 512, 16, 2, 4, 8, 64> Engine{Budget, Router};
+static TEngine<> Engine{Budget, Router};                 // capacities from FDefaultEngineTraits
 // actors take Router by IMessageRouter&, and subscribe in BeginPlay via AddMessageHandler
 ```
 
@@ -51,18 +51,18 @@ Client/server over one wire — server side shown:
 ```cpp
 static FEsp32UartDriver Driver{{.UartPort = 1, .TxGpio = 17, .RxGpio = 18,
                                 .BaudRate = 115200, .LocalNodeId = 1}};
-static TTransportHost<2, 120> Net{Driver};               // Configure(DedicatedServer) + Start
+static TTransportHost<2, 120> Transport{Driver};         // Configure(DedicatedServer) + Start
 static TMessageRouter<16, 8, 96, 1> Router;
-static TMessageChannelBinding<decltype(Net)> Commands{Net, /*wire*/1, /*id*/1,
-                                                      EChannelSendTarget::AllPeers, Router};
-static THostPlaySystem<decltype(Net)> NetFrame{Net};
-static TNetworkFrameSet<2> Frames;                       // Add(NetFrame); Add(Router);
-static TEngineHost<...> Engine{Budget, Frames};
+static TMessageChannelBinding<decltype(Transport)> Commands{Transport, /*wire*/1, /*id*/1,
+                                                            EChannelSendTarget::AllPeers, Router};
+static THostPlaySystem<decltype(Transport)> HostPlay{Transport};
+static TPlaySystemSet<2> Systems;                        // Add(HostPlay); Add(Router);
+static TEngine<> Engine{Budget, Systems};
 // after wiring: Router.AddChannel(Commands);
 ```
 
 Two drivers, two channels, one world: a second driver, a second `TTransportHost`, and
-a second binding with a different `FMessageChannelId` — both net frames added
+a second binding with a different `FMessageChannelId` — both host play systems added
 before the router.
 
 Guaranteed channel — the reliable wrapper sits between binding and router in
@@ -71,14 +71,14 @@ construction cycle broken by one deliberate two-phase setup:
 
 ```cpp
 static TReliableChannel<8, 96> Reliable{Router /*forward sink*/, {}};
-static TMessageChannelBinding<decltype(Net)> Wire{Net, /*wire*/1, /*id*/1,
-                                                  EChannelSendTarget::Server,
-                                                  Reliable /*inbound sink*/};
-static TNetworkFrameSet<3> Frames;
+static TMessageChannelBinding<decltype(Transport)> Wire{Transport, /*wire*/1, /*id*/1,
+                                                        EChannelSendTarget::Server,
+                                                        Reliable /*inbound sink*/};
+static TPlaySystemSet<3> Systems;
 // at startup, in this order:
 //   Reliable.SetInnerChannel(Wire);   // outbound: router -> reliable -> wire
 //   Router.AddChannel(Reliable);      // AFTER SetInnerChannel: GetChannelId needs the inner id
-//   Frames.Add(NetFrame); Frames.Add(Reliable); Frames.Add(Router);
+//   Systems.Add(HostPlay); Systems.Add(Reliable); Systems.Add(Router);
 ```
 
 ## Verification

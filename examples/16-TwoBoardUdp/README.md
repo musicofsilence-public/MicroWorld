@@ -1,7 +1,7 @@
 # 16-TwoBoardUdp
 
 **Feature:** the full networked engine across two real boards — a dedicated-server
-`TEngineHost` bound to `TTransportHost` through the `THostPlaySystem` interface, and a bare `TTransportHost`
+`TEngine` bound to `TTransportHost` through the `THostPlaySystem` interface, and a bare `TTransportHost`
 client, exchanging channel messages over **WiFi UDP with no router**. The server board
 hosts its own SoftAP; the client joins it. This is the host `TwoNodeDemo` split across two
 boards, and the **WiFi twin of example 19** (same protocol, UART swapped for UDP).
@@ -15,7 +15,7 @@ Two roles talk directly over the server's SoftAP — **no home WiFi, no real cre
 SoftAP gateway `192.168.4.1`, so there is no IP to look up or copy:
 
 1. The **server** (`esp32-s3-server`) hosts the SoftAP `microworld-ex16`, then composes a
-   `TEngineHost` + `THostPlaySystem` + `TTransportHost` (`DedicatedServer`) over one
+   `TEngine` + `THostPlaySystem` + `TTransportHost` (`DedicatedServer`) over one
    `FEsp32UdpDriver` bound to `ServerPort`, registers a spawnable actor class, creates its
    world, and ticks forever. Each tick it broadcasts the world actor count on channel 2.
 2. The **client** (`esp32-s3-client`) joins the AP and runs a bare `TTransportHost` (`Client`)
@@ -26,7 +26,7 @@ SoftAP gateway `192.168.4.1`, so there is no IP to look up or copy:
    the client observes count 2 it logs `done`.
 
 The application code above the driver is identical to example 19's; only the driver and the
-pre-driver WiFi bring-up changed. The same `TTransportHost` + `TEngineHost` design rides UART, a
+pre-driver WiFi bring-up changed. The same `TTransportHost` + `TEngine` design rides UART, a
 bare wire, or WiFi UDP unchanged.
 
 ## MicroWorld APIs used
@@ -34,8 +34,8 @@ bare wire, or WiFi UDP unchanged.
 - `TTransportHost` (`Configure` / `Start` / `PumpReceive` / `PumpSend` / `SendTo` / `Broadcast` /
   `GetState` / `GetServerPeer`, message-handler multicast), `ENetworkMode`, `ETransportHostState`,
   `FTransportHostConfig`, `FPeerId`
-- `THostPlaySystem` / `IPlaySystem` and the `TEngineHost` network-frame constructor
-- `TEngineHost` (`RegisterClass` / `CreateWorld` / `CreateObject` / `BeginPlay` / `Tick`),
+- `THostPlaySystem` / `IPlaySystem` and the `TEngine` network-frame constructor
+- `TEngine` (`RegisterClass` / `CreateWorld` / `CreateObject` / `BeginPlay` / `Tick`),
   `UWorld::SpawnActor`, `AActor`, `FGarbageCollectionBudget`
 - `FEsp32UdpDriver`, `MakeUdpAddress`, `FEsp32TimeSource::Now`
 - `FEsp32WifiLink` (`StartAccessPoint` / `JoinAccessPoint`), `SleepMilliseconds`,

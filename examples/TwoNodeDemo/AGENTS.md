@@ -5,7 +5,7 @@ Inherits `../AGENTS.md`.
 ## Architecture
 
 `Main.cpp` is one executable hosting TWO independent MicroWorld nodes over
-real localhost UDP: a dedicated server built on a full `TEngineHost` (bound to
+real localhost UDP: a dedicated server built on a full `TEngine` (bound to
 an `IPlaySystem` via `THostPlaySystem`) and a bare client `TTransportHost`. Both
 nodes are driven from one process through a single deterministic interleaved
 loop, so the printed trace is byte-identical across runs.
@@ -16,7 +16,7 @@ loop, so the printed trace is byte-identical across runs.
   the server to `CreateObject`+`SpawnActor` one `AActor` into its world; the
   server's per-tick channel-2 broadcast reports the resulting world actor
   count back to the client.
-- The server advances only through `TEngineHost::Tick` (network dispatch is
+- The server advances only through `TEngine::Tick` (network dispatch is
   step 1, flush is step 7); the bare client pumps `PumpSend`/`PumpReceive`
   explicitly since it owns no engine host.
 - The full run — handshake, two spawn requests, three state broadcasts, and
