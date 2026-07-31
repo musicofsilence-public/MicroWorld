@@ -371,7 +371,7 @@ that needs no key.**
 
 ### Our own icons
 
-Eleven `icon-*.svg` files sit beside the `.c4` files, referenced as `icon ./icon-transport.svg`.
+Twelve `icon-*.svg` files sit beside the `.c4` files, referenced as `icon ./icon-transport.svg`.
 They render in `export png` with no network, the same as the bundled sets.
 
 | Element | Glyph | Why it is honest |
@@ -385,6 +385,7 @@ They render in `export png` with no network, the same as the bundled sets.
 | Wi-Fi / Wired / LoRa Device | network, cable, antenna | the physical medium, the one thing they differ by |
 | Bluetooth Device | the Bluetooth rune | the medium has a real mark; one path, no interior detail |
 | Engine / Device Interface | ball-and-socket connector | the standard notation for a provided interface; shared by both because they are one kind |
+| every `component` | the UML component symbol | the standard notation for one. Set on the **kind** in `specification.c4` rather than on each element, so a new component carries it for free — `interface` predates that and still sets its icon twice |
 
 Two rules learned by looking at exports rather than at SVGs:
 
