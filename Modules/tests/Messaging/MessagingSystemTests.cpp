@@ -446,7 +446,7 @@ MW_TEST_CASE(MessagingSystem_AcceptsTwoAddressesOnOneDevice)
 }
 
 /**
- * Motivation: Lets composition roots provide reliability policy before channel setup.
+ * Motivation: Lets application entry points provide reliability policy before channel setup.
  * Responsibilities: Verify the system exposes exactly the policy supplied at construction.
  */
 MW_TEST_CASE(MessagingSystem_ReturnsSuppliedSystemInformation)

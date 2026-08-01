@@ -121,7 +121,7 @@ struct FDeviceHostTraits : MicroWorld::Engine::FDefaultEngineTraits
 } // namespace
 
 /**
- * Motivation: Composition root for the HostLifecycle demo, so the single entry point owns the one
+ * Motivation: Application entry point for the HostLifecycle demo, so the single entry point owns the one
  *   place that builds a managed TEngine composition and prints deterministic lifecycle evidence.
  * Responsibilities: Register the actor and component, register the component on the actor, begin play,
  *   tick a straddling schedule, then end play in reverse order.

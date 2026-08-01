@@ -46,10 +46,10 @@ built.**
 
 - **Model I2C/SPI as device-access APIs (register read/write).** Rejected: it
   solves the out-of-scope problem, and it would push master/slave asymmetry and
-  bus addressing up into the portable layer — exactly the coupling the device
+  bus addressing up into the portable layer — exactly the dependency the device
   shape exists to prevent.
 - **Add a portable "wired transport" abstraction above the device shape.**
-  Rejected (YAGNI): the device shape already is that abstraction. Wired links need
+  Rejected as unneeded: the device shape already is that abstraction. Wired links need
   nothing it does not already provide.
 
 ## Revisit triggers

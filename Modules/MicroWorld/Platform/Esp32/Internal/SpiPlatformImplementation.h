@@ -13,7 +13,7 @@
 // descriptor queued and the FrameCodec CRC rejects any garbage a momentary empty-queue
 // gap produces. Error/timeout branches stayed unexercised (every exchange succeeded).
 // DMA is used (SPI_DMA_CH_AUTO), so the device's transmit/receive buffers must live in
-// internal RAM — the example composition root makes each device static, as the ESP32-S3
+// internal RAM — the example entry point makes each device static, as the ESP32-S3
 // main-task stack lesson in examples/AGENTS.md already requires. See ../AGENTS.md for
 // the rule this comment satisfies.
 // =============================================================================

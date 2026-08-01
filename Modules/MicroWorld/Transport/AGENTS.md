@@ -7,7 +7,7 @@ Inherits `../../AGENTS.md`.
 Transport is the portable byte-I/O system. Its dependency direction is
 `Core <- Transport`: it may depend only on Core and the C++17 standard library.
 Transport must not depend on Engine, Messaging, or Application, and no portable
-system may see both Engine and Transport — only a composition root joins them.
+system may see both Engine and Transport — only the application entry point joins them.
 
 The system owns a bounded byte reader/writer, one non-blocking `IDevice`
 contract, one caller-storage-backed fixed-capacity `TTransportManager`, the `TTransportHost`

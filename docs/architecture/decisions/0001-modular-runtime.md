@@ -18,7 +18,7 @@ pay.
 - **Portable layers stay separate, and a consumer selects what it uses.** The
   foundation remains independently usable, and building on it must not change how
   it behaves for someone who does not.
-- **Composition roots own concrete resources and adapters.** No global runtime
+- **Application entry points own concrete resources and adapters.** No global runtime
   registry is introduced, so what an application depends on is visible where it is
   assembled rather than discovered at run time.
 

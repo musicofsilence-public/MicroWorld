@@ -477,7 +477,7 @@ bool RunStateBroadcastLoop(
 } // namespace
 
 /**
- * Motivation: Composition root for the TwoNodeDemo, so the single entry point owns the one place that
+ * Motivation: Application entry point for the TwoNodeDemo, so the single entry point owns the one place that
  *   composes the server engine and bare client over real localhost UDP and drives a byte-identical trace.
  * Responsibilities: Construct and wire both nodes, run the handshake and the state-broadcast loop, and
  *   return 0 on success or 1 on any failure.

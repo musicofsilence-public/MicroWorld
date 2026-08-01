@@ -159,12 +159,12 @@ struct FHostTraits : FDefaultEngineTraits
 /** Motivation: Engine profile sized for a bare rooted world; these cases never spawn actors. */
 using FHost = TEngine<FHostTraits>;
 
-/** Motivation: Per-side D3 composition root: holds one side's host play system and message router behind the one
+/** Motivation: Per-side D3 entry point: holds one side's host play system and message router behind the one
  *   IPlaySystem slot TEngine drives.
  */
 using FFrameSet = TPlaySystemSet<2>;
 
-/** Motivation: Per-side D3 composition root for the multi-channel cases: two host play systems (telemetry, command)
+/** Motivation: Per-side D3 entry point for the multi-channel cases: two host play systems (telemetry, command)
  *   plus the one router that binds both.
  */
 using FMultiChannelFrameSet = TPlaySystemSet<3>;

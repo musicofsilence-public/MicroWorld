@@ -9,9 +9,9 @@ demonstrates exactly one MicroWorld feature. All current examples build for an
 ESP32-S3 through PlatformIO; `01-CoreTick` additionally shares its portable
 behavior with the native Pico C++ SDK + FreeRTOS consumer. Dependencies point
 inward: an example consumes `Modules/` packages, and MicroWorld never depends
-on an example. Duplication *across* examples (the `platformio.ini` boilerplate,
+on an example. Duplication *across* examples (the `platformio.ini` repetition,
 the role-dispatch `Main.cpp`) is deliberate so each folder copies out
-standalone; DRY applies only *within* one example. WiFi, sleep, logging, and
+standalone; sharing definitions applies only *within* one example. WiFi, sleep, logging, and
 time come from the shared `MicroWorld::Platform::Esp32` facades (`FEsp32WifiLink`,
 `SleepMilliseconds`, `WriteEsp32LogRecord`, `FEsp32TimeSource`), not
 per-example glue.
@@ -28,7 +28,7 @@ per-example glue.
   `<cstdint>`/`<cstddef>`/`<utility>` — no ESP-IDF/lwIP/FreeRTOS/`printf`/
   `std::array`/`<cstdio>` in shared behavior (a grep gate enforces zero hits);
   only `Main.cpp` has `extern "C" app_main`. `01-CoreTick/src/PicoMain.cpp` is
-  the one explicit Pico composition root and may include Pico SDK + FreeRTOS;
+  the one explicit Pico entry point and may include Pico SDK + FreeRTOS;
   `CoreTickExample.*` remains platform-neutral.
 - Every MicroWorld composition object is declared `static` at file scope (or in
   a `static` function-local), never on the `app_main` stack — the default main

@@ -4,7 +4,7 @@ Inherits `../AGENTS.md`.
 
 ## Architecture
 
-One composition root (`app_main`) owns one static `FEsp32LoraDevice` and
+One application entry point (`app_main`) owns one static `FEsp32LoraDevice` and
 drives a bare ping-pong directly over its `TrySend`/`TryReceive` — no
 `TTransportManager`, no `TTransportHost`, no world. The role (node 1 vs node 2) is a
 compile-time constant from `-DMICROWORLD_EXAMPLE_NODE_ID`, so the two build

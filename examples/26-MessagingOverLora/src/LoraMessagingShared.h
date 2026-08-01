@@ -9,7 +9,7 @@
 /**
  * Motivation: Holds the shared protocol constants and config builders for example 26's two roles, so
  *   both translation units (ServerMain.cpp, ClientMain.cpp) define the channel numbers, opcode, node
- *   ids, and session/LoRa configuration exactly once (DRY).
+ *   ids, and session/LoRa configuration exactly once, so both roles share one definition.
  */
 namespace Ex26
 {

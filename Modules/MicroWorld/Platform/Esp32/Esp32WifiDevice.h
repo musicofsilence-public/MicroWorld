@@ -13,7 +13,7 @@ namespace MicroWorld::Platform::Esp32
 {
 
 /**
- * Motivation: Gives one composition root a non-blocking UDP Core::ITransportDevice over a real lwIP socket,
+ * Motivation: Gives the application entry point a non-blocking UDP Core::ITransportDevice over a real lwIP socket,
  *   the ESP32 sibling of the host adapter.
  * Responsibilities: Own one SOCK_DGRAM socket bound to an IPv4 port, map each lwIP outcome to the shared
  *   ETransportResult so callers poll without blocking, validate every argument before any syscall, and leave

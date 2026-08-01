@@ -481,7 +481,7 @@ void AdvancePayloadRegression(
 } // namespace
 
 /**
- * Motivation: Composition root for example 17, so the single ESP32 entry point stays a thin selector
+ * Motivation: Application entry point for example 17: the single ESP32 `app_main` stays a thin selector
  *   that runs the chosen bounded LoRa exchange against the peer board.
  * Responsibilities: Install the output device, open the radio, and run the volley or regression loop.
  */

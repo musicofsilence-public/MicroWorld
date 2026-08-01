@@ -51,8 +51,8 @@ Core, Messaging, Transport <- Networking
 ```
 
 Transport is an independent overlay above Core: it never pulls Engine, so an
-application can use byte I/O without the managed runtime, and a composition root is the
-only place permitted to see both. PlatformHost, PlatformEsp32, and PlatformPico are the
+application can use byte I/O without the managed runtime, and the application entry
+point is the only place permitted to see both. PlatformHost, PlatformEsp32, and PlatformPico are the
 non-portable edges that supply real transports. `IUartByteStream` is a narrow
 byte-transfer interface, not a universal HAL: RadioE32 owns portable E32 state and framing,
 while ESP32 and Pico facades own UART SDK lifetime. See

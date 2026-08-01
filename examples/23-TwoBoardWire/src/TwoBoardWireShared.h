@@ -15,7 +15,7 @@
  * Motivation: Holds the shared protocol ids, config builders, and composition-type aliases for
  *   example 23's two roles, so both translation units (ServerMain.cpp, ClientMain.cpp) define the
  *   message ids, actor ids, node ids, UART/session configuration, and the TTransportHost/TMessageRouter/
- *   TEngine shapes exactly once (DRY).
+ *   TEngine shapes exactly once, so both roles share one definition.
  */
 namespace Ex23
 {

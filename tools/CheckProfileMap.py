@@ -11,7 +11,7 @@ from pathlib import Path
 
 # Profile names describe package bundles. Transport is an independent overlay above
 # Core: it never pulls Object or Engine, and no Engine-Transport Integration profile
-# is retained because that coupling is deferred until a real application needs
+# is retained because that dependency is deferred until a real application needs
 # it. Memory folded into Core, so no Memory package or archive marker remains.
 PROFILE_MODULES = {
     "Core": {"Core"},

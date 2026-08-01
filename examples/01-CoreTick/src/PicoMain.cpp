@@ -8,7 +8,7 @@
 namespace
 {
 
-/** Motivation: Reserves bounded task stack storage for the Pico CoreTick composition root. */
+/** Motivation: Reserves bounded task stack storage for the Pico CoreTick entry point. */
 constexpr configSTACK_DEPTH_TYPE CoreTickTaskStackDepth = 512;
 
 /** Motivation: Preserves the polling pace while the tick function owns cadence decisions. */
@@ -54,7 +54,7 @@ void RunCoreTickTask(void*)
 } // namespace
 
 /**
- * Motivation: Composition root that creates the static Pico task and hands control to FreeRTOS.
+ * Motivation: Application entry point that creates the static Pico task and hands control to FreeRTOS.
  * Responsibilities: Create the static CoreTick task and start the scheduler.
  */
 int main()

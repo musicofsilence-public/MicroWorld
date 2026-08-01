@@ -87,7 +87,7 @@ public:
 
 	/**
 	 * Motivation: Gives every concrete device one stable virtual destructor anchored out of line.
-	 * Responsibilities: Release no interface-owned resource and allow polymorphic destruction.
+	 * Responsibilities: Release no interface-owned resource and allow destruction through the interface base.
 	 */
 	virtual ~ITransportDevice() noexcept;
 

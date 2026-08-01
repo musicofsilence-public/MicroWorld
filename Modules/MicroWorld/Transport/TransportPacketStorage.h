@@ -66,7 +66,7 @@ public:
 
 private:
 	// Storage and manager are deliberately separate types: caller-owned storage is the
-	// repo-wide pattern, and keeping the FIFO mechanics in TTransportManager lets one manager
+	// repo-wide convention, and keeping the FIFO mechanics in TTransportManager lets one manager
 	// implementation be reused over any caller-provided backing (D8).
 	/** Motivation: Grants the matching TTransportManager exclusive access to this storage's FIFO slots. */
 	friend class TTransportManager<MaxPackets, MaxPacketBytes>;

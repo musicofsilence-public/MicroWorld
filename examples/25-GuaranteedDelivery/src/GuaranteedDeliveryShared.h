@@ -14,7 +14,7 @@
 /**
  * Motivation: Holds the shared protocol ids, config, and composition-type aliases for example 25's two
  *   roles, so both translation units define the message/actor/channel ids, WiFi/UDP configuration, and
- *   the TTransportHost/TMessageRouter/TReliableChannel/TEngine/TPlaySystemSet shapes exactly once (DRY).
+ *   the TTransportHost/TMessageRouter/TReliableChannel/TEngine/TPlaySystemSet shapes exactly once, so both roles share one definition.
  */
 namespace Ex25
 {

@@ -189,7 +189,7 @@ public:
 	~TLoopbackNetwork() noexcept = default;
 
 	/**
-	 * Motivation: Gives a composition root the transport device bound to one port.
+	 * Motivation: Gives the application entry point the transport device bound to one port.
 	 * Responsibilities: Return the port at InPort, which the caller keeps below PortCount().
 	 */
 	Core::ITransportDevice& Port(const std::uint8_t InPort) noexcept { return Ports[InPort]; }

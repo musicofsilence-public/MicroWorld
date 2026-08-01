@@ -11,7 +11,7 @@ headers. It is excluded from `CheckDependencyBoundaries.py`.
 
 ## Concepts
 
-- Construction is inert; the composition root initializes one exclusively
+- Construction is inert; the application entry point initializes one exclusively
   owned UART after entering `main`.
 - `TrySend(Success)` queues a frame; direct callers invoke `AdvanceTransmit`,
   while `TTransportHost` already advances its device after outbound FIFO progress.

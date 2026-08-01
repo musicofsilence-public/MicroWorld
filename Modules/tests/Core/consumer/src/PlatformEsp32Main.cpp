@@ -145,7 +145,7 @@ extern "C" void app_main()
 	// 5. Adapt the host to the engine's `THostPlaySystem` interface (Phase 4.4).
 	static THostPlaySystem<TTransportHost<4, 256>> Frame(Transport);
 
-	// 6. The composition root: same capacities as the Engine profile probe + the live frame.
+	// 6. The application entry point: same capacities as the Engine profile probe + the live frame.
 	using FDemoHost = TEngine<FDemoHostTraits>;
 	static FDemoHost Host{FGarbageCollectionBudget{1, 4, 8}, Frame};
 

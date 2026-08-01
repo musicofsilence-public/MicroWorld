@@ -111,7 +111,7 @@ MicroWorld::Platform::Esp32::FEsp32UartConfig MakeUartConfig(const std::uint8_t 
 } // namespace
 
 /**
- * Motivation: Composition root for example 18, so the single ESP32 entry point stays a thin driver
+ * Motivation: Application entry point for example 18: the single ESP32 `app_main` stays a thin driver
  *   that ping-pongs a counter with the peer board over one wired UART.
  * Responsibilities: Install the output device, open the UART, and run the counter volley loop.
  */

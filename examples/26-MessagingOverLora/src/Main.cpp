@@ -12,19 +12,19 @@
 #endif
 
 /**
- * Motivation: Lets the server role live in its own translation unit so the composition root stays a build-time switch.
+ * Motivation: Lets the server role live in its own translation unit so the entry point stays a build-time switch.
  * Responsibilities: Run the dedicated-server role defined in ServerMain.cpp.
  */
 void RunServer() noexcept;
 
 /**
- * Motivation: Lets the client role live in its own translation unit so the composition root stays a build-time switch.
+ * Motivation: Lets the client role live in its own translation unit so the entry point stays a build-time switch.
  * Responsibilities: Run the bare-client role defined in ClientMain.cpp.
  */
 void RunClient() noexcept;
 
 /**
- * Motivation: Composition root for example 26, so the single ESP32 entry point stays a thin
+ * Motivation: Application entry point for example 26: the single ESP32 `app_main` stays a thin
  *   build-time role selector rather than carrying role behavior.
  * Responsibilities: Install the output device, then run the role this image was built for.
  */

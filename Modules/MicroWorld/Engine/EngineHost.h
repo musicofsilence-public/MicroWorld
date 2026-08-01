@@ -339,7 +339,7 @@ public:
 	FTimerManager& GetTimerManager() noexcept { return Timers; }
 
 	/**
-	 * Motivation: Gives a composition root one bounded messaging system the engine drives, without needing a world first.
+	 * Motivation: Gives the application entry point one bounded messaging system the engine drives, without needing a world first.
 	 * Responsibilities: Construct the system in the reserved slot, and report Duplicate leaving the existing system and
 	 *   its channels and subscriptions untouched when the slot is already filled.
 	 */

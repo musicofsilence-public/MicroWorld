@@ -10,8 +10,8 @@ Two role worlds, one source tree. `Main.cpp` is a thin dispatcher whose
 hold the two roles and are both always compiled, and
 `GuaranteedDeliveryShared.h` defines the message/actor/channel ids, WiFi/UDP
 configuration, and the `TTransportHost`/`TMessageRouter`/`TReliableChannel`/
-`TEngine`/`TPlaySystemSet` type shapes once (DRY within this one
-example). Per board: ONE `TTransportHost` over `FEsp32WifiDevice` -- on the client,
+`TEngine`/`TPlaySystemSet` type shapes once, so both roles share one
+definition. Per board: ONE `TTransportHost` over `FEsp32WifiDevice` -- on the client,
 wrapped in `FPacketDropDevice` -- carrying TWO channels to the same
 `TMessageRouter`: a best-effort binding straight to the router, and a
 guaranteed binding wrapped in `TReliableChannel`. All pumped by one

@@ -12,7 +12,7 @@ namespace MicroWorld::Platform::Pico
 
 /**
  * Motivation: Describes one RP2040 UART connection to an E32 module without leaking Pico SDK types into device callers.
- * Responsibilities: Hold UART index, TX/RX GPIO routing, baud rate, and local node id for the composition root to pass
+ * Responsibilities: Hold UART index, TX/RX GPIO routing, baud rate, and local node id for the application entry point to pass
  *   into Initialize; the device takes the UART exclusively and never shares it.
  * Example:
  *   FPicoE32LoraConfig Config{0, 0, 1, 115200, 0x42};

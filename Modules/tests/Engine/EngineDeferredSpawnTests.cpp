@@ -372,8 +372,8 @@ MW_TEST_CASE(EngineDeferredSpawnReportsQueuedThenSpawnedAtBarrier)
 	const TObjectPtr<UWorld> World = Host.CreateWorld();
 	FDeferredSpawnState State{};
 
-	// Assert - the composition root creates and begins the configured world
-	MW_EXPECT_TRUE(Test, World.Get() != nullptr, "The composition root creates a configured world");
+	// Assert - the application entry point creates and begins the configured world
+	MW_EXPECT_TRUE(Test, World.Get() != nullptr, "The application entry point creates a configured world");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, Host.BeginPlay(0), "The empty world begins before deferred spawn admission");
 
 	// Act - the typed request queues a bounded factory without beginning the actor
@@ -406,8 +406,8 @@ MW_TEST_CASE(EngineDeferredSpawnBeforeBeginPlayStartsWhenPlayBegins)
 	const TObjectPtr<UWorld> World = Host.CreateWorld();
 	FDeferredSpawnState State{};
 
-	// Assert - the composition root creates a configured world
-	MW_EXPECT_TRUE(Test, World.Get() != nullptr, "The composition root creates a configured world");
+	// Assert - the application entry point creates a configured world
+	MW_EXPECT_TRUE(Test, World.Get() != nullptr, "The application entry point creates a configured world");
 
 	// Act - the typed request is admitted before play begins
 	const FActorSpawnRequest Request = Host.GetWorld().SpawnActor<FDeferredActor>(&State);
@@ -568,7 +568,7 @@ MW_TEST_CASE(EngineDeferredSpawnRejectsOversizedFactoryWithoutMutation)
 	FDeferredSpawnState State{};
 
 	// Arrange - the world enters play before queue preflight
-	MW_EXPECT_TRUE(Test, World.Get() != nullptr, "The composition root creates a configured world");
+	MW_EXPECT_TRUE(Test, World.Get() != nullptr, "The application entry point creates a configured world");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, Host.BeginPlay(0), "The world enters play before queue preflight");
 
 	// Act
@@ -592,7 +592,7 @@ MW_TEST_CASE(EngineDeferredSpawnRejectsUnsupportedFactoryAlignment)
 	FDeferredSpawnState State{};
 
 	// Arrange - the world enters play before factory-layout preflight
-	MW_EXPECT_TRUE(Test, World.Get() != nullptr, "The composition root creates a configured world");
+	MW_EXPECT_TRUE(Test, World.Get() != nullptr, "The application entry point creates a configured world");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, Host.BeginPlay(0), "The world enters play before factory-layout preflight");
 
 	// Act
@@ -842,7 +842,7 @@ MW_TEST_CASE(EngineDeferredSpawnPinsThenInvalidatesReusedHandle)
 	FDeferredSpawnState State{};
 
 	// Arrange - the world is created and begun before the deferred request
-	MW_EXPECT_TRUE(Test, World.Get() != nullptr, "The composition root creates a configured world");
+	MW_EXPECT_TRUE(Test, World.Get() != nullptr, "The application entry point creates a configured world");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, Host.BeginPlay(0), "The world begins before the deferred request");
 
 	// Act - the first deferred actor publishes at the barrier and pins its handle

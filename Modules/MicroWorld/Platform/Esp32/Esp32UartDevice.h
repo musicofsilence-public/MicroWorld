@@ -43,7 +43,7 @@ struct FEsp32UartConfig
 };
 
 /**
- * Motivation: Gives one composition root a non-blocking point-to-point Core::ITransportDevice over one ESP-IDF UART,
+ * Motivation: Gives the application entry point a non-blocking point-to-point Core::ITransportDevice over one ESP-IDF UART,
  *   the E32 LoRa device minus the radio.
  * Responsibilities: Encode each packet with the portable FrameCodec, write the whole frame to the UART, and pump
  *   received bytes one at a time through a bounded TFrameDecoder that resyncs on bad magic, oversize length, or CRC

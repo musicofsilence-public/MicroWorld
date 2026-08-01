@@ -11,8 +11,8 @@ other, and justified itself with one invariant: the role a node plays decides
 where its channels send. The invariant turned out to be a one-line mapping, and
 everything around it was wiring — ownership slots, handles, and a capacity blob
 re-exporting other systems' limits — which this project already assigns to
-composition roots. Meanwhile Messaging claimed transport independence while its
-channel binding was compile-time coupled to a concrete Transport type.
+application entry points. Meanwhile Messaging claimed transport independence while its
+channel binding was compile-time tied to a concrete Transport type.
 
 ## Decision
 

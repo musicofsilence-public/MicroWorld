@@ -364,7 +364,7 @@ constexpr unsigned PollPacingMilliseconds = 10;
 } // namespace
 
 /**
- * Motivation: Composition root for example 22, so the single ESP32 entry point owns the one place
+ * Motivation: Application entry point for example 22, so the single ESP32 `app_main` owns the one place
  *   that wires a router, engine, sensor, and two actors into a bounded local-messaging run.
  * Responsibilities: Wire the router and engine, register and spawn the actors, then drive a bounded
  *   run demonstrating a broadcast reading, a counting display, and a targeted calibrate reply.

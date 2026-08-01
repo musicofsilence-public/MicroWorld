@@ -30,7 +30,7 @@ public:
 	static constexpr std::size_t UdpMaxPacketBytes = 1200;
 
 	/**
-	 * Motivation: Lets a composition root open a working socket from one construction argument.
+	 * Motivation: Lets the application entry point open a working socket from one construction argument.
 	 * Responsibilities: Open one non-blocking UDP socket bound to 127.0.0.1 on InBindPort (zero asks for an
 	 *   ephemeral port, readable through BoundPort), and on any syscall failure close what was opened so the
 	 *   device is left inert without throwing.

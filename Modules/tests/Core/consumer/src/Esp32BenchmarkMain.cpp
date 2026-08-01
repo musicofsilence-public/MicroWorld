@@ -453,7 +453,7 @@ extern "C" void app_main()
 	// 4. Adapt the host to the engine's `THostPlaySystem` interface.
 	static THostPlaySystem<FBenchmarkTransport> Frame(Transport);
 
-	// 5. Composition root. Budget {1,4,32}: MaxSweepOperations(32) >= MaxObjects(32) so one
+	// 5. Application entry point. Budget {1,4,32}: MaxSweepOperations(32) >= MaxObjects(32) so one
 	//    Tick completes a full GC cycle each frame — no mid-cycle mutation lock during the
 	//    measured loop (safe because all spawning happens in this setup phase).
 	static FBenchmarkHost Host{FGarbageCollectionBudget{1, 4, 32}, Frame};

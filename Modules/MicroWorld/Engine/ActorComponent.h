@@ -17,7 +17,7 @@ class FReferenceCollector;
 
 /**
  * Motivation: Provides the smallest managed component anchored on UObject and Core's tick mix-in so applications can
- *   compose actor behavior without coupling actors to each behavior.
+ *   compose actor behavior without tying actors to each behavior.
  * Responsibilities: Hold only a weak reference to its owning actor so the parent-child graph stays acyclic for the
  *   iterative collector, and drive a forward-only BeginPlay/Tick/EndPlay lifecycle.
  * Example:

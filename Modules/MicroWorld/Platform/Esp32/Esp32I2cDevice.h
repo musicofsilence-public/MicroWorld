@@ -114,7 +114,7 @@ struct FEsp32I2cSlaveConfig
 };
 
 /**
- * Motivation: Gives one composition root a non-blocking Core::ITransportDevice for the I2C master side of a
+ * Motivation: Gives the application entry point a non-blocking Core::ITransportDevice for the I2C master side of a
  *   point-to-point link.
  * Responsibilities: Clock one bus transaction per send and one whole-frame read window per receive; validate every
  *   argument before any syscall, leave caller outputs unchanged on any non-Success result, and never split a frame.
@@ -216,7 +216,7 @@ private:
 };
 
 /**
- * Motivation: Gives one composition root a non-blocking Core::ITransportDevice for the I2C slave side of a
+ * Motivation: Gives the application entry point a non-blocking Core::ITransportDevice for the I2C slave side of a
  *   point-to-point link, mirroring the master interface above.
  * Responsibilities: Stage one framed packet per TrySend for the master's next read and drain an ISR-filled inbox
  *   per TryReceive through a bounded TFrameDecoder; validate every argument before any syscall and leave caller

@@ -12,7 +12,7 @@
 /**
  * Motivation: Shares Messaging names, configuration builders, and engine aliases between both roles.
  * Responsibilities: Define the shared channel and message names, the UART/WiFi settings, and the engine
- *   alias exactly once (DRY), so both translation units agree without restating them.
+ *   alias exactly once, so both translation units agree without restating them.
  */
 namespace Ex24
 {

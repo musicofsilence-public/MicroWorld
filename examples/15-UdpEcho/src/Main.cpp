@@ -26,7 +26,7 @@ constexpr DurationMilliseconds PollReadinessMilliseconds = 250;
 } // namespace
 
 /**
- * Motivation: Composition root for example 15 that keeps the platform adapter to one place,
+ * Motivation: Application entry point for example 15 that keeps the platform adapter to one place,
  *   so the echo behavior can be reasoned about without scattered setup.
  * Responsibilities: Install the output device, host the demo SoftAP, then echo every UDP
  *   datagram back to its sender through FEsp32WifiDevice.

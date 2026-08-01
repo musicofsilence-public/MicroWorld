@@ -87,25 +87,25 @@ public:
 	 */
 	~TReliableChannel() noexcept override = default;
 
-	// Held by reference at a fixed composition root (the wrapper<->binding cycle breaker, see
+	// Held by reference at a fixed owner in the application entry point (the wrapper<->binding cycle breaker, see
 	// SetInnerChannel) and captured by pointer in a frame set, matching TMessageRouter's fixed-identity rule.
 	/**
-	 * Motivation: Stops copy construction from duplicating the wrapper the composition root and pending set point at.
+	 * Motivation: Stops copy construction from duplicating the wrapper the entry point and pending set point at.
 	 * Responsibilities: Reject copy construction outright so the wrapper keeps one fixed identity.
 	 */
 	TReliableChannel(const TReliableChannel&) = delete;
 	/**
-	 * Motivation: Stops copy assignment from rebinding the wrapper the composition root and pending set point at.
+	 * Motivation: Stops copy assignment from rebinding the wrapper the entry point and pending set point at.
 	 * Responsibilities: Reject copy assignment outright so the wrapper keeps one fixed identity.
 	 */
 	TReliableChannel& operator=(const TReliableChannel&) = delete;
 	/**
-	 * Motivation: Stops move construction from relocating the wrapper the composition root and pending set point at.
+	 * Motivation: Stops move construction from relocating the wrapper the entry point and pending set point at.
 	 * Responsibilities: Reject move construction outright so the wrapper keeps one fixed identity.
 	 */
 	TReliableChannel(TReliableChannel&&) = delete;
 	/**
-	 * Motivation: Stops move assignment from relocating the wrapper the composition root and pending set point at.
+	 * Motivation: Stops move assignment from relocating the wrapper the entry point and pending set point at.
 	 * Responsibilities: Reject move assignment outright so the wrapper keeps one fixed identity.
 	 */
 	TReliableChannel& operator=(TReliableChannel&&) = delete;

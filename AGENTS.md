@@ -74,7 +74,7 @@ Core, Engine <- Application
 Object folded into Engine; Net and RadioE32 folded into Transport. Transport
 never pulls Engine, and no portable system sees both Engine and Transport —
 Networking reaches the engine only through Core's `IPlaySystem`, so joining the
-two is a composition root's job. Platform/Host, Platform/Esp32, and Platform/Pico
+two is the application entry point's job. Platform/Host, Platform/Esp32, and Platform/Pico
 are the non-portable edges; only they may reach OS/SDK headers.
 
 `CLAUDE.md` at this level carries the architecture overview and each module's
@@ -83,7 +83,7 @@ responsibility in one place.
 ## Architecture and concepts
 
 - Keep hardware access at the edges; domain/runtime code is platform-neutral.
-- Composition roots own concrete objects; dependencies point inward toward Core.
+- Application entry points own concrete objects; dependencies point inward toward Core.
 - Explicit state and typed results replace toggles and exception-driven control.
 - Caller-supplied monotonic time keeps scheduling, safety deadlines, and tests
   deterministic without hidden clock reads.

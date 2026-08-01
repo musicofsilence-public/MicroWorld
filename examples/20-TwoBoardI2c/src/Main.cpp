@@ -232,7 +232,7 @@ void RunSlave() noexcept
 } // namespace
 
 /**
- * Motivation: Composition root for example 20, so the single ESP32 entry point stays a thin
+ * Motivation: Application entry point for example 20: the single ESP32 `app_main` stays a thin
  *   build-time role selector over a wired I2C bus.
  * Responsibilities: Install the output device, then run the master or slave counter volley.
  */

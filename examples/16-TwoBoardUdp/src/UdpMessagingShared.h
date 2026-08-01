@@ -8,7 +8,7 @@
 /**
  * Motivation: Holds the shared protocol constants and session-config builder for example 16's
  *   two roles, so both translation units (ServerMain.cpp, ClientMain.cpp) define the channel
- *   numbers, opcode, spawn count, and session configuration exactly once (DRY).
+ *   numbers, opcode, spawn count, and session configuration exactly once, so both roles share one definition.
  */
 namespace Ex16
 {

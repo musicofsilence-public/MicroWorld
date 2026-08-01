@@ -40,7 +40,7 @@ other, and neither do Messaging and Transport. An engine that knows about radios
 cannot be tested without one, and a transport that knows about messages cannot be
 reused. No system joins them: they meet only at `ITransportDevice` in Core — a
 messaging channel sends through the interface, each medium realises it, and a
-composition root is the only place a concrete device is named.
+concrete device is named only at the application entry point.
 
 `Platform/Host`, `Platform/Esp32`, and `Platform/Pico` sit outside this graph as
 the non-portable edges. Only they may include OS or SDK headers.
@@ -77,8 +77,8 @@ struct carries the eight compile-time capacities. `IEngine` is the narrow
 interface an application holds — `BeginPlay`, `Tick`, `EndPlay`, `GetWorld`,
 `GetObjectStore`, plus `CreateMessagingSystem`/`GetMessagingSystem` for the one
 system the engine knows beyond Core. Class registration and object creation are
-function templates on `TEngine`, so they are reachable only from the composition
-root.
+function templates on `TEngine`, so they are reachable only from the application
+entry point.
 
 **Two ways an actor enters a world.** `UWorld::RegisterActor` takes an
 already-constructed actor before play begins. `UWorld::SpawnActor<TActor>` is the
@@ -91,7 +91,7 @@ it without depending on Engine) has four turns: `BeginPlay`, `PreAdvance`,
 `PostAdvance`, `EndPlay`. `TEngine` holds one; `TPlaySystemSet` composes several
 with add-order start and reverse-order shutdown.
 
-**Composition roots own everything.** Objects are constructed by the entry point
+**The application entry point owns everything.** Objects are constructed by the entry point
 and passed by reference inward. On ESP32 targets they must be `static` — the main
 task stack cannot hold an engine composition as locals.
 

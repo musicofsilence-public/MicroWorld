@@ -26,7 +26,7 @@ boards.
    telemetry-in lines (UDP) and command-out lines (UART).
 5. Every actor reaches messaging only through injected `FMessagingSystem&`; none
    of them ever sees a device, UDP, or UART — swapping which channel rides which
-   transport is a composition-root edit only. Actor-owned subscriptions use a
+   transport is an entry-point edit only. Actor-owned subscriptions use a
    weak owner so collection prevents callbacks into reclaimed actors.
 6. The run is **unbounded** (matching 16-TwoBoardUdp and 23-TwoBoardWire):
    this is a continuous two-board, two-channel demo, not a self-terminating

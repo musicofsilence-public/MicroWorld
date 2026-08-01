@@ -5,7 +5,7 @@ Inherits `../AGENTS.md`.
 **General LikeC4 rules are not repeated here.** Element kinds, the subtitle rule,
 description rules, tag rules, and LikeC4 syntax gotchas live in the
 `likec4-modelling` skill. This file records only what MicroWorld decided, which is
-the part that cannot be re-derived from the tool or the DSL.
+the part that cannot be re-derived from the tool or its source model.
 
 ## Architecture
 
@@ -59,7 +59,7 @@ implies and never states.
 | Engine | `[system: managed runtime]` |
 | Messaging System | `[system: play service]` |
 | Transport | `[system: byte I/O]` |
-| Application | `[system: composition root]` |
+| Application | `[system: entry point]` |
 | Networking | `[system: play service]` |
 
 The two `play service` lines are identical on purpose: it is how the model already shows
@@ -347,8 +347,8 @@ delete Bluetooth as speculative — it is a stated requirement, not a guessed on
 
 ### The invariant the model must keep visible
 
-Engine and Transport never reference each other, and **no system joins them** — only a
-composition root does. `PlaySystem.h` in Core is what lets a play service extend a
+Engine and Transport never reference each other, and **no system joins them** — only
+the application entry point does. `PlaySystem.h` in Core is what lets a play service extend a
 frame loop it cannot see, which is why neither `Messaging System` nor `Networking` needs
 Engine in order to be installed in one.
 
@@ -473,7 +473,7 @@ python tools/CheckFolderAgents.py --root docs
 That is the whole gate. **Do not export PNGs** — review happens in the live dev server,
 so an export plus an image read is pure overhead.
 
-Reason about what a change does to the render from the DSL instead: `title`, `technology`
+Reason about what a change does to the render from the model source instead: `title`, `technology`
 and `description` are rendered, `metadata { }` never is. So a metadata-only edit cannot
 change a diagram, and an edit to a subtitle or a description changes the most prominent
 text on it.

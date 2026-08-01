@@ -22,7 +22,7 @@ so that any LLM (including a weak one) can pick it up, find the next task,
 complete it, and record progress without extra context. Companions:
 `examples/AGENTS.md` (owns the build and hardware-verification procedure),
 `Modules/MicroWorld/Messaging/AGENTS.md` (owns the composition recipes), and examples
-18–21 (the wired device pattern this plan imitates for radios).
+18–21 (the wired device approach this plan imitates for radios).
 
 Completed tasks below still cite `PROGRESS.md` and `CHANGELOG.md`. Both files
 were deleted on 2026-07-26 because they had become a third and fourth record of
@@ -277,7 +277,7 @@ includes a LoRa channel.
 ### 4.2 BLE — target shape (spike-confirmed; only ADR 0004 may change it)
 
 **Link model (D4/D5):** one custom 128-bit GATT service (the Nordic-UART
-pattern, own UUIDs fixed by the spike) with two characteristics: **RX**
+convention, own UUIDs fixed by the spike) with two characteristics: **RX**
 (central writes encoded frames, write-without-response) and **TX**
 (peripheral notifies encoded frames). Both directions carry the same
 `FrameCodec` frames as every other transport; received bytes are pumped

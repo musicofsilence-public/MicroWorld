@@ -4,7 +4,7 @@ Inherits `../AGENTS.md`.
 
 ## Architecture
 
-`Main.cpp` is one executable composition root built on `TEngine`. A
+`Main.cpp` is one executable entry point built on `TEngine`. A
 100 ms-cadence sensor `UActorComponent` belongs to a tick-disabled device
 `AActor`, and both live inside the host's fixed-capacity storage so the
 lifecycle order is observable without a hidden allocator.

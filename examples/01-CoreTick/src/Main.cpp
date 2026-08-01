@@ -18,7 +18,7 @@ constexpr unsigned PollPacingMilliseconds = 10;
 } // namespace
 
 /**
- * Motivation: Composition root that drives one 500 ms tick schedule off real time for five ticks,
+ * Motivation: Application entry point that drives one 500 ms tick schedule off real time for five ticks,
  *   so the platform adapter stays a thin shell around the shared bounded behavior.
  * Responsibilities: Start the schedule from the real clock, poll on a fast pace, log each due tick,
  *   and stop when the shared behavior reports completion.

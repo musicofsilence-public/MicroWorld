@@ -89,7 +89,7 @@ struct FEsp32SpiSlaveConfig
 };
 
 /**
- * Motivation: Gives one composition root a non-blocking Core::ITransportDevice for the SPI master side of a
+ * Motivation: Gives the application entry point a non-blocking Core::ITransportDevice for the SPI master side of a
  *   point-to-point link with fixed-size full-duplex transactions.
  * Responsibilities: Feed every received window into a bounded TFrameDecoder so full-duplex traffic is never
  *   discarded, validate every argument before any syscall, leave caller outputs unchanged on any non-Success
@@ -208,7 +208,7 @@ private:
 };
 
 /**
- * Motivation: Gives one composition root a non-blocking Core::ITransportDevice for the SPI slave side of a
+ * Motivation: Gives the application entry point a non-blocking Core::ITransportDevice for the SPI slave side of a
  *   point-to-point link that the master clocks.
  * Responsibilities: Stage one framed packet per TrySend for the next queued transaction, harvest a completed
  *   transaction per TryReceive and drain its received window through a bounded TFrameDecoder, and keep one

@@ -4,7 +4,7 @@ Inherits `../AGENTS.md`.
 
 ## Architecture
 
-One composition root (`app_main` in `src/Main.cpp`) owns one world with two
+One application entry point (`app_main` in `src/Main.cpp`) owns one world with two
 actors — `FThermometerActor` (one `FReadingSensorComponent`) and
 `FDisplayActor` (no components) — and one `TMessageRouter` that doubles as the
 `TEngine`'s network frame. Everything is static, sized at compile time,

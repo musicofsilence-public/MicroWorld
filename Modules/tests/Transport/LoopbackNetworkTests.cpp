@@ -70,7 +70,7 @@ constexpr std::uint8_t AddressValidationPacket[] = {0x71};
 constexpr std::uint8_t InterfacePacket[] = {0x81, 0x82};
 
 /**
- * Motivation: A composition root needs fixed network capacities visible before it starts sending.
+ * Motivation: The application entry point needs fixed network capacities visible before it starts sending.
  * Responsibilities: Report the configured port, mailbox, and packet capacities while every fresh mailbox is empty.
  */
 MW_TEST_CASE(LoopbackNetworkStartsEmptyWithConfiguredCapacities)

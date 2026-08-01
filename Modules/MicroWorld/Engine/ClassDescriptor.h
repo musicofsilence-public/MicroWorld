@@ -129,7 +129,7 @@ struct FClassDescriptor
 };
 
 /**
- * Motivation: Stores a fixed explicit class set owned by the application composition root with stable descriptor addresses.
+ * Motivation: Stores a fixed explicit class set owned by the application entry point with stable descriptor addresses.
  * Responsibilities: Validate and store descriptors without allocation or partial mutation, keep owned addresses stable so
  *   parent pointers and registry views survive, and reserve a low-id range for application descriptors.
  * Example:

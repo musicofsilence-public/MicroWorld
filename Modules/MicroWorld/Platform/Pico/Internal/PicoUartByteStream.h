@@ -9,7 +9,7 @@ namespace MicroWorld::Platform::Pico
 {
 
 /**
- * Motivation: Carries one RP2040 UART identity to the platform composition root without dragging Pico SDK types into
+ * Motivation: Carries one RP2040 UART identity to the platform entry point without dragging Pico SDK types into
  *   the public header.
  * Responsibilities: Hold UART index, TX/RX GPIO routing, and an exact baud rate for the byte stream to validate.
  * Example:

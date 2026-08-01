@@ -8,8 +8,8 @@ Two role worlds, one source tree. `Main.cpp` is a thin dispatcher whose
 `app_main` calls `RunServer()` or `RunClient()` by the
 `-DMICROWORLD_EXAMPLE_SERVER` define; `ServerMain.cpp` and `ClientMain.cpp`
 hold the two roles and are both always compiled, and `TwoChannelWorldShared.h`
-defines message/channel names and node/pin/WiFi configuration once (DRY within
-this one example). Per board, `TEngine` owns one `FMessagingSystem` with TWO
+defines message/channel names and node/pin/WiFi configuration once, so both
+roles share one definition. Per board, `TEngine` owns one `FMessagingSystem` with TWO
 channels — one over `FEsp32WifiDevice` (telemetry), one over
 `FEsp32UartDevice` (commands). Every composition object is `static` and
 allocation-free.

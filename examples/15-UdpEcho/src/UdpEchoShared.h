@@ -5,7 +5,7 @@
 
 /**
  * Motivation: Holds one demo-network config for example 15's single echo role (Main.cpp),
- *   so the SoftAP values are defined once (DRY). These are fixed demo-only strings, not a
+ *   so the SoftAP values are defined once. These are fixed demo-only strings, not a
  *   secret, so they commit safely; no home router and no real credentials are involved.
  */
 namespace Ex15

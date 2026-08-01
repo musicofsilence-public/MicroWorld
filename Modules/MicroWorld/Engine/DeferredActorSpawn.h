@@ -127,7 +127,7 @@ struct FActorSpawnStatus final
 };
 
 /**
- * Motivation: Lets custom deferred factory capture wrappers retain managed references during collection without coupling
+ * Motivation: Lets custom deferred factory capture wrappers retain managed references during collection without tying
  *   the storage to each capture type.
  * Responsibilities: Visit a capture's references for the active collector; the default owns none.
  * Example:

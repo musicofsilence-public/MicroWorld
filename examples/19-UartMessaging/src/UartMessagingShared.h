@@ -9,7 +9,7 @@
 /**
  * Motivation: Holds the shared protocol constants and config builders for example 19's two roles,
  *   so both translation units (ServerMain.cpp, ClientMain.cpp) define the channel numbers, opcode,
- *   node ids, and session/UART configuration exactly once (DRY).
+ *   node ids, and session/UART configuration exactly once, so both roles share one definition.
  */
 namespace Ex19
 {

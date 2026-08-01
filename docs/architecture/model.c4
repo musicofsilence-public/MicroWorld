@@ -254,7 +254,7 @@ model {
         }
 
         app = system 'Application' {
-            technology '[system: composition root]'
+            technology '[system: entry point]'
             description 'Starts, drives and stops one engine.'
             style {
                 icon ./icon-application.svg
@@ -291,7 +291,7 @@ model {
 
     microworld.app -[dependsOn]-> microworld.engine 'holds one engine for its lifetime'
 
-    // 'uses' not 'dependsOn': the composition root reaches messaging through the
+    // 'uses' not 'dependsOn': the application entry point reaches messaging through the
     // engine and names a concrete device only to configure it.
     microworld.app -[uses]-> microworld.messagingSystem 'creates channels and sends through the system the engine hands out'
 

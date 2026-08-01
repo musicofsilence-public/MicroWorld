@@ -45,11 +45,9 @@ struct FDefaultMessagingTraits
 /**
  * Motivation: Owns the bounded set of named channels and carries their messages to local subscribers and, where a channel holds a device, the wire.
  * Responsibilities: Create valid unique channels without allocating, deliver local messages, and move complete best-effort and reliable frames
- *   through externally driven transport devices; never call a device's own PreAdvance or PostAdvance, because its composition root owns those turns
- *   and a shared device must not be ticked twice.
- * Example:
- *   TMessagingSystem<> System;
- *   System.CreateChannel({"Telemetry", false, nullptr, {}});
+ *   through externally driven transport devices; never call a device's own PreAdvance or PostAdvance, because the application entry point owns those
+ *   turns and a shared device must not be ticked twice.
+ * Example: TMessagingSystem<> System; System.CreateChannel({"Telemetry", false, nullptr, {}});
  */
 template<typename TTraits = FDefaultMessagingTraits>
 class TMessagingSystem final : public Core::IPlaySystem
@@ -115,7 +113,7 @@ public:
 	TMessagingSystem() noexcept = default;
 
 	/**
-	 * Motivation: Lets a composition root configure reliability policy before it creates channels.
+	 * Motivation: Lets the application entry point configure reliability policy before it creates channels.
 	 * Responsibilities: Retain the supplied system information and initialize no live channels without allocation.
 	 */
 	explicit TMessagingSystem(const FMessagingSystemInformation& InInformation) noexcept : Information(InInformation) {}

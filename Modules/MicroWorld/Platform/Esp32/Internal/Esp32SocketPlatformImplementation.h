@@ -92,7 +92,7 @@ inline bool SetNonBlocking(const FSocketHandle InSocket) noexcept
 
 /**
  * Motivation: Builds a network-ready IPv4 socket address from plain octets and a host-order port so call sites need
- *   no byte-swap boilerplate.
+ *   no byte-swap code.
  * Responsibilities: Pack the octets with htonl and the port with htons so the returned address is ready for bind or sendto.
  */
 inline sockaddr_in MakeSockAddrIn(
