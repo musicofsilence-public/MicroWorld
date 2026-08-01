@@ -1,6 +1,7 @@
 #pragma once
 
 #include <MicroWorld/Core/Containers/StaticVector.h>
+#include <MicroWorld/Core/Delegates/Delegate.h>
 #include <MicroWorld/Core/PlaySystem.h>
 #include <MicroWorld/Core/Time.h>
 #include <MicroWorld/Messaging/MessageTypes.h>
@@ -8,6 +9,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <utility>
 
 namespace MicroWorld::Messaging
 {
@@ -25,6 +27,9 @@ struct FDefaultMessagingTraits
 
 	/** Motivation: Bounds how many subscriber registrations one Messaging system may store. */
 	static constexpr std::size_t MaxSubscriptions = 16;
+
+	/** Motivation: Bounds the inline storage one subscriber callable may occupy before Messaging rejects it without allocating. */
+	static constexpr std::size_t MaxSubscriberCallableBytes = 32;
 
 	/** Motivation: Bounds how many outbound messages one Messaging system may queue. */
 	static constexpr std::size_t MaxQueuedMessages = 8;
@@ -47,6 +52,13 @@ template<typename TTraits = FDefaultMessagingTraits>
 class TMessagingSystem final : public Core::IPlaySystem
 {
 public:
+	/**
+	 * Motivation: Gives channel subscribers one bounded callable type that keeps local delivery allocation-free.
+	 * Responsibilities: Receive a message by const reference and treat its payload span as valid only for the duration of the call; subscribers that
+	 * retain bytes must copy them.
+	 */
+	using FSubscriberDelegate = Core::TDelegate<void(const FMessage&), TTraits::MaxSubscriberCallableBytes>;
+
 	/**
 	 * Motivation: Gives callers an empty Messaging system when the default reliability policy is sufficient.
 	 * Responsibilities: Initialize no live channels and retain default system information without allocation.
@@ -110,6 +122,74 @@ public:
 	}
 
 	/**
+	 * Motivation: Lets a caller receive every message sent locally through one existing channel.
+	 * Responsibilities: Store one bound subscriber with no message-name filter, or report the first applicable validation or capacity failure without
+	 * changing state.
+	 */
+	EMessagingResult SubscribeToChannel(const FNameId InChannelNameId, FSubscriberDelegate&& InSubscriber) noexcept
+	{
+		return SubscribeToChannel(InChannelNameId, InvalidNameId, std::move(InSubscriber));
+	}
+
+	/**
+	 * Motivation: Lets a caller receive only one named kind of message sent locally through one existing channel.
+	 * Responsibilities: Validate the channel and bound subscriber before storing a filtered registration within the fixed system-wide subscription
+	 * capacity.
+	 */
+	EMessagingResult SubscribeToChannel(const FNameId InChannelNameId, const FNameId InMessageNameFilter, FSubscriberDelegate&& InSubscriber) noexcept
+	{
+		if (!IsChannelNameInUse(InChannelNameId))
+		{
+			return EMessagingResult::NotFound;
+		}
+
+		if (!InSubscriber.IsBound())
+		{
+			return EMessagingResult::Invalid;
+		}
+
+		// Capacity exhaustion is the only way Emplace fails, so its result is the whole capacity rule.
+		return Subscriptions.Emplace(InChannelNameId, InMessageNameFilter, std::move(InSubscriber)) == Core::ERuntimeResult::Success
+			? EMessagingResult::Success
+			: EMessagingResult::Full;
+	}
+
+	/**
+	 * Motivation: Makes locally composed Messaging useful before any transport device exists or adds remote reach.
+	 * Responsibilities: Reject an unset message name or missing channel, then synchronously deliver the message once to every matching subscriber in
+	 * registration order; capture the subscription count before dispatch so a callback can add a subscriber without changing this in-flight
+	 * iteration.
+	 */
+	EMessagingResult SendMessageToChannel(const FMessage& InMessage, const FNameId InChannelNameId) noexcept
+	{
+		if (InMessage.GetMessageNameId() == InvalidNameId)
+		{
+			return EMessagingResult::Invalid;
+		}
+
+		if (!IsChannelNameInUse(InChannelNameId))
+		{
+			return EMessagingResult::NotFound;
+		}
+
+		// The captured count excludes registrations added by a subscriber during this synchronous delivery.
+		const std::size_t SubscriptionCountAtDispatchStart = Subscriptions.Size();
+		for (std::size_t SubscriptionIndex = 0; SubscriptionIndex < SubscriptionCountAtDispatchStart; ++SubscriptionIndex)
+		{
+			FSubscription& Subscription = Subscriptions[SubscriptionIndex];
+			if (Subscription.ChannelNameId != InChannelNameId
+				|| (Subscription.MessageNameFilter != InvalidNameId && Subscription.MessageNameFilter != InMessage.GetMessageNameId()))
+			{
+				continue;
+			}
+
+			(void)Subscription.Subscriber.Execute(InMessage);
+		}
+
+		return EMessagingResult::Success;
+	}
+
+	/**
 	 * Motivation: Reserves the inbound Messaging lifecycle turn required before world advancement.
 	 * Responsibilities: Perform no work until later tasks add device pumping.
 	 */
@@ -122,6 +202,33 @@ public:
 	void PostAdvance(Core::TimePointMilliseconds InNowMilliseconds) noexcept override { (void)InNowMilliseconds; }
 
 private:
+	/**
+	 * Motivation: Keeps each local subscriber's routing criteria and its bounded callable together in flat system-owned storage.
+	 * Responsibilities: Retain one channel identity, optional message-name filter, and uniquely owned callable without allocating.
+	 * Example:
+	 *   FSubscription Subscription{"Telemetry", InvalidNameId, std::move(Subscriber)};
+	 */
+	struct FSubscription final
+	{
+		/**
+		 * Motivation: Lets the system publish one fully configured local subscription in a single fixed-storage insertion.
+		 * Responsibilities: Retain the supplied channel, optional filter, and uniquely owned bound callable without allocating.
+		 */
+		FSubscription(const FNameId InChannelNameId, const FNameId InMessageNameFilter, FSubscriberDelegate&& InSubscriber) noexcept
+			: ChannelNameId(InChannelNameId), MessageNameFilter(InMessageNameFilter), Subscriber(std::move(InSubscriber))
+		{
+		}
+
+		/** Motivation: Identifies the channel whose local sends can reach this subscriber. */
+		FNameId ChannelNameId{};
+
+		/** Motivation: Narrows delivery to one message name, with the unset id accepting every message on the channel. */
+		FNameId MessageNameFilter{};
+
+		/** Motivation: Owns the inline callable that observes matching local messages. */
+		FSubscriberDelegate Subscriber{};
+	};
+
 	/**
 	 * Motivation: Lets channel creation reject an existing name before it changes bounded channel storage.
 	 * Responsibilities: Report whether a live channel already has InChannelNameId without mutating any channel.
@@ -144,6 +251,9 @@ private:
 
 	/** Motivation: Owns each live channel's immutable creation information within the compile-time channel limit. */
 	Core::TStaticVector<FChannelInformation, TTraits::MaxChannels> Channels;
+
+	/** Motivation: Owns every local subscription in registration order within one system-wide fixed capacity. */
+	Core::TStaticVector<FSubscription, TTraits::MaxSubscriptions> Subscriptions;
 };
 
 /** Motivation: Names the default fixed-capacity Messaging system used by engine-facing code. */
