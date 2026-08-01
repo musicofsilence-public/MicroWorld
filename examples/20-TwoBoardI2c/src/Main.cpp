@@ -126,7 +126,7 @@ void RunMaster() noexcept
 		return;
 	}
 
-	static std::uint8_t RxBuffer[MicroWorld::I2cMaxPayloadBytes];
+	static std::uint8_t RxBuffer[MicroWorld::Platform::Esp32::I2cMaxPayloadBytes];
 	bool bAwaitingReply = false;
 	std::uint32_t NextCounter = 1;
 	std::uint64_t NextSendDueMilliseconds = TimeSource.Now() + VolleyPeriodMilliseconds;
@@ -153,13 +153,13 @@ void RunMaster() noexcept
 		if (bAwaitingReply)
 		{
 			MicroWorld::Transport::Address::FDeviceAddress From{};
-			MicroWorld::Transport::Device::FReceiveResult Received{};
+			MicroWorld::Core::FReceiveResult Received{};
 			const MicroWorld::Transport::ETransportResult RxResult =
 				Device.TryReceive(From, MicroWorld::Core::TSpan<std::uint8_t>(RxBuffer, sizeof(RxBuffer)), Received);
 			if (RxResult == MicroWorld::Transport::ETransportResult::Success && Received.BytesReceived == VolleyPayloadBytes)
 			{
 				const std::uint32_t Counter = ReadVolleyCounter(RxBuffer);
-				const std::uint8_t FromId = MicroWorld::I2cAddressNodeId(From);
+				const std::uint8_t FromId = MicroWorld::Platform::Esp32::I2cAddressNodeId(From);
 				MW_LOG(Log, "ex20", "rx n=%u from=%u", static_cast<unsigned>(Counter), static_cast<unsigned>(FromId));
 				NextCounter = Counter + 1;
 				bAwaitingReply = false;
@@ -203,18 +203,18 @@ void RunSlave() noexcept
 		return;
 	}
 
-	static std::uint8_t RxBuffer[MicroWorld::I2cMaxPayloadBytes];
+	static std::uint8_t RxBuffer[MicroWorld::Platform::Esp32::I2cMaxPayloadBytes];
 
 	for (;;)
 	{
 		MicroWorld::Transport::Address::FDeviceAddress From{};
-		MicroWorld::Transport::Device::FReceiveResult Received{};
+		MicroWorld::Core::FReceiveResult Received{};
 		const MicroWorld::Transport::ETransportResult RxResult =
 			Device.TryReceive(From, MicroWorld::Core::TSpan<std::uint8_t>(RxBuffer, sizeof(RxBuffer)), Received);
 		if (RxResult == MicroWorld::Transport::ETransportResult::Success && Received.BytesReceived == VolleyPayloadBytes)
 		{
 			const std::uint32_t Counter = ReadVolleyCounter(RxBuffer);
-			const std::uint8_t FromId = MicroWorld::I2cAddressNodeId(From);
+			const std::uint8_t FromId = MicroWorld::Platform::Esp32::I2cAddressNodeId(From);
 			MW_LOG(Log, "ex20", "rx n=%u from=%u", static_cast<unsigned>(Counter), static_cast<unsigned>(FromId));
 
 			// Stage the reply (counter + 1) for the master's next read; the master clocks it out.

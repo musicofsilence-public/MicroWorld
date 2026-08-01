@@ -75,7 +75,7 @@ namespace
 		Transport::FrameCodec::TFrameDecoder<SpiMaxPayloadBytes>& InDecoder,
 		Core::TSpan<std::uint8_t> InDestination,
 		Transport::Address::FDeviceAddress& OutFrom,
-		Transport::Device::FReceiveResult& OutResult) noexcept
+		Core::FReceiveResult& OutResult) noexcept
 	{
 		// On Full the destination is untouched and the frame stays held for the next call, so a
 		// receive that cannot fit is transactional.
@@ -181,7 +181,7 @@ Transport::ETransportResult FEsp32SpiMasterDevice::TrySend(
 }
 
 Transport::ETransportResult FEsp32SpiMasterDevice::TryReceive(
-	Transport::Address::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Transport::Device::FReceiveResult& OutResult) noexcept
+	Transport::Address::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept
 {
 	// Reject a null destination with nonzero length before any bus transaction.
 	const std::size_t Capacity = InDestination.Size();
@@ -299,7 +299,7 @@ Transport::ETransportResult FEsp32SpiSlaveDevice::TrySend(
 }
 
 Transport::ETransportResult FEsp32SpiSlaveDevice::TryReceive(
-	Transport::Address::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Transport::Device::FReceiveResult& OutResult) noexcept
+	Transport::Address::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept
 {
 	// Reject a null destination with nonzero length before touching the transaction queue.
 	const std::size_t Capacity = InDestination.Size();

@@ -97,7 +97,7 @@ namespace
 } // namespace
 
 Transport::ETransportResult FEsp32WifiDevice::TryReceive(
-	Transport::Address::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Transport::Device::FReceiveResult& OutResult) noexcept
+	Transport::Address::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept
 {
 	// Keep the sizing scratch and the advertised max in lockstep; both are 1200.
 	static_assert(PeekScratchBytes == FEsp32WifiDevice::UdpMaxPacketBytes, "Peek scratch must match the advertised packet maximum.");

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <MicroWorld/Transport/DeviceAddress.h>
-#include <MicroWorld/Transport/Device.h>
+#include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Platform/Host/UdpAddress.h>
 #include <MicroWorld/Platform/Host/WinSockScope.h>
@@ -14,8 +14,8 @@ namespace MicroWorld::Platform::Host
 {
 
 /**
- * Motivation: Gives the engine a real host socket behind the shared IDevice interface so a host build can
- *   exercise the networking path without bespoke hardware.
+ * Motivation: Gives the engine a real host socket through Core::ITransportDevice so a host build can exercise the
+ *   networking path without bespoke hardware.
  * Responsibilities: Own one non-blocking SOCK_DGRAM socket bound to an IPv4 loopback port, validate every
  *   argument before any syscall, map each BSD/WinSock outcome to the shared ETransportResult, and leave
  *   caller-owned outputs unchanged on any non-Success result.
@@ -23,7 +23,7 @@ namespace MicroWorld::Platform::Host
  *   FHostWifiDevice Device(0);
  *   if (Device.IsOpen()) { Device.TrySend(Peer, Packet); }
  */
-class FHostWifiDevice final : public Transport::Device::IDevice
+class FHostWifiDevice final : public Core::ITransportDevice
 {
 public:
 	/** Motivation: Largest UDP payload one send accepts and one receive destination may exceed. */
@@ -82,15 +82,19 @@ public:
 	 *   and Success only after a consuming read writes the bytes, count, and sender address into OutFrom.
 	 */
 	Transport::ETransportResult TryReceive(
-		Transport::Address::FDeviceAddress& OutFrom,
-		Core::TSpan<std::uint8_t> InDestination,
-		Transport::Device::FReceiveResult& OutResult) noexcept override;
+		Transport::Address::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept override;
 
 	/**
 	 * Motivation: Lets a caller size a send destination against the device's accepted maximum.
 	 * Responsibilities: Report the largest datagram, in bytes, one send accepts.
 	 */
 	std::size_t MaxPacketBytes() const noexcept override;
+
+	/**
+	 * Motivation: Records that synchronous UDP sends leave no deferred transport work for this turn.
+	 * Responsibilities: Do no work because TrySend submits each datagram directly to the socket.
+	 */
+	void PreAdvance(Core::TimePointMilliseconds) noexcept override {}
 
 	/**
 	 * Motivation: Lets a caller gate every operation on a usable socket after construction.

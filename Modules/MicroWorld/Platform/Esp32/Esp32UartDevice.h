@@ -2,7 +2,7 @@
 
 #include <MicroWorld/Transport/FrameCodec.h>
 #include <MicroWorld/Transport/DeviceAddress.h>
-#include <MicroWorld/Transport/Device.h>
+#include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Platform/Esp32/UartAddress.h>
 
@@ -43,8 +43,8 @@ struct FEsp32UartConfig
 };
 
 /**
- * Motivation: Gives one composition root a non-blocking point-to-point wired IDevice that frames traffic over one
- *   ESP-IDF UART, the E32 LoRa device minus the radio.
+ * Motivation: Gives one composition root a non-blocking point-to-point Core::ITransportDevice over one ESP-IDF UART,
+ *   the E32 LoRa device minus the radio.
  * Responsibilities: Encode each packet with the portable FrameCodec, write the whole frame to the UART, and pump
  *   received bytes one at a time through a bounded TFrameDecoder that resyncs on bad magic, oversize length, or CRC
  *   mismatch; validate every argument before any syscall and leave caller-owned outputs unchanged on any non-Success
@@ -53,7 +53,7 @@ struct FEsp32UartConfig
  *   FEsp32UartDevice Uart(Config);
  *   if (Uart.IsOpen()) { Uart.TrySend(To, Packet); }
  */
-class FEsp32UartDevice final : public Transport::Device::IDevice
+class FEsp32UartDevice final : public Core::ITransportDevice
 {
 public:
 	/**
@@ -109,15 +109,19 @@ public:
 	 *   into OutFrom; leave outputs unchanged on any non-success result.
 	 */
 	Transport::ETransportResult TryReceive(
-		Transport::Address::FDeviceAddress& OutFrom,
-		Core::TSpan<std::uint8_t> InDestination,
-		Transport::Device::FReceiveResult& OutResult) noexcept override;
+		Transport::Address::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept override;
 
 	/**
 	 * Motivation: Lets a caller size a packet against the transport's capacity without a magic number.
 	 * Responsibilities: Report the largest payload, in bytes, one send accepts, excluding framing overhead.
 	 */
 	std::size_t MaxPacketBytes() const noexcept override;
+
+	/**
+	 * Motivation: Records that synchronous UART sends leave no deferred transport work for this turn.
+	 * Responsibilities: Do no work because TrySend writes each framed message directly to the UART.
+	 */
+	void PreAdvance(Core::TimePointMilliseconds) noexcept override {}
 
 	/**
 	 * Motivation: Lets a caller gate every op on whether construction opened a usable UART.
@@ -133,7 +137,7 @@ private:
 	 *   (leaving the frame held) when the payload exceeds the destination.
 	 */
 	Transport::ETransportResult DeliverFrameToDestination(
-		Core::TSpan<std::uint8_t> InDestination, Transport::Address::FDeviceAddress& OutFrom, Transport::Device::FReceiveResult& OutResult) noexcept;
+		Core::TSpan<std::uint8_t> InDestination, Transport::Address::FDeviceAddress& OutFrom, Core::FReceiveResult& OutResult) noexcept;
 
 	/**
 	 * Motivation: Drains a bounded byte budget through the decoder so a flood cannot starve the caller while still
@@ -142,7 +146,7 @@ private:
 	 *   or return Unavailable when the budget drains with no frame ready.
 	 */
 	Transport::ETransportResult PumpDecoderForFrame(
-		Core::TSpan<std::uint8_t> InDestination, Transport::Address::FDeviceAddress& OutFrom, Transport::Device::FReceiveResult& OutResult) noexcept;
+		Core::TSpan<std::uint8_t> InDestination, Transport::Address::FDeviceAddress& OutFrom, Core::FReceiveResult& OutResult) noexcept;
 
 	/**
 	 * Motivation: Guards a send against a malformed address, oversize packet, or null span before any syscall so a

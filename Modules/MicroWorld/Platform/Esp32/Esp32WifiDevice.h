@@ -1,7 +1,7 @@
 #pragma once
 
 #include <MicroWorld/Transport/DeviceAddress.h>
-#include <MicroWorld/Transport/Device.h>
+#include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Platform/Esp32/UdpAddress.h>
 #include <MicroWorld/Core/Time.h>
@@ -13,7 +13,7 @@ namespace MicroWorld::Platform::Esp32
 {
 
 /**
- * Motivation: Gives one composition root a non-blocking UDP IDevice that carries traffic over one real lwIP socket,
+ * Motivation: Gives one composition root a non-blocking UDP Core::ITransportDevice over a real lwIP socket,
  *   the ESP32 sibling of the host adapter.
  * Responsibilities: Own one SOCK_DGRAM socket bound to an IPv4 port, map each lwIP outcome to the shared
  *   ETransportResult so callers poll without blocking, validate every argument before any syscall, and leave
@@ -22,7 +22,7 @@ namespace MicroWorld::Platform::Esp32
  *   FEsp32WifiDevice Wifi(8888);
  *   if (Wifi.IsOpen()) { Wifi.TrySend(To, Packet); }
  */
-class FEsp32WifiDevice final : public Transport::Device::IDevice
+class FEsp32WifiDevice final : public Core::ITransportDevice
 {
 public:
 	/** Motivation: Largest UDP payload one send accepts and one receive destination may exceed. */
@@ -80,15 +80,19 @@ public:
 	 *   with nonzero length, or Success after a consuming read writes bytes, count, and sender address into OutFrom.
 	 */
 	Transport::ETransportResult TryReceive(
-		Transport::Address::FDeviceAddress& OutFrom,
-		Core::TSpan<std::uint8_t> InDestination,
-		Transport::Device::FReceiveResult& OutResult) noexcept override;
+		Transport::Address::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept override;
 
 	/**
 	 * Motivation: Lets a caller size a datagram against the transport's capacity without a magic number.
 	 * Responsibilities: Report the largest datagram, in bytes, one send accepts.
 	 */
 	std::size_t MaxPacketBytes() const noexcept override;
+
+	/**
+	 * Motivation: Records that synchronous UDP sends leave no deferred transport work for this turn.
+	 * Responsibilities: Do no work because TrySend submits each datagram directly to the lwIP socket.
+	 */
+	void PreAdvance(Core::TimePointMilliseconds) noexcept override {}
 
 	/**
 	 * Motivation: Lets a caller gate every op on whether construction opened a usable socket.

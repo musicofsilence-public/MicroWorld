@@ -2,7 +2,7 @@
 
 #include <MicroWorld/Transport/FrameCodec.h>
 #include <MicroWorld/Transport/DeviceAddress.h>
-#include <MicroWorld/Transport/Device.h>
+#include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Platform/Esp32/I2cAddress.h>
 
@@ -114,15 +114,15 @@ struct FEsp32I2cSlaveConfig
 };
 
 /**
- * Motivation: Gives one composition root a non-blocking wired IDevice that clocks the master side of a
- *   point-to-point I2C link through one bus transaction per send and one whole-frame read window per receive.
- * Responsibilities: Validate every argument before any syscall, leave caller outputs unchanged on any non-Success
- *   result, and never split a frame across I2C transactions.
+ * Motivation: Gives one composition root a non-blocking Core::ITransportDevice for the I2C master side of a
+ *   point-to-point link.
+ * Responsibilities: Clock one bus transaction per send and one whole-frame read window per receive; validate every
+ *   argument before any syscall, leave caller outputs unchanged on any non-Success result, and never split a frame.
  * Example:
  *   FEsp32I2cMasterDevice Master(Config);
  *   if (Master.IsOpen()) { Master.TrySend(To, Packet); }
  */
-class FEsp32I2cMasterDevice final : public Transport::Device::IDevice
+class FEsp32I2cMasterDevice final : public Core::ITransportDevice
 {
 public:
 	/**
@@ -178,15 +178,19 @@ public:
 	 *   any non-success result.
 	 */
 	Transport::ETransportResult TryReceive(
-		Transport::Address::FDeviceAddress& OutFrom,
-		Core::TSpan<std::uint8_t> InDestination,
-		Transport::Device::FReceiveResult& OutResult) noexcept override;
+		Transport::Address::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept override;
 
 	/**
 	 * Motivation: Lets a caller size a packet against the transport's capacity without a magic number.
 	 * Responsibilities: Report the largest payload, in bytes, one send accepts, excluding framing overhead.
 	 */
 	std::size_t MaxPacketBytes() const noexcept override;
+
+	/**
+	 * Motivation: Records that synchronous I2C master sends leave no deferred transport work for this turn.
+	 * Responsibilities: Do no work because TrySend clocks each frame through one bus write.
+	 */
+	void PreAdvance(Core::TimePointMilliseconds) noexcept override {}
 
 	/**
 	 * Motivation: Lets a caller gate every op on whether construction opened a usable bus.
@@ -212,8 +216,8 @@ private:
 };
 
 /**
- * Motivation: Gives one composition root a non-blocking wired IDevice for the slave side of a point-to-point I2C
- *   link, mirroring the master above the IDevice interface.
+ * Motivation: Gives one composition root a non-blocking Core::ITransportDevice for the I2C slave side of a
+ *   point-to-point link, mirroring the master interface above.
  * Responsibilities: Stage one framed packet per TrySend for the master's next read and drain an ISR-filled inbox
  *   per TryReceive through a bounded TFrameDecoder; validate every argument before any syscall and leave caller
  *   outputs unchanged on any non-Success result.
@@ -221,7 +225,7 @@ private:
  *   FEsp32I2cSlaveDevice Slave(Config);
  *   if (Slave.IsOpen()) { Slave.TryReceive(From, Dest, Result); }
  */
-class FEsp32I2cSlaveDevice final : public Transport::Device::IDevice
+class FEsp32I2cSlaveDevice final : public Core::ITransportDevice
 {
 public:
 	/**
@@ -279,15 +283,19 @@ public:
 	 *   leave outputs unchanged on any non-success result.
 	 */
 	Transport::ETransportResult TryReceive(
-		Transport::Address::FDeviceAddress& OutFrom,
-		Core::TSpan<std::uint8_t> InDestination,
-		Transport::Device::FReceiveResult& OutResult) noexcept override;
+		Transport::Address::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept override;
 
 	/**
 	 * Motivation: Lets a caller size a packet against the transport's capacity without a magic number.
 	 * Responsibilities: Report the largest payload, in bytes, one send accepts, excluding framing overhead.
 	 */
 	std::size_t MaxPacketBytes() const noexcept override;
+
+	/**
+	 * Motivation: Records that I2C slave writes leave no device-local work for the next transport turn.
+	 * Responsibilities: Do no work because TrySend writes each frame directly to the slave transmit ring.
+	 */
+	void PreAdvance(Core::TimePointMilliseconds) noexcept override {}
 
 	/**
 	 * Motivation: Lets a caller gate every op on whether construction opened a usable slave device.

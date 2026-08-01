@@ -129,7 +129,7 @@ extern "C" void app_main(void)
 		return;
 	}
 
-	static std::uint8_t RxBuffer[MicroWorld::UartMaxPayloadBytes];
+	static std::uint8_t RxBuffer[MicroWorld::Platform::Esp32::UartMaxPayloadBytes];
 
 	// Node 1 seeds the volley one period after boot; node 2 stays idle until it hears frame 1.
 	bool bHasPendingTx = (LocalNodeId == VolleyInitiatorNodeId);
@@ -142,13 +142,13 @@ extern "C" void app_main(void)
 
 		// Receive at most one frame; a completed volley schedules the reply (counter + 1).
 		MicroWorld::Transport::Address::FDeviceAddress From{};
-		MicroWorld::Transport::Device::FReceiveResult Received{};
+		MicroWorld::Core::FReceiveResult Received{};
 		const MicroWorld::Transport::ETransportResult RxResult =
 			Device.TryReceive(From, MicroWorld::Core::TSpan<std::uint8_t>(RxBuffer, sizeof(RxBuffer)), Received);
 		if (RxResult == MicroWorld::Transport::ETransportResult::Success && Received.BytesReceived == VolleyPayloadBytes)
 		{
 			const std::uint32_t Counter = ReadVolleyCounter(RxBuffer);
-			const std::uint8_t FromId = MicroWorld::UartAddressNodeId(From);
+			const std::uint8_t FromId = MicroWorld::Platform::Esp32::UartAddressNodeId(From);
 			MW_LOG(Log, "ex18", "rx n=%u from=%u", static_cast<unsigned>(Counter), static_cast<unsigned>(FromId));
 			bHasPendingTx = true;
 			PendingCounter = Counter + 1;

@@ -2,7 +2,7 @@
 
 #include <MicroWorld/Transport/FrameCodec.h>
 #include <MicroWorld/Transport/DeviceAddress.h>
-#include <MicroWorld/Transport/Device.h>
+#include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Platform/Esp32/SpiAddress.h>
 
@@ -89,8 +89,8 @@ struct FEsp32SpiSlaveConfig
 };
 
 /**
- * Motivation: Gives one composition root a non-blocking wired IDevice for the master side of a point-to-point SPI
- *   link that clocks the bus with fixed-size full-duplex transactions.
+ * Motivation: Gives one composition root a non-blocking Core::ITransportDevice for the SPI master side of a
+ *   point-to-point link with fixed-size full-duplex transactions.
  * Responsibilities: Feed every received window into a bounded TFrameDecoder so full-duplex traffic is never
  *   discarded, validate every argument before any syscall, leave caller outputs unchanged on any non-Success
  *   result, and never split a frame across transactions.
@@ -98,7 +98,7 @@ struct FEsp32SpiSlaveConfig
  *   FEsp32SpiMasterDevice Master(Config);
  *   if (Master.IsOpen()) { Master.TryReceive(From, Dest, Result); }
  */
-class FEsp32SpiMasterDevice final : public Transport::Device::IDevice
+class FEsp32SpiMasterDevice final : public Core::ITransportDevice
 {
 public:
 	/**
@@ -154,15 +154,19 @@ public:
 	 *   non-success result.
 	 */
 	Transport::ETransportResult TryReceive(
-		Transport::Address::FDeviceAddress& OutFrom,
-		Core::TSpan<std::uint8_t> InDestination,
-		Transport::Device::FReceiveResult& OutResult) noexcept override;
+		Transport::Address::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept override;
 
 	/**
 	 * Motivation: Lets a caller size a packet against the transport's capacity without a magic number.
 	 * Responsibilities: Report the largest payload, in bytes, one send accepts, excluding framing overhead.
 	 */
 	std::size_t MaxPacketBytes() const noexcept override;
+
+	/**
+	 * Motivation: Records that synchronous SPI master sends leave no deferred transport work for this turn.
+	 * Responsibilities: Do no work because TrySend clocks each frame in its full-duplex transaction.
+	 */
+	void PreAdvance(Core::TimePointMilliseconds) noexcept override {}
 
 	/**
 	 * Motivation: Lets a caller gate every op on whether construction opened a usable master bus.
@@ -204,8 +208,8 @@ private:
 };
 
 /**
- * Motivation: Gives one composition root a non-blocking wired IDevice for the slave side of a point-to-point SPI link
- *   that the master clocks.
+ * Motivation: Gives one composition root a non-blocking Core::ITransportDevice for the SPI slave side of a
+ *   point-to-point link that the master clocks.
  * Responsibilities: Stage one framed packet per TrySend for the next queued transaction, harvest a completed
  *   transaction per TryReceive and drain its received window through a bounded TFrameDecoder, and keep one
  *   transaction always queued; validate every argument before any syscall and leave caller outputs unchanged on
@@ -214,7 +218,7 @@ private:
  *   FEsp32SpiSlaveDevice Slave(Config);
  *   if (Slave.IsOpen()) { Slave.TrySend(To, Packet); }
  */
-class FEsp32SpiSlaveDevice final : public Transport::Device::IDevice
+class FEsp32SpiSlaveDevice final : public Core::ITransportDevice
 {
 public:
 	/**
@@ -273,15 +277,25 @@ public:
 	 *   frame copies payload, byte count, and sender node id into OutFrom.
 	 */
 	Transport::ETransportResult TryReceive(
-		Transport::Address::FDeviceAddress& OutFrom,
-		Core::TSpan<std::uint8_t> InDestination,
-		Transport::Device::FReceiveResult& OutResult) noexcept override;
+		Transport::Address::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept override;
 
 	/**
 	 * Motivation: Lets a caller size a packet against the transport's capacity without a magic number.
 	 * Responsibilities: Report the largest payload, in bytes, one send accepts, excluding framing overhead.
 	 */
 	std::size_t MaxPacketBytes() const noexcept override;
+
+	/**
+	 * Motivation: Drains a staged reply into the next transaction before the master clocks it.
+	 * Responsibilities: Queue one transaction when the open slave has none queued, consuming any staged frame.
+	 */
+	void PreAdvance(Core::TimePointMilliseconds) noexcept override
+	{
+		if (bOpen && !bTransactionQueued)
+		{
+			QueueNextTransaction();
+		}
+	}
 
 	/**
 	 * Motivation: Lets a caller gate every op on whether construction opened a usable slave bus.
