@@ -13,7 +13,7 @@ Time is always supplied by the caller, never read from a hidden clock.
 
 ## The dependency graph
 
-Six portable systems. Dependencies point inward, and the graph is
+Five portable systems. Dependencies point inward, and the graph is
 machine-enforced by `tools/CheckDependencyBoundaries.py` — a violation fails
 `ctest`, not review.
 
@@ -23,23 +23,24 @@ machine-enforced by `tools/CheckDependencyBoundaries.py` — a violation fails
               └─────┬──────┘
         ┌───────────┼───────────┐
         │           │           │
-   ┌────▼───┐  ┌────▼─────┐ ┌───▼────────┐
-   │ Engine │  │Messaging │ │ Transport  │
-   └────┬───┘  └────┬─────┘ └────────────┘
-        │           │           │
- ┌──────▼───────────▼───────────▼──────┐
- │            Networking               │
- └─────────────────────────────────────┘
+   ┌────▼─────┐     │      ┌────▼──────┐
+   │Messaging │     │      │ Transport │
+   └────┬─────┘     │      └───────────┘
+        │           │
+   ┌────▼───────────▼────┐
+   │       Engine        │
+   └─────────────────────┘
 
  Application sits beside this on Engine alone:
    Core <- Engine <- Application
 ```
 
 **The invariant the whole shape protects:** Engine and Transport never see each
-other. An engine that knows about radios cannot be tested without one, and a
-transport that knows about actors cannot be reused. No system joins them either:
-`Networking` composes Messaging and Transport behind Core's `IPlaySystem`, and a
-composition root is the only thing that hands the result to an engine.
+other, and neither do Messaging and Transport. An engine that knows about radios
+cannot be tested without one, and a transport that knows about messages cannot be
+reused. No system joins them: they meet only at `ITransportDevice` in Core — a
+messaging channel sends through the interface, each medium realises it, and a
+composition root is the only place a concrete device is named.
 
 `Platform/Host`, `Platform/Esp32`, and `Platform/Pico` sit outside this graph as
 the non-portable edges. Only they may include OS or SDK headers.
@@ -50,21 +51,22 @@ the non-portable edges. Only they may include OS or SDK headers.
 
 | System | Depends on | Owns |
 | --- | --- | --- |
-| **Core** | — | Result codes, time, logging, `FLifecycleGuard`, tick scheduling, fixed-capacity containers, delegates, smart pointers, timers, `IPlaySystem` |
-| **Engine** | Core | The managed runtime and identity: `UWorld`, `AActor`, `UActorComponent`, the `TEngine`/`IEngine` interface, timer manager, plus the folded Object store, garbage collector, and generation-checked handles |
-| **Messaging** | Core | Actor messaging: message types, router, channel bindings, reliable channel. Header-only — no archive |
-| **Transport** | Core | Byte I/O: `IDevice`, `TTransportHost`, protocol, framing, plus the optional portable E32 LoRa transport (`FE32LoraDevice`) over `IUartByteStream`. Link it only for LoRa builds — the RadioE32 sources are toggled by `MICROWORLD_TRANSPORT_LORA` |
+| **Core** | — | Result codes, time, logging, `FLifecycleGuard`, tick scheduling, fixed-capacity containers, delegates, smart pointers, timers, `IPlaySystem`, `ITransportDevice` + `FDeviceAddress` |
+| **Engine** | Core, Messaging | The managed runtime and identity: `UWorld`, `AActor`, `UActorComponent`, the `TEngine`/`IEngine` interface, timer manager, the folded Object store, garbage collector, and generation-checked handles — plus creating and handing out `FMessagingSystem` |
+| **Messaging** | Core | `FMessagingSystem` (engine-created): `FMessage` (name id + opaque payload), named channels from `FChannelInformation` (reliability, optional device + address), subscriptions with optional message-name filter. Header-only — no archive |
+| **Transport** | Core | Byte I/O: medium devices realising Core's `ITransportDevice`, wire framing, plus the optional portable E32 LoRa transport (`FE32LoraDevice`) over `IUartByteStream`. Link it only for LoRa builds — the RadioE32 sources are toggled by `MICROWORLD_TRANSPORT_LORA` |
 | **Application** | Core, Engine | Program entry: `FApplication` holds one engine for its lifetime and owns the `Run` frame-loop template |
-| **Networking** | Core, Messaging, Transport | `TNetworking` — transport hosts, one shared router, and channels composed behind Core's `IPlaySystem` |
 | **Platform/Host** | non-portable | Host UDP over OS sockets, `steady_clock` time source |
 | **Platform/Esp32** | non-portable | ESP32-S3 transports (lwIP UDP, E32 LoRa UART, wired UART/I2C/SPI), ESP timer and log |
 | **Platform/Pico** | Transport, non-portable | RP2040 E32 LoRa UART over the native Pico SDK |
 
-Six portable systems plus three platform edges. The folder tree under
+Five portable systems plus three platform edges. The folder tree under
 `Modules/MicroWorld/` states these systems directly: one directory per system,
-header and source side by side. Object folded into Engine, and Net + RadioE32
-folded into Transport, so the build package count now equals the architecture
-system count — the two are reconciled.
+header and source side by side. Object folded into Engine, Net + RadioE32 folded
+into Transport, and Networking dissolved into Messaging, so the build package
+count equals the architecture system count — the two are reconciled. (Code is
+mid-migration: `Modules/MicroWorld/Networking` still exists until the dissolution
+refactor lands; this document and the model describe the target.)
 
 ---
 
@@ -73,8 +75,10 @@ system count — the two are reconciled.
 **The engine interface.** `TEngine<TTraits>` is the concrete engine; its traits
 struct carries the eight compile-time capacities. `IEngine` is the narrow
 interface an application holds — `BeginPlay`, `Tick`, `EndPlay`, `GetWorld`,
-`GetObjectStore`. Class registration and object creation are function templates on
-`TEngine`, so they are reachable only from the composition root.
+`GetObjectStore`, plus `CreateMessagingSystem`/`GetMessagingSystem` for the one
+system the engine knows beyond Core. Class registration and object creation are
+function templates on `TEngine`, so they are reachable only from the composition
+root.
 
 **Two ways an actor enters a world.** `UWorld::RegisterActor` takes an
 already-constructed actor before play begins. `UWorld::SpawnActor<TActor>` is the

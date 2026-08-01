@@ -75,7 +75,20 @@ model {
                 icon ./icon-core.svg
             }
             metadata {
-                contract 'time, tick scheduling, timers, logging, lifecycle, result codes, the play-system turn points, byte streams'
+                contract 'time, tick scheduling, timers, logging, lifecycle, result codes, the play-system turn points, byte streams, the transport device interface and its address value'
+            }
+
+            transportDeviceInterface = interface 'Transport Device Interface' {
+                technology '[interface: ITransportDevice / FDeviceAddress]'
+                description 'Sends one packet to an address, drains arrivals, caps payload size.'
+                style {
+                    icon ./icon-interface.svg
+                }
+                metadata {
+                    contract 'Try-send one packet to an address, try-receive one packet, the largest payload a send accepts, and the four play-system turns, because a callback cannot fire itself. One uniform address value serves every medium: a broadcast address is a value of the same shape rather than a second operation, refused by a medium that cannot reach it. A device publishes the largest payload it can take and refuses anything longer instead of splitting'
+                    boundary 'Declared in Core so Messaging and Transport share it without seeing each other: a channel sends through this shape, a medium realises it, and neither names the other. Configuration stays out on purpose - an SSID and a baud rate have nothing in common - so an application names a concrete device type to configure it and needs nothing concrete afterwards. Whoever owns a device installs it: the messaging system pumps the devices its channels hold, an application pumps one it holds directly, never both for the same device'
+                    standalone 'Uniform in its data path, deliberately not in configuration. What is uniform is the shape, not the meaning - each medium reads the address its own way, and a point-to-point one ignores it entirely'
+                }
             }
         }
 
@@ -134,16 +147,41 @@ model {
         }
 
         messagingSystem = system 'Messaging System' {
-            technology '[system: play service]'
-            description 'Delivers typed messages between actors, with or without a transport.'
+            technology '[system: engine service]'
+            description 'Delivers named messages through channels, with or without a device.'
             style {
                 shape queue
                 icon ./icon-messaging.svg
             }
             metadata {
-                contract 'TMessageRouter (an IPlaySystem), channel bindings, and the delivery mode a binding declares'
-                standalone 'Usable with no networking at all. Its contract names neither actors nor transports, so Core plus this system is already a working stack, and Core + Engine + this is local actor messaging with no Transport, no Networking and no device. A binding may still declare reliable delivery there - locally the call itself satisfies it, which is why declaring a mode drags in no machinery'
-                boundary 'That independence is the whole reason it is its own system. Folding it into Networking would assert that a message between two actors on one board travels through networking, which is false'
+                contract 'FMessagingSystem, created and handed out by the engine. FMessage carries a message name id and an opaque payload. A channel is created from FChannelInformation - channel name id, reliability, and an optional transport device plus the address it sends to - and subscriptions attach per channel, with or without a message-name filter'
+                standalone 'Usable with no transport at all: a channel with no device delivers only to this node, and local delivery always happens - a device adds remote reach, never replaces it. Core plus Engine plus this system is complete local messaging with no Transport and no device. A channel may still declare reliable delivery there - locally the call itself satisfies it, which is why declaring it drags in no machinery'
+                boundary 'It reaches bytes only through the transport device interface in Core, so no medium is named here and no message type is named in Transport. Delivery guarantees live here, per channel, because Transport answers acceptance and never delivery - an acknowledgement is a message from the peer, and a byte layer that reads one has stopped carrying payload opaquely. Splitting an oversized message lands here too. This is the one system the engine knows beyond Core, so composing messaging is one call rather than a wiring exercise'
+            }
+
+            system = entity 'Messaging System' {
+                technology '[entity: FMessagingSystem]'
+                description 'The one object the engine creates and hands out.'
+            }
+
+            message = entity 'Message' {
+                technology '[entity: FMessage]'
+                description 'One named fact with an opaque payload.'
+            }
+
+            channel = entity 'Channel' {
+                technology '[entity: named route]'
+                description 'Owns one name, one reliability declaration, an optional device and address.'
+            }
+
+            subscription = entity 'Subscription' {
+                technology '[entity: channel listener]'
+                description 'One listener on a channel, optionally filtered by message name.'
+            }
+
+            reliableDelivery = component 'Reliable Delivery' {
+                technology '[component: resend until acknowledged]'
+                description 'Retries unacknowledged messages within a bounded budget.'
             }
         }
 
@@ -154,22 +192,9 @@ model {
                 icon ./icon-transport.svg
             }
             metadata {
-                contract 'one device shape - Setup, SendDataTo, OnDataReceived - realised once per medium, plus wire framing for the stream media'
+                contract 'the transport device shape from Core realised once per medium, each with its own concrete Setup, plus wire framing for the stream media'
                 boundary 'Transport sits below the engine and takes only time and result codes. Anything that merely realises the device shape belongs inside it - Wi-Fi, Bluetooth, wire and radio alike - and anything needing a world cannot be in here at all'
                 standalone 'It reports acceptance, never delivery, so no medium here sequences, acknowledges or retries. Reading an acknowledgement would mean opening the payload this system promised to carry opaquely'
-            }
-
-            deviceInterface = interface 'Device Interface' {
-                technology '[interface: Setup, SendDataTo, OnDataReceived]'
-                description 'Configures, sends without blocking, drains arrivals each turn.'
-                style {
-                    icon ./icon-interface.svg
-                }
-                metadata {
-                    boundary 'The application holds a medium device directly, so this contract is both what an application writes against and what each medium realises. There is no layer above it to hide the choice of medium, because choosing the medium is the point. Whoever owns a device installs it - an application holding one pumps it in its own frame loop, Networking pumps the ones it owns, and never both for the same device'
-                    contract 'The three operations plus the four play-system turns, because a callback cannot fire itself. Setup answers with a Core result code, and a device before Setup is unusable. The span handed to a subscriber belongs to the device and is valid only for that call. A device publishes the largest payload it can take and refuses anything longer instead of splitting. A broadcast address is a value of the same shape rather than a second operation, refused by a medium that cannot reach it'
-                    standalone 'Uniform in its data path, deliberately not in Setup: one address shape lets SendDataTo read the same on every medium, while configuration stays per-medium because an SSID and a baud rate have nothing in common. That asymmetry is why an application names a concrete device type to configure it and needs nothing concrete afterwards. What is uniform is the shape, not the meaning - each medium reads the address its own way, and a point-to-point one ignores it entirely'
-                }
             }
 
             frameCodec = component 'Frame Codec' {
@@ -233,19 +258,6 @@ model {
                 contract 'FApplication, Run frame loop'
             }
         }
-
-        networking = system 'Networking' {
-            technology '[system: play service]'
-            description 'Gives this node a role and binds channels to wires.'
-            style {
-                icon ./icon-networking.svg
-            }
-            metadata {
-                contract 'TNetworking, an IPlaySystem that owns devices and channels and drives them in the order a frame requires'
-                standalone 'Core, Messaging and Transport are its whole closure, so a networked messaging stack needs no world, no actors and no Object. It cannot drive itself though - something must call its turn points each frame'
-                boundary 'Merged with Transport, one element would own both the byte contract and the message types, and nothing would then forbid a device from knowing a message type. Kept apart, a device stays reusable with no messaging, messaging stays usable with no device, and adding a transport touches neither. A separation needs two elements to state it. Role is what makes this a system rather than a composition root: a client addresses the server, a server addresses all peers, and that follows from the role this node plays. Messaging cannot hold role without learning that wires exist, and Transport cannot hold it without learning that channels do. If that invariant ever moves elsewhere, what remains here is wiring and should be deleted'
-            }
-        }
     }
 
 
@@ -264,25 +276,21 @@ model {
 
     microworld.engine -[dependsOn]-> microworld.core 'takes Time, Timer, Lifecycle, PlaySystem'
 
-    microworld.messagingSystem -[dependsOn]-> microworld.core 'takes Span, Delegate, Time, PlaySystem'
+    microworld.engine -[dependsOn]-> microworld.messagingSystem 'creates and hands out the messaging system'
 
-    microworld.transport -[dependsOn]-> microworld.core 'takes Span, Delegate, Log, Time, PlaySystem, UartByteStream'
+    microworld.messagingSystem -[dependsOn]-> microworld.core 'takes Span, Delegate, Time, PlaySystem, TransportDevice, DeviceAddress'
 
-    microworld.networking -[dependsOn]-> microworld.core 'takes PlaySystem'
+    microworld.transport -[dependsOn]-> microworld.core 'takes Span, Delegate, Log, Time, PlaySystem, UartByteStream, TransportDevice, DeviceAddress'
 
     microworld.app -[dependsOn]-> microworld.core 'takes Lifecycle, RuntimeResult, Time'
 
     microworld.app -[dependsOn]-> microworld.engine 'holds one engine for its lifetime'
 
-    // 'uses' not 'dependsOn': Application runs whatever play system it is handed, so it
-    // is not written against either of these in particular.
-    microworld.app -[uses]-> microworld.messagingSystem 'installs the router in its frame loop, no transport involved'
+    // 'uses' not 'dependsOn': the composition root reaches messaging through the
+    // engine and names a concrete device only to configure it.
+    microworld.app -[uses]-> microworld.messagingSystem 'creates channels and sends through the system the engine hands out'
 
-    microworld.app -[uses]-> microworld.transport 'installs a device it was handed and pumps it each frame'
-
-    microworld.networking -[dependsOn]-> microworld.messagingSystem 'routes typed messages through'
-
-    microworld.networking -[uses]-> microworld.transport 'pumps the devices it owns each frame'
+    microworld.app -[uses]-> microworld.transport 'constructs and configures the concrete medium devices channels send through'
 
 
     microworld.engine.engineInterface -[uses]-> microworld.engine.world 'owns and advances'
@@ -293,10 +301,17 @@ model {
     microworld.engine.actor -[uses]-> microworld.engine.actorComponent 'owns'
     microworld.engine.collector -[uses]-> microworld.engine.objectStore 'reclaims through'
 
-    microworld.transport.deviceInterface -[realisedBy]-> microworld.transport.wifiDevice
-    microworld.transport.deviceInterface -[realisedBy]-> microworld.transport.bluetoothDevice
-    microworld.transport.deviceInterface -[realisedBy]-> microworld.transport.loraDevice
-    microworld.transport.deviceInterface -[realisedBy]-> microworld.transport.wiredDevice
+    microworld.core.transportDeviceInterface -[realisedBy]-> microworld.transport.wifiDevice
+    microworld.core.transportDeviceInterface -[realisedBy]-> microworld.transport.bluetoothDevice
+    microworld.core.transportDeviceInterface -[realisedBy]-> microworld.transport.loraDevice
+    microworld.core.transportDeviceInterface -[realisedBy]-> microworld.transport.wiredDevice
+
+    microworld.messagingSystem.system -[uses]-> microworld.messagingSystem.channel 'creates from FChannelInformation and sends messages through'
+    microworld.messagingSystem.system -[uses]-> microworld.messagingSystem.subscription 'attaches to a channel on subscribe'
+    microworld.messagingSystem.channel -[uses]-> microworld.messagingSystem.message 'queues and delivers'
+    microworld.messagingSystem.channel -[publishes]-> microworld.messagingSystem.subscription 'delivers matching messages to'
+    microworld.messagingSystem.channel -[uses]-> microworld.messagingSystem.reliableDelivery 'resends unacknowledged sends through, when declared reliable'
+    microworld.messagingSystem.channel -[uses]-> microworld.core.transportDeviceInterface 'sends to its address through, when it holds a device'
 
     microworld.transport.loraDevice -[uses]-> microworld.transport.frameCodec 'recovers message boundaries with'
     microworld.transport.wiredDevice -[uses]-> microworld.transport.frameCodec 'recovers message boundaries with'
