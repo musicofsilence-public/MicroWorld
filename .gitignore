@@ -40,3 +40,4 @@ examples/*/src/NetworkConfig.h
 # per-machine setup rather than shared project source.
 /.mcp.json
 /opencode.jsonc
+/.github/code-review-graph.instruction.md
