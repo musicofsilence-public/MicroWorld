@@ -127,10 +127,10 @@ struct FChannelHandle
 };
 
 /**
- * Motivation: Turns devices into a working networked engine in one object, owning fixed-capacity hosts, bindings, reliable wrappers, and a
- *   shared router so a composition root wires transport to messaging without adapter objects.
- * Responsibilities: Accept devices and channels during composition, start and stop hosts on the engine lifecycle, and pump frames in the fixed
- *   transport -> reliable -> router order without hidden clocks or heap growth.
+ * Motivation: Holds this node's role in the network (client, server, or standalone) and binds each logical channel to the wire that carries it,
+ *   so neither Messaging nor Transport has to learn that the other exists.
+ * Responsibilities: Accept devices and channels during composition, derive each channel's send target from the configured role, start and stop
+ *   hosts on the engine lifecycle, and pump frames in the fixed transport -> reliable -> router order without hidden clocks or heap growth.
  * Example:
  *   TNetworking<> Net;
  *   FDeviceHandle Device = Net.AddDevice(Radio, ENetworkMode::Standalone, HostConfig);

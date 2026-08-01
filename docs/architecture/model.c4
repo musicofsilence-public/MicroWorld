@@ -236,14 +236,14 @@ model {
 
         networking = system 'Networking' {
             technology '[system: play service]'
-            description 'Carries typed messages over a transport, reliably when asked.'
+            description 'Gives this node a role and binds channels to wires.'
             style {
                 icon ./icon-networking.svg
             }
             metadata {
-                contract 'TNetworking, an IPlaySystem that owns devices and channels, plus the sequencing, acknowledgement and retransmit behind a channel that asked for reliable delivery, and the splitting of a message too large for the device carrying it'
+                contract 'TNetworking, an IPlaySystem that owns devices and channels and drives them in the order a frame requires'
                 standalone 'Core, Messaging and Transport are its whole closure, so a networked messaging stack needs no world, no actors and no Object. It cannot drive itself though - something must call its turn points each frame'
-                boundary 'Merged with Transport, one element would own both the byte contract and the message types, and nothing would then forbid a device from knowing a message type. Kept apart, a device stays reusable with no messaging, messaging stays usable with no device, and adding a transport touches neither. A separation needs two elements to state it. Reliability lands here for the same kind of reason: it only means something when a wire can drop things, and Messaging must stay usable with no wire at all'
+                boundary 'Merged with Transport, one element would own both the byte contract and the message types, and nothing would then forbid a device from knowing a message type. Kept apart, a device stays reusable with no messaging, messaging stays usable with no device, and adding a transport touches neither. A separation needs two elements to state it. Role is what makes this a system rather than a composition root: a client addresses the server, a server addresses all peers, and that follows from the role this node plays. Messaging cannot hold role without learning that wires exist, and Transport cannot hold it without learning that channels do. If that invariant ever moves elsewhere, what remains here is wiring and should be deleted'
             }
         }
     }
