@@ -13,7 +13,7 @@ the part that cannot be re-derived from the tool or the DSL.
   seven relationship kinds.
 - `model.c4` — elements, evidence-backed relationships. One `model { }` block; no
   deployment block (hardware is the `device` kind).
-- `views.c4` — presentation only. Four views: one per level per scope, titled
+- `views.c4` — presentation only. Five views: one per level per scope, titled
   `[Cn] <scope>` with nothing after the scope. A view that needs a box the model
   lacks means the model is wrong. The C1 view keeps the reserved id `index`.
 
@@ -143,11 +143,13 @@ Recorded because they are the decisions someone will otherwise re-litigate:
 ### Depth
 
 C1 is the product boundary and its purpose. C2 is six contract-defined systems.
-C3 exists in exactly two of them, because these are where a contributor
+C3 exists in exactly three of them, because these are where a contributor
 reliably guesses wrong:
 
 - **Engine** — the deferred spawn barrier and generation-checked handles, plus
   where the `Engine + Object` merge gets unpacked.
+- **Messaging System** — local delivery, reliable delivery, and the Core
+  `IPlaySystem` lifecycle contract.
 - **Transport** — the one device shape, and the media that realise it.
 
 Do not add C3 elsewhere for symmetry.
@@ -223,11 +225,11 @@ at all.
 
 ### An interface is its own kind, and it replaced a tag
 
-`Engine Interface` and `Device Interface` could be mistaken for `component` elements
-and once carried a `#contract` tag. Neither representation was honest. A `component`
-does work; an interface only declares the shape others satisfy. `entity` is no better:
-that kind means a stateful concept with identity and a lifetime, which an interface
-has neither of.
+`Play System Interface` and `Device Interface` could be mistaken for `component`
+elements and once carried a `#contract` tag. Neither representation was honest. A
+`component` does work; an interface only declares the shape others satisfy. `entity`
+is no better: that kind means a stateful concept with identity and a lifetime, which
+an interface has neither of.
 
 So `interface` is a kind. It cost nothing to add, because `#contract` marked exactly
 those two elements — identical membership means the tag and the kind were one
@@ -238,12 +240,22 @@ of thing seen in two different systems. The shape stays `rectangle` — none of 
 eight available shapes depicts an interface, and borrowing a near-miss would assert
 something false.
 
+The Engine component is the counter-example that keeps the boundary sharp: it does
+work — owns the world, the object store and the timers — so it is a `component`
+(`[component: TEngine<TTraits>]`), not an interface. The `IEngine` shape an
+application holds is a fact of the Engine system's contract, not a box of its own.
+
 ### The kind is `component`, not `domainService`
 
 "Domain service" is DDD vocabulary: behaviour expressed in the *business* language.
 MicroWorld has no business domain, so the word claimed something that does not exist,
-and it was most obviously false on a byte framer. Its three members were always
+and it was most obviously false on a byte framer. Its four members were always
 something plainer, and C4 already had the word for it; the spec carries the definition.
+
+`Subscription` is also a component: it packages the delegate, optional message-name
+property, and delivery logic a Channel invokes for subscription delivery. It owns neither an
+independent lifecycle nor a contract other code is written against, so `entity` would
+overstate its architectural role.
 
 `service` and `mechanism` were rejected for saying only that a thing does something.
 `protocol` fits `Frame Codec` and nothing else, and a kind with one member is a
@@ -388,7 +400,7 @@ They render in `export png` with no network, the same as the bundled sets.
 | Networking | two lines merging into one | the only place Messaging and Transport meet |
 | Wi-Fi / Wired / LoRa Device | network, cable, antenna | the physical medium, the one thing they differ by |
 | Bluetooth Device | the Bluetooth rune | the medium has a real mark; one path, no interior detail |
-| Engine / Device Interface | ball-and-socket connector | the standard notation for a provided interface; shared by both because they are one kind |
+| Play System / Device Interface | ball-and-socket connector | the standard notation for a provided interface; shared by both because they are one kind |
 | every `component` | the UML component symbol | the standard notation for one. Set on the **kind** in `specification.c4` rather than on each element, so a new component carries it for free — `interface` predates that and still sets its icon twice |
 
 Two rules learned by looking at exports rather than at SVGs:
