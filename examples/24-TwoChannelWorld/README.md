@@ -1,48 +1,48 @@
 # 24-TwoChannelWorld
 
-**Feature:** one world, two live channels on two different physical links at
-once — one `TNetworking` owns the shared `TMessageRouter`, host bindings, and
-engine-system ordering for telemetry over WiFi UDP and commands over a UART
-wire, simultaneously, between the same two boards.
+**Feature:** one world, two live named Messaging channels on two different
+physical links at once — engine-owned `FMessagingSystem` carries telemetry over
+WiFi UDP and commands over a UART wire, simultaneously, between the same two
+boards.
 
-> Status: not yet hardware-verified after the `TNetworking` conversion.
+> Status: not yet hardware-verified after the `FMessagingSystem` port.
 
 ## What it does
 
 1. The **server** board (`esp32-s3-server`) hosts the WiFi SoftAP and runs
-   `FTelemetrySinkActor`, which subscribes to the broadcast telemetry reading
+   `FTelemetrySinkActor`, which subscribes to the named telemetry reading
    and logs `rx telemetry reading=<n>` for every one that arrives over **UDP**.
 2. The server also runs `FCommanderActor`, which every 10 s sends a
-   **targeted** `SetReportingRateMessageId` to the client's sensor actor over
+   `SetReportingRate` to the client's point-to-point sensor over
    **UART**, alternating its reporting interval between 1000 ms and 500 ms
    (halve, then restore, then halve…).
 3. The **client** board (`esp32-s3-client`) joins the SoftAP and runs
    `FSensorActor`, which every reporting interval (starting at 1000 ms)
-   broadcasts a 2-byte synthetic reading (ADR 0003 — no GPIO/sensor
-   peripheral) on the telemetry (**UDP**) channel, and subscribes to
-   `SetReportingRateMessageId` targeted at its own id — on receipt it calls
+   sends a 2-byte synthetic reading (ADR 0003 — no GPIO/sensor peripheral) on
+   the telemetry (**UDP**) channel, and subscribes to `SetReportingRate` on the
+   commands channel — on receipt it calls
    `SetTickInterval` so its reporting cadence visibly halves/restores.
 4. Both links are alive **at the same time**: the server console interleaves
    telemetry-in lines (UDP) and command-out lines (UART).
-5. Every actor reaches messaging only through `IMessageRouter&`, injected at
-   construction (D9); none of them ever sees `TTransportHost`, a device, UDP, or
-   UART — swapping which channel rides which transport is a composition-root
-   edit only.
+5. Every actor reaches messaging only through injected `FMessagingSystem&`; none
+   of them ever sees a device, UDP, or UART — swapping which channel rides which
+   transport is a composition-root edit only. Actor-owned subscriptions use a
+   weak owner so collection prevents callbacks into reclaimed actors.
 6. The run is **unbounded** (matching 16-TwoBoardUdp and 23-TwoBoardWire):
    this is a continuous two-board, two-channel demo, not a self-terminating
    trace.
 
 ## MicroWorld APIs used
 
-- `TNetworking` (`AddDevice` / `AddChannel` / `GetRouter`) — configures
-  both devices, derives wire channels and peer targets, and starts hosts at
-  engine `BeginPlay`
-- `IMessageRouter` (`AddMessageHandler` / `SendMessageToActor` /
-  `BroadcastMessage`)
-- `ENetworkMode` and `FTransportHostConfig` — explicit client/server session policy
+- `FMessagingSystem` (`CreateChannel` / `SubscribeToChannel` /
+  `SendMessageToChannel`) — engine-owned named channels, filtered
+  subscriptions, wire framing, and engine lifecycle ordering
+- `FNameId` / `MakeNameId` — stable readable names for channels and messages
+- `MakeWeakOwner` — actor-owned subscriptions that become inert when collection
+  reclaims their owner
 - `FEsp32WifiLink` (`StartAccessPoint` / `JoinAccessPoint`), `FEsp32WifiDevice`,
   `MakeUdpAddress`
-- `FEsp32UartDevice`, `FEsp32UartConfig`, `MakeUartAddress`
+- `FEsp32UartDevice`, `FEsp32UartConfig`
 - `AActor::SetTickInterval` — the sensor re-times its own reporting cadence
 - `TEngine` (`RegisterClass` / `CreateWorld` / `CreateObject` /
   `BeginPlay` / `Tick`), `AActor`, `UWorld::RegisterActor`
@@ -102,9 +102,9 @@ download loader; `mw log` holds the line steady and reconnects across resets.
 ## Historical hardware verification
 
 The following trace was captured on two ESP32-S3-DevKitC-1 boards on
-**2026-07-24**, before this example was converted to `TNetworking`. It documents
-the physical setup only; the current composition still needs a fresh hardware
-run.
+**2026-07-24**, before this example was ported to `FMessagingSystem`. It
+documents the physical setup only; the current composition still needs a fresh
+hardware run.
 
 **Server** — UDP telemetry in and UART commands out, interleaved:
 
@@ -135,7 +135,7 @@ rate=N` lands on the client as `sensor reporting rate -> N`, alternating
 
 ## Image size
 
-Historical output from `pio run` before the `TNetworking` conversion (release
+Historical output from `pio run` before the `FMessagingSystem` conversion (release
 build, ESP32-S3-DevKitC-1). Fresh size evidence is required for the current
 example:
 

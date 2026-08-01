@@ -1,45 +1,32 @@
 #pragma once
 
 #include <MicroWorld/Engine/EngineHost.h>
-#include <MicroWorld/Messaging/Message.h>
-#include <MicroWorld/Networking/Networking.h>
-#include <MicroWorld/Transport/Wifi/UdpAddressCodec.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
+#include <MicroWorld/Messaging/NameId.h>
 #include <MicroWorld/Platform/Esp32/Esp32UartDevice.h>
 #include <MicroWorld/Platform/Esp32/Esp32WifiDevice.h>
 #include <MicroWorld/Platform/Esp32/Esp32WifiLink.h>
 
-#include <cstddef>
 #include <cstdint>
 
 /**
- * Motivation: Holds the shared protocol ids, config builders, and composition-type aliases for
- *   example 24's two roles, so both translation units (ServerMain.cpp, ClientMain.cpp) define the
- *   message/actor/channel ids, UART/WiFi/UDP configuration, and the TNetworking and engine shapes
- *   exactly once (DRY).
+ * Motivation: Shares Messaging names, configuration builders, and engine aliases between both roles.
+ * Responsibilities: Define the shared channel and message names, the UART/WiFi settings, and the engine
+ *   alias exactly once (DRY), so both translation units agree without restating them.
  */
 namespace Ex24
 {
-/** Motivation: Broadcast message id: client sensor -> server, 2-byte LE reading, delivered over UDP. */
-inline constexpr MicroWorld::Messaging::FMessageTypeId TelemetryReadingMessageId = 1;
+/** Motivation: Names the client sensor's 2-byte LE reading delivered to the server over UDP. */
+inline constexpr MicroWorld::Messaging::FNameId TelemetryReadingMessageName = MicroWorld::Messaging::MakeNameId("TelemetryReading");
 
-/** Motivation: Targeted message id: server -> client sensor, 2-byte LE interval milliseconds, delivered over UART. */
-inline constexpr MicroWorld::Messaging::FMessageTypeId SetReportingRateMessageId = 2;
+/** Motivation: Names the server's 2-byte LE reporting interval command delivered over UART. */
+inline constexpr MicroWorld::Messaging::FNameId SetReportingRateMessageName = MicroWorld::Messaging::MakeNameId("SetReportingRate");
 
-/** Motivation: Actor id FSensorActor registers its SetReportingRate handler under and the commander targets. */
-inline constexpr MicroWorld::Messaging::FMessageActorId SensorActorId = 10;
+/** Motivation: Names the shared UDP channel that carries client telemetry to the server. */
+inline constexpr MicroWorld::Messaging::FNameId TelemetryChannelName = MicroWorld::Messaging::MakeNameId("Telemetry");
 
-/** Motivation: Actor id recorded as the telemetry sink's sender; nothing ever targets a send at it. */
-inline constexpr MicroWorld::Messaging::FMessageActorId TelemetrySinkActorId = 11;
-
-/** Motivation: Actor id recorded as the commander's sender; nothing ever targets a send at it. */
-inline constexpr MicroWorld::Messaging::FMessageActorId CommanderActorId = 12;
-
-/** Motivation: Router-facing channel id both roles register their UDP telemetry binding under. */
-inline constexpr MicroWorld::Messaging::FMessageChannelId TelemetryChannelId = 1;
-
-/** Motivation: Router-facing channel id both roles register their UART commands binding under. */
-inline constexpr MicroWorld::Messaging::FMessageChannelId CommandsChannelId = 2;
+/** Motivation: Names the shared UART channel that carries server reporting-rate commands to the client. */
+inline constexpr MicroWorld::Messaging::FNameId CommandsChannelName = MicroWorld::Messaging::MakeNameId("Commands");
 
 /** Motivation: The sensor's start/restored reporting cadence. */
 inline constexpr MicroWorld::Core::DurationMilliseconds BaseReportingIntervalMilliseconds = 1000;
@@ -53,10 +40,10 @@ inline constexpr MicroWorld::Core::DurationMilliseconds CommandIntervalMilliseco
 /** Motivation: Poll pace for both boards; far faster than any app cadence so the watchdog idle task runs. */
 inline constexpr unsigned PollPacingMilliseconds = 20;
 
-/** Motivation: Server stamps command frames with node id 1; the client greets that id as its server. */
+/** Motivation: Supplies the local server node value required by the UART device configuration. */
 constexpr std::uint8_t ServerNodeId = 1;
 
-/** Motivation: Client stamps command frames with node id 2; the point-to-point wire never routes either id. */
+/** Motivation: Supplies the local client node value required by the UART device configuration. */
 constexpr std::uint8_t ClientNodeId = 2;
 
 /** Motivation: Fixed UART port and the two crossover data GPIOs, identical to examples 18, 19, and 23. */
@@ -66,9 +53,6 @@ constexpr std::int32_t RxGpioNumber = 18;
 
 /** Motivation: A wire is fast, so 115200 baud. */
 constexpr std::uint32_t UartBaudRate = 115200;
-
-/** Motivation: Protocol version both hosts advertise in Hello/Welcome, over both transports. */
-constexpr std::uint8_t ProtocolVersion = 1;
 
 /** Motivation: SoftAP the server hosts and the client joins -- demo-only values, not a secret, so
  *  they commit safely; no home router and no real credentials are involved. */
@@ -92,28 +76,6 @@ constexpr MicroWorld::Engine::FTypeId TelemetrySinkActorTypeId{0x00180002u};
 /** Motivation: Stable descriptor id for the managed FCommanderActor type. */
 constexpr MicroWorld::Engine::FTypeId CommanderActorTypeId{0x00180003u};
 
-/**
- * Motivation: Sizes the one TNetworking for two links, two router channels, and the example's existing
- *   96-byte messages, so the composition fits without restating the bounds in each role.
- * Responsibilities: Name the device, router-channel, and channel capacities the world networking uses.
- * Example:
- *   using FWorldNetworking = MicroWorld::TNetworking<FWorldNetworkingTraits>;
- */
-struct FWorldNetworkingTraits : MicroWorld::FDefaultNetworkingTraits
-{
-	/** Motivation: The example configures one UDP and one UART device. */
-	static constexpr std::size_t MaxDevices = 2;
-
-	/** Motivation: The shared router owns exactly the telemetry and command channels. */
-	static constexpr std::size_t MaxRouterChannels = 2;
-
-	/** Motivation: The composition front door accepts exactly the telemetry and command channels. */
-	static constexpr std::size_t MaxChannels = 2;
-};
-
-/** Motivation: The one networked engine system both roles compose before their engine begins play. */
-using FWorldNetworking = MicroWorld::TNetworking<FWorldNetworkingTraits>;
-
 /** Motivation: The engine both roles compose; sized for one world with a couple of small actors using direct component storage. */
 using FWorldEngine = MicroWorld::Engine::TEngine<>;
 
@@ -130,20 +92,6 @@ inline MicroWorld::Platform::Esp32::FEsp32UartConfig MakeUartConfig(const std::u
 	Config.RxGpio = RxGpioNumber;
 	Config.BaudRate = UartBaudRate;
 	Config.LocalNodeId = NodeId;
-	return Config;
-}
-
-/**
- * Motivation: Lets both roles build the same session configuration from one source, so heartbeats keep
- *   each point-to-point peer alive between sends without each role restating the values.
- * Responsibilities: Return a config carrying the shared heartbeat, timeout, and protocol version.
- */
-inline MicroWorld::Transport::FTransportHostConfig MakeHostConfig() noexcept
-{
-	MicroWorld::Transport::FTransportHostConfig Config{};
-	Config.HeartbeatIntervalMilliseconds = 1000;
-	Config.PeerTimeoutMilliseconds = 5000;
-	Config.ProtocolVersion = ProtocolVersion;
 	return Config;
 }
 

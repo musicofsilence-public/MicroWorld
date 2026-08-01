@@ -8,27 +8,27 @@ Two role worlds, one source tree. `Main.cpp` is a thin dispatcher whose
 `app_main` calls `RunServer()` or `RunClient()` by the
 `-DMICROWORLD_EXAMPLE_SERVER` define; `ServerMain.cpp` and `ClientMain.cpp`
 hold the two roles and are both always compiled, and `TwoChannelWorldShared.h`
-defines the message/actor/channel ids, node/pin/WiFi configuration, and the
-`TNetworking`/`TEngine` type shapes once (DRY within this one example). Per
-board, `TNetworking` owns TWO `TTransportHost` values — one over `FEsp32WifiDevice`
-(telemetry), one over `FEsp32UartDevice` (commands) — plus their bindings,
-one shared `TMessageRouter`, and its ordered engine-system set. Every
-composition object is `static` and allocation-free.
+defines message/channel names and node/pin/WiFi configuration once (DRY within
+this one example). Per board, `TEngine` owns one `FMessagingSystem` with TWO
+channels — one over `FEsp32WifiDevice` (telemetry), one over
+`FEsp32UartDevice` (commands). Every composition object is `static` and
+allocation-free.
 
 ## Concepts
 
-- **Two channels, two links, one world.** `TelemetryChannelId` rides
-  `FEsp32WifiDevice`; `CommandsChannelId` rides `FEsp32UartDevice`; both bind to
-  the same router, so one actor-messaging design spans two independent
+- **Two channels, two links, one world.** `TelemetryChannelName` rides
+  `FEsp32WifiDevice`; `CommandsChannelName` rides `FEsp32UartDevice`; both live
+  in the engine-owned Messaging system, so one actor-messaging design spans two independent
   transports at once.
-- **`TNetworking` owns the link policy.** Its derived channel wire byte matches
-  the channel id; server modes target `AllPeers`, client mode targets `Server`,
-  and its internal set pumps transport -> reliable -> router in pre-advance order.
+- **Channels own their link policy.** The client telemetry channel addresses the
+  server UDP socket; the server telemetry channel receives on its bound socket.
+  Both UART channel addresses are empty because the point-to-point medium ignores them.
 - **Actors name no transport (D9).** `FTelemetrySinkActor`, `FCommanderActor`,
-  and `FSensorActor` all take `IMessageRouter&` by constructor injection and
-  never see `TTransportHost`, a device, UDP, or UART.
+  and `FSensorActor` all take `FMessagingSystem&` by constructor injection and
+  never see a device, UDP, or UART. Their subscriptions use `MakeWeakOwner`, so
+  Messaging skips and reclaims a subscription when its actor dies.
 - **`AActor::SetTickInterval` re-times the sensor mid-handler.** The sensor's
-  `SetReportingRateMessageId` handler runs during the engine's inbound network
+  `SetReportingRate` subscriber runs during the engine's inbound Messaging
   dispatch step (`TEngine::Tick` step 1), strictly before the world advance
   step (step 3) that ticks the same actor — so calling `SetTickInterval` from
   inside the handler is safe and takes effect for that very frame.
