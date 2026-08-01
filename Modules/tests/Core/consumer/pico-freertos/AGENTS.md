@@ -79,8 +79,10 @@ SDK source, and FreeRTOS source live under ignored `build/` only; do not vendor
 either dependency into MicroWorld.
 
 Validate the `lora` map with the `Core+Transport` profile and require
-`libmicroworld_platform_pico.a`; forbid PlatformHost and PlatformEsp32
-archives. Before a paired hardware test,
+`libmicroworld_platform_pico_device.a`; forbid PlatformHost and PlatformEsp32
+archives. The archive is named for the device because `Modules` already
+publishes an SDK-free `microworld_platform_pico` INTERFACE facade under that
+plain name, and two targets cannot share one. Before a paired hardware test,
 power both E32 modules with antennas attached, wire Pico GP4 TX → E32 RXD and
 GP5 RX ← E32 TXD, tie M0/M1 low for transparent mode, and use the unchanged
 ESP32 example-17 node-B log as the proof of the Pico exchange.

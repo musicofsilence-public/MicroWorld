@@ -88,14 +88,14 @@ set(MICROWORLD_PLATFORM_PICO_DEVICE_SOURCES
     "${CMAKE_CURRENT_LIST_DIR}/../../../../MicroWorld/Platform/Pico/PicoUartByteStream.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/../../../../MicroWorld/Platform/Pico/PicoUartPlatform.cpp"
 )
-add_library(microworld_platform_pico STATIC ${MICROWORLD_PLATFORM_PICO_DEVICE_SOURCES})
+add_library(microworld_platform_pico_device STATIC ${MICROWORLD_PLATFORM_PICO_DEVICE_SOURCES})
 target_include_directories(
-    microworld_platform_pico
+    microworld_platform_pico_device
     PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/../../../../>"
 )
-target_compile_features(microworld_platform_pico PUBLIC cxx_std_17)
+target_compile_features(microworld_platform_pico_device PUBLIC cxx_std_17)
 target_link_libraries(
-    microworld_platform_pico
+    microworld_platform_pico_device
     PUBLIC MicroWorld::Transport
     PRIVATE hardware_gpio hardware_uart
 )
@@ -193,7 +193,7 @@ microworld_pico_add_uf2_output(microworld_pico_core_tests)
 add_executable(microworld_pico_lora_interop PicoLoraInteropMain.cpp)
 microworld_pico_configure_owned_target(microworld_pico_lora_interop)
 target_compile_definitions(microworld_pico_lora_interop PRIVATE PICO_CXX_DISABLE_ALLOCATION_OVERRIDES=1)
-target_link_libraries(microworld_pico_lora_interop PRIVATE MicroWorld::PlatformPico)
+target_link_libraries(microworld_pico_lora_interop PRIVATE microworld_platform_pico_device)
 pico_add_extra_outputs(microworld_pico_lora_interop)
 microworld_pico_add_uf2_output(microworld_pico_lora_interop)
 
@@ -209,6 +209,6 @@ target_include_directories(
 	microworld_pico_lora_payload_regression
 	PRIVATE "${CMAKE_CURRENT_LIST_DIR}/../../../../../examples/17-TwoBoardLora/src"
 )
-target_link_libraries(microworld_pico_lora_payload_regression PRIVATE MicroWorld::PlatformPico)
+target_link_libraries(microworld_pico_lora_payload_regression PRIVATE microworld_platform_pico_device)
 pico_add_extra_outputs(microworld_pico_lora_payload_regression)
 microworld_pico_add_uf2_output(microworld_pico_lora_payload_regression)
