@@ -1,11 +1,6 @@
 #pragma once
 
-#include <MicroWorld/Core/Containers/Span.h>
-#include <MicroWorld/Transport/DeviceAddress.h>
-#include <MicroWorld/Transport/TransportResult.h>
-
-#include <cstddef>
-#include <cstdint>
+#include <MicroWorld/Core/IO/TransportDevice.h>
 
 namespace MicroWorld::Transport::Device
 {
@@ -20,33 +15,17 @@ namespace MicroWorld::Transport::Device
 using FReceiveResult = Core::FReceiveResult;
 
 /**
- * Motivation: Bounds one non-blocking addressed byte transport behind one reference-held interface so a caller can poll
- *   without blocking and distinguish transient unavailability from permanent rejection.
- * Responsibilities: Perform at most one transport operation per call, return an explicit ETransportResult for it, and own no
- *   scheduler, clock, thread, retry policy, peer identity, session, or protocol behavior.
+ * Motivation: Extends Core's non-blocking transport contract with the existing staged-transmit pump so Transport and Platform
+ *   devices remain usable as Core play systems without duplicating packet operations.
+ * Responsibilities: Inherit Core's packet transport and lifecycle contract, map the pre-advance turn to one bounded transmit
+ *   pump, and own no scheduler, clock, thread, retry policy, peer identity, session, or protocol behavior.
  * Example:
  *   IDevice& Device = GetDevice();
  *   if (Device.TrySend(To, Packet) == ETransportResult::Success) { Sent(); }
  */
-class IDevice
+class IDevice : public Core::ITransportDevice
 {
 public:
-	/**
-	 * Motivation: Sends one complete packet transactionally so a non-success result never leaves a partial packet on the wire.
-	 * Responsibilities: Return Success only when the whole span was accepted, Full for missing capacity, Invalid for a null span
-	 *   with nonzero length, an oversize packet, or an unroutable address, and leave transport state unchanged otherwise.
-	 */
-	virtual ETransportResult TrySend(
-		const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept = 0;
-
-	/**
-	 * Motivation: Receives at most one packet transactionally so a caller never confuses a failed receive with a short read.
-	 * Responsibilities: On Full, Invalid, or Unavailable leave the destination, OutResult.BytesReceived, and OutFrom unchanged;
-	 *   write the head bytes, byte count, and sender address only on Success.
-	 */
-	virtual ETransportResult TryReceive(
-		::MicroWorld::Transport::Address::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept = 0;
-
 	/**
 	 * Motivation: Lets staged devices advance one bounded unit of pending outbound work so a packet accepted before physical
 	 *   transmission can drain across pumps.
@@ -56,35 +35,24 @@ public:
 	virtual void AdvanceTransmit() noexcept {}
 
 	/**
-	 * Motivation: Lets a caller bound a send to the transport's accepted packet size.
-	 * Responsibilities: Report the largest packet, in bytes, the transport accepts on a single send.
+	 * Motivation: Maps the existing staged-transmit pump to Core's pre-advance turn because both represent the device's one
+	 *   bounded per-frame opportunity to progress queued physical transmission.
+	 * Responsibilities: Advance at most one bounded unit of outbound work by forwarding to AdvanceTransmit.
 	 */
-	virtual std::size_t MaxPacketBytes() const noexcept = 0;
+	void PreAdvance(Core::TimePointMilliseconds) noexcept override { AdvanceTransmit(); }
+
+	/**
+	 * Motivation: Satisfies Core's post-advance turn without imposing a second pump on devices whose existing outbound turn
+	 *   is already mapped to pre-advance.
+	 * Responsibilities: Perform no work by default so existing device implementations keep their current frame behavior.
+	 */
+	void PostAdvance(Core::TimePointMilliseconds) noexcept override {}
 
 	/**
 	 * Motivation: Gives every concrete device one stable virtual destructor anchored out of line.
 	 * Responsibilities: Release no interface-owned resource and allow polymorphic destruction.
 	 */
 	virtual ~IDevice() noexcept;
-
-	/**
-	 * Motivation: Prevents slicing through the interface since devices are held by reference.
-	 * Responsibilities: Reject copy construction so an IDevice value is never copied by its base.
-	 */
-	IDevice(const IDevice&) = delete;
-
-	/**
-	 * Motivation: Prevents slicing through the interface since devices are held by reference.
-	 * Responsibilities: Reject copy assignment so an IDevice value is never copied by its base.
-	 */
-	IDevice& operator=(const IDevice&) = delete;
-
-protected:
-	/**
-	 * Motivation: Lets concrete devices construct without exposing the interface itself as instantiable.
-	 * Responsibilities: Provide a protected default constructor with no side effects.
-	 */
-	IDevice() noexcept = default;
 };
 
 } // namespace MicroWorld::Transport::Device
