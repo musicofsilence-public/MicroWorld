@@ -11,18 +11,13 @@ namespace MicroWorld::Transport::Device
 {
 
 /**
- * Motivation: Carries the byte count produced by one non-blocking receive so a caller distinguishes a short successful
- *   read from a failed one without inspecting destination bytes.
- * Responsibilities: Report bytes written only on Success, and stay unchanged on every non-success result.
- * Example:
- *   FReceiveResult Result;
- *   if (Device.TryReceive(From, Dest, Result) == ETransportResult::Success) { Use(Result.BytesReceived); }
+ * Core owns this type now; this declaration exists only so existing Transport and Platform code keeps compiling.
+ * It disappears with the rest of the moved Transport headers.
+ *
+ * Motivation: Preserves the former Transport receive-result name while callers complete the move to Core ownership.
+ * Responsibilities: Alias Core's receive result without declaring another byte-count carrier or behavior.
  */
-struct FReceiveResult
-{
-	/** Motivation: Counts bytes written to the caller-owned destination, set only on Success (zero for a zero-length packet). */
-	std::size_t BytesReceived{0};
-};
+using FReceiveResult = Core::FReceiveResult;
 
 /**
  * Motivation: Bounds one non-blocking addressed byte transport behind one reference-held interface so a caller can poll
