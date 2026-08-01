@@ -374,6 +374,7 @@ if(MICROWORLD_BUILD_TESTS)
         "${MICROWORLD_TESTS_ROOT}/Transport/E32LoraTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Transport/FrameCodecTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Transport/HostLoopbackTests.cpp"
+        "${MICROWORLD_TESTS_ROOT}/Transport/LoopbackNetworkTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Transport/PacketDropDeviceTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Transport/TransportManagerTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Transport/TransportProtocolTests.cpp"
