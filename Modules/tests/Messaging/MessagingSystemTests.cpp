@@ -18,6 +18,7 @@ using MicroWorld::Core::TimePointMilliseconds;
 using MicroWorld::Core::TSpan;
 using MicroWorld::Messaging::EMessagingResult;
 using MicroWorld::Messaging::FChannelInformation;
+using MicroWorld::Messaging::FDefaultMessagingTraits;
 using MicroWorld::Messaging::FMessage;
 using MicroWorld::Messaging::FMessagingSystemInformation;
 using MicroWorld::Messaging::FNameId;
@@ -40,7 +41,7 @@ class FTestTransportDevice final : public ITransportDevice
 {
 public:
 	/**
-	 * Motivation: Confirms local delivery does not use a channel's device before the wire path exists.
+	 * Motivation: Lets a test count a channel's outbound frames without modelling a medium.
 	 * Responsibilities: Record each send request and report success without retaining the supplied packet or destination.
 	 */
 	ETransportResult TrySend(const FDeviceAddress&, const TSpan<const std::uint8_t>) noexcept override
@@ -74,13 +75,13 @@ public:
 	void PostAdvance(TimePointMilliseconds) noexcept override {}
 
 	/**
-	 * Motivation: Lets local-delivery tests prove this task does not initiate any remote transmission.
+	 * Motivation: Lets a test assert exactly how many remote transmissions one send initiated.
 	 * Responsibilities: Return the number of TrySend requests observed without changing the device.
 	 */
 	std::size_t GetTrySendCallCount() const noexcept { return TrySendCallCount; }
 
 private:
-	/** Motivation: Records remote transmission requests that task B4 must not make. */
+	/** Motivation: Records every remote transmission this device was asked to make. */
 	std::size_t TrySendCallCount{0};
 };
 
@@ -90,16 +91,10 @@ private:
  * Example:
  *   TMessagingSystem<FSmallMessagingTraits> System;
  */
-struct FSmallMessagingTraits
+struct FSmallMessagingTraits : FDefaultMessagingTraits
 {
-	/** Motivation: Bounds this test system to two channels. */
+	/** Motivation: Bounds this test system to two channels while every other capacity stays at its default. */
 	static constexpr std::size_t MaxChannels = 2;
-
-	/** Motivation: Supplies storage for subscriptions even though these channel tests do not register any. */
-	static constexpr std::size_t MaxSubscriptions = 2;
-
-	/** Motivation: Supplies the callable capacity required by this test system's subscription storage. */
-	static constexpr std::size_t MaxSubscriberCallableBytes = 32;
 };
 
 /**
@@ -108,16 +103,13 @@ struct FSmallMessagingTraits
  * Example:
  *   TMessagingSystem<FSmallSubscriptionTraits> System;
  */
-struct FSmallSubscriptionTraits
+struct FSmallSubscriptionTraits : FDefaultMessagingTraits
 {
 	/** Motivation: Keeps one channel slot available for subscription capacity tests. */
 	static constexpr std::size_t MaxChannels = 1;
 
 	/** Motivation: Limits this test system to two stored subscriber registrations. */
 	static constexpr std::size_t MaxSubscriptions = 2;
-
-	/** Motivation: Matches the default inline callable budget for test subscribers. */
-	static constexpr std::size_t MaxSubscriberCallableBytes = 32;
 };
 
 /**
@@ -774,10 +766,10 @@ MW_TEST_CASE(MessagingSystem_AcceptsSendingToAChannelWithNoSubscribers)
 }
 
 /**
- * Motivation: Preserves local behavior when a future-capable channel already holds a transport device.
- * Responsibilities: Verify a device-backed channel delivers locally and does not request a device send in task B4.
+ * Motivation: Proves a device never replaces local delivery, which is what makes Messaging complete with no transport linked.
+ * Responsibilities: Verify a device-backed channel delivers to its local subscriber and asks its device to send exactly once.
  */
-MW_TEST_CASE(MessagingSystem_DeliversLocallyOnADeviceBackedChannelWithoutSendingToTheDevice)
+MW_TEST_CASE(MessagingSystem_DeliversLocallyAndRemotelyOnADeviceBackedChannel)
 {
 	// Arrange
 	FDefaultMessagingSystem System;
@@ -803,7 +795,7 @@ MW_TEST_CASE(MessagingSystem_DeliversLocallyOnADeviceBackedChannelWithoutSending
 	MW_EXPECT_EQ(Test, EMessagingResult::Success, SubscribeResult, "The device-backed subscriber should register successfully");
 	MW_EXPECT_EQ(Test, EMessagingResult::Success, SendResult, "A device-backed local send should succeed");
 	MW_EXPECT_EQ(Test, std::size_t{1}, DeliveryCount, "A device-backed channel should still deliver locally");
-	MW_EXPECT_EQ(Test, std::size_t{0}, Device.GetTrySendCallCount(), "Task B4 local delivery should not call the transport device");
+	MW_EXPECT_EQ(Test, std::size_t{1}, Device.GetTrySendCallCount(), "A device-backed channel should also send one frame to its device");
 }
 
 /**

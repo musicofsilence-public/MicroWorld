@@ -42,8 +42,10 @@ struct FDefaultMessagingTraits
 };
 
 /**
- * Motivation: Owns the bounded set of named channels that future Messaging operations will use.
- * Responsibilities: Create valid unique channels without allocating and participate in the caller-driven play lifecycle.
+ * Motivation: Owns the bounded set of named channels and carries their messages to local subscribers and, where a channel holds a device, the wire.
+ * Responsibilities: Create valid unique channels without allocating, deliver local messages, and move complete best-effort frames through
+ *   externally driven transport devices; never call a device's own PreAdvance or PostAdvance, because its composition root owns those turns and
+ *   a shared device must not be ticked twice.
  * Example:
  *   TMessagingSystem<> System;
  *   System.CreateChannel({"Telemetry", false, nullptr, {}});
@@ -51,7 +53,25 @@ struct FDefaultMessagingTraits
 template<typename TTraits = FDefaultMessagingTraits>
 class TMessagingSystem final : public Core::IPlaySystem
 {
+	/** Motivation: Fixes the count of bytes in one 32-bit name id on the wire. */
+	static constexpr std::size_t NameIdBytes = sizeof(std::uint32_t);
+
+	/** Motivation: Fixes the number of bits in one wire byte for explicit little-endian shifts. */
+	static constexpr std::size_t BitsPerByte = 8;
+
+	/** Motivation: Identifies the first byte of the frame's encoded channel name id. */
+	static constexpr std::size_t ChannelNameIdByteIndex = 0;
+
+	/** Motivation: Identifies the first byte of the frame's encoded message name id. */
+	static constexpr std::size_t MessageNameIdByteIndex = ChannelNameIdByteIndex + NameIdBytes;
+
 public:
+	/** Motivation: Fixes where the two name ids end, which is also where application payload bytes begin. */
+	static constexpr std::size_t FrameHeaderBytes = MessageNameIdByteIndex + NameIdBytes;
+
+	/** Motivation: Exposes the largest complete wire frame this Messaging system can construct without dynamic allocation. */
+	static constexpr std::size_t MaxFrameBytes = FrameHeaderBytes + TTraits::MaxMessageBytes;
+
 	/**
 	 * Motivation: Gives channel subscribers one bounded callable type that keeps local delivery allocation-free.
 	 * Responsibilities: Receive a message by const reference and treat its payload span as valid only for the duration of the call; subscribers that
@@ -112,7 +132,7 @@ public:
 			return EMessagingResult::Invalid;
 		}
 
-		if (IsChannelNameInUse(InChannelInformation.ChannelNameId))
+		if (FindChannel(InChannelInformation.ChannelNameId) != nullptr)
 		{
 			return EMessagingResult::Duplicate;
 		}
@@ -138,7 +158,7 @@ public:
 	 */
 	EMessagingResult SubscribeToChannel(const FNameId InChannelNameId, const FNameId InMessageNameFilter, FSubscriberDelegate&& InSubscriber) noexcept
 	{
-		if (!IsChannelNameInUse(InChannelNameId))
+		if (FindChannel(InChannelNameId) == nullptr)
 		{
 			return EMessagingResult::NotFound;
 		}
@@ -155,10 +175,10 @@ public:
 	}
 
 	/**
-	 * Motivation: Makes locally composed Messaging useful before any transport device exists or adds remote reach.
-	 * Responsibilities: Reject an unset message name or missing channel, then synchronously deliver the message once to every matching subscriber in
-	 * registration order; capture the subscription count before dispatch so a callback can add a subscriber without changing this in-flight
-	 * iteration.
+	 * Motivation: Makes locally composed Messaging useful before any transport device exists and extends it with best-effort remote reach.
+	 * Responsibilities: Reject an unset message name or missing channel, then synchronously deliver locally once to every matching subscriber before
+	 * attempting one complete wire frame through the channel's device, if any; return a transport-capacity or invalid-request result without undoing
+	 * that local delivery.
 	 */
 	EMessagingResult SendMessageToChannel(const FMessage& InMessage, const FNameId InChannelNameId) noexcept
 	{
@@ -167,39 +187,65 @@ public:
 			return EMessagingResult::Invalid;
 		}
 
-		if (!IsChannelNameInUse(InChannelNameId))
+		FChannelInformation* const ChannelInformation = FindChannel(InChannelNameId);
+		if (ChannelInformation == nullptr)
 		{
 			return EMessagingResult::NotFound;
 		}
 
-		// The captured count excludes registrations added by a subscriber during this synchronous delivery.
-		const std::size_t SubscriptionCountAtDispatchStart = Subscriptions.Size();
-		for (std::size_t SubscriptionIndex = 0; SubscriptionIndex < SubscriptionCountAtDispatchStart; ++SubscriptionIndex)
+		DeliverToMatchingSubscribers(InMessage, InChannelNameId);
+
+		if (ChannelInformation->TransportDevice == nullptr)
 		{
-			FSubscription& Subscription = Subscriptions[SubscriptionIndex];
-			if (Subscription.ChannelNameId != InChannelNameId
-				|| (Subscription.MessageNameFilter != InvalidNameId && Subscription.MessageNameFilter != InMessage.GetMessageNameId()))
+			return EMessagingResult::Success;
+		}
+
+		const Core::TSpan<const std::uint8_t> Payload = InMessage.GetPayload();
+		const std::size_t FrameSize = FrameHeaderBytes + Payload.Size();
+		if (FrameSize > MaxFrameBytes || FrameSize > ChannelInformation->TransportDevice->MaxPacketBytes())
+		{
+			return EMessagingResult::Full;
+		}
+
+		std::uint8_t FrameBytes[MaxFrameBytes]{};
+		EncodeFrame(InChannelNameId, InMessage, FrameBytes);
+		return MapTransportSendResult(
+			ChannelInformation->TransportDevice->TrySend(ChannelInformation->Address, Core::TSpan<const std::uint8_t>(FrameBytes, FrameSize)));
+	}
+
+	/**
+	 * Motivation: Pumps inbound best-effort frames before the world advances so this node's subscribers see device input in the current turn.
+	 * Responsibilities: Drain each distinct channel device once, route each complete frame by its encoded channel name, and count malformed or
+	 * unroutable frames without asserting; leave InNowMilliseconds unused until reliability needs caller-supplied time.
+	 */
+	void PreAdvance(Core::TimePointMilliseconds InNowMilliseconds) noexcept override
+	{
+		(void)InNowMilliseconds;
+
+		for (std::size_t ChannelIndex = 0; ChannelIndex < Channels.Size(); ++ChannelIndex)
+		{
+			Core::ITransportDevice* const TransportDevice = Channels[ChannelIndex].TransportDevice;
+			if (TransportDevice == nullptr || IsDeviceUsedByEarlierChannel(TransportDevice, ChannelIndex))
 			{
 				continue;
 			}
 
-			(void)Subscription.Subscriber.Execute(InMessage);
+			DrainDevice(*TransportDevice);
 		}
-
-		return EMessagingResult::Success;
 	}
 
 	/**
-	 * Motivation: Reserves the inbound Messaging lifecycle turn required before world advancement.
-	 * Responsibilities: Perform no work until later tasks add device pumping.
-	 */
-	void PreAdvance(Core::TimePointMilliseconds InNowMilliseconds) noexcept override { (void)InNowMilliseconds; }
-
-	/**
 	 * Motivation: Reserves the outbound Messaging lifecycle turn required after world advancement.
-	 * Responsibilities: Perform no work until later tasks add queue flushing.
+	 * Responsibilities: Perform no work until later reliability work adds retry processing; never advance a transport device's lifecycle turns.
 	 */
 	void PostAdvance(Core::TimePointMilliseconds InNowMilliseconds) noexcept override { (void)InNowMilliseconds; }
+
+	/**
+	 * Motivation: Lets callers observe inbound frames this system received but could not route to a live channel.
+	 * Responsibilities: Return the cumulative count of frames shorter than a header, naming an unknown channel, or too large for this system's frame
+	 * budget, without changing system state.
+	 */
+	std::uint32_t GetDroppedFrameCount() const noexcept { return DroppedFrameCount; }
 
 private:
 	/**
@@ -230,20 +276,191 @@ private:
 	};
 
 	/**
-	 * Motivation: Lets channel creation reject an existing name before it changes bounded channel storage.
-	 * Responsibilities: Report whether a live channel already has InChannelNameId without mutating any channel.
+	 * Motivation: Gives channel creation, subscription, send, and receive paths one authoritative lookup for live channel information.
+	 * Responsibilities: Return the matching channel information, or null when InChannelNameId names no live channel, without changing channel
+	 * storage.
 	 */
-	bool IsChannelNameInUse(const FNameId InChannelNameId) const noexcept
+	FChannelInformation* FindChannel(const FNameId InChannelNameId) noexcept
 	{
-		for (const FChannelInformation& ChannelInformation : Channels)
+		for (FChannelInformation& ChannelInformation : Channels)
 		{
 			if (ChannelInformation.ChannelNameId == InChannelNameId)
+			{
+				return &ChannelInformation;
+			}
+		}
+
+		return nullptr;
+	}
+
+	/**
+	 * Motivation: Keeps subscriber routing identical for local sends and decoded inbound messages.
+	 * Responsibilities: Synchronously invoke every subscriber matching InChannelNameId and InMessage's optional name filter in registration order;
+	 *   capture the subscription count before dispatch so a callback can add a subscriber without changing this in-flight iteration.
+	 */
+	void DeliverToMatchingSubscribers(const FMessage& InMessage, const FNameId InChannelNameId) noexcept
+	{
+		// The captured count excludes registrations added by a subscriber during this synchronous delivery.
+		const std::size_t SubscriptionCountAtDispatchStart = Subscriptions.Size();
+		for (std::size_t SubscriptionIndex = 0; SubscriptionIndex < SubscriptionCountAtDispatchStart; ++SubscriptionIndex)
+		{
+			FSubscription& Subscription = Subscriptions[SubscriptionIndex];
+			if (Subscription.ChannelNameId != InChannelNameId
+				|| (Subscription.MessageNameFilter != InvalidNameId && Subscription.MessageNameFilter != InMessage.GetMessageNameId()))
+			{
+				continue;
+			}
+
+			(void)Subscription.Subscriber.Execute(InMessage);
+		}
+	}
+
+	/**
+	 * Motivation: Maps transport acceptance outcomes into the public Messaging result vocabulary in one place.
+	 * Responsibilities: Preserve successful sends, report device backpressure as Full, and collapse invalid or unavailable devices into Invalid.
+	 */
+	static EMessagingResult MapTransportSendResult(const Core::ETransportResult InTransportResult) noexcept
+	{
+		switch (InTransportResult)
+		{
+			case Core::ETransportResult::Success:
+				return EMessagingResult::Success;
+			case Core::ETransportResult::Full:
+				return EMessagingResult::Full;
+			case Core::ETransportResult::Invalid:
+			case Core::ETransportResult::Unavailable:
+				return EMessagingResult::Invalid;
+		}
+
+		return EMessagingResult::Invalid;
+	}
+
+	/**
+	 * Motivation: Makes the fixed wire frame contract explicit at the only boundary that writes bytes to a device.
+	 * Responsibilities: Write channel and message name ids in little-endian order, then copy application payload bytes after the fixed header.
+	 */
+	static void EncodeFrame(const FNameId InChannelNameId, const FMessage& InMessage, std::uint8_t* const OutFrameBytes) noexcept
+	{
+		WriteNameIdLittleEndian(InChannelNameId, &OutFrameBytes[ChannelNameIdByteIndex]);
+		WriteNameIdLittleEndian(InMessage.GetMessageNameId(), &OutFrameBytes[MessageNameIdByteIndex]);
+		CopyBytes(&OutFrameBytes[FrameHeaderBytes], InMessage.GetPayload());
+	}
+
+	/**
+	 * Motivation: Lets the inbound turn drain one device without making any channel holding it consume a second time.
+	 * Responsibilities: Receive complete packets until the device reports a non-success result, decoding and routing every successful packet, and
+	 *   count a packet the device refuses to fit in this system's frame budget.
+	 */
+	void DrainDevice(Core::ITransportDevice& InTransportDevice) noexcept
+	{
+		std::uint8_t FrameBytes[MaxFrameBytes]{};
+		Core::FDeviceAddress Sender;
+		Core::FReceiveResult ReceiveResult;
+		for (;;)
+		{
+			const Core::ETransportResult ReceiveStatus =
+				InTransportDevice.TryReceive(Sender, Core::TSpan<std::uint8_t>(FrameBytes, MaxFrameBytes), ReceiveResult);
+			if (ReceiveStatus == Core::ETransportResult::Full)
+			{
+				// The device keeps a packet larger than this system's frame budget, so the same packet is counted again every
+				// turn. A count rising with no delivery means a peer sends frames larger than this system's traits allow.
+				++DroppedFrameCount;
+				return;
+			}
+
+			if (ReceiveStatus != Core::ETransportResult::Success)
+			{
+				return;
+			}
+
+			ProcessReceivedFrame(Sender, FrameBytes, ReceiveResult.BytesReceived);
+		}
+	}
+
+	/**
+	 * Motivation: Turns one successfully received device packet into local subscriber delivery when its encoded channel is live.
+	 * Responsibilities: Count and discard frames shorter than the header or naming no channel; otherwise decode its message name and payload, retain
+	 *   the reported sender address, and deliver synchronously while the local frame buffer remains valid for the whole call.
+	 */
+	void ProcessReceivedFrame(const Core::FDeviceAddress& InSender, const std::uint8_t* const InFrameBytes, const std::size_t InFrameSize) noexcept
+	{
+		if (InFrameSize < FrameHeaderBytes)
+		{
+			++DroppedFrameCount;
+			return;
+		}
+
+		const FNameId ChannelNameId = ReadNameIdLittleEndian(&InFrameBytes[ChannelNameIdByteIndex]);
+		if (FindChannel(ChannelNameId) == nullptr)
+		{
+			++DroppedFrameCount;
+			return;
+		}
+
+		FMessage Message;
+		Message.SetMessageNameId(ReadNameIdLittleEndian(&InFrameBytes[MessageNameIdByteIndex]));
+		// The decoded payload points into DrainDevice's local frame buffer, so subscribers retaining it must copy it.
+		Message.SetPayload(Core::TSpan<const std::uint8_t>(&InFrameBytes[FrameHeaderBytes], InFrameSize - FrameHeaderBytes));
+		Message.SetSender(InSender);
+		DeliverToMatchingSubscribers(Message, ChannelNameId);
+	}
+
+	/**
+	 * Motivation: Prevents a shared transport device from being drained twice when several channels use different destination addresses on it.
+	 * Responsibilities: Return true only when one channel before InChannelIndex holds the identical transport-device pointer.
+	 */
+	bool IsDeviceUsedByEarlierChannel(const Core::ITransportDevice* const InTransportDevice, const std::size_t InChannelIndex) const noexcept
+	{
+		for (std::size_t EarlierChannelIndex = 0; EarlierChannelIndex < InChannelIndex; ++EarlierChannelIndex)
+		{
+			if (Channels[EarlierChannelIndex].TransportDevice == InTransportDevice)
 			{
 				return true;
 			}
 		}
 
 		return false;
+	}
+
+	/**
+	 * Motivation: Gives the frame encoder and decoder one portable, byte-order-independent representation of name ids.
+	 * Responsibilities: Write InNameId's 32-bit value as four least-significant-byte-first bytes at OutBytes.
+	 */
+	static void WriteNameIdLittleEndian(const FNameId InNameId, std::uint8_t* const OutBytes) noexcept
+	{
+		for (std::size_t NameIdByteOffset = 0; NameIdByteOffset < NameIdBytes; ++NameIdByteOffset)
+		{
+			const std::size_t BitShift = NameIdByteOffset * BitsPerByte;
+			OutBytes[NameIdByteOffset] = static_cast<std::uint8_t>(InNameId.Value >> BitShift);
+		}
+	}
+
+	/**
+	 * Motivation: Gives the frame decoder the same portable, byte-order-independent name-id representation as the encoder.
+	 * Responsibilities: Read four least-significant-byte-first bytes from InBytes into one 32-bit Messaging name id.
+	 */
+	static FNameId ReadNameIdLittleEndian(const std::uint8_t* const InBytes) noexcept
+	{
+		std::uint32_t NameIdValue = 0;
+		for (std::size_t NameIdByteOffset = 0; NameIdByteOffset < NameIdBytes; ++NameIdByteOffset)
+		{
+			const std::size_t BitShift = NameIdByteOffset * BitsPerByte;
+			NameIdValue |= static_cast<std::uint32_t>(InBytes[NameIdByteOffset]) << BitShift;
+		}
+
+		return FNameId{NameIdValue};
+	}
+
+	/**
+	 * Motivation: Copies payload bytes into a frame without needing a separate guard for the empty payload a block copy cannot take.
+	 * Responsibilities: Copy every byte in InPayload into OutDestination in order, doing nothing for an empty payload.
+	 */
+	static void CopyBytes(std::uint8_t* const OutDestination, const Core::TSpan<const std::uint8_t> InPayload) noexcept
+	{
+		for (std::size_t PayloadByteOffset = 0; PayloadByteOffset < InPayload.Size(); ++PayloadByteOffset)
+		{
+			OutDestination[PayloadByteOffset] = InPayload.Data()[PayloadByteOffset];
+		}
 	}
 
 	/** Motivation: Retains the reliability policy future Messaging work must consult without a global configuration. */
@@ -254,6 +471,9 @@ private:
 
 	/** Motivation: Owns every local subscription in registration order within one system-wide fixed capacity. */
 	Core::TStaticVector<FSubscription, TTraits::MaxSubscriptions> Subscriptions;
+
+	/** Motivation: Counts inbound frames this Messaging system could not route, whatever the reason, so a misconfigured peer stays observable. */
+	std::uint32_t DroppedFrameCount{0};
 };
 
 /** Motivation: Names the default fixed-capacity Messaging system used by engine-facing code. */

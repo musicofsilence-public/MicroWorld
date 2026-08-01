@@ -346,6 +346,7 @@ if(MICROWORLD_BUILD_TESTS)
         "${MICROWORLD_TESTS_ROOT}/Messaging/NameIdTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Messaging/MessageTypesTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Messaging/MessagingSystemTests.cpp"
+        "${MICROWORLD_TESTS_ROOT}/Messaging/MessagingWireTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Messaging/MessageCodecTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Messaging/MessageRouterTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Messaging/MessageChannelTests.cpp"
