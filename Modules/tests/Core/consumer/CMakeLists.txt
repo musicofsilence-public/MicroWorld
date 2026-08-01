@@ -46,7 +46,7 @@ if(
     set(MICROWORLD_BUILD_TESTS OFF CACHE BOOL "" FORCE)
     set(MICROWORLD_BUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
     # The single Modules package defines every per-system target and alias
-    # (Core, Engine, Messaging, Transport, Networking, Application) in one
+    # (Core, Engine, Messaging, Transport, Application) in one
     # add, so each consumer below links its alias directly — no per-package
     # add_subdirectory remains. ../.. resolves from Modules/tests/Core/consumer
     # to Modules/, the consolidated package root.

@@ -14,7 +14,6 @@ Dependencies point inward:
 Core <- Engine
 Core <- Messaging
 Core <- Transport
-Core, Messaging, Transport <- Networking
 Core, Engine <- Application
 ```
 

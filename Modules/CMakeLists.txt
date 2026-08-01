@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.16)
 
-# One package, six contract-defined systems. The folder tree below MicroWorld/
+# One package, five contract-defined systems. The folder tree below MicroWorld/
 # states the architecture directly: Core, Engine (Object folded in), Messaging,
-# Transport (Net + RadioE32 folded in), Networking (was Integration), Application,
-# and the non-portable Platform/{Host,Esp32,Pico} edges. Each system keeps its
+# Transport (Net + RadioE32 folded in), Application, and the non-portable
+# Platform/{Host,Esp32,Pico} edges. Each system keeps its
 # own STATIC/INTERFACE target and MicroWorld::* alias so the per-module profile
 # evidence (CheckProfileMap.py) and the dependency-boundary gate still hold. The
 # single include root is this directory: headers live at
@@ -155,21 +155,6 @@ target_compile_features(microworld_transport PUBLIC cxx_std_17)
 target_link_libraries(microworld_transport PUBLIC MicroWorld::Core)
 microworld_enable_strict_portable_options(microworld_transport)
 microworld_disable_exceptions_and_rtti("${MICROWORLD_TRANSPORT_SOURCES}")
-
-# ---------------------------------------------------------------------------
-# Networking (was Integration): TNetworking — Messaging + Transport behind
-# IPlaySystem. Header-only; Engine is deliberately absent.
-# ---------------------------------------------------------------------------
-add_library(microworld_networking INTERFACE)
-add_library(MicroWorld::Networking ALIAS microworld_networking)
-target_include_directories(microworld_networking INTERFACE
-    "$<BUILD_INTERFACE:${MICROWORLD_INCLUDE_ROOT}>"
-)
-target_compile_features(microworld_networking INTERFACE cxx_std_17)
-target_link_libraries(microworld_networking INTERFACE
-    MicroWorld::Messaging
-    MicroWorld::Transport
-)
 
 # ---------------------------------------------------------------------------
 # Application: FApplication and the Run frame-loop template.
@@ -395,24 +380,6 @@ if(MICROWORLD_BUILD_TESTS)
     microworld_disable_exceptions_and_rtti("${microworld_transport_TEST_SOURCES}")
     add_test(NAME microworld_transport_tests COMMAND microworld_transport_tests)
 
-    # --- Networking tests (was Integration) ---
-    set(microworld_networking_TEST_SOURCES
-        "${MICROWORLD_TESTS_ROOT}/Core/TestMain.cpp"
-        "${MICROWORLD_TESTS_ROOT}/Networking/EngineHostTests.cpp"
-        "${MICROWORLD_TESTS_ROOT}/Networking/NetworkingTests.cpp"
-    )
-    add_executable(microworld_networking_tests ${microworld_networking_TEST_SOURCES})
-    target_include_directories(microworld_networking_tests PRIVATE
-        "${MICROWORLD_TESTS_ROOT}/Core"
-    )
-    target_link_libraries(microworld_networking_tests PRIVATE
-        MicroWorld::Networking
-        MicroWorld::Engine
-    )
-    microworld_enable_strict_portable_options(microworld_networking_tests)
-    microworld_disable_exceptions_and_rtti("${microworld_networking_TEST_SOURCES}")
-    add_test(NAME microworld_networking_tests COMMAND microworld_networking_tests)
-
     # --- Application tests ---
     set(MICROWORLD_APPLICATION_TEST_SOURCES
         "${MICROWORLD_TESTS_ROOT}/Core/TestMain.cpp"
@@ -531,7 +498,6 @@ if(MICROWORLD_BUILD_TESTS)
             --package Engine=${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Engine
             --package Messaging=${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Messaging
             --package Transport=${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Transport
-            --package Networking=${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Networking
             --package Application=${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Application
     )
     add_test(

@@ -6,8 +6,8 @@ Inherits `../../AGENTS.md`.
 
 Messaging is the portable actor-messaging system. Its dependency direction is
 `Core <- Messaging`: it may depend only on Core and the C++17 standard library.
-Engine, Transport, Networking, platform, SDK, and transport-device headers must
-not appear here.
+Engine, Transport, platform, SDK, and transport-device headers must not appear
+here.
 
 The system owns message vocabulary and codecs, bounded routing, channel
 interfaces and bindings, and bounded reliable delivery. Its router and reliable
@@ -19,7 +19,7 @@ There is no production translation unit: every primitive is a template or an
 inline codec whose caller-selected capacities must stay visible at instantiation.
 Any source file added later may depend only on Messaging's public headers and
 Core, and must introduce no hidden transport, engine, clock, heap, or SDK
-coupling.
+dependency.
 
 ## Concepts and boundaries
 

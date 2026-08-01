@@ -1,11 +1,14 @@
 #include "TestSupport.h"
 
 #include <MicroWorld/Core/PlaySystem.h>
+#include <MicroWorld/Engine/Actor.h>
+#include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Engine/EngineResult.h>
 #include <MicroWorld/Engine/EngineSystem.h>
 #include <MicroWorld/Engine/GarbageCollector.h>
 #include <MicroWorld/Engine/ObjectPtr.h>
+#include <MicroWorld/Engine/World.h>
 #include <MicroWorld/Core/Time.h>
 
 #include <cstddef>
@@ -14,13 +17,18 @@
 namespace
 {
 using MicroWorld::Core::ERuntimeResult;
+using MicroWorld::Core::FTickConfiguration;
 using MicroWorld::Core::IPlaySystem;
 using MicroWorld::Core::TimePointMilliseconds;
+using MicroWorld::Engine::AActor;
 using MicroWorld::Engine::EEngineResult;
+using MicroWorld::Engine::EObjectResult;
 using MicroWorld::Engine::FDefaultEngineTraits;
 using MicroWorld::Engine::FGarbageCollectionBudget;
 using MicroWorld::Engine::TEngine;
+using MicroWorld::Engine::TObjectPtr;
 using MicroWorld::Engine::TPlaySystemSet;
+using MicroWorld::Engine::UWorld;
 
 /**
  * Motivation: Carries the exact capacities FHost sized before the traits refactor, so the test store is unchanged.
@@ -38,8 +46,11 @@ struct FHostTraits : FDefaultEngineTraits
 	static constexpr std::size_t MaxTimers = 4;
 };
 
-/** Motivation: Engine profile sized for a bare rooted world, matching EngineMessageChannelTests.cpp's profile; this suite never spawns actors. */
+/** Motivation: Engine profile sized for a bare rooted world, matching EngineMessageChannelTests.cpp's profile. */
 using FHost = TEngine<FHostTraits>;
+
+/** Motivation: Stable descriptor id for the world actor that stamps its own lifecycle turns. */
+constexpr MicroWorld::Engine::FTypeId LifecycleRecordingActorTypeId{0x00070003u};
 
 /**
  * Motivation: Monotonic call-order source every recording frame in a test stamps from, so several frames' relative
@@ -158,6 +169,52 @@ private:
 
 	/** Motivation: Shared monotonic source every recording frame in the owning test stamps from; never owned here. */
 	FSharedFrameSequence& Sequence;
+};
+
+/**
+ * Motivation: A world actor that stamps its own lifecycle turns from the same sequence a play system stamps from, so
+ *   system-versus-world ordering is observable without either side knowing about the other.
+ * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Example:
+ *   // Construct and exercise the type in one behavior test.
+ */
+class FLifecycleRecordingActor final : public AActor
+{
+public:
+	/**
+	 * Motivation: Binds this actor to the caller-owned stamps it writes and the sequence the test shares; it never ticks.
+	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+	 */
+	FLifecycleRecordingActor(FSharedFrameSequence& InSequence, std::uint32_t& InBeginOrder, std::uint32_t& InEndOrder) noexcept
+		: AActor(FTickConfiguration{/*bCanEverTick*/ false, /*bStartWithTickEnabled*/ false, /*TickIntervalMilliseconds*/ 0})
+		, Sequence(InSequence)
+		, BeginOrder(InBeginOrder)
+		, EndOrder(InEndOrder)
+	{
+	}
+
+protected:
+	/**
+	 * Motivation: World begin order relative to the bound system is observable.
+	 * Responsibilities: Stamps this actor's play-start turn.
+	 */
+	void BeginPlay() noexcept override { BeginOrder = Sequence.Next(); }
+
+	/**
+	 * Motivation: World end order relative to the bound system is observable.
+	 * Responsibilities: Stamps this actor's play-end turn.
+	 */
+	void EndPlay() noexcept override { EndOrder = Sequence.Next(); }
+
+private:
+	/** Motivation: Shared monotonic source the bound play system stamps from too; never owned here. */
+	FSharedFrameSequence& Sequence;
+
+	/** Motivation: Receives this actor's play-start stamp; never owned here. */
+	std::uint32_t& BeginOrder;
+
+	/** Motivation: Receives this actor's play-end stamp; never owned here. */
+	std::uint32_t& EndOrder;
 };
 
 } // namespace
@@ -281,6 +338,42 @@ MW_TEST_CASE(PlaySystemSet_TEngineTickPumpsBoundSetAtPreAdvanceAndPostAdvanceSte
 		RouterRecord.FlushOrder < TransportRecord.FlushOrder,
 		"Flush must run the router-like frame before the transport-like frame (reverse add-order)");
 	MW_EXPECT_TRUE(Test, RouterRecord.DispatchOrder < RouterRecord.FlushOrder, "Every dispatch this tick must complete before any flush begins");
+}
+
+/**
+ * Motivation: Bind one recording system to a host, root a world holding a lifecycle-recording actor, and drive one full
+ *   BeginPlay/EndPlay turn.
+ * Responsibilities: The bound system begins before any world actor and ends only after every world actor has ended, so a
+ *   system is live for the whole span in which actors can use it.
+ */
+MW_TEST_CASE(PlaySystemSet_BoundSystemBeginsBeforeTheWorldAndEndsAfterIt)
+{
+	// Arrange
+	FSharedFrameSequence Sequence;
+	FFrameCallRecord SystemRecord{};
+	FRecordingPlaySystem System{SystemRecord, Sequence};
+	std::uint32_t ActorBeginOrder = 0;
+	std::uint32_t ActorEndOrder = 0;
+
+	// Act - root a world holding the recording actor, then run one full lifecycle
+	FHost Host{FGarbageCollectionBudget{1, 4, 8}, System};
+	const EObjectResult RegisterResult = Host.RegisterClass<FLifecycleRecordingActor>(LifecycleRecordingActorTypeId, "LifecycleRecordingActor");
+	UWorld* const World = Host.CreateWorld().Get();
+	const TObjectPtr<FLifecycleRecordingActor> Actor =
+		Host.CreateObject<FLifecycleRecordingActor>(LifecycleRecordingActorTypeId, Sequence, ActorBeginOrder, ActorEndOrder).Object;
+	const EEngineResult ActorRegistration = World == nullptr ? EEngineResult::InvalidReference : World->RegisterActor(TObjectPtr<AActor>{Actor});
+	const ERuntimeResult BeginResult = Host.BeginPlay(0);
+	const ERuntimeResult EndResult = Host.EndPlay();
+
+	// Assert
+	MW_EXPECT_EQ(Test, EObjectResult::Success, RegisterResult, "The engine must register the lifecycle-recording actor type");
+	MW_EXPECT_EQ(Test, EEngineResult::Success, ActorRegistration, "The world must register the lifecycle-recording actor");
+	MW_EXPECT_EQ(Test, ERuntimeResult::Success, BeginResult, "BeginPlay reports success at the canonical baseline");
+	MW_EXPECT_EQ(Test, ERuntimeResult::Success, EndResult, "EndPlay reports success after ending the rooted world");
+	MW_EXPECT_EQ(Test, 1, SystemRecord.BeginCount, "The engine must begin the bound system exactly once");
+	MW_EXPECT_EQ(Test, 1, SystemRecord.EndCount, "The engine must end the bound system exactly once");
+	MW_EXPECT_TRUE(Test, SystemRecord.BeginOrder < ActorBeginOrder, "The bound system must begin before any world actor receives BeginPlay");
+	MW_EXPECT_TRUE(Test, ActorEndOrder < SystemRecord.EndOrder, "The bound system must end only after every world actor has received EndPlay");
 }
 
 /**

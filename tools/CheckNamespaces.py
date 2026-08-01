@@ -15,7 +15,6 @@ SYSTEM_NAMESPACE_RULES = {
     "Engine": "MicroWorld::Engine",
     "Messaging": "MicroWorld::Messaging",
     "Transport": "MicroWorld::Transport",
-    "Networking": "MicroWorld::Networking",
     "Application": "MicroWorld::Application",
 }
 

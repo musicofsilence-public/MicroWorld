@@ -11,7 +11,7 @@ with the `FTickable` contract expresses the forward-only begin/tick/end lifecycl
 primitives every higher system reuses. Core retired its own World/Actor/Component
 model; the managed Engine system is the sole Actor model.
 
-Engine, Messaging, Transport, Networking, and Application are the systems above
+Engine, Messaging, Transport, and Application are the systems above
 Core; Memory is folded into Core and is no longer a separate system. This guide
 owns durable Core boundaries rather than volatile roadmap sequencing — next work
 lives in `../../docs/RADIO_TRANSPORTS_ROADMAP.md`.

@@ -10,19 +10,18 @@ import tempfile
 from pathlib import Path
 
 
-# The folder tree under Modules/MicroWorld/ names the six contract-defined
+# The folder tree under Modules/MicroWorld/ names the five contract-defined
 # systems directly. Each system may include itself plus only these inward
 # portable dependencies. Object folded into Engine (so Engine owns identity and
 # lifetime); Net and RadioE32 folded into Transport (so one byte-I/O system owns
 # the device contract and every medium). Engine and Transport never name each
-# other: that separation is the invariant the whole shape protects. Integration
-# became Networking.
+# other: that separation is the invariant the whole shape protects. Messaging
+# and Transport meet only at Core's ITransportDevice, so no system joins them.
 MODULE_DEPENDENCIES = {
     "Core": set(),
     "Engine": {"Core", "Messaging"},
     "Messaging": {"Core"},
     "Transport": {"Core"},
-    "Networking": {"Core", "Messaging", "Transport"},
     "Application": {"Core", "Engine"},
 }
 
