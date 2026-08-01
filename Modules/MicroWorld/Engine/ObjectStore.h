@@ -100,7 +100,8 @@ enum class EObjectSlotState : std::uint8_t
  */
 struct FObjectSlotMetadata
 {
-	/** Motivation: Retains the most recently published generation without ever wrapping it. */
+	/** Motivation: Names this slot's current identity without ever wrapping it; it advances the moment an object dies, so a stale handle and a weak
+	 * reference both stop matching immediately rather than waiting for the slot to be reused. */
 	ObjectGeneration Generation{0};
 
 	/** Motivation: Selects tracing, ancestry, layout, and exact destruction for the active object. */
@@ -559,6 +560,14 @@ public:
 	 * Responsibilities: Return the live UObject for a matching generation or null.
 	 */
 	UObject* Resolve(FObjectHandle InHandle) const noexcept;
+
+	/**
+	 * Motivation: Lets a weak reference outside Engine watch one object's lifetime through a plain counter, without naming any Engine type.
+	 * Responsibilities: Return the stable address of the live slot's generation, or null when InHandle no longer names a live object. The address
+	 *   stays valid for the store's lifetime because slot metadata is caller-owned and never moves; the value behind it changes the moment the object
+	 *   dies, which is how a holder learns the object is gone.
+	 */
+	const ObjectGeneration* GetSlotGenerationAddress(FObjectHandle InHandle) const noexcept;
 
 	/**
 	 * Motivation: Hides one live object immediately and queues it for the explicit destruction barrier.

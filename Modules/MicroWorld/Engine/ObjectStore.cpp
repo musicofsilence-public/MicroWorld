@@ -100,6 +100,12 @@ UObject* FObjectStore::Resolve(const FObjectHandle InHandle) const noexcept
 	return Slot != nullptr ? Slot->Object : nullptr;
 }
 
+const ObjectGeneration* FObjectStore::GetSlotGenerationAddress(const FObjectHandle InHandle) const noexcept
+{
+	const FObjectSlotMetadata* const Slot = FindMatchingSlot(InHandle, false);
+	return Slot != nullptr ? &Slot->Generation : nullptr;
+}
+
 EObjectResult FObjectStore::MarkPendingDestroy(const FObjectHandle InHandle) noexcept
 {
 	if (IsPublicMutationLocked())
@@ -243,8 +249,9 @@ ObjectIndex FObjectStore::FindVacantSlot() const noexcept
 {
 	for (ObjectIndex SlotIndex = 0; SlotIndex < Storage.SlotCount; ++SlotIndex)
 	{
-		if (Storage.SlotMetadata[SlotIndex].State == EObjectSlotState::Vacant
-			&& CanAdvanceObjectGeneration(Storage.SlotMetadata[SlotIndex].Generation))
+		// A vacant slot always carries a publishable generation: RecycleOrRetireSlot
+		// retires the ones that could not advance rather than leaving them vacant.
+		if (Storage.SlotMetadata[SlotIndex].State == EObjectSlotState::Vacant)
 		{
 			return SlotIndex;
 		}
@@ -345,8 +352,13 @@ void FObjectStore::RecycleOrRetireSlot(FObjectSlotMetadata& InSlot) noexcept
 	InSlot.Descriptor = nullptr;
 	InSlot.Object = nullptr;
 	InSlot.bMarked = false;
+	// Advancing here, rather than at the next publish, is what makes a destroyed
+	// object's generation differ immediately. A weak reference that only compares
+	// this counter would otherwise call a slot live until some unrelated object
+	// happened to reuse it.
 	if (CanAdvanceObjectGeneration(InSlot.Generation))
 	{
+		++InSlot.Generation;
 		InSlot.State = EObjectSlotState::Vacant;
 	}
 	else
@@ -375,9 +387,10 @@ void FObjectStore::UpdateOccupancyCounters(const bool bInWasPending, const std::
 ObjectGeneration FObjectStore::NextPublishGeneration(const ObjectGeneration InCurrentGeneration) noexcept
 {
 	// Generation 0 means "never published" (ObjectHandle.h), so a slot's first
-	// publish jumps to 1 and later reuse increments -- keeping every live handle's
-	// generation nonzero. FindVacantSlot never returns a slot that cannot advance.
-	return InCurrentGeneration == 0 ? 1 : InCurrentGeneration + 1;
+	// publish jumps to 1 and every live handle's generation stays nonzero. A reused
+	// slot already carries its next generation, because RecycleOrRetireSlot advanced
+	// it when the previous object died.
+	return InCurrentGeneration == 0 ? 1 : InCurrentGeneration;
 }
 
 FObjectHandle FObjectStore::PublishObjectIntoSlot(
