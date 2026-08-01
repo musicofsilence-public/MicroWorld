@@ -4,10 +4,9 @@
 // Role is chosen at build time: server (=1) or client (=0). Both roles always
 // compile -- ServerMain.cpp and ClientMain.cpp are always built -- and this
 // define only selects which one runs; never build_src_filter, which ESP-IDF
-// ignores. This is the first example to run one world's TMessageRouter over ONE
-// WiFi-UDP link carrying TWO channels at once -- a best-effort channel and a
-// guaranteed channel (TReliableChannel) -- with the client injecting
-// deterministic packet loss via FPacketDropDevice.
+// ignores. This example runs one engine-owned Messaging system over ONE WiFi-UDP
+// link carrying TWO channels at once -- one best-effort and one reliable -- with
+// the client injecting deterministic packet loss via FPacketDropDevice.
 #ifndef MICROWORLD_EXAMPLE_SERVER
 #error "Define MICROWORLD_EXAMPLE_SERVER=1 (server) or 0 (client) via the build environment."
 #endif

@@ -7,52 +7,47 @@ Inherits `../AGENTS.md`.
 Two role worlds, one source tree. `Main.cpp` is a thin dispatcher whose
 `app_main` calls `RunServer()` or `RunClient()` by the
 `-DMICROWORLD_EXAMPLE_SERVER` define; `ServerMain.cpp` and `ClientMain.cpp`
-hold the two roles and are both always compiled, and
-`GuaranteedDeliveryShared.h` defines the message/actor/channel ids, WiFi/UDP
-configuration, and the `TTransportHost`/`TMessageRouter`/`TReliableChannel`/
-`TEngine`/`TPlaySystemSet` type shapes once, so both roles share one
-definition. Per board: ONE `TTransportHost` over `FEsp32WifiDevice` -- on the client,
-wrapped in `FPacketDropDevice` -- carrying TWO channels to the same
-`TMessageRouter`: a best-effort binding straight to the router, and a
-guaranteed binding wrapped in `TReliableChannel`. All pumped by one
-`TPlaySystemSet<3>` (host play system, reliable channel, router) the engine holds.
-Every composition object is `static` and allocation-free.
+hold the two roles and are both always compiled. `GuaranteedDeliveryShared.h`
+defines the shared Messaging names, fixed endpoints, and `TEngine` alias once.
+Each board owns one engine-created `FMessagingSystem` and two channels sharing
+one UDP device: `BestEffort` (`bIsReliable = false`) and `Guaranteed`
+(`bIsReliable = true`). The client alone wraps its device in
+`FPacketDropDevice`. Every composition object that lives for the run is
+`static` and allocation-free.
+
+The reliable channel is point-to-point. The client binds `40405` and addresses
+the SoftAP server at `192.168.4.1:40404`; the server binds `40404` and names
+the client at `192.168.4.2:40405` on both channels. This is required because
+Messaging acknowledgements go to the channel's configured address, not the
+last packet sender. The demo therefore assumes the SoftAP assigns its first
+and only station `192.168.4.2`.
 
 ## Concepts
 
-- **Best-effort vs guaranteed, side by side, on one link.** Both channels
-  share the same `FWorldTransport`; the wire-level channel byte (1 vs 2) is how the
-  transport demuxes them, since `TTransportHost` has no concept of "channel" of its own.
-- **`TReliableChannel`'s two-phase `SetInnerChannel` cycle-break.** The
-  wrapper's forward sink (the router) is fixed at construction, but its inner
-  channel (the binding) cannot be, because the binding's own constructor needs
-  the wrapper as ITS sink -- a genuine circular dependency. The fix:
-  construct the wrapper first (forward sink = router), construct the binding
-  second (inbound sink = the wrapper), then call
-  `Guaranteed.SetInnerChannel(GuaranteedWire)` before `Router.AddChannel`,
-  since `AddChannel` reads `GetChannelId()`, which the wrapper forwards to its
-  (now-bound) inner channel.
-- **Frame-set add order is exact: host play system, reliable, router.** The host play system
-  delivers inbound wire bytes to both bindings first; the reliable channel's
-  `PostAdvance` then paces retries for anything still unacknowledged; the
-  router dispatches last, once both channels have had their turn. Reversing
-  this order would let the router run against stale channel state.
-- **`FPacketDropDevice` sits below the channel demux.** It wraps the raw UDP
-  device, one layer beneath `TTransportHost`, so it drops indiscriminately --
-  best-effort data, guaranteed data, guaranteed acks, and heartbeats are all
-  equally at risk of the same dropped send. This is why the guaranteed
-  column's exact resend timing is illustrative, not fixed: which packet type
-  gets hit by the Nth drop depends on send interleaving, not channel identity.
-- **Actors name no transport (D9).** `FLedgerActor` and `FCounterActor` both
-  take `IMessageRouter&` by constructor injection and never see `TTransportHost`, a
-  device, UDP, or the drop injector.
+- **Best-effort versus reliable, side by side, on one link.** Both channels
+  carry the same `Counter` payload and share one UDP device; the channel name
+  distinguishes their independent Messaging frame routes.
+- **Reliability lives inside Messaging.** `bIsReliable` selects sequence
+  numbers, acknowledgement processing, pending-frame storage, retry timing,
+  and the bounded attempt budget. This example adds no wrapper, binding,
+  transport host, router, session, or frame-set composition.
+- **Outcome evidence, not mechanism counters.** The server records distinct
+  values in a bounded bitmask and emits `guaranteed complete 30/30; best-effort
+  <m>/30`; the client logs injected send loss and only reports a nonzero
+  reliable-abandonment count as an error.
+- **Loss injection is client send-only.** The receiver has no duplicate
+  suppression, so dropping a server acknowledgement would retransmit an
+  already-delivered counter value and corrupt the comparison. Never wrap the
+  server device or make the injector drop receives.
+- **Actors name no transport (D9).** `FLedgerActor` and `FCounterActor` take
+  `FMessagingSystem&` by constructor injection and never see a device, UDP, or
+  the drop injector.
 
 ## Verification
 
 Build Verify (`../AGENTS.md`): `pio run -d
 examples/25-GuaranteedDelivery` builds both role environments, then the root
 `cmake --build` / `ctest` runs the repo-wide format and unit-test gates.
-Hardware checkpoint (`../AGENTS.md`, human-gated) flashes the server to one board and
-the client to the other -- no wiring, WiFi only -- and expects the server
-console's best-effort column to show gaps while the guaranteed column stays
-complete.
+Hardware checkpoint (`../AGENTS.md`, human-gated) flashes the server to one
+board and the client to the other -- no wiring, WiFi only -- and retains the
+server completion line plus client drop evidence.

@@ -1,31 +1,25 @@
 #include "GuaranteedDeliveryShared.h"
 
 #include <MicroWorld/Core/Containers/Span.h>
+#include <MicroWorld/Core/Log.h>
 #include <MicroWorld/Engine/Actor.h>
+#include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Engine/EngineResult.h>
-#include <MicroWorld/Messaging/Message.h>
-#include <MicroWorld/Messaging/MessageChannelBinding.h>
-#include <MicroWorld/Messaging/MessageRouter.h>
-#include <MicroWorld/Engine/EngineSystem.h>
-#include <MicroWorld/Messaging/ReliableChannel.h>
-#include <MicroWorld/Engine/World.h>
-#include <MicroWorld/Core/Log.h>
-#include <MicroWorld/Transport/TransportHost.h>
-#include <MicroWorld/Transport/TransportResult.h>
-#include <MicroWorld/Transport/PacketDropDevice.h>
-#include <MicroWorld/Transport/Wifi/UdpAddressCodec.h>
-#include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Engine/GarbageCollector.h>
 #include <MicroWorld/Engine/ObjectPtr.h>
+#include <MicroWorld/Engine/World.h>
+#include <MicroWorld/Messaging/Message.h>
+#include <MicroWorld/Messaging/MessagingSystem.h>
 #include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
 #include <MicroWorld/Platform/Esp32/Esp32TimeSource.h>
 #include <MicroWorld/Platform/Esp32/Esp32WifiDevice.h>
 #include <MicroWorld/Platform/Esp32/Esp32WifiLink.h>
+#include <MicroWorld/Transport/PacketDropDevice.h>
+#include <MicroWorld/Transport/TransportResult.h>
+#include <MicroWorld/Transport/Wifi/UdpAddressCodec.h>
 
-#include <cstddef>
 #include <cstdint>
-#include <utility>
 
 using namespace MicroWorld::Core;
 using namespace MicroWorld::Platform::Esp32;
@@ -41,23 +35,23 @@ FEsp32TimeSource GTimeSource{};
 
 /**
  * Motivation: Every CounterIntervalMilliseconds, sends the next value in 1..LastCounterValue to the
- *   server's FLedgerActor on BOTH the best-effort and the guaranteed channel, then idles once all are
- *   sent. Takes the router by constructor injection, owns no components, and has no handlers -- it only
- *   sends, and acknowledgements are consumed inside the guaranteed channel's wrapper.
- * Responsibilities: Tick on the counter cadence, send one value on both channels, then idle once done.
+ *   server on both the best-effort and guaranteed channels, then idles once all are sent. Takes Messaging
+ *   by constructor injection, owns no components, and has no handlers because Messaging consumes acknowledgements.
+ * Responsibilities: Tick on the counter cadence, send one value on both channels, react to reliable
+ *   backpressure, then advance the counter.
  * Example:
- *   auto Counter = Engine.CreateObject<FCounterActor>(CounterActorTypeId, Router).Object;
+ *   auto Counter = Engine.CreateObject<FCounterActor>(CounterActorTypeId, Messaging).Object;
  *   Engine.GetWorld().RegisterActor(TObjectPtr<AActor>{Counter});
  */
 class FCounterActor final : public AActor
 {
 public:
 	/**
-	 * Motivation: Aligns this actor's own tick to the counter cadence and stores the injected router.
-	 * Responsibilities: Construct on the counter cadence and capture the router reference.
+	 * Motivation: Aligns this actor's own tick to the counter cadence and stores injected Messaging.
+	 * Responsibilities: Construct on the counter cadence and capture the Messaging system reference.
 	 */
-	explicit FCounterActor(IMessageRouter& InRouter) noexcept
-		: AActor(FTickConfiguration::EnabledEvery(CounterIntervalMilliseconds)), Router(InRouter)
+	explicit FCounterActor(FMessagingSystem& InMessaging) noexcept
+		: AActor(FTickConfiguration::EnabledEvery(CounterIntervalMilliseconds)), Messaging(InMessaging)
 	{
 	}
 
@@ -65,7 +59,8 @@ protected:
 	/**
 	 * Motivation: Sends the next counter value on both channels so the demo's lossy link exercises both
 	 *   paths, idling once all values are out.
-	 * Responsibilities: Send one value on the best-effort and guaranteed channels, then advance the counter.
+	 * Responsibilities: Send one named value on the best-effort and guaranteed channels, react to capacity,
+	 *   then advance the counter.
 	 */
 	void Tick(const FTickContext&) noexcept override
 	{
@@ -74,24 +69,28 @@ protected:
 			return;
 		}
 
-		std::uint8_t Payload[1] = {NextValue};
-		const TSpan<const std::uint8_t> PayloadSpan(Payload, 1);
+		const std::uint8_t PayloadBytes[1] = {NextValue};
+		FMessage Message;
+		Message.SetMessageNameId(CounterMessageName);
+		Message.SetPayload(TSpan<const std::uint8_t>(PayloadBytes, sizeof(PayloadBytes)));
 
-		const EMessageResult BestEffortResult =
-			Router.SendMessageToActor(BestEffortChannelId, BestEffortCounterMessageId, LedgerActorId, CounterActorId, PayloadSpan);
-		if (BestEffortResult != EMessageResult::Success)
+		const EMessagingResult BestEffortResult = Messaging.SendMessageToChannel(Message, BestEffortChannelName);
+		if (BestEffortResult != EMessagingResult::Success)
 		{
 			MW_LOG(Error, "ex25", "counter best-effort send failed n=%u", static_cast<unsigned>(NextValue));
 		}
 
-		const EMessageResult GuaranteedResult =
-			Router.SendMessageToActor(GuaranteedChannelId, GuaranteedCounterMessageId, LedgerActorId, CounterActorId, PayloadSpan);
-		if (GuaranteedResult != EMessageResult::Success)
+		const EMessagingResult GuaranteedResult = Messaging.SendMessageToChannel(Message, GuaranteedChannelName);
+		if (GuaranteedResult == EMessagingResult::Full)
+		{
+			MW_LOG(Error, "ex25", "counter guaranteed capacity full n=%u", static_cast<unsigned>(NextValue));
+		}
+		else if (GuaranteedResult != EMessagingResult::Success)
 		{
 			MW_LOG(Error, "ex25", "counter guaranteed send failed n=%u", static_cast<unsigned>(NextValue));
 		}
 
-		if (BestEffortResult == EMessageResult::Success && GuaranteedResult == EMessageResult::Success)
+		if (BestEffortResult == EMessagingResult::Success && GuaranteedResult == EMessagingResult::Success)
 		{
 			MW_LOG(Log, "ex25", "tx n=%u (best-effort + guaranteed)", static_cast<unsigned>(NextValue));
 		}
@@ -100,8 +99,8 @@ protected:
 	}
 
 private:
-	/** Motivation: Router this actor sends through; injected at construction, never a global. */
-	IMessageRouter& Router;
+	/** Motivation: Messaging system this actor sends through; injected at construction, never a global. */
+	FMessagingSystem& Messaging;
 
 	/** Motivation: Next counter value to send; once past LastCounterValue, Tick idles without sending. */
 	std::uint8_t NextValue{FirstCounterValue};
@@ -109,12 +108,10 @@ private:
 } // namespace
 
 /**
- * Motivation: Lets Board B join the WiFi SoftAP and run FCounterActor over one router wired to one UDP
- *   transport through two bindings -- best-effort straight to the router, guaranteed wrapped in
- *   TReliableChannel -- behind one TPlaySystemSet, with the UDP device wrapped in FPacketDropDevice so
- *   every third outgoing packet is dropped (the point of the demo).
- * Responsibilities: Join the SoftAP, wire the drop device, transport, both bindings, the reliable channel,
- *   the frame set, and the engine, spawn the counter, start as a client, and tick the engine in an unbounded loop.
+ * Motivation: Lets Board B join the WiFi SoftAP and run FCounterActor over two named channels that share
+ *   one client-side loss-injecting UDP device, while Messaging owns framing, acknowledgements, pending messages, and retries.
+ * Responsibilities: Join the SoftAP, open the fixed-port device, create the Messaging channels, spawn the
+ *   counter, start the engine, observe injected loss and reliable abandonment, and tick in an unbounded loop.
  */
 void RunClient() noexcept
 {
@@ -126,55 +123,35 @@ void RunClient() noexcept
 	}
 	MW_LOG(Log, "ex25", "wifi joined AP");
 
-	// The client binds an ephemeral local port (0): it only needs to reach the server, and TTransportHost
-	// learns the client's address server-side from its Hello.
-	static FEsp32WifiDevice UdpDevice(0);
-	MW_LOG(Log, "ex25", "udp open=%d", UdpDevice.IsOpen() ? 1 : 0);
+	static FEsp32WifiDevice UdpDevice(ClientPort);
+	MW_LOG(Log, "ex25", "udp open=%d udp_port=%u", UdpDevice.IsOpen() ? 1 : 0, static_cast<unsigned>(UdpDevice.BoundPort()));
 	if (!UdpDevice.IsOpen())
 	{
 		MW_LOG(Error, "ex25", "udp socket failed; halting");
 		return;
 	}
 
-	// All composition objects are static (the ESP32-S3 stack lesson, §2.2). The drop device wraps
-	// the real UDP device, so the transport below sends and receives through the loss injector.
+	// This stays on the client send path only: dropping a server acknowledgement would retry and deliver the same counter value twice.
 	static FPacketDropDevice DropDevice{UdpDevice, DropEveryNthSend};
-	static FWorldTransport Transport{DropDevice};
-	static FWorldRouter Router;
-
-	// Best-effort channel: a plain binding straight to the router, no reliable wrapper.
-	static FChannelBinding BestEffortWire{Transport, BestEffortWireChannelByte, BestEffortChannelId, EChannelSendTarget::Server, Router};
-
-	// Guaranteed channel: break the wrapper<->binding reference cycle in this exact order --
-	// construct the reliable wrapper (forward sink = Router), construct the binding (inbound sink =
-	// the wrapper), then bind the wrapper to the binding via SetInnerChannel (ReliableChannel.h).
-	static FGuaranteedChannel Guaranteed{Router, FReliableChannelConfig{}};
-	static FChannelBinding GuaranteedWire{Transport, GuaranteedWireChannelByte, GuaranteedChannelId, EChannelSendTarget::Server, Guaranteed};
-	Guaranteed.SetInnerChannel(GuaranteedWire);
-
-	static FHostPlay HostPlay{Transport};
-
-	// D3 frame-set order: transport first (delivers inbound traffic), reliable channel second (its
-	// PostAdvance paces retries), router last (dispatches what the transport and the reliable channel just
-	// delivered) -- see GuaranteedDeliveryShared.h's FWorldFrameSet alias.
-	static FWorldFrameSet Frames;
-	if (Frames.Add(HostPlay) != EEngineResult::Success || Frames.Add(Guaranteed) != EEngineResult::Success
-		|| Frames.Add(Router) != EEngineResult::Success)
+	static FWorldEngine Engine{FGarbageCollectionBudget{1, 4, 8}};
+	if (Engine.CreateMessagingSystem(FMessagingSystemInformation{}) != ERuntimeResult::Success)
 	{
-		MW_LOG(Error, "ex25", "client frame set rejected a frame; halting");
+		MW_LOG(Error, "ex25", "client Messaging system creation failed; halting");
 		return;
 	}
-	static FWorldEngine Engine{FGarbageCollectionBudget{1, 4, 8}, Frames};
-
-	if (!BestEffortWire.IsAttached() || !GuaranteedWire.IsAttached())
+	FMessagingSystem* const Messaging = Engine.GetMessagingSystem();
+	if (Messaging == nullptr)
 	{
-		MW_LOG(Error, "ex25", "client binding failed to attach; halting");
+		MW_LOG(Error, "ex25", "client Messaging system unavailable; halting");
 		return;
 	}
-	// AddChannel(Guaranteed) must follow SetInnerChannel above: GetChannelId() reads the inner id.
-	if (Router.AddChannel(BestEffortWire) != EMessageResult::Success || Router.AddChannel(Guaranteed) != EMessageResult::Success)
+
+	const FDeviceAddress ServerAddress = MakeUdpAddress(ServerIpv4[0], ServerIpv4[1], ServerIpv4[2], ServerIpv4[3], ServerPort);
+	const EMessagingResult BestEffortChannelResult = Messaging->CreateChannel({BestEffortChannelName, false, &DropDevice, ServerAddress});
+	const EMessagingResult GuaranteedChannelResult = Messaging->CreateChannel({GuaranteedChannelName, true, &DropDevice, ServerAddress});
+	if (BestEffortChannelResult != EMessagingResult::Success || GuaranteedChannelResult != EMessagingResult::Success)
 	{
-		MW_LOG(Error, "ex25", "client router rejected a channel; halting");
+		MW_LOG(Error, "ex25", "client Messaging channel creation failed; halting");
 		return;
 	}
 
@@ -185,7 +162,7 @@ void RunClient() noexcept
 	}
 
 	const TObjectPtr<UWorld> World = Engine.CreateWorld();
-	const TObjectPtr<FCounterActor> Counter = Engine.CreateObject<FCounterActor>(CounterActorTypeId, Router).Object;
+	const TObjectPtr<FCounterActor> Counter = Engine.CreateObject<FCounterActor>(CounterActorTypeId, *Messaging).Object;
 	if (World.Get() == nullptr || Counter.Get() == nullptr)
 	{
 		MW_LOG(Error, "ex25", "client world or actor creation failed; halting");
@@ -198,11 +175,6 @@ void RunClient() noexcept
 		return;
 	}
 
-	FTransportHostConfig Config = MakeHostConfig();
-	Config.ServerAddress = MakeUdpAddress(ServerIpv4[0], ServerIpv4[1], ServerIpv4[2], ServerIpv4[3], ServerPort);
-	(void)Transport.Configure(ENetworkMode::Client, Config);
-	(void)Transport.Start(GTimeSource.Now());
-
 	const TimePointMilliseconds BootTime = GTimeSource.Now();
 	if (Engine.BeginPlay(BootTime) != ERuntimeResult::Success)
 	{
@@ -211,17 +183,23 @@ void RunClient() noexcept
 	}
 	MW_LOG(Log, "ex25", "client up (best-effort + guaranteed over one UDP link, dropping every %u-th send)", static_cast<unsigned>(DropEveryNthSend));
 
-	// This is a two-board two-channel demo, not a self-terminating trace (matching 16-TwoBoardUdp and
-	// 24-TwoChannelWorld's client), so the loop runs unbounded rather than stopping after N messages.
-	std::uint32_t LastResent = 0;
+	std::uint32_t LastDroppedSendCount = 0;
+	std::uint32_t LastAbandonedReliableMessageCount = 0;
 	for (;;)
 	{
 		(void)Engine.Tick(GTimeSource.Now());
-		const std::uint32_t Resent = Guaranteed.ResentCount();
-		if (Resent != LastResent)
+		const std::uint32_t DroppedSendCount = DropDevice.DroppedSendCount();
+		if (DroppedSendCount != LastDroppedSendCount)
 		{
-			MW_LOG(Log, "ex25", "guaranteed resent=%u pending=%u", static_cast<unsigned>(Resent), static_cast<unsigned>(Guaranteed.PendingCount()));
-			LastResent = Resent;
+			MW_LOG(Log, "ex25", "drop injector dropped sends=%u", static_cast<unsigned>(DroppedSendCount));
+			LastDroppedSendCount = DroppedSendCount;
+		}
+
+		const std::uint32_t AbandonedReliableMessageCount = Messaging->GetAbandonedReliableMessageCount();
+		if (AbandonedReliableMessageCount > 0 && AbandonedReliableMessageCount != LastAbandonedReliableMessageCount)
+		{
+			MW_LOG(Error, "ex25", "guaranteed abandoned=%u", static_cast<unsigned>(AbandonedReliableMessageCount));
+			LastAbandonedReliableMessageCount = AbandonedReliableMessageCount;
 		}
 		SleepMilliseconds(PollPacingMilliseconds);
 	}

@@ -1,58 +1,63 @@
 # 25-GuaranteedDelivery
 
-**Feature:** best-effort vs guaranteed delivery on ONE WiFi-UDP link, with the
-client injecting deterministic loss via `FPacketDropDevice`; the guaranteed
-channel (`TReliableChannel`) recovers every dropped packet.
+**Feature:** best-effort versus reliable delivery on one WiFi-UDP link. The
+client injects deterministic send loss through `FPacketDropDevice`; reliable
+Messaging retries until the server acknowledges every counter value.
 
-> Status: hardware-verified on two ESP32-S3 boards, 2026-07-24 (SoftAP UDP).
+> Status: requires hardware verification after the Messaging port.
 
 ## What it does
 
 1. The **server** board (`esp32-s3-server`) hosts the WiFi SoftAP and runs
-   `FLedgerActor`, which registers two handlers -- one per channel -- and logs
-   one column per channel: `rx best-effort n=<n>` and `rx guaranteed n=<n>`.
-2. The **client** board (`esp32-s3-client`) joins the SoftAP, wraps its UDP
-   device in `FPacketDropDevice{DropEveryNthSend = 3}`, and runs
-   `FCounterActor`, which every 500 ms sends the next value in 1..30 to the
-   server's `FLedgerActor` on **both** channels: `BestEffortChannelId` (a
-   plain `TMessageChannelBinding`) and `GuaranteedChannelId` (the same kind of
-   binding, wrapped in `TReliableChannel`).
-3. Every third packet the client sends -- of any kind, data or ack or
-   heartbeat -- is silently dropped at the `IDevice` interface. As a result the
-   server's best-effort column has gaps, while the guaranteed column is
-   complete: `TReliableChannel` resends any unacknowledged value until the
-   server acknowledges it.
-4. Every actor reaches messaging only through `IMessageRouter&`, injected at
-   construction (D9); neither actor ever sees `TTransportHost`, a device, UDP, or
-   the drop injector.
+   `FLedgerActor`. It subscribes to the same `Counter` message on both named
+   channels, logs each arrival, and records the distinct values received on
+   each channel.
+2. The **client** board (`esp32-s3-client`) joins the SoftAP, wraps only its
+   UDP send path in `FPacketDropDevice{DropEveryNthSend = 3}`, and runs
+   `FCounterActor`. Every 500 ms it sends the next value in 1..30 on both
+   channels: `BestEffort` and reliable `Guaranteed`.
+3. `FMessagingSystem` owns reliable framing, sequence numbers, pending frames,
+   retry timing, the bounded attempt budget, and acknowledgements. The example
+   composes that behavior only by setting `bIsReliable` on `Guaranteed`.
+4. The client uses fixed UDP port `40405`; the server's channels name
+   `192.168.4.2:40405`, so acknowledgements have a return route. This demo
+   assumes the SoftAP gives its first and only station `192.168.4.2`.
 5. The run is **unbounded** (matching 16-TwoBoardUdp and 24-TwoChannelWorld):
-   this is a continuous two-board demo, not a self-terminating trace.
+   after counter 30 the actor idles while the boards remain observable.
 
-The best-effort column drops roughly every third value and never recovers it;
-the guaranteed column shows all 30 because `TReliableChannel` retries each
-unacked value until the server acknowledges it. Which exact values go missing
-depends on how the dropped-every-third counter interleaves all outgoing
-packets (data, acks, heartbeats) through the one shared device, so treat the
-gap positions as illustrative, not fixed.
+## Proof of delivery
+
+The trace proves outcomes instead of reporting retry internals:
+
+1. The client logs `drop injector dropped sends=<n>` whenever deterministic
+   loss occurs, proving packets really were removed on the client send path.
+2. The server logs `rx best-effort n=<n>` and `rx guaranteed n=<n>` for each
+   delivery. The best-effort values show gaps; the guaranteed values cover the
+   full range.
+3. Once all distinct guaranteed values arrive, the server logs
+   `guaranteed complete 30/30; best-effort <m>/30`. That is the completion
+   proof for the run.
+4. The client remains quiet about `GetAbandonedReliableMessageCount()` while it
+   is zero. An error `guaranteed abandoned=<n>` means the bounded retry budget
+   gave up and the run failed its guarantee.
+
+The injector is deliberately client-side and send-only. Dropping a server
+acknowledgement would make the client resend a value that the server currently
+has no duplicate suppression for, corrupting the comparison.
 
 ## MicroWorld APIs used
 
-- `TReliableChannel` (`SetInnerChannel`, `PendingCount` / `ResentCount` /
-  `DuplicateDroppedCount`)
-- `FPacketDropDevice` -- the client's deterministic loss injector, wrapping
-  the real UDP device
-- `TMessageChannelBinding`, `EChannelSendTarget` (`Server` on the client,
-  `AllPeers` on the server, per channel)
-- `TMessageRouter`, `IMessageRouter` (`AddMessageHandler` /
-  `SendMessageToActor`)
-- `TPlaySystemSet` (`Add`, D3 dispatch/flush order over the host play system, the
-  reliable channel, and the router)
-- `TTransportHost` (`Configure` / `Start`), `THostPlaySystem`, `ENetworkMode`
-- `FEsp32WifiLink` (`StartAccessPoint` / `JoinAccessPoint`), `FEsp32WifiDevice`,
-  `MakeUdpAddress`
-- `TEngine` (`RegisterClass` / `CreateWorld` / `CreateObject` /
-  `BeginPlay` / `Tick`), `AActor`, `UWorld::RegisterActor`
-- `FEsp32TimeSource::Now`, `SleepMilliseconds`, `WriteEsp32LogRecord`, `MW_LOG`
+- `FMessagingSystem` (`CreateChannel`, `SubscribeToChannel`,
+  `SendMessageToChannel`, `GetAbandonedReliableMessageCount`)
+- `FChannelInformation` (`bIsReliable`, the client/server fixed peer address)
+- `FMessage`, `FNameId`, `MakeWeakOwner`
+- `FPacketDropDevice` (`DroppedSendCount`), client-side only
+- `FEsp32WifiLink` (`StartAccessPoint` / `JoinAccessPoint`),
+  `FEsp32WifiDevice`, `MakeUdpAddress`
+- `TEngine` (`CreateMessagingSystem`, `RegisterClass`, `CreateWorld`,
+  `CreateObject`, `BeginPlay`, `Tick`), `AActor`, `UWorld::RegisterActor`
+- `FEsp32TimeSource::Now`, `SleepMilliseconds`, `WriteEsp32LogRecord`,
+  `MW_LOG`
 
 ## Hardware required
 
@@ -79,7 +84,7 @@ SoftAP is up before the client joins:
 mw flash 25 esp32-s3-server COM5     :: server hosts the SoftAP
 mw flash 25 esp32-s3-client COM7     :: client joins and sends 1..30
 mw log   COM5                        :: server RX columns  (Ctrl-C to stop)
-mw log   COM7                        :: client TX + resent  (second terminal)
+mw log   COM7                        :: client TX + drop evidence (second terminal)
 ```
 
 `mw` is [`../tools/mw.bat`](../tools/mw.bat). Do **not** use `pio device monitor`
@@ -88,54 +93,8 @@ download loader; `mw log` holds the line steady and reconnects across resets.
 
 ## Hardware verification
 
-Verified on two ESP32-S3-DevKitC-1 boards over SoftAP UDP on **2026-07-24**
-(server COM5, client COM7; primary console on USB-Serial-JTAG). One synchronized
-run, values 1..30 sent on both channels.
-
-**Server** -- best-effort has gaps, guaranteed is complete (abridged):
-
-```text
-I (41723) ex25: rx best-effort n=1
-I (41983) ex25: rx guaranteed n=1
-I (42243) ex25: rx best-effort n=2
-I (42483) ex25: rx guaranteed n=2
-I (42763) ex25: rx guaranteed n=3      <- best-effort n=3 never arrived
-I (43303) ex25: rx best-effort n=4
-I (43563) ex25: rx guaranteed n=4
-I (43843) ex25: rx guaranteed n=5      <- best-effort n=5 never arrived
-I (44383) ex25: rx best-effort n=6
-I (44643) ex25: rx guaranteed n=6
-```
-
-Over the full run the **best-effort** column delivered **15 of 30** (missing 3,
-5, 7, 9, 11, 13, 15, 16, 18, 20, 22, 24, 26, 28, 29) while the **guaranteed**
-column delivered **all 30 in order**.
-
-**Client** -- same run, the reliable channel resending the drops:
-
-```text
-I (3599)  ex25: wifi joined AP
-I (3599)  ex25: client up (best-effort + guaranteed over one UDP link, dropping every 3-th send)
-I (3599)  ex25: tx n=1 (best-effort + guaranteed)
-I (3899)  ex25: guaranteed resent=1 pending=1
-...
-I (19267) ex25: tx n=30 (best-effort + guaranteed)
-I (19527) ex25: guaranteed resent=15 pending=1
-```
-
-The numbers tie together: the client resent **15** guaranteed messages, and the
-server received **all 30** guaranteed despite losing **15** best-effort -- exactly
-the guarantee `TReliableChannel` exists to provide, over real WiFi. Which values
-go missing shifts run to run with how the every-third drop interleaves all
-outgoing packets; the counts are stable, the exact positions are not.
-
-## Image size
-
-From `pio run` (release build, ESP32-S3-DevKitC-1):
-
-```text
-server  RAM:   18.0% (used 58992 bytes from 327680 bytes)
-        Flash: 19.4% (used 811741 bytes from 4194304 bytes)
-client  RAM:   18.0% (used 59040 bytes from 327680 bytes)
-        Flash: 19.4% (used 812981 bytes from 4194304 bytes)
-```
+After flashing both boards, retain the server's closing
+`guaranteed complete 30/30; best-effort <m>/30` line and the matching client
+drop-injector lines as the hardware evidence for this port. The former trace
+and its image-size measurements applied to the retired composition, so they
+are intentionally not retained here.

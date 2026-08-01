@@ -1,28 +1,24 @@
 #include "GuaranteedDeliveryShared.h"
 
-#include <MicroWorld/Core/Containers/Span.h>
 #include <MicroWorld/Core/Delegates/Delegate.h>
+#include <MicroWorld/Core/Log.h>
 #include <MicroWorld/Engine/Actor.h>
+#include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Engine/EngineResult.h>
-#include <MicroWorld/Messaging/Message.h>
-#include <MicroWorld/Messaging/MessageChannelBinding.h>
-#include <MicroWorld/Messaging/MessageRouter.h>
-#include <MicroWorld/Engine/EngineSystem.h>
-#include <MicroWorld/Messaging/ReliableChannel.h>
-#include <MicroWorld/Engine/World.h>
-#include <MicroWorld/Core/Log.h>
-#include <MicroWorld/Transport/TransportHost.h>
-#include <MicroWorld/Transport/TransportResult.h>
-#include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Engine/GarbageCollector.h>
 #include <MicroWorld/Engine/ObjectPtr.h>
+#include <MicroWorld/Engine/ObjectStore.h>
+#include <MicroWorld/Engine/World.h>
+#include <MicroWorld/Messaging/Message.h>
+#include <MicroWorld/Messaging/MessagingSystem.h>
 #include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
 #include <MicroWorld/Platform/Esp32/Esp32TimeSource.h>
 #include <MicroWorld/Platform/Esp32/Esp32WifiDevice.h>
 #include <MicroWorld/Platform/Esp32/Esp32WifiLink.h>
+#include <MicroWorld/Transport/TransportResult.h>
+#include <MicroWorld/Transport/Wifi/UdpAddressCodec.h>
 
-#include <cstddef>
 #include <cstdint>
 #include <utility>
 
@@ -39,111 +35,161 @@ namespace
 FEsp32TimeSource GTimeSource{};
 
 /**
- * Motivation: Subscribes to both counter message ids and logs one line per arrival, one column per
- *   channel, so the demo's best-effort gaps and guaranteed completeness are visible side by side. Takes
- *   the router by constructor injection and never ticks.
- * Responsibilities: Register one handler per channel on play and log each arrival on its column.
+ * Motivation: Subscribes to the same counter message on both channels and logs one line per arrival, one
+ *   column per channel, so the demo's best-effort gaps and guaranteed completeness are visible side by side.
+ *   Takes Messaging by constructor injection and never ticks.
+ * Responsibilities: Register one subscription per channel on play, log each arrival, and report the final
+ *   distinct-value tallies when the guaranteed channel is complete.
  * Example:
- *   auto Ledger = Engine.CreateObject<FLedgerActor>(LedgerActorTypeId, Router).Object;
+ *   auto Ledger = Engine.CreateObject<FLedgerActor>(LedgerActorTypeId, Messaging).Object;
  *   Engine.GetWorld().RegisterActor(TObjectPtr<AActor>{Ledger});
  */
 class FLedgerActor final : public AActor
 {
 public:
 	/**
-	 * Motivation: Stores the injected router; this actor's tick is disabled because it only reacts to messages.
-	 * Responsibilities: Construct with tick disabled and capture the router reference.
+	 * Motivation: Stores injected Messaging; this actor's tick is disabled because it only reacts to messages.
+	 * Responsibilities: Construct with tick disabled and capture the Messaging system reference.
 	 */
-	explicit FLedgerActor(IMessageRouter& InRouter) noexcept
-		: AActor({/*bCanEverTick*/ false, /*bStartWithTickEnabled*/ false, /*TickIntervalMilliseconds*/ 0}), Router(InRouter)
+	explicit FLedgerActor(FMessagingSystem& InMessaging) noexcept
+		: AActor({/*bCanEverTick*/ false, /*bStartWithTickEnabled*/ false, /*TickIntervalMilliseconds*/ 0}), Messaging(InMessaging)
 	{
 	}
 
 protected:
 	/**
-	 * Motivation: Registers one handler per channel, both targeted at this actor's own LedgerActorId, so both
-	 *   delivery paths are observable.
-	 * Responsibilities: Bind and register the best-effort and guaranteed handlers.
+	 * Motivation: Registers one subscription per channel under this actor's weak owner, so both delivery
+	 *   paths are observable without actor addressing.
+	 * Responsibilities: Bind and register the best-effort and guaranteed subscribers.
 	 */
 	void BeginPlay() noexcept override
 	{
-		FMessageHandlerBinding BestEffortHandler;
-		const EDelegateResult BestEffortBindResult = BestEffortHandler.Bind([this](const FMessageView& View) noexcept { this->OnBestEffort(View); });
+		FObjectStore* const ObjectStore = GetObjectStore();
+		if (ObjectStore == nullptr)
+		{
+			MW_LOG(Error, "ex25", "ledger has no object store");
+			return;
+		}
+
+		FMessagingSystem::FSubscriberDelegate BestEffortSubscriber;
+		const EDelegateResult BestEffortBindResult =
+			BestEffortSubscriber.Bind([this](const FMessage& Message) noexcept { this->OnBestEffort(Message); });
 		if (BestEffortBindResult != EDelegateResult::Success)
 		{
-			MW_LOG(Error, "ex25", "ledger best-effort handler bind failed");
+			MW_LOG(Error, "ex25", "ledger best-effort subscriber bind failed");
 		}
 		else
 		{
-			// This unbounded example never removes handlers (the run never ends), so the returned handle is not retained.
-			FMessageHandlerHandle BestEffortHandle;
-			const EMessageResult BestEffortAddResult =
-				Router.AddMessageHandler(BestEffortCounterMessageId, LedgerActorId, std::move(BestEffortHandler), BestEffortHandle);
-			if (BestEffortAddResult != EMessageResult::Success)
+			const EMessagingResult BestEffortSubscribeResult = Messaging.SubscribeToChannel(
+				BestEffortChannelName, CounterMessageName, std::move(BestEffortSubscriber), MakeWeakOwner(*ObjectStore, GetObjectHandle()));
+			if (BestEffortSubscribeResult != EMessagingResult::Success)
 			{
-				MW_LOG(Error, "ex25", "ledger best-effort handler registration failed");
+				MW_LOG(Error, "ex25", "ledger best-effort subscription failed");
 			}
 		}
 
-		FMessageHandlerBinding GuaranteedHandler;
-		const EDelegateResult GuaranteedBindResult = GuaranteedHandler.Bind([this](const FMessageView& View) noexcept { this->OnGuaranteed(View); });
+		FMessagingSystem::FSubscriberDelegate GuaranteedSubscriber;
+		const EDelegateResult GuaranteedBindResult =
+			GuaranteedSubscriber.Bind([this](const FMessage& Message) noexcept { this->OnGuaranteed(Message); });
 		if (GuaranteedBindResult != EDelegateResult::Success)
 		{
-			MW_LOG(Error, "ex25", "ledger guaranteed handler bind failed");
+			MW_LOG(Error, "ex25", "ledger guaranteed subscriber bind failed");
 		}
 		else
 		{
-			FMessageHandlerHandle GuaranteedHandle;
-			const EMessageResult GuaranteedAddResult =
-				Router.AddMessageHandler(GuaranteedCounterMessageId, LedgerActorId, std::move(GuaranteedHandler), GuaranteedHandle);
-			if (GuaranteedAddResult != EMessageResult::Success)
+			const EMessagingResult GuaranteedSubscribeResult = Messaging.SubscribeToChannel(
+				GuaranteedChannelName, CounterMessageName, std::move(GuaranteedSubscriber), MakeWeakOwner(*ObjectStore, GetObjectHandle()));
+			if (GuaranteedSubscribeResult != EMessagingResult::Success)
 			{
-				MW_LOG(Error, "ex25", "ledger guaranteed handler registration failed");
+				MW_LOG(Error, "ex25", "ledger guaranteed subscription failed");
 			}
 		}
 	}
 
 private:
 	/**
-	 * Motivation: Logs one arrival on the best-effort column, where gaps are expected under injected loss.
-	 * Responsibilities: Validate the payload and log the best-effort counter value.
+	 * Motivation: Records one best-effort arrival, where gaps are expected under injected loss.
+	 * Responsibilities: Validate the payload, log the counter value, and update the best-effort tally.
 	 */
-	void OnBestEffort(const FMessageView& View) noexcept
+	void OnBestEffort(const FMessage& Message) noexcept { RecordCounter(Message, "best-effort", BestEffortReceivedValues, BestEffortReceivedCount); }
+
+	/**
+	 * Motivation: Records one guaranteed arrival, where the full sequence is expected after retries.
+	 * Responsibilities: Validate the payload, log the counter value, update the guaranteed tally, and report completeness once.
+	 */
+	void OnGuaranteed(const FMessage& Message) noexcept
 	{
-		if (View.Payload.Size() < 1)
+		RecordCounter(Message, "guaranteed", GuaranteedReceivedValues, GuaranteedReceivedCount);
+		if (GuaranteedReceivedCount == CounterValueCount && !bHasLoggedGuaranteedComplete)
 		{
-			MW_LOG(Error, "ex25", "ledger received undersized best-effort payload");
-			return;
+			MW_LOG(
+				Log,
+				"ex25",
+				"guaranteed complete %u/%u; best-effort %u/%u",
+				static_cast<unsigned>(GuaranteedReceivedCount),
+				static_cast<unsigned>(CounterValueCount),
+				static_cast<unsigned>(BestEffortReceivedCount),
+				static_cast<unsigned>(CounterValueCount));
+			bHasLoggedGuaranteedComplete = true;
 		}
-		MW_LOG(Log, "ex25", "rx best-effort n=%u", static_cast<unsigned>(View.Payload.Data()[0]));
 	}
 
 	/**
-	 * Motivation: Logs one arrival on the guaranteed column, where the sequence is expected to be complete.
-	 * Responsibilities: Validate the payload and log the guaranteed counter value.
+	 * Motivation: Keeps bounded distinct-value accounting identical for the two channel callbacks without
+	 *   duplicating range validation and bit-mask updates.
+	 * Responsibilities: Validate one counter payload, log its channel column, and add its value to the supplied tally once.
 	 */
-	void OnGuaranteed(const FMessageView& View) noexcept
+	void RecordCounter(
+		const FMessage& Message, const char* InChannelLabel, std::uint32_t& InOutReceivedValues, std::uint8_t& InOutReceivedCount) noexcept
 	{
-		if (View.Payload.Size() < 1)
+		const TSpan<const std::uint8_t> Payload = Message.GetPayload();
+		if (Payload.Size() < 1)
 		{
-			MW_LOG(Error, "ex25", "ledger received undersized guaranteed payload");
+			MW_LOG(Error, "ex25", "ledger received undersized %s payload", InChannelLabel);
 			return;
 		}
-		MW_LOG(Log, "ex25", "rx guaranteed n=%u", static_cast<unsigned>(View.Payload.Data()[0]));
+
+		const std::uint8_t CounterValue = Payload.Data()[0];
+		if (CounterValue < FirstCounterValue || CounterValue > LastCounterValue)
+		{
+			MW_LOG(Error, "ex25", "ledger received out-of-range %s n=%u", InChannelLabel, static_cast<unsigned>(CounterValue));
+			return;
+		}
+
+		MW_LOG(Log, "ex25", "rx %s n=%u", InChannelLabel, static_cast<unsigned>(CounterValue));
+		const std::uint32_t ValueMask = 1u << static_cast<std::uint32_t>(CounterValue - FirstCounterValue);
+		if ((InOutReceivedValues & ValueMask) == 0)
+		{
+			InOutReceivedValues |= ValueMask;
+			++InOutReceivedCount;
+		}
 	}
 
-	/** Motivation: Router this actor listens through; injected at construction, never a global. */
-	IMessageRouter& Router;
+	/** Motivation: Messaging system this actor listens through; injected at construction, never a global. */
+	FMessagingSystem& Messaging;
+
+	/** Motivation: Marks every distinct best-effort counter value that reached this server. */
+	std::uint32_t BestEffortReceivedValues{0};
+
+	/** Motivation: Counts distinct best-effort counter values for the final proof line. */
+	std::uint8_t BestEffortReceivedCount{0};
+
+	/** Motivation: Marks every distinct guaranteed counter value that reached this server. */
+	std::uint32_t GuaranteedReceivedValues{0};
+
+	/** Motivation: Counts distinct guaranteed counter values for the final proof line. */
+	std::uint8_t GuaranteedReceivedCount{0};
+
+	/** Motivation: Prevents duplicate reliable frames from repeating the single completion proof line. */
+	bool bHasLoggedGuaranteedComplete{false};
 };
 } // namespace
 
 /**
- * Motivation: Lets Board A host the WiFi SoftAP and run FLedgerActor over one router wired to one UDP
- *   transport through two bindings -- best-effort straight to the router, guaranteed wrapped in
- *   TReliableChannel -- behind one TPlaySystemSet. The server's own device is never wrapped in
- *   FPacketDropDevice; only the client injects loss.
- * Responsibilities: Host the SoftAP, wire the transport, both bindings, the reliable channel, the frame
- *   set, and the engine, spawn the ledger, start as a dedicated server, and tick the engine in an unbounded loop.
+ * Motivation: Lets Board A host the WiFi SoftAP and run FLedgerActor over two named channels that share
+ *   one UDP device, while Messaging owns framing, acknowledgements, pending messages, and retries.
+ * Responsibilities: Host the SoftAP, open the device, create the Messaging channels, spawn the ledger,
+ *   start the engine, and tick it in an unbounded loop.
  */
 void RunServer() noexcept
 {
@@ -165,42 +211,27 @@ void RunServer() noexcept
 		return;
 	}
 
-	// All composition objects are static (the ESP32-S3 stack lesson, §2.2).
-	static FWorldTransport Transport{UdpDevice};
-	static FWorldRouter Router;
-
-	// Best-effort channel: a plain binding straight to the router, no reliable wrapper.
-	static FChannelBinding BestEffortWire{Transport, BestEffortWireChannelByte, BestEffortChannelId, EChannelSendTarget::AllPeers, Router};
-
-	// Guaranteed channel: same cycle-break order as the client -- construct the reliable wrapper
-	// (forward sink = Router), construct the binding (inbound sink = the wrapper), then bind the
-	// wrapper to the binding via SetInnerChannel (ReliableChannel.h).
-	static FGuaranteedChannel Guaranteed{Router, FReliableChannelConfig{}};
-	static FChannelBinding GuaranteedWire{Transport, GuaranteedWireChannelByte, GuaranteedChannelId, EChannelSendTarget::AllPeers, Guaranteed};
-	Guaranteed.SetInnerChannel(GuaranteedWire);
-
-	static FHostPlay HostPlay{Transport};
-
-	// D3 frame-set order: transport first, reliable channel second, router last -- see
-	// GuaranteedDeliveryShared.h's FWorldFrameSet alias.
-	static FWorldFrameSet Frames;
-	if (Frames.Add(HostPlay) != EEngineResult::Success || Frames.Add(Guaranteed) != EEngineResult::Success
-		|| Frames.Add(Router) != EEngineResult::Success)
+	static FWorldEngine Engine{FGarbageCollectionBudget{1, 4, 8}};
+	if (Engine.CreateMessagingSystem(FMessagingSystemInformation{}) != ERuntimeResult::Success)
 	{
-		MW_LOG(Error, "ex25", "server frame set rejected a frame; halting");
+		MW_LOG(Error, "ex25", "server Messaging system creation failed; halting");
 		return;
 	}
-	static FWorldEngine Engine{FGarbageCollectionBudget{1, 4, 8}, Frames};
-
-	if (!BestEffortWire.IsAttached() || !GuaranteedWire.IsAttached())
+	FMessagingSystem* const Messaging = Engine.GetMessagingSystem();
+	if (Messaging == nullptr)
 	{
-		MW_LOG(Error, "ex25", "server binding failed to attach; halting");
+		MW_LOG(Error, "ex25", "server Messaging system unavailable; halting");
 		return;
 	}
-	// AddChannel(Guaranteed) must follow SetInnerChannel above: GetChannelId() reads the inner id.
-	if (Router.AddChannel(BestEffortWire) != EMessageResult::Success || Router.AddChannel(Guaranteed) != EMessageResult::Success)
+
+	const FDeviceAddress ClientAddress = MakeUdpAddress(ClientIpv4[0], ClientIpv4[1], ClientIpv4[2], ClientIpv4[3], ClientPort);
+	// The server names the client even though it sends no application message of its own: a reliable
+	// acknowledgement goes to its channel's configured address, so without this the client is unreachable.
+	const EMessagingResult BestEffortChannelResult = Messaging->CreateChannel({BestEffortChannelName, false, &UdpDevice, ClientAddress});
+	const EMessagingResult GuaranteedChannelResult = Messaging->CreateChannel({GuaranteedChannelName, true, &UdpDevice, ClientAddress});
+	if (BestEffortChannelResult != EMessagingResult::Success || GuaranteedChannelResult != EMessagingResult::Success)
 	{
-		MW_LOG(Error, "ex25", "server router rejected a channel; halting");
+		MW_LOG(Error, "ex25", "server Messaging channel creation failed; halting");
 		return;
 	}
 
@@ -211,7 +242,7 @@ void RunServer() noexcept
 	}
 
 	const TObjectPtr<UWorld> World = Engine.CreateWorld();
-	const TObjectPtr<FLedgerActor> Ledger = Engine.CreateObject<FLedgerActor>(LedgerActorTypeId, Router).Object;
+	const TObjectPtr<FLedgerActor> Ledger = Engine.CreateObject<FLedgerActor>(LedgerActorTypeId, *Messaging).Object;
 	if (World.Get() == nullptr || Ledger.Get() == nullptr)
 	{
 		MW_LOG(Error, "ex25", "server world or actor creation failed; halting");
@@ -224,9 +255,6 @@ void RunServer() noexcept
 		return;
 	}
 
-	(void)Transport.Configure(ENetworkMode::DedicatedServer, MakeHostConfig());
-	(void)Transport.Start(GTimeSource.Now());
-
 	const TimePointMilliseconds BootTime = GTimeSource.Now();
 	if (Engine.BeginPlay(BootTime) != ERuntimeResult::Success)
 	{
@@ -235,18 +263,9 @@ void RunServer() noexcept
 	}
 	MW_LOG(Log, "ex25", "server up (best-effort + guaranteed over one UDP link)");
 
-	// This is a two-board two-channel demo, not a self-terminating trace (matching 16-TwoBoardUdp and
-	// 24-TwoChannelWorld's server), so the loop runs unbounded rather than stopping after N messages.
-	std::uint32_t LastDedup = 0;
 	for (;;)
 	{
 		(void)Engine.Tick(GTimeSource.Now());
-		const std::uint32_t Dedup = Guaranteed.DuplicateDroppedCount();
-		if (Dedup != LastDedup)
-		{
-			MW_LOG(Log, "ex25", "guaranteed dedup dropped=%u", static_cast<unsigned>(Dedup));
-			LastDedup = Dedup;
-		}
 		SleepMilliseconds(PollPacingMilliseconds);
 	}
 }
