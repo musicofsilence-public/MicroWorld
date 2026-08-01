@@ -1,5 +1,6 @@
 #pragma once
 
+#include <MicroWorld/Core/WeakOwner.h>
 #include <MicroWorld/Engine/ObjectPtr.h>
 
 #include <cstddef>
@@ -928,5 +929,18 @@ private:
 	/** Motivation: Identifies the collector that exclusively owns incremental store traversal. */
 	const FGarbageCollector* ActiveCollector{nullptr};
 };
+
+/**
+ * Motivation: Lets a system that must not name Engine — Messaging above all — hold a reference that stops working when
+ *   an object dies, in the same way UE5 lets a delegate hold a weak object reference.
+ * Responsibilities: Build a token watching InHandle's slot generation, or a token that is already dead when InHandle
+ *   names no live object, so a subscription captured too late can never fire.
+ * Example:
+ *   MessagingSystem->SubscribeToChannel("Telemetry", std::move(Subscriber), MakeWeakOwner(Store, GetObjectHandle()));
+ */
+inline Core::FWeakOwner MakeWeakOwner(const FObjectStore& InStore, const FObjectHandle InHandle) noexcept
+{
+	return Core::FWeakOwner{InStore.GetSlotGenerationAddress(InHandle), InHandle.Generation, true};
+}
 
 } // namespace MicroWorld::Engine
