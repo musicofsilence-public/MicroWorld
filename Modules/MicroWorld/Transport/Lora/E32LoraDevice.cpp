@@ -48,7 +48,7 @@ ETransportResult FE32LoraDevice::TrySend(
 ETransportResult FE32LoraDevice::TryReceive(
 	::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
 	const Core::TSpan<std::uint8_t> InDestination,
-	::MicroWorld::Transport::Device::FReceiveResult& OutResult) noexcept
+	Core::FReceiveResult& OutResult) noexcept
 {
 	if (InDestination.Size() != 0 && InDestination.Data() == nullptr)
 	{
@@ -91,7 +91,7 @@ std::size_t FE32LoraDevice::MaxPacketBytes() const noexcept
 	return E32MaxPayloadBytes;
 }
 
-void FE32LoraDevice::AdvanceTransmit() noexcept
+void FE32LoraDevice::PreAdvance(Core::TimePointMilliseconds) noexcept
 {
 	if (!bInitialized)
 	{

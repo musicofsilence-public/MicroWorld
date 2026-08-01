@@ -1,8 +1,8 @@
 #pragma once
 
 #include <MicroWorld/Core/Containers/Span.h>
+#include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Transport/DeviceAddress.h>
-#include <MicroWorld/Transport/Device.h>
 #include <MicroWorld/Transport/TransportResult.h>
 
 #include <array>
@@ -16,12 +16,12 @@ namespace MicroWorld::Transport
 /**
  * Motivation: Provides one deterministic in-process multi-port loopback network for host tests so two hosts exchange
  *   packets without a physical transport.
- * Responsibilities: Own N mailboxes and N embedded per-port IDevice values, hand out the device bound to the 1-byte
- *   loopback address equal to its index via Port(index), and keep the ports' lifetimes tracked by the network.
+ * Responsibilities: Own N mailboxes and N embedded per-port Core::ITransportDevice values, hand out the device bound to the
+ *   1-byte loopback address equal to its index via Port(index), and keep the ports' lifetimes tracked by the network.
  * Example:
  *   THostLoopback<2, 4, 64> Net;
- *   IDevice& A = Net.Port(0);
- *   IDevice& B = Net.Port(1);
+ *   Core::ITransportDevice& A = Net.Port(0);
+ *   Core::ITransportDevice& B = Net.Port(1);
  *   A.TrySend(MakeLoopbackAddress(1), Packet);
  */
 template<std::size_t MaxPorts, std::size_t MailboxCapacity, std::size_t PacketBytes>
@@ -97,7 +97,7 @@ class THostLoopback final
 			const std::uint8_t InLocalPort,
 			::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
 			Core::TSpan<std::uint8_t> InDestination,
-			::MicroWorld::Transport::Device::FReceiveResult& OutResult) noexcept
+			Core::FReceiveResult& OutResult) noexcept
 		{
 			const ETransportResult DestinationResult = ValidateReceiveDestination(InDestination);
 			if (DestinationResult != ETransportResult::Success)
@@ -267,7 +267,7 @@ class THostLoopback final
 			const std::size_t InHeadSize,
 			::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
 			Core::TSpan<std::uint8_t> InDestination,
-			::MicroWorld::Transport::Device::FReceiveResult& OutResult) noexcept
+			Core::FReceiveResult& OutResult) noexcept
 		{
 			if (InHeadSize > 0)
 			{
@@ -315,13 +315,14 @@ class THostLoopback final
 	};
 
 	/**
-	 * Motivation: Adapts one port's index to the IDevice interface so each host drives its own device backed by shared mailboxes.
+	 * Motivation: Adapts one port's index to the Core::ITransportDevice interface so each host drives its own device backed by
+	 *   shared mailboxes.
 	 * Responsibilities: Forward send and receive to the shared mailboxes using the bound port index, and report the network's
 	 *   per-packet byte capacity.
 	 * Example:
 	 *   // Returned by THostLoopback::Port(index); not constructed directly.
 	 */
-	class FPort final : public ::MicroWorld::Transport::Device::IDevice
+	class FPort final : public Core::ITransportDevice
 	{
 	public:
 		/**
@@ -363,7 +364,7 @@ class THostLoopback final
 		ETransportResult TryReceive(
 			::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
 			Core::TSpan<std::uint8_t> InDestination,
-			::MicroWorld::Transport::Device::FReceiveResult& OutResult) noexcept override
+			Core::FReceiveResult& OutResult) noexcept override
 		{
 			return Mailboxes->Receive(LocalIndex, OutFrom, InDestination, OutResult);
 		}
@@ -373,6 +374,12 @@ class THostLoopback final
 		 * Responsibilities: Report the per-packet byte capacity of this loopback network.
 		 */
 		std::size_t MaxPacketBytes() const noexcept override { return PacketBytes; }
+
+		/**
+		 * Motivation: Makes this synchronous loopback port's lack of staged bytes explicit at the required pre-advance turn.
+		 * Responsibilities: Do no work because TrySend delivers directly into the destination mailbox and stages nothing.
+		 */
+		void PreAdvance(Core::TimePointMilliseconds) noexcept override {}
 
 	private:
 		/** Motivation: References the shared mailboxes owned by the enclosing network. */
@@ -417,7 +424,7 @@ public:
 	 * Motivation: Hands hosts the device bound to a port so each drives its own loopback endpoint.
 	 * Responsibilities: Return the device at InIndex, which must be below MaxPorts by caller contract.
 	 */
-	::MicroWorld::Transport::Device::IDevice& Port(const std::uint8_t InIndex) noexcept { return Ports[InIndex]; }
+	Core::ITransportDevice& Port(const std::uint8_t InIndex) noexcept { return Ports[InIndex]; }
 
 	/**
 	 * Motivation: Lets a caller observe the fixed port count without magic numbers.

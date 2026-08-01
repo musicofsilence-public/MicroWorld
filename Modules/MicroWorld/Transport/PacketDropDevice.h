@@ -1,8 +1,8 @@
 #pragma once
 
 #include <MicroWorld/Core/Containers/Span.h>
+#include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Transport/DeviceAddress.h>
-#include <MicroWorld/Transport/Device.h>
 #include <MicroWorld/Transport/TransportResult.h>
 
 #include <cstddef>
@@ -20,14 +20,14 @@ namespace MicroWorld::Transport
  *   Lossy.TrySend(To, Packet);
  *   if (Lossy.DroppedSendCount() > 0) { Retried(); }
  */
-class FPacketDropDevice final : public ::MicroWorld::Transport::Device::IDevice
+class FPacketDropDevice final : public Core::ITransportDevice
 {
 public:
 	/**
 	 * Motivation: Binds the wrapped device and the drop interval at construction.
 	 * Responsibilities: Store the inner device reference and the drop interval (zero disables dropping).
 	 */
-	FPacketDropDevice(::MicroWorld::Transport::Device::IDevice& InInnerDevice, std::uint32_t InDropEveryNthSend) noexcept;
+	FPacketDropDevice(Core::ITransportDevice& InInnerDevice, std::uint32_t InDropEveryNthSend) noexcept;
 
 	/**
 	 * Motivation: Prevents copying since this device holds InnerDevice by reference and is itself held by reference.
@@ -54,7 +54,7 @@ public:
 	FPacketDropDevice& operator=(FPacketDropDevice&&) = delete;
 
 	/**
-	 * Motivation: Anchors the vtable in one translation unit matching the IDevice out-of-line destructor rule.
+	 * Motivation: Anchors the vtable in one translation unit matching the ITransportDevice out-of-line destructor rule.
 	 * Responsibilities: Define one out-of-line virtual destructor without side effects.
 	 */
 	~FPacketDropDevice() noexcept override;
@@ -74,13 +74,13 @@ public:
 	ETransportResult TryReceive(
 		::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
 		Core::TSpan<std::uint8_t> InDestination,
-		::MicroWorld::Transport::Device::FReceiveResult& OutResult) noexcept override;
+		Core::FReceiveResult& OutResult) noexcept override;
 
 	/**
-	 * Motivation: Keeps staged transmit progress working so a wrapped staged device cannot stall behind loss injection.
-	 * Responsibilities: Forward bounded physical transmit progress to the inner device.
+	 * Motivation: Keeps the required pre-advance transport turn working so a wrapped staged device cannot stall behind loss injection.
+	 * Responsibilities: Forward bounded physical transmit progress and the caller-supplied time to the inner device.
 	 */
-	void AdvanceTransmit() noexcept override { InnerDevice.AdvanceTransmit(); }
+	void PreAdvance(Core::TimePointMilliseconds InNowMilliseconds) noexcept override { InnerDevice.PreAdvance(InNowMilliseconds); }
 
 	/**
 	 * Motivation: Keeps the capacity query consistent with the wrapped device.
@@ -96,7 +96,7 @@ public:
 
 private:
 	/** Motivation: References the wrapped device that every non-dropped send and every receive forwards to. */
-	::MicroWorld::Transport::Device::IDevice& InnerDevice;
+	Core::ITransportDevice& InnerDevice;
 
 	/** Motivation: Fixes the drop cadence; zero disables dropping entirely. */
 	const std::uint32_t DropEveryNthSend;

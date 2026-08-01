@@ -3,7 +3,7 @@
 namespace MicroWorld::Transport
 {
 
-FPacketDropDevice::FPacketDropDevice(::MicroWorld::Transport::Device::IDevice& InInnerDevice, const std::uint32_t InDropEveryNthSend) noexcept
+FPacketDropDevice::FPacketDropDevice(Core::ITransportDevice& InInnerDevice, const std::uint32_t InDropEveryNthSend) noexcept
 	: InnerDevice(InInnerDevice), DropEveryNthSend(InDropEveryNthSend)
 {
 }
@@ -28,9 +28,7 @@ ETransportResult FPacketDropDevice::TrySend(
 }
 
 ETransportResult FPacketDropDevice::TryReceive(
-	::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
-	Core::TSpan<std::uint8_t> InDestination,
-	::MicroWorld::Transport::Device::FReceiveResult& OutResult) noexcept
+	::MicroWorld::Transport::Address::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept
 {
 	return InnerDevice.TryReceive(OutFrom, InDestination, OutResult);
 }

@@ -2,10 +2,10 @@
 
 #include <MicroWorld/Core/Containers/Span.h>
 #include <MicroWorld/Core/Delegates/Delegate.h>
+#include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Core/Log.h>
 #include <MicroWorld/Transport/ByteWriter.h>
 #include <MicroWorld/Transport/DeviceAddress.h>
-#include <MicroWorld/Transport/Device.h>
 #include <MicroWorld/Transport/TransportManager.h>
 #include <MicroWorld/Transport/TransportPacketStorage.h>
 #include <MicroWorld/Transport/TransportProtocol.h>
@@ -194,10 +194,7 @@ public:
 	 * Motivation: Binds the host to one externally owned device at construction, with mode and config following via Configure.
 	 * Responsibilities: Store the device reference and construct the outbound manager over the device and its storage.
 	 */
-	explicit TTransportHost(::MicroWorld::Transport::Device::IDevice& InDevice) noexcept
-		: Device(InDevice), OutboundManager(InDevice, OutboundStorage)
-	{
-	}
+	explicit TTransportHost(Core::ITransportDevice& InDevice) noexcept : Device(InDevice), OutboundManager(InDevice, OutboundStorage) {}
 
 	/**
 	 * Motivation: Prevents copying so one host value binds one device, table, and handler.
@@ -303,7 +300,7 @@ public:
 
 	/**
 	 * Motivation: Emits due heartbeats and drains the outbound FIFO in one bounded tick so the host needs no background thread.
-	 * Responsibilities: Send client Hello retries and due heartbeats, drain the outbound FIFO, advance the device's transmit
+	 * Responsibilities: Send client Hello retries and due heartbeats, drain the outbound FIFO, run the device's pre-advance
 	 *   progress, and return immediately for a standalone host.
 	 */
 	ETransportResult PumpSend(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
@@ -315,7 +312,7 @@ public:
 		SendClientHelloIfDue(InNowMilliseconds);
 		SendDueHeartbeats(InNowMilliseconds);
 		DrainOutbound();
-		Device.AdvanceTransmit();
+		Device.PreAdvance(InNowMilliseconds);
 		return ETransportResult::Success;
 	}
 
@@ -886,7 +883,7 @@ private:
 		for (std::size_t Count = 0; Count < MaxReceives; ++Count)
 		{
 			::MicroWorld::Transport::Address::FDeviceAddress From{};
-			::MicroWorld::Transport::Device::FReceiveResult Result{};
+			Core::FReceiveResult Result{};
 			const ETransportResult ReceiveResult =
 				OutboundManager.Receive(From, Core::TSpan<std::uint8_t>(ReceiveBuffer.data(), ReceiveBuffer.size()), Result);
 			if (ReceiveResult != ETransportResult::Success)
@@ -1017,7 +1014,7 @@ private:
 	}
 
 	/** Motivation: Borrows the device for one host lifetime; pending physical transmission progresses after each outbound pump. */
-	::MicroWorld::Transport::Device::IDevice& Device;
+	Core::ITransportDevice& Device;
 
 	/** Motivation: Owns the outbound packet bytes, lengths, and destinations for the FIFO. */
 	TTransportPacketStorage<SendQueueDepth, MaxPacketBytes> OutboundStorage{};

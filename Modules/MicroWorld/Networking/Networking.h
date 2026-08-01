@@ -5,6 +5,7 @@
 #include <MicroWorld/Messaging/MessageChannelBinding.h>
 #include <MicroWorld/Messaging/MessageRouter.h>
 #include <MicroWorld/Messaging/ReliableChannel.h>
+#include <MicroWorld/Transport/Device.h>
 #include <MicroWorld/Transport/TransportHost.h>
 
 #include <array>
@@ -226,7 +227,7 @@ public:
 	 * Responsibilities: Acquire a device slot, configure the host, and return a generation-checked handle; leave composition untouched on failure.
 	 */
 	FDeviceHandle AddDevice(
-		::MicroWorld::Transport::Device::IDevice& InDevice,
+		Core::ITransportDevice& InDevice,
 		::MicroWorld::Transport::ENetworkMode InMode,
 		const ::MicroWorld::Transport::FTransportHostConfig& InConfig) noexcept
 	{
@@ -456,7 +457,7 @@ private:
 	 * Motivation: Finds the first free device slot and constructs a host in it.
 	 * Responsibilities: Construct the host in stable storage and mark the slot live, or return null when capacity is exhausted.
 	 */
-	FDeviceSlot* AcquireDeviceSlot(::MicroWorld::Transport::Device::IDevice& InDevice) noexcept
+	FDeviceSlot* AcquireDeviceSlot(Core::ITransportDevice& InDevice) noexcept
 	{
 		for (FDeviceSlot& Slot : DeviceSlots)
 		{

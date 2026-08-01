@@ -8,6 +8,9 @@ namespace
 /** Motivation: Uses plain configuration values so the released facade compiles without exposing ESP-IDF UART types. */
 constexpr MicroWorld::Platform::Esp32::FEsp32E32LoraConfig RadioProbeConfig{1, 17, 18, 9600, 1};
 
+/** Motivation: Names the stamp handed to a pre-advance turn taken without a clock, so the zero reads as deliberate. */
+constexpr MicroWorld::Core::TimePointMilliseconds UnpacedPumpTimeMilliseconds{0};
+
 } // namespace
 
 /**
@@ -22,6 +25,7 @@ extern "C" void app_main()
 	if (bRunRadioHardwareProbe)
 	{
 		MicroWorld::Platform::Esp32::FEsp32LoraDevice Device(RadioProbeConfig);
-		Device.AdvanceTransmit();
+		// A link probe owns no clock, and the E32 radio paces nothing by one, so the turn matters and its stamp does not.
+		Device.PreAdvance(UnpacedPumpTimeMilliseconds);
 	}
 }

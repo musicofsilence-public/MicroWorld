@@ -15,6 +15,7 @@ namespace
 
 using MicroWorld::Core::EUartByteStreamResult;
 using MicroWorld::Core::IUartByteStream;
+using MicroWorld::Core::TimePointMilliseconds;
 using MicroWorld::Core::TSpan;
 using MicroWorld::Transport::E32MaxPayloadBytes;
 using MicroWorld::Transport::ETransportResult;
@@ -23,6 +24,9 @@ using MicroWorld::Transport::MakeLoraAddress;
 using MicroWorld::Transport::Address::FDeviceAddress;
 using MicroWorld::Transport::Device::FReceiveResult;
 using MicroWorld::Transport::FrameCodec::FrameOverheadBytes;
+
+/** Motivation: Names the time handed to the device's pre-advance turn; the E32 device paces nothing by the clock and ignores it. */
+constexpr TimePointMilliseconds PumpTimeMilliseconds{0};
 
 /** Motivation: Fixed encoded E32 frame capacity used by transmit and receive test fixtures. */
 constexpr std::size_t EncodedFrameCapacity = E32MaxPayloadBytes + FrameOverheadBytes;
@@ -301,7 +305,7 @@ MW_TEST_CASE(E32LoraDeviceRemainsInertUntilSingleShotInitialization)
 	const bool bInitiallyInitialized = Device.IsInitialized();
 	const ETransportResult SendBeforeInitialize = Device.TrySend(DestinationAddress, TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
 	const ETransportResult ReceiveBeforeInitialize = Device.TryReceive(From, TSpan<std::uint8_t>(Destination, sizeof(Destination)), ReceiveResult);
-	Device.AdvanceTransmit();
+	Device.PreAdvance(PumpTimeMilliseconds);
 	const ETransportResult FirstInitializeResult = Device.Initialize(LocalNodeId);
 	const ETransportResult SecondInitializeResult = Device.Initialize(LocalNodeId);
 	const bool bInitializedAfterFirstCall = Device.IsInitialized();
@@ -344,10 +348,10 @@ MW_TEST_CASE(E32LoraDeviceValidatesSendInputsAndAcceptsPayloadBoundaries)
 	const ETransportResult OversizePayloadResult =
 		Device.TrySend(DestinationAddress, TSpan<const std::uint8_t>(&OversizePayloadByte, E32MaxPayloadBytes + 1));
 	const ETransportResult ValidPayloadResult = Device.TrySend(DestinationAddress, TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
-	Device.AdvanceTransmit();
+	Device.PreAdvance(PumpTimeMilliseconds);
 	const std::size_t ValidFrameWrittenBytes = Stream.WrittenByteCount();
 	const ETransportResult EmptyPayloadResult = Device.TrySend(DestinationAddress, TSpan<const std::uint8_t>(nullptr, 0));
-	Device.AdvanceTransmit();
+	Device.PreAdvance(PumpTimeMilliseconds);
 	const std::size_t EmptyFrameWrittenBytes = Stream.WrittenByteCount();
 	const ETransportResult MaximumPayloadResult =
 		Device.TrySend(DestinationAddress, TSpan<const std::uint8_t>(MaximumPayload, sizeof(MaximumPayload)));
@@ -359,10 +363,11 @@ MW_TEST_CASE(E32LoraDeviceValidatesSendInputsAndAcceptsPayloadBoundaries)
 	MW_EXPECT_EQ(Test, ETransportResult::Invalid, NullPayloadResult, "A null non-empty payload must be rejected");
 	MW_EXPECT_EQ(Test, ETransportResult::Invalid, OversizePayloadResult, "A payload over the E32 limit must be rejected");
 	MW_EXPECT_EQ(Test, ETransportResult::Success, ValidPayloadResult, "A valid payload after rejected sends must be accepted");
-	MW_EXPECT_EQ(Test, sizeof(Payload) + FrameOverheadBytes, ValidFrameWrittenBytes, "AdvanceTransmit must emit the accepted valid payload frame");
+	MW_EXPECT_EQ(
+		Test, sizeof(Payload) + FrameOverheadBytes, ValidFrameWrittenBytes, "The pre-advance turn must emit the accepted valid payload frame");
 	MW_EXPECT_EQ(Test, ETransportResult::Success, EmptyPayloadResult, "An empty payload must be accepted");
 	MW_EXPECT_EQ(
-		Test, sizeof(Payload) + (2u * FrameOverheadBytes), EmptyFrameWrittenBytes, "AdvanceTransmit must emit the accepted empty payload frame");
+		Test, sizeof(Payload) + (2u * FrameOverheadBytes), EmptyFrameWrittenBytes, "The pre-advance turn must emit the accepted empty payload frame");
 	MW_EXPECT_EQ(Test, ETransportResult::Success, MaximumPayloadResult, "The maximum E32 payload must be accepted");
 	MW_EXPECT_EQ(Test, E32MaxPayloadBytes, MaximumPacketBytes, "MaxPacketBytes must expose the E32 payload limit");
 }
@@ -384,7 +389,7 @@ MW_TEST_CASE(E32LoraDeviceAppliesBackpressureAndDrainsMaximumFrameInOneAdvance)
 	const ETransportResult FullResult = Device.TrySend(DestinationAddress, TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
 
 	// Act
-	Device.AdvanceTransmit();
+	Device.PreAdvance(PumpTimeMilliseconds);
 	const std::size_t WrittenBytes = Stream.WrittenByteCount();
 	const std::size_t WriteCalls = Stream.WriteCallCount();
 	const ETransportResult ReuseResult = Device.TrySend(DestinationAddress, TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
@@ -420,13 +425,13 @@ MW_TEST_CASE(E32LoraDeviceRetainsCurrentByteWhenWriteIsUnavailable)
 	Stream.SetWriteResult(EUartByteStreamResult::Unavailable);
 
 	// Act
-	Device.AdvanceTransmit();
+	Device.PreAdvance(PumpTimeMilliseconds);
 	const std::size_t BlockedWriteCalls = Stream.WriteCallCount();
 	const std::size_t BlockedWrittenBytes = Stream.WrittenByteCount();
 	const ETransportResult FullWhileBlockedResult =
 		Device.TrySend(DestinationAddress, TSpan<const std::uint8_t>(ReplacementPayload, sizeof(ReplacementPayload)));
 	Stream.SetWriteResult(EUartByteStreamResult::Success);
-	Device.AdvanceTransmit();
+	Device.PreAdvance(PumpTimeMilliseconds);
 	const std::size_t WrittenBytesAfterRetry = Stream.WrittenByteCount();
 	const std::uint8_t FirstWrittenByte = Stream.WrittenByteAt(0);
 	const ETransportResult ReuseResult =
@@ -459,7 +464,7 @@ MW_TEST_CASE(E32LoraDeviceDiscardsQueuedFrameAfterWriteError)
 	Stream.SetSuccessfulWriteLimit(2);
 
 	// Act
-	Device.AdvanceTransmit();
+	Device.PreAdvance(PumpTimeMilliseconds);
 	const std::size_t WriteCalls = Stream.WriteCallCount();
 	const std::size_t WrittenBytes = Stream.WrittenByteCount();
 	const ETransportResult LaterSendResult =
@@ -734,7 +739,7 @@ MW_TEST_CASE(E32LoraDevicesExchangeOneRealEncodedFrame)
 	const ETransportResult SendResult = Sender.TrySend(DestinationAddress, TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
 
 	// Act
-	Sender.AdvanceTransmit();
+	Sender.PreAdvance(PumpTimeMilliseconds);
 	const std::size_t EmittedBytes = SenderStream.WrittenByteCount();
 	bool bCopiedEveryByte = true;
 	for (std::size_t ByteIndex = 0; ByteIndex < EmittedBytes; ++ByteIndex)

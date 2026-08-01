@@ -78,6 +78,14 @@ public:
 	virtual std::size_t MaxPacketBytes() const noexcept = 0;
 
 	/**
+	 * Motivation: Avoids ceremony for a transport turn no device currently needs, while keeping PreAdvance inherited as a
+	 *   required declaration: a staged device that omits its pump still accepts TrySend and silently transmits nothing.
+	 * Responsibilities: Perform no post-advance work by default; concrete devices must still explicitly state PreAdvance,
+	 *   including an empty body when they transmit synchronously within TrySend and stage nothing.
+	 */
+	void PostAdvance(TimePointMilliseconds) noexcept override {}
+
+	/**
 	 * Motivation: Gives every concrete device one stable virtual destructor anchored out of line.
 	 * Responsibilities: Release no interface-owned resource and allow polymorphic destruction.
 	 */

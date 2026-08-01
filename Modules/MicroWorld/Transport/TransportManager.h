@@ -1,7 +1,7 @@
 #pragma once
 
 #include <MicroWorld/Core/Containers/Span.h>
-#include <MicroWorld/Transport/Device.h>
+#include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Transport/TransportPacketStorage.h>
 #include <MicroWorld/Transport/TransportResult.h>
 
@@ -35,7 +35,7 @@ public:
 	 * Motivation: Binds the manager to the device and caller-owned storage it will drive.
 	 * Responsibilities: Store references to the externally owned device and storage.
 	 */
-	TTransportManager(::MicroWorld::Transport::Device::IDevice& InDevice, TTransportPacketStorage<MaxPackets, MaxPacketBytes>& InStorage) noexcept
+	TTransportManager(Core::ITransportDevice& InDevice, TTransportPacketStorage<MaxPackets, MaxPacketBytes>& InStorage) noexcept
 		: Device(InDevice), Storage(InStorage)
 	{
 	}
@@ -113,9 +113,7 @@ public:
 	 *   unchanged on Full, Invalid, or Unavailable.
 	 */
 	ETransportResult Receive(
-		::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
-		Core::TSpan<std::uint8_t> InDestination,
-		::MicroWorld::Transport::Device::FReceiveResult& OutResult) noexcept
+		::MicroWorld::Transport::Address::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept
 	{
 		return Device.TryReceive(OutFrom, InDestination, OutResult);
 	}
@@ -195,7 +193,7 @@ private:
 	}
 
 	/** Motivation: References the externally owned device whose lifetime the caller controls. */
-	::MicroWorld::Transport::Device::IDevice& Device;
+	Core::ITransportDevice& Device;
 
 	/** Motivation: References the caller-owned packet storage the manager reads and writes. */
 	TTransportPacketStorage<MaxPackets, MaxPacketBytes>& Storage;

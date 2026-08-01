@@ -1,9 +1,9 @@
 #include "TestSupport.h"
 
 #include <MicroWorld/Core/Containers/Span.h>
+#include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Transport/HostLoopback.h>
 #include <MicroWorld/Transport/DeviceAddress.h>
-#include <MicroWorld/Transport/Device.h>
 #include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Transport/PacketDropDevice.h>
 
@@ -14,13 +14,13 @@
 namespace
 {
 
+using MicroWorld::Core::FReceiveResult;
 using MicroWorld::Core::TSpan;
 using MicroWorld::Transport::ETransportResult;
 using MicroWorld::Transport::FPacketDropDevice;
 using MicroWorld::Transport::THostLoopback;
 using MicroWorld::Transport::Address::FDeviceAddress;
 using MicroWorld::Transport::Address::MakeLoopbackAddress;
-using MicroWorld::Transport::Device::FReceiveResult;
 
 /** Motivation: Loopback template parameters every packet-drop case binds: two ports, deep enough mailboxes, one-word packets. */
 constexpr std::size_t LoopbackPortCount = 2;
@@ -67,14 +67,15 @@ constexpr std::uint8_t PassthroughPacketBytes[2] = {0xAA, 0xBB};
  * Example:
  *   // Construct and exercise the type in one behavior test.
  */
-class FAdvanceRecordingDevice final : public MicroWorld::Transport::Device::IDevice
+class FAdvanceRecordingDevice final : public MicroWorld::Core::ITransportDevice
 {
 public:
 	/**
-	 * Motivation: Records the bounded progress command that a wrapping decorator must preserve.
-	 * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+	 * Motivation: Records the bounded pre-advance turn that a wrapping decorator must preserve.
+	 * Responsibilities: Perform only the documented
+	 * mutation and leave unrelated state untouched.
 	 */
-	void AdvanceTransmit() noexcept override { ++AdvanceCount; }
+	void PreAdvance(MicroWorld::Core::TimePointMilliseconds) noexcept override { ++AdvanceCount; }
 
 	/**
 	 * Motivation: This fake only observes transport progress.
@@ -99,8 +100,9 @@ public:
 };
 
 /**
- * Motivation: Wrap an inner recording device with a drop-every-send decorator, then advance transmit.
- * Responsibilities: Transport progress reaches the wrapped device even when every logical send drops.
+ * Motivation: Wrap an inner recording device with a drop-every-send decorator, then run its pre-advance turn.
+ * Responsibilities: Transport progress
+ * reaches the wrapped device even when every logical send drops.
  */
 MW_TEST_CASE(PacketDropDevice_ForwardsPendingTransmitProgress)
 {
@@ -109,7 +111,7 @@ MW_TEST_CASE(PacketDropDevice_ForwardsPendingTransmitProgress)
 	FPacketDropDevice Dropper(InnerDevice, DropEverySendInterval);
 
 	// Act
-	Dropper.AdvanceTransmit();
+	Dropper.PreAdvance(0);
 
 	// Assert
 	MW_EXPECT_EQ(

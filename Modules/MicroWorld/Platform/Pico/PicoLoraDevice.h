@@ -44,9 +44,9 @@ struct FPicoE32LoraConfig
  *   addresses stay shape-checked metadata rather than on-air routing.
  * Example:
  *   static FPicoLoraDevice Device;
- *   if (Device.Initialize(Config) == ETransportResult::Success) { Device.AdvanceTransmit(); }
+ *   if (Device.Initialize(Config) == ETransportResult::Success) { Device.PreAdvance(NowMilliseconds); }
  */
-class FPicoLoraDevice final : public ::MicroWorld::Transport::Device::IDevice
+class FPicoLoraDevice final : public Core::ITransportDevice
 {
 public:
 	/**
@@ -102,7 +102,7 @@ public:
 	/**
 	 * Motivation: Lets a caller queue one outgoing packet for later physical progress without partial sends.
 	 * Responsibilities: Return Unavailable while closed, Invalid for a malformed address/span or oversize packet, Full
-	 *   while a prior frame remains queued, and Success once the complete encoded frame is queued for AdvanceTransmit.
+	 *   while a prior frame remains queued, and Success once the complete encoded frame is queued for the pre-advance turn.
 	 */
 	::MicroWorld::Transport::ETransportResult TrySend(
 		const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
@@ -115,7 +115,7 @@ public:
 	::MicroWorld::Transport::ETransportResult TryReceive(
 		::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
 		Core::TSpan<std::uint8_t> InDestination,
-		::MicroWorld::Transport::Device::FReceiveResult& OutResult) noexcept override;
+		Core::FReceiveResult& OutResult) noexcept override;
 
 	/**
 	 * Motivation: Lets a caller size outgoing packets against the shared transport limit without framing surprises.
@@ -125,9 +125,10 @@ public:
 
 	/**
 	 * Motivation: Lets the runtime drain queued bytes toward the radio in bounded steps instead of blocking loops.
-	 * Responsibilities: Advance up to one complete encoded frame's worth of bytes when the UART is writable.
+	 * Responsibilities: Advance up to one complete encoded frame's worth of bytes when the UART is writable, by forwarding the
+	 *   turn to the portable radio device that owns the framing.
 	 */
-	void AdvanceTransmit() noexcept override;
+	void PreAdvance(Core::TimePointMilliseconds InNowMilliseconds) noexcept override;
 
 	/**
 	 * Motivation: Lets a caller gate send, receive, and teardown logic on a single live check.

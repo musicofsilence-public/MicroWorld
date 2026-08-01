@@ -36,15 +36,15 @@ struct FEsp32E32LoraConfig
 };
 
 /**
- * Motivation: Gives PlatformEsp32 one header-defined compatibility facade over the portable E32 LoRa IDevice so an
+ * Motivation: Gives PlatformEsp32 one header-defined compatibility facade over the portable E32 LoRa device so an
  *   application composes the radio without depending on the optional RadioE32 package unless it includes this header.
  * Responsibilities: Own ESP-IDF UART lifetime through the internal byte stream while delegating framing and bounded
  *   progress to FE32LoraDevice, and keep all methods inline so non-LoRa PlatformEsp32 consumers stay independent.
  * Example:
  *   FEsp32LoraDevice Radio(Config);
- *   if (Radio.IsOpen()) { Radio.AdvanceTransmit(); }
+ *   if (Radio.IsOpen()) { Radio.PreAdvance(NowMilliseconds); }
  */
-class FEsp32LoraDevice final : public Transport::Device::IDevice
+class FEsp32LoraDevice final : public Core::ITransportDevice
 {
 public:
 	/**
@@ -106,7 +106,7 @@ public:
 	 * Motivation: Queues one complete framed packet for later bounded UART progress without blocking the caller.
 	 * Responsibilities: Delegate to FE32LoraDevice.TrySend and forward its outcome unchanged; Success means the
 	 *   complete encoded frame was accepted into the fixed slot, not physically emitted, so direct callers must
-	 *   invoke AdvanceTransmit regularly (TTransportHost already does so).
+	 *   run the pre-advance turn regularly (TTransportHost already does so).
 	 */
 	Transport::ETransportResult TrySend(const Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override
 	{
@@ -119,9 +119,7 @@ public:
 	 *   Full retains the decoded frame for a larger retry, and a UART failure maps to Invalid.
 	 */
 	Transport::ETransportResult TryReceive(
-		Transport::Address::FDeviceAddress& OutFrom,
-		Core::TSpan<std::uint8_t> InDestination,
-		Transport::Device::FReceiveResult& OutResult) noexcept override
+		Transport::Address::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept override
 	{
 		return RadioDevice.TryReceive(OutFrom, InDestination, OutResult);
 	}
@@ -134,9 +132,10 @@ public:
 
 	/**
 	 * Motivation: Drives the queued frame toward the wire in bounded steps so a caller never blocks on a full UART.
-	 * Responsibilities: Advance the queued frame through bounded physical UART progress.
+	 * Responsibilities: Advance the queued frame through bounded physical UART progress by forwarding the turn to the portable
+	 *   radio device that owns the framing.
 	 */
-	void AdvanceTransmit() noexcept override { RadioDevice.AdvanceTransmit(); }
+	void PreAdvance(const Core::TimePointMilliseconds InNowMilliseconds) noexcept override { RadioDevice.PreAdvance(InNowMilliseconds); }
 
 	/**
 	 * Motivation: Lets a caller gate every op on whether construction produced a usable radio.

@@ -1,7 +1,7 @@
 #pragma once
 
+#include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Core/IO/UartByteStream.h>
-#include <MicroWorld/Transport/Device.h>
 #include <MicroWorld/Transport/Lora/Internal/E32LoraTransportState.h>
 
 #include <cstddef>
@@ -11,7 +11,7 @@ namespace MicroWorld::Transport
 {
 
 /**
- * Motivation: Implements the IDevice contract for an E32 LoRa module over a platform-provided UART byte stream so portable
+ * Motivation: Implements Core's ITransportDevice contract for an E32 LoRa module over a platform-provided UART byte stream so portable
  *   framing lives once and platform adapters own only UART configuration and lifetime.
  * Responsibilities: Perform no I/O at construction or initialization, and own portable framing, bounded physical progress, and
  *   transactional delivery over the borrowed byte stream.
@@ -19,9 +19,9 @@ namespace MicroWorld::Transport
  *   FE32LoraDevice Device(Uart);
  *   Device.Initialize(NodeId);
  *   Device.TrySend(To, Packet);
- *   Device.AdvanceTransmit();
+ *   Device.PreAdvance(Now);
  */
-class FE32LoraDevice final : public ::MicroWorld::Transport::Device::IDevice
+class FE32LoraDevice final : public Core::ITransportDevice
 {
 public:
 	/**
@@ -53,7 +53,7 @@ public:
 	ETransportResult TryReceive(
 		::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
 		Core::TSpan<std::uint8_t> InDestination,
-		::MicroWorld::Transport::Device::FReceiveResult& OutResult) noexcept override;
+		Core::FReceiveResult& OutResult) noexcept override;
 
 	/**
 	 * Motivation: Lets a caller bound a send to the E32 payload capacity.
@@ -66,7 +66,7 @@ public:
 	 * Responsibilities: Commit each byte only after UART Success, retain the current byte on Unavailable, and discard the queued
 	 *   frame on Error so a permanent UART failure cannot keep later sends Full.
 	 */
-	void AdvanceTransmit() noexcept override;
+	void PreAdvance(Core::TimePointMilliseconds InNowMilliseconds) noexcept override;
 
 	/**
 	 * Motivation: Lets a caller guard byte-stream operations behind one successful initialization.

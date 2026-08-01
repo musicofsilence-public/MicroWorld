@@ -18,7 +18,7 @@ using MicroWorld::Transport::THostLoopback;
 using MicroWorld::Transport::Address::FDeviceAddress;
 using MicroWorld::Transport::Address::MakeLoopbackAddress;
 using MicroWorld::Transport::Device::FReceiveResult;
-using MicroWorld::Transport::Device::IDevice;
+namespace Core = MicroWorld::Core;
 
 /** Motivation: Sentinel address byte that proves a receive call did not overwrite the caller's address. */
 constexpr std::uint8_t UntouchedAddressByte = 0x42;
@@ -451,7 +451,7 @@ MW_TEST_CASE(HostLoopbackSatisfiesIDeviceInterface)
 	// Arrange
 	THostLoopback<SinglePortCount, OneSlotMailbox, FourBytePacketCapacity> Loopback;
 	const FDeviceAddress Port0 = MakeLoopbackAddress(SourcePort);
-	IDevice& Device = Loopback.Port(SourcePort);
+	Core::ITransportDevice& Device = Loopback.Port(SourcePort);
 
 	// Act
 	MW_EXPECT_EQ(
@@ -629,7 +629,7 @@ MW_TEST_CASE(HostLoopbackReportsMaxPacketBytesAndRetainsHeadOnTooSmallReceive)
 	const FDeviceAddress Port0 = MakeLoopbackAddress(SourcePort);
 
 	// Assert - the per-port device reports the network's per-packet byte capacity.
-	IDevice& Device = Loopback.Port(ReportedDevicePort);
+	Core::ITransportDevice& Device = Loopback.Port(ReportedDevicePort);
 	MW_EXPECT_EQ(Test, FourBytePacketCapacity, Device.MaxPacketBytes(), "MaxPacketBytes must report the template packet byte capacity");
 	MW_EXPECT_EQ(Test, FourBytePacketCapacity, Loopback.MaximumPacketBytes(), "MaximumPacketBytes must report the template packet byte capacity");
 

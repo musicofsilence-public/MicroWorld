@@ -38,7 +38,7 @@ FPicoLoraDevice::~FPicoLoraDevice() noexcept = default;
 ::MicroWorld::Transport::ETransportResult FPicoLoraDevice::TryReceive(
 	::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
 	const Core::TSpan<std::uint8_t> InDestination,
-	::MicroWorld::Transport::Device::FReceiveResult& OutResult) noexcept
+	Core::FReceiveResult& OutResult) noexcept
 {
 	return RadioDevice.TryReceive(OutFrom, InDestination, OutResult);
 }
@@ -48,9 +48,9 @@ std::size_t FPicoLoraDevice::MaxPacketBytes() const noexcept
 	return RadioDevice.MaxPacketBytes();
 }
 
-void FPicoLoraDevice::AdvanceTransmit() noexcept
+void FPicoLoraDevice::PreAdvance(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 {
-	RadioDevice.AdvanceTransmit();
+	RadioDevice.PreAdvance(InNowMilliseconds);
 }
 
 bool FPicoLoraDevice::IsOpen() const noexcept

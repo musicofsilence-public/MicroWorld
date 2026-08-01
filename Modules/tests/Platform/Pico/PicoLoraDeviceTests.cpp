@@ -14,6 +14,7 @@
 namespace
 {
 
+using MicroWorld::Core::TimePointMilliseconds;
 using MicroWorld::Core::TSpan;
 using MicroWorld::Platform::Pico::FPicoE32LoraConfig;
 using MicroWorld::Platform::Pico::FPicoLoraDevice;
@@ -26,6 +27,9 @@ using MicroWorld::Transport::FrameCodec::FrameOverheadBytes;
 
 /** Motivation: Exact UART rate returned by a successful fake platform open. */
 constexpr std::uint32_t ExpectedBaudRate = 9600;
+
+/** Motivation: Names the time handed to the device's pre-advance turn; the radio paces nothing by the clock and ignores it. */
+constexpr TimePointMilliseconds PumpTimeMilliseconds{0};
 
 /** Motivation: Source node id used by every facade initialization fixture. */
 constexpr std::uint8_t LocalNodeId = 7;
@@ -304,7 +308,7 @@ MW_TEST_CASE(PicoE32FacadeRetainsLegacyPlatformAliasCompatibility)
  * Motivation: Queue a packet through the facade and advance transmit once while the fake UART remains writable.
  * Responsibilities: The delegated RadioE32 progress emits a bounded multi-byte burst and frees the transmit slot.
  */
-MW_TEST_CASE(PicoE32FacadeAdvanceTransmitDelegatesBoundedFrameBurst)
+MW_TEST_CASE(PicoE32FacadePreAdvanceDelegatesBoundedFrameBurst)
 {
 	// Arrange
 	FFakePicoUartPlatform Platform;
@@ -316,7 +320,7 @@ MW_TEST_CASE(PicoE32FacadeAdvanceTransmitDelegatesBoundedFrameBurst)
 	const ETransportResult FirstSendResult = Device.TrySend(Destination, TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
 
 	// Act
-	Device.AdvanceTransmit();
+	Device.PreAdvance(PumpTimeMilliseconds);
 	const std::size_t WrittenBytes = Platform.WrittenByteCount;
 	const ETransportResult RetrySendResult = Device.TrySend(Destination, TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
 
@@ -350,7 +354,7 @@ MW_TEST_CASE(PicoE32FacadeEmitsEmptyFrameAndReleasesTransmitSlot)
 	// Act
 	const ETransportResult InitializeResult = Device.Initialize(Config);
 	const ETransportResult FirstSendResult = Device.TrySend(Destination, EmptyPayload);
-	Device.AdvanceTransmit();
+	Device.PreAdvance(PumpTimeMilliseconds);
 	const std::size_t WrittenFrameBytes = Platform.WrittenByteCount;
 	const ETransportResult RetrySendResult = Device.TrySend(Destination, EmptyPayload);
 

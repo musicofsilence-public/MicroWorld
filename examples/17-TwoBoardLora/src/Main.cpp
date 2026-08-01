@@ -511,7 +511,7 @@ extern "C" void app_main(void)
 	{
 		const std::uint64_t Now = GTimeSource.Now();
 		AdvancePayloadRegression(Device, Context, RxBuffer, TxBuffer, Now);
-		Device.AdvanceTransmit();
+		Device.PreAdvance(Now);
 		MicroWorld::Platform::Esp32::SleepMilliseconds(PollPacingMilliseconds);
 	}
 #else
@@ -554,7 +554,7 @@ extern "C" void app_main(void)
 		}
 
 		// Physical UART progress is independent of packet acceptance, so a Full slot keeps draining every iteration.
-		Device.AdvanceTransmit();
+		Device.PreAdvance(Now);
 
 		MicroWorld::Platform::Esp32::SleepMilliseconds(PollPacingMilliseconds);
 	}

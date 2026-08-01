@@ -1,8 +1,8 @@
 #include "TestSupport.h"
 
 #include <MicroWorld/Core/Containers/Span.h>
+#include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Transport/DeviceAddress.h>
-#include <MicroWorld/Transport/Device.h>
 #include <MicroWorld/Transport/TransportManager.h>
 #include <MicroWorld/Transport/TransportPacketStorage.h>
 #include <MicroWorld/Transport/TransportResult.h>
@@ -13,13 +13,13 @@
 namespace
 {
 
+using MicroWorld::Core::FReceiveResult;
+using MicroWorld::Core::ITransportDevice;
 using MicroWorld::Core::TSpan;
 using MicroWorld::Transport::ETransportResult;
 using MicroWorld::Transport::TTransportManager;
 using MicroWorld::Transport::TTransportPacketStorage;
 using MicroWorld::Transport::Address::FDeviceAddress;
-using MicroWorld::Transport::Device::FReceiveResult;
-using MicroWorld::Transport::Device::IDevice;
 
 /** Motivation: Sentinel address byte that proves a receive call did not overwrite the caller's address. */
 constexpr std::uint8_t UntouchedAddressByte = 0x42;
@@ -111,7 +111,7 @@ constexpr FDeviceAddress MakeDest(const std::uint8_t InIndex) noexcept
  * Example:
  *   // Construct and exercise the type in one behavior test.
  */
-class FRecordingDevice final : public IDevice
+class FRecordingDevice final : public ITransportDevice
 {
 public:
 	/**
@@ -167,6 +167,12 @@ public:
 	 * Responsibilities: Return the stored value and touch nothing else.
 	 */
 	std::size_t MaxPacketBytes() const noexcept override { return DeviceMaxPacketBytes; }
+
+	/**
+	 * Motivation: Makes this synchronous recording fake's lack of staged bytes explicit at the required pre-advance turn.
+	 * Responsibilities: Do no work because TrySend records the packet synchronously and stages nothing.
+	 */
+	void PreAdvance(MicroWorld::Core::TimePointMilliseconds) noexcept override {}
 
 	/** Motivation: The result the next TrySend call must return, regardless of packet contents. */
 	ETransportResult ForcedSendResult{ETransportResult::Success};

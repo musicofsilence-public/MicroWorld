@@ -41,6 +41,9 @@ namespace
 {
 
 /** Motivation: Identifies the Pico as the node that starts the paired LoRa counter volley. */
+/** Motivation: Names the stamp handed to a pre-advance turn taken without a millisecond clock, so the zero reads as deliberate. */
+constexpr MicroWorld::Core::TimePointMilliseconds UnpacedPumpTimeMilliseconds{0};
+
 constexpr std::uint8_t LocalNodeId = 1;
 
 /** Motivation: Identifies the unchanged ESP32 example-17 node-B peer. */
@@ -150,7 +153,9 @@ void RunLoraInteropTask(void* const InContext)
 
 	for (;;)
 	{
-		LoraDevice.AdvanceTransmit();
+		// This task counts FreeRTOS ticks, not milliseconds, and the E32 radio paces nothing by the clock, so passing a
+		// converted tick would assert a precision the device never reads. The turn is what matters here, not its stamp.
+		LoraDevice.PreAdvance(UnpacedPumpTimeMilliseconds);
 
 		MicroWorld::Transport::Address::FDeviceAddress From{};
 		MicroWorld::Transport::Device::FReceiveResult Received{};
@@ -331,7 +336,7 @@ void RunLoraInteropTask(void* const InContext)
 		}
 
 		QueuePendingPayloadRegressionTransmit(LoraDevice, State, EmptyRetryDue, Now, PayloadBuffer);
-		LoraDevice.AdvanceTransmit();
+		LoraDevice.PreAdvance(Now);
 
 		configASSERT(uxTaskGetStackHighWaterMark(nullptr) >= MinimumStackHeadroomWords);
 		vTaskDelay(PollPeriodTicks);

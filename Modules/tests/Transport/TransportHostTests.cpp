@@ -2,6 +2,7 @@
 #include "TestSupport.h"
 
 #include <MicroWorld/Core/Containers/Span.h>
+#include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Transport/HostLoopback.h>
 #include <MicroWorld/Transport/DeviceAddress.h>
 #include <MicroWorld/Transport/TransportHost.h>
@@ -16,6 +17,8 @@ namespace
 {
 
 using MicroWorld::Core::FDelegateHandle;
+using MicroWorld::Core::FReceiveResult;
+using MicroWorld::Core::ITransportDevice;
 using MicroWorld::Core::TimePointMilliseconds;
 using MicroWorld::Core::TSpan;
 using MicroWorld::Tests::GlobalAllocationCount;
@@ -28,8 +31,6 @@ using MicroWorld::Transport::THostLoopback;
 using MicroWorld::Transport::TTransportHost;
 using MicroWorld::Transport::Address::FDeviceAddress;
 using MicroWorld::Transport::Address::MakeLoopbackAddress;
-using MicroWorld::Transport::Device::FReceiveResult;
-using MicroWorld::Transport::Device::IDevice;
 
 /** Motivation: Heartbeat interval (ms) the deterministic host config stamps so timed cases advance in fixed steps. */
 constexpr TimePointMilliseconds HeartbeatIntervalMs = 100;
@@ -721,7 +722,7 @@ MW_TEST_CASE(TransportHostDedicatedServerHasNoLocalDispatch)
  * Example:
  *   // Construct and exercise the type in one behavior test.
  */
-class FFloodDevice final : public IDevice
+class FFloodDevice final : public ITransportDevice
 {
 public:
 	/**
@@ -755,6 +756,13 @@ public:
 	 * Responsibilities: Return the stored value and touch nothing else.
 	 */
 	std::size_t MaxPacketBytes() const noexcept override { return LoopbackPacketBytes; }
+
+	/**
+	 * Motivation: Makes this synchronous flood fake's lack of staged bytes explicit at the required pre-advance turn.
+	 * Responsibilities:
+	 * Do no work because TrySend succeeds synchronously and stages nothing.
+	 */
+	void PreAdvance(TimePointMilliseconds) noexcept override {}
 
 	/** Motivation: Counts how many receives one or more pumps have requested. */
 	std::size_t ReceiveCallCount{0};
