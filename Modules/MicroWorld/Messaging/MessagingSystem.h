@@ -4,6 +4,7 @@
 #include <MicroWorld/Core/Delegates/Delegate.h>
 #include <MicroWorld/Core/PlaySystem.h>
 #include <MicroWorld/Core/Time.h>
+#include <MicroWorld/Core/WeakOwner.h>
 #include <MicroWorld/Messaging/MessageTypes.h>
 #include <MicroWorld/Messaging/NameId.h>
 
@@ -89,6 +90,25 @@ public:
 	using FSubscriberDelegate = Core::TDelegate<void(const FMessage&), TTraits::MaxSubscriberCallableBytes>;
 
 	/**
+	 * Motivation: Lets callers retain one optional identity for a subscription without exposing its storage slot.
+	 * Responsibilities: Identify a currently occupied slot only when its index and generation both match that slot.
+	 * Example:
+	 *   FSubscriptionHandle Handle;
+	 *   System.SubscribeToChannel("Telemetry", std::move(Subscriber), Owner, &Handle);
+	 */
+	struct FSubscriptionHandle final
+	{
+		/** Motivation: Marks a handle that does not identify any slot in this Messaging system. */
+		static constexpr std::uint16_t InvalidIndex = 0xFFFFu;
+
+		/** Motivation: Identifies the fixed subscription slot selected on a successful registration. */
+		std::uint16_t Index{InvalidIndex};
+
+		/** Motivation: Distinguishes this handle from earlier occupants of the same fixed slot. */
+		std::uint16_t Generation{0};
+	};
+
+	/**
 	 * Motivation: Gives callers an empty Messaging system when the default reliability policy is sufficient.
 	 * Responsibilities: Initialize no live channels and retain default system information without allocation.
 	 */
@@ -155,9 +175,13 @@ public:
 	 * Responsibilities: Store one bound subscriber with no message-name filter, or report the first applicable validation or capacity failure without
 	 * changing state.
 	 */
-	EMessagingResult SubscribeToChannel(const FNameId InChannelNameId, FSubscriberDelegate&& InSubscriber) noexcept
+	EMessagingResult SubscribeToChannel(
+		const FNameId InChannelNameId,
+		FSubscriberDelegate&& InSubscriber,
+		Core::FWeakOwner InOwner = {},
+		FSubscriptionHandle* OutHandle = nullptr) noexcept
 	{
-		return SubscribeToChannel(InChannelNameId, InvalidNameId, std::move(InSubscriber));
+		return SubscribeToChannel(InChannelNameId, InvalidNameId, std::move(InSubscriber), InOwner, OutHandle);
 	}
 
 	/**
@@ -165,7 +189,12 @@ public:
 	 * Responsibilities: Validate the channel and bound subscriber before storing a filtered registration within the fixed system-wide subscription
 	 * capacity.
 	 */
-	EMessagingResult SubscribeToChannel(const FNameId InChannelNameId, const FNameId InMessageNameFilter, FSubscriberDelegate&& InSubscriber) noexcept
+	EMessagingResult SubscribeToChannel(
+		const FNameId InChannelNameId,
+		const FNameId InMessageNameFilter,
+		FSubscriberDelegate&& InSubscriber,
+		Core::FWeakOwner InOwner = {},
+		FSubscriptionHandle* OutHandle = nullptr) noexcept
 	{
 		if (FindChannel(InChannelNameId) == nullptr)
 		{
@@ -177,10 +206,36 @@ public:
 			return EMessagingResult::Invalid;
 		}
 
-		// Capacity exhaustion is the only way Emplace fails, so its result is the whole capacity rule.
-		return Subscriptions.Emplace(InChannelNameId, InMessageNameFilter, std::move(InSubscriber)) == Core::ERuntimeResult::Success
-			? EMessagingResult::Success
-			: EMessagingResult::Full;
+		if (!InOwner.IsLive())
+		{
+			return EMessagingResult::Invalid;
+		}
+
+		for (std::size_t SlotIndex = 0; SlotIndex < TTraits::MaxSubscriptions; ++SlotIndex)
+		{
+			FSubscriptionSlot& Slot = SubscriptionSlots[SlotIndex];
+			if (Slot.bIsOccupied)
+			{
+				continue;
+			}
+
+			Slot.SubscriptionSequence = NextSubscriptionSequence;
+			++NextSubscriptionSequence;
+			Slot.ChannelNameId = InChannelNameId;
+			Slot.MessageNameFilter = InMessageNameFilter;
+			Slot.Owner = InOwner;
+			Slot.Subscriber = std::move(InSubscriber);
+			Slot.bIsOccupied = true;
+			if (OutHandle != nullptr)
+			{
+				OutHandle->Index = static_cast<std::uint16_t>(SlotIndex);
+				OutHandle->Generation = Slot.Generation;
+			}
+
+			return EMessagingResult::Success;
+		}
+
+		return EMessagingResult::Full;
 	}
 
 	/**
@@ -303,6 +358,12 @@ public:
 	 */
 	std::uint32_t GetAbandonedReliableMessageCount() const noexcept { return AbandonedReliableMessageCount; }
 
+	/**
+	 * Motivation: Lets callers observe subscriptions removed because their bound owner died.
+	 * Responsibilities: Return the cumulative number of dead-owner subscriptions reclaimed during delivery without changing system state.
+	 */
+	std::uint32_t GetReclaimedDeadOwnerSubscriptionCount() const noexcept { return ReclaimedDeadOwnerSubscriptionCount; }
+
 private:
 	/**
 	 * Motivation: Keeps a channel's immutable configuration and its mutable reliable-send state in one bounded storage element.
@@ -326,27 +387,32 @@ private:
 	};
 
 	/**
-	 * Motivation: Keeps each local subscriber's routing criteria and its bounded callable together in flat system-owned storage.
-	 * Responsibilities: Retain one channel identity, optional message-name filter, and uniquely owned callable without allocating.
+	 * Motivation: Keeps one removable local subscription and its liveness metadata in flat system-owned storage.
+	 * Responsibilities: Retain occupancy, generation, delivery order, routing criteria, owner liveness, and uniquely owned callable without
+	 *   allocating.
+	 *
 	 * Example:
-	 *   FSubscription Subscription{"Telemetry", InvalidNameId, std::move(Subscriber)};
+	 *   FSubscriptionSlot Slot{};
 	 */
-	struct FSubscription final
+	struct FSubscriptionSlot final
 	{
-		/**
-		 * Motivation: Lets the system publish one fully configured local subscription in a single fixed-storage insertion.
-		 * Responsibilities: Retain the supplied channel, optional filter, and uniquely owned bound callable without allocating.
-		 */
-		FSubscription(const FNameId InChannelNameId, const FNameId InMessageNameFilter, FSubscriberDelegate&& InSubscriber) noexcept
-			: ChannelNameId(InChannelNameId), MessageNameFilter(InMessageNameFilter), Subscriber(std::move(InSubscriber))
-		{
-		}
+		/** Motivation: Marks whether this slot currently owns a callable and routing registration. */
+		bool bIsOccupied{false};
+
+		/** Motivation: Invalidates handles from earlier occupants whenever this slot is released. */
+		std::uint16_t Generation{1};
+
+		/** Motivation: Preserves registration order and excludes registrations added during an active delivery. */
+		std::uint32_t SubscriptionSequence{0};
 
 		/** Motivation: Identifies the channel whose local sends can reach this subscriber. */
 		FNameId ChannelNameId{};
 
 		/** Motivation: Narrows delivery to one message name, with the unset id accepting every message on the channel. */
 		FNameId MessageNameFilter{};
+
+		/** Motivation: Prevents delivery into a callable after its captured owner has died. */
+		Core::FWeakOwner Owner{};
 
 		/** Motivation: Owns the inline callable that observes matching local messages. */
 		FSubscriberDelegate Subscriber{};
@@ -466,6 +532,22 @@ private:
 	}
 
 	/**
+	 * Motivation: Releases a subscription whose owner died without retaining its callable or validating stale future handles.
+	 * Responsibilities: Mark InSlot unoccupied, advance its generation without producing zero, and reset its delegate.
+	 */
+	static void ReleaseSubscriptionSlot(FSubscriptionSlot& InSlot) noexcept
+	{
+		InSlot.bIsOccupied = false;
+		++InSlot.Generation;
+		if (InSlot.Generation == 0)
+		{
+			InSlot.Generation = 1;
+		}
+
+		InSlot.Subscriber.Reset();
+	}
+
+	/**
 	 * Motivation: Applies the retry interval and attempt budget to one occupied reliable slot without making PostAdvance a policy maze.
 	 * Responsibilities: Skip early or backwards time, abandon exhausted or orphaned frames, or resend one retained frame and restamp its attempt.
 	 */
@@ -512,23 +594,39 @@ private:
 
 	/**
 	 * Motivation: Keeps subscriber routing identical for local sends and decoded inbound messages.
-	 * Responsibilities: Synchronously invoke every subscriber matching InChannelNameId and InMessage's optional name filter in registration order;
-	 *   capture the subscription count before dispatch so a callback can add a subscriber without changing this in-flight iteration.
+	 * Responsibilities: Reclaim dead owners before routing, then synchronously invoke every matching live subscriber while skipping registrations
+	 *   added during this in-flight delivery. Order follows the slot array, which is registration order until a released slot is reused.
 	 */
 	void DeliverToMatchingSubscribers(const FMessage& InMessage, const FNameId InChannelNameId) noexcept
 	{
-		// The captured count excludes registrations added by a subscriber during this synchronous delivery.
-		const std::size_t SubscriptionCountAtDispatchStart = Subscriptions.Size();
-		for (std::size_t SubscriptionIndex = 0; SubscriptionIndex < SubscriptionCountAtDispatchStart; ++SubscriptionIndex)
+		const std::uint32_t SequenceAtDispatchStart = NextSubscriptionSequence;
+		for (std::size_t SlotIndex = 0; SlotIndex < TTraits::MaxSubscriptions; ++SlotIndex)
 		{
-			FSubscription& Subscription = Subscriptions[SubscriptionIndex];
-			if (Subscription.ChannelNameId != InChannelNameId
-				|| (Subscription.MessageNameFilter != InvalidNameId && Subscription.MessageNameFilter != InMessage.GetMessageNameId()))
+			FSubscriptionSlot& Slot = SubscriptionSlots[SlotIndex];
+			if (!Slot.bIsOccupied)
 			{
 				continue;
 			}
 
-			(void)Subscription.Subscriber.Execute(InMessage);
+			if (Slot.SubscriptionSequence >= SequenceAtDispatchStart)
+			{
+				continue;
+			}
+
+			if (!Slot.Owner.IsLive())
+			{
+				ReleaseSubscriptionSlot(Slot);
+				++ReclaimedDeadOwnerSubscriptionCount;
+				continue;
+			}
+
+			if (Slot.ChannelNameId != InChannelNameId
+				|| (Slot.MessageNameFilter != InvalidNameId && Slot.MessageNameFilter != InMessage.GetMessageNameId()))
+			{
+				continue;
+			}
+
+			(void)Slot.Subscriber.Execute(InMessage);
 		}
 	}
 
@@ -812,8 +910,19 @@ private:
 	/** Motivation: Owns each live channel's configuration and reliable sequence state within the compile-time channel limit. */
 	Core::TStaticVector<FChannel, TTraits::MaxChannels> Channels;
 
-	/** Motivation: Owns every local subscription in registration order within one system-wide fixed capacity. */
-	Core::TStaticVector<FSubscription, TTraits::MaxSubscriptions> Subscriptions;
+	/** Motivation: Owns fixed removable subscription slots; each carries an owner token, sequence stamp, generation, and occupancy flag, so sixteen
+	 * default subscriptions cost roughly four hundred bytes more than the former append-only storage. */
+	FSubscriptionSlot SubscriptionSlots[TTraits::MaxSubscriptions]{};
+
+	static_assert(
+		TTraits::MaxSubscriptions < FSubscriptionHandle::InvalidIndex,
+		"MaxSubscriptions must leave InvalidIndex unused, so no live slot index can be mistaken for an empty handle.");
+
+	/** Motivation: Stamps each successful registration so active delivery skips newer subscriptions even when they reuse an earlier slot. */
+	std::uint32_t NextSubscriptionSequence{1};
+
+	/** Motivation: Counts dead-owner slots reclaimed before local routing so lifecycle cleanup remains observable. */
+	std::uint32_t ReclaimedDeadOwnerSubscriptionCount{0};
 
 	/** Motivation: Owns the largest Messaging allocation: MaxReliablePendingMessages slots, each retaining one MaxFrameBytes encoded frame plus
 	 * retry metadata, so increasing pending capacity multiplies the system's frame-sized memory cost. */
