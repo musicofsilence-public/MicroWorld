@@ -2,38 +2,36 @@
 
 **Feature:** the vision demo — actor messaging over the cheapest possible link.
 A client board's `FSwitchActor` drives a server board's `FLampActor` through
-`TMessageChannelBinding` + `TMessageRouter` over `FEsp32UartDevice`; only the
-device construction line would change to run the same application protocol
-over WiFi.
+an engine-owned `FMessagingSystem` over `FEsp32UartDevice`.
 
 > Status: not yet verified on hardware.
 
 ## What it does
 
 1. The **client** board (`node=2`) composes a world with one `FSwitchActor`.
-   Every 2 s it toggles a boolean lamp state and sends a **targeted**
-   `SetLampStateMessageId` (1-byte payload) to `LampActorId`, then increments
-   a heartbeat counter and **broadcasts** it as `HeartbeatCountMessageId`.
+   Every 2 s it toggles a boolean lamp state and sends a `SetLampState` message
+   (1-byte payload), then increments and sends a `HeartbeatCount` message.
 2. The **server** board (`node=1`) composes a world with `FLampActor`
-   (subscribed to `SetLampStateMessageId` targeted at its own id — logs
-   `lamp ON` / `lamp OFF`) and `FDisplayActor` (subscribed to the broadcast
-   `HeartbeatCountMessageId` — logs `heartbeat=<n>`).
-3. Both actors reach messaging only through `IMessageRouter&`, injected at
-   construction (D9); neither actor ever sees `TTransportHost` or the UART device
-   directly — that boundary is `TMessageChannelBinding`.
+   (subscribed to `SetLampState` — logs `lamp ON` / `lamp OFF`) and
+   `FDisplayActor` (subscribed to `HeartbeatCount` — logs `heartbeat=<n>`).
+   Their message-name filters are the complete application addressing needed
+   on this one point-to-point wire.
+3. Both roles create the named `App` channel with an empty address because the
+   UART device is point-to-point and ignores it. Actors reach only injected
+   `FMessagingSystem&`; their subscriptions use `MakeWeakOwner`, so collection
+   prevents callbacks into reclaimed actors.
 4. The run is **unbounded** (matching 18-TwoBoardUart and 19-UartMessaging's
    server): this is a continuous two-board demo, not a self-terminating trace.
 
 ## MicroWorld APIs used
 
-- `TMessageRouter`, `IMessageRouter` (`AddMessageHandler` / `SendMessageToActor`
-  / `BroadcastMessage` / `PreAdvance` / `PostAdvance`)
-- `TMessageChannelBinding`, `EChannelSendTarget` (`Server` on the client,
-  `AllPeers` on the server)
-- `TTransportHost` (`Configure` / `Start`), `THostPlaySystem`, `ENetworkMode`
-- `FEsp32UartDevice`, `FEsp32UartConfig`, `MakeUartAddress`
-- `TEngine` (`RegisterClass` / `CreateWorld` / `CreateObject` /
-  `BeginPlay` / `Tick`), `AActor`, `UWorld::RegisterActor`
+- `FMessagingSystem` (`CreateChannel` / `SubscribeToChannel` /
+  `SendMessageToChannel`) — named framing, filtered subscriptions, and engine
+  lifecycle ordering
+- `FMessage`, `FNameId`, `MakeNameId`, `MakeWeakOwner`
+- `FEsp32UartDevice`, `FEsp32UartConfig`
+- `TEngine` (`CreateMessagingSystem` / `RegisterClass` / `CreateWorld` /
+  `CreateObject` / `BeginPlay` / `Tick`), `AActor`, `UWorld::RegisterActor`
 - `FEsp32TimeSource::Now`, `SleepMilliseconds`, `WriteEsp32LogRecord`, `MW_LOG`
 
 ## Hardware required
@@ -109,9 +107,9 @@ I (nnnn) ex23: switch broadcast heartbeat=3
 
 ## Image size
 
-From `pio run` (release build, ESP32-S3-DevKitC-1). Both role environments
-carry the same engine/object/GC stack (each board runs a full `TEngine`),
-so the two images are nearly identical:
+Historical output from `pio run` before the `FMessagingSystem` port (release
+build, ESP32-S3-DevKitC-1). Fresh size evidence is required for the current
+example:
 
 ```text
 server  RAM:   10.8% (used 35548 bytes from 327680 bytes)

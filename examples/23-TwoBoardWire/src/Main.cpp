@@ -4,8 +4,8 @@
 // Role is chosen at build time: server (=1) or client (=0). Both roles always
 // compile — ServerMain.cpp and ClientMain.cpp are always built — and this
 // define only selects which one runs; never build_src_filter, which ESP-IDF
-// ignores. This is 22-ActorMessages' local actor-message design run over a real
-// UART wire instead of one board's local channel.
+// ignores. This is 22-ActorMessages' named Messaging design run over a real UART
+// wire instead of one board's local-only channel.
 #ifndef MICROWORLD_EXAMPLE_SERVER
 #error "Define MICROWORLD_EXAMPLE_SERVER=1 (server) or 0 (client) via the build environment."
 #endif

@@ -8,33 +8,25 @@ Two role worlds, one source tree. `Main.cpp` is a thin dispatcher whose
 `app_main` calls `RunServer()` or `RunClient()` by the
 `-DMICROWORLD_EXAMPLE_SERVER` define; `ServerMain.cpp` and `ClientMain.cpp`
 hold the two roles and are both always compiled, and `TwoBoardWireShared.h`
-defines the message/actor ids, node ids, UART/session config builders, and the
-`TTransportHost`/`TMessageRouter`/`TEngine` type shapes once, so both roles share one
-definition. Per board: a `TTransportHost` over `FEsp32UartDevice`, a `TMessageRouter`,
-and a `TMessageChannelBinding` wiring the two together. The engine holds the
-`THostPlaySystem` as its per-frame network slot; the run loop pumps the router
-manually (`PostAdvance` before `Engine.Tick`, `PreAdvance` after) because
-`TPlaySystemSet` does not exist until Phase 4.1 and `TEngine` holds
-exactly one `IPlaySystem`. Every composition object is `static`,
-allocation-free, sized at compile time.
+defines message/channel names, node ids, UART configuration, and the `TEngine`
+shape once, so both roles share one definition. Per board, `TEngine` owns one
+`FMessagingSystem` with an `App` channel over `FEsp32UartDevice`; every
+composition object is `static`, allocation-free, and sized at compile time.
 
 ## Concepts
 
 - **Actor messaging over a real wire.** The client's `FSwitchActor` and the
-  server's `FLampActor`/`FDisplayActor` talk only through `IMessageRouter&`,
-  injected at construction (D9); none of them ever sees `TTransportHost` or the UART
-  device.
-- **`EChannelSendTarget`.** The client's binding sends to `Server` (its one
-  connected peer); the server's binding sends to `AllPeers` (broadcasts reach
-  every connected client, matching `TTransportHost::Broadcast`'s own semantics).
-- **Manual frame order = the 3.1 test's.** `Modules/MicroWorld/Engine/tests/EngineMessageChannelTests.cpp`'s
-  `PumpSide` proved `Router.PostAdvance` -> `Host.Tick` -> `Router.PreAdvance`
-  is the correct per-frame order for a router bound to a live `TTransportHost`; this
-  example's run loop mirrors that order exactly, on both boards.
-- **Only the device differs from a WiFi build.** Swapping `FEsp32UartDevice`
-  for `FEsp32WifiDevice` (and `MakeUartConfig`/`MakeUartAddress` for their WiFi
-  equivalents) is the only change needed to run this same application protocol
-  over WiFi instead of a wire.
+  server's `FLampActor`/`FDisplayActor` talk only through injected
+  `FMessagingSystem&`; none of them sees the UART device. Weak-owned
+  subscriptions become inert if collection reclaims an actor.
+- **Named filters replace actor addressing.** `SetLampState` reaches the lamp
+  and `HeartbeatCount` reaches the display because both subscribe on `App`
+  with different message-name filters; there are no actor ids to coordinate.
+- **Engine-owned frame order.** `TEngine::Tick` calls Messaging pre-advance to
+  drain and dispatch UART input before world advance, then post-advance for
+  reliable retries. The run loop has one `Engine.Tick` call and no manual pump.
+- **Point-to-point UART address.** Each `App` channel uses an empty address
+  because `FEsp32UartDevice` ignores it on this single wire.
 
 ## Verification
 

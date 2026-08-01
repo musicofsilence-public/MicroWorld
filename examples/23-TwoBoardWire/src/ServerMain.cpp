@@ -5,14 +5,11 @@
 #include <MicroWorld/Engine/Actor.h>
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Engine/EngineResult.h>
-#include <MicroWorld/Messaging/Message.h>
-#include <MicroWorld/Messaging/MessageChannelBinding.h>
-#include <MicroWorld/Messaging/MessageRouter.h>
-#include <MicroWorld/Engine/EngineSystem.h>
+#include <MicroWorld/Engine/ObjectStore.h>
 #include <MicroWorld/Engine/World.h>
 #include <MicroWorld/Core/Log.h>
-#include <MicroWorld/Transport/TransportHost.h>
-#include <MicroWorld/Transport/TransportResult.h>
+#include <MicroWorld/Messaging/MessageTypes.h>
+#include <MicroWorld/Messaging/MessagingSystem.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Engine/GarbageCollector.h>
 #include <MicroWorld/Engine/ObjectPtr.h>
@@ -27,7 +24,6 @@
 using namespace MicroWorld::Core;
 using namespace MicroWorld::Platform::Esp32;
 using namespace MicroWorld::Engine;
-using namespace MicroWorld::Transport;
 using namespace MicroWorld::Messaging;
 using namespace Ex23;
 
@@ -37,48 +33,54 @@ namespace
 FEsp32TimeSource GTimeSource{};
 
 /**
- * Motivation: Subscribes to a targeted SetLampStateMessageId (its own actor id) and logs the decoded
- *   state, so the lamp half of the two-board wire demo is observable. Takes the router by constructor
- *   injection and never ticks.
- * Responsibilities: Register a handler for SetLampState on play and log each received state.
+ * Motivation: Subscribes to the lamp command arriving over the wire and logs the decoded state, so the
+ *   lamp half of the two-board wire demo is observable. Takes Messaging by constructor injection and
+ *   never ticks.
+ * Responsibilities: Register a message-filtered subscription on play and log each received state.
  * Example:
- *   auto Lamp = Engine.CreateObject<FLampActor>(LampActorTypeId, Router).Object;
+ *   auto Lamp = Engine.CreateObject<FLampActor>(LampActorTypeId, Messaging).Object;
  *   Engine.GetWorld().RegisterActor(TObjectPtr<AActor>{Lamp});
  */
 class FLampActor final : public AActor
 {
 public:
 	/**
-	 * Motivation: Stores the injected router; this actor's tick is disabled because it only reacts to a message.
-	 * Responsibilities: Construct with tick disabled and capture the router reference.
+	 * Motivation: Stores injected Messaging; this actor's tick is disabled because it only reacts to a message.
+	 * Responsibilities: Construct with tick disabled and capture the Messaging system reference.
 	 */
-	explicit FLampActor(IMessageRouter& InRouter) noexcept
-		: AActor({/*bCanEverTick*/ false, /*bStartWithTickEnabled*/ false, /*TickIntervalMilliseconds*/ 0}), Router(InRouter)
+	explicit FLampActor(FMessagingSystem& InMessaging) noexcept
+		: AActor({/*bCanEverTick*/ false, /*bStartWithTickEnabled*/ false, /*TickIntervalMilliseconds*/ 0}), Messaging(InMessaging)
 	{
 	}
 
 protected:
 	/**
-	 * Motivation: Subscribes to SetLampStateMessageId targeted at this actor's own LampActorId, so later
-	 *   toggle sends reach this lamp.
-	 * Responsibilities: Bind and register the lamp-state handler under the lamp's actor id.
+	 * Motivation: Subscribes to the lamp command by message name, so later toggles from the remote switch
+	 *   reach this lamp; the name filter is the whole of the addressing this needs.
+	 * Responsibilities: Bind the lamp-state subscriber and register it under this actor's weak owner.
 	 */
 	void BeginPlay() noexcept override
 	{
-		FMessageHandlerBinding Handler;
-		const EDelegateResult BindResult = Handler.Bind([this](const FMessageView& View) noexcept { this->OnLampStateReceived(View); });
+		FMessagingSystem::FSubscriberDelegate Subscriber;
+		const EDelegateResult BindResult = Subscriber.Bind([this](const FMessage& Message) noexcept { this->OnLampStateReceived(Message); });
 		if (BindResult != EDelegateResult::Success)
 		{
-			MW_LOG(Error, "ex23", "lamp handler bind failed");
+			MW_LOG(Error, "ex23", "lamp subscriber bind failed");
 			return;
 		}
 
-		// This unbounded example never removes handlers (the run never ends), so the returned handle is not retained.
-		FMessageHandlerHandle HandlerHandle;
-		const EMessageResult AddResult = Router.AddMessageHandler(SetLampStateMessageId, LampActorId, std::move(Handler), HandlerHandle);
-		if (AddResult != EMessageResult::Success)
+		FObjectStore* const ObjectStore = GetObjectStore();
+		if (ObjectStore == nullptr)
 		{
-			MW_LOG(Error, "ex23", "lamp handler registration failed");
+			MW_LOG(Error, "ex23", "lamp has no object store");
+			return;
+		}
+
+		const EMessagingResult SubscribeResult = Messaging.SubscribeToChannel(
+			AppChannelName, SetLampStateMessageName, std::move(Subscriber), MakeWeakOwner(*ObjectStore, GetObjectHandle()));
+		if (SubscribeResult != EMessagingResult::Success)
+		{
+			MW_LOG(Error, "ex23", "lamp subscription failed");
 		}
 	}
 
@@ -87,63 +89,71 @@ private:
 	 * Motivation: Decodes the 1-byte state and logs the lamp's new state; this is the handler bound in BeginPlay.
 	 * Responsibilities: Validate the payload and log ON or OFF.
 	 */
-	void OnLampStateReceived(const FMessageView& View) noexcept
+	void OnLampStateReceived(const FMessage& Message) noexcept
 	{
-		if (View.Payload.Size() < 1)
+		const TSpan<const std::uint8_t> Payload = Message.GetPayload();
+		if (Payload.Size() < 1)
 		{
 			MW_LOG(Error, "ex23", "lamp received undersized state payload");
 			return;
 		}
-		const bool bLampOn = View.Payload.Data()[0] != 0;
+		const bool bLampOn = Payload.Data()[0] != 0;
 		MW_LOG(Log, "ex23", "lamp %s", bLampOn ? "ON" : "OFF");
 	}
 
-	/** Motivation: Router this actor listens through; injected at construction, never a global. */
-	IMessageRouter& Router;
+	/** Motivation: Messaging system this actor listens through; injected at construction, never a global. */
+	FMessagingSystem& Messaging;
 };
 
 /**
- * Motivation: Subscribes to the broadcast HeartbeatCountMessageId and logs every count it receives, so
- *   the heartbeat half of the two-board wire demo is observable. Takes the router by constructor
- *   injection and never ticks.
- * Responsibilities: Register a broadcast handler on play and log each received count.
+ * Motivation: Subscribes to the heartbeat counter arriving over the wire and logs every count, so the
+ *   heartbeat half of the two-board wire demo is observable. Takes Messaging by constructor injection
+ *   and never ticks.
+ * Responsibilities: Register a message-filtered subscription on play and log each received count.
  * Example:
- *   auto Display = Engine.CreateObject<FDisplayActor>(DisplayActorTypeId, Router).Object;
+ *   auto Display = Engine.CreateObject<FDisplayActor>(DisplayActorTypeId, Messaging).Object;
  *   Engine.GetWorld().RegisterActor(TObjectPtr<AActor>{Display});
  */
 class FDisplayActor final : public AActor
 {
 public:
 	/**
-	 * Motivation: Stores the injected router; this actor's tick is disabled because it only reacts to a message.
-	 * Responsibilities: Construct with tick disabled and capture the router reference.
+	 * Motivation: Stores injected Messaging; this actor's tick is disabled because it only reacts to a message.
+	 * Responsibilities: Construct with tick disabled and capture the Messaging system reference.
 	 */
-	explicit FDisplayActor(IMessageRouter& InRouter) noexcept
-		: AActor({/*bCanEverTick*/ false, /*bStartWithTickEnabled*/ false, /*TickIntervalMilliseconds*/ 0}), Router(InRouter)
+	explicit FDisplayActor(FMessagingSystem& InMessaging) noexcept
+		: AActor({/*bCanEverTick*/ false, /*bStartWithTickEnabled*/ false, /*TickIntervalMilliseconds*/ 0}), Messaging(InMessaging)
 	{
 	}
 
 protected:
 	/**
-	 * Motivation: Subscribes to every broadcast HeartbeatCountMessageId, so the display receives each heartbeat.
-	 * Responsibilities: Bind and register the heartbeat handler under the broadcast listener id.
+	 * Motivation: Subscribes to the heartbeat counter by message name, so the display receives each one
+	 *   the remote switch sends on the shared application channel.
+	 * Responsibilities: Bind the heartbeat subscriber and register it under this actor's weak owner.
 	 */
 	void BeginPlay() noexcept override
 	{
-		FMessageHandlerBinding Handler;
-		const EDelegateResult BindResult = Handler.Bind([this](const FMessageView& View) noexcept { this->OnHeartbeatReceived(View); });
+		FMessagingSystem::FSubscriberDelegate Subscriber;
+		const EDelegateResult BindResult = Subscriber.Bind([this](const FMessage& Message) noexcept { this->OnHeartbeatReceived(Message); });
 		if (BindResult != EDelegateResult::Success)
 		{
-			MW_LOG(Error, "ex23", "display handler bind failed");
+			MW_LOG(Error, "ex23", "display subscriber bind failed");
 			return;
 		}
 
-		// This unbounded example never removes handlers (the run never ends), so the returned handle is not retained.
-		FMessageHandlerHandle HandlerHandle;
-		const EMessageResult AddResult = Router.AddMessageHandler(HeartbeatCountMessageId, BroadcastActorId, std::move(Handler), HandlerHandle);
-		if (AddResult != EMessageResult::Success)
+		FObjectStore* const ObjectStore = GetObjectStore();
+		if (ObjectStore == nullptr)
 		{
-			MW_LOG(Error, "ex23", "display handler registration failed");
+			MW_LOG(Error, "ex23", "display has no object store");
+			return;
+		}
+
+		const EMessagingResult SubscribeResult = Messaging.SubscribeToChannel(
+			AppChannelName, HeartbeatCountMessageName, std::move(Subscriber), MakeWeakOwner(*ObjectStore, GetObjectHandle()));
+		if (SubscribeResult != EMessagingResult::Success)
+		{
+			MW_LOG(Error, "ex23", "display subscription failed");
 		}
 	}
 
@@ -152,27 +162,27 @@ private:
 	 * Motivation: Decodes the 1-byte counter and logs it; this is the handler bound in BeginPlay.
 	 * Responsibilities: Validate the payload and log the received count.
 	 */
-	void OnHeartbeatReceived(const FMessageView& View) noexcept
+	void OnHeartbeatReceived(const FMessage& Message) noexcept
 	{
-		if (View.Payload.Size() < 1)
+		const TSpan<const std::uint8_t> Payload = Message.GetPayload();
+		if (Payload.Size() < 1)
 		{
 			MW_LOG(Error, "ex23", "display received undersized heartbeat payload");
 			return;
 		}
-		MW_LOG(Log, "ex23", "heartbeat=%u", static_cast<unsigned>(View.Payload.Data()[0]));
+		MW_LOG(Log, "ex23", "heartbeat=%u", static_cast<unsigned>(Payload.Data()[0]));
 	}
 
-	/** Motivation: Router this actor listens through; injected at construction, never a global. */
-	IMessageRouter& Router;
+	/** Motivation: Messaging system this actor listens through; injected at construction, never a global. */
+	FMessagingSystem& Messaging;
 };
 } // namespace
 
 /**
- * Motivation: Lets Board A (node 1) run FLampActor + FDisplayActor over a TMessageRouter wired to
- *   TTransportHost (DedicatedServer) through TMessageChannelBinding, so the server half of the two-board
- *   wire demo can be reasoned about in one place.
- * Responsibilities: Open the UART, wire the transport, router, binding, and engine, spawn the actors,
- *   start as a dedicated server, and pump frames in an unbounded loop.
+ * Motivation: Lets Board A (node 1) run FLampActor and FDisplayActor over one Messaging channel on its
+ *   UART device, so the server half of the two-board wire demo can be reasoned about in one place.
+ * Responsibilities: Open the UART, create the Messaging system and its channel, spawn both actors, and
+ *   tick the engine in an unbounded loop.
  */
 void RunServer() noexcept
 {
@@ -185,20 +195,22 @@ void RunServer() noexcept
 	}
 
 	// All composition objects are static (the ESP32-S3 stack lesson, §2.2).
-	static FWireTransport Transport{Device};
-	static FWireRouter Router;
-	static FWireBinding Wire{Transport, AppWireChannelByte, AppChannelId, EChannelSendTarget::AllPeers, Router};
-	static FWireFrame WireFrame{Transport};
-	static FWireEngine Engine{FGarbageCollectionBudget{1, 4, 8}, WireFrame};
-
-	if (!Wire.IsAttached())
+	static FWireEngine Engine{FGarbageCollectionBudget{1, 4, 8}};
+	if (Engine.CreateMessagingSystem(FMessagingSystemInformation{}) != ERuntimeResult::Success)
 	{
-		MW_LOG(Error, "ex23", "server wire binding failed to attach; halting");
+		MW_LOG(Error, "ex23", "server Messaging system creation failed; halting");
 		return;
 	}
-	if (Router.AddChannel(Wire) != EMessageResult::Success)
+	FMessagingSystem* const Messaging = Engine.GetMessagingSystem();
+	if (Messaging == nullptr)
 	{
-		MW_LOG(Error, "ex23", "server router rejected its wired channel; halting");
+		MW_LOG(Error, "ex23", "server Messaging system unavailable; halting");
+		return;
+	}
+	// UART is point-to-point, so its device ignores this empty destination address.
+	if (Messaging->CreateChannel({AppChannelName, false, &Device, {}}) != EMessagingResult::Success)
+	{
+		MW_LOG(Error, "ex23", "server Messaging channel creation failed; halting");
 		return;
 	}
 
@@ -210,8 +222,8 @@ void RunServer() noexcept
 	}
 
 	const TObjectPtr<UWorld> World = Engine.CreateWorld();
-	const TObjectPtr<FLampActor> Lamp = Engine.CreateObject<FLampActor>(LampActorTypeId, Router).Object;
-	const TObjectPtr<FDisplayActor> Display = Engine.CreateObject<FDisplayActor>(DisplayActorTypeId, Router).Object;
+	const TObjectPtr<FLampActor> Lamp = Engine.CreateObject<FLampActor>(LampActorTypeId, *Messaging).Object;
+	const TObjectPtr<FDisplayActor> Display = Engine.CreateObject<FDisplayActor>(DisplayActorTypeId, *Messaging).Object;
 	if (World.Get() == nullptr || Lamp.Get() == nullptr || Display.Get() == nullptr)
 	{
 		MW_LOG(Error, "ex23", "server world or actor creation failed; halting");
@@ -225,9 +237,6 @@ void RunServer() noexcept
 		return;
 	}
 
-	(void)Transport.Configure(ENetworkMode::DedicatedServer, MakeHostConfig());
-	(void)Transport.Start(GTimeSource.Now());
-
 	const TimePointMilliseconds BootTime = GTimeSource.Now();
 	if (Engine.BeginPlay(BootTime) != ERuntimeResult::Success)
 	{
@@ -240,7 +249,7 @@ void RunServer() noexcept
 	// 19-UartMessaging's server), so the loop runs unbounded rather than stopping after N messages.
 	for (;;)
 	{
-		PumpOneFrame(Router, Engine, GTimeSource.Now());
+		(void)Engine.Tick(GTimeSource.Now());
 		SleepMilliseconds(PollPacingMilliseconds);
 	}
 }

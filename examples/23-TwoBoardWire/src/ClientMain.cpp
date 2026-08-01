@@ -1,24 +1,20 @@
 #include "TwoBoardWireShared.h"
 
 #include <MicroWorld/Core/Containers/Span.h>
+#include <MicroWorld/Core/Delegates/Delegate.h>
 #include <MicroWorld/Engine/Actor.h>
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Engine/EngineResult.h>
-#include <MicroWorld/Messaging/Message.h>
-#include <MicroWorld/Messaging/MessageChannelBinding.h>
-#include <MicroWorld/Messaging/MessageRouter.h>
-#include <MicroWorld/Engine/EngineSystem.h>
 #include <MicroWorld/Engine/World.h>
 #include <MicroWorld/Core/Log.h>
-#include <MicroWorld/Transport/TransportHost.h>
-#include <MicroWorld/Transport/TransportResult.h>
+#include <MicroWorld/Messaging/MessageTypes.h>
+#include <MicroWorld/Messaging/MessagingSystem.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Engine/GarbageCollector.h>
 #include <MicroWorld/Engine/ObjectPtr.h>
 #include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
 #include <MicroWorld/Platform/Esp32/Esp32TimeSource.h>
 #include <MicroWorld/Platform/Esp32/Esp32UartDevice.h>
-#include <MicroWorld/Platform/Esp32/UartAddress.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -26,7 +22,6 @@
 using namespace MicroWorld::Core;
 using namespace MicroWorld::Platform::Esp32;
 using namespace MicroWorld::Engine;
-using namespace MicroWorld::Transport;
 using namespace MicroWorld::Messaging;
 using namespace Ex23;
 
@@ -39,30 +34,30 @@ FEsp32TimeSource GTimeSource{};
 constexpr DurationMilliseconds SwitchToggleIntervalMilliseconds = 2000;
 
 /**
- * Motivation: Toggles a lamp state and sends it to FLampActor every SwitchToggleIntervalMilliseconds,
- *   and broadcasts an incrementing heartbeat counter. Takes the router by constructor injection and
- *   owns no components.
- * Responsibilities: Tick on the 2 s cadence, send one targeted lamp toggle, and broadcast one heartbeat.
+ * Motivation: Toggles a lamp state and sends it to the remote lamp every SwitchToggleIntervalMilliseconds,
+ *   and sends an incrementing heartbeat counter alongside it. Takes Messaging by constructor injection
+ *   and owns no components.
+ * Responsibilities: Tick on the 2 s cadence, send one lamp toggle, and send one heartbeat.
  * Example:
- *   auto Switch = Engine.CreateObject<FSwitchActor>(SwitchActorTypeId, Router).Object;
+ *   auto Switch = Engine.CreateObject<FSwitchActor>(SwitchActorTypeId, Messaging).Object;
  *   Engine.GetWorld().RegisterActor(TObjectPtr<AActor>{Switch});
  */
 class FSwitchActor final : public AActor
 {
 public:
 	/**
-	 * Motivation: Aligns this actor's own tick to the 2 s toggle cadence and stores the injected router.
-	 * Responsibilities: Construct on the toggle cadence and capture the router reference.
+	 * Motivation: Aligns this actor's own tick to the 2 s toggle cadence and stores injected Messaging.
+	 * Responsibilities: Construct on the toggle cadence and capture the Messaging system reference.
 	 */
-	explicit FSwitchActor(IMessageRouter& InRouter) noexcept
-		: AActor(FTickConfiguration::EnabledEvery(SwitchToggleIntervalMilliseconds)), Router(InRouter)
+	explicit FSwitchActor(FMessagingSystem& InMessaging) noexcept
+		: AActor(FTickConfiguration::EnabledEvery(SwitchToggleIntervalMilliseconds)), Messaging(InMessaging)
 	{
 	}
 
 protected:
 	/**
 	 * Motivation: Drives the per-tick exchange so the lamp toggle and heartbeat stay in step.
-	 * Responsibilities: Send the targeted lamp toggle then broadcast the heartbeat counter, each tick.
+	 * Responsibilities: Send the named lamp toggle then application heartbeat counter, each tick.
 	 */
 	void Tick(const FTickContext&) noexcept override
 	{
@@ -72,16 +67,18 @@ protected:
 
 private:
 	/**
-	 * Motivation: Flips bLampOn and sends its new value to LampActorId as a 1-byte targeted message.
-	 * Responsibilities: Toggle the state, send it, and log the outcome.
+	 * Motivation: Flips bLampOn and sends its new value as a 1-byte message the remote lamp subscribes to.
+	 * Responsibilities: Toggle the state, send it on the application channel, and log the outcome.
 	 */
 	void SendLampToggle() noexcept
 	{
 		bLampOn = !bLampOn;
 		const std::uint8_t StateByte = bLampOn ? 1 : 0;
-		const EMessageResult SendResult =
-			Router.SendMessageToActor(AppChannelId, SetLampStateMessageId, LampActorId, SwitchActorId, TSpan<const std::uint8_t>(&StateByte, 1));
-		if (SendResult != EMessageResult::Success)
+		FMessage Message;
+		Message.SetMessageNameId(SetLampStateMessageName);
+		Message.SetPayload(TSpan<const std::uint8_t>(&StateByte, 1));
+		const EMessagingResult SendResult = Messaging.SendMessageToChannel(Message, AppChannelName);
+		if (SendResult != EMessagingResult::Success)
 		{
 			MW_LOG(Error, "ex23", "switch lamp send failed");
 			return;
@@ -90,15 +87,18 @@ private:
 	}
 
 	/**
-	 * Motivation: Bumps HeartbeatCount and broadcasts it as a 1-byte message to every subscriber.
-	 * Responsibilities: Increment the counter, broadcast it, and log the outcome.
+	 * Motivation: Bumps HeartbeatCount and sends it as a 1-byte message the remote display subscribes to.
+	 *   This is the example's own application heartbeat, unrelated to any transport-level liveness.
+	 * Responsibilities: Increment the counter, send it, and log the outcome.
 	 */
 	void BroadcastHeartbeat() noexcept
 	{
 		++HeartbeatCount;
-		const EMessageResult SendResult =
-			Router.BroadcastMessage(AppChannelId, HeartbeatCountMessageId, SwitchActorId, TSpan<const std::uint8_t>(&HeartbeatCount, 1));
-		if (SendResult != EMessageResult::Success)
+		FMessage Message;
+		Message.SetMessageNameId(HeartbeatCountMessageName);
+		Message.SetPayload(TSpan<const std::uint8_t>(&HeartbeatCount, 1));
+		const EMessagingResult SendResult = Messaging.SendMessageToChannel(Message, AppChannelName);
+		if (SendResult != EMessagingResult::Success)
 		{
 			MW_LOG(Error, "ex23", "switch heartbeat broadcast failed");
 			return;
@@ -106,8 +106,8 @@ private:
 		MW_LOG(Log, "ex23", "switch broadcast heartbeat=%u", static_cast<unsigned>(HeartbeatCount));
 	}
 
-	/** Motivation: Router this actor sends through; injected at construction, never a global. */
-	IMessageRouter& Router;
+	/** Motivation: Messaging system this actor sends through; injected at construction, never a global. */
+	FMessagingSystem& Messaging;
 
 	/** Motivation: Current toggled lamp state; flips every tick, starting OFF -> first send is ON. */
 	bool bLampOn{false};
@@ -118,11 +118,10 @@ private:
 } // namespace
 
 /**
- * Motivation: Lets Board B (node 2) run FSwitchActor over a TMessageRouter wired to TTransportHost
- *   (Client, greeting the server's UART address) through TMessageChannelBinding, so the client half of
- *   the two-board wire demo can be reasoned about in one place.
- * Responsibilities: Open the UART, wire the transport, router, binding, and engine, spawn the switch,
- *   start as a client, and pump frames in an unbounded loop.
+ * Motivation: Lets Board B (node 2) run FSwitchActor over one Messaging channel on its UART device, so
+ *   the client half of the two-board wire demo can be reasoned about in one place.
+ * Responsibilities: Open the UART, create the Messaging system and its channel, spawn the switch, and
+ *   tick the engine in an unbounded loop.
  */
 void RunClient() noexcept
 {
@@ -135,20 +134,22 @@ void RunClient() noexcept
 	}
 
 	// All composition objects are static (the ESP32-S3 stack lesson, §2.2).
-	static FWireTransport Transport{Device};
-	static FWireRouter Router;
-	static FWireBinding Wire{Transport, AppWireChannelByte, AppChannelId, EChannelSendTarget::Server, Router};
-	static FWireFrame WireFrame{Transport};
-	static FWireEngine Engine{FGarbageCollectionBudget{1, 4, 8}, WireFrame};
-
-	if (!Wire.IsAttached())
+	static FWireEngine Engine{FGarbageCollectionBudget{1, 4, 8}};
+	if (Engine.CreateMessagingSystem(FMessagingSystemInformation{}) != ERuntimeResult::Success)
 	{
-		MW_LOG(Error, "ex23", "client wire binding failed to attach; halting");
+		MW_LOG(Error, "ex23", "client Messaging system creation failed; halting");
 		return;
 	}
-	if (Router.AddChannel(Wire) != EMessageResult::Success)
+	FMessagingSystem* const Messaging = Engine.GetMessagingSystem();
+	if (Messaging == nullptr)
 	{
-		MW_LOG(Error, "ex23", "client router rejected its wired channel; halting");
+		MW_LOG(Error, "ex23", "client Messaging system unavailable; halting");
+		return;
+	}
+	// UART is point-to-point, so its device ignores this empty destination address.
+	if (Messaging->CreateChannel({AppChannelName, false, &Device, {}}) != EMessagingResult::Success)
+	{
+		MW_LOG(Error, "ex23", "client Messaging channel creation failed; halting");
 		return;
 	}
 
@@ -159,7 +160,7 @@ void RunClient() noexcept
 	}
 
 	const TObjectPtr<UWorld> World = Engine.CreateWorld();
-	const TObjectPtr<FSwitchActor> Switch = Engine.CreateObject<FSwitchActor>(SwitchActorTypeId, Router).Object;
+	const TObjectPtr<FSwitchActor> Switch = Engine.CreateObject<FSwitchActor>(SwitchActorTypeId, *Messaging).Object;
 	if (World.Get() == nullptr || Switch.Get() == nullptr)
 	{
 		MW_LOG(Error, "ex23", "client world or actor creation failed; halting");
@@ -171,11 +172,6 @@ void RunClient() noexcept
 		MW_LOG(Error, "ex23", "client actor registration failed; halting");
 		return;
 	}
-
-	FTransportHostConfig ClientConfig = MakeHostConfig();
-	ClientConfig.ServerAddress = MakeUartAddress(ServerNodeId);
-	(void)Transport.Configure(ENetworkMode::Client, ClientConfig);
-	(void)Transport.Start(GTimeSource.Now());
 
 	const TimePointMilliseconds BootTime = GTimeSource.Now();
 	if (Engine.BeginPlay(BootTime) != ERuntimeResult::Success)
@@ -189,7 +185,7 @@ void RunClient() noexcept
 	// 19-UartMessaging's client), so the loop runs unbounded rather than stopping after N messages.
 	for (;;)
 	{
-		PumpOneFrame(Router, Engine, GTimeSource.Now());
+		(void)Engine.Tick(GTimeSource.Now());
 		SleepMilliseconds(PollPacingMilliseconds);
 	}
 }
