@@ -9,7 +9,6 @@
 #include <MicroWorld/Engine/GarbageCollector.h>
 #include <MicroWorld/Engine/ObjectPtr.h>
 #include <MicroWorld/Engine/World.h>
-#include <MicroWorld/Messaging/Message.h>
 #include <MicroWorld/Messaging/MessagingSystem.h>
 #include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
 #include <MicroWorld/Platform/Esp32/Esp32TimeSource.h>

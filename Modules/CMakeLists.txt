@@ -119,7 +119,7 @@ microworld_enable_strict_portable_options(microworld_engine)
 microworld_disable_exceptions_and_rtti("${MICROWORLD_ENGINE_SOURCES}")
 
 # ---------------------------------------------------------------------------
-# Messaging: header-only router, channel bindings, reliable channel.
+# Messaging: header-only named channels, subscriptions, and reliable delivery.
 # ---------------------------------------------------------------------------
 add_library(microworld_messaging INTERFACE)
 target_include_directories(microworld_messaging INTERFACE
@@ -335,10 +335,6 @@ if(MICROWORLD_BUILD_TESTS)
         "${MICROWORLD_TESTS_ROOT}/Messaging/MessagingSystemTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Messaging/MessagingSubscriptionTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Messaging/MessagingWireTests.cpp"
-        "${MICROWORLD_TESTS_ROOT}/Messaging/MessageCodecTests.cpp"
-        "${MICROWORLD_TESTS_ROOT}/Messaging/MessageRouterTests.cpp"
-        "${MICROWORLD_TESTS_ROOT}/Messaging/MessageChannelTests.cpp"
-        "${MICROWORLD_TESTS_ROOT}/Messaging/ReliableChannelTests.cpp"
     )
     add_executable(microworld_messaging_tests ${MICROWORLD_MESSAGING_TEST_SOURCES})
     target_include_directories(microworld_messaging_tests PRIVATE

@@ -6,7 +6,6 @@
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Engine/EngineResult.h>
 #include <MicroWorld/Engine/ObjectStore.h>
-#include <MicroWorld/Messaging/Message.h>
 #include <MicroWorld/Engine/World.h>
 #include <MicroWorld/Core/Log.h>
 #include <MicroWorld/Transport/TransportResult.h>

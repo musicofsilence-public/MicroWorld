@@ -86,7 +86,7 @@ public:
 
 	// TEngine holds this set by IPlaySystem&, and each added frame is captured by raw
 	// pointer; relocating the set would dangle both references, so copy and move are deleted
-	// (the same fixed-identity rule TMessageRouter and TMessageChannelBinding already follow).
+	// (the same fixed-identity rule every other engine-held system already follows).
 	/**
 	 * Motivation: Prevents relocating this set from dangling the IPlaySystem& an engine holds and the raw pointers it captures.
 	 * Responsibilities: Reject copy construction so the set keeps a fixed identity.

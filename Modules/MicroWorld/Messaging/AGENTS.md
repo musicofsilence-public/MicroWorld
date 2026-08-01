@@ -9,11 +9,16 @@ Messaging is the portable actor-messaging system. Its dependency direction is
 Engine, Transport, platform, SDK, and transport-device headers must not appear
 here.
 
-The system owns message vocabulary and codecs, bounded routing, channel
-interfaces and bindings, and bounded reliable delivery. Its router and reliable
-channel participate in caller-owned frame ordering without owning a world or
-engine. It is transport-agnostic: callers provide a channel or a duck-typed
-network facade at the edge rather than giving Messaging a Transport dependency.
+The system owns message vocabulary, named channels, subscriptions, wire framing,
+and bounded reliable delivery. It is transport-agnostic without depending on
+Transport: a channel holds a `Core::ITransportDevice*`, so each medium realises
+Core's interface and Messaging never names one. A channel with no device is the
+local mode, not a degraded one.
+
+`FMessagingSystem` is a `Core::IPlaySystem`, and the engine that created it
+drives its turns. It never drives a device's own `PreAdvance` or `PostAdvance`:
+those belong to whoever composed the device, so a device shared by several
+channels is not ticked twice.
 
 There is no production translation unit: every primitive is a template or an
 inline codec whose caller-selected capacities must stay visible at instantiation.
@@ -23,62 +28,63 @@ dependency.
 
 ## Concepts and boundaries
 
-- All routing, handler, queue, retry, and frame-set capacities are caller
-  selected and fixed at compile time; steady-state message work allocates
+- All channel, subscription, message-size, and reliable-pending capacities are
+  caller selected and fixed at compile time; steady-state message work allocates
   nothing and reads no hidden clock.
-- Message delivery remains queued and deterministic. Time arrives from the
-  caller, and physical transport policies stay outside this system.
-- Public symbols live in the flat `MicroWorld` namespace below the `Messaging/`
-  include layout. The system never owns worlds, actors, engines, network hosts,
-  devices, or platform resources.
+- **Local delivery is synchronous.** `SendMessageToChannel` runs matching local
+  subscribers inside the send call, before it touches any device. A subscriber
+  may send from inside its own callback: the slot being dispatched is marked, so
+  a nested delivery cannot re-enter it.
+- **Reliable delivery is point-to-point and at-least-once.** A channel
+  acknowledges to its own configured address, not to whoever sent the message,
+  so both ends must be known when the channel is created. There is no
+  receiver-side duplicate suppression.
+- A subscription may carry a weak owner, so an owner that dies makes its
+  subscription inert and its slot reclaimable instead of dangling.
+- Public symbols live in `MicroWorld::Messaging`, matching the `Messaging/`
+  include layout; `tools/CheckNamespaces.py` enforces it. The system never owns
+  worlds, actors, engines, devices, or platform resources.
 
 ## Composition recipes
 
-Four shapes cover every wiring this system supports. Frame order is the rule
-that makes them work: **host play systems are added before the router**, so inbound
-bytes are decoded in the same tick they are routed.
+Every wiring is the same three calls: create the system on the engine, create
+the channels, subscribe. There is no binding, no wrapper, and no frame-order
+rule for the caller to get right.
 
-Standalone world, local messaging only — the router *is* the play system:
+Local messaging only — a channel with no device:
 
 ```cpp
-static TMessageRouter<16, 8, 96, 1> Router;              // handlers, queue, bytes, channels
-static TEngine<> Engine{Budget, Router};                 // capacities from FDefaultEngineTraits
-// actors take Router by IMessageRouter&, and subscribe in BeginPlay via AddMessageHandler
+Engine.CreateMessagingSystem(FMessagingSystemInformation{});
+FMessagingSystem* const Messaging = Engine.GetMessagingSystem();
+Messaging->CreateChannel({"Local", /*bIsReliable*/ false, /*Device*/ nullptr, /*Address*/ {}});
+// actors take FMessagingSystem& by constructor injection and subscribe in BeginPlay
 ```
 
-Client/server over one wire — server side shown:
+Over a wire — name the device the channel sends through:
 
 ```cpp
 static MicroWorld::Platform::Esp32::FEsp32UartDevice Device{{.UartPort = 1, .TxGpio = 17, .RxGpio = 18,
                                 .BaudRate = 115200, .LocalNodeId = 1}};
-static TTransportHost<2, 120> Transport{Device};         // Configure(DedicatedServer) + Start
-static TMessageRouter<16, 8, 96, 1> Router;
-static TMessageChannelBinding<decltype(Transport)> Commands{Transport, /*wire*/1, /*id*/1,
-                                                            EChannelSendTarget::AllPeers, Router};
-static THostPlaySystem<decltype(Transport)> HostPlay{Transport};
-static TPlaySystemSet<2> Systems;                        // Add(HostPlay); Add(Router);
-static TEngine<> Engine{Budget, Systems};
-// after wiring: Router.AddChannel(Commands);
+Messaging->CreateChannel({"App", false, &Device, {}});   // point-to-point ignores the address
 ```
 
-Two devices, two channels, one world: a second device, a second `TTransportHost`, and
-a second binding with a different `FMessageChannelId` — both host play systems added
-before the router.
+Two media at once: create a second channel naming the second device. Several
+channels may share one device; Messaging drains it once per turn.
 
-Guaranteed channel — the reliable wrapper sits between binding and router in
-both directions. Wrapper and binding each hold the other by reference, a
-construction cycle broken by one deliberate two-phase setup:
+Guaranteed delivery is one boolean, and both ends must name each other because
+acknowledgements go to the channel's configured address:
 
 ```cpp
-static TReliableChannel<8, 96> Reliable{Router /*forward sink*/, {}};
-static TMessageChannelBinding<decltype(Transport)> Wire{Transport, /*wire*/1, /*id*/1,
-                                                        EChannelSendTarget::Server,
-                                                        Reliable /*inbound sink*/};
-static TPlaySystemSet<3> Systems;
-// at startup, in this order:
-//   Reliable.SetInnerChannel(Wire);   // outbound: router -> reliable -> wire
-//   Router.AddChannel(Reliable);      // AFTER SetInnerChannel: GetChannelId needs the inner id
-//   Systems.Add(HostPlay); Systems.Add(Reliable); Systems.Add(Router);
+Messaging->CreateChannel({"Guaranteed", /*bIsReliable*/ true, &Device, PeerAddress});
+```
+
+Subscribing, with the optional message-name filter and a weak owner:
+
+```cpp
+FMessagingSystem::FSubscriberDelegate Subscriber;
+Subscriber.Bind([this](const FMessage& Message) noexcept { this->OnMessage(Message); });
+Messaging.SubscribeToChannel("App", "SetLampState", std::move(Subscriber),
+    MicroWorld::Engine::MakeWeakOwner(*GetObjectStore(), GetObjectHandle()));
 ```
 
 ## Verification
