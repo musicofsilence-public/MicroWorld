@@ -3,14 +3,50 @@
 #include <MicroWorld/Messaging/NameId.h>
 
 #include <cstdint>
+#include <type_traits>
 
 namespace
 {
 
 using MicroWorld::Messaging::FNameId;
+using MicroWorld::Messaging::InvalidNameId;
 using MicroWorld::Messaging::MakeNameId;
 
 static_assert(MakeNameId("SensorA") == MakeNameId("SensorA"));
+static_assert(std::is_constructible_v<FNameId, std::uint32_t>);
+static_assert(!std::is_convertible_v<std::uint32_t, FNameId>);
+
+/**
+ * Motivation: Keeps string-literal call sites readable while preserving one canonical hash implementation.
+ * Responsibilities: Confirm an implicitly converted literal equals the explicit hashing helper result.
+ */
+MW_TEST_CASE(NameId_ImplicitLiteralConversionMatchesMakeNameId)
+{
+	// Arrange
+	const FNameId LiteralNameId = "SensorA";
+
+	// Act
+	const FNameId HashedNameId = MakeNameId("SensorA");
+
+	// Assert
+	MW_EXPECT_EQ(Test, HashedNameId, LiteralNameId, "A literal conversion should use MakeNameId's hash");
+}
+
+/**
+ * Motivation: Gives default-constructed messaging values one explicit unset identity.
+ * Responsibilities: Confirm the default FNameId equals the public invalid value.
+ */
+MW_TEST_CASE(NameId_DefaultValueEqualsInvalidNameId)
+{
+	// Arrange
+	const FNameId DefaultNameId{};
+
+	// Act
+	const bool bIsInvalid = DefaultNameId == InvalidNameId;
+
+	// Assert
+	MW_EXPECT_TRUE(Test, bIsInvalid, "A default FNameId should equal InvalidNameId");
+}
 
 /**
  * Motivation: Lets independent call sites use the same readable name without coordinating stored ids.
@@ -36,7 +72,7 @@ MW_TEST_CASE(NameId_ReturnsTheSameIdForRepeatedNames)
 MW_TEST_CASE(NameId_NullAndEmptyNamesUseTheOffsetBasis)
 {
 	// Arrange
-	constexpr FNameId ExpectedNameId = 2166136261u;
+	constexpr FNameId ExpectedNameId{2166136261u};
 
 	// Act
 	const FNameId NullNameId = MakeNameId(nullptr);
