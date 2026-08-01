@@ -343,6 +343,7 @@ if(MICROWORLD_BUILD_TESTS)
     set(MICROWORLD_MESSAGING_TEST_SOURCES
         "${MICROWORLD_TESTS_ROOT}/Core/TestMain.cpp"
         "${MICROWORLD_TESTS_ROOT}/Engine/EngineAllocationCounters.cpp"
+        "${MICROWORLD_TESTS_ROOT}/Messaging/NameIdTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Messaging/MessageCodecTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Messaging/MessageRouterTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Messaging/MessageChannelTests.cpp"
