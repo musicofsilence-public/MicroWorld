@@ -27,3 +27,12 @@ examples/*/src/NetworkConfig.h
 # Per-session scratch plans written by the zcode tool
 .zcode/
 /build-*
+# Added by code-review-graph
+.code-review-graph/
+/.claude/
+/.codebuddy/
+/.gemini/
+/.vscode/
+/.qoder/
+/.cursor/
+/.kiro/
