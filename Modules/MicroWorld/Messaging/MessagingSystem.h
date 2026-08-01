@@ -211,31 +211,77 @@ public:
 			return EMessagingResult::Invalid;
 		}
 
-		for (std::size_t SlotIndex = 0; SlotIndex < TTraits::MaxSubscriptions; ++SlotIndex)
+		FSubscriptionSlot* Slot = FindFreeSubscriptionSlot();
+		if (Slot == nullptr)
 		{
-			FSubscriptionSlot& Slot = SubscriptionSlots[SlotIndex];
-			if (Slot.bIsOccupied)
+			for (FSubscriptionSlot& CandidateSlot : SubscriptionSlots)
 			{
-				continue;
+				if (CandidateSlot.bIsOccupied && !CandidateSlot.Owner.IsLive())
+				{
+					ReclaimDeadOwnerSubscriptionSlot(CandidateSlot);
+				}
 			}
 
-			Slot.SubscriptionSequence = NextSubscriptionSequence;
-			++NextSubscriptionSequence;
-			Slot.ChannelNameId = InChannelNameId;
-			Slot.MessageNameFilter = InMessageNameFilter;
-			Slot.Owner = InOwner;
-			Slot.Subscriber = std::move(InSubscriber);
-			Slot.bIsOccupied = true;
-			if (OutHandle != nullptr)
-			{
-				OutHandle->Index = static_cast<std::uint16_t>(SlotIndex);
-				OutHandle->Generation = Slot.Generation;
-			}
-
-			return EMessagingResult::Success;
+			Slot = FindFreeSubscriptionSlot();
 		}
 
-		return EMessagingResult::Full;
+		if (Slot == nullptr)
+		{
+			return EMessagingResult::Full;
+		}
+
+		Slot->SubscriptionSequence = NextSubscriptionSequence;
+		++NextSubscriptionSequence;
+		Slot->ChannelNameId = InChannelNameId;
+		Slot->MessageNameFilter = InMessageNameFilter;
+		Slot->Owner = InOwner;
+		Slot->Subscriber = std::move(InSubscriber);
+		Slot->bIsOccupied = true;
+		if (OutHandle != nullptr)
+		{
+			OutHandle->Index = static_cast<std::uint16_t>(Slot - SubscriptionSlots);
+			OutHandle->Generation = Slot->Generation;
+		}
+
+		return EMessagingResult::Success;
+	}
+
+	/**
+	 * Motivation: Lets a caller stop one subscription without disturbing other subscribers on the same channel.
+	 * Responsibilities: Release only an occupied slot whose index and generation match InHandle, or report NotFound without indexing an invalid
+	 * handle.
+	 */
+	EMessagingResult Unsubscribe(const FSubscriptionHandle InHandle) noexcept
+	{
+		if (InHandle.Index >= TTraits::MaxSubscriptions)
+		{
+			return EMessagingResult::NotFound;
+		}
+
+		FSubscriptionSlot& Slot = SubscriptionSlots[InHandle.Index];
+		if (!Slot.bIsOccupied || InHandle.Generation != Slot.Generation)
+		{
+			return EMessagingResult::NotFound;
+		}
+
+		ReleaseSubscriptionSlot(Slot);
+		return EMessagingResult::Success;
+	}
+
+	/**
+	 * Motivation: Lets an owner remove every subscription it created as one lifecycle action.
+	 * Responsibilities: Release every occupied subscription owned by InOwner; an ownerless token matches nothing so it cannot remove every ownerless
+	 * subscription.
+	 */
+	void UnsubscribeAll(const Core::FWeakOwner InOwner) noexcept
+	{
+		for (FSubscriptionSlot& Slot : SubscriptionSlots)
+		{
+			if (Slot.bIsOccupied && Slot.Owner.IsSameOwner(InOwner))
+			{
+				ReleaseSubscriptionSlot(Slot);
+			}
+		}
 	}
 
 	/**
@@ -399,6 +445,9 @@ private:
 		/** Motivation: Marks whether this slot currently owns a callable and routing registration. */
 		bool bIsOccupied{false};
 
+		/** Motivation: Marks a callable that is executing right now, so releasing it cannot hand its storage to a replacement mid-call. */
+		bool bIsBeingDispatched{false};
+
 		/** Motivation: Invalidates handles from earlier occupants whenever this slot is released. */
 		std::uint16_t Generation{1};
 
@@ -532,8 +581,10 @@ private:
 	}
 
 	/**
-	 * Motivation: Releases a subscription whose owner died without retaining its callable or validating stale future handles.
-	 * Responsibilities: Mark InSlot unoccupied, advance its generation without producing zero, and reset its delegate.
+	 * Motivation: Keeps a running self-unsubscribing callable alive until it returns; resetting the delegate here would destroy a callable whose body
+	 *   is still on the stack, and it would free nothing, because delegate storage is inline and fixed. The stale callable is unreachable once
+	 *   occupancy clears and is destroyed later, when a replacement is move-assigned over it.
+	 * Responsibilities: Mark InSlot unoccupied and advance its generation without producing zero.
 	 */
 	static void ReleaseSubscriptionSlot(FSubscriptionSlot& InSlot) noexcept
 	{
@@ -543,8 +594,33 @@ private:
 		{
 			InSlot.Generation = 1;
 		}
+	}
 
-		InSlot.Subscriber.Reset();
+	/**
+	 * Motivation: Reuses released capacity without replacing a callable that is executing inside a dispatch.
+	 * Responsibilities: Return the first slot that is neither occupied nor being dispatched, or nullptr when no safe slot is available.
+	 */
+	FSubscriptionSlot* FindFreeSubscriptionSlot() noexcept
+	{
+		for (FSubscriptionSlot& Slot : SubscriptionSlots)
+		{
+			if (!Slot.bIsOccupied && !Slot.bIsBeingDispatched)
+			{
+				return &Slot;
+			}
+		}
+
+		return nullptr;
+	}
+
+	/**
+	 * Motivation: Keeps dead-owner reclamation observability consistent whether capacity is reclaimed by subscribing or by delivery.
+	 * Responsibilities: Release InSlot and record one dead-owner subscription reclamation.
+	 */
+	void ReclaimDeadOwnerSubscriptionSlot(FSubscriptionSlot& InSlot) noexcept
+	{
+		ReleaseSubscriptionSlot(InSlot);
+		++ReclaimedDeadOwnerSubscriptionCount;
 	}
 
 	/**
@@ -615,8 +691,7 @@ private:
 
 			if (!Slot.Owner.IsLive())
 			{
-				ReleaseSubscriptionSlot(Slot);
-				++ReclaimedDeadOwnerSubscriptionCount;
+				ReclaimDeadOwnerSubscriptionSlot(Slot);
 				continue;
 			}
 
@@ -626,7 +701,9 @@ private:
 				continue;
 			}
 
+			Slot.bIsBeingDispatched = true;
 			(void)Slot.Subscriber.Execute(InMessage);
+			Slot.bIsBeingDispatched = false;
 		}
 	}
 
