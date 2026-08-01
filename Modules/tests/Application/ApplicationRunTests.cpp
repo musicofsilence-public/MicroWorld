@@ -2,6 +2,7 @@
 
 #include <MicroWorld/Application/Application.h>
 #include <MicroWorld/Engine/ObjectStore.h>
+#include <MicroWorld/Messaging/MessagingSystem.h>
 
 #include <cstddef>
 #include <initializer_list>
@@ -102,7 +103,9 @@ namespace
 	 * Motivation: IEngine double whose Tick stops the runner on a configured frame and records observed timestamps.
 	 *   Tick returns non-Success once TickCount reaches the configured stop frame, so Run returns instead of
 	 *   looping forever; the observed-timestamp vector is what RunnerFeedsClockValuesIntoTick inspects.
-	 *   BeginPlay can also be configured to fail so a failed-begin run is reachable from a test.
+	 *   BeginPlay can also be configured to fail so a failed-begin run is reachable from a test. This double
+	 *   reserves no messaging capacity, so creating a messaging system always reports CapacityExceeded and the
+	 *   getter stays null.
 	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
 	 * Example:
 	 *   // Construct and exercise the type in one behavior test.
@@ -166,6 +169,13 @@ namespace
 		{
 			return *reinterpret_cast<MicroWorld::Engine::FObjectStore*>(&StoreStorage);
 		}
+
+		MicroWorld::Core::ERuntimeResult CreateMessagingSystem(const MicroWorld::Messaging::FMessagingSystemInformation&) noexcept override
+		{
+			return MicroWorld::Core::ERuntimeResult::CapacityExceeded;
+		}
+
+		MicroWorld::Messaging::FMessagingSystem* GetMessagingSystem() noexcept override { return nullptr; }
 
 	private:
 		/** Motivation: Holds the frame index at which Tick stops the run, so Run always returns in tests. */

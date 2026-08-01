@@ -19,7 +19,7 @@ from pathlib import Path
 # became Networking.
 MODULE_DEPENDENCIES = {
     "Core": set(),
-    "Engine": {"Core"},
+    "Engine": {"Core", "Messaging"},
     "Messaging": {"Core"},
     "Transport": {"Core"},
     "Networking": {"Core", "Messaging", "Transport"},
@@ -357,7 +357,7 @@ def run_self_test() -> int:
         # foreign module path even though it lives in Core's tree.
         (core / "Transport" / "Leak.h").write_text("#pragma once\n", encoding="utf-8")
 
-        # Engine may reach Core but nothing else; it must never reach Transport.
+        # Engine may reach Core and Messaging but must never reach Transport.
         (engine / "World.h").write_text(
             "#include <MicroWorld/Core/Time.h>\n",
             encoding="utf-8",

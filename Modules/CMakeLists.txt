@@ -114,7 +114,7 @@ target_include_directories(microworld_engine PUBLIC
     "$<BUILD_INTERFACE:${MICROWORLD_INCLUDE_ROOT}>"
 )
 target_compile_features(microworld_engine PUBLIC cxx_std_17)
-target_link_libraries(microworld_engine PUBLIC MicroWorld::Core)
+target_link_libraries(microworld_engine PUBLIC MicroWorld::Core MicroWorld::Messaging)
 microworld_enable_strict_portable_options(microworld_engine)
 microworld_disable_exceptions_and_rtti("${MICROWORLD_ENGINE_SOURCES}")
 
@@ -325,6 +325,7 @@ if(MICROWORLD_BUILD_TESTS)
         "${MICROWORLD_TESTS_ROOT}/Engine/EngineSpawnDestroyTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Engine/EngineDeferredSpawnTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Engine/EngineHostTests.cpp"
+        "${MICROWORLD_TESTS_ROOT}/Engine/EngineMessagingTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Engine/EngineGarbageCollectionTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Engine/PlaySystemSetTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Engine/GarbageCollectorTests.cpp"

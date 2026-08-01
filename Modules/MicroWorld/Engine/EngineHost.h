@@ -6,6 +6,7 @@
 #include <MicroWorld/Engine/EngineClassIds.h>
 #include <MicroWorld/Engine/EngineStorage.h>
 #include <MicroWorld/Core/PlaySystem.h>
+#include <MicroWorld/Messaging/MessagingSystem.h>
 #include <MicroWorld/Engine/World.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Engine/GarbageCollector.h>
@@ -27,8 +28,8 @@ namespace MicroWorld::Engine
 /**
  * Motivation: Lets an application hold and drive an engine without naming its compile-time traits, so a subclass-free app
  *   composes a TEngine<TTraits> and reaches it through this interface.
- * Responsibilities: Expose the five lifecycle/world methods that do not depend on a compile-time capacity, leaving
- *   capacity-dependent operations (such as the templated timer manager) off this interface.
+ * Responsibilities: Expose the lifecycle, world, and messaging methods that do not depend on a compile-time capacity,
+ *   leaving capacity-dependent operations (such as the templated timer manager) off this interface.
  * Example:
  *   IEngine& Engine = MakeEngine();
  *   (void)Engine.BeginPlay(Now); Engine.Tick(Now + 16);
@@ -71,6 +72,19 @@ public:
 	 * Responsibilities: Return the object store.
 	 */
 	virtual FObjectStore& GetObjectStore() noexcept = 0;
+
+	/**
+	 * Motivation: Lets an application reach messaging without composing and driving a second runtime object of its own.
+	 * Responsibilities: Construct the engine's one messaging system, and report Duplicate leaving the existing system
+	 *   untouched when one already exists.
+	 */
+	virtual Core::ERuntimeResult CreateMessagingSystem(const Messaging::FMessagingSystemInformation& InInformation) noexcept = 0;
+
+	/**
+	 * Motivation: Lets a caller open channels and subscribe on the system the engine created and drives.
+	 * Responsibilities: Return the one live messaging system, or null until a creation has succeeded.
+	 */
+	virtual Messaging::FMessagingSystem* GetMessagingSystem() noexcept = 0;
 };
 
 /**
@@ -121,9 +135,9 @@ struct FDefaultEngineTraits
 /**
  * Motivation: Owns and wires every fixed-capacity runtime subsystem behind one canonical per-frame order, sizing all
  *   storage at compile time and never allocating.
- * Responsibilities: Own the class registry, object store, garbage collector, world actor registry, and timer manager; run
- *   the documented fixed frame order; and, when a caller-owned system is bound at construction, drive its lifecycle and
- *   per-frame turns.
+ * Responsibilities: Own the class registry, object store, garbage collector, world actor registry, timer manager, and
+ *   the one messaging system; run the documented fixed frame order; and, when a caller-owned system is bound at
+ *   construction, drive its lifecycle and per-frame turns.
  * Example:
  *   TEngine<> Engine(Budget);
  *   (void)Engine.CreateWorld();
@@ -325,6 +339,27 @@ public:
 	FTimerManager& GetTimerManager() noexcept { return Timers; }
 
 	/**
+	 * Motivation: Gives a composition root one bounded messaging system the engine drives, without needing a world first.
+	 * Responsibilities: Construct the system in the reserved slot, and report Duplicate leaving the existing system and
+	 *   its channels and subscriptions untouched when the slot is already filled.
+	 */
+	Core::ERuntimeResult CreateMessagingSystem(const Messaging::FMessagingSystemInformation& InInformation) noexcept override
+	{
+		if (!MessagingSystems.IsEmpty())
+		{
+			return Core::ERuntimeResult::Duplicate;
+		}
+
+		return MessagingSystems.Emplace(InInformation);
+	}
+
+	/**
+	 * Motivation: Lets a caller open channels and subscribe on the system the engine created and drives.
+	 * Responsibilities: Return the one live messaging system, or null until a creation has succeeded.
+	 */
+	Messaging::FMessagingSystem* GetMessagingSystem() noexcept override { return MessagingSystems.Data(); }
+
+	/**
 	 * Motivation: Starts the bound system then the world at one canonical time and records it as the tick baseline.
 	 * Responsibilities: Reject the start when no world has been created, then record the baseline and begin the system
 	 *   before the world.
@@ -338,7 +373,7 @@ public:
 		}
 
 		LastTickMilliseconds = InNowMilliseconds;
-		BeginPlaySystem(InNowMilliseconds);
+		BeginPlaySystems(InNowMilliseconds);
 		return World->BeginPlay(InNowMilliseconds);
 	}
 
@@ -361,11 +396,11 @@ public:
 		}
 		LastTickMilliseconds = InNowMilliseconds;
 
-		PreAdvanceSystem(InNowMilliseconds);
+		PreAdvanceSystems(InNowMilliseconds);
 		(void)Timers.Advance(InNowMilliseconds);
 		const Core::ERuntimeResult FrameResult = AdvanceWorldAndApplyBarrier(*World, InNowMilliseconds);
 		ReclaimAndCollect();
-		PostAdvanceSystem(InNowMilliseconds);
+		PostAdvanceSystems(InNowMilliseconds);
 
 		return FrameResult;
 	}
@@ -383,7 +418,7 @@ public:
 		}
 
 		const Core::ERuntimeResult EndResult = World->EndPlay();
-		EndPlaySystem();
+		EndPlaySystems();
 		return EndResult;
 	}
 
@@ -422,11 +457,16 @@ private:
 	}
 
 	/**
-	 * Motivation: Starts the bound system before the world's actors receive their BeginPlay turn.
-	 * Responsibilities: Forward to the system's BeginPlay only when one is bound.
+	 * Motivation: Starts the engine's systems before the world's actors receive their BeginPlay turn.
+	 * Responsibilities: Begin the messaging system then the bound system, skipping either when it is absent.
 	 */
-	void BeginPlaySystem(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
+	void BeginPlaySystems(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
+		if (Messaging::FMessagingSystem* const MessagingSystem = GetMessagingSystem(); MessagingSystem != nullptr)
+		{
+			MessagingSystem->BeginPlay(InNowMilliseconds);
+		}
+
 		if (System != nullptr)
 		{
 			System->BeginPlay(InNowMilliseconds);
@@ -434,11 +474,17 @@ private:
 	}
 
 	/**
-	 * Motivation: Frame step 1 — gives a bound system its pre-advance turn (draining inbound traffic, dispatching messages).
-	 * Responsibilities: Forward to the system's PreAdvance only when one is bound.
+	 * Motivation: Frame step 1 — inbound work lands before the world advances, so a frame's arriving messages are already
+	 *   delivered when actors run.
+	 * Responsibilities: Pre-advance the messaging system then the bound system, skipping either when it is absent.
 	 */
-	void PreAdvanceSystem(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
+	void PreAdvanceSystems(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
+		if (Messaging::FMessagingSystem* const MessagingSystem = GetMessagingSystem(); MessagingSystem != nullptr)
+		{
+			MessagingSystem->PreAdvance(InNowMilliseconds);
+		}
+
 		if (System != nullptr)
 		{
 			System->PreAdvance(InNowMilliseconds);
@@ -477,26 +523,38 @@ private:
 	}
 
 	/**
-	 * Motivation: Frame step 7 — gives a bound system its post-advance turn (flushing outbound traffic and heartbeats).
-	 * Responsibilities: Forward to the system's PostAdvance only when one is bound.
+	 * Motivation: Frame step 7 — outbound work leaves after the world advanced, so messages an actor sent this frame go
+	 *   out in the same frame; the reverse of the pre-advance order mirrors the repository's add-order start and
+	 *   reverse-order shutdown.
+	 * Responsibilities: Post-advance the bound system then the messaging system, skipping either when it is absent.
 	 */
-	void PostAdvanceSystem(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
+	void PostAdvanceSystems(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		if (System != nullptr)
 		{
 			System->PostAdvance(InNowMilliseconds);
 		}
+
+		if (Messaging::FMessagingSystem* const MessagingSystem = GetMessagingSystem(); MessagingSystem != nullptr)
+		{
+			MessagingSystem->PostAdvance(InNowMilliseconds);
+		}
 	}
 
 	/**
-	 * Motivation: Ends the bound system after the world has delivered all actor EndPlay turns.
-	 * Responsibilities: Forward to the system's EndPlay only when one is bound.
+	 * Motivation: Ends the engine's systems after the world has delivered all actor EndPlay turns.
+	 * Responsibilities: End the bound system then the messaging system, skipping either when it is absent.
 	 */
-	void EndPlaySystem() noexcept
+	void EndPlaySystems() noexcept
 	{
 		if (System != nullptr)
 		{
 			System->EndPlay();
+		}
+
+		if (Messaging::FMessagingSystem* const MessagingSystem = GetMessagingSystem(); MessagingSystem != nullptr)
+		{
+			MessagingSystem->EndPlay();
 		}
 	}
 
@@ -508,6 +566,9 @@ private:
 
 	/** Motivation: Optional caller-owned system started before and stopped after the world, advanced first and last each tick. */
 	Core::IPlaySystem* System{nullptr};
+
+	/** Motivation: Holds the one optional messaging system; its storage is reserved whether or not a system is created. */
+	Core::TStaticVector<Messaging::FMessagingSystem, 1> MessagingSystems;
 
 	/** Motivation: Records the last accepted tick time so a rolled-back clock is rejected. */
 	Core::TimePointMilliseconds LastTickMilliseconds{0};

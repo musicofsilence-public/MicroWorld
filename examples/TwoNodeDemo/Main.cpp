@@ -37,6 +37,10 @@ using namespace MicroWorld::Transport;
 using MicroWorld::Platform::Host::FHostWifiDevice;
 using MicroWorld::Transport::MakeUdpAddress;
 
+// Core and Transport each declare an ETransportResult while the transport move is mid-flight; this demo means the
+// Transport one. The Core declaration is the survivor, so this line disappears once the old Transport headers do.
+using MicroWorld::Transport::ETransportResult;
+
 /** Motivation: Loopback IPv4 octets shared by every endpoint address in the demo. */
 constexpr std::uint8_t LoopbackIpv4Octets[4] = {127, 0, 0, 1};
 

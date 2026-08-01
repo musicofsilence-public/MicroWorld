@@ -2,6 +2,7 @@
 
 #include <MicroWorld/Application/Application.h>
 #include <MicroWorld/Engine/ObjectStore.h>
+#include <MicroWorld/Messaging/MessagingSystem.h>
 
 #include <utility>
 
@@ -19,7 +20,8 @@ namespace
 	 *   configurable BeginPlay/OnConfigure results so a test can drive the failed-begin path without
 	 *   duplicating the application base's own state machine. GetWorld/GetObjectStore return references to
 	 *   backing storage so the IEngine contract is satisfied even though these tests never exercise the
-	 *   world or store.
+	 *   world or store. This double reserves no messaging capacity, so creating a messaging system always
+	 *   reports CapacityExceeded and the getter stays null.
 	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
 	 * Example:
 	 *   // Construct and exercise the type in one behavior test.
@@ -65,6 +67,13 @@ namespace
 		{
 			return *reinterpret_cast<MicroWorld::Engine::FObjectStore*>(&StoreStorage);
 		}
+
+		MicroWorld::Core::ERuntimeResult CreateMessagingSystem(const MicroWorld::Messaging::FMessagingSystemInformation&) noexcept override
+		{
+			return MicroWorld::Core::ERuntimeResult::CapacityExceeded;
+		}
+
+		MicroWorld::Messaging::FMessagingSystem* GetMessagingSystem() noexcept override { return nullptr; }
 
 	private:
 		/** Motivation: Holds the result BeginPlay will return, seeded to Success so the happy path needs no setup. */
