@@ -6,22 +6,27 @@ Inherits `../AGENTS.md`.
 
 One application entry point (`app_main` in `src/Main.cpp`) owns one world with two
 actors — `FThermometerActor` (one `FReadingSensorComponent`) and
-`FDisplayActor` (no components) — and one `TMessageRouter` that doubles as the
-`TEngine`'s network frame. Everything is static, sized at compile time,
-and allocation-free; no wire, no second board.
+`FDisplayActor` (no components) — and an engine-owned `FMessagingSystem` with
+one local-only channel. Everything is static, sized at compile time, and
+allocation-free; no wire, no second board.
 
 ## Concepts
 
-- **Local messaging through `IMessageRouter`.** Both actors talk only to the
-  router — a broadcast reading and a targeted calibrate reply — never to each
-  other directly.
-- **D9 constructor injection.** Both actors take `IMessageRouter&` (and the
+- **Local messaging through `FMessagingSystem`.** Both actors talk only to
+  injected Messaging — a named reading and a named calibrate reply — never to
+  each other directly. The `Local` channel has a null device, so delivery stops
+  after local subscribers and no frame reaches a wire.
+- **D9 constructor injection.** Both actors take `FMessagingSystem&` (and the
   thermometer also takes its sensor) through their constructor; neither reads
-  a global router, and neither `AActor` nor `UActorComponent` gained any
+  a global Messaging system, and neither `AActor` nor `UActorComponent` gained any
   messaging member for this.
-- **D5 one-frame local latency.** A send queues; only the next `Tick` call's
-  `PreAdvance` delivers it. See the README's teaching-point section for the
-  exact frame-by-frame trace.
+- **Weak actor subscriptions.** Both actors register their subscribers with
+  `MakeWeakOwner`, so collection prevents callbacks into reclaimed actor slots
+  and Messaging reclaims the registration.
+- **Synchronous local delivery.** A local send dispatches inside
+  `SendMessageToChannel`; the display runs in the thermometer's `Tick`, and
+  its calibrate subscriber resets the sensor in that same frame. See the
+  README for the trace order.
 - **Component-before-actor tick order.** The thermometer's `Tick` runs after
   its own sensor component's `TickComponent` within the same `Advance` (see
   `Modules/MicroWorld/Engine/Actor.h`), and both are configured

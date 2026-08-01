@@ -1,8 +1,8 @@
 # 22-ActorMessages
 
-**Feature:** local actor messaging through `TMessageRouter` — one board, one
-world, no wire. Two actors talk only through `IMessageRouter&`, injected at
-construction (D9): a broadcast reading and a targeted calibrate reply.
+**Feature:** local actor messaging through engine-owned `FMessagingSystem` — one
+board, one world, no wire. Two actors talk only through injected Messaging: a
+named reading and a named calibrate reply on one device-free channel.
 
 > Status: not yet verified on hardware.
 
@@ -11,52 +11,49 @@ construction (D9): a broadcast reading and a targeted calibrate reply.
 1. `FThermometerActor` owns one `FReadingSensorComponent`. Every 500 ms the
    sensor produces a synthetic reading (a named base plus a bounded ramp
    derived from its own tick count — no peripheral, ADR 0003 keeps device
-   buses out of engine-first examples). The actor then **broadcasts**
-   `TemperatureReadingMessageId` with the reading packed as a 2-byte
+   buses out of engine-first examples). The actor then sends
+   `TemperatureReading` with the reading packed as a 2-byte
    little-endian payload.
-2. `FDisplayActor` subscribes to `TemperatureReadingMessageId` in `BeginPlay`
+2. `FDisplayActor` subscribes to `TemperatureReading` in `BeginPlay`
    and logs every reading it receives. After it has logged 5 readings it sends
-   one **targeted** `CalibrateMessageId` to `ThermometerActorId` via
-   `SendMessageToActor` — sending from inside a message handler is legal (D5):
-   it just appends to the outbound queue like any other send.
-3. The thermometer subscribes to `CalibrateMessageId` (targeted to its own id)
-   in `BeginPlay`; its handler logs receipt and resets the sensor's reading
-   counter, so the displayed value cycles back to its starting point.
+   one `Calibrate` message through the same local channel. Sending from inside
+   a message handler is legal because Messaging prevents the active display
+   subscription from re-entering itself.
+3. The thermometer subscribes to `Calibrate` in `BeginPlay`; its weak owner
+   makes the registration inert if the garbage collector reclaims the actor.
+   Its handler logs receipt and resets the sensor's reading counter, so the
+   displayed value cycles back to its starting point.
 4. The run is bounded and deterministic: it stops once the display has logged
    7 readings (5 to trigger calibrate, 2 more to show the counter has reset).
 
-## The one-frame latency teaching point
+## Synchronous local delivery
 
 A "frame" here means one call to `TEngine::Tick`, not one 500 ms sensor
-cadence — the two are independent. Within a single `Tick` call the canonical
-order is fixed: **(1) `PreAdvance`** delivers whatever is already queued,
-**(3) the world advances** (components tick, then actors tick — this is when
-the thermometer broadcasts), and **(7) `PostAdvance`** moves that new
-`LocalChannelId` send into the inbound queue for next time. So:
+cadence — the two are independent. The `Local` channel has a `nullptr` device,
+so Messaging delivers to matching local subscribers directly inside
+`SendMessageToChannel` and stops there: it neither frames nor sends anything.
+Within a world-advance tick:
 
-- A reading broadcast during the world-advance step of frame **F** is flushed
-  to the inbound queue at the end of that same frame **F**, and is only
-  handed to the display's handler by `PreAdvance` at frame **F+1** — the
-  very next `Tick` call (about 10 ms later at this example's poll pace, well
-  before the sensor's next 500 ms tick). This is decision **D5**: sends are
-  queued, never dispatched inline.
-- The same rule applies to the calibrate reply: sent from inside the
-  display's handler during frame **F+1**'s `PreAdvance`, it is flushed at
-  the end of frame **F+1** and reaches the thermometer's handler at frame
-  **F+2**.
+- The display's reading subscriber runs inside the thermometer's `Tick`. The
+  thermometer logs its reading immediately before the send so the trace stays
+  in causal order.
+- The display's calibrate send invokes the thermometer subscriber nested in
+  the same call stack. The sensor counter resets in that same frame, rather
+  than on the next poll.
 
-The expected trace below shows this exactly: each `broadcast` line is followed
-one poll later by its matching `received` line, and `sent calibrate` is
-followed one poll later by `calibrated`.
+The expected trace below shows this: each `broadcast` line is immediately
+followed by its matching `received` line, and the calibrate handler completes
+before its sender returns.
 
 ## MicroWorld APIs used
 
-- `TMessageRouter`, `IMessageRouter` (`AddMessageHandler` / `BroadcastMessage`
-  / `SendMessageToActor`)
-- `FMessageView`, `FMessageHandlerBinding`
-- `LocalChannelId`, `BroadcastActorId`
+- `FMessagingSystem` (`CreateChannel` / `SubscribeToChannel` /
+  `SendMessageToChannel`)
+- `FMessage`, `FNameId`, `MakeNameId`
+- `MakeWeakOwner` — actor-owned subscriptions become inert when collection
+  reclaims their owner
 - `AActor`, `UActorComponent`
-- `TEngine` (network-frame constructor, `RegisterClass` / `CreateWorld` /
+- `TEngine` (`CreateMessagingSystem`, `RegisterClass` / `CreateWorld` /
   `CreateObject` / `RegisterComponent` / `BeginPlay` / `Tick` / `EndPlay`)
 - `FEsp32TimeSource`, `WriteEsp32LogRecord`, `SleepMilliseconds`
 
@@ -108,7 +105,9 @@ I (nnnn) ex22: done readings=7
 
 ## Image size
 
-From `pio run` (release build, ESP32-S3-DevKitC-1):
+Historical output from `pio run` before the `FMessagingSystem` port (release
+build, ESP32-S3-DevKitC-1). Fresh size evidence is required for the current
+example:
 
 ```text
 RAM:   10.3% (used 33772 bytes from 327680 bytes)
