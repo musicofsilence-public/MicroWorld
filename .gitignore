@@ -36,3 +36,7 @@ examples/*/src/NetworkConfig.h
 /.qoder/
 /.cursor/
 /.kiro/
+# MCP server configs: both hardcode an absolute interpreter path, so they are
+# per-machine setup rather than shared project source.
+/.mcp.json
+/opencode.jsonc
