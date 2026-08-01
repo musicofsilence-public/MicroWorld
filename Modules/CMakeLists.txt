@@ -281,6 +281,7 @@ if(MICROWORLD_BUILD_TESTS)
         "${MICROWORLD_TESTS_ROOT}/Core/MemoryTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Core/DelegateTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Core/TimerManagerTests.cpp"
+        "${MICROWORLD_TESTS_ROOT}/Core/DeviceAddressTests.cpp"
     )
     target_link_libraries(microworld_tests PRIVATE MicroWorld::Core)
     microworld_enable_strict_warnings(microworld_tests)
