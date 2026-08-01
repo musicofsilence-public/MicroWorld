@@ -78,6 +78,9 @@ public:
 	// An acknowledgement frame is a header plus one sequence number, so a payload budget below that width could not hold one.
 	static_assert(TTraits::MaxMessageBytes >= SequenceNumberBytes, "MaxMessageBytes must leave room for a reliable sequence number.");
 
+	// A zero-slot reliable system could never track its first reliable send.
+	static_assert(TTraits::MaxReliablePendingMessages > 0, "MaxReliablePendingMessages must reserve at least one reliable pending slot.");
+
 	/**
 	 * Motivation: Gives channel subscribers one bounded callable type that keeps local delivery allocation-free.
 	 * Responsibilities: Receive a message by const reference and treat its payload span as valid only for the duration of the call; subscribers that
@@ -184,7 +187,7 @@ public:
 	 * Motivation: Makes locally composed Messaging useful before any transport device exists and extends it with best-effort remote reach.
 	 * Responsibilities: Reject an unset message name or missing channel, then synchronously deliver locally once to every matching subscriber before
 	 * attempting one complete wire frame through the channel's device, if any; return a transport-capacity or invalid-request result without undoing
-	 * that local delivery.
+	 * that local delivery. A reliable frame is retained for later retry even when its first device send reports Full.
 	 */
 	EMessagingResult SendMessageToChannel(const FMessage& InMessage, const FNameId InChannelNameId) noexcept
 	{
@@ -214,6 +217,17 @@ public:
 			return EMessagingResult::Full;
 		}
 
+		FPendingReliableMessage* PendingMessage = nullptr;
+		if (Channel->Information.bIsReliable)
+		{
+			PendingMessage = FindFreeReliablePendingMessage();
+			if (PendingMessage == nullptr)
+			{
+				// Local delivery already happened, but an untracked reliable wire send would promise delivery this system cannot recover.
+				return EMessagingResult::Full;
+			}
+		}
+
 		std::uint8_t FrameBytes[MaxFrameBytes]{};
 		EncodeFrameHeader(InChannelNameId, InMessage.GetMessageNameId(), FrameBytes);
 		if (Channel->Information.bIsReliable)
@@ -226,6 +240,13 @@ public:
 			Channel->Information.TransportDevice->TrySend(Channel->Information.Address, Core::TSpan<const std::uint8_t>(FrameBytes, FrameSize));
 		if (Channel->Information.bIsReliable)
 		{
+			// A Full device is busy rather than terminal: retaining this frame lets the bounded retry policy recover that first miss.
+			TrackReliableMessage(
+				*PendingMessage,
+				InChannelNameId,
+				Channel->NextOutgoingSequenceNumber,
+				Core::TSpan<const std::uint8_t>(FrameBytes, FrameSize),
+				MostRecentTimeMilliseconds);
 			// Wrapping at the 16-bit range is intentional; reusing a number for a different attempted frame is not.
 			++Channel->NextOutgoingSequenceNumber;
 		}
@@ -236,11 +257,11 @@ public:
 	/**
 	 * Motivation: Pumps inbound best-effort frames before the world advances so this node's subscribers see device input in the current turn.
 	 * Responsibilities: Drain each distinct channel device once, route each complete frame by its encoded channel name, and count malformed or
-	 * unroutable frames without asserting; leave InNowMilliseconds unused until reliability needs caller-supplied time.
+	 * unroutable frames without asserting and retain the supplied time for sends occurring between lifecycle turns.
 	 */
 	void PreAdvance(Core::TimePointMilliseconds InNowMilliseconds) noexcept override
 	{
-		(void)InNowMilliseconds;
+		MostRecentTimeMilliseconds = InNowMilliseconds;
 
 		for (std::size_t ChannelIndex = 0; ChannelIndex < Channels.Size(); ++ChannelIndex)
 		{
@@ -255,10 +276,18 @@ public:
 	}
 
 	/**
-	 * Motivation: Reserves the outbound Messaging lifecycle turn required after world advancement.
-	 * Responsibilities: Perform no work until later reliability work adds retry processing; never advance a transport device's lifecycle turns.
+	 * Motivation: Gives reliable frames their caller-timed opportunity to retry after world advancement.
+	 * Responsibilities: Retain the supplied time for between-turn sends, process every occupied reliable pending slot once, and never advance a
+	 * transport device's lifecycle turns.
 	 */
-	void PostAdvance(Core::TimePointMilliseconds InNowMilliseconds) noexcept override { (void)InNowMilliseconds; }
+	void PostAdvance(Core::TimePointMilliseconds InNowMilliseconds) noexcept override
+	{
+		MostRecentTimeMilliseconds = InNowMilliseconds;
+		for (FPendingReliableMessage& PendingMessage : ReliablePendingMessages)
+		{
+			ProcessReliablePendingMessage(PendingMessage, InNowMilliseconds);
+		}
+	}
 
 	/**
 	 * Motivation: Lets callers observe inbound frames this system received but could not route to a live channel.
@@ -266,6 +295,13 @@ public:
 	 * budget, without changing system state.
 	 */
 	std::uint32_t GetDroppedFrameCount() const noexcept { return DroppedFrameCount; }
+
+	/**
+	 * Motivation: Lets callers distinguish reliable delivery that is still retrying from delivery whose bounded attempt policy gave up.
+	 * Responsibilities: Return the cumulative number of released reliable pending messages that exhausted their attempts or lost their channel,
+	 * without changing system state.
+	 */
+	std::uint32_t GetAbandonedReliableMessageCount() const noexcept { return AbandonedReliableMessageCount; }
 
 private:
 	/**
@@ -317,6 +353,36 @@ private:
 	};
 
 	/**
+	 * Motivation: Retains exactly one already-sent reliable frame until its peer acknowledges the frame's channel and sequence number.
+	 * Responsibilities: Store explicit occupancy, destination lookup identity, wire bytes, attempt count, and last-attempt time without allocating.
+	 * Example:
+	 *   FPendingReliableMessage PendingMessage{};
+	 */
+	struct FPendingReliableMessage final
+	{
+		/** Motivation: Marks whether this slot is awaiting acknowledgement; false makes the slot free for the next reliable send. */
+		bool bAwaitingAcknowledgement{false};
+
+		/** Motivation: Identifies the channel whose device and address resend this stored frame. */
+		FNameId ChannelNameId{};
+
+		/** Motivation: Matches an acknowledgement to this one reliable wire frame. */
+		std::uint16_t SequenceNumber{0};
+
+		/** Motivation: Retains the already-encoded frame so a resend cannot duplicate framing rules or observe changed caller bytes. */
+		std::uint8_t FrameBytes[MaxFrameBytes]{};
+
+		/** Motivation: Records how many leading FrameBytes elements belong to this retained wire frame. */
+		std::size_t FrameSize{0};
+
+		/** Motivation: Counts every device send attempt, including the initial attempt that may have reported Full. */
+		std::uint8_t SendAttempts{0};
+
+		/** Motivation: Sets the caller-supplied time from which the next retry interval begins. */
+		Core::TimePointMilliseconds LastAttemptMilliseconds{0};
+	};
+
+	/**
 	 * Motivation: Gives channel creation, subscription, send, and receive paths one authoritative lookup for live channel information.
 	 * Responsibilities: Return the matching channel state, or null when InChannelNameId names no live channel, without changing channel
 	 * storage.
@@ -332,6 +398,116 @@ private:
 		}
 
 		return nullptr;
+	}
+
+	/**
+	 * Motivation: Gives reliable sends a plain fixed-array free-slot lookup without widening Core's append-only static vector.
+	 * Responsibilities: Return the first slot not awaiting acknowledgement, or null when the bounded reliable pending set is full.
+	 */
+	FPendingReliableMessage* FindFreeReliablePendingMessage() noexcept
+	{
+		for (FPendingReliableMessage& PendingMessage : ReliablePendingMessages)
+		{
+			if (!PendingMessage.bAwaitingAcknowledgement)
+			{
+				return &PendingMessage;
+			}
+		}
+
+		return nullptr;
+	}
+
+	/**
+	 * Motivation: Gives acknowledgement processing one exact channel-and-sequence lookup across the fixed pending set.
+	 * Responsibilities: Return the occupied slot matching both reliable wire identities, or null when the acknowledgement is duplicate or abandoned.
+	 */
+	FPendingReliableMessage* FindReliablePendingMessage(const FNameId InChannelNameId, const std::uint16_t InSequenceNumber) noexcept
+	{
+		for (FPendingReliableMessage& PendingMessage : ReliablePendingMessages)
+		{
+			if (PendingMessage.bAwaitingAcknowledgement && PendingMessage.ChannelNameId == InChannelNameId
+				&& PendingMessage.SequenceNumber == InSequenceNumber)
+			{
+				return &PendingMessage;
+			}
+		}
+
+		return nullptr;
+	}
+
+	/**
+	 * Motivation: Makes one reliable-send reservation retain immutable retry inputs before caller-owned frame storage expires.
+	 * Responsibilities: Copy the complete encoded frame and record its initial attempt, channel identity, sequence, and caller-supplied time; the
+	 *   caller has already checked that InFrame fits one frame buffer.
+	 */
+	static void TrackReliableMessage(
+		FPendingReliableMessage& OutPendingMessage,
+		const FNameId InChannelNameId,
+		const std::uint16_t InSequenceNumber,
+		const Core::TSpan<const std::uint8_t> InFrame,
+		const Core::TimePointMilliseconds InAttemptTimeMilliseconds) noexcept
+	{
+		OutPendingMessage.ChannelNameId = InChannelNameId;
+		OutPendingMessage.SequenceNumber = InSequenceNumber;
+		CopyBytes(OutPendingMessage.FrameBytes, InFrame);
+		OutPendingMessage.FrameSize = InFrame.Size();
+		OutPendingMessage.SendAttempts = 1;
+		OutPendingMessage.LastAttemptMilliseconds = InAttemptTimeMilliseconds;
+		OutPendingMessage.bAwaitingAcknowledgement = true;
+	}
+
+	/**
+	 * Motivation: Releases a reliable pending slot without assigning a magic value to any retained message field.
+	 * Responsibilities: Mark only the explicit acknowledgement flag false so the slot becomes available for a later reliable send.
+	 */
+	static void ReleaseReliablePendingMessage(FPendingReliableMessage& InOutPendingMessage) noexcept
+	{
+		InOutPendingMessage.bAwaitingAcknowledgement = false;
+	}
+
+	/**
+	 * Motivation: Applies the retry interval and attempt budget to one occupied reliable slot without making PostAdvance a policy maze.
+	 * Responsibilities: Skip early or backwards time, abandon exhausted or orphaned frames, or resend one retained frame and restamp its attempt.
+	 */
+	void ProcessReliablePendingMessage(FPendingReliableMessage& InOutPendingMessage, const Core::TimePointMilliseconds InNowMilliseconds) noexcept
+	{
+		if (!InOutPendingMessage.bAwaitingAcknowledgement)
+		{
+			return;
+		}
+
+		if (InNowMilliseconds < InOutPendingMessage.LastAttemptMilliseconds)
+		{
+			// Subtracting unsigned non-monotonic time would appear enormous and incorrectly resend every pending frame at once.
+			return;
+		}
+
+		const Core::TimePointMilliseconds ElapsedMilliseconds = InNowMilliseconds - InOutPendingMessage.LastAttemptMilliseconds;
+		if (ElapsedMilliseconds < Information.ReliableRetryIntervalMilliseconds)
+		{
+			return;
+		}
+
+		if (InOutPendingMessage.SendAttempts >= Information.MaxReliableSendAttempts)
+		{
+			ReleaseReliablePendingMessage(InOutPendingMessage);
+			++AbandonedReliableMessageCount;
+			return;
+		}
+
+		FChannel* const Channel = FindChannel(InOutPendingMessage.ChannelNameId);
+		if (Channel == nullptr || Channel->Information.TransportDevice == nullptr)
+		{
+			ReleaseReliablePendingMessage(InOutPendingMessage);
+			++AbandonedReliableMessageCount;
+			return;
+		}
+
+		// Device refusal is intentionally ignored: each later interval retries until acknowledgement or the bounded attempt budget ends.
+		(void)Channel->Information.TransportDevice->TrySend(
+			Channel->Information.Address, Core::TSpan<const std::uint8_t>(InOutPendingMessage.FrameBytes, InOutPendingMessage.FrameSize));
+		++InOutPendingMessage.SendAttempts;
+		InOutPendingMessage.LastAttemptMilliseconds = InNowMilliseconds;
 	}
 
 	/**
@@ -443,7 +619,7 @@ private:
 		const std::size_t PayloadSize = InFrameSize - FrameHeaderBytes;
 		if (MessageNameId == MessageAcknowledgementNameId)
 		{
-			ProcessAcknowledgement(PayloadSize);
+			ProcessAcknowledgement(ChannelNameId, PayloadBytes, PayloadSize);
 			return;
 		}
 
@@ -458,10 +634,10 @@ private:
 
 	/**
 	 * Motivation: Keeps malformed acknowledgement control traffic observable without exposing it to application subscribers.
-	 * Responsibilities: Count only acknowledgements whose payload is not exactly one sequence number; consume a well-formed acknowledgement so B6b
-	 *   can add its pending-set lookup here.
+	 * Responsibilities: Count only acknowledgements whose payload is not exactly one sequence number; release the matching reliable pending frame
+	 *   when it exists, otherwise consume duplicate or late acknowledgement control traffic without counting it as a drop.
 	 */
-	void ProcessAcknowledgement(const std::size_t InPayloadSize) noexcept
+	void ProcessAcknowledgement(const FNameId InChannelNameId, const std::uint8_t* const InPayloadBytes, const std::size_t InPayloadSize) noexcept
 	{
 		if (InPayloadSize != SequenceNumberBytes)
 		{
@@ -469,7 +645,13 @@ private:
 			return;
 		}
 
-		// A valid acknowledgement is expected control traffic; B6b will match it against the reliable pending set here.
+		const std::uint16_t SequenceNumber = static_cast<std::uint16_t>(ReadUnsignedLittleEndian(InPayloadBytes, SequenceNumberBytes));
+		FPendingReliableMessage* const PendingMessage = FindReliablePendingMessage(InChannelNameId, SequenceNumber);
+		if (PendingMessage != nullptr)
+		{
+			ReleaseReliablePendingMessage(*PendingMessage);
+		}
+		// No matching slot is normal: an acknowledgement may be duplicated or may arrive after this bounded system already abandoned its frame.
 	}
 
 	/**
@@ -623,14 +805,25 @@ private:
 	/** Motivation: Retains the reliability policy future Messaging work must consult without a global configuration. */
 	FMessagingSystemInformation Information{};
 
+	/** Motivation: Retains the newest caller-supplied turn time for sends between turns; a frame-stale stamp is harmless against retry intervals of
+	 * hundreds of milliseconds and keeps Messaging free of a hidden clock. */
+	Core::TimePointMilliseconds MostRecentTimeMilliseconds{0};
+
 	/** Motivation: Owns each live channel's configuration and reliable sequence state within the compile-time channel limit. */
 	Core::TStaticVector<FChannel, TTraits::MaxChannels> Channels;
 
 	/** Motivation: Owns every local subscription in registration order within one system-wide fixed capacity. */
 	Core::TStaticVector<FSubscription, TTraits::MaxSubscriptions> Subscriptions;
 
+	/** Motivation: Owns the largest Messaging allocation: MaxReliablePendingMessages slots, each retaining one MaxFrameBytes encoded frame plus
+	 * retry metadata, so increasing pending capacity multiplies the system's frame-sized memory cost. */
+	FPendingReliableMessage ReliablePendingMessages[TTraits::MaxReliablePendingMessages]{};
+
 	/** Motivation: Counts inbound frames this Messaging system could not route, whatever the reason, so a misconfigured peer stays observable. */
 	std::uint32_t DroppedFrameCount{0};
+
+	/** Motivation: Counts reliable frames whose bounded retry ownership ended without an acknowledgement. */
+	std::uint32_t AbandonedReliableMessageCount{0};
 };
 
 /** Motivation: Names the default fixed-capacity Messaging system used by engine-facing code. */

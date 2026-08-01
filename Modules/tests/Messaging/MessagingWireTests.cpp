@@ -14,6 +14,7 @@ using MicroWorld::Core::EDelegateResult;
 using MicroWorld::Core::ETransportResult;
 using MicroWorld::Core::FDeviceAddress;
 using MicroWorld::Core::FReceiveResult;
+using MicroWorld::Core::ITransportDevice;
 using MicroWorld::Core::MakeLoopbackAddress;
 using MicroWorld::Core::TimePointMilliseconds;
 using MicroWorld::Core::TSpan;
@@ -21,6 +22,7 @@ using MicroWorld::Messaging::EMessagingResult;
 using MicroWorld::Messaging::FChannelInformation;
 using MicroWorld::Messaging::FDefaultMessagingTraits;
 using MicroWorld::Messaging::FMessage;
+using MicroWorld::Messaging::FMessagingSystemInformation;
 using MicroWorld::Messaging::FNameId;
 using MicroWorld::Messaging::MessageAcknowledgementNameId;
 using MicroWorld::Messaging::TMessagingSystem;
@@ -90,6 +92,10 @@ constexpr TimePointMilliseconds SenderReceiveTurnMilliseconds = 300;
 constexpr std::size_t NoDeliveries = 0;
 /** Motivation: Names one expected synchronous or routed subscriber delivery. */
 constexpr std::size_t OneDelivery = 1;
+/** Motivation: Names two expected synchronous or routed subscriber deliveries. */
+constexpr std::size_t TwoDeliveries = OneDelivery + 1;
+/** Motivation: Names the initial reliable send plus one retry attempt. */
+constexpr std::size_t TwoReliableSendAttempts = 2;
 /** Motivation: Names the expected absence of any queued device packet after a rejected wire send. */
 constexpr std::size_t NoQueuedPackets = 0;
 /** Motivation: Names one queued device packet after a single accepted wire send. */
@@ -104,6 +110,30 @@ constexpr std::uint32_t TwoDroppedFrames = 2;
 constexpr std::uint16_t FirstSequenceNumber = 0;
 /** Motivation: Names the sequence following the first reliable send from one channel. */
 constexpr std::uint16_t SecondSequenceNumber = FirstSequenceNumber + 1;
+/** Motivation: Sets the short deterministic interval used to force reliable retries without wall-clock time. */
+constexpr TimePointMilliseconds ReliableRetryIntervalMilliseconds = 50;
+/** Motivation: Offsets a post-advance turn to the last moment still inside the retry interval. */
+constexpr TimePointMilliseconds BeforeReliableRetryOffsetMilliseconds = ReliableRetryIntervalMilliseconds - 1;
+/** Motivation: Identifies the first post-advance turn at which one reliable retry is due. */
+constexpr TimePointMilliseconds ReliableRetryTurnMilliseconds = ReliableRetryIntervalMilliseconds;
+/** Motivation: Identifies the receiver turn that consumes a retried reliable frame. */
+constexpr TimePointMilliseconds RetriedReceiveTurnMilliseconds = ReliableRetryTurnMilliseconds + 1;
+/** Motivation: Identifies the sender turn that consumes the acknowledgement of a retried reliable frame. */
+constexpr TimePointMilliseconds AcknowledgementReceiveTurnMilliseconds = RetriedReceiveTurnMilliseconds + 1;
+/** Motivation: Identifies a post-advance turn far beyond the retry interval after an acknowledgement. */
+constexpr TimePointMilliseconds FarAfterAcknowledgementTurnMilliseconds = ReliableRetryIntervalMilliseconds * 4;
+/** Motivation: Identifies a supplied turn earlier than the first send's default time stamp. */
+constexpr TimePointMilliseconds BackwardsReliableTurnMilliseconds = 0;
+/** Motivation: Fixes the exact total sends a budget-exhaustion test permits. */
+constexpr std::uint8_t ReliableAttemptBudget = 3;
+/** Motivation: Names how many packets one exhausted attempt budget produces, which is both the mailbox depth and the expected peer count. */
+constexpr std::size_t ReliableAttemptPacketCount = ReliableAttemptBudget;
+/** Motivation: Names one dropped send, which forces exactly one retry. */
+constexpr std::size_t OneDroppedSend = 1;
+/** Motivation: Names one reliable message whose bounded retry policy gave up. */
+constexpr std::uint32_t OneAbandonedReliableMessage = 1;
+/** Motivation: Names a sequence far above any this file sends, so no pending frame can ever match it. */
+constexpr std::uint16_t UnmatchedAcknowledgementSequenceNumber = 4242;
 
 /** Motivation: Supplies known application bytes for the ordinary cross-system round-trip. */
 constexpr std::uint8_t WirePayload[WirePayloadByteCount] = {11, 22, 33};
@@ -119,6 +149,10 @@ constexpr std::uint8_t DeviceRejectedPayload[DeviceRejectedPayloadByteCount] = {
 constexpr std::uint8_t TooShortFrame[TooShortFrameByteCount] = {};
 /** Motivation: Supplies a raw packet the device accepts but the receiving Messaging frame buffer cannot hold. */
 constexpr std::uint8_t OversizedInboundFrame[OversizedInboundFrameByteCount] = {};
+/** Motivation: Supplies a complete but unmatched acknowledgement payload in little-endian sequence order. */
+constexpr std::uint8_t UnmatchedAcknowledgementPayload[SequenceNumberBytes] = {
+	static_cast<std::uint8_t>(UnmatchedAcknowledgementSequenceNumber),
+	static_cast<std::uint8_t>(UnmatchedAcknowledgementSequenceNumber >> BitsPerByte)};
 
 /**
  * Motivation: Captures delivered wire-message facts after Messaging releases its transient inbound payload view.
@@ -249,6 +283,102 @@ struct FSmallFrameMessagingTraits : FDefaultMessagingTraits
 {
 	/** Motivation: Limits the test system's application payload to two bytes before the wire header is added. */
 	static constexpr std::size_t MaxMessageBytes = 2;
+};
+
+/**
+ * Motivation: Makes reliable pending-capacity behavior observable with one occupied slot.
+ * Responsibilities: Override only reliable pending capacity while preserving every other default trait limit.
+ * Example:
+ *   TMessagingSystem<FSingleReliablePendingMessagingTraits> System;
+ */
+struct FSingleReliablePendingMessagingTraits : FDefaultMessagingTraits
+{
+	/** Motivation: Limits the test system to exactly one reliable frame awaiting acknowledgement. */
+	static constexpr std::size_t MaxReliablePendingMessages = 1;
+};
+
+/**
+ * Motivation: Simulates deterministic initial packet loss without adding a production-only transport device.
+ * Responsibilities: Drop the chosen number of sends before forwarding all later device operations to the wrapped loopback port.
+ * Example:
+ *   FPacketDropDevice Device{Network.Port(SendingPort), 1};
+ */
+class FPacketDropDevice final : public ITransportDevice
+{
+public:
+	/**
+	 * Motivation: Binds packet-loss behavior to one existing transport device without taking ownership of it.
+	 * Responsibilities: Retain the wrapped device and exact remaining send drops.
+	 */
+	explicit FPacketDropDevice(ITransportDevice& InDevice, const std::size_t InSendDropsRemaining) noexcept
+		: Device(InDevice), SendDropsRemaining(InSendDropsRemaining)
+	{
+	}
+
+	/**
+	 * Motivation: Keeps the wrapper side-effect free on destruction.
+	 * Responsibilities: Release no resource because the caller owns the wrapped device.
+	 */
+	~FPacketDropDevice() noexcept override = default;
+
+	/**
+	 * Motivation: Preserves the wrapped device's receive-side lifecycle behavior.
+	 * Responsibilities: Forward the caller-supplied pre-advance time unchanged.
+	 */
+	void PreAdvance(TimePointMilliseconds InNowMilliseconds) noexcept override { Device.PreAdvance(InNowMilliseconds); }
+
+	/**
+	 * Motivation: Preserves the wrapped device's send-side lifecycle behavior.
+	 * Responsibilities: Forward the caller-supplied post-advance time unchanged.
+	 */
+	void PostAdvance(TimePointMilliseconds InNowMilliseconds) noexcept override { Device.PostAdvance(InNowMilliseconds); }
+
+	/**
+	 * Motivation: Lets reliability tests model a successful device send whose packet disappears before its peer can receive it.
+	 * Responsibilities: Count each attempt, consume one configured drop as Success, and otherwise forward the complete request unchanged.
+	 */
+	ETransportResult TrySend(const FDeviceAddress& InTo, const TSpan<const std::uint8_t> InPacket) noexcept override
+	{
+		++SendAttemptCount;
+		if (SendDropsRemaining > 0)
+		{
+			--SendDropsRemaining;
+			return ETransportResult::Success;
+		}
+
+		return Device.TrySend(InTo, InPacket);
+	}
+
+	/**
+	 * Motivation: Lets inbound acknowledgement tests use the wrapped device transparently.
+	 * Responsibilities: Forward the complete receive operation and preserve the wrapped device's result.
+	 */
+	ETransportResult TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept override
+	{
+		return Device.TryReceive(OutFrom, InDestination, OutResult);
+	}
+
+	/**
+	 * Motivation: Keeps frame-size validation identical to the wrapped transport.
+	 * Responsibilities: Return the wrapped device's packet limit unchanged.
+	 */
+	std::size_t MaxPacketBytes() const noexcept override { return Device.MaxPacketBytes(); }
+
+	/**
+	 * Motivation: Lets tests assert exact initial and retry send attempts without inspecting private Messaging slots.
+	 * Responsibilities: Return the cumulative attempt count.
+	 */
+	std::size_t GetSendAttemptCount() const noexcept { return SendAttemptCount; }
+
+private:
+	/** Motivation: References the caller-owned loopback port that receives all non-dropped operations. */
+	ITransportDevice& Device;
+
+	/** Motivation: Counts how many future sends disappear while still reporting device acceptance. */
+	std::size_t SendDropsRemaining{0};
+
+	/** Motivation: Records all send calls so bounded retry behavior stays externally observable. */
+	std::size_t SendAttemptCount{0};
 };
 
 /** Motivation: Supplies a payload that exactly fills the small best-effort application budget. */
@@ -899,6 +1029,264 @@ MW_TEST_CASE(MessagingSystem_RoundTripsZeroLengthWirePayload)
 	MW_EXPECT_EQ(Test, OneDelivery, ReceivingRecorder.DeliveryCount, "The header-only wire frame should deliver once");
 	MW_EXPECT_EQ(Test, FNameId{"Heartbeat"}, ReceivingRecorder.MessageNameId, "The header-only wire frame should preserve its message name");
 	MW_EXPECT_EQ(Test, ZeroPayloadByteCount, ReceivingRecorder.PayloadSize, "The header-only wire frame should preserve an empty payload");
+}
+
+/**
+ * Motivation: Proves a dropped first reliable packet is retried from stored frame bytes and reaches its peer.
+ * Responsibilities: Drop the first send, advance exactly one retry interval, and verify remote delivery plus one acknowledgement.
+ */
+MW_TEST_CASE(MessagingSystem_RetriesDroppedReliableMessagesAfterTheConfiguredInterval)
+{
+	// Arrange
+	TLoopbackNetwork<TwoPorts, OneMailboxSlot, StandardPacketBytes> Network;
+	FPacketDropDevice DroppingDevice{Network.Port(SendingPort), OneDroppedSend};
+	FMessagingSystemInformation Information{};
+	Information.ReliableRetryIntervalMilliseconds = ReliableRetryIntervalMilliseconds;
+	FDefaultMessagingSystem SendingSystem{Information};
+	FDefaultMessagingSystem ReceivingSystem{Information};
+	const FDeviceAddress ReceivingAddress = MakeLoopbackAddress(ReceivingPort);
+	const FDeviceAddress SendingAddress = MakeLoopbackAddress(SendingPort);
+	const FChannelInformation SendingChannel{"Telemetry", true, &DroppingDevice, ReceivingAddress};
+	const FChannelInformation ReceivingChannel{"Telemetry", true, &Network.Port(ReceivingPort), SendingAddress};
+	const EMessagingResult SendingCreateResult = SendingSystem.CreateChannel(SendingChannel);
+	const EMessagingResult ReceivingCreateResult = ReceivingSystem.CreateChannel(ReceivingChannel);
+	std::size_t ReceivingDeliveryCount = NoDeliveries;
+	FDefaultSubscriberDelegate Subscriber;
+	const EDelegateResult BindingResult = Subscriber.Bind([&ReceivingDeliveryCount](const FMessage&) noexcept { ++ReceivingDeliveryCount; });
+	const EMessagingResult SubscribeResult = ReceivingSystem.SubscribeToChannel("Telemetry", std::move(Subscriber));
+	FMessage Message;
+	Message.SetMessageNameId("TemperatureUpdated");
+	Message.SetPayload(TSpan<const std::uint8_t>(WirePayload, WirePayloadByteCount));
+
+	// Act
+	const EMessagingResult SendResult = SendingSystem.SendMessageToChannel(Message, "Telemetry");
+	const std::size_t QueuedBeforeRetry = Network.QueuedCount(ReceivingPort);
+	SendingSystem.PostAdvance(ReliableRetryTurnMilliseconds);
+	ReceivingSystem.PreAdvance(RetriedReceiveTurnMilliseconds);
+	const std::size_t QueuedAcknowledgements = Network.QueuedCount(SendingPort);
+
+	// Assert
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, SendingCreateResult, "The retry sender channel should be created");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, ReceivingCreateResult, "The retry receiver channel should be created");
+	MW_EXPECT_EQ(Test, EDelegateResult::Success, BindingResult, "The retry receiver subscriber should bind");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, SubscribeResult, "The retry receiver subscriber should register");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, SendResult, "The dropped first reliable send should report device acceptance");
+	MW_EXPECT_EQ(Test, NoQueuedPackets, QueuedBeforeRetry, "The dropped first attempt should queue no peer packet");
+	MW_EXPECT_EQ(Test, OneDelivery, ReceivingDeliveryCount, "The retried reliable frame should reach the peer once");
+	MW_EXPECT_EQ(Test, OneQueuedPacket, QueuedAcknowledgements, "The peer should acknowledge the retried reliable frame");
+	MW_EXPECT_EQ(Test, TwoReliableSendAttempts, DroppingDevice.GetSendAttemptCount(), "The sender should make the initial attempt and one retry");
+}
+
+/**
+ * Motivation: Prevents premature or non-monotonic post-advance calls from creating spurious reliable sends.
+ * Responsibilities: Verify a turn inside the interval and an earlier turn both leave the peer mailbox unchanged.
+ */
+MW_TEST_CASE(MessagingSystem_DoesNotRetryBeforeItsIntervalOrWhenTimeMovesBackwards)
+{
+	// Arrange
+	TLoopbackNetwork<TwoPorts, OneMailboxSlot, StandardPacketBytes> Network;
+	FMessagingSystemInformation Information{};
+	Information.ReliableRetryIntervalMilliseconds = ReliableRetryIntervalMilliseconds;
+	FDefaultMessagingSystem System{Information};
+	const FChannelInformation Channel{"Telemetry", true, &Network.Port(SendingPort), MakeLoopbackAddress(ReceivingPort)};
+	const EMessagingResult CreateResult = System.CreateChannel(Channel);
+	FMessage Message;
+	Message.SetMessageNameId("TemperatureUpdated");
+	Message.SetPayload(TSpan<const std::uint8_t>(WirePayload, WirePayloadByteCount));
+
+	// Act
+	System.PreAdvance(FirstReceiveTurnMilliseconds);
+	const EMessagingResult SendResult = System.SendMessageToChannel(Message, "Telemetry");
+	Network.Drain(ReceivingPort);
+	System.PostAdvance(FirstReceiveTurnMilliseconds + BeforeReliableRetryOffsetMilliseconds);
+	const std::size_t QueuedBeforeInterval = Network.QueuedCount(ReceivingPort);
+	System.PostAdvance(BackwardsReliableTurnMilliseconds);
+	const std::size_t QueuedAfterBackwardsTime = Network.QueuedCount(ReceivingPort);
+
+	// Assert
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, CreateResult, "The retry-guard channel should be created");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, SendResult, "The retry-guard reliable message should send initially");
+	MW_EXPECT_EQ(Test, NoQueuedPackets, QueuedBeforeInterval, "A turn inside the retry interval should not queue a resend");
+	MW_EXPECT_EQ(Test, NoQueuedPackets, QueuedAfterBackwardsTime, "Earlier unsigned time should not trigger a resend");
+}
+
+/**
+ * Motivation: Proves acknowledgement consumption releases a reliable slot before any later retry is due.
+ * Responsibilities: Deliver one reliable frame, consume its acknowledgement, then advance far beyond the interval without another send.
+ */
+MW_TEST_CASE(MessagingSystem_DoesNotRetryAcknowledgedReliableMessages)
+{
+	// Arrange
+	TLoopbackNetwork<TwoPorts, OneMailboxSlot, StandardPacketBytes> Network;
+	FMessagingSystemInformation Information{};
+	Information.ReliableRetryIntervalMilliseconds = ReliableRetryIntervalMilliseconds;
+	FDefaultMessagingSystem SendingSystem{Information};
+	FDefaultMessagingSystem ReceivingSystem{Information};
+	const FChannelInformation SendingChannel{"Telemetry", true, &Network.Port(SendingPort), MakeLoopbackAddress(ReceivingPort)};
+	const FChannelInformation ReceivingChannel{"Telemetry", true, &Network.Port(ReceivingPort), MakeLoopbackAddress(SendingPort)};
+	const EMessagingResult SendingCreateResult = SendingSystem.CreateChannel(SendingChannel);
+	const EMessagingResult ReceivingCreateResult = ReceivingSystem.CreateChannel(ReceivingChannel);
+	FMessage Message;
+	Message.SetMessageNameId("TemperatureUpdated");
+	Message.SetPayload(TSpan<const std::uint8_t>(WirePayload, WirePayloadByteCount));
+
+	// Act
+	const EMessagingResult SendResult = SendingSystem.SendMessageToChannel(Message, "Telemetry");
+	ReceivingSystem.PreAdvance(FirstReceiveTurnMilliseconds);
+	SendingSystem.PreAdvance(AcknowledgementReceiveTurnMilliseconds);
+	SendingSystem.PostAdvance(FarAfterAcknowledgementTurnMilliseconds);
+	const std::size_t QueuedAfterAcknowledgement = Network.QueuedCount(ReceivingPort);
+
+	// Assert
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, SendingCreateResult, "The acknowledgement sender channel should be created");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, ReceivingCreateResult, "The acknowledgement receiver channel should be created");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, SendResult, "The acknowledged reliable message should send");
+	MW_EXPECT_EQ(Test, NoQueuedPackets, QueuedAfterAcknowledgement, "An acknowledged reliable frame should not resend later");
+	MW_EXPECT_EQ(Test, NoDroppedFrames, SendingSystem.GetDroppedFrameCount(), "A valid acknowledgement should not count as dropped");
+}
+
+/**
+ * Motivation: Makes the maximum reliable attempt count and its visible abandonment outcome exact.
+ * Responsibilities: With no receiver turn to acknowledge, verify exactly the configured packet count and one stable abandonment count.
+ */
+MW_TEST_CASE(MessagingSystem_AbandonsReliableMessagesAfterTheExactAttemptBudget)
+{
+	// Arrange
+	TLoopbackNetwork<TwoPorts, ReliableAttemptPacketCount, StandardPacketBytes> Network;
+	FMessagingSystemInformation Information{};
+	Information.ReliableRetryIntervalMilliseconds = ReliableRetryIntervalMilliseconds;
+	Information.MaxReliableSendAttempts = ReliableAttemptBudget;
+	FDefaultMessagingSystem System{Information};
+	const FChannelInformation Channel{"Telemetry", true, &Network.Port(SendingPort), MakeLoopbackAddress(ReceivingPort)};
+	const EMessagingResult CreateResult = System.CreateChannel(Channel);
+	FMessage Message;
+	Message.SetMessageNameId("TemperatureUpdated");
+	Message.SetPayload(TSpan<const std::uint8_t>(WirePayload, WirePayloadByteCount));
+
+	// Act
+	const EMessagingResult SendResult = System.SendMessageToChannel(Message, "Telemetry");
+	System.PostAdvance(ReliableRetryTurnMilliseconds);
+	System.PostAdvance(ReliableRetryTurnMilliseconds * 2);
+	System.PostAdvance(ReliableRetryTurnMilliseconds * 3);
+	const std::size_t QueuedAtBudget = Network.QueuedCount(ReceivingPort);
+	const std::uint32_t AbandonedAtBudget = System.GetAbandonedReliableMessageCount();
+	System.PostAdvance(ReliableRetryTurnMilliseconds * 4);
+	const std::size_t QueuedAfterAbandonment = Network.QueuedCount(ReceivingPort);
+	const std::uint32_t AbandonedAfterAbandonment = System.GetAbandonedReliableMessageCount();
+
+	// Assert
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, CreateResult, "The attempt-budget channel should be created");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, SendResult, "The attempt-budget reliable message should send");
+	MW_EXPECT_EQ(Test, ReliableAttemptPacketCount, QueuedAtBudget, "The peer mailbox should observe exactly the configured total attempts");
+	MW_EXPECT_EQ(Test, OneAbandonedReliableMessage, AbandonedAtBudget, "The exhausted reliable frame should increment abandonment once");
+	MW_EXPECT_EQ(Test, ReliableAttemptPacketCount, QueuedAfterAbandonment, "No packet should follow reliable abandonment");
+	MW_EXPECT_EQ(Test, OneAbandonedReliableMessage, AbandonedAfterAbandonment, "The abandonment count should stay stable after release");
+}
+
+/**
+ * Motivation: Prevents a reliable wire promise when every fixed pending slot is already occupied.
+ * Responsibilities: Fill one pending slot, prove a second reliable send remains local but returns Full and reaches no device.
+ */
+MW_TEST_CASE(MessagingSystem_ReturnsFullForReliableSendsWhenAllPendingSlotsAreOccupied)
+{
+	// Arrange
+	TLoopbackNetwork<TwoPorts, OneMailboxSlot, StandardPacketBytes> Network;
+	TMessagingSystem<FSingleReliablePendingMessagingTraits> System;
+	const FChannelInformation Channel{"Telemetry", true, &Network.Port(SendingPort), MakeLoopbackAddress(ReceivingPort)};
+	const EMessagingResult CreateResult = System.CreateChannel(Channel);
+	std::size_t LocalDeliveryCount = NoDeliveries;
+	TMessagingSystem<FSingleReliablePendingMessagingTraits>::FSubscriberDelegate Subscriber;
+	const EDelegateResult BindingResult = Subscriber.Bind([&LocalDeliveryCount](const FMessage&) noexcept { ++LocalDeliveryCount; });
+	const EMessagingResult SubscribeResult = System.SubscribeToChannel("Telemetry", std::move(Subscriber));
+	FMessage Message;
+	Message.SetMessageNameId("TemperatureUpdated");
+	Message.SetPayload(TSpan<const std::uint8_t>(WirePayload, WirePayloadByteCount));
+
+	// Act
+	const EMessagingResult FirstSendResult = System.SendMessageToChannel(Message, "Telemetry");
+	const EMessagingResult SecondSendResult = System.SendMessageToChannel(Message, "Telemetry");
+	const std::size_t QueuedAfterSecondSend = Network.QueuedCount(ReceivingPort);
+
+	// Assert
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, CreateResult, "The one-slot reliable channel should be created");
+	MW_EXPECT_EQ(Test, EDelegateResult::Success, BindingResult, "The pending-capacity subscriber should bind");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, SubscribeResult, "The pending-capacity subscriber should register");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, FirstSendResult, "The first reliable frame should occupy the only slot");
+	MW_EXPECT_EQ(Test, EMessagingResult::Full, SecondSendResult, "The untrackable second reliable frame should report Full");
+	MW_EXPECT_EQ(Test, TwoDeliveries, LocalDeliveryCount, "Both reliable sends should still deliver locally");
+	MW_EXPECT_EQ(Test, OneQueuedPacket, QueuedAfterSecondSend, "Only the trackable reliable frame should reach the device");
+}
+
+/**
+ * Motivation: Keeps duplicate or late acknowledgement control traffic harmless while another reliable frame is still pending.
+ * Responsibilities: Consume an unmatched acknowledgement, preserve zero drops, and verify both pending messages later retry.
+ */
+MW_TEST_CASE(MessagingSystem_ConsumesUnmatchedAcknowledgementsWithoutDisturbingPendingFrames)
+{
+	// Arrange
+	TLoopbackNetwork<TwoPorts, TwoMailboxSlots, StandardPacketBytes> Network;
+	FMessagingSystemInformation Information{};
+	Information.ReliableRetryIntervalMilliseconds = ReliableRetryIntervalMilliseconds;
+	FDefaultMessagingSystem System{Information};
+	const FDeviceAddress SendingAddress = MakeLoopbackAddress(SendingPort);
+	const FDeviceAddress ReceivingAddress = MakeLoopbackAddress(ReceivingPort);
+	const FChannelInformation Channel{"Telemetry", true, &Network.Port(SendingPort), ReceivingAddress};
+	const EMessagingResult CreateResult = System.CreateChannel(Channel);
+	FMessage Message;
+	Message.SetMessageNameId("TemperatureUpdated");
+	Message.SetPayload(TSpan<const std::uint8_t>(WirePayload, WirePayloadByteCount));
+	FRawWireFrame AcknowledgementFrame;
+	AcknowledgementFrame.Set(
+		"Telemetry", MessageAcknowledgementNameId, TSpan<const std::uint8_t>(UnmatchedAcknowledgementPayload, SequenceNumberBytes));
+
+	// Act
+	const EMessagingResult FirstSendResult = System.SendMessageToChannel(Message, "Telemetry");
+	const EMessagingResult SecondSendResult = System.SendMessageToChannel(Message, "Telemetry");
+	Network.Drain(ReceivingPort);
+	const ETransportResult AcknowledgementSendResult =
+		Network.Port(ReceivingPort).TrySend(SendingAddress, TSpan<const std::uint8_t>(AcknowledgementFrame.Bytes, AcknowledgementFrame.Size));
+	System.PreAdvance(FirstReceiveTurnMilliseconds);
+	System.PostAdvance(FarAfterAcknowledgementTurnMilliseconds);
+	const std::size_t QueuedRetries = Network.QueuedCount(ReceivingPort);
+
+	// Assert
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, CreateResult, "The unmatched-acknowledgement channel should be created");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, FirstSendResult, "The first pending reliable frame should send");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, SecondSendResult, "The second pending reliable frame should send");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, AcknowledgementSendResult, "The unmatched acknowledgement should reach the sender device");
+	MW_EXPECT_EQ(Test, NoDroppedFrames, System.GetDroppedFrameCount(), "An unmatched valid acknowledgement should be consumed without a drop");
+	MW_EXPECT_EQ(Test, TwoMailboxSlots, QueuedRetries, "The unmatched acknowledgement should release neither pending reliable frame");
+}
+
+/**
+ * Motivation: Preserves best-effort availability when reliable retry storage is completely occupied.
+ * Responsibilities: Fill one reliable slot, then send a best-effort frame on another channel and verify it still reaches the device.
+ */
+MW_TEST_CASE(MessagingSystem_BestEffortSendsDoNotConsumeReliablePendingSlots)
+{
+	// Arrange
+	TLoopbackNetwork<TwoPorts, TwoMailboxSlots, StandardPacketBytes> Network;
+	TMessagingSystem<FSingleReliablePendingMessagingTraits> System;
+	const FDeviceAddress ReceivingAddress = MakeLoopbackAddress(ReceivingPort);
+	const FChannelInformation ReliableChannel{"Reliable", true, &Network.Port(SendingPort), ReceivingAddress};
+	const FChannelInformation BestEffortChannel{"BestEffort", false, &Network.Port(SendingPort), ReceivingAddress};
+	const EMessagingResult ReliableCreateResult = System.CreateChannel(ReliableChannel);
+	const EMessagingResult BestEffortCreateResult = System.CreateChannel(BestEffortChannel);
+	FMessage Message;
+	Message.SetMessageNameId("TemperatureUpdated");
+	Message.SetPayload(TSpan<const std::uint8_t>(WirePayload, WirePayloadByteCount));
+
+	// Act
+	const EMessagingResult ReliableSendResult = System.SendMessageToChannel(Message, "Reliable");
+	const EMessagingResult BestEffortSendResult = System.SendMessageToChannel(Message, "BestEffort");
+	const std::size_t QueuedAfterSends = Network.QueuedCount(ReceivingPort);
+
+	// Assert
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, ReliableCreateResult, "The reliable pending-capacity channel should be created");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, BestEffortCreateResult, "The best-effort pending-capacity channel should be created");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, ReliableSendResult, "The reliable frame should fill the only pending slot");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, BestEffortSendResult, "A best-effort frame should not need a reliable pending slot");
+	MW_EXPECT_EQ(Test, TwoMailboxSlots, QueuedAfterSends, "Both reliable and best-effort frames should reach the device");
 }
 
 } // namespace
