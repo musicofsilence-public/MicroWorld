@@ -85,6 +85,7 @@ set(MICROWORLD_CORE_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Core/Log.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Core/MemoryResource.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Core/TickFunction.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Core/TransportDevice.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Core/UartByteStream.cpp"
 )
 
