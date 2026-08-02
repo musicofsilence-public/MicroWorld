@@ -2,6 +2,7 @@
 
 #include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Core/IO/UartByteStream.h>
+#include <MicroWorld/Core/IO/UartByteStreamResult.h>
 #include <MicroWorld/Transport/FrameCodec.h>
 #include <MicroWorld/Transport/Lora/E32Lora.h>
 #include <MicroWorld/Transport/Lora/E32LoraDevice.h>

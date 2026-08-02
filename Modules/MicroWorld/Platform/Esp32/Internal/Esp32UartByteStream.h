@@ -1,6 +1,7 @@
 #pragma once
 
 #include <MicroWorld/Core/IO/UartByteStream.h>
+#include <MicroWorld/Core/IO/UartByteStreamResult.h>
 
 #include <cstdint>
 
