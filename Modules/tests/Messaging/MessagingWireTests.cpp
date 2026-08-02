@@ -4,7 +4,11 @@
 #include <MicroWorld/Core/IO/ReceiveResult.h>
 #include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Core/IO/TransportResult.h>
+#include <MicroWorld/Messaging/ChannelInformation.h>
+#include <MicroWorld/Messaging/Message.h>
+#include <MicroWorld/Messaging/MessagingResult.h>
 #include <MicroWorld/Messaging/MessagingSystem.h>
+#include <MicroWorld/Messaging/MessagingSystemInformation.h>
 #include <MicroWorld/Transport/LoopbackNetwork.h>
 
 #include <cstddef>

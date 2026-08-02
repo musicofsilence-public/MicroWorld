@@ -9,8 +9,11 @@
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Engine/EngineResult.h>
 #include <MicroWorld/Engine/ObjectStore.h>
-#include <MicroWorld/Messaging/MessageTypes.h>
+#include <MicroWorld/Messaging/ChannelInformation.h>
+#include <MicroWorld/Messaging/Message.h>
+#include <MicroWorld/Messaging/MessagingResult.h>
 #include <MicroWorld/Messaging/MessagingSystem.h>
+#include <MicroWorld/Messaging/MessagingSystemInformation.h>
 #include <MicroWorld/Messaging/NameId.h>
 
 #include <MicroWorld/Engine/ClassDescriptor.h>

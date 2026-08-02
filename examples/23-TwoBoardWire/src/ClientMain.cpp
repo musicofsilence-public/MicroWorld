@@ -8,8 +8,11 @@
 #include <MicroWorld/Engine/World.h>
 #include <MicroWorld/Core/Log.h>
 #include <MicroWorld/Core/TickContext.h>
-#include <MicroWorld/Messaging/MessageTypes.h>
+#include <MicroWorld/Messaging/ChannelInformation.h>
+#include <MicroWorld/Messaging/Message.h>
+#include <MicroWorld/Messaging/MessagingResult.h>
 #include <MicroWorld/Messaging/MessagingSystem.h>
+#include <MicroWorld/Messaging/MessagingSystemInformation.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Engine/GarbageCollector.h>
 #include <MicroWorld/Engine/ObjectPtr.h>

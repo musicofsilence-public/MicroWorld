@@ -2,35 +2,10 @@
 
 #include <MicroWorld/Core/Containers/Span.h>
 #include <MicroWorld/Core/IO/DeviceAddress.h>
-#include <MicroWorld/Core/IO/TransportDevice.h>
-#include <MicroWorld/Core/Time.h>
 #include <MicroWorld/Messaging/NameId.h>
-
-#include <cstddef>
-#include <cstdint>
 
 namespace MicroWorld::Messaging
 {
-
-/**
- * Motivation: Gives Messaging one bounded result vocabulary for channel and message operations.
- * Responsibilities: Distinguish successful work from duplicate, missing, capacity, and malformed requests.
- * Example:
- *   if (Result == EMessagingResult::Full) { RetryLater(); }
- */
-enum class EMessagingResult : std::uint8_t
-{
-	/** Motivation: Reports that the requested Messaging operation completed with its promised state change. */
-	Success,
-	/** Motivation: Reports a duplicate channel name while leaving the existing channels and the requested creation state untouched. */
-	Duplicate,
-	/** Motivation: Reports that the requested name id does not identify an existing channel or subscription. */
-	NotFound,
-	/** Motivation: Reports that fixed channel, subscription, queue, or reliable-send capacity is exhausted and state is unchanged. */
-	Full,
-	/** Motivation: Reports an unset or oversize request whose unchanged retry cannot succeed and leaves state unchanged. */
-	Invalid,
-};
 
 /**
  * Motivation: Carries one named payload and its sender without owning or allocating payload storage.
@@ -106,43 +81,6 @@ private:
 
 	/** Motivation: Retains the source route, or the empty sender that identifies this-node origin. */
 	Core::FDeviceAddress Sender{};
-};
-
-/**
- * Motivation: Supplies the fixed configuration required to create one named Messaging channel.
- * Responsibilities: Describe identity, reliability, optional transport device, and destination address without owning them.
- * Example:
- *   FChannelInformation Information{ "Telemetry", false, &Device, Address };
- */
-struct FChannelInformation
-{
-	/** Motivation: Identifies this channel independently of its device or destination, with an unset name invalid for creation. */
-	FNameId ChannelNameId{};
-
-	/** Motivation: Selects resend-until-ack behavior; false leaves the channel best-effort and local delivery still occurs. */
-	bool bIsReliable{false};
-
-	/** Motivation: Reaches the optional non-owning device used for remote delivery; null is the normal local-only channel shape. */
-	Core::ITransportDevice* TransportDevice{nullptr};
-
-	/** Motivation: Selects the device-defined destination route; zero active bytes select its default route, and multiple channels may share one
-	 * device while using different addresses. */
-	Core::FDeviceAddress Address{};
-};
-
-/**
- * Motivation: Supplies the bounded reliability policy shared by one Messaging system.
- * Responsibilities: Define retry timing and the maximum send attempts without owning scheduler state.
- * Example:
- *   FMessagingSystemInformation Information{};
- */
-struct FMessagingSystemInformation
-{
-	/** Motivation: Sets the exact milliseconds between reliable resend attempts after a send remains unacknowledged. */
-	Core::DurationMilliseconds ReliableRetryIntervalMilliseconds{200};
-
-	/** Motivation: Sets the exact total attempts one reliable message may make before Messaging stops retrying it. */
-	std::uint8_t MaxReliableSendAttempts{8};
 };
 
 } // namespace MicroWorld::Messaging

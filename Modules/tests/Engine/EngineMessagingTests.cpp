@@ -5,8 +5,11 @@
 #include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Core/IO/TransportResult.h>
 #include <MicroWorld/Engine/EngineHost.h>
-#include <MicroWorld/Messaging/MessageTypes.h>
+#include <MicroWorld/Messaging/ChannelInformation.h>
+#include <MicroWorld/Messaging/Message.h>
+#include <MicroWorld/Messaging/MessagingResult.h>
 #include <MicroWorld/Messaging/MessagingSystem.h>
+#include <MicroWorld/Messaging/MessagingSystemInformation.h>
 #include <MicroWorld/Messaging/NameId.h>
 
 #include <array>

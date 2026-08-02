@@ -8,6 +8,7 @@
 #include <MicroWorld/Engine/EngineStorage.h>
 #include <MicroWorld/Core/PlaySystem.h>
 #include <MicroWorld/Messaging/MessagingSystem.h>
+#include <MicroWorld/Messaging/MessagingSystemInformation.h>
 #include <MicroWorld/Engine/World.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Engine/GarbageCollector.h>

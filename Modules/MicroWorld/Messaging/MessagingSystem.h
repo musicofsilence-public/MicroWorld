@@ -2,10 +2,14 @@
 
 #include <MicroWorld/Core/Containers/StaticVector.h>
 #include <MicroWorld/Core/Delegates/Delegate.h>
+#include <MicroWorld/Core/IO/ReceiveResult.h>
 #include <MicroWorld/Core/PlaySystem.h>
 #include <MicroWorld/Core/Time.h>
 #include <MicroWorld/Core/WeakOwner.h>
-#include <MicroWorld/Messaging/MessageTypes.h>
+#include <MicroWorld/Messaging/ChannelInformation.h>
+#include <MicroWorld/Messaging/Message.h>
+#include <MicroWorld/Messaging/MessagingResult.h>
+#include <MicroWorld/Messaging/MessagingSystemInformation.h>
 #include <MicroWorld/Messaging/NameId.h>
 
 #include <cstddef>

@@ -4,7 +4,9 @@
 #include <MicroWorld/Core/IO/ReceiveResult.h>
 #include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Core/IO/TransportResult.h>
-#include <MicroWorld/Messaging/MessageTypes.h>
+#include <MicroWorld/Messaging/ChannelInformation.h>
+#include <MicroWorld/Messaging/Message.h>
+#include <MicroWorld/Messaging/MessagingSystemInformation.h>
 
 #include <cstddef>
 #include <cstdint>
