@@ -7,21 +7,21 @@ FPicoLoraDevice::FPicoLoraDevice(IPicoE32LoraPlatform& InPlatform) noexcept : By
 
 FPicoLoraDevice::~FPicoLoraDevice() noexcept = default;
 
-::MicroWorld::Transport::ETransportResult FPicoLoraDevice::Initialize(const FPicoE32LoraConfig& InConfig) noexcept
+::MicroWorld::Core::ETransportResult FPicoLoraDevice::Initialize(const FPicoE32LoraConfig& InConfig) noexcept
 {
 	if (IsOpen())
 	{
-		return ::MicroWorld::Transport::ETransportResult::Unavailable;
+		return ::MicroWorld::Core::ETransportResult::Unavailable;
 	}
 
 	const FPicoUartConfig UartConfig{InConfig.UartIndex, InConfig.TxGpio, InConfig.RxGpio, InConfig.BaudRate};
 	if (!ByteStream.Open(UartConfig))
 	{
-		return ::MicroWorld::Transport::ETransportResult::Invalid;
+		return ::MicroWorld::Core::ETransportResult::Invalid;
 	}
 
-	const ::MicroWorld::Transport::ETransportResult InitializeResult = RadioDevice.Initialize(InConfig.LocalNodeId);
-	if (InitializeResult != ::MicroWorld::Transport::ETransportResult::Success)
+	const ::MicroWorld::Core::ETransportResult InitializeResult = RadioDevice.Initialize(InConfig.LocalNodeId);
+	if (InitializeResult != ::MicroWorld::Core::ETransportResult::Success)
 	{
 		ByteStream.Close();
 	}
@@ -29,16 +29,14 @@ FPicoLoraDevice::~FPicoLoraDevice() noexcept = default;
 	return InitializeResult;
 }
 
-::MicroWorld::Transport::ETransportResult FPicoLoraDevice::TrySend(
-	const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, const Core::TSpan<const std::uint8_t> InPacket) noexcept
+::MicroWorld::Core::ETransportResult FPicoLoraDevice::TrySend(
+	const Core::FDeviceAddress& InTo, const Core::TSpan<const std::uint8_t> InPacket) noexcept
 {
 	return RadioDevice.TrySend(InTo, InPacket);
 }
 
-::MicroWorld::Transport::ETransportResult FPicoLoraDevice::TryReceive(
-	::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
-	const Core::TSpan<std::uint8_t> InDestination,
-	Core::FReceiveResult& OutResult) noexcept
+::MicroWorld::Core::ETransportResult FPicoLoraDevice::TryReceive(
+	Core::FDeviceAddress& OutFrom, const Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept
 {
 	return RadioDevice.TryReceive(OutFrom, InDestination, OutResult);
 }

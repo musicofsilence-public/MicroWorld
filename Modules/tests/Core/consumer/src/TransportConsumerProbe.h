@@ -6,11 +6,10 @@
 #include <MicroWorld/Transport/ByteReader.h>
 #include <MicroWorld/Transport/ByteWriter.h>
 #include <MicroWorld/Transport/HostLoopback.h>
-#include <MicroWorld/Transport/DeviceAddress.h>
-#include <MicroWorld/Transport/Device.h>
+#include <MicroWorld/Core/IO/DeviceAddress.h>
+#include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Transport/TransportManager.h>
 #include <MicroWorld/Transport/TransportPacketStorage.h>
-#include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Core/Version.h>
 
 #include <cstddef>

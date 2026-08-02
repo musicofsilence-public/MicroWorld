@@ -1,9 +1,8 @@
 #pragma once
 
 #include <MicroWorld/Core/Containers/Span.h>
+#include <MicroWorld/Core/IO/DeviceAddress.h>
 #include <MicroWorld/Core/IO/TransportDevice.h>
-#include <MicroWorld/Transport/DeviceAddress.h>
-#include <MicroWorld/Transport/TransportResult.h>
 
 #include <array>
 #include <cstddef>
@@ -59,13 +58,11 @@ class THostLoopback final
 		 *   packet as a valid enqueue, reject a null-with-nonzero-length or oversize packet with Invalid, and report Full when
 		 *   no slot remains.
 		 */
-		ETransportResult Deliver(
-			const ::MicroWorld::Transport::Address::FDeviceAddress& InTo,
-			const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom,
-			Core::TSpan<const std::uint8_t> InPacket) noexcept
+		Core::ETransportResult Deliver(
+			const Core::FDeviceAddress& InTo, const Core::FDeviceAddress& InFrom, Core::TSpan<const std::uint8_t> InPacket) noexcept
 		{
-			const ETransportResult AddressResult = ValidateDeliverAddress(InTo);
-			if (AddressResult != ETransportResult::Success)
+			const Core::ETransportResult AddressResult = ValidateDeliverAddress(InTo);
+			if (AddressResult != Core::ETransportResult::Success)
 			{
 				return AddressResult;
 			}
@@ -78,12 +75,12 @@ class THostLoopback final
 			}
 			if (InPacket.Data() == nullptr)
 			{
-				return ETransportResult::Invalid;
+				return Core::ETransportResult::Invalid;
 			}
 			if (PacketSize > PacketBytes)
 			{
 				// The packet can never fit a slot; the request is malformed.
-				return ETransportResult::Invalid;
+				return Core::ETransportResult::Invalid;
 			}
 			return EnqueuePacket(Target, InFrom, InPacket);
 		}
@@ -93,30 +90,30 @@ class THostLoopback final
 		 * Responsibilities: On Success write the head bytes, OutResult.BytesReceived, and OutFrom (the stored sender); on
 		 *   Full, Invalid, or Unavailable leave destination, OutResult, and OutFrom unchanged.
 		 */
-		ETransportResult Receive(
+		Core::ETransportResult Receive(
 			const std::uint8_t InLocalPort,
-			::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
+			Core::FDeviceAddress& OutFrom,
 			Core::TSpan<std::uint8_t> InDestination,
 			Core::FReceiveResult& OutResult) noexcept
 		{
-			const ETransportResult DestinationResult = ValidateReceiveDestination(InDestination);
-			if (DestinationResult != ETransportResult::Success)
+			const Core::ETransportResult DestinationResult = ValidateReceiveDestination(InDestination);
+			if (DestinationResult != Core::ETransportResult::Success)
 			{
 				return DestinationResult;
 			}
 			FMailbox& Mailbox = Mailboxes[InLocalPort];
 			if (Mailbox.QueuedCount == 0)
 			{
-				return ETransportResult::Unavailable;
+				return Core::ETransportResult::Unavailable;
 			}
 			const std::size_t HeadSize = Mailbox.PacketLengths[Mailbox.HeadIndex];
 			if (!HeadFitsDestination(HeadSize, InDestination.Size()))
 			{
 				// Keep the head packet so the caller can retry with a larger buffer.
-				return ETransportResult::Full;
+				return Core::ETransportResult::Full;
 			}
 			PopHeadInto(Mailbox, HeadSize, OutFrom, InDestination, OutResult);
-			return ETransportResult::Success;
+			return Core::ETransportResult::Success;
 		}
 
 		/**
@@ -181,7 +178,7 @@ class THostLoopback final
 			std::array<std::size_t, MailboxCapacity> PacketLengths{};
 
 			/** Motivation: Records the sender address stamped on each queued packet so receive can report it. */
-			std::array<::MicroWorld::Transport::Address::FDeviceAddress, MailboxCapacity> SenderAddresses{};
+			std::array<Core::FDeviceAddress, MailboxCapacity> SenderAddresses{};
 
 			/** Motivation: Indexes the next packet to receive so the FIFO order is preserved. */
 			std::size_t HeadIndex{0};
@@ -197,45 +194,45 @@ class THostLoopback final
 		 * Motivation: Guards delivery against a destination that names no port before any mailbox state is consulted.
 		 * Responsibilities: Return Success only when the destination is exactly one byte naming a valid port index, else Invalid.
 		 */
-		static ETransportResult ValidateDeliverAddress(const ::MicroWorld::Transport::Address::FDeviceAddress& InTo) noexcept
+		static Core::ETransportResult ValidateDeliverAddress(const Core::FDeviceAddress& InTo) noexcept
 		{
 			if (InTo.Size != LoopbackPortAddressBytes || InTo.Bytes[0] >= MaxPorts)
 			{
-				return ETransportResult::Invalid;
+				return Core::ETransportResult::Invalid;
 			}
-			return ETransportResult::Success;
+			return Core::ETransportResult::Success;
 		}
 
 		/**
 		 * Motivation: Appends one validated packet at the tail so the FIFO order survives concurrent delivers.
 		 * Responsibilities: Return Full when no slot is free, otherwise store the packet and advance the tail.
 		 */
-		static ETransportResult EnqueuePacket(
-			FMailbox& InTarget, const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom, Core::TSpan<const std::uint8_t> InPacket) noexcept
+		static Core::ETransportResult EnqueuePacket(
+			FMailbox& InTarget, const Core::FDeviceAddress& InFrom, Core::TSpan<const std::uint8_t> InPacket) noexcept
 		{
 			if (InTarget.QueuedCount >= MailboxCapacity)
 			{
-				return ETransportResult::Full;
+				return Core::ETransportResult::Full;
 			}
 			StorePacketAt(InTarget, InTarget.TailIndex, InFrom, InPacket, InPacket.Size());
 			AdvanceTail(InTarget);
-			return ETransportResult::Success;
+			return Core::ETransportResult::Success;
 		}
 
 		/**
 		 * Motivation: Rejects a null destination with nonzero length before mailbox state is consulted.
 		 * Responsibilities: Return Invalid for a null destination with nonzero length independent of mailbox state, else Success.
 		 */
-		static ETransportResult ValidateReceiveDestination(Core::TSpan<std::uint8_t> InDestination) noexcept
+		static Core::ETransportResult ValidateReceiveDestination(Core::TSpan<std::uint8_t> InDestination) noexcept
 		{
 			// A null destination with nonzero length is an invalid request independent of the
 			// mailbox state: validate it before the empty check so an empty mailbox still
 			// returns Invalid for a malformed destination.
 			if (InDestination.Size() != 0 && InDestination.Data() == nullptr)
 			{
-				return ETransportResult::Invalid;
+				return Core::ETransportResult::Invalid;
 			}
-			return ETransportResult::Success;
+			return Core::ETransportResult::Success;
 		}
 
 		/**
@@ -265,7 +262,7 @@ class THostLoopback final
 		static void PopHeadInto(
 			FMailbox& InMailbox,
 			const std::size_t InHeadSize,
-			::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
+			Core::FDeviceAddress& OutFrom,
 			Core::TSpan<std::uint8_t> InDestination,
 			Core::FReceiveResult& OutResult) noexcept
 		{
@@ -288,7 +285,7 @@ class THostLoopback final
 		static void StorePacketAt(
 			FMailbox& InMailbox,
 			const std::size_t InIndex,
-			const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom,
+			const Core::FDeviceAddress& InFrom,
 			Core::TSpan<const std::uint8_t> InPacket,
 			const std::size_t InPacketSize) noexcept
 		{
@@ -351,20 +348,17 @@ class THostLoopback final
 		 * Motivation: Implements the device send contract by routing to the destination port's mailbox.
 		 * Responsibilities: Deliver one packet stamped with this port's address to the shared mailboxes.
 		 */
-		ETransportResult TrySend(
-			const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override
+		Core::ETransportResult TrySend(const Core::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override
 		{
-			return Mailboxes->Deliver(InTo, ::MicroWorld::Transport::Address::MakeLoopbackAddress(LocalIndex), InPacket);
+			return Mailboxes->Deliver(InTo, Core::MakeLoopbackAddress(LocalIndex), InPacket);
 		}
 
 		/**
 		 * Motivation: Implements the device receive contract by popping from this port's mailbox.
 		 * Responsibilities: Pop one packet from this port's mailbox and report its sender via OutFrom.
 		 */
-		ETransportResult TryReceive(
-			::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
-			Core::TSpan<std::uint8_t> InDestination,
-			Core::FReceiveResult& OutResult) noexcept override
+		Core::ETransportResult TryReceive(
+			Core::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept override
 		{
 			return Mailboxes->Receive(LocalIndex, OutFrom, InDestination, OutResult);
 		}

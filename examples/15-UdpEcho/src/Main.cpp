@@ -1,9 +1,8 @@
 #include "UdpEchoShared.h"
 
 #include <MicroWorld/Core/Log.h>
-#include <MicroWorld/Transport/DeviceAddress.h>
-#include <MicroWorld/Transport/Device.h>
-#include <MicroWorld/Transport/TransportResult.h>
+#include <MicroWorld/Core/IO/DeviceAddress.h>
+#include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Transport/Wifi/UdpAddressCodec.h>
 #include <MicroWorld/Platform/Esp32/Esp32OutputDevice.h>
 #include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
@@ -15,8 +14,6 @@
 using namespace MicroWorld::Core;
 using namespace MicroWorld::Platform::Esp32;
 using namespace MicroWorld::Transport;
-using namespace MicroWorld::Transport::Address;
-using namespace MicroWorld::Transport::Device;
 using namespace Ex15;
 
 namespace

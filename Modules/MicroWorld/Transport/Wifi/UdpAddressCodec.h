@@ -2,11 +2,11 @@
 
 // The 6-byte UDP address encoding lives here, in Transport, so both platform adapters
 // (PlatformHost, PlatformEsp32) and both UDP devices share ONE definition rather
-// than hand-copying it per package. It is pure arithmetic over ::MicroWorld::Transport::Address::FDeviceAddress with
+// than hand-copying it per package. It is pure arithmetic over Core::FDeviceAddress with
 // no OS includes, so the Core <- Transport dependency direction still holds.
 
 #include <MicroWorld/Core/ByteCodecConstants.h>
-#include <MicroWorld/Transport/DeviceAddress.h>
+#include <MicroWorld/Core/IO/DeviceAddress.h>
 
 #include <cstdint>
 
@@ -48,10 +48,10 @@ inline constexpr std::uint32_t Ipv4OctetCShift = 8u;
  * Responsibilities: Store bytes 0-3 as the four IPv4 octets in dotted order and bytes 4-5 as the port in network byte order
  *   (high byte first), matching the encoding this package's device reads and writes.
  */
-constexpr ::MicroWorld::Transport::Address::FDeviceAddress MakeUdpAddress(
+constexpr Core::FDeviceAddress MakeUdpAddress(
 	const std::uint8_t InA, const std::uint8_t InB, const std::uint8_t InC, const std::uint8_t InD, const std::uint16_t InPort) noexcept
 {
-	::MicroWorld::Transport::Address::FDeviceAddress Address{};
+	Core::FDeviceAddress Address{};
 	Address.Bytes[UdpAddressOctetAIndex] = InA;
 	Address.Bytes[UdpAddressOctetBIndex] = InB;
 	Address.Bytes[UdpAddressOctetCIndex] = InC;
@@ -67,7 +67,7 @@ constexpr ::MicroWorld::Transport::Address::FDeviceAddress MakeUdpAddress(
  * Responsibilities: Inspect the active length only and report whether it is exactly six bytes; byte contents are validated when
  *   a device routes the address, so a loopback or LoRa address is never mistaken for a UDP one.
  */
-constexpr bool IsUdpAddress(const ::MicroWorld::Transport::Address::FDeviceAddress& InAddress) noexcept
+constexpr bool IsUdpAddress(const Core::FDeviceAddress& InAddress) noexcept
 {
 	return InAddress.Size == UdpAddressByteCount;
 }
@@ -77,7 +77,7 @@ constexpr bool IsUdpAddress(const ::MicroWorld::Transport::Address::FDeviceAddre
  * Responsibilities: Shift the high byte up before OR-ing the low byte, mirroring MakeUdpAddress's write order for an exact round
  *   trip; callers must first confirm IsUdpAddress to avoid reading unrelated bytes.
  */
-constexpr std::uint16_t UdpAddressPort(const ::MicroWorld::Transport::Address::FDeviceAddress& InAddress) noexcept
+constexpr std::uint16_t UdpAddressPort(const Core::FDeviceAddress& InAddress) noexcept
 {
 	return static_cast<std::uint16_t>(
 		(static_cast<std::uint16_t>(InAddress.Bytes[UdpAddressPortHighByteIndex]) << Core::HighByteShift)
@@ -89,8 +89,7 @@ constexpr std::uint16_t UdpAddressPort(const ::MicroWorld::Transport::Address::F
  * Responsibilities: Take the four octets most-significant first (matching MakeUdpAddress's dotted order) after a device decodes a
  *   received datagram's sender with ntohl/ntohs.
  */
-constexpr ::MicroWorld::Transport::Address::FDeviceAddress MakeUdpAddressFromPackedHostOrder(
-	const std::uint32_t InPackedIpv4Address, const std::uint16_t InPort) noexcept
+constexpr Core::FDeviceAddress MakeUdpAddressFromPackedHostOrder(const std::uint32_t InPackedIpv4Address, const std::uint16_t InPort) noexcept
 {
 	return MakeUdpAddress(
 		static_cast<std::uint8_t>(InPackedIpv4Address >> Ipv4OctetAShift),

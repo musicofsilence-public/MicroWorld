@@ -2,9 +2,9 @@
 
 #include <MicroWorld/Core/ByteCodecConstants.h>
 #include <MicroWorld/Core/Containers/Span.h>
+#include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Transport/ByteReader.h>
 #include <MicroWorld/Transport/ByteWriter.h>
-#include <MicroWorld/Transport/TransportResult.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -87,27 +87,27 @@ inline std::uint16_t ComputeCrc16Ccitt(const Core::TSpan<const std::uint8_t> InB
  * Responsibilities: Return Invalid for a null-with-length payload or destination, or a payload over Uint16Max that can never
  *   fit the 16-bit length field; return Full when the destination is too small; otherwise Success.
  */
-inline ETransportResult ValidateEncodeInputs(const Core::TSpan<const std::uint8_t> InPayload, const Core::TSpan<std::uint8_t> InFrame) noexcept
+inline Core::ETransportResult ValidateEncodeInputs(const Core::TSpan<const std::uint8_t> InPayload, const Core::TSpan<std::uint8_t> InFrame) noexcept
 {
 	const std::size_t PayloadSize = InPayload.Size();
 	if (PayloadSize != 0 && InPayload.Data() == nullptr)
 	{
-		return ETransportResult::Invalid;
+		return Core::ETransportResult::Invalid;
 	}
 	if (InFrame.Size() != 0 && InFrame.Data() == nullptr)
 	{
-		return ETransportResult::Invalid;
+		return Core::ETransportResult::Invalid;
 	}
 	if (PayloadSize > Core::Uint16Max)
 	{
 		// Oversize input can never fit the 16-bit length field, so it can never succeed on retry (D7).
-		return ETransportResult::Invalid;
+		return Core::ETransportResult::Invalid;
 	}
 	if (PayloadSize + FrameOverheadBytes > InFrame.Size())
 	{
-		return ETransportResult::Full;
+		return Core::ETransportResult::Full;
 	}
-	return ETransportResult::Success;
+	return Core::ETransportResult::Success;
 }
 
 /**
@@ -147,14 +147,14 @@ inline void AppendPayloadAndChecksum(const Core::TSpan<const std::uint8_t> InPay
  *   too-small destination as Full), then on Success write the full frame and set OutWritten to payload plus overhead; on any
  *   non-success leave the destination and OutWritten unchanged.
  */
-inline ETransportResult EncodeFrame(
+inline Core::ETransportResult EncodeFrame(
 	const std::uint8_t InSourceNodeId,
 	const Core::TSpan<const std::uint8_t> InPayload,
 	const Core::TSpan<std::uint8_t> OutFrame,
 	std::size_t& OutWritten) noexcept
 {
-	const ETransportResult ValidationResult = ValidateEncodeInputs(InPayload, OutFrame);
-	if (ValidationResult != ETransportResult::Success)
+	const Core::ETransportResult ValidationResult = ValidateEncodeInputs(InPayload, OutFrame);
+	if (ValidationResult != Core::ETransportResult::Success)
 	{
 		return ValidationResult;
 	}
@@ -162,7 +162,7 @@ inline ETransportResult EncodeFrame(
 	WriteFrameHeader(InSourceNodeId, PayloadSize, OutFrame);
 	AppendPayloadAndChecksum(InPayload, OutFrame);
 	OutWritten = PayloadSize + FrameOverheadBytes;
-	return ETransportResult::Success;
+	return Core::ETransportResult::Success;
 }
 
 /**

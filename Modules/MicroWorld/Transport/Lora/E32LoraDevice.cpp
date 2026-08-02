@@ -22,41 +22,38 @@ namespace
 
 FE32LoraDevice::FE32LoraDevice(Core::IUartByteStream& InByteStream) noexcept : ByteStream(InByteStream) {}
 
-ETransportResult FE32LoraDevice::Initialize(const std::uint8_t InLocalNodeId) noexcept
+Core::ETransportResult FE32LoraDevice::Initialize(const std::uint8_t InLocalNodeId) noexcept
 {
 	if (bInitialized)
 	{
-		return ETransportResult::Unavailable;
+		return Core::ETransportResult::Unavailable;
 	}
 
 	LocalNodeIdValue = InLocalNodeId;
 	bInitialized = true;
-	return ETransportResult::Success;
+	return Core::ETransportResult::Success;
 }
 
-ETransportResult FE32LoraDevice::TrySend(
-	const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, const Core::TSpan<const std::uint8_t> InPacket) noexcept
+Core::ETransportResult FE32LoraDevice::TrySend(const Core::FDeviceAddress& InTo, const Core::TSpan<const std::uint8_t> InPacket) noexcept
 {
 	if (!bInitialized)
 	{
-		return ETransportResult::Unavailable;
+		return Core::ETransportResult::Unavailable;
 	}
 
 	return TransportState.TryQueueFrame(LocalNodeIdValue, InTo, InPacket);
 }
 
-ETransportResult FE32LoraDevice::TryReceive(
-	::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
-	const Core::TSpan<std::uint8_t> InDestination,
-	Core::FReceiveResult& OutResult) noexcept
+Core::ETransportResult FE32LoraDevice::TryReceive(
+	Core::FDeviceAddress& OutFrom, const Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept
 {
 	if (InDestination.Size() != 0 && InDestination.Data() == nullptr)
 	{
-		return ETransportResult::Invalid;
+		return Core::ETransportResult::Invalid;
 	}
 	if (!bInitialized)
 	{
-		return ETransportResult::Unavailable;
+		return Core::ETransportResult::Unavailable;
 	}
 	if (TransportState.HasReceivedFrame())
 	{
@@ -69,11 +66,11 @@ ETransportResult FE32LoraDevice::TryReceive(
 		const Core::EUartByteStreamResult ReadResult = ByteStream.TryReadByte(ReceivedByte);
 		if (ReadResult == Core::EUartByteStreamResult::Unavailable)
 		{
-			return ETransportResult::Unavailable;
+			return Core::ETransportResult::Unavailable;
 		}
 		if (ReadResult == Core::EUartByteStreamResult::Error)
 		{
-			return ETransportResult::Invalid;
+			return Core::ETransportResult::Invalid;
 		}
 
 		const ::MicroWorld::Transport::FrameCodec::EFrameEvent Event = TransportState.PushReceivedByte(ReceivedByte);
@@ -83,7 +80,7 @@ ETransportResult FE32LoraDevice::TryReceive(
 		}
 	}
 
-	return ETransportResult::Unavailable;
+	return Core::ETransportResult::Unavailable;
 }
 
 std::size_t FE32LoraDevice::MaxPacketBytes() const noexcept

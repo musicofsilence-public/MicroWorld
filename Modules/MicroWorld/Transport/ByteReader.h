@@ -2,7 +2,7 @@
 
 #include <MicroWorld/Core/ByteCodecConstants.h>
 #include <MicroWorld/Core/Containers/Span.h>
-#include <MicroWorld/Transport/TransportResult.h>
+#include <MicroWorld/Core/IO/TransportDevice.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -19,7 +19,7 @@ namespace MicroWorld::Transport
  * Example:
  *   FByteReader Reader(Source);
  *   std::uint8_t Byte = 0;
- *   if (Reader.ReadByte(Byte) == ETransportResult::Success) { Parse(Byte); }
+ *   if (Reader.ReadByte(Byte) == Core::ETransportResult::Success) { Parse(Byte); }
  */
 class FByteReader final
 {
@@ -74,15 +74,15 @@ public:
 	 * Responsibilities: Return Invalid without modifying OutValue when the source is an invalid {nullptr, nonzero} view or no
 	 *   byte remains; otherwise write the byte and advance the cursor.
 	 */
-	ETransportResult ReadByte(std::uint8_t& OutValue) noexcept
+	Core::ETransportResult ReadByte(std::uint8_t& OutValue) noexcept
 	{
 		if (!HasValidStorage() || ReadPosition >= Buffer.Size())
 		{
-			return ETransportResult::Invalid;
+			return Core::ETransportResult::Invalid;
 		}
 		OutValue = Buffer[ReadPosition];
 		++ReadPosition;
-		return ETransportResult::Success;
+		return Core::ETransportResult::Success;
 	}
 
 	/**
@@ -91,29 +91,29 @@ public:
 	 *   invalid {nullptr, nonzero} source with Invalid, reject a truncated request (more than remaining) with Invalid without
 	 *   modifying the destination or advancing, and copy and advance only on a complete read.
 	 */
-	ETransportResult Read(Core::TSpan<std::uint8_t> InDestination) noexcept
+	Core::ETransportResult Read(Core::TSpan<std::uint8_t> InDestination) noexcept
 	{
 		const std::size_t RequestedSize = InDestination.Size();
 		if (RequestedSize == 0)
 		{
-			return ETransportResult::Success;
+			return Core::ETransportResult::Success;
 		}
 		if (InDestination.Data() == nullptr)
 		{
-			return ETransportResult::Invalid;
+			return Core::ETransportResult::Invalid;
 		}
 		if (!HasValidStorage())
 		{
-			return ETransportResult::Invalid;
+			return Core::ETransportResult::Invalid;
 		}
 		if (RequestedSize > Buffer.Size() - ReadPosition)
 		{
 			// The request exceeds the remaining source; treat it as a truncated request.
-			return ETransportResult::Invalid;
+			return Core::ETransportResult::Invalid;
 		}
 		std::memcpy(InDestination.Data(), Buffer.Data() + ReadPosition, RequestedSize);
 		ReadPosition += RequestedSize;
-		return ETransportResult::Success;
+		return Core::ETransportResult::Success;
 	}
 
 	/**
@@ -121,14 +121,14 @@ public:
 	 * Responsibilities: Return Invalid without modifying OutValue when the source is an invalid {nullptr, nonzero} view or no
 	 *   byte remains; otherwise write the byte and leave the cursor unchanged.
 	 */
-	ETransportResult PeekByte(std::uint8_t& OutValue) const noexcept
+	Core::ETransportResult PeekByte(std::uint8_t& OutValue) const noexcept
 	{
 		if (!HasValidStorage() || ReadPosition >= Buffer.Size())
 		{
-			return ETransportResult::Invalid;
+			return Core::ETransportResult::Invalid;
 		}
 		OutValue = Buffer[ReadPosition];
-		return ETransportResult::Success;
+		return Core::ETransportResult::Success;
 	}
 
 	/**

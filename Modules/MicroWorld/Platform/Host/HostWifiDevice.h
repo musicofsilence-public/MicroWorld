@@ -1,8 +1,7 @@
 #pragma once
 
-#include <MicroWorld/Transport/DeviceAddress.h>
+#include <MicroWorld/Core/IO/DeviceAddress.h>
 #include <MicroWorld/Core/IO/TransportDevice.h>
-#include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Platform/Host/UdpAddress.h>
 #include <MicroWorld/Platform/Host/WinSockScope.h>
 #include <MicroWorld/Core/Time.h>
@@ -73,7 +72,7 @@ public:
 	 *   Invalid, report Full when the send would block, and return Success only when the whole datagram was
 	 *   accepted; a non-success result leaves the socket state unchanged.
 	 */
-	Transport::ETransportResult TrySend(const Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
+	Core::ETransportResult TrySend(const Core::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
 	 * Motivation: Lets the device take in at most one datagram per call without blocking or overwriting caller state on failure.
@@ -81,8 +80,8 @@ public:
 	 *   Full when the destination is too small (datagram left queued), Invalid for a null destination with nonzero length,
 	 *   and Success only after a consuming read writes the bytes, count, and sender address into OutFrom.
 	 */
-	Transport::ETransportResult TryReceive(
-		Transport::Address::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept override;
+	Core::ETransportResult TryReceive(
+		Core::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept override;
 
 	/**
 	 * Motivation: Lets a caller size a send destination against the device's accepted maximum.

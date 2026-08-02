@@ -1,11 +1,10 @@
 #pragma once
 
 #include <MicroWorld/Core/Containers/Span.h>
-#include <MicroWorld/Transport/Lora/E32Lora.h>
+#include <MicroWorld/Core/IO/DeviceAddress.h>
+#include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Transport/FrameCodec.h>
-#include <MicroWorld/Transport/DeviceAddress.h>
-#include <MicroWorld/Transport/Device.h>
-#include <MicroWorld/Transport/TransportResult.h>
+#include <MicroWorld/Transport/Lora/E32Lora.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -66,8 +65,8 @@ public:
 	 * Responsibilities: Require the one-byte E32 address shape (not written on air in transparent mode), return Invalid for an
 	 *   invalid address or span, Full while another frame remains queued, and Success once the complete encoded frame is owned.
 	 */
-	ETransportResult TryQueueFrame(
-		std::uint8_t InLocalNodeId, const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept;
+	Core::ETransportResult TryQueueFrame(
+		std::uint8_t InLocalNodeId, const Core::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept;
 
 	/**
 	 * Motivation: Lets the device read the next transmit byte before committing it to the UART.
@@ -113,10 +112,8 @@ public:
 	 *   held payload does not fit, and Success after copying the payload, sender address, and byte count; every non-success
 	 *   preserves all caller outputs and retains the held frame.
 	 */
-	ETransportResult TryDeliverReceivedFrame(
-		::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
-		Core::TSpan<std::uint8_t> InDestination,
-		::MicroWorld::Transport::Device::FReceiveResult& OutResult) noexcept;
+	Core::ETransportResult TryDeliverReceivedFrame(
+		Core::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept;
 
 private:
 	/** Motivation: Owns bounded receive assembly and retains one complete frame across a Full retry. */

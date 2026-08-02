@@ -1,9 +1,8 @@
 #pragma once
 
 #include <MicroWorld/Transport/FrameCodec.h>
-#include <MicroWorld/Transport/DeviceAddress.h>
+#include <MicroWorld/Core/IO/DeviceAddress.h>
 #include <MicroWorld/Core/IO/TransportDevice.h>
-#include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Platform/Esp32/SpiAddress.h>
 
 #include <cstddef>
@@ -144,7 +143,7 @@ public:
 	 *   Full when the transaction times out, and Success only after the whole frame is clocked out; feed the bytes the
 	 *   slave clocks back into the decoder so a send never discards a pending reply.
 	 */
-	Transport::ETransportResult TrySend(const Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
+	Core::ETransportResult TrySend(const Core::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
 	 * Motivation: Receives at most one framed message by clocking one idle full-duplex transaction, transactionally.
@@ -153,8 +152,8 @@ public:
 	 *   a complete frame copies payload, byte count, and sender node id into OutFrom; leave outputs unchanged on any
 	 *   non-success result.
 	 */
-	Transport::ETransportResult TryReceive(
-		Transport::Address::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept override;
+	Core::ETransportResult TryReceive(
+		Core::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept override;
 
 	/**
 	 * Motivation: Lets a caller size a packet against the transport's capacity without a magic number.
@@ -180,7 +179,7 @@ private:
 	 * Responsibilities: Run one full-duplex transaction with the given transmit window, pump the received window into
 	 *   the decoder only while no frame is already held, and return the transaction's send outcome.
 	 */
-	Transport::ETransportResult ExchangeAndPump(const std::uint8_t* InTransmitWindow) noexcept;
+	Core::ETransportResult ExchangeAndPump(const std::uint8_t* InTransmitWindow) noexcept;
 
 	/** Motivation: Bounded RX deframer held by value; its capacity matches SpiMaxPayloadBytes. */
 	Transport::FrameCodec::TFrameDecoder<SpiMaxPayloadBytes> Decoder{};
@@ -267,7 +266,7 @@ public:
 	 *   Full when a previously staged frame has not yet been queued, and Success once the whole frame is staged; the
 	 *   staged frame is sent on the next transaction the master clocks.
 	 */
-	Transport::ETransportResult TrySend(const Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
+	Core::ETransportResult TrySend(const Core::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
 	 * Motivation: Receives at most one framed message by harvesting a completed transaction, transactionally.
@@ -276,8 +275,8 @@ public:
 	 *   (frame held for a larger retry), Invalid (null destination with nonzero length), or Success after a complete
 	 *   frame copies payload, byte count, and sender node id into OutFrom.
 	 */
-	Transport::ETransportResult TryReceive(
-		Transport::Address::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept override;
+	Core::ETransportResult TryReceive(
+		Core::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept override;
 
 	/**
 	 * Motivation: Lets a caller size a packet against the transport's capacity without a magic number.

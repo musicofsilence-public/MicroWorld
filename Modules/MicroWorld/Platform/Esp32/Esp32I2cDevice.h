@@ -1,9 +1,8 @@
 #pragma once
 
 #include <MicroWorld/Transport/FrameCodec.h>
-#include <MicroWorld/Transport/DeviceAddress.h>
+#include <MicroWorld/Core/IO/DeviceAddress.h>
 #include <MicroWorld/Core/IO/TransportDevice.h>
-#include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Platform/Esp32/I2cAddress.h>
 
 #include <cstddef>
@@ -168,7 +167,7 @@ public:
 	 *   length, Full when the slave does not acknowledge or the bus is busy, and Success only after the whole
 	 *   frame is clocked out; leave bus state unchanged on any non-success result.
 	 */
-	Transport::ETransportResult TrySend(const Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
+	Core::ETransportResult TrySend(const Core::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
 	 * Motivation: Receives at most one framed message by clocking one whole-frame window from the slave, transactionally.
@@ -177,8 +176,8 @@ public:
 	 *   complete frame copies payload, byte count, and sender node id into OutFrom; leave outputs unchanged on
 	 *   any non-success result.
 	 */
-	Transport::ETransportResult TryReceive(
-		Transport::Address::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept override;
+	Core::ETransportResult TryReceive(
+		Core::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept override;
 
 	/**
 	 * Motivation: Lets a caller size a packet against the transport's capacity without a magic number.
@@ -273,7 +272,7 @@ public:
 	 *   length, Full (discarding any partial bytes so a half-frame never reaches the master) when the transmit
 	 *   ring cannot take the whole frame, and Success only after the whole frame is queued.
 	 */
-	Transport::ETransportResult TrySend(const Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
+	Core::ETransportResult TrySend(const Core::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
 	 * Motivation: Receives at most one framed message by draining the ISR-filled inbox, transactionally.
@@ -282,8 +281,8 @@ public:
 	 *   length), or Success after a complete frame copies payload, byte count, and sender node id into OutFrom;
 	 *   leave outputs unchanged on any non-success result.
 	 */
-	Transport::ETransportResult TryReceive(
-		Transport::Address::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept override;
+	Core::ETransportResult TryReceive(
+		Core::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept override;
 
 	/**
 	 * Motivation: Lets a caller size a packet against the transport's capacity without a magic number.

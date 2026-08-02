@@ -2,7 +2,7 @@
 
 #include <MicroWorld/Core/ByteCodecConstants.h>
 #include <MicroWorld/Core/Containers/Span.h>
-#include <MicroWorld/Transport/TransportResult.h>
+#include <MicroWorld/Core/IO/TransportDevice.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -18,7 +18,7 @@ namespace MicroWorld::Transport
  *   the cursor or alter accepted bytes on a failed write.
  * Example:
  *   FByteWriter Writer(Destination);
- *   if (Writer.WriteByte(0xA5) == ETransportResult::Success) { Send(Writer.WrittenBytes()); }
+ *   if (Writer.WriteByte(0xA5) == Core::ETransportResult::Success) { Send(Writer.WrittenBytes()); }
  */
 class FByteWriter final
 {
@@ -73,19 +73,19 @@ public:
 	 * Responsibilities: Return Invalid without advancing for an invalid {nullptr, nonzero} buffer, Full without advancing
 	 *   when a valid buffer has no remaining capacity, and write and advance only on success.
 	 */
-	ETransportResult WriteByte(const std::uint8_t InValue) noexcept
+	Core::ETransportResult WriteByte(const std::uint8_t InValue) noexcept
 	{
 		if (!HasValidStorage())
 		{
-			return ETransportResult::Invalid;
+			return Core::ETransportResult::Invalid;
 		}
 		if (WritePosition >= Buffer.Size())
 		{
-			return ETransportResult::Full;
+			return Core::ETransportResult::Full;
 		}
 		Buffer[WritePosition] = InValue;
 		++WritePosition;
-		return ETransportResult::Success;
+		return Core::ETransportResult::Success;
 	}
 
 	/**
@@ -94,37 +94,37 @@ public:
 	 *   nonzero} destination with Invalid, reject a span larger than total capacity with Invalid (it can never fit) and one
 	 *   that fits total but not remaining capacity with Full, and copy and advance only on a complete write.
 	 */
-	ETransportResult Write(Core::TSpan<const std::uint8_t> InBytes) noexcept
+	Core::ETransportResult Write(Core::TSpan<const std::uint8_t> InBytes) noexcept
 	{
 		const std::size_t IncomingSize = InBytes.Size();
 		if (IncomingSize == 0)
 		{
 			// An empty span is a valid no-op whether or not its data pointer is null.
-			return ETransportResult::Success;
+			return Core::ETransportResult::Success;
 		}
 		if (InBytes.Data() == nullptr)
 		{
 			// A null source with nonzero length cannot be copied honestly.
-			return ETransportResult::Invalid;
+			return Core::ETransportResult::Invalid;
 		}
 		if (!HasValidStorage())
 		{
 			// A null destination with nonzero capacity cannot accept any byte honestly.
-			return ETransportResult::Invalid;
+			return Core::ETransportResult::Invalid;
 		}
 		if (IncomingSize > Buffer.Size())
 		{
 			// The span can never fit the total buffer; the request is malformed.
-			return ETransportResult::Invalid;
+			return Core::ETransportResult::Invalid;
 		}
 		if (IncomingSize > Buffer.Size() - WritePosition)
 		{
 			// The span fits the total buffer but not the remaining capacity.
-			return ETransportResult::Full;
+			return Core::ETransportResult::Full;
 		}
 		std::memcpy(Buffer.Data() + WritePosition, InBytes.Data(), IncomingSize);
 		WritePosition += IncomingSize;
-		return ETransportResult::Success;
+		return Core::ETransportResult::Success;
 	}
 
 	/**

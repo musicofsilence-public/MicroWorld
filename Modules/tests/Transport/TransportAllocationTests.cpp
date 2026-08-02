@@ -6,7 +6,6 @@
 #include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Transport/ByteReader.h>
 #include <MicroWorld/Transport/ByteWriter.h>
-#include <MicroWorld/Transport/Device.h>
 #include <MicroWorld/Transport/HostLoopback.h>
 #include <MicroWorld/Transport/TransportManager.h>
 #include <MicroWorld/Transport/TransportPacketStorage.h>
@@ -36,7 +35,6 @@ using MicroWorld::Transport::TTransportManager;
 using MicroWorld::Transport::TTransportPacketStorage;
 using MicroWorld::Transport::WriteControlMessage;
 using MicroWorld::Transport::WriteMessage;
-using MicroWorld::Transport::Device::IDevice;
 
 /** Motivation: Per-buffer byte capacity of the writer/reader storage exercised by the allocation test. */
 constexpr std::size_t BufferByteCount = 8;

@@ -14,21 +14,20 @@ FPacketDropDevice::FPacketDropDevice(Core::ITransportDevice& InInnerDevice, cons
  */
 FPacketDropDevice::~FPacketDropDevice() noexcept = default;
 
-ETransportResult FPacketDropDevice::TrySend(
-	const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept
+Core::ETransportResult FPacketDropDevice::TrySend(const Core::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept
 {
 	++SendCallCount;
 	if (DropEveryNthSend != 0 && (SendCallCount % DropEveryNthSend == 0))
 	{
 		// A dropped send is modeled as having left the wire and been lost: no inner call, no packet inspection.
 		++DroppedSendTotal;
-		return ETransportResult::Success;
+		return Core::ETransportResult::Success;
 	}
 	return InnerDevice.TrySend(InTo, InPacket);
 }
 
-ETransportResult FPacketDropDevice::TryReceive(
-	::MicroWorld::Transport::Address::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept
+Core::ETransportResult FPacketDropDevice::TryReceive(
+	Core::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept
 {
 	return InnerDevice.TryReceive(OutFrom, InDestination, OutResult);
 }

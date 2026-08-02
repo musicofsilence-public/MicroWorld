@@ -1,8 +1,8 @@
 #include "TestSupport.h"
 
 #include <MicroWorld/Core/Containers/Span.h>
+#include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Transport/ByteReader.h>
-#include <MicroWorld/Transport/TransportResult.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -10,8 +10,8 @@
 namespace
 {
 
+using MicroWorld::Core::ETransportResult;
 using MicroWorld::Core::TSpan;
-using MicroWorld::Transport::ETransportResult;
 using MicroWorld::Transport::FByteReader;
 
 /** Motivation: Pre-fill marker written into every destination byte before a read, so a write is observable. */

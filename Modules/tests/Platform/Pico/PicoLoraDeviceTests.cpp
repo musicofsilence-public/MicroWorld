@@ -2,7 +2,7 @@
 
 #include <MicroWorld/Transport/Lora/E32Lora.h>
 #include <MicroWorld/Transport/FrameCodec.h>
-#include <MicroWorld/Transport/TransportResult.h>
+#include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Platform/Pico/Internal/PicoE32LoraPlatform.h>
 #include <MicroWorld/Platform/Pico/Internal/PicoUartPlatform.h>
 #include <MicroWorld/Platform/Pico/PicoLoraDevice.h>
@@ -14,6 +14,7 @@
 namespace
 {
 
+using MicroWorld::Core::ETransportResult;
 using MicroWorld::Core::TimePointMilliseconds;
 using MicroWorld::Core::TSpan;
 using MicroWorld::Platform::Pico::FPicoE32LoraConfig;
@@ -21,7 +22,6 @@ using MicroWorld::Platform::Pico::FPicoLoraDevice;
 using MicroWorld::Platform::Pico::IPicoE32LoraPlatform;
 using MicroWorld::Platform::Pico::IPicoUartPlatform;
 using MicroWorld::Transport::E32MaxPayloadBytes;
-using MicroWorld::Transport::ETransportResult;
 using MicroWorld::Transport::MakeLoraAddress;
 using MicroWorld::Transport::FrameCodec::FrameOverheadBytes;
 
@@ -314,7 +314,7 @@ MW_TEST_CASE(PicoE32FacadePreAdvanceDelegatesBoundedFrameBurst)
 	FFakePicoUartPlatform Platform;
 	FPicoLoraDevice Device(Platform);
 	const FPicoE32LoraConfig Config = MakeValidConfig();
-	const MicroWorld::Transport::Address::FDeviceAddress Destination = MakeLoraAddress(PeerNodeId);
+	const MicroWorld::Core::FDeviceAddress Destination = MakeLoraAddress(PeerNodeId);
 	const std::uint8_t Payload[] = {0xA5};
 	const ETransportResult InitializeResult = Device.Initialize(Config);
 	const ETransportResult FirstSendResult = Device.TrySend(Destination, TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
@@ -344,7 +344,7 @@ MW_TEST_CASE(PicoE32FacadeEmitsEmptyFrameAndReleasesTransmitSlot)
 	FFakePicoUartPlatform Platform;
 	FPicoLoraDevice Device(Platform);
 	const FPicoE32LoraConfig Config = MakeValidConfig();
-	const MicroWorld::Transport::Address::FDeviceAddress Destination = MakeLoraAddress(PeerNodeId);
+	const MicroWorld::Core::FDeviceAddress Destination = MakeLoraAddress(PeerNodeId);
 	const TSpan<const std::uint8_t> EmptyPayload(nullptr, 0);
 	std::uint8_t ExpectedFrame[EncodedFrameCapacity]{};
 	std::size_t ExpectedFrameBytes = 0;

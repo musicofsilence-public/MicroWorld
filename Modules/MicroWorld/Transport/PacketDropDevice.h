@@ -1,9 +1,8 @@
 #pragma once
 
 #include <MicroWorld/Core/Containers/Span.h>
+#include <MicroWorld/Core/IO/DeviceAddress.h>
 #include <MicroWorld/Core/IO/TransportDevice.h>
-#include <MicroWorld/Transport/DeviceAddress.h>
-#include <MicroWorld/Transport/TransportResult.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -64,17 +63,14 @@ public:
 	 * Responsibilities: Count each call, drop every DropEveryNthSend-th send by returning Success without forwarding, and forward
 	 *   every other call verbatim to the inner device.
 	 */
-	ETransportResult TrySend(
-		const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
+	Core::ETransportResult TrySend(const Core::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
 	 * Motivation: Keeps receive behavior untouched so loss injection affects only the send path.
 	 * Responsibilities: Forward verbatim to the inner device without counting or dropping.
 	 */
-	ETransportResult TryReceive(
-		::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
-		Core::TSpan<std::uint8_t> InDestination,
-		Core::FReceiveResult& OutResult) noexcept override;
+	Core::ETransportResult TryReceive(
+		Core::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept override;
 
 	/**
 	 * Motivation: Keeps the required pre-advance transport turn working so a wrapped staged device cannot stall behind loss injection.

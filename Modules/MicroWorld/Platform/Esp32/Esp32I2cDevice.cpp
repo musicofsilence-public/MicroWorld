@@ -44,17 +44,17 @@ namespace
 	 *   device body never inspects platform codes.
 	 * Responsibilities: Map Sent to Success, WouldBlock to Full, and anything else to Invalid.
 	 */
-	Transport::ETransportResult MapI2cWriteOutcome(const EI2cWriteOutcome InOutcome) noexcept
+	Core::ETransportResult MapI2cWriteOutcome(const EI2cWriteOutcome InOutcome) noexcept
 	{
 		switch (InOutcome)
 		{
 			case EI2cWriteOutcome::Sent:
-				return Transport::ETransportResult::Success;
+				return Core::ETransportResult::Success;
 			case EI2cWriteOutcome::WouldBlock:
-				return Transport::ETransportResult::Full;
+				return Core::ETransportResult::Full;
 			case EI2cWriteOutcome::Error:
 			default:
-				return Transport::ETransportResult::Invalid;
+				return Core::ETransportResult::Invalid;
 		}
 	}
 
@@ -63,24 +63,23 @@ namespace
 	 *   a rejection is truly transactional.
 	 * Responsibilities: Return the first reason an outgoing packet cannot be framed and sent, or Success.
 	 */
-	Transport::ETransportResult ValidateOutgoingI2cPacket(
-		const Transport::Address::FDeviceAddress& InTo, const Core::TSpan<const std::uint8_t> InPacket) noexcept
+	Core::ETransportResult ValidateOutgoingI2cPacket(const Core::FDeviceAddress& InTo, const Core::TSpan<const std::uint8_t> InPacket) noexcept
 	{
 		// Validate every argument before any syscall so a rejection is truly transactional.
 		if (!IsI2cAddress(InTo))
 		{
-			return Transport::ETransportResult::Invalid;
+			return Core::ETransportResult::Invalid;
 		}
 		const std::size_t PacketSize = InPacket.Size();
 		if (PacketSize > I2cMaxPayloadBytes)
 		{
-			return Transport::ETransportResult::Invalid;
+			return Core::ETransportResult::Invalid;
 		}
 		if (PacketSize != 0 && InPacket.Data() == nullptr)
 		{
-			return Transport::ETransportResult::Invalid;
+			return Core::ETransportResult::Invalid;
 		}
-		return Transport::ETransportResult::Success;
+		return Core::ETransportResult::Success;
 	}
 
 	/**
@@ -89,10 +88,10 @@ namespace
 	 * Responsibilities: Copy the payload, byte count, and sender node id and clear the held frame, or return Full
 	 *   (leaving the frame held) when the payload exceeds the destination.
 	 */
-	Transport::ETransportResult DeliverFrameFromDecoder(
+	Core::ETransportResult DeliverFrameFromDecoder(
 		Transport::FrameCodec::TFrameDecoder<I2cMaxPayloadBytes>& InDecoder,
 		Core::TSpan<std::uint8_t> InDestination,
-		Transport::Address::FDeviceAddress& OutFrom,
+		Core::FDeviceAddress& OutFrom,
 		Core::FReceiveResult& OutResult) noexcept
 	{
 		// On Full the destination is untouched and the frame stays held for the next call, so a
@@ -100,13 +99,13 @@ namespace
 		const std::size_t HeldLength = InDecoder.FramePayload().Size();
 		if (HeldLength > InDestination.Size())
 		{
-			return Transport::ETransportResult::Full;
+			return Core::ETransportResult::Full;
 		}
 		std::memcpy(InDestination.Data(), InDecoder.FramePayload().Data(), HeldLength);
 		OutFrom = MakeI2cAddress(InDecoder.FrameNodeId());
 		OutResult.BytesReceived = HeldLength;
 		InDecoder.ClearFrame();
-		return Transport::ETransportResult::Success;
+		return Core::ETransportResult::Success;
 	}
 
 } // namespace
@@ -137,24 +136,23 @@ FEsp32I2cMasterDevice::~FEsp32I2cMasterDevice() noexcept
 	}
 }
 
-Transport::ETransportResult FEsp32I2cMasterDevice::TrySend(
-	const Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept
+Core::ETransportResult FEsp32I2cMasterDevice::TrySend(const Core::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept
 {
 	if (!bOpen)
 	{
-		return Transport::ETransportResult::Unavailable;
+		return Core::ETransportResult::Unavailable;
 	}
-	const Transport::ETransportResult Validation = ValidateOutgoingI2cPacket(InTo, InPacket);
-	if (Validation != Transport::ETransportResult::Success)
+	const Core::ETransportResult Validation = ValidateOutgoingI2cPacket(InTo, InPacket);
+	if (Validation != Core::ETransportResult::Success)
 	{
 		return Validation;
 	}
 	// The codec is transactional on failure.
 	std::uint8_t Frame[I2cTransactionWindowBytes];
 	std::size_t Written = 0;
-	const Transport::ETransportResult EncodeResult =
+	const Core::ETransportResult EncodeResult =
 		Transport::FrameCodec::EncodeFrame(LocalNodeIdValue, InPacket, Core::TSpan<std::uint8_t>(Frame, sizeof(Frame)), Written);
-	if (EncodeResult != Transport::ETransportResult::Success)
+	if (EncodeResult != Core::ETransportResult::Success)
 	{
 		return EncodeResult;
 	}
@@ -162,18 +160,18 @@ Transport::ETransportResult FEsp32I2cMasterDevice::TrySend(
 	return MapI2cWriteOutcome(Outcome);
 }
 
-Transport::ETransportResult FEsp32I2cMasterDevice::TryReceive(
-	Transport::Address::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept
+Core::ETransportResult FEsp32I2cMasterDevice::TryReceive(
+	Core::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept
 {
 	// Reject a null destination with nonzero length before any bus read.
 	const std::size_t Capacity = InDestination.Size();
 	if (Capacity != 0 && InDestination.Data() == nullptr)
 	{
-		return Transport::ETransportResult::Invalid;
+		return Core::ETransportResult::Invalid;
 	}
 	if (!bOpen)
 	{
-		return Transport::ETransportResult::Unavailable;
+		return Core::ETransportResult::Unavailable;
 	}
 	// A frame held from a prior Full is delivered first so the decoder precondition is honored.
 	if (Decoder.HasFrame())
@@ -185,11 +183,11 @@ Transport::ETransportResult FEsp32I2cMasterDevice::TryReceive(
 	const EI2cReadOutcome Outcome = ReadI2cMaster(static_cast<i2c_master_dev_handle_t>(DeviceHandle), Window, sizeof(Window));
 	if (Outcome == EI2cReadOutcome::WouldBlock)
 	{
-		return Transport::ETransportResult::Unavailable;
+		return Core::ETransportResult::Unavailable;
 	}
 	if (Outcome == EI2cReadOutcome::Error)
 	{
-		return Transport::ETransportResult::Invalid;
+		return Core::ETransportResult::Invalid;
 	}
 	for (std::size_t Index = 0; Index < sizeof(Window); ++Index)
 	{
@@ -204,7 +202,7 @@ Transport::ETransportResult FEsp32I2cMasterDevice::TryReceive(
 			MW_LOG_MSG(Warning, "I2c", "master decoder discarded a candidate frame (bad length or CRC)");
 		}
 	}
-	return Transport::ETransportResult::Unavailable;
+	return Core::ETransportResult::Unavailable;
 }
 
 std::size_t FEsp32I2cMasterDevice::MaxPacketBytes() const noexcept
@@ -240,24 +238,23 @@ FEsp32I2cSlaveDevice::~FEsp32I2cSlaveDevice() noexcept
 	}
 }
 
-Transport::ETransportResult FEsp32I2cSlaveDevice::TrySend(
-	const Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept
+Core::ETransportResult FEsp32I2cSlaveDevice::TrySend(const Core::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept
 {
 	if (!bOpen)
 	{
-		return Transport::ETransportResult::Unavailable;
+		return Core::ETransportResult::Unavailable;
 	}
-	const Transport::ETransportResult Validation = ValidateOutgoingI2cPacket(InTo, InPacket);
-	if (Validation != Transport::ETransportResult::Success)
+	const Core::ETransportResult Validation = ValidateOutgoingI2cPacket(InTo, InPacket);
+	if (Validation != Core::ETransportResult::Success)
 	{
 		return Validation;
 	}
 	// The codec is transactional on failure.
 	std::uint8_t Frame[I2cTransactionWindowBytes];
 	std::size_t Written = 0;
-	const Transport::ETransportResult EncodeResult =
+	const Core::ETransportResult EncodeResult =
 		Transport::FrameCodec::EncodeFrame(LocalNodeIdValue, InPacket, Core::TSpan<std::uint8_t>(Frame, sizeof(Frame)), Written);
-	if (EncodeResult != Transport::ETransportResult::Success)
+	if (EncodeResult != Core::ETransportResult::Success)
 	{
 		return EncodeResult;
 	}
@@ -265,18 +262,18 @@ Transport::ETransportResult FEsp32I2cSlaveDevice::TrySend(
 	return MapI2cWriteOutcome(Outcome);
 }
 
-Transport::ETransportResult FEsp32I2cSlaveDevice::TryReceive(
-	Transport::Address::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept
+Core::ETransportResult FEsp32I2cSlaveDevice::TryReceive(
+	Core::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept
 {
 	// Reject a null destination with nonzero length before any inbox read.
 	const std::size_t Capacity = InDestination.Size();
 	if (Capacity != 0 && InDestination.Data() == nullptr)
 	{
-		return Transport::ETransportResult::Invalid;
+		return Core::ETransportResult::Invalid;
 	}
 	if (!bOpen)
 	{
-		return Transport::ETransportResult::Unavailable;
+		return Core::ETransportResult::Unavailable;
 	}
 	// A frame held from a prior Full is delivered first so the decoder precondition is honored.
 	if (Decoder.HasFrame())
@@ -303,7 +300,7 @@ Transport::ETransportResult FEsp32I2cSlaveDevice::TryReceive(
 			MW_LOG_MSG(Warning, "I2c", "slave decoder discarded a candidate frame (bad length or CRC)");
 		}
 	}
-	return Transport::ETransportResult::Unavailable;
+	return Core::ETransportResult::Unavailable;
 }
 
 std::size_t FEsp32I2cSlaveDevice::MaxPacketBytes() const noexcept

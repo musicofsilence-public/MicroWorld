@@ -1,6 +1,6 @@
 #pragma once
 
-#include <MicroWorld/Transport/TransportResult.h>
+#include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Core/Time.h>
 
 #include <cstdint>
@@ -58,7 +58,7 @@ struct FEsp32StationConfig
  *   or timer.
  * Example:
  *   FEsp32WifiLink Link;
- *   if (Link.StartAccessPoint(Config) == Transport::ETransportResult::Success) { Link.Stop(); }
+ *   if (Link.StartAccessPoint(Config) == Core::ETransportResult::Success) { Link.Stop(); }
  */
 class FEsp32WifiLink
 {
@@ -106,7 +106,7 @@ public:
 	 *   then configure and start the SoftAP; any ESP-IDF failure returns Unavailable and leaves the link down; never
 	 *   print or log.
 	 */
-	Transport::ETransportResult StartAccessPoint(const FEsp32AccessPointConfig& InConfig) noexcept;
+	Core::ETransportResult StartAccessPoint(const FEsp32AccessPointConfig& InConfig) noexcept;
 
 	/**
 	 * Motivation: Joins an existing network as a station and waits for an IPv4 lease, transactionally, at startup time.
@@ -115,7 +115,7 @@ public:
 	 *   slices for an IPv4 lease until InConfig.ConnectTimeoutMilliseconds is spent; return Success once the lease
 	 *   arrives or Unavailable once the budget is spent; never print or log.
 	 */
-	Transport::ETransportResult JoinAccessPoint(const FEsp32StationConfig& InConfig) noexcept;
+	Core::ETransportResult JoinAccessPoint(const FEsp32StationConfig& InConfig) noexcept;
 
 	/**
 	 * Motivation: Lets a caller gate every op on whether the radio is currently up.

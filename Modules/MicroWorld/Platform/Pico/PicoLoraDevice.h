@@ -97,25 +97,22 @@ public:
 	 *   unmatchable baud with Invalid, then return the delegated RadioE32 initialization result and roll back the UART
 	 *   when framing fails.
 	 */
-	::MicroWorld::Transport::ETransportResult Initialize(const FPicoE32LoraConfig& InConfig) noexcept;
+	::MicroWorld::Core::ETransportResult Initialize(const FPicoE32LoraConfig& InConfig) noexcept;
 
 	/**
 	 * Motivation: Lets a caller queue one outgoing packet for later physical progress without partial sends.
 	 * Responsibilities: Return Unavailable while closed, Invalid for a malformed address/span or oversize packet, Full
 	 *   while a prior frame remains queued, and Success once the complete encoded frame is queued for the pre-advance turn.
 	 */
-	::MicroWorld::Transport::ETransportResult TrySend(
-		const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
+	::MicroWorld::Core::ETransportResult TrySend(const Core::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
 	 * Motivation: Lets a caller pump one bounded receive step and get at most one whole frame back.
 	 * Responsibilities: Advance the delegated device transactionally, preserving destination, sender address, and result
 	 *   on every non-success outcome and retaining the decoded frame on Full for a later retry with a larger destination.
 	 */
-	::MicroWorld::Transport::ETransportResult TryReceive(
-		::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
-		Core::TSpan<std::uint8_t> InDestination,
-		Core::FReceiveResult& OutResult) noexcept override;
+	::MicroWorld::Core::ETransportResult TryReceive(
+		Core::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept override;
 
 	/**
 	 * Motivation: Lets a caller size outgoing packets against the shared transport limit without framing surprises.

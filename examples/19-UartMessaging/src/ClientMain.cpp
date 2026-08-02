@@ -4,7 +4,7 @@
 #include <MicroWorld/Core/Delegates/Delegate.h>
 #include <MicroWorld/Core/Log.h>
 #include <MicroWorld/Transport/TransportHost.h>
-#include <MicroWorld/Transport/TransportResult.h>
+#include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
 #include <MicroWorld/Platform/Esp32/Esp32TimeSource.h>
 #include <MicroWorld/Platform/Esp32/Esp32UartDevice.h>

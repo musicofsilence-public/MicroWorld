@@ -65,8 +65,8 @@ public:
 			return;
 		}
 
-		const Transport::ETransportResult InitializeResult = RadioDevice.Initialize(InConfig.LocalNodeId);
-		if (InitializeResult != Transport::ETransportResult::Success)
+		const Core::ETransportResult InitializeResult = RadioDevice.Initialize(InConfig.LocalNodeId);
+		if (InitializeResult != Core::ETransportResult::Success)
 		{
 			ByteStream.Close();
 		}
@@ -108,7 +108,7 @@ public:
 	 *   complete encoded frame was accepted into the fixed slot, not physically emitted, so direct callers must
 	 *   run the pre-advance turn regularly (TTransportHost already does so).
 	 */
-	Transport::ETransportResult TrySend(const Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override
+	Core::ETransportResult TrySend(const Core::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override
 	{
 		return RadioDevice.TrySend(InTo, InPacket);
 	}
@@ -118,8 +118,8 @@ public:
 	 * Responsibilities: Delegate to FE32LoraDevice.TryReceive; every non-success result preserves caller outputs,
 	 *   Full retains the decoded frame for a larger retry, and a UART failure maps to Invalid.
 	 */
-	Transport::ETransportResult TryReceive(
-		Transport::Address::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept override
+	Core::ETransportResult TryReceive(
+		Core::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept override
 	{
 		return RadioDevice.TryReceive(OutFrom, InDestination, OutResult);
 	}

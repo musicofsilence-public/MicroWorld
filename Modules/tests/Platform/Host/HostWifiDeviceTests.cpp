@@ -1,8 +1,7 @@
 #include "TestSupport.h"
 
-#include <MicroWorld/Transport/DeviceAddress.h>
-#include <MicroWorld/Transport/Device.h>
-#include <MicroWorld/Transport/TransportResult.h>
+#include <MicroWorld/Core/IO/DeviceAddress.h>
+#include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Platform/Host/HostWifiDevice.h>
 #include <MicroWorld/Platform/Host/UdpAddress.h>
 #include <MicroWorld/Core/Time.h>
@@ -17,8 +16,6 @@ namespace
 
 using namespace MicroWorld::Core;
 using namespace MicroWorld::Transport;
-using namespace MicroWorld::Transport::Address;
-using namespace MicroWorld::Transport::Device;
 using MicroWorld::Platform::Host::FHostWifiDevice;
 
 /** Motivation: Loopback prefix reused by every test's target address. */

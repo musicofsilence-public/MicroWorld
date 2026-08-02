@@ -3,8 +3,8 @@
 #include "TransportAllocationCounters.h"
 
 #include <MicroWorld/Core/Containers/Span.h>
+#include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Transport/FrameCodec.h>
-#include <MicroWorld/Transport/TransportResult.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -12,8 +12,8 @@
 namespace
 {
 
+using MicroWorld::Core::ETransportResult;
 using MicroWorld::Core::TSpan;
-using MicroWorld::Transport::ETransportResult;
 using MicroWorld::Transport::FrameCodec::ComputeCrc16Ccitt;
 using MicroWorld::Transport::FrameCodec::EFrameEvent;
 using MicroWorld::Transport::FrameCodec::EncodeFrame;

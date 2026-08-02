@@ -1,10 +1,9 @@
 #include "TestSupport.h"
 
 #include <MicroWorld/Core/Containers/Span.h>
-#include <MicroWorld/Transport/DeviceAddress.h>
-#include <MicroWorld/Transport/Device.h>
+#include <MicroWorld/Core/IO/DeviceAddress.h>
+#include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Transport/TransportHost.h>
-#include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Platform/Host/HostTimeSource.h>
 #include <MicroWorld/Platform/Host/HostWifiDevice.h>
 #include <MicroWorld/Platform/Host/UdpAddress.h>
@@ -20,8 +19,6 @@ namespace
 
 using namespace MicroWorld::Core;
 using namespace MicroWorld::Transport;
-using namespace MicroWorld::Transport::Address;
-using namespace MicroWorld::Transport::Device;
 using MicroWorld::Platform::Host::FHostTimeSource;
 using MicroWorld::Platform::Host::FHostWifiDevice;
 

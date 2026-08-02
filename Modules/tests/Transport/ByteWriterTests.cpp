@@ -1,8 +1,8 @@
 #include "TestSupport.h"
 
 #include <MicroWorld/Core/Containers/Span.h>
+#include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Transport/ByteWriter.h>
-#include <MicroWorld/Transport/TransportResult.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -10,8 +10,8 @@
 namespace
 {
 
+using MicroWorld::Core::ETransportResult;
 using MicroWorld::Core::TSpan;
-using MicroWorld::Transport::ETransportResult;
 using MicroWorld::Transport::FByteWriter;
 
 /** Motivation: Value the value-initialized storage bytes hold before any write, so a write is observable. */

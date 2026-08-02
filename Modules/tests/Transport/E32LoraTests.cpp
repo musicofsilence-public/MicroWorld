@@ -19,7 +19,7 @@ MW_TEST_CASE(E32LoraAddressRoundTripsNodeId)
 	constexpr std::uint8_t NodeId = 42;
 
 	// Act
-	const MicroWorld::Transport::Address::FDeviceAddress Address = MicroWorld::Transport::MakeLoraAddress(NodeId);
+	const MicroWorld::Core::FDeviceAddress Address = MicroWorld::Transport::MakeLoraAddress(NodeId);
 
 	// Assert
 	MW_EXPECT_TRUE(Test, MicroWorld::Transport::IsLoraAddress(Address), "Encoded E32 address must use the one-byte shape");
@@ -33,8 +33,8 @@ MW_TEST_CASE(E32LoraAddressRoundTripsNodeId)
 MW_TEST_CASE(E32LoraAddressPreservesBoundaryNodeIds)
 {
 	// Arrange
-	const MicroWorld::Transport::Address::FDeviceAddress LowestAddress = MicroWorld::Transport::MakeLoraAddress(std::uint8_t{0});
-	const MicroWorld::Transport::Address::FDeviceAddress HighestAddress = MicroWorld::Transport::MakeLoraAddress(std::uint8_t{255});
+	const MicroWorld::Core::FDeviceAddress LowestAddress = MicroWorld::Transport::MakeLoraAddress(std::uint8_t{0});
+	const MicroWorld::Core::FDeviceAddress HighestAddress = MicroWorld::Transport::MakeLoraAddress(std::uint8_t{255});
 
 	// Assert
 	MW_EXPECT_EQ(Test, std::uint8_t{0}, MicroWorld::Transport::LoraAddressNodeId(LowestAddress), "Node id zero must round-trip");
@@ -48,8 +48,8 @@ MW_TEST_CASE(E32LoraAddressPreservesBoundaryNodeIds)
 MW_TEST_CASE(E32LoraAddressRejectsOtherActiveLengths)
 {
 	// Arrange
-	MicroWorld::Transport::Address::FDeviceAddress EmptyAddress{};
-	MicroWorld::Transport::Address::FDeviceAddress TwoByteAddress{};
+	MicroWorld::Core::FDeviceAddress EmptyAddress{};
+	MicroWorld::Core::FDeviceAddress TwoByteAddress{};
 	TwoByteAddress.Size = 2;
 
 	// Assert

@@ -1,8 +1,7 @@
 #pragma once
 
-#include <MicroWorld/Transport/DeviceAddress.h>
+#include <MicroWorld/Core/IO/DeviceAddress.h>
 #include <MicroWorld/Core/IO/TransportDevice.h>
-#include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Platform/Esp32/UdpAddress.h>
 #include <MicroWorld/Core/Time.h>
 
@@ -71,7 +70,7 @@ public:
 	 *   Full when the send would block, and Success only after the whole datagram is accepted; leave socket state
 	 *   unchanged on any non-success result.
 	 */
-	Transport::ETransportResult TrySend(const Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
+	Core::ETransportResult TrySend(const Core::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
 	 * Motivation: Receives at most one datagram into the caller-owned destination, transactionally.
@@ -79,8 +78,8 @@ public:
 	 *   ready, Full when the destination is too small (the datagram stays queued), Invalid for a null destination
 	 *   with nonzero length, or Success after a consuming read writes bytes, count, and sender address into OutFrom.
 	 */
-	Transport::ETransportResult TryReceive(
-		Transport::Address::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept override;
+	Core::ETransportResult TryReceive(
+		Core::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept override;
 
 	/**
 	 * Motivation: Lets a caller size a datagram against the transport's capacity without a magic number.

@@ -8,7 +8,7 @@
 #include <MicroWorld/Engine/ObjectStore.h>
 #include <MicroWorld/Engine/World.h>
 #include <MicroWorld/Core/Log.h>
-#include <MicroWorld/Transport/TransportResult.h>
+#include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Transport/Wifi/UdpAddressCodec.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Engine/GarbageCollector.h>

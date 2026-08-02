@@ -13,9 +13,9 @@
 #include <MicroWorld/Engine/EngineStorage.h>
 #include <MicroWorld/Engine/EngineSystem.h>
 #include <MicroWorld/Engine/World.h>
-#include <MicroWorld/Transport/DeviceAddress.h>
+#include <MicroWorld/Core/IO/DeviceAddress.h>
 #include <MicroWorld/Transport/TransportHost.h>
-#include <MicroWorld/Transport/TransportResult.h>
+#include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Engine/GarbageCollector.h>
 #include <MicroWorld/Engine/ObjectPtr.h>

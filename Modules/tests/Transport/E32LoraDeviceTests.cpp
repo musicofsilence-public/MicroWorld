@@ -1,10 +1,9 @@
 #include "TestSupport.h"
 
+#include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Core/IO/UartByteStream.h>
-#include <MicroWorld/Transport/Lora/E32Lora.h>
 #include <MicroWorld/Transport/FrameCodec.h>
-#include <MicroWorld/Transport/Device.h>
-#include <MicroWorld/Transport/TransportResult.h>
+#include <MicroWorld/Transport/Lora/E32Lora.h>
 #include <MicroWorld/Transport/Lora/E32LoraDevice.h>
 
 #include <cstddef>
@@ -13,16 +12,16 @@
 namespace
 {
 
+using MicroWorld::Core::ETransportResult;
 using MicroWorld::Core::EUartByteStreamResult;
+using MicroWorld::Core::FDeviceAddress;
+using MicroWorld::Core::FReceiveResult;
 using MicroWorld::Core::IUartByteStream;
 using MicroWorld::Core::TimePointMilliseconds;
 using MicroWorld::Core::TSpan;
 using MicroWorld::Transport::E32MaxPayloadBytes;
-using MicroWorld::Transport::ETransportResult;
 using MicroWorld::Transport::FE32LoraDevice;
 using MicroWorld::Transport::MakeLoraAddress;
-using MicroWorld::Transport::Address::FDeviceAddress;
-using MicroWorld::Transport::Device::FReceiveResult;
 using MicroWorld::Transport::FrameCodec::FrameOverheadBytes;
 
 /** Motivation: Names the time handed to the device's pre-advance turn; the E32 device paces nothing by the clock and ignores it. */

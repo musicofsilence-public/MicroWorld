@@ -1,5 +1,5 @@
 #include <MicroWorld/Core/Log.h>
-#include <MicroWorld/Transport/TransportResult.h>
+#include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Platform/Esp32/Esp32LoraDevice.h>
 #include <MicroWorld/Platform/Esp32/Esp32OutputDevice.h>
 #include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
@@ -61,17 +61,17 @@ constexpr std::size_t VolleyPayloadBytes = 5;
  *   without restating the enum-to-text mapping at each call site.
  * Responsibilities: Map each transport result to one stable label string.
  */
-const char* ToText(const MicroWorld::Transport::ETransportResult Result) noexcept
+const char* ToText(const MicroWorld::Core::ETransportResult Result) noexcept
 {
 	switch (Result)
 	{
-		case MicroWorld::Transport::ETransportResult::Success:
+		case MicroWorld::Core::ETransportResult::Success:
 			return "Success";
-		case MicroWorld::Transport::ETransportResult::Full:
+		case MicroWorld::Core::ETransportResult::Full:
 			return "Full";
-		case MicroWorld::Transport::ETransportResult::Invalid:
+		case MicroWorld::Core::ETransportResult::Invalid:
 			return "Invalid";
-		case MicroWorld::Transport::ETransportResult::Unavailable:
+		case MicroWorld::Core::ETransportResult::Unavailable:
 			return "Unavailable";
 		default:
 			return "unknown";
@@ -242,8 +242,8 @@ void HandlePayloadRegressionTimeout(FPayloadRegressionContext& OutContext, const
  */
 void HandlePayloadRegressionReceive(
 	FPayloadRegressionContext& OutContext,
-	const MicroWorld::Transport::Address::FDeviceAddress& InFrom,
-	const MicroWorld::Transport::Device::FReceiveResult& InReceived,
+	const MicroWorld::Core::FDeviceAddress& InFrom,
+	const MicroWorld::Core::FReceiveResult& InReceived,
 	const std::uint8_t* const InPayload,
 	const std::uint64_t InNowMilliseconds) noexcept
 {
@@ -330,16 +330,16 @@ void ReceivePayloadRegressionFrame(
 	std::uint8_t* const InOutRxBuffer,
 	const std::uint64_t InNowMilliseconds) noexcept
 {
-	MicroWorld::Transport::Address::FDeviceAddress From{};
-	MicroWorld::Transport::Device::FReceiveResult Received{};
-	const MicroWorld::Transport::ETransportResult RxResult =
+	MicroWorld::Core::FDeviceAddress From{};
+	MicroWorld::Core::FReceiveResult Received{};
+	const MicroWorld::Core::ETransportResult RxResult =
 		InDevice.TryReceive(From, MicroWorld::Core::TSpan<std::uint8_t>(InOutRxBuffer, MicroWorld::Transport::E32MaxPayloadBytes), Received);
-	if (RxResult == MicroWorld::Transport::ETransportResult::Success)
+	if (RxResult == MicroWorld::Core::ETransportResult::Success)
 	{
 		HandlePayloadRegressionReceive(OutContext, From, Received, InOutRxBuffer, InNowMilliseconds);
 		return;
 	}
-	if (RxResult != MicroWorld::Transport::ETransportResult::Unavailable)
+	if (RxResult != MicroWorld::Core::ETransportResult::Unavailable)
 	{
 		MW_LOG(Error, "ex17", "reg FAIL receive result=%s", ToText(RxResult));
 		OutContext.State = EPayloadRegressionState::Failed;
@@ -360,7 +360,7 @@ void QueuePayloadRegressionFrame(
 {
 	MicroWorld::Example17::FillCanonicalPayload(InCase, InOutTxBuffer);
 	const std::size_t PayloadBytes = MicroWorld::Example17::PayloadRegressionByteCount(InCase);
-	const MicroWorld::Transport::ETransportResult TxResult = InDevice.TrySend(
+	const MicroWorld::Core::ETransportResult TxResult = InDevice.TrySend(
 		MicroWorld::Transport::MakeLoraAddress(PeerNodeId), MicroWorld::Core::TSpan<const std::uint8_t>(InOutTxBuffer, PayloadBytes));
 	if (InCase == MicroWorld::Example17::EPayloadRegressionCase::Maximum)
 	{
@@ -384,7 +384,7 @@ void QueuePayloadRegressionFrame(
 			static_cast<unsigned>(PeerNodeId),
 			ToText(TxResult));
 	}
-	if (TxResult != MicroWorld::Transport::ETransportResult::Success)
+	if (TxResult != MicroWorld::Core::ETransportResult::Success)
 	{
 		return;
 	}
@@ -525,11 +525,11 @@ extern "C" void app_main(void)
 		const std::uint64_t Now = GTimeSource.Now();
 
 		// Receive at most one frame; a completed volley schedules the reply (counter + 1).
-		MicroWorld::Transport::Address::FDeviceAddress From{};
-		MicroWorld::Transport::Device::FReceiveResult Received{};
-		const MicroWorld::Transport::ETransportResult RxResult =
+		MicroWorld::Core::FDeviceAddress From{};
+		MicroWorld::Core::FReceiveResult Received{};
+		const MicroWorld::Core::ETransportResult RxResult =
 			Device.TryReceive(From, MicroWorld::Core::TSpan<std::uint8_t>(RxBuffer, sizeof(RxBuffer)), Received);
-		if (RxResult == MicroWorld::Transport::ETransportResult::Success && Received.BytesReceived == VolleyPayloadBytes)
+		if (RxResult == MicroWorld::Core::ETransportResult::Success && Received.BytesReceived == VolleyPayloadBytes)
 		{
 			const std::uint32_t Counter = ReadVolleyCounter(RxBuffer);
 			const std::uint8_t FromId = MicroWorld::Transport::LoraAddressNodeId(From);
@@ -544,10 +544,10 @@ extern "C" void app_main(void)
 		{
 			std::uint8_t Payload[VolleyPayloadBytes];
 			WriteVolleyPayload(Payload, LocalNodeId, PendingCounter);
-			const MicroWorld::Transport::ETransportResult TxResult = Device.TrySend(
+			const MicroWorld::Core::ETransportResult TxResult = Device.TrySend(
 				MicroWorld::Transport::MakeLoraAddress(PeerNodeId), MicroWorld::Core::TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
 			MW_LOG(Log, "ex17", "tx n=%u result=%s", static_cast<unsigned>(PendingCounter), ToText(TxResult));
-			if (TxResult == MicroWorld::Transport::ETransportResult::Success)
+			if (TxResult == MicroWorld::Core::ETransportResult::Success)
 			{
 				bHasPendingTx = false;
 			}

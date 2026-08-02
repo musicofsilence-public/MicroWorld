@@ -1,9 +1,8 @@
 #pragma once
 
 #include <MicroWorld/Transport/FrameCodec.h>
-#include <MicroWorld/Transport/DeviceAddress.h>
+#include <MicroWorld/Core/IO/DeviceAddress.h>
 #include <MicroWorld/Core/IO/TransportDevice.h>
-#include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Platform/Esp32/UartAddress.h>
 
 #include <cstddef>
@@ -99,7 +98,7 @@ public:
 	 *   length, Full when the UART write would block, and Success only after the whole frame is accepted; leave
 	 *   UART state unchanged on any non-success result.
 	 */
-	Transport::ETransportResult TrySend(const Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
+	Core::ETransportResult TrySend(const Core::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
 	 * Motivation: Receives at most one framed message into the caller-owned destination, transactionally.
@@ -108,8 +107,8 @@ public:
 	 *   with nonzero length), or Success after a complete frame copies payload, byte count, and sender node id
 	 *   into OutFrom; leave outputs unchanged on any non-success result.
 	 */
-	Transport::ETransportResult TryReceive(
-		Transport::Address::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept override;
+	Core::ETransportResult TryReceive(
+		Core::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept override;
 
 	/**
 	 * Motivation: Lets a caller size a packet against the transport's capacity without a magic number.
@@ -136,8 +135,8 @@ private:
 	 * Responsibilities: Copy the payload, byte count, and sender node id and clear the held frame, or return Full
 	 *   (leaving the frame held) when the payload exceeds the destination.
 	 */
-	Transport::ETransportResult DeliverFrameToDestination(
-		Core::TSpan<std::uint8_t> InDestination, Transport::Address::FDeviceAddress& OutFrom, Core::FReceiveResult& OutResult) noexcept;
+	Core::ETransportResult DeliverFrameToDestination(
+		Core::TSpan<std::uint8_t> InDestination, Core::FDeviceAddress& OutFrom, Core::FReceiveResult& OutResult) noexcept;
 
 	/**
 	 * Motivation: Drains a bounded byte budget through the decoder so a flood cannot starve the caller while still
@@ -145,16 +144,15 @@ private:
 	 * Responsibilities: Pump the bounded UART byte budget through the decoder and deliver the first completed frame,
 	 *   or return Unavailable when the budget drains with no frame ready.
 	 */
-	Transport::ETransportResult PumpDecoderForFrame(
-		Core::TSpan<std::uint8_t> InDestination, Transport::Address::FDeviceAddress& OutFrom, Core::FReceiveResult& OutResult) noexcept;
+	Core::ETransportResult PumpDecoderForFrame(
+		Core::TSpan<std::uint8_t> InDestination, Core::FDeviceAddress& OutFrom, Core::FReceiveResult& OutResult) noexcept;
 
 	/**
 	 * Motivation: Guards a send against a malformed address, oversize packet, or null span before any syscall so a
 	 *   rejection is truly transactional.
 	 * Responsibilities: Return the first reason an outgoing packet cannot be framed and sent, or Success.
 	 */
-	Transport::ETransportResult ValidateOutgoingPacket(
-		const Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) const noexcept;
+	Core::ETransportResult ValidateOutgoingPacket(const Core::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) const noexcept;
 
 	/** Motivation: Bounded RX deframer held by value; its capacity matches UartMaxPayloadBytes. */
 	Transport::FrameCodec::TFrameDecoder<UartMaxPayloadBytes> Decoder{};

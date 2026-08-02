@@ -34,15 +34,14 @@ public:
 	 * Motivation: Arms the portable device with the source node id for future outgoing frames exactly once.
 	 * Responsibilities: Return Success on the first call and Unavailable on later calls; perform no UART I/O on either path.
 	 */
-	ETransportResult Initialize(std::uint8_t InLocalNodeId) noexcept;
+	Core::ETransportResult Initialize(std::uint8_t InLocalNodeId) noexcept;
 
 	/**
 	 * Motivation: Accepts one complete packet transactionally into the fixed transmit slot so a rejected send never half-occupies it.
 	 * Responsibilities: Return Unavailable before initialization, Invalid for a malformed address/span or oversize packet, Full
 	 *   while another frame remains queued, and Success once this device owns the complete encoded frame.
 	 */
-	ETransportResult TrySend(
-		const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
+	Core::ETransportResult TrySend(const Core::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override;
 
 	/**
 	 * Motivation: Pumps a bounded number of UART bytes and transactionally delivers at most one decoded frame so a caller never
@@ -50,10 +49,8 @@ public:
 	 * Responsibilities: Preserve the destination, sender address, and result on every non-success; return Full to retain the
 	 *   decoded frame for a later retry, and map a UART Error to Invalid without changing caller outputs.
 	 */
-	ETransportResult TryReceive(
-		::MicroWorld::Transport::Address::FDeviceAddress& OutFrom,
-		Core::TSpan<std::uint8_t> InDestination,
-		Core::FReceiveResult& OutResult) noexcept override;
+	Core::ETransportResult TryReceive(
+		Core::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept override;
 
 	/**
 	 * Motivation: Lets a caller bound a send to the E32 payload capacity.

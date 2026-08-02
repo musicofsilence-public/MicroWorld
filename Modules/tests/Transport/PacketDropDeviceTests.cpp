@@ -1,10 +1,9 @@
 #include "TestSupport.h"
 
 #include <MicroWorld/Core/Containers/Span.h>
+#include <MicroWorld/Core/IO/DeviceAddress.h>
 #include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Transport/HostLoopback.h>
-#include <MicroWorld/Transport/DeviceAddress.h>
-#include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Transport/PacketDropDevice.h>
 
 #include <array>
@@ -14,13 +13,13 @@
 namespace
 {
 
+using MicroWorld::Core::ETransportResult;
+using MicroWorld::Core::FDeviceAddress;
 using MicroWorld::Core::FReceiveResult;
+using MicroWorld::Core::MakeLoopbackAddress;
 using MicroWorld::Core::TSpan;
-using MicroWorld::Transport::ETransportResult;
 using MicroWorld::Transport::FPacketDropDevice;
 using MicroWorld::Transport::THostLoopback;
-using MicroWorld::Transport::Address::FDeviceAddress;
-using MicroWorld::Transport::Address::MakeLoopbackAddress;
 
 /** Motivation: Loopback template parameters every packet-drop case binds: two ports, deep enough mailboxes, one-word packets. */
 constexpr std::size_t LoopbackPortCount = 2;

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <MicroWorld/Transport/DeviceAddress.h>
+#include <MicroWorld/Core/IO/DeviceAddress.h>
 
 #include <cstdint>
 
@@ -13,9 +13,9 @@ namespace MicroWorld::Platform::Esp32
  *   because FDeviceAddress ascribes no meaning to its bytes and is shared across every transport.
  * Responsibilities: Stamp exactly one node id into the first byte and set the active length to one.
  */
-constexpr Transport::Address::FDeviceAddress MakeI2cAddress(const std::uint8_t InNodeId) noexcept
+constexpr Core::FDeviceAddress MakeI2cAddress(const std::uint8_t InNodeId) noexcept
 {
-	Transport::Address::FDeviceAddress Address{};
+	Core::FDeviceAddress Address{};
 	Address.Bytes[0] = InNodeId;
 	Address.Size = 1;
 	return Address;
@@ -26,7 +26,7 @@ constexpr Transport::Address::FDeviceAddress MakeI2cAddress(const std::uint8_t I
  *   hand a UDP or wrong-length address to a point-to-point I2C device.
  * Responsibilities: Inspect only the active length and return true when it is exactly one byte.
  */
-constexpr bool IsI2cAddress(const Transport::Address::FDeviceAddress& InAddress) noexcept
+constexpr bool IsI2cAddress(const Core::FDeviceAddress& InAddress) noexcept
 {
 	return InAddress.Size == 1;
 }
@@ -36,7 +36,7 @@ constexpr bool IsI2cAddress(const Transport::Address::FDeviceAddress& InAddress)
  *   identity back to the caller.
  * Responsibilities: Return the first byte; callers must confirm IsI2cAddress first to avoid reading unrelated bytes.
  */
-constexpr std::uint8_t I2cAddressNodeId(const Transport::Address::FDeviceAddress& InAddress) noexcept
+constexpr std::uint8_t I2cAddressNodeId(const Core::FDeviceAddress& InAddress) noexcept
 {
 	return InAddress.Bytes[0];
 }

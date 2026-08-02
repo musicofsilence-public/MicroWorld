@@ -1,6 +1,6 @@
 #pragma once
 
-#include <MicroWorld/Transport/DeviceAddress.h>
+#include <MicroWorld/Core/IO/DeviceAddress.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -20,9 +20,9 @@ constexpr std::size_t E32MaxPayloadBytes = 58;
  * Responsibilities: Stamp the node id into the first byte and set the active length to one; transparent-mode E32 transmission
  *   is broadcast, so the destination address is device-relative metadata rather than an on-air command.
  */
-constexpr ::MicroWorld::Transport::Address::FDeviceAddress MakeLoraAddress(const std::uint8_t InNodeId) noexcept
+constexpr Core::FDeviceAddress MakeLoraAddress(const std::uint8_t InNodeId) noexcept
 {
-	::MicroWorld::Transport::Address::FDeviceAddress Address{};
+	Core::FDeviceAddress Address{};
 	Address.Bytes[0] = InNodeId;
 	Address.Size = 1;
 	return Address;
@@ -33,7 +33,7 @@ constexpr ::MicroWorld::Transport::Address::FDeviceAddress MakeLoraAddress(const
  * Responsibilities: Check shape only and report whether the active length is exactly one byte; another device may assign a
  *   different meaning to a one-byte address, so callers interpret a positive result within the active device's contract.
  */
-constexpr bool IsLoraAddress(const ::MicroWorld::Transport::Address::FDeviceAddress& InAddress) noexcept
+constexpr bool IsLoraAddress(const Core::FDeviceAddress& InAddress) noexcept
 {
 	return InAddress.Size == 1;
 }
@@ -43,7 +43,7 @@ constexpr bool IsLoraAddress(const ::MicroWorld::Transport::Address::FDeviceAddr
  * Responsibilities: Return the first byte of a previously validated address; callers must confirm IsLoraAddress first, since
  *   reading another address shape would interpret unrelated storage as a node id.
  */
-constexpr std::uint8_t LoraAddressNodeId(const ::MicroWorld::Transport::Address::FDeviceAddress& InAddress) noexcept
+constexpr std::uint8_t LoraAddressNodeId(const Core::FDeviceAddress& InAddress) noexcept
 {
 	return InAddress.Bytes[0];
 }

@@ -66,38 +66,37 @@ FHostWifiDevice::~FHostWifiDevice() noexcept
 	}
 }
 
-Transport::ETransportResult FHostWifiDevice::TrySend(
-	const Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept
+Core::ETransportResult FHostWifiDevice::TrySend(const Core::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept
 {
 	if (!bOpen)
 	{
-		return Transport::ETransportResult::Unavailable;
+		return Core::ETransportResult::Unavailable;
 	}
 	// Validate every argument before any syscall so a rejection is truly transactional.
 	if (!Transport::IsUdpAddress(InTo))
 	{
-		return Transport::ETransportResult::Invalid;
+		return Core::ETransportResult::Invalid;
 	}
 	const std::size_t PacketSize = InPacket.Size();
 	if (PacketSize > UdpMaxPacketBytes)
 	{
-		return Transport::ETransportResult::Invalid;
+		return Core::ETransportResult::Invalid;
 	}
 	if (PacketSize != 0 && InPacket.Data() == nullptr)
 	{
-		return Transport::ETransportResult::Invalid;
+		return Core::ETransportResult::Invalid;
 	}
 	const sockaddr_in Destination = MakeSockAddrIn(InTo.Bytes[0], InTo.Bytes[1], InTo.Bytes[2], InTo.Bytes[3], Transport::UdpAddressPort(InTo));
 	const ESendOutcome Outcome = SendDatagram(AsSocketHandle(SocketHandle), InPacket.Data(), PacketSize, Destination);
 	switch (Outcome)
 	{
 		case ESendOutcome::Success:
-			return Transport::ETransportResult::Success;
+			return Core::ETransportResult::Success;
 		case ESendOutcome::WouldBlock:
-			return Transport::ETransportResult::Full;
+			return Core::ETransportResult::Full;
 		case ESendOutcome::Error:
 		default:
-			return Transport::ETransportResult::Invalid;
+			return Core::ETransportResult::Invalid;
 	}
 }
 
@@ -110,46 +109,46 @@ namespace
 	 *   queued, Invalid on a socket error, Full when the datagram cannot fit the caller's capacity (left unconsumed),
 	 *   and Success only when a datagram is ready and fits so the caller should consume it next.
 	 */
-	Transport::ETransportResult ProbeAndClassify(const FSocketHandle InSocket, const std::size_t InCapacity) noexcept
+	Core::ETransportResult ProbeAndClassify(const FSocketHandle InSocket, const std::size_t InCapacity) noexcept
 	{
 		const FPeekProbe Probe = ProbeReadableDatagram(InSocket);
 		switch (Probe.Status)
 		{
 			case EPeekStatus::WouldBlock:
-				return Transport::ETransportResult::Unavailable;
+				return Core::ETransportResult::Unavailable;
 			case EPeekStatus::Error:
-				return Transport::ETransportResult::Invalid;
+				return Core::ETransportResult::Invalid;
 			case EPeekStatus::Ready:
 				break;
 		}
 		// Single fits-vs-Full decision: the caller's destination is untouched on Full.
 		if (Probe.BytesReady > InCapacity)
 		{
-			return Transport::ETransportResult::Full;
+			return Core::ETransportResult::Full;
 		}
-		return Transport::ETransportResult::Success;
+		return Core::ETransportResult::Success;
 	}
 
 } // namespace
 
-Transport::ETransportResult FHostWifiDevice::TryReceive(
-	Transport::Address::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept
+Core::ETransportResult FHostWifiDevice::TryReceive(
+	Core::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept
 {
 	// Keep the sizing scratch and the advertised max in lockstep; both are 1200.
 	static_assert(PeekScratchBytes == FHostWifiDevice::UdpMaxPacketBytes, "Peek scratch must match the advertised packet maximum.");
 
 	if (!bOpen)
 	{
-		return Transport::ETransportResult::Unavailable;
+		return Core::ETransportResult::Unavailable;
 	}
 	// Reject a null destination with nonzero length before touching the socket.
 	const std::size_t Capacity = InDestination.Size();
 	if (Capacity != 0 && InDestination.Data() == nullptr)
 	{
-		return Transport::ETransportResult::Invalid;
+		return Core::ETransportResult::Invalid;
 	}
-	const Transport::ETransportResult Classification = ProbeAndClassify(AsSocketHandle(SocketHandle), Capacity);
-	if (Classification != Transport::ETransportResult::Success)
+	const Core::ETransportResult Classification = ProbeAndClassify(AsSocketHandle(SocketHandle), Capacity);
+	if (Classification != Core::ETransportResult::Success)
 	{
 		return Classification;
 	}
@@ -160,12 +159,12 @@ Transport::ETransportResult FHostWifiDevice::TryReceive(
 	if (!Consumed.bSuccess)
 	{
 		// A peer may have evicted the probed datagram; treat that race as transient.
-		return Transport::ETransportResult::Unavailable;
+		return Core::ETransportResult::Unavailable;
 	}
 	const std::uint32_t PackedIpv4Address = ntohl(Sender.sin_addr.s_addr);
 	OutFrom = Transport::MakeUdpAddressFromPackedHostOrder(PackedIpv4Address, ntohs(Sender.sin_port));
 	OutResult.BytesReceived = Consumed.BytesReceived;
-	return Transport::ETransportResult::Success;
+	return Core::ETransportResult::Success;
 }
 
 std::size_t FHostWifiDevice::MaxPacketBytes() const noexcept

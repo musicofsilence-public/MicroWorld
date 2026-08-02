@@ -1,10 +1,9 @@
 #include "TestSupport.h"
 
 #include <MicroWorld/Core/Containers/Span.h>
+#include <MicroWorld/Core/IO/DeviceAddress.h>
+#include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Transport/HostLoopback.h>
-#include <MicroWorld/Transport/DeviceAddress.h>
-#include <MicroWorld/Transport/Device.h>
-#include <MicroWorld/Transport/TransportResult.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -12,12 +11,12 @@
 namespace
 {
 
+using MicroWorld::Core::ETransportResult;
+using MicroWorld::Core::FDeviceAddress;
+using MicroWorld::Core::FReceiveResult;
+using MicroWorld::Core::MakeLoopbackAddress;
 using MicroWorld::Core::TSpan;
-using MicroWorld::Transport::ETransportResult;
 using MicroWorld::Transport::THostLoopback;
-using MicroWorld::Transport::Address::FDeviceAddress;
-using MicroWorld::Transport::Address::MakeLoopbackAddress;
-using MicroWorld::Transport::Device::FReceiveResult;
 namespace Core = MicroWorld::Core;
 
 /** Motivation: Sentinel address byte that proves a receive call did not overwrite the caller's address. */
@@ -75,7 +74,7 @@ constexpr std::uint8_t DrainReusePacket[2] = {0x55, 0x66};
 constexpr std::uint8_t OversizedPacket[4] = {0x01, 0x02, 0x03, 0x04};
 /** Motivation: Two-byte packet the null-destination-retains-head case queues as the head. */
 constexpr std::uint8_t NullDestHeadPacket[2] = {0x11, 0x22};
-/** Motivation: Two-byte packet the IDevice interface case threads through the loopback. */
+/** Motivation: Two-byte packet the ITransportDevice interface case threads through the loopback. */
 constexpr std::uint8_t InterfacePacket[2] = {0x07, 0x08};
 /** Motivation: Single-byte packet the multi-port routing case delivers to port 1. */
 constexpr std::uint8_t ToPort1Packet[1] = {0x01};
@@ -442,11 +441,11 @@ MW_TEST_CASE(HostLoopbackNullDestinationRetainsHeadPacketAndOutputs)
 }
 
 /**
- * Motivation: Send and receive through an IDevice reference bound to a loopback port.
+ * Motivation: Send and receive through an ITransportDevice reference bound to a loopback port.
  * Responsibilities: The interface send and receive route to the loopback mailbox, delivering the head packet length and
  *   the correct sender.
  */
-MW_TEST_CASE(HostLoopbackSatisfiesIDeviceInterface)
+MW_TEST_CASE(HostLoopbackSatisfiesTransportDeviceInterface)
 {
 	// Arrange
 	THostLoopback<SinglePortCount, OneSlotMailbox, FourBytePacketCapacity> Loopback;
