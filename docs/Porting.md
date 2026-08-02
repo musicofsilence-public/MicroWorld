@@ -26,7 +26,7 @@ into `TEngine::Tick(Now)` (or the lower-level `Advance(Now)` calls).
 ### 2. Device
 
 Implement
-[`IDevice`](../Modules/MicroWorld/Transport/Device.h) with
+[`ITransportDevice`](../Modules/MicroWorld/Core/IO/TransportDevice.h) with
 two non-blocking, transactional operations — `TrySend(const FDeviceAddress& To,
 TSpan<const std::uint8_t>)` and `TryReceive(FDeviceAddress& OutFrom, TSpan<
 std::uint8_t>, FReceiveResult&)`. On any non-`Success` result the

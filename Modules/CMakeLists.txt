@@ -136,7 +136,6 @@ add_library(MicroWorld::Messaging ALIAS microworld_messaging)
 # the IP/protocol sources and a radio-less build can omit the E32 sources.
 # ---------------------------------------------------------------------------
 set(MICROWORLD_TRANSPORT_SOURCES
-    "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Transport/Device.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Transport/PacketDropDevice.cpp"
 )
 if(MICROWORLD_TRANSPORT_LORA)

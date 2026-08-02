@@ -27,9 +27,6 @@ PLATFORM_NAMESPACE_RULES = {
 
 # Namespaces that are intentionally deeper than their Transport parent.
 TRANSPORT_NESTED_NAMESPACE_RULES = {
-    "Device.h": "MicroWorld::Transport::Device",
-    "Device.cpp": "MicroWorld::Transport::Device",
-    "DeviceAddress.h": "MicroWorld::Transport::Address",
     "FrameCodec.h": "MicroWorld::Transport::FrameCodec",
 }
 
@@ -161,9 +158,9 @@ def run_self_test() -> int:
             True,
         ),
         (
-            "valid nested Transport device",
-            "Modules/MicroWorld/Transport/Device.cpp",
-            "namespace MicroWorld::Transport::Device\n{\n}\n",
+            "valid nested Transport frame codec",
+            "Modules/MicroWorld/Transport/FrameCodec.h",
+            "namespace MicroWorld::Transport::FrameCodec\n{\n}\n",
             True,
         ),
         (

@@ -101,7 +101,7 @@ OBJECT_ARCHIVE_MARKERS = (
 )
 
 # Transport profiles must link their separate package archive. Header-only byte I/O
-# evidence does not prove that the IDevice out-of-line destructor participated.
+# evidence does not prove that the compiled device sources participated.
 TRANSPORT_ARCHIVE_MARKERS = (
     "microworld_transport:",
     "microworld_transport.lib",
