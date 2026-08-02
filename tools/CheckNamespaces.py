@@ -27,7 +27,9 @@ PLATFORM_NAMESPACE_RULES = {
 
 # Namespaces that are intentionally deeper than their Transport parent.
 TRANSPORT_NESTED_NAMESPACE_RULES = {
+    "EFrameEvent.h": "MicroWorld::Transport::FrameCodec",
     "FrameCodec.h": "MicroWorld::Transport::FrameCodec",
+    "TFrameDecoder.h": "MicroWorld::Transport::FrameCodec",
 }
 
 # RawSlot moved into Core's storage boundary without changing its public name.

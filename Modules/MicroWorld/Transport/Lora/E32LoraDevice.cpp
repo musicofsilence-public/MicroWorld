@@ -1,6 +1,7 @@
 #include <MicroWorld/Transport/Lora/E32LoraDevice.h>
 
 #include <MicroWorld/Transport/Lora/E32Lora.h>
+#include <MicroWorld/Transport/EFrameEvent.h>
 #include <MicroWorld/Transport/FrameCodec.h>
 
 #include <cstddef>

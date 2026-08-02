@@ -4,7 +4,9 @@
 
 #include <MicroWorld/Core/Containers/Span.h>
 #include <MicroWorld/Core/IO/TransportResult.h>
+#include <MicroWorld/Transport/EFrameEvent.h>
 #include <MicroWorld/Transport/FrameCodec.h>
+#include <MicroWorld/Transport/TFrameDecoder.h>
 
 #include <cstddef>
 #include <cstdint>

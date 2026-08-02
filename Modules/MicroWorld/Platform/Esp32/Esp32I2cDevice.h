@@ -1,6 +1,7 @@
 #pragma once
 
 #include <MicroWorld/Transport/FrameCodec.h>
+#include <MicroWorld/Transport/TFrameDecoder.h>
 #include <MicroWorld/Core/IO/DeviceAddress.h>
 #include <MicroWorld/Core/IO/ReceiveResult.h>
 #include <MicroWorld/Core/IO/TransportDevice.h>

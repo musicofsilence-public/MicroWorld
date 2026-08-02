@@ -3,7 +3,9 @@
 #include "Internal/SpiPlatformImplementation.h"
 
 #include <MicroWorld/Core/Log.h>
+#include <MicroWorld/Transport/EFrameEvent.h>
 #include <MicroWorld/Transport/FrameCodec.h>
+#include <MicroWorld/Transport/TFrameDecoder.h>
 
 #include <cstddef>
 #include <cstdint>

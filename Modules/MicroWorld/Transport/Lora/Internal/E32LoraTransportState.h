@@ -4,8 +4,10 @@
 #include <MicroWorld/Core/IO/DeviceAddress.h>
 #include <MicroWorld/Core/IO/ReceiveResult.h>
 #include <MicroWorld/Core/IO/TransportResult.h>
+#include <MicroWorld/Transport/EFrameEvent.h>
 #include <MicroWorld/Transport/FrameCodec.h>
 #include <MicroWorld/Transport/Lora/E32Lora.h>
+#include <MicroWorld/Transport/TFrameDecoder.h>
 
 #include <cstddef>
 #include <cstdint>

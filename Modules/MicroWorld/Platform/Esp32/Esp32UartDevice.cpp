@@ -3,6 +3,7 @@
 #include "Internal/UartPlatformImplementation.h"
 
 #include <MicroWorld/Core/Log.h>
+#include <MicroWorld/Transport/EFrameEvent.h>
 #include <MicroWorld/Transport/FrameCodec.h>
 
 #include <cstdint>
