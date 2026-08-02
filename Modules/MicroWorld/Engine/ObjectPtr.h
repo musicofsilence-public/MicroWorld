@@ -2,6 +2,7 @@
 
 #include <MicroWorld/Engine/Object.h>
 #include <MicroWorld/Engine/ObjectHandle.h>
+#include <MicroWorld/Engine/ObjectResult.h>
 #include <MicroWorld/Engine/IsManagedObjectPointerConversion.h>
 
 #include <type_traits>

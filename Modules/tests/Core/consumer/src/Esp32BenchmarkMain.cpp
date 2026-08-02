@@ -30,6 +30,7 @@
 #include <MicroWorld/Transport/TransportHost.h>
 #include <MicroWorld/Transport/TransportHostConfig.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
+#include <MicroWorld/Engine/ClassRegistry.h>
 #include <MicroWorld/Engine/GarbageCollector.h>
 #include <MicroWorld/Engine/Object.h>
 #include <MicroWorld/Engine/ObjectStore.h>
