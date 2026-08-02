@@ -339,7 +339,7 @@ def scan_root(
     scanned_files = 0
     for path in iter_files_below(root, excluded_names):
         suffix = path.suffix.lower()
-        if suffix not in {".h", ".hpp", ".cpp", ".cc", ".cxx", ".md"}:
+        if suffix not in {".h", ".hpp", ".cpp", ".cc", ".cxx", ".md", ".inl"}:
             continue
         if suffix == ".md" and not arguments.scan_markdown_fences:
             continue

@@ -30,6 +30,17 @@ radio-less build can omit the E32 framing.
 `Lora/Internal/` holds fixed transport state and other implementation mechanics (the
 portable E32 transport state); consumers must not depend on those headers.
 
+`TTransportHost`'s private implementation is partitioned into flat `.inl` files
+(`TransportHost_PeerTable.inl`, `TransportHost_Outbound.inl`,
+`TransportHost_ControlMessages.inl`) included in order after the class body
+closes; they are never included directly. Declarations stay inside the class
+body, while each definition is written out-of-class as
+`TTransportHost<MaxPeers, MaxPacketBytes>::Method`, so the public API stays
+compact while every body remains visible at instantiation. The `.inl` suffix is
+gated by `tools/CheckFormatting.py` and `tools/CheckDocumentationStyle.py`, so
+each partition carries the same Motivation/Responsibilities contract as the
+public header.
+
 ## Concepts and boundaries
 
 - `Core::ETransportResult` keeps every byte, queue, packet, and device outcome explicit

@@ -47,6 +47,13 @@ architecture model states them as one system.
 - Keep portable code bounded, allocation-free in steady state, single-pass in
   dispatch, free of structural mutation during dispatch, and free of RTTI,
   exceptions, hidden clocks, threads, and SDK calls.
+- `UWorld` is one type across several translation units: `World.cpp` holds the
+  constructors/destructor and `StaticClassDescriptor`, and each remaining
+  responsibility group lives in a flat `World_<Group>.cpp` partition
+  (`World_ActorRegistration.cpp`, `World_Lifecycle.cpp`, `World_SpawnDestroy.cpp`,
+  `World_GarbageCollection.cpp`). New `UWorld` methods join the matching group
+  rather than growing `World.cpp`; the single `World.h` declaration list is
+  unchanged.
 
 ## Verification
 

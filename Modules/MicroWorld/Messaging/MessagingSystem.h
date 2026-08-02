@@ -97,7 +97,7 @@ public:
 	 * Motivation: Lets the application entry point configure reliability policy before it creates channels.
 	 * Responsibilities: Retain the supplied system information and initialize no live channels without allocation.
 	 */
-	explicit TMessagingSystem(const FMessagingSystemInformation& InInformation) noexcept : Information(InInformation) {}
+	explicit TMessagingSystem(const FMessagingSystemInformation& InInformation) noexcept;
 
 	/**
 	 * Motivation: Prevents copying a system whose future channel references must remain stable.
@@ -133,21 +133,7 @@ public:
 	 * Motivation: Gives callers one explicit, bounded operation for adding a named Messaging channel.
 	 * Responsibilities: Reject unset names, preserve existing channels on duplicates or capacity exhaustion, and store each valid unique channel.
 	 */
-	EMessagingResult CreateChannel(const FChannelInformation& InChannelInformation) noexcept
-	{
-		if (InChannelInformation.ChannelNameId == InvalidNameId)
-		{
-			return EMessagingResult::Invalid;
-		}
-
-		if (FindChannel(InChannelInformation.ChannelNameId) != nullptr)
-		{
-			return EMessagingResult::Duplicate;
-		}
-
-		// Capacity exhaustion is the only way Emplace fails, so its result is the whole capacity rule.
-		return Channels.Emplace(InChannelInformation) == Core::ERuntimeResult::Success ? EMessagingResult::Success : EMessagingResult::Full;
-	}
+	EMessagingResult CreateChannel(const FChannelInformation& InChannelInformation) noexcept;
 
 	/**
 	 * Motivation: Lets a caller receive every message sent locally through one existing channel.
@@ -158,10 +144,7 @@ public:
 		const FNameId InChannelNameId,
 		FSubscriberDelegate&& InSubscriber,
 		Core::FWeakOwner InOwner = {},
-		FSubscriptionHandle* OutHandle = nullptr) noexcept
-	{
-		return SubscribeToChannel(InChannelNameId, InvalidNameId, std::move(InSubscriber), InOwner, OutHandle);
-	}
+		FSubscriptionHandle* OutHandle = nullptr) noexcept;
 
 	/**
 	 * Motivation: Lets a caller receive only one named kind of message sent locally through one existing channel.
@@ -173,95 +156,21 @@ public:
 		const FNameId InMessageNameFilter,
 		FSubscriberDelegate&& InSubscriber,
 		Core::FWeakOwner InOwner = {},
-		FSubscriptionHandle* OutHandle = nullptr) noexcept
-	{
-		if (FindChannel(InChannelNameId) == nullptr)
-		{
-			return EMessagingResult::NotFound;
-		}
-
-		if (!InSubscriber.IsBound())
-		{
-			return EMessagingResult::Invalid;
-		}
-
-		if (!InOwner.IsLive())
-		{
-			return EMessagingResult::Invalid;
-		}
-
-		FSubscriptionSlot* Slot = FindFreeSubscriptionSlot();
-		if (Slot == nullptr)
-		{
-			for (FSubscriptionSlot& CandidateSlot : SubscriptionSlots)
-			{
-				if (CandidateSlot.bIsOccupied && !CandidateSlot.Owner.IsLive())
-				{
-					ReclaimDeadOwnerSubscriptionSlot(CandidateSlot);
-				}
-			}
-
-			Slot = FindFreeSubscriptionSlot();
-		}
-
-		if (Slot == nullptr)
-		{
-			return EMessagingResult::Full;
-		}
-
-		Slot->SubscriptionSequence = NextSubscriptionSequence;
-		++NextSubscriptionSequence;
-		Slot->ChannelNameId = InChannelNameId;
-		Slot->MessageNameFilter = InMessageNameFilter;
-		Slot->Owner = InOwner;
-		Slot->Subscriber = std::move(InSubscriber);
-		Slot->bIsOccupied = true;
-		if (OutHandle != nullptr)
-		{
-			OutHandle->Index = static_cast<std::uint16_t>(Slot - SubscriptionSlots);
-			OutHandle->Generation = Slot->Generation;
-		}
-
-		return EMessagingResult::Success;
-	}
+		FSubscriptionHandle* OutHandle = nullptr) noexcept;
 
 	/**
 	 * Motivation: Lets a caller stop one subscription without disturbing other subscribers on the same channel.
 	 * Responsibilities: Release only an occupied slot whose index and generation match InHandle, or report NotFound without indexing an invalid
 	 * handle.
 	 */
-	EMessagingResult Unsubscribe(const FSubscriptionHandle InHandle) noexcept
-	{
-		if (InHandle.Index >= TTraits::MaxSubscriptions)
-		{
-			return EMessagingResult::NotFound;
-		}
-
-		FSubscriptionSlot& Slot = SubscriptionSlots[InHandle.Index];
-		if (!Slot.bIsOccupied || InHandle.Generation != Slot.Generation)
-		{
-			return EMessagingResult::NotFound;
-		}
-
-		ReleaseSubscriptionSlot(Slot);
-		return EMessagingResult::Success;
-	}
+	EMessagingResult Unsubscribe(const FSubscriptionHandle InHandle) noexcept;
 
 	/**
 	 * Motivation: Lets an owner remove every subscription it created as one lifecycle action.
 	 * Responsibilities: Release every occupied subscription owned by InOwner; an ownerless token matches nothing so it cannot remove every ownerless
 	 * subscription.
 	 */
-	void UnsubscribeAll(const Core::FWeakOwner InOwner) noexcept
-	{
-		for (FSubscriptionSlot& Slot : SubscriptionSlots)
-		{
-			if (Slot.bIsOccupied && Slot.Owner.IsSameOwner(InOwner))
-			{
-				ReleaseSubscriptionSlot(Slot);
-			}
-		}
-	}
+	void UnsubscribeAll(const Core::FWeakOwner InOwner) noexcept;
 
 	/**
 	 * Motivation: Makes locally composed Messaging useful before any transport device exists and extends it with best-effort remote reach.
@@ -269,105 +178,21 @@ public:
 	 * attempting one complete wire frame through the channel's device, if any; return a transport-capacity or invalid-request result without undoing
 	 * that local delivery. A reliable frame is retained for later retry even when its first device send reports Full.
 	 */
-	EMessagingResult SendMessageToChannel(const FMessage& InMessage, const FNameId InChannelNameId) noexcept
-	{
-		if (InMessage.GetMessageNameId() == InvalidNameId || InMessage.GetMessageNameId() == MessageAcknowledgementNameId)
-		{
-			return EMessagingResult::Invalid;
-		}
-
-		FChannel* const Channel = FindChannel(InChannelNameId);
-		if (Channel == nullptr)
-		{
-			return EMessagingResult::NotFound;
-		}
-
-		DeliverToMatchingSubscribers(InMessage, InChannelNameId);
-
-		if (Channel->Information.TransportDevice == nullptr)
-		{
-			return EMessagingResult::Success;
-		}
-
-		const Core::TSpan<const std::uint8_t> Payload = InMessage.GetPayload();
-		const std::size_t ReliableHeaderBytes = Channel->Information.bIsReliable ? SequenceNumberBytes : 0;
-		const std::size_t FrameSize = FrameHeaderBytes + ReliableHeaderBytes + Payload.Size();
-		if (FrameSize > MaxFrameBytes || FrameSize > Channel->Information.TransportDevice->MaxPacketBytes())
-		{
-			return EMessagingResult::Full;
-		}
-
-		FPendingReliableMessage* PendingMessage = nullptr;
-		if (Channel->Information.bIsReliable)
-		{
-			PendingMessage = FindFreeReliablePendingMessage();
-			if (PendingMessage == nullptr)
-			{
-				// Local delivery already happened, but an untracked reliable wire send would promise delivery this system cannot recover.
-				return EMessagingResult::Full;
-			}
-		}
-
-		std::uint8_t FrameBytes[MaxFrameBytes]{};
-		EncodeFrameHeader(InChannelNameId, InMessage.GetMessageNameId(), FrameBytes);
-		if (Channel->Information.bIsReliable)
-		{
-			WriteUnsignedLittleEndian(Channel->NextOutgoingSequenceNumber, &FrameBytes[FrameHeaderBytes], SequenceNumberBytes);
-		}
-		CopyBytes(&FrameBytes[FrameHeaderBytes + ReliableHeaderBytes], Payload);
-
-		const Core::ETransportResult TransportSendResult =
-			Channel->Information.TransportDevice->TrySend(Channel->Information.Address, Core::TSpan<const std::uint8_t>(FrameBytes, FrameSize));
-		if (Channel->Information.bIsReliable)
-		{
-			// A Full device is busy rather than terminal: retaining this frame lets the bounded retry policy recover that first miss.
-			TrackReliableMessage(
-				*PendingMessage,
-				InChannelNameId,
-				Channel->NextOutgoingSequenceNumber,
-				Core::TSpan<const std::uint8_t>(FrameBytes, FrameSize),
-				MostRecentTimeMilliseconds);
-			// Wrapping at the 16-bit range is intentional; reusing a number for a different attempted frame is not.
-			++Channel->NextOutgoingSequenceNumber;
-		}
-
-		return MapTransportSendResult(TransportSendResult);
-	}
+	EMessagingResult SendMessageToChannel(const FMessage& InMessage, const FNameId InChannelNameId) noexcept;
 
 	/**
 	 * Motivation: Pumps inbound best-effort frames before the world advances so this node's subscribers see device input in the current turn.
 	 * Responsibilities: Drain each distinct channel device once, route each complete frame by its encoded channel name, and count malformed or
 	 * unroutable frames without asserting and retain the supplied time for sends occurring between lifecycle turns.
 	 */
-	void PreAdvance(Core::TimePointMilliseconds InNowMilliseconds) noexcept override
-	{
-		MostRecentTimeMilliseconds = InNowMilliseconds;
-
-		for (std::size_t ChannelIndex = 0; ChannelIndex < Channels.Size(); ++ChannelIndex)
-		{
-			Core::ITransportDevice* const TransportDevice = Channels[ChannelIndex].Information.TransportDevice;
-			if (TransportDevice == nullptr || IsDeviceUsedByEarlierChannel(TransportDevice, ChannelIndex))
-			{
-				continue;
-			}
-
-			DrainDevice(*TransportDevice);
-		}
-	}
+	void PreAdvance(Core::TimePointMilliseconds InNowMilliseconds) noexcept override;
 
 	/**
 	 * Motivation: Gives reliable frames their caller-timed opportunity to retry after world advancement.
 	 * Responsibilities: Retain the supplied time for between-turn sends, process every occupied reliable pending slot once, and never advance a
 	 * transport device's lifecycle turns.
 	 */
-	void PostAdvance(Core::TimePointMilliseconds InNowMilliseconds) noexcept override
-	{
-		MostRecentTimeMilliseconds = InNowMilliseconds;
-		for (FPendingReliableMessage& PendingMessage : ReliablePendingMessages)
-		{
-			ProcessReliablePendingMessage(PendingMessage, InNowMilliseconds);
-		}
-	}
+	void PostAdvance(Core::TimePointMilliseconds InNowMilliseconds) noexcept override;
 
 	/**
 	 * Motivation: Lets callers observe inbound frames this system received but could not route to a live channel.
@@ -481,53 +306,19 @@ private:
 	 * Responsibilities: Return the matching channel state, or null when InChannelNameId names no live channel, without changing channel
 	 * storage.
 	 */
-	FChannel* FindChannel(const FNameId InChannelNameId) noexcept
-	{
-		for (FChannel& Channel : Channels)
-		{
-			if (Channel.Information.ChannelNameId == InChannelNameId)
-			{
-				return &Channel;
-			}
-		}
-
-		return nullptr;
-	}
+	FChannel* FindChannel(const FNameId InChannelNameId) noexcept;
 
 	/**
 	 * Motivation: Gives reliable sends a plain fixed-array free-slot lookup without widening Core's append-only static vector.
 	 * Responsibilities: Return the first slot not awaiting acknowledgement, or null when the bounded reliable pending set is full.
 	 */
-	FPendingReliableMessage* FindFreeReliablePendingMessage() noexcept
-	{
-		for (FPendingReliableMessage& PendingMessage : ReliablePendingMessages)
-		{
-			if (!PendingMessage.bAwaitingAcknowledgement)
-			{
-				return &PendingMessage;
-			}
-		}
-
-		return nullptr;
-	}
+	FPendingReliableMessage* FindFreeReliablePendingMessage() noexcept;
 
 	/**
 	 * Motivation: Gives acknowledgement processing one exact channel-and-sequence lookup across the fixed pending set.
 	 * Responsibilities: Return the occupied slot matching both reliable wire identities, or null when the acknowledgement is duplicate or abandoned.
 	 */
-	FPendingReliableMessage* FindReliablePendingMessage(const FNameId InChannelNameId, const std::uint16_t InSequenceNumber) noexcept
-	{
-		for (FPendingReliableMessage& PendingMessage : ReliablePendingMessages)
-		{
-			if (PendingMessage.bAwaitingAcknowledgement && PendingMessage.ChannelNameId == InChannelNameId
-				&& PendingMessage.SequenceNumber == InSequenceNumber)
-			{
-				return &PendingMessage;
-			}
-		}
-
-		return nullptr;
-	}
+	FPendingReliableMessage* FindReliablePendingMessage(const FNameId InChannelNameId, const std::uint16_t InSequenceNumber) noexcept;
 
 	/**
 	 * Motivation: Makes one reliable-send reservation retain immutable retry inputs before caller-owned frame storage expires.
@@ -539,25 +330,13 @@ private:
 		const FNameId InChannelNameId,
 		const std::uint16_t InSequenceNumber,
 		const Core::TSpan<const std::uint8_t> InFrame,
-		const Core::TimePointMilliseconds InAttemptTimeMilliseconds) noexcept
-	{
-		OutPendingMessage.ChannelNameId = InChannelNameId;
-		OutPendingMessage.SequenceNumber = InSequenceNumber;
-		CopyBytes(OutPendingMessage.FrameBytes, InFrame);
-		OutPendingMessage.FrameSize = InFrame.Size();
-		OutPendingMessage.SendAttempts = 1;
-		OutPendingMessage.LastAttemptMilliseconds = InAttemptTimeMilliseconds;
-		OutPendingMessage.bAwaitingAcknowledgement = true;
-	}
+		const Core::TimePointMilliseconds InAttemptTimeMilliseconds) noexcept;
 
 	/**
 	 * Motivation: Releases a reliable pending slot without assigning a magic value to any retained message field.
 	 * Responsibilities: Mark only the explicit acknowledgement flag false so the slot becomes available for a later reliable send.
 	 */
-	static void ReleaseReliablePendingMessage(FPendingReliableMessage& InOutPendingMessage) noexcept
-	{
-		InOutPendingMessage.bAwaitingAcknowledgement = false;
-	}
+	static void ReleaseReliablePendingMessage(FPendingReliableMessage& InOutPendingMessage) noexcept;
 
 	/**
 	 * Motivation: Keeps a running self-unsubscribing callable alive until it returns; resetting the delegate here would destroy a callable whose body
@@ -565,248 +344,65 @@ private:
 	 *   occupancy clears and is destroyed later, when a replacement is move-assigned over it.
 	 * Responsibilities: Mark InSlot unoccupied and advance its generation without producing zero.
 	 */
-	static void ReleaseSubscriptionSlot(FSubscriptionSlot& InSlot) noexcept
-	{
-		InSlot.bIsOccupied = false;
-		++InSlot.Generation;
-		if (InSlot.Generation == 0)
-		{
-			InSlot.Generation = 1;
-		}
-	}
+	static void ReleaseSubscriptionSlot(FSubscriptionSlot& InSlot) noexcept;
 
 	/**
 	 * Motivation: Reuses released capacity without replacing a callable that is executing inside a dispatch.
 	 * Responsibilities: Return the first slot that is neither occupied nor being dispatched, or nullptr when no safe slot is available.
 	 */
-	FSubscriptionSlot* FindFreeSubscriptionSlot() noexcept
-	{
-		for (FSubscriptionSlot& Slot : SubscriptionSlots)
-		{
-			if (!Slot.bIsOccupied && !Slot.bIsBeingDispatched)
-			{
-				return &Slot;
-			}
-		}
-
-		return nullptr;
-	}
+	FSubscriptionSlot* FindFreeSubscriptionSlot() noexcept;
 
 	/**
 	 * Motivation: Keeps dead-owner reclamation observability consistent whether capacity is reclaimed by subscribing or by delivery.
 	 * Responsibilities: Release InSlot and record one dead-owner subscription reclamation.
 	 */
-	void ReclaimDeadOwnerSubscriptionSlot(FSubscriptionSlot& InSlot) noexcept
-	{
-		ReleaseSubscriptionSlot(InSlot);
-		++ReclaimedDeadOwnerSubscriptionCount;
-	}
+	void ReclaimDeadOwnerSubscriptionSlot(FSubscriptionSlot& InSlot) noexcept;
 
 	/**
 	 * Motivation: Applies the retry interval and attempt budget to one occupied reliable slot without making PostAdvance a policy maze.
 	 * Responsibilities: Skip early or backwards time, abandon exhausted or orphaned frames, or resend one retained frame and restamp its attempt.
 	 */
-	void ProcessReliablePendingMessage(FPendingReliableMessage& InOutPendingMessage, const Core::TimePointMilliseconds InNowMilliseconds) noexcept
-	{
-		if (!InOutPendingMessage.bAwaitingAcknowledgement)
-		{
-			return;
-		}
-
-		if (InNowMilliseconds < InOutPendingMessage.LastAttemptMilliseconds)
-		{
-			// Subtracting unsigned non-monotonic time would appear enormous and incorrectly resend every pending frame at once.
-			return;
-		}
-
-		const Core::TimePointMilliseconds ElapsedMilliseconds = InNowMilliseconds - InOutPendingMessage.LastAttemptMilliseconds;
-		if (ElapsedMilliseconds < Information.ReliableRetryIntervalMilliseconds)
-		{
-			return;
-		}
-
-		if (InOutPendingMessage.SendAttempts >= Information.MaxReliableSendAttempts)
-		{
-			ReleaseReliablePendingMessage(InOutPendingMessage);
-			++AbandonedReliableMessageCount;
-			return;
-		}
-
-		FChannel* const Channel = FindChannel(InOutPendingMessage.ChannelNameId);
-		if (Channel == nullptr || Channel->Information.TransportDevice == nullptr)
-		{
-			ReleaseReliablePendingMessage(InOutPendingMessage);
-			++AbandonedReliableMessageCount;
-			return;
-		}
-
-		// Device refusal is intentionally ignored: each later interval retries until acknowledgement or the bounded attempt budget ends.
-		(void)Channel->Information.TransportDevice->TrySend(
-			Channel->Information.Address, Core::TSpan<const std::uint8_t>(InOutPendingMessage.FrameBytes, InOutPendingMessage.FrameSize));
-		++InOutPendingMessage.SendAttempts;
-		InOutPendingMessage.LastAttemptMilliseconds = InNowMilliseconds;
-	}
+	void ProcessReliablePendingMessage(FPendingReliableMessage& InOutPendingMessage, const Core::TimePointMilliseconds InNowMilliseconds) noexcept;
 
 	/**
 	 * Motivation: Keeps subscriber routing identical for local sends and decoded inbound messages.
 	 * Responsibilities: Reclaim dead owners before routing, then synchronously invoke every matching live subscriber while skipping registrations
 	 *   added during this in-flight delivery. Order follows the slot array, which is registration order until a released slot is reused.
 	 */
-	void DeliverToMatchingSubscribers(const FMessage& InMessage, const FNameId InChannelNameId) noexcept
-	{
-		const std::uint32_t SequenceAtDispatchStart = NextSubscriptionSequence;
-		for (std::size_t SlotIndex = 0; SlotIndex < TTraits::MaxSubscriptions; ++SlotIndex)
-		{
-			FSubscriptionSlot& Slot = SubscriptionSlots[SlotIndex];
-			if (!Slot.bIsOccupied)
-			{
-				continue;
-			}
-
-			if (Slot.SubscriptionSequence >= SequenceAtDispatchStart)
-			{
-				continue;
-			}
-
-			if (!Slot.Owner.IsLive())
-			{
-				ReclaimDeadOwnerSubscriptionSlot(Slot);
-				continue;
-			}
-
-			if (Slot.ChannelNameId != InChannelNameId
-				|| (Slot.MessageNameFilter != InvalidNameId && Slot.MessageNameFilter != InMessage.GetMessageNameId()))
-			{
-				continue;
-			}
-
-			Slot.bIsBeingDispatched = true;
-			(void)Slot.Subscriber.Execute(InMessage);
-			Slot.bIsBeingDispatched = false;
-		}
-	}
+	void DeliverToMatchingSubscribers(const FMessage& InMessage, const FNameId InChannelNameId) noexcept;
 
 	/**
 	 * Motivation: Maps transport acceptance outcomes into the public Messaging result vocabulary in one place.
 	 * Responsibilities: Preserve successful sends, report device backpressure as Full, and collapse invalid or unavailable devices into Invalid.
 	 */
-	static EMessagingResult MapTransportSendResult(const Core::ETransportResult InTransportResult) noexcept
-	{
-		switch (InTransportResult)
-		{
-			case Core::ETransportResult::Success:
-				return EMessagingResult::Success;
-			case Core::ETransportResult::Full:
-				return EMessagingResult::Full;
-			case Core::ETransportResult::Invalid:
-			case Core::ETransportResult::Unavailable:
-				return EMessagingResult::Invalid;
-		}
-
-		return EMessagingResult::Invalid;
-	}
+	static EMessagingResult MapTransportSendResult(const Core::ETransportResult InTransportResult) noexcept;
 
 	/**
 	 * Motivation: Makes the fixed wire frame contract explicit at the only boundary that writes frame metadata to a device.
 	 * Responsibilities: Write channel and message name ids in little-endian order before a caller adds its message or control payload.
 	 */
-	static void EncodeFrameHeader(const FNameId InChannelNameId, const FNameId InMessageNameId, std::uint8_t* const OutFrameBytes) noexcept
-	{
-		WriteNameIdLittleEndian(InChannelNameId, &OutFrameBytes[ChannelNameIdByteIndex]);
-		WriteNameIdLittleEndian(InMessageNameId, &OutFrameBytes[MessageNameIdByteIndex]);
-	}
+	static void EncodeFrameHeader(const FNameId InChannelNameId, const FNameId InMessageNameId, std::uint8_t* const OutFrameBytes) noexcept;
 
 	/**
 	 * Motivation: Lets the inbound turn drain one device without making any channel holding it consume a second time.
 	 * Responsibilities: Receive complete packets until the device reports a non-success result, decoding and routing every successful packet, and
 	 *   count a packet the device refuses to fit in this system's frame budget.
 	 */
-	void DrainDevice(Core::ITransportDevice& InTransportDevice) noexcept
-	{
-		std::uint8_t FrameBytes[MaxFrameBytes]{};
-		Core::FDeviceAddress Sender;
-		Core::FReceiveResult ReceiveResult;
-		for (;;)
-		{
-			const Core::ETransportResult ReceiveStatus =
-				InTransportDevice.TryReceive(Sender, Core::TSpan<std::uint8_t>(FrameBytes, MaxFrameBytes), ReceiveResult);
-			if (ReceiveStatus == Core::ETransportResult::Full)
-			{
-				// The device keeps a packet larger than this system's frame budget, so the same packet is counted again every
-				// turn. A count rising with no delivery means a peer sends frames larger than this system's traits allow.
-				++DroppedFrameCount;
-				return;
-			}
-
-			if (ReceiveStatus != Core::ETransportResult::Success)
-			{
-				return;
-			}
-
-			ProcessReceivedFrame(Sender, FrameBytes, ReceiveResult.BytesReceived);
-		}
-	}
+	void DrainDevice(Core::ITransportDevice& InTransportDevice) noexcept;
 
 	/**
 	 * Motivation: Routes one successfully received device packet through reliable control handling or subscriber delivery.
 	 * Responsibilities: Count and discard frames shorter than the header or naming no channel; consume acknowledgement control traffic; otherwise
 	 *   decode the channel's best-effort or reliable application payload while the local frame buffer remains valid for the whole call.
 	 */
-	void ProcessReceivedFrame(const Core::FDeviceAddress& InSender, const std::uint8_t* const InFrameBytes, const std::size_t InFrameSize) noexcept
-	{
-		if (InFrameSize < FrameHeaderBytes)
-		{
-			++DroppedFrameCount;
-			return;
-		}
-
-		const FNameId ChannelNameId = ReadNameIdLittleEndian(&InFrameBytes[ChannelNameIdByteIndex]);
-		FChannel* const Channel = FindChannel(ChannelNameId);
-		if (Channel == nullptr)
-		{
-			++DroppedFrameCount;
-			return;
-		}
-
-		const FNameId MessageNameId = ReadNameIdLittleEndian(&InFrameBytes[MessageNameIdByteIndex]);
-		const std::uint8_t* const PayloadBytes = &InFrameBytes[FrameHeaderBytes];
-		const std::size_t PayloadSize = InFrameSize - FrameHeaderBytes;
-		if (MessageNameId == MessageAcknowledgementNameId)
-		{
-			ProcessAcknowledgement(ChannelNameId, PayloadBytes, PayloadSize);
-			return;
-		}
-
-		if (Channel->Information.bIsReliable)
-		{
-			ProcessReliableMessage(*Channel, InSender, MessageNameId, PayloadBytes, PayloadSize);
-			return;
-		}
-
-		DeliverReceivedMessage(InSender, ChannelNameId, MessageNameId, PayloadBytes, PayloadSize);
-	}
+	void ProcessReceivedFrame(const Core::FDeviceAddress& InSender, const std::uint8_t* const InFrameBytes, const std::size_t InFrameSize) noexcept;
 
 	/**
 	 * Motivation: Keeps malformed acknowledgement control traffic observable without exposing it to application subscribers.
 	 * Responsibilities: Count only acknowledgements whose payload is not exactly one sequence number; release the matching reliable pending frame
 	 *   when it exists, otherwise consume duplicate or late acknowledgement control traffic without counting it as a drop.
 	 */
-	void ProcessAcknowledgement(const FNameId InChannelNameId, const std::uint8_t* const InPayloadBytes, const std::size_t InPayloadSize) noexcept
-	{
-		if (InPayloadSize != SequenceNumberBytes)
-		{
-			++DroppedFrameCount;
-			return;
-		}
-
-		const std::uint16_t SequenceNumber = static_cast<std::uint16_t>(ReadUnsignedLittleEndian(InPayloadBytes, SequenceNumberBytes));
-		FPendingReliableMessage* const PendingMessage = FindReliablePendingMessage(InChannelNameId, SequenceNumber);
-		if (PendingMessage != nullptr)
-		{
-			ReleaseReliablePendingMessage(*PendingMessage);
-		}
-		// No matching slot is normal: an acknowledgement may be duplicated or may arrive after this bounded system already abandoned its frame.
-	}
+	void ProcessAcknowledgement(const FNameId InChannelNameId, const std::uint8_t* const InPayloadBytes, const std::size_t InPayloadSize) noexcept;
 
 	/**
 	 * Motivation: Separates reliable frame validation and acknowledgement generation from ordinary inbound delivery.
@@ -818,23 +414,7 @@ private:
 		const Core::FDeviceAddress& InSender,
 		const FNameId InMessageNameId,
 		const std::uint8_t* const InPayloadBytes,
-		const std::size_t InPayloadSize) noexcept
-	{
-		if (InPayloadSize < SequenceNumberBytes)
-		{
-			++DroppedFrameCount;
-			return;
-		}
-
-		const std::uint16_t SequenceNumber = static_cast<std::uint16_t>(ReadUnsignedLittleEndian(InPayloadBytes, SequenceNumberBytes));
-		DeliverReceivedMessage(
-			InSender,
-			InChannel.Information.ChannelNameId,
-			InMessageNameId,
-			&InPayloadBytes[SequenceNumberBytes],
-			InPayloadSize - SequenceNumberBytes);
-		SendAcknowledgement(InChannel, SequenceNumber);
-	}
+		const std::size_t InPayloadSize) noexcept;
 
 	/**
 	 * Motivation: Gives best-effort and reliable decoded messages one subscriber-delivery path.
@@ -846,15 +426,7 @@ private:
 		const FNameId InChannelNameId,
 		const FNameId InMessageNameId,
 		const std::uint8_t* const InPayloadBytes,
-		const std::size_t InPayloadSize) noexcept
-	{
-		FMessage Message;
-		Message.SetMessageNameId(InMessageNameId);
-		// The decoded payload points into DrainDevice's local frame buffer, so subscribers retaining it must copy it.
-		Message.SetPayload(Core::TSpan<const std::uint8_t>(InPayloadBytes, InPayloadSize));
-		Message.SetSender(InSender);
-		DeliverToMatchingSubscribers(Message, InChannelNameId);
-	}
+		const std::size_t InPayloadSize) noexcept;
 
 	/**
 	 * Motivation: Closes one received reliable message with the protocol acknowledgement that lets its peer stop retrying in B6b.
@@ -865,96 +437,43 @@ private:
 	 * a reliable channel describes today. A reliable channel hearing several peers would need to answer the actual sender instead, and not every
 	 * medium reports one, so that choice belongs with a real medium rather than here.
 	 */
-	static void SendAcknowledgement(const FChannel& InChannel, const std::uint16_t InSequenceNumber) noexcept
-	{
-		if (InChannel.Information.TransportDevice == nullptr)
-		{
-			return;
-		}
-
-		std::uint8_t FrameBytes[MaxFrameBytes]{};
-		EncodeFrameHeader(InChannel.Information.ChannelNameId, MessageAcknowledgementNameId, FrameBytes);
-		WriteUnsignedLittleEndian(InSequenceNumber, &FrameBytes[FrameHeaderBytes], SequenceNumberBytes);
-		// Device refusal is intentionally ignored: B6b's sender retry makes a lost acknowledgement recoverable.
-		(void)InChannel.Information.TransportDevice->TrySend(
-			InChannel.Information.Address, Core::TSpan<const std::uint8_t>(FrameBytes, FrameHeaderBytes + SequenceNumberBytes));
-	}
+	static void SendAcknowledgement(const FChannel& InChannel, const std::uint16_t InSequenceNumber) noexcept;
 
 	/**
 	 * Motivation: Prevents a shared transport device from being drained twice when several channels use different destination addresses on it.
 	 * Responsibilities: Return true only when one channel before InChannelIndex holds the identical transport-device pointer.
 	 */
-	bool IsDeviceUsedByEarlierChannel(const Core::ITransportDevice* const InTransportDevice, const std::size_t InChannelIndex) const noexcept
-	{
-		for (std::size_t EarlierChannelIndex = 0; EarlierChannelIndex < InChannelIndex; ++EarlierChannelIndex)
-		{
-			if (Channels[EarlierChannelIndex].Information.TransportDevice == InTransportDevice)
-			{
-				return true;
-			}
-		}
-
-		return false;
-	}
+	bool IsDeviceUsedByEarlierChannel(const Core::ITransportDevice* const InTransportDevice, const std::size_t InChannelIndex) const noexcept;
 
 	/**
 	 * Motivation: Gives every fixed-width wire value one portable, byte-order-independent encoder.
 	 * Responsibilities: Write InValue's InByteCount least-significant bytes first at OutBytes.
 	 */
-	static void WriteUnsignedLittleEndian(const std::uint32_t InValue, std::uint8_t* const OutBytes, const std::size_t InByteCount) noexcept
-	{
-		for (std::size_t ByteOffset = 0; ByteOffset < InByteCount; ++ByteOffset)
-		{
-			const std::size_t BitShift = ByteOffset * BitsPerByte;
-			OutBytes[ByteOffset] = static_cast<std::uint8_t>(InValue >> BitShift);
-		}
-	}
+	static void WriteUnsignedLittleEndian(const std::uint32_t InValue, std::uint8_t* const OutBytes, const std::size_t InByteCount) noexcept;
 
 	/**
 	 * Motivation: Gives every fixed-width wire value one portable, byte-order-independent decoder.
 	 * Responsibilities: Read InByteCount least-significant-byte-first bytes from InBytes into one unsigned 32-bit value.
 	 */
-	static std::uint32_t ReadUnsignedLittleEndian(const std::uint8_t* const InBytes, const std::size_t InByteCount) noexcept
-	{
-		std::uint32_t Value = 0;
-		for (std::size_t ByteOffset = 0; ByteOffset < InByteCount; ++ByteOffset)
-		{
-			const std::size_t BitShift = ByteOffset * BitsPerByte;
-			Value |= static_cast<std::uint32_t>(InBytes[ByteOffset]) << BitShift;
-		}
-
-		return Value;
-	}
+	static std::uint32_t ReadUnsignedLittleEndian(const std::uint8_t* const InBytes, const std::size_t InByteCount) noexcept;
 
 	/**
 	 * Motivation: Keeps name-id callers independent of the generic fixed-width wire encoder.
 	 * Responsibilities: Write InNameId as four least-significant-byte-first bytes at OutBytes.
 	 */
-	static void WriteNameIdLittleEndian(const FNameId InNameId, std::uint8_t* const OutBytes) noexcept
-	{
-		WriteUnsignedLittleEndian(InNameId.Value, OutBytes, NameIdBytes);
-	}
+	static void WriteNameIdLittleEndian(const FNameId InNameId, std::uint8_t* const OutBytes) noexcept;
 
 	/**
 	 * Motivation: Keeps name-id callers independent of the generic fixed-width wire decoder.
 	 * Responsibilities: Read four least-significant-byte-first bytes from InBytes into one Messaging name id.
 	 */
-	static FNameId ReadNameIdLittleEndian(const std::uint8_t* const InBytes) noexcept
-	{
-		return FNameId{ReadUnsignedLittleEndian(InBytes, NameIdBytes)};
-	}
+	static FNameId ReadNameIdLittleEndian(const std::uint8_t* const InBytes) noexcept;
 
 	/**
 	 * Motivation: Copies payload bytes into a frame without needing a separate guard for the empty payload a block copy cannot take.
 	 * Responsibilities: Copy every byte in InPayload into OutDestination in order, doing nothing for an empty payload.
 	 */
-	static void CopyBytes(std::uint8_t* const OutDestination, const Core::TSpan<const std::uint8_t> InPayload) noexcept
-	{
-		for (std::size_t PayloadByteOffset = 0; PayloadByteOffset < InPayload.Size(); ++PayloadByteOffset)
-		{
-			OutDestination[PayloadByteOffset] = InPayload.Data()[PayloadByteOffset];
-		}
-	}
+	static void CopyBytes(std::uint8_t* const OutDestination, const Core::TSpan<const std::uint8_t> InPayload) noexcept;
 
 	/** Motivation: Retains the reliability policy future Messaging work must consult without a global configuration. */
 	FMessagingSystemInformation Information{};
@@ -990,6 +509,14 @@ private:
 	/** Motivation: Counts reliable frames whose bounded retry ownership ended without an acknowledgement. */
 	std::uint32_t AbandonedReliableMessageCount{0};
 };
+
+// Out-of-class member definitions live in flat .inl partitions included here, after
+// the class body closes. Each definition is written as TMessagingSystem<TTraits>::Method
+// so the public API in the class body stays compact while every method body stays
+// visible at instantiation (the .inl files are never included directly).
+#include "MessagingSystem_ReliableRetry.inl"
+#include "MessagingSystem_WireReceive.inl"
+#include "MessagingSystem_FrameCodec.inl"
 
 /** Motivation: Names the default fixed-capacity Messaging system used by engine-facing code. */
 using FMessagingSystem = TMessagingSystem<>;

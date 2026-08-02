@@ -14,7 +14,7 @@ from pathlib import Path
 # --style=file:<path>; a bare --style=file would fall back to LLVM style and
 # falsely flag every file. dry-run --Werror turns any drift into a non-zero
 # status without rewriting files, which is what makes the check a usable gate.
-SOURCE_SUFFIXES = {".h", ".hpp", ".cpp", ".cc", ".cxx"}
+SOURCE_SUFFIXES = {".h", ".hpp", ".cpp", ".cc", ".cxx", ".inl"}
 
 # clang-format emits diagnostics as "<path>:<line>:<col>: <severity>: ...".
 # The path may contain a Windows drive-letter colon (e.g. C:\repo\...), so a
@@ -46,11 +46,11 @@ def parse_arguments() -> argparse.Namespace:
 
 
 def discover_sources(root: Path) -> list[Path]:
-    """Find tracked *.h/*.cpp under Modules/, preferring git when available."""
+    """Find tracked *.h/*.cpp/*.inl under Modules/, preferring git when available."""
     root = root.resolve()
     try:
         result = subprocess.run(
-            ["git", "-C", str(root), "ls-files", "--", "*.h", "*.cpp"],
+            ["git", "-C", str(root), "ls-files", "--", "*.h", "*.cpp", "*.inl"],
             capture_output=True,
             text=True,
             check=True,
@@ -83,16 +83,57 @@ def discover_sources(root: Path) -> list[Path]:
 def check_files(
     sources: list[Path], style_file: Path, clang_format: str
 ) -> tuple[list[Path], list[str]]:
-    """Run one batched dry-run and split offending files from invocation errors."""
+    """Run batched dry-runs and split offending files from invocation errors.
+
+    On Windows, ``CreateProcess`` rejects any command line longer than 32 KiB, and a
+    large source set with absolute paths can exceed that before clang-format is ever
+    reached: ``subprocess.run`` then raises ``FileNotFoundError``, which is easily
+    misread as "executable not found". Batching keeps every invocation well under the
+    ceiling so a growing file count never turns into a false gate failure.
+    """
     if not sources:
         return [], []
 
+    # clang-format accepts the style and flags once per invocation; the variable cost
+    # is the source list. 8 KiB of paths per batch leaves ample room for flags and for
+    # the path-quoting inflation subprocess applies on Windows.
+    max_batch_chars = 8192
+    offenders: list[Path] = []
+    batch: list[Path] = []
+    batch_chars = 0
+    for source in sources:
+        source_chars = len(str(source)) + 1
+        if batch and batch_chars + source_chars > max_batch_chars:
+            new_offenders, _ = _run_one_batch(batch, style_file, clang_format, sources)
+            offenders.extend(new_offenders)
+            batch = []
+            batch_chars = 0
+        batch.append(source)
+        batch_chars += source_chars
+    if batch:
+        new_offenders, invocation_errors = _run_one_batch(batch, style_file, clang_format, sources)
+        offenders.extend(new_offenders)
+        if invocation_errors:
+            return [], invocation_errors
+
+    # Deduplicate while preserving deterministic order.
+    unique: list[Path] = []
+    for source in offenders:
+        if source not in unique:
+            unique.append(source)
+    return sorted(unique), []
+
+
+def _run_one_batch(
+    batch: list[Path], style_file: Path, clang_format: str, all_sources: list[Path]
+) -> tuple[list[Path], list[str]]:
+    """Run one clang-format dry-run over a bounded slice of the source list."""
     command = [
         clang_format,
         f"--style=file:{style_file}",
         "--dry-run",
         "--Werror",
-        *[str(path) for path in sources],
+        *[str(path) for path in batch],
     ]
     try:
         result = subprocess.run(
@@ -107,9 +148,9 @@ def check_files(
         if match is None:
             continue
         candidate = Path(match.group(1)).resolve()
-        if candidate in sources and candidate not in offenders:
+        if candidate in all_sources and candidate not in offenders:
             offenders.append(candidate)
-    return sorted(offenders), []
+    return offenders, []
 
 
 def main() -> int:
