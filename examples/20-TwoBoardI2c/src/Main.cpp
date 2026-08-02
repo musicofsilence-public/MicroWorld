@@ -3,7 +3,10 @@
 #include <MicroWorld/Core/IO/DeviceAddress.h>
 #include <MicroWorld/Core/IO/ReceiveResult.h>
 #include <MicroWorld/Core/IO/TransportResult.h>
-#include <MicroWorld/Platform/Esp32/Esp32I2cDevice.h>
+#include <MicroWorld/Platform/Esp32/Esp32I2cMasterConfig.h>
+#include <MicroWorld/Platform/Esp32/Esp32I2cMasterDevice.h>
+#include <MicroWorld/Platform/Esp32/Esp32I2cSlaveConfig.h>
+#include <MicroWorld/Platform/Esp32/Esp32I2cSlaveDevice.h>
 #include <MicroWorld/Platform/Esp32/Esp32OutputDevice.h>
 #include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
 #include <MicroWorld/Platform/Esp32/Esp32TimeSource.h>

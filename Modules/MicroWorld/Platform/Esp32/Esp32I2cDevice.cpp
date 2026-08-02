@@ -1,6 +1,14 @@
-#include <MicroWorld/Platform/Esp32/Esp32I2cDevice.h>
+#include <MicroWorld/Platform/Esp32/Esp32I2cMasterConfig.h>
+#include <MicroWorld/Platform/Esp32/Esp32I2cMasterDevice.h>
+#include <MicroWorld/Platform/Esp32/Esp32I2cSlaveConfig.h>
+#include <MicroWorld/Platform/Esp32/Esp32I2cSlaveDevice.h>
+#include <MicroWorld/Platform/Esp32/I2cAddress.h>
+#include <MicroWorld/Platform/Esp32/I2cReceiveInbox.h>
 
-#include "Internal/I2cPlatformImplementation.h"
+#include "Internal/I2cReadOutcome.h"
+#include "Internal/I2cWriteOutcome.h"
+#include "Internal/OpenedI2cMaster.h"
+#include "Internal/OpenedI2cSlave.h"
 
 #include <MicroWorld/Core/Log.h>
 #include <MicroWorld/Transport/EFrameEvent.h>
