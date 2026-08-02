@@ -1,6 +1,6 @@
 #pragma once
 
-#include <MicroWorld/Transport/DeviceAddress.h>
+#include <MicroWorld/Core/IO/DeviceAddress.h>
 
 #include <array>
 #include <cstddef>
@@ -78,7 +78,7 @@ private:
 	std::array<std::size_t, MaxPackets> PacketLengths{};
 
 	/** Motivation: Records the destination address queued with each packet so AdvanceSend routes it correctly. */
-	std::array<::MicroWorld::Transport::Address::FDeviceAddress, MaxPackets> Destinations{};
+	std::array<Core::FDeviceAddress, MaxPackets> Destinations{};
 };
 
 } // namespace MicroWorld::Transport

@@ -2,9 +2,9 @@
 
 #include <MicroWorld/Core/ByteCodecConstants.h>
 #include <MicroWorld/Core/Containers/Span.h>
+#include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Transport/ByteReader.h>
 #include <MicroWorld/Transport/ByteWriter.h>
-#include <MicroWorld/Transport/TransportResult.h>
 
 #include <array>
 #include <cstddef>
@@ -68,7 +68,7 @@ constexpr std::size_t WelcomePeerGenerationByteIndex = 3;
  * Example:
  *   FMessageHeader Header;
  *   Core::TSpan<const std::uint8_t> Payload;
- *   if (ReadMessage(Message, Header, Payload) == ETransportResult::Success) { Dispatch(Header.Channel, Payload); }
+ *   if (ReadMessage(Message, Header, Payload) == Core::ETransportResult::Success) { Dispatch(Header.Channel, Payload); }
  */
 struct FMessageHeader
 {
@@ -106,7 +106,7 @@ enum class EControlMessageType : std::uint8_t
  *   per-type length.
  * Example:
  *   FControlMessage Control;
- *   if (ReadControlMessage(Payload, Control) == ETransportResult::Success) { Handle(Control); }
+ *   if (ReadControlMessage(Payload, Control) == Core::ETransportResult::Success) { Handle(Control); }
  */
 struct FControlMessage
 {
@@ -128,19 +128,19 @@ struct FControlMessage
  * Responsibilities: Validate the payload length and total required capacity up front, treat a payload over Uint16Max as Invalid,
  *   write only the four-byte header for a zero-length payload, and write header plus payload only on Success.
  */
-inline ETransportResult WriteMessage(FByteWriter& InWriter, std::uint8_t InChannel, Core::TSpan<const std::uint8_t> InPayload) noexcept
+inline Core::ETransportResult WriteMessage(FByteWriter& InWriter, std::uint8_t InChannel, Core::TSpan<const std::uint8_t> InPayload) noexcept
 {
 	const std::size_t PayloadSize = InPayload.Size();
 	if (PayloadSize > Core::Uint16Max)
 	{
 		// A u16 length field cannot represent a payload this large; reject before any write.
-		return ETransportResult::Invalid;
+		return Core::ETransportResult::Invalid;
 	}
 	const std::size_t RequiredBytes = MessageHeaderBytes + PayloadSize;
 	// Pre-check the whole requirement before the first WriteByte so a Full leaves the cursor at zero.
 	if (InWriter.Remaining() < RequiredBytes)
 	{
-		return ETransportResult::Full;
+		return Core::ETransportResult::Full;
 	}
 	const std::uint16_t PayloadBytes = static_cast<std::uint16_t>(PayloadSize);
 	(void)InWriter.WriteByte(InChannel);
@@ -153,7 +153,7 @@ inline ETransportResult WriteMessage(FByteWriter& InWriter, std::uint8_t InChann
 	{
 		(void)InWriter.Write(InPayload);
 	}
-	return ETransportResult::Success;
+	return Core::ETransportResult::Success;
 }
 
 /**
@@ -161,32 +161,32 @@ inline ETransportResult WriteMessage(FByteWriter& InWriter, std::uint8_t InChann
  * Responsibilities: Return Invalid and leave OutHeader and OutPayload unchanged for a too-short message, a nonzero Flags
  *   byte, or a payload-size mismatch; write outputs only on Success.
  */
-inline ETransportResult ReadMessage(
+inline Core::ETransportResult ReadMessage(
 	Core::TSpan<const std::uint8_t> InMessage, FMessageHeader& OutHeader, Core::TSpan<const std::uint8_t>& OutPayload) noexcept
 {
 	if (InMessage.Size() < MessageHeaderBytes)
 	{
 		// Not even a header is present; nothing can be parsed.
-		return ETransportResult::Invalid;
+		return Core::ETransportResult::Invalid;
 	}
 	const std::uint8_t Flags = InMessage[MessageFlagsByteIndex];
 	if (Flags != MessageReservedFlags)
 	{
 		// Flags is reserved; a nonzero value is a malformed or unknown-framing message.
-		return ETransportResult::Invalid;
+		return Core::ETransportResult::Invalid;
 	}
 	// The message header length is little-endian to match this layer's byte I/O convention (D6).
 	const std::uint16_t PayloadBytes = ReadUint16LittleEndian(&InMessage[MessagePayloadLengthByteIndex]);
 	if (InMessage.Size() - MessageHeaderBytes != PayloadBytes)
 	{
 		// The declared length disagrees with the actual trailing payload: truncation or corruption.
-		return ETransportResult::Invalid;
+		return Core::ETransportResult::Invalid;
 	}
 	OutHeader.Channel = InMessage[MessageChannelByteIndex];
 	OutHeader.Flags = MessageReservedFlags;
 	OutHeader.PayloadBytes = PayloadBytes;
 	OutPayload = Core::TSpan<const std::uint8_t>(InMessage.Data() + MessageHeaderBytes, PayloadBytes);
-	return ETransportResult::Success;
+	return Core::ETransportResult::Success;
 }
 
 /**
@@ -194,7 +194,7 @@ inline ETransportResult ReadMessage(
  * Responsibilities: Build the per-type control payload in a fixed local array, frame it on the control channel, and return
  *   Invalid without touching the writer for an unknown type.
  */
-inline ETransportResult WriteControlMessage(FByteWriter& InWriter, const FControlMessage& InMessage) noexcept
+inline Core::ETransportResult WriteControlMessage(FByteWriter& InWriter, const FControlMessage& InMessage) noexcept
 {
 	std::array<std::uint8_t, MaxControlPayloadBytes> Payload{};
 	Payload[ControlTypeByteIndex] = static_cast<std::uint8_t>(InMessage.Type);
@@ -217,7 +217,7 @@ inline ETransportResult WriteControlMessage(FByteWriter& InWriter, const FContro
 			break;
 		default:
 			// An unknown type has no defined encoding; reject before any write.
-			return ETransportResult::Invalid;
+			return Core::ETransportResult::Invalid;
 	}
 	return WriteMessage(InWriter, ControlChannel, Core::TSpan<const std::uint8_t>(Payload.data(), PayloadLength));
 }
@@ -227,32 +227,32 @@ inline ETransportResult WriteControlMessage(FByteWriter& InWriter, const FContro
  * Responsibilities: Return Success only when the type byte is known and the payload size matches its expected length,
  *   otherwise Invalid.
  */
-inline ETransportResult ValidateControlPayloadLength(const std::uint8_t InTypeByte, const std::size_t InPayloadSize) noexcept
+inline Core::ETransportResult ValidateControlPayloadLength(const std::uint8_t InTypeByte, const std::size_t InPayloadSize) noexcept
 {
 	switch (InTypeByte)
 	{
 		case static_cast<std::uint8_t>(EControlMessageType::Hello):
 			if (InPayloadSize != HelloControlPayloadBytes)
 			{
-				return ETransportResult::Invalid;
+				return Core::ETransportResult::Invalid;
 			}
-			return ETransportResult::Success;
+			return Core::ETransportResult::Success;
 		case static_cast<std::uint8_t>(EControlMessageType::Welcome):
 			if (InPayloadSize != WelcomeControlPayloadBytes)
 			{
-				return ETransportResult::Invalid;
+				return Core::ETransportResult::Invalid;
 			}
-			return ETransportResult::Success;
+			return Core::ETransportResult::Success;
 		case static_cast<std::uint8_t>(EControlMessageType::Heartbeat):
 		case static_cast<std::uint8_t>(EControlMessageType::Bye):
 			if (InPayloadSize != HeartbeatControlPayloadBytes)
 			{
-				return ETransportResult::Invalid;
+				return Core::ETransportResult::Invalid;
 			}
-			return ETransportResult::Success;
+			return Core::ETransportResult::Success;
 		default:
 			// The type byte names no known control message; the caller drops it.
-			return ETransportResult::Invalid;
+			return Core::ETransportResult::Invalid;
 	}
 }
 
@@ -281,22 +281,22 @@ inline void DecodeControlFields(FByteReader& InReader, const EControlMessageType
  * Responsibilities: Read the type byte through a local FByteReader, validate it against Hello, Welcome, Heartbeat, and Bye,
  *   enforce the exact per-type length before any field read, and write OutMessage only on Success.
  */
-inline ETransportResult ReadControlMessage(Core::TSpan<const std::uint8_t> InPayload, FControlMessage& OutMessage) noexcept
+inline Core::ETransportResult ReadControlMessage(Core::TSpan<const std::uint8_t> InPayload, FControlMessage& OutMessage) noexcept
 {
 	FByteReader Reader(InPayload);
 	std::uint8_t TypeByte = 0;
-	if (Reader.ReadByte(TypeByte) != ETransportResult::Success)
+	if (Reader.ReadByte(TypeByte) != Core::ETransportResult::Success)
 	{
 		// An empty control payload carries no type byte at all.
-		return ETransportResult::Invalid;
+		return Core::ETransportResult::Invalid;
 	}
-	const ETransportResult LengthResult = ValidateControlPayloadLength(TypeByte, InPayload.Size());
-	if (LengthResult != ETransportResult::Success)
+	const Core::ETransportResult LengthResult = ValidateControlPayloadLength(TypeByte, InPayload.Size());
+	if (LengthResult != Core::ETransportResult::Success)
 	{
 		return LengthResult;
 	}
 	DecodeControlFields(Reader, static_cast<EControlMessageType>(TypeByte), OutMessage);
-	return ETransportResult::Success;
+	return Core::ETransportResult::Success;
 }
 
 } // namespace MicroWorld::Transport

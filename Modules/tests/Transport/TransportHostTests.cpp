@@ -2,12 +2,11 @@
 #include "TestSupport.h"
 
 #include <MicroWorld/Core/Containers/Span.h>
+#include <MicroWorld/Core/IO/DeviceAddress.h>
 #include <MicroWorld/Core/IO/TransportDevice.h>
-#include <MicroWorld/Transport/HostLoopback.h>
-#include <MicroWorld/Transport/DeviceAddress.h>
-#include <MicroWorld/Transport/TransportHost.h>
-#include <MicroWorld/Transport/TransportResult.h>
 #include <MicroWorld/Core/Time.h>
+#include <MicroWorld/Transport/HostLoopback.h>
+#include <MicroWorld/Transport/TransportHost.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -16,21 +15,21 @@
 namespace
 {
 
+using MicroWorld::Core::ETransportResult;
 using MicroWorld::Core::FDelegateHandle;
+using MicroWorld::Core::FDeviceAddress;
 using MicroWorld::Core::FReceiveResult;
 using MicroWorld::Core::ITransportDevice;
+using MicroWorld::Core::MakeLoopbackAddress;
 using MicroWorld::Core::TimePointMilliseconds;
 using MicroWorld::Core::TSpan;
 using MicroWorld::Tests::GlobalAllocationCount;
 using MicroWorld::Transport::ENetworkMode;
 using MicroWorld::Transport::ETransportHostState;
-using MicroWorld::Transport::ETransportResult;
 using MicroWorld::Transport::FPeerId;
 using MicroWorld::Transport::FTransportHostConfig;
 using MicroWorld::Transport::THostLoopback;
 using MicroWorld::Transport::TTransportHost;
-using MicroWorld::Transport::Address::FDeviceAddress;
-using MicroWorld::Transport::Address::MakeLoopbackAddress;
 
 /** Motivation: Heartbeat interval (ms) the deterministic host config stamps so timed cases advance in fixed steps. */
 constexpr TimePointMilliseconds HeartbeatIntervalMs = 100;

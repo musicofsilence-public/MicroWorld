@@ -1,9 +1,9 @@
 #include "TestSupport.h"
 
 #include <MicroWorld/Core/Containers/Span.h>
+#include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Transport/ByteWriter.h>
 #include <MicroWorld/Transport/TransportProtocol.h>
-#include <MicroWorld/Transport/TransportResult.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -11,10 +11,10 @@
 namespace
 {
 
+using MicroWorld::Core::ETransportResult;
 using MicroWorld::Core::TSpan;
 using MicroWorld::Transport::ControlChannel;
 using MicroWorld::Transport::EControlMessageType;
-using MicroWorld::Transport::ETransportResult;
 using MicroWorld::Transport::FByteWriter;
 using MicroWorld::Transport::FControlMessage;
 using MicroWorld::Transport::FMessageHeader;

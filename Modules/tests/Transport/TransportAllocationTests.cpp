@@ -2,15 +2,15 @@
 #include "TestSupport.h"
 
 #include <MicroWorld/Core/Containers/Span.h>
+#include <MicroWorld/Core/IO/DeviceAddress.h>
+#include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Transport/ByteReader.h>
 #include <MicroWorld/Transport/ByteWriter.h>
-#include <MicroWorld/Transport/HostLoopback.h>
-#include <MicroWorld/Transport/DeviceAddress.h>
 #include <MicroWorld/Transport/Device.h>
+#include <MicroWorld/Transport/HostLoopback.h>
 #include <MicroWorld/Transport/TransportManager.h>
 #include <MicroWorld/Transport/TransportPacketStorage.h>
 #include <MicroWorld/Transport/TransportProtocol.h>
-#include <MicroWorld/Transport/TransportResult.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -18,10 +18,13 @@
 namespace
 {
 
+using MicroWorld::Core::ETransportResult;
+using MicroWorld::Core::FDeviceAddress;
+using MicroWorld::Core::FReceiveResult;
+using MicroWorld::Core::MakeLoopbackAddress;
 using MicroWorld::Core::TSpan;
 using MicroWorld::Tests::GlobalAllocationCount;
 using MicroWorld::Transport::EControlMessageType;
-using MicroWorld::Transport::ETransportResult;
 using MicroWorld::Transport::FByteReader;
 using MicroWorld::Transport::FByteWriter;
 using MicroWorld::Transport::FControlMessage;
@@ -33,9 +36,6 @@ using MicroWorld::Transport::TTransportManager;
 using MicroWorld::Transport::TTransportPacketStorage;
 using MicroWorld::Transport::WriteControlMessage;
 using MicroWorld::Transport::WriteMessage;
-using MicroWorld::Transport::Address::FDeviceAddress;
-using MicroWorld::Transport::Address::MakeLoopbackAddress;
-using MicroWorld::Transport::Device::FReceiveResult;
 using MicroWorld::Transport::Device::IDevice;
 
 /** Motivation: Per-buffer byte capacity of the writer/reader storage exercised by the allocation test. */

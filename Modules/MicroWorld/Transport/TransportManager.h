@@ -1,9 +1,9 @@
 #pragma once
 
 #include <MicroWorld/Core/Containers/Span.h>
+#include <MicroWorld/Core/IO/DeviceAddress.h>
 #include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Transport/TransportPacketStorage.h>
-#include <MicroWorld/Transport/TransportResult.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -64,7 +64,7 @@ public:
 	 *   length or a packet larger than MaxPacketBytes, return Full when the FIFO has no free slot, and otherwise copy the
 	 *   packet into the tail.
 	 */
-	ETransportResult QueueSend(const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept
+	Core::ETransportResult QueueSend(const Core::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept
 	{
 		const std::size_t PacketSize = InPacket.Size();
 		if (PacketSize == 0)
@@ -73,12 +73,12 @@ public:
 		}
 		if (InPacket.Data() == nullptr)
 		{
-			return ETransportResult::Invalid;
+			return Core::ETransportResult::Invalid;
 		}
 		if (PacketSize > MaxPacketBytes)
 		{
 			// The packet can never fit a slot; the request is malformed.
-			return ETransportResult::Invalid;
+			return Core::ETransportResult::Invalid;
 		}
 		return EnqueuePacket(InTo, InPacket);
 	}
@@ -88,15 +88,15 @@ public:
 	 * Responsibilities: Perform at most one device send, remove the head on Success, and retain the head and preserve order on
 	 *   Full, Unavailable, or Invalid; return Unavailable when the FIFO is empty so "nothing to send" is distinguishable.
 	 */
-	ETransportResult AdvanceSend() noexcept
+	Core::ETransportResult AdvanceSend() noexcept
 	{
 		if (QueuedPacketCount == 0)
 		{
-			return ETransportResult::Unavailable;
+			return Core::ETransportResult::Unavailable;
 		}
 		const Core::TSpan<const std::uint8_t> HeadPacket(Storage.PacketBytes[HeadIndex].data(), Storage.PacketLengths[HeadIndex]);
-		const ETransportResult SendResult = Device.TrySend(Storage.Destinations[HeadIndex], HeadPacket);
-		if (SendResult != ETransportResult::Success)
+		const Core::ETransportResult SendResult = Device.TrySend(Storage.Destinations[HeadIndex], HeadPacket);
+		if (SendResult != Core::ETransportResult::Success)
 		{
 			// Retain the head and preserve order; the caller retries on the next advance.
 			return SendResult;
@@ -104,7 +104,7 @@ public:
 		Storage.PacketLengths[HeadIndex] = 0;
 		HeadIndex = (HeadIndex + 1) % MaxPackets;
 		--QueuedPacketCount;
-		return ETransportResult::Success;
+		return Core::ETransportResult::Success;
 	}
 
 	/**
@@ -112,8 +112,7 @@ public:
 	 * Responsibilities: Delegate to the device transactionally, leaving the destination, OutResult.BytesReceived, and OutFrom
 	 *   unchanged on Full, Invalid, or Unavailable.
 	 */
-	ETransportResult Receive(
-		::MicroWorld::Transport::Address::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept
+	Core::ETransportResult Receive(Core::FDeviceAddress& OutFrom, Core::TSpan<std::uint8_t> InDestination, Core::FReceiveResult& OutResult) noexcept
 	{
 		return Device.TryReceive(OutFrom, InDestination, OutResult);
 	}
@@ -153,15 +152,15 @@ private:
 	 * Motivation: Completes a validated queue by appending to the FIFO tail.
 	 * Responsibilities: Return Full when no slot is free, otherwise store the packet and advance the tail.
 	 */
-	ETransportResult EnqueuePacket(const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept
+	Core::ETransportResult EnqueuePacket(const Core::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept
 	{
 		if (QueuedPacketCount >= MaxPackets)
 		{
-			return ETransportResult::Full;
+			return Core::ETransportResult::Full;
 		}
 		StorePacketAt(TailIndex, InTo, InPacket, InPacket.Size());
 		AdvanceTail();
-		return ETransportResult::Success;
+		return Core::ETransportResult::Success;
 	}
 
 	/**
@@ -170,7 +169,7 @@ private:
 	 */
 	void StorePacketAt(
 		const std::size_t InIndex,
-		const ::MicroWorld::Transport::Address::FDeviceAddress& InTo,
+		const Core::FDeviceAddress& InTo,
 		Core::TSpan<const std::uint8_t> InPacket,
 		const std::size_t InPacketSize) noexcept
 	{

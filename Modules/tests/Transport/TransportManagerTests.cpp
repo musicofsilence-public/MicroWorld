@@ -1,11 +1,10 @@
 #include "TestSupport.h"
 
 #include <MicroWorld/Core/Containers/Span.h>
+#include <MicroWorld/Core/IO/DeviceAddress.h>
 #include <MicroWorld/Core/IO/TransportDevice.h>
-#include <MicroWorld/Transport/DeviceAddress.h>
 #include <MicroWorld/Transport/TransportManager.h>
 #include <MicroWorld/Transport/TransportPacketStorage.h>
-#include <MicroWorld/Transport/TransportResult.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -13,13 +12,13 @@
 namespace
 {
 
+using MicroWorld::Core::ETransportResult;
+using MicroWorld::Core::FDeviceAddress;
 using MicroWorld::Core::FReceiveResult;
 using MicroWorld::Core::ITransportDevice;
 using MicroWorld::Core::TSpan;
-using MicroWorld::Transport::ETransportResult;
 using MicroWorld::Transport::TTransportManager;
 using MicroWorld::Transport::TTransportPacketStorage;
-using MicroWorld::Transport::Address::FDeviceAddress;
 
 /** Motivation: Sentinel address byte that proves a receive call did not overwrite the caller's address. */
 constexpr std::uint8_t UntouchedAddressByte = 0x42;
@@ -99,7 +98,7 @@ constexpr std::uint8_t RoutedPacketC[TwoBytePacketLength] = {0xC0, 0xC1};
  */
 constexpr FDeviceAddress MakeDest(const std::uint8_t InIndex) noexcept
 {
-	return MicroWorld::Transport::Address::MakeLoopbackAddress(InIndex);
+	return MicroWorld::Core::MakeLoopbackAddress(InIndex);
 }
 
 /**

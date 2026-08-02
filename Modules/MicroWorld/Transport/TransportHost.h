@@ -2,15 +2,14 @@
 
 #include <MicroWorld/Core/Containers/Span.h>
 #include <MicroWorld/Core/Delegates/Delegate.h>
+#include <MicroWorld/Core/IO/DeviceAddress.h>
 #include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Core/Log.h>
+#include <MicroWorld/Core/Time.h>
 #include <MicroWorld/Transport/ByteWriter.h>
-#include <MicroWorld/Transport/DeviceAddress.h>
 #include <MicroWorld/Transport/TransportManager.h>
 #include <MicroWorld/Transport/TransportPacketStorage.h>
 #include <MicroWorld/Transport/TransportProtocol.h>
-#include <MicroWorld/Transport/TransportResult.h>
-#include <MicroWorld/Core/Time.h>
 
 #include <array>
 #include <cstddef>
@@ -81,7 +80,7 @@ struct FTransportHostConfig
 	Core::DurationMilliseconds PeerTimeoutMilliseconds{DefaultPeerTimeoutMilliseconds};
 
 	/** Motivation: Names the server a client greets with Hello; ignored by every non-client mode. */
-	::MicroWorld::Transport::Address::FDeviceAddress ServerAddress{};
+	Core::FDeviceAddress ServerAddress{};
 
 	/** Motivation: Pins the protocol version advertised in Hello/Welcome; a mismatch is ignored, not admitted. */
 	std::uint8_t ProtocolVersion{DefaultProtocolVersion};
@@ -230,15 +229,15 @@ public:
 	 * Motivation: Sets the role and session parameters before the host starts so a running session cannot be silently reconfigured.
 	 * Responsibilities: Return Invalid without changing anything when the host is not Idle; otherwise store the mode and config.
 	 */
-	ETransportResult Configure(const ENetworkMode InMode, const FTransportHostConfig& InConfig) noexcept
+	Core::ETransportResult Configure(const ENetworkMode InMode, const FTransportHostConfig& InConfig) noexcept
 	{
 		if (State != ETransportHostState::Idle)
 		{
-			return ETransportResult::Invalid;
+			return Core::ETransportResult::Invalid;
 		}
 		Mode = InMode;
 		Config = InConfig;
-		return ETransportResult::Success;
+		return Core::ETransportResult::Success;
 	}
 
 	/**
@@ -246,11 +245,11 @@ public:
 	 * Responsibilities: Move a client to Connecting (greeting on the next PumpSend), a server to Listening, leave standalone Idle,
 	 *   and return Invalid when already started.
 	 */
-	ETransportResult Start(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
+	Core::ETransportResult Start(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		if (State != ETransportHostState::Idle)
 		{
-			return ETransportResult::Invalid;
+			return Core::ETransportResult::Invalid;
 		}
 		switch (Mode)
 		{
@@ -266,7 +265,7 @@ public:
 			case ENetworkMode::Standalone:
 				break;
 		}
-		return ETransportResult::Success;
+		return Core::ETransportResult::Success;
 	}
 
 	/**
@@ -287,15 +286,15 @@ public:
 	 * Responsibilities: Receive at most MaxPeers + 4 packets (handling control internally and dispatching application messages),
 	 *   evict peers past the timeout window, and return immediately for a standalone host.
 	 */
-	ETransportResult PumpReceive(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
+	Core::ETransportResult PumpReceive(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		if (Mode == ENetworkMode::Standalone)
 		{
-			return ETransportResult::Success;
+			return Core::ETransportResult::Success;
 		}
 		DrainInboundPackets(InNowMilliseconds);
 		EvictTimedOutPeers(InNowMilliseconds);
-		return ETransportResult::Success;
+		return Core::ETransportResult::Success;
 	}
 
 	/**
@@ -303,17 +302,17 @@ public:
 	 * Responsibilities: Send client Hello retries and due heartbeats, drain the outbound FIFO, run the device's pre-advance
 	 *   progress, and return immediately for a standalone host.
 	 */
-	ETransportResult PumpSend(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
+	Core::ETransportResult PumpSend(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		if (Mode == ENetworkMode::Standalone)
 		{
-			return ETransportResult::Success;
+			return Core::ETransportResult::Success;
 		}
 		SendClientHelloIfDue(InNowMilliseconds);
 		SendDueHeartbeats(InNowMilliseconds);
 		DrainOutbound();
 		Device.PreAdvance(InNowMilliseconds);
-		return ETransportResult::Success;
+		return Core::ETransportResult::Success;
 	}
 
 	/**
@@ -321,15 +320,15 @@ public:
 	 * Responsibilities: Return Unavailable for a standalone host, Invalid for channel 0 or an unresolved peer, and otherwise the
 	 *   framing or queue result.
 	 */
-	ETransportResult SendTo(const FPeerId InPeer, const std::uint8_t InChannel, Core::TSpan<const std::uint8_t> InPayload) noexcept
+	Core::ETransportResult SendTo(const FPeerId InPeer, const std::uint8_t InChannel, Core::TSpan<const std::uint8_t> InPayload) noexcept
 	{
 		if (Mode == ENetworkMode::Standalone)
 		{
-			return ETransportResult::Unavailable;
+			return Core::ETransportResult::Unavailable;
 		}
 		if (InChannel == ControlChannel)
 		{
-			return ETransportResult::Invalid;
+			return Core::ETransportResult::Invalid;
 		}
 		if (InPeer.Index == LocalPeerIndex)
 		{
@@ -338,7 +337,7 @@ public:
 		const FTransportPeerSlot* const Slot = ResolvePeer(InPeer);
 		if (Slot == nullptr)
 		{
-			return ETransportResult::Invalid;
+			return Core::ETransportResult::Invalid;
 		}
 		return QueueAppMessage(Slot->Address, InChannel, InPayload);
 	}
@@ -348,29 +347,29 @@ public:
 	 * Responsibilities: Best-effort queue to each active peer (a listen server also dispatches to its local peer directly),
 	 *   return Success when every active peer queued, and otherwise the first failure result.
 	 */
-	ETransportResult Broadcast(const std::uint8_t InChannel, Core::TSpan<const std::uint8_t> InPayload) noexcept
+	Core::ETransportResult Broadcast(const std::uint8_t InChannel, Core::TSpan<const std::uint8_t> InPayload) noexcept
 	{
 		if (Mode == ENetworkMode::Standalone)
 		{
-			return ETransportResult::Unavailable;
+			return Core::ETransportResult::Unavailable;
 		}
 		if (InChannel == ControlChannel)
 		{
-			return ETransportResult::Invalid;
+			return Core::ETransportResult::Invalid;
 		}
 		if (Mode == ENetworkMode::ListenServer)
 		{
 			DispatchToHandler(GetLocalPeer(), InChannel, InPayload);
 		}
-		ETransportResult Outcome = ETransportResult::Success;
+		Core::ETransportResult Outcome = Core::ETransportResult::Success;
 		for (std::size_t Index = 0; Index < MaxPeers; ++Index)
 		{
 			if (!Peers[Index].bActive)
 			{
 				continue;
 			}
-			const ETransportResult SlotResult = QueueAppMessage(Peers[Index].Address, InChannel, InPayload);
-			if (SlotResult != ETransportResult::Success && Outcome == ETransportResult::Success)
+			const Core::ETransportResult SlotResult = QueueAppMessage(Peers[Index].Address, InChannel, InPayload);
+			if (SlotResult != Core::ETransportResult::Success && Outcome == Core::ETransportResult::Success)
 			{
 				Outcome = SlotResult;
 			}
@@ -457,7 +456,7 @@ private:
 	struct FTransportPeerSlot
 	{
 		/** Motivation: Holds the transport address to reach this peer; empty while the slot is free. */
-		::MicroWorld::Transport::Address::FDeviceAddress Address{};
+		Core::FDeviceAddress Address{};
 
 		/** Motivation: Records the last packet received from this peer; drives timeout eviction. */
 		Core::TimePointMilliseconds LastReceiveMilliseconds{0};
@@ -519,7 +518,7 @@ private:
 	 * Motivation: Locates an active peer by address for admission and dispatch.
 	 * Responsibilities: Return the active peer index at the address, or MaxPeers when none matches.
 	 */
-	std::size_t FindActivePeerIndexByAddress(const ::MicroWorld::Transport::Address::FDeviceAddress& InAddress) const noexcept
+	std::size_t FindActivePeerIndexByAddress(const Core::FDeviceAddress& InAddress) const noexcept
 	{
 		for (std::size_t Index = 0; Index < MaxPeers; ++Index)
 		{
@@ -583,7 +582,7 @@ private:
 		// id from exactly 256 evictions ago would re-match -- an accepted,
 		// practically-unreachable window.
 		Slot.Generation = static_cast<std::uint8_t>(Slot.Generation + 1);
-		Slot.Address = ::MicroWorld::Transport::Address::FDeviceAddress{};
+		Slot.Address = Core::FDeviceAddress{};
 	}
 
 	/**
@@ -627,13 +626,11 @@ private:
 	 *   dispatch recognized application messages to the handler.
 	 */
 	void HandleInboundPacket(
-		const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom,
-		Core::TSpan<const std::uint8_t> InPacket,
-		const Core::TimePointMilliseconds InNowMilliseconds) noexcept
+		const Core::FDeviceAddress& InFrom, Core::TSpan<const std::uint8_t> InPacket, const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		FMessageHeader Header{};
 		Core::TSpan<const std::uint8_t> Payload{};
-		if (ReadMessage(InPacket, Header, Payload) != ETransportResult::Success)
+		if (ReadMessage(InPacket, Header, Payload) != Core::ETransportResult::Success)
 		{
 			MW_LOG_MSG(Log, "TransportHost", "dropped malformed inbound packet");
 			return;
@@ -658,12 +655,10 @@ private:
 	 * Responsibilities: Drop an unknown or malformed control message and dispatch Hello, Welcome, Heartbeat, and Bye.
 	 */
 	void HandleControlMessage(
-		const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom,
-		Core::TSpan<const std::uint8_t> InPayload,
-		const Core::TimePointMilliseconds InNowMilliseconds) noexcept
+		const Core::FDeviceAddress& InFrom, Core::TSpan<const std::uint8_t> InPayload, const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		FControlMessage Control{};
-		if (ReadControlMessage(InPayload, Control) != ETransportResult::Success)
+		if (ReadControlMessage(InPayload, Control) != Core::ETransportResult::Success)
 		{
 			MW_LOG_MSG(Log, "TransportHost", "dropped unknown or malformed control message");
 			return;
@@ -691,9 +686,7 @@ private:
 	 *   and reply with Welcome unless the table is full.
 	 */
 	void HandleHello(
-		const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom,
-		const FControlMessage& InControl,
-		const Core::TimePointMilliseconds InNowMilliseconds) noexcept
+		const Core::FDeviceAddress& InFrom, const FControlMessage& InControl, const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		if (!IsServer())
 		{
@@ -723,9 +716,7 @@ private:
 	 *   assigned identity, and enter Connected.
 	 */
 	void HandleWelcome(
-		const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom,
-		const FControlMessage& InControl,
-		const Core::TimePointMilliseconds InNowMilliseconds) noexcept
+		const Core::FDeviceAddress& InFrom, const FControlMessage& InControl, const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		if (Mode != ENetworkMode::Client)
 		{
@@ -754,7 +745,7 @@ private:
 	 * Motivation: Keeps a known peer alive on Heartbeat.
 	 * Responsibilities: Refresh a known peer's liveness and ignore heartbeats from strangers.
 	 */
-	void HandleHeartbeat(const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom, const Core::TimePointMilliseconds InNowMilliseconds) noexcept
+	void HandleHeartbeat(const Core::FDeviceAddress& InFrom, const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		const std::size_t Index = FindActivePeerIndexByAddress(InFrom);
 		if (Index == MaxPeers)
@@ -769,7 +760,7 @@ private:
 	 * Motivation: Removes a peer on Bye and returns a client to connecting if its server departed.
 	 * Responsibilities: Evict the matching peer and notify loss.
 	 */
-	void HandleBye(const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom) noexcept
+	void HandleBye(const Core::FDeviceAddress& InFrom) noexcept
 	{
 		const std::size_t Index = FindActivePeerIndexByAddress(InFrom);
 		if (Index == MaxPeers)
@@ -784,14 +775,14 @@ private:
 	 * Motivation: Replies to an admitted client with the identity it must use.
 	 * Responsibilities: Queue a Welcome carrying the assigned index and generation, logging if the queue is full.
 	 */
-	void SendWelcome(const std::size_t InPeerIndex, const ::MicroWorld::Transport::Address::FDeviceAddress& InTo) noexcept
+	void SendWelcome(const std::size_t InPeerIndex, const Core::FDeviceAddress& InTo) noexcept
 	{
 		FControlMessage Welcome{};
 		Welcome.Type = EControlMessageType::Welcome;
 		Welcome.ProtocolVersion = Config.ProtocolVersion;
 		Welcome.PeerIndex = static_cast<std::uint8_t>(InPeerIndex);
 		Welcome.PeerGeneration = Peers[InPeerIndex].Generation;
-		if (QueueControl(InTo, Welcome) != ETransportResult::Success)
+		if (QueueControl(InTo, Welcome) != Core::ETransportResult::Success)
 		{
 			MW_LOG_MSG(Warning, "TransportHost", "Welcome not queued: outbound queue full");
 		}
@@ -806,7 +797,7 @@ private:
 		FControlMessage Hello{};
 		Hello.Type = EControlMessageType::Hello;
 		Hello.ProtocolVersion = Config.ProtocolVersion;
-		if (QueueControl(Config.ServerAddress, Hello) != ETransportResult::Success)
+		if (QueueControl(Config.ServerAddress, Hello) != Core::ETransportResult::Success)
 		{
 			MW_LOG_MSG(Warning, "TransportHost", "Hello not queued: outbound queue full");
 		}
@@ -816,12 +807,12 @@ private:
 	 * Motivation: Frames and queues a control message in one step so callers avoid the writer directly.
 	 * Responsibilities: Encode the control message into a fixed buffer and queue it to InTo; return the framing or queue result.
 	 */
-	ETransportResult QueueControl(const ::MicroWorld::Transport::Address::FDeviceAddress& InTo, const FControlMessage& InControl) noexcept
+	Core::ETransportResult QueueControl(const Core::FDeviceAddress& InTo, const FControlMessage& InControl) noexcept
 	{
 		std::array<std::uint8_t, MessageHeaderBytes + MaxControlPayloadBytes> FrameBuffer{};
 		FByteWriter Writer(Core::TSpan<std::uint8_t>(FrameBuffer.data(), FrameBuffer.size()));
-		const ETransportResult WriteResult = WriteControlMessage(Writer, InControl);
-		if (WriteResult != ETransportResult::Success)
+		const Core::ETransportResult WriteResult = WriteControlMessage(Writer, InControl);
+		if (WriteResult != Core::ETransportResult::Success)
 		{
 			return WriteResult;
 		}
@@ -832,15 +823,13 @@ private:
 	 * Motivation: Frames and queues an application message in one step so callers avoid the writer directly.
 	 * Responsibilities: Encode the message into a fixed buffer and queue it to InTo; return the framing or queue result.
 	 */
-	ETransportResult QueueAppMessage(
-		const ::MicroWorld::Transport::Address::FDeviceAddress& InTo,
-		const std::uint8_t InChannel,
-		Core::TSpan<const std::uint8_t> InPayload) noexcept
+	Core::ETransportResult QueueAppMessage(
+		const Core::FDeviceAddress& InTo, const std::uint8_t InChannel, Core::TSpan<const std::uint8_t> InPayload) noexcept
 	{
 		std::array<std::uint8_t, MaxPacketBytes> FrameBuffer{};
 		FByteWriter Writer(Core::TSpan<std::uint8_t>(FrameBuffer.data(), FrameBuffer.size()));
-		const ETransportResult WriteResult = WriteMessage(Writer, InChannel, InPayload);
-		if (WriteResult != ETransportResult::Success)
+		const Core::ETransportResult WriteResult = WriteMessage(Writer, InChannel, InPayload);
+		if (WriteResult != Core::ETransportResult::Success)
 		{
 			return WriteResult;
 		}
@@ -864,7 +853,7 @@ private:
 	{
 		for (std::size_t Count = 0; Count < SendQueueDepth; ++Count)
 		{
-			if (OutboundManager.AdvanceSend() != ETransportResult::Success)
+			if (OutboundManager.AdvanceSend() != Core::ETransportResult::Success)
 			{
 				// Unavailable means the FIFO is empty; a device failure retains the head for a later drain.
 				break;
@@ -882,11 +871,11 @@ private:
 		const std::size_t MaxReceives = MaxPeers + PumpSlackPackets;
 		for (std::size_t Count = 0; Count < MaxReceives; ++Count)
 		{
-			::MicroWorld::Transport::Address::FDeviceAddress From{};
+			Core::FDeviceAddress From{};
 			Core::FReceiveResult Result{};
-			const ETransportResult ReceiveResult =
+			const Core::ETransportResult ReceiveResult =
 				OutboundManager.Receive(From, Core::TSpan<std::uint8_t>(ReceiveBuffer.data(), ReceiveBuffer.size()), Result);
-			if (ReceiveResult != ETransportResult::Success)
+			if (ReceiveResult != Core::ETransportResult::Success)
 			{
 				// Unavailable means the transport is drained; any other failure cannot make progress now.
 				break;
@@ -974,22 +963,21 @@ private:
 	 * Motivation: Short-circuits a send to the listen server's local peer so it skips the device entirely.
 	 * Responsibilities: Dispatch directly to the handler in ListenServer mode and return Invalid in any other.
 	 */
-	ETransportResult SendToLocalPeer(const std::uint8_t InChannel, Core::TSpan<const std::uint8_t> InPayload) noexcept
+	Core::ETransportResult SendToLocalPeer(const std::uint8_t InChannel, Core::TSpan<const std::uint8_t> InPayload) noexcept
 	{
 		if (Mode != ENetworkMode::ListenServer)
 		{
-			return ETransportResult::Invalid;
+			return Core::ETransportResult::Invalid;
 		}
 		DispatchToHandler(GetLocalPeer(), InChannel, InPayload);
-		return ETransportResult::Success;
+		return Core::ETransportResult::Success;
 	}
 
 	/**
 	 * Motivation: Adds or refreshes a peer on Hello so admission is idempotent per address.
 	 * Responsibilities: Find this address's peer or allocate a free slot, refresh liveness, and return MaxPeers when the table is full.
 	 */
-	std::size_t AdmitPeer(
-		const ::MicroWorld::Transport::Address::FDeviceAddress& InFrom, const Core::TimePointMilliseconds InNowMilliseconds) noexcept
+	std::size_t AdmitPeer(const Core::FDeviceAddress& InFrom, const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
 		std::size_t Index = FindActivePeerIndexByAddress(InFrom);
 		if (Index == MaxPeers)
