@@ -119,7 +119,7 @@ TSharedPointerResult<ValueType, Mode> TWeakPtr<ValueType, Mode>::Pin() const noe
  * Responsibilities: Allocate combined storage from InResource, construct the value with forwarded arguments, and
  *   return the typed outcome and first strong owner on success or the exact resource failure otherwise.
  */
-template<typename ValueType, ESharedPointerMode Mode = ESharedPointerMode::SingleThreaded, typename... ConstructorArgumentTypes>
+template<typename ValueType, ESharedPointerMode Mode, typename... ConstructorArgumentTypes>
 TSharedPointerResult<ValueType, Mode> MakeShared(IMemoryResource& InResource, ConstructorArgumentTypes&&... Arguments) noexcept
 {
 	static_assert(Mode == ESharedPointerMode::SingleThreaded, "Only single-threaded shared pointers are available.");

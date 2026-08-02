@@ -21,7 +21,7 @@ struct TSharedPointerResult;
 template<typename ValueType, ESharedPointerMode Mode>
 struct TWeakPointerResult;
 
-template<typename ValueType, ESharedPointerMode Mode, typename... ConstructorArgumentTypes>
+template<typename ValueType, ESharedPointerMode Mode = ESharedPointerMode::SingleThreaded, typename... ConstructorArgumentTypes>
 TSharedPointerResult<ValueType, Mode> MakeShared(IMemoryResource&, ConstructorArgumentTypes&&...) noexcept;
 
 /**
