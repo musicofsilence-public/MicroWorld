@@ -32,9 +32,9 @@ extern "C" void app_main(void)
 		Log,
 		"ex01",
 		"microworld %u.%u.%u",
-		static_cast<unsigned>(MicroWorld::Version.Major),
-		static_cast<unsigned>(MicroWorld::Version.Minor),
-		static_cast<unsigned>(MicroWorld::Version.Patch));
+		static_cast<unsigned>(MicroWorld::Core::Version.Major),
+		static_cast<unsigned>(MicroWorld::Core::Version.Minor),
+		static_cast<unsigned>(MicroWorld::Core::Version.Patch));
 
 	// Static, never on the app_main stack (the ESP32-S3 stack lesson, §2.2).
 	static FCoreTickExample CoreTickExample{};

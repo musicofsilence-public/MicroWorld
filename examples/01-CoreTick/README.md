@@ -24,7 +24,7 @@ visible with a real clock.
 - `FTickDecision` (`bShouldTick`, `Context.DeltaMilliseconds`)
 - `TimePointMilliseconds`
 - `FEsp32TimeSource::Now`
-- `FVersion` (`MicroWorld::Version`, printed once at boot)
+- `FVersion` (`MicroWorld::Core::Version`, printed once at boot)
 
 `FCoreTickExample` is platform-neutral. The ESP32 adapter prints the trace;
 the Pico adapter uses Pico monotonic time inside one static FreeRTOS task.
