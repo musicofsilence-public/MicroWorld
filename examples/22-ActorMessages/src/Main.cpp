@@ -6,6 +6,10 @@
 
 #include <MicroWorld/Engine/Actor.h>
 #include <MicroWorld/Engine/ActorComponent.h>
+#include <MicroWorld/Engine/ActorSpawnRequest.h>
+#include <MicroWorld/Engine/ActorSpawnRequestResult.h>
+#include <MicroWorld/Engine/ActorSpawnState.h>
+#include <MicroWorld/Engine/ActorSpawnStatus.h>
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Engine/EngineResult.h>
 #include <MicroWorld/Engine/ObjectStore.h>

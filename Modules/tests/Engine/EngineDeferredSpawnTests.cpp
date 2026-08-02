@@ -2,7 +2,12 @@
 #include "TestSupport.h"
 
 #include <MicroWorld/Engine/EngineHost.h>
+#include <MicroWorld/Engine/ActorSpawnRequest.h>
+#include <MicroWorld/Engine/ActorSpawnRequestResult.h>
+#include <MicroWorld/Engine/ActorSpawnState.h>
+#include <MicroWorld/Engine/ActorSpawnStatus.h>
 #include <MicroWorld/Engine/EngineStorage.h>
+#include <MicroWorld/Engine/TDeferredActorSpawnStorage.h>
 
 #include <array>
 #include <cstddef>

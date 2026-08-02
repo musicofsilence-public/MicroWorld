@@ -2,7 +2,7 @@
 
 #include <MicroWorld/Engine/Actor.h>
 #include <MicroWorld/Engine/ActorComponent.h>
-#include <MicroWorld/Engine/DeferredActorSpawn.h>
+#include <MicroWorld/Engine/TDeferredActorSpawnStorage.h>
 #include <MicroWorld/Engine/EngineClassIds.h>
 #include <MicroWorld/Engine/EngineRuntime.h>
 #include <MicroWorld/Engine/EngineStorage.h>

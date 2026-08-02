@@ -1,7 +1,13 @@
 #pragma once
 
 #include <MicroWorld/Engine/Actor.h>
-#include <MicroWorld/Engine/DeferredActorSpawn.h>
+#include <MicroWorld/Engine/ActorFactory.h>
+#include <MicroWorld/Engine/ActorSpawnHandle.h>
+#include <MicroWorld/Engine/ActorSpawnRequest.h>
+#include <MicroWorld/Engine/ActorSpawnRequestResult.h>
+#include <MicroWorld/Engine/ActorSpawnStatus.h>
+#include <MicroWorld/Engine/DeferredActorSpawnStorageReference.h>
+#include <MicroWorld/Engine/FactoryOperations.h>
 #include <MicroWorld/Engine/EngineRegistryView.h>
 #include <MicroWorld/Engine/EngineResult.h>
 #include <MicroWorld/Core/LifecycleGuard.h>
