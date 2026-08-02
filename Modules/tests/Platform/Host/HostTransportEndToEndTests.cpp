@@ -8,7 +8,8 @@
 #include <MicroWorld/Platform/Host/HostWifiDevice.h>
 #include <MicroWorld/Platform/Host/UdpAddress.h>
 #include <MicroWorld/Core/Time.h>
-#include <MicroWorld/Core/Delegates/Delegate.h>
+#include <MicroWorld/Core/Delegates/DelegateHandle.h>
+#include <MicroWorld/Core/Delegates/DelegateResult.h>
 
 #include <array>
 #include <cstddef>

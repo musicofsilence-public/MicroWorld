@@ -1,6 +1,6 @@
 #include "TestSupport.h"
 
-#include <MicroWorld/Core/Delegates/Delegate.h>
+#include <MicroWorld/Core/Delegates/MulticastDelegate.h>
 
 #include <cstddef>
 #include <type_traits>

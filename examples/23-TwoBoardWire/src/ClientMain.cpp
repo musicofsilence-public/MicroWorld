@@ -1,7 +1,7 @@
 #include "TwoBoardWireShared.h"
 
 #include <MicroWorld/Core/Containers/Span.h>
-#include <MicroWorld/Core/Delegates/Delegate.h>
+#include <MicroWorld/Core/Delegates/DelegateResult.h>
 #include <MicroWorld/Engine/Actor.h>
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Engine/EngineResult.h>

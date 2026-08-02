@@ -1,6 +1,6 @@
 #include "GuaranteedDeliveryShared.h"
 
-#include <MicroWorld/Core/Delegates/Delegate.h>
+#include <MicroWorld/Core/Delegates/DelegateResult.h>
 #include <MicroWorld/Core/Log.h>
 #include <MicroWorld/Engine/Actor.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>

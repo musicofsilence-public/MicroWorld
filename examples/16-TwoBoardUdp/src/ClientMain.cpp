@@ -1,7 +1,7 @@
 #include "UdpMessagingShared.h"
 
 #include <MicroWorld/Core/Containers/Span.h>
-#include <MicroWorld/Core/Delegates/Delegate.h>
+#include <MicroWorld/Core/Delegates/DelegateHandle.h>
 #include <MicroWorld/Core/Log.h>
 #include <MicroWorld/Transport/TransportHost.h>
 #include <MicroWorld/Core/IO/DeviceAddress.h>
