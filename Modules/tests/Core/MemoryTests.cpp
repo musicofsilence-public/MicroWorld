@@ -4,7 +4,7 @@
 #include <MicroWorld/Core/Containers/StaticVector.h>
 #include <MicroWorld/Core/Memory/FixedArena.h>
 #include <MicroWorld/Core/Memory/TSharedPointerDefinitions.h>
-#include <MicroWorld/Core/Memory/UniquePtr.h>
+#include <MicroWorld/Core/Memory/UniquePointerResult.h>
 
 #include <array>
 #include <cstddef>
