@@ -3,6 +3,7 @@
 #include <MicroWorld/Platform/Pico/PicoLoraDevice.h>
 
 #include <FreeRTOS.h>
+#include <pico/stdlib.h>
 #include <task.h>
 
 #include <cstddef>
@@ -66,6 +67,18 @@ constexpr TickType_t VolleyPeriodTicks = pdMS_TO_TICKS(1000);
 /** Motivation: Paces UART polling and one-byte transmit advancement without busy-spinning the task. */
 constexpr TickType_t PollPeriodTicks = pdMS_TO_TICKS(10);
 
+/** Motivation: Makes task liveness visible on the headless board — blinking means alive, solid means Initialize failed, dark means never booted. */
+constexpr unsigned int HeartbeatLedPin = PICO_DEFAULT_LED_PIN;
+
+/** Motivation: Times the heartbeat at a human-readable one-second blink derived from the task's own tick count. */
+constexpr TickType_t HeartbeatHalfPeriodTicks = pdMS_TO_TICKS(500);
+
+/** Motivation: Makes a received radio frame visible as a burst of rapid blinking on the console-less board. */
+constexpr TickType_t ReceiveFlashHalfPeriodTicks = pdMS_TO_TICKS(100);
+
+/** Motivation: Holds the rapid receive flash long enough for a human to notice one frame. */
+constexpr TickType_t ReceiveFlashHoldTicks = pdMS_TO_TICKS(3000);
+
 /** Motivation: Reserves a fixed stack for the sole LoRa task through the firmware lifetime. */
 constexpr configSTACK_DEPTH_TYPE LoraTaskStackDepth = 512;
 
@@ -88,6 +101,17 @@ constexpr MicroWorld::Platform::Pico::FPicoE32LoraConfig LoraConfig{
 bool IsTickDue(const TickType_t InNow, const TickType_t InDue) noexcept
 {
 	return static_cast<std::int32_t>(InNow - InDue) >= 0;
+}
+
+/**
+ * Motivation: Proves on the headless board that the LoRa task is still looping, without a console.
+ * Responsibilities: Drive the onboard LED from the tick count so a stalled task freezes the blink,
+ * and blink rapidly until `InReceiveFlashUntil` so a received radio frame is visible to a human.
+ */
+void ShowHeartbeat(const TickType_t InNow, const TickType_t InReceiveFlashUntil) noexcept
+{
+	const TickType_t HalfPeriodTicks = IsTickDue(InNow, InReceiveFlashUntil) ? HeartbeatHalfPeriodTicks : ReceiveFlashHalfPeriodTicks;
+	gpio_put(HeartbeatLedPin, ((InNow / HalfPeriodTicks) % 2u) == 0u);
 }
 
 #if !defined(MICROWORLD_LORA_PAYLOAD_REGRESSION)
@@ -149,6 +173,7 @@ void RunLoraInteropTask(void* const InContext)
 	bool bHasPendingTransmit = true;
 	std::uint32_t PendingCounter = 1;
 	TickType_t PendingTransmitDue = xTaskGetTickCount() + VolleyPeriodTicks;
+	TickType_t ReceiveFlashUntil = xTaskGetTickCount();
 
 	for (;;)
 	{
@@ -161,13 +186,19 @@ void RunLoraInteropTask(void* const InContext)
 		const MicroWorld::Core::ETransportResult ReceiveResult =
 			LoraDevice.TryReceive(From, MicroWorld::Core::TSpan<std::uint8_t>(ReceiveBuffer, sizeof(ReceiveBuffer)), Received);
 		const TickType_t Now = xTaskGetTickCount();
-		if (ReceiveResult == MicroWorld::Core::ETransportResult::Success && IsExpectedPeerPayload(From, Received, ReceiveBuffer))
+		if (ReceiveResult == MicroWorld::Core::ETransportResult::Success)
 		{
-			bHasPendingTransmit = true;
-			PendingCounter = ReadVolleyCounter(ReceiveBuffer) + 1u;
-			PendingTransmitDue = Now + VolleyPeriodTicks;
+			// Any decoded frame flashes the LED, even a rejected one, so a one-directional radio path is still visible.
+			ReceiveFlashUntil = Now + ReceiveFlashHoldTicks;
+			if (IsExpectedPeerPayload(From, Received, ReceiveBuffer))
+			{
+				bHasPendingTransmit = true;
+				PendingCounter = ReadVolleyCounter(ReceiveBuffer) + 1u;
+				PendingTransmitDue = Now + VolleyPeriodTicks;
+			}
 		}
 
+		ShowHeartbeat(Now, ReceiveFlashUntil);
 		if (bHasPendingTransmit && IsTickDue(Now, PendingTransmitDue))
 		{
 			std::uint8_t Payload[VolleyPayloadBytes]{};
@@ -316,6 +347,7 @@ void RunLoraInteropTask(void* const InContext)
 	std::uint8_t PayloadBuffer[MicroWorld::Transport::E32MaxPayloadBytes]{};
 	EPayloadRegressionState State = EPayloadRegressionState::SendEmpty;
 	TickType_t EmptyRetryDue = xTaskGetTickCount();
+	TickType_t ReceiveFlashUntil = xTaskGetTickCount();
 
 	for (;;)
 	{
@@ -325,10 +357,12 @@ void RunLoraInteropTask(void* const InContext)
 			LoraDevice.TryReceive(From, MicroWorld::Core::TSpan<std::uint8_t>(PayloadBuffer, sizeof(PayloadBuffer)), Received);
 		if (ReceiveResult == MicroWorld::Core::ETransportResult::Success)
 		{
+			ReceiveFlashUntil = xTaskGetTickCount() + ReceiveFlashHoldTicks;
 			AdvancePayloadRegressionReceiveState(State, From, Received, PayloadBuffer);
 		}
 
 		const TickType_t Now = xTaskGetTickCount();
+		ShowHeartbeat(Now, ReceiveFlashUntil);
 		if (State == EPayloadRegressionState::AwaitEmptyEcho && IsTickDue(Now, EmptyRetryDue))
 		{
 			State = EPayloadRegressionState::SendEmpty;
@@ -351,9 +385,14 @@ void RunLoraInteropTask(void* const InContext)
  */
 int main()
 {
+	gpio_init(HeartbeatLedPin);
+	gpio_set_dir(HeartbeatLedPin, GPIO_OUT);
+
 	MicroWorld::Platform::Pico::FPicoLoraDevice LoraDevice;
 	if (LoraDevice.Initialize(LoraConfig) != MicroWorld::Core::ETransportResult::Success)
 	{
+		// A solid LED distinguishes a failed radio Initialize from a firmware that never booted (dark) on this console-less board.
+		gpio_put(HeartbeatLedPin, true);
 		return 1;
 	}
 
