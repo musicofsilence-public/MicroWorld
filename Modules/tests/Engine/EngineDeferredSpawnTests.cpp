@@ -2,6 +2,7 @@
 #include "TestSupport.h"
 
 #include <MicroWorld/Engine/EngineHost.h>
+#include <MicroWorld/Engine/DefaultEngineTraits.h>
 #include <MicroWorld/Engine/ActorSpawnRequest.h>
 #include <MicroWorld/Engine/ActorSpawnRequestResult.h>
 #include <MicroWorld/Engine/ActorSpawnState.h>

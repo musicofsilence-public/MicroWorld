@@ -4,6 +4,7 @@
 #include <MicroWorld/Engine/Actor.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Engine/EngineHost.h>
+#include <MicroWorld/Engine/DefaultEngineTraits.h>
 #include <MicroWorld/Engine/EngineResult.h>
 #include <MicroWorld/Engine/PlaySystemSet.h>
 #include <MicroWorld/Engine/GarbageCollectionBudget.h>
