@@ -1,7 +1,8 @@
 #pragma once
 
 #include <MicroWorld/Engine/EngineResult.h>
-#include <MicroWorld/Core/Lifecycle.h>
+#include <MicroWorld/Core/LifecycleGuard.h>
+#include <MicroWorld/Core/LifecycleState.h>
 #include <MicroWorld/Engine/Object.h>
 #include <MicroWorld/Engine/ObjectHandle.h>
 #include <MicroWorld/Engine/ObjectPtr.h>

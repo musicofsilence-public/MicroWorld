@@ -1,7 +1,7 @@
 #pragma once
 
 #include <MicroWorld/Engine/EngineRuntime.h>
-#include <MicroWorld/Core/Lifecycle.h>
+#include <MicroWorld/Core/LifecycleGuard.h>
 #include <MicroWorld/Core/RuntimeResult.h>
 #include <MicroWorld/Core/Time.h>
 
