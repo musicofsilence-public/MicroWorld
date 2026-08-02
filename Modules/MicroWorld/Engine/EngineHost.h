@@ -15,7 +15,7 @@
 #include <MicroWorld/Engine/ObjectPtr.h>
 #include <MicroWorld/Engine/ObjectStore.h>
 #include <MicroWorld/Core/Time.h>
-#include <MicroWorld/Core/Timer.h>
+#include <MicroWorld/Core/TimerManager.h>
 
 #include <array>
 #include <cstddef>

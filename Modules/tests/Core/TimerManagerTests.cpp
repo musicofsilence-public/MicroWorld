@@ -3,7 +3,7 @@
 
 #include <MicroWorld/Core/Delegates/Delegate.h>
 #include <MicroWorld/Core/Time.h>
-#include <MicroWorld/Core/Timer.h>
+#include <MicroWorld/Core/TimerManager.h>
 
 #include <cstddef>
 #include <cstdint>

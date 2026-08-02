@@ -10,7 +10,7 @@
 #include <MicroWorld/Engine/World.h>
 #include <MicroWorld/Engine/GarbageCollector.h>
 #include <MicroWorld/Engine/ObjectStore.h>
-#include <MicroWorld/Core/Timer.h>
+#include <MicroWorld/Core/TimerManager.h>
 #include <MicroWorld/Core/Version.h>
 
 #include <cstddef>

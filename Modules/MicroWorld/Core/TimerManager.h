@@ -2,6 +2,9 @@
 
 #include <MicroWorld/Core/Delegates/Delegate.h>
 #include <MicroWorld/Core/Time.h>
+#include <MicroWorld/Core/TimerHandle.h>
+#include <MicroWorld/Core/TimerMode.h>
+#include <MicroWorld/Core/TimerResult.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -10,109 +13,6 @@
 
 namespace MicroWorld::Core
 {
-
-/**
- * Motivation: Gives every bounded timer operation one result vocabulary that does not borrow unrelated
- *   lifecycle errors.
- * Responsibilities: Distinguish success from capacity, callback, handle, mode, dispatch, and time-rollback failures.
- * Example:
- *   if (Manager.Cancel(Handle) == ETimerResult::StaleHandle) { IgnoreStale(); }
- */
-enum class ETimerResult : std::uint8_t
-{
-	/** Motivation: Confirms that the requested timer operation completed. */
-	Success,
-
-	/** Motivation: Reports that no reusable timer slot remains, including zero capacity and retired generations. */
-	CapacityExceeded,
-
-	/** Motivation: Rejects an unbound delegate before any slot is consumed or callback ownership moves. */
-	InvalidCallback,
-
-	/** Motivation: Rejects a default, sentinel, or out-of-range handle before consulting slot state. */
-	InvalidHandle,
-
-	/** Motivation: Rejects a handle whose slot is free, retired, removed, expired, or holds another generation. */
-	StaleHandle,
-
-	/** Motivation: Rejects a timer mode that is neither OneShot nor Looping. */
-	InvalidMode,
-
-	/** Motivation: Prevents Schedule, Cancel, and nested Advance from mutating an active dispatch. */
-	DispatchLocked,
-
-	/** Motivation: Prevents unsigned time arithmetic from accepting a rolled-back caller clock. */
-	NonMonotonicTime,
-};
-
-/**
- * Motivation: Selects one timer schedule shape independently of its bound callback.
- * Responsibilities: Distinguish the unscheduled default from one-shot and looping schedules.
- * Example:
- *   ETimerMode Mode = ETimerMode::Looping;
- */
-enum class ETimerMode : std::uint8_t
-{
-	/** Motivation: Rejects scheduling so an uninitialized mode never silently becomes OneShot or Looping. */
-	None,
-
-	/** Motivation: Fires once and removes the timer so its handle becomes stale. */
-	OneShot,
-
-	/** Motivation: Reschedules from the accepted NowMilliseconds after each fire and stays in insertion order. */
-	Looping,
-};
-
-/**
- * Motivation: Lets a caller carry one live timer identity without exposing storage or extending the callback's lifetime.
- * Responsibilities: Pair a slot index with a generation and never mutate on its own; a handle is local to the
- *   manager that issued it and must not be carried between managers.
- * Example:
- *   FTimerHandle Handle;
- *   if (Handle.IsValid()) { Manager.Cancel(Handle); }
- */
-struct FTimerHandle final
-{
-	/** Motivation: Reserves the maximum index as the invalid sentinel independent of manager capacity. */
-	static constexpr std::uint16_t InvalidIndex = std::numeric_limits<std::uint16_t>::max();
-
-	/** Motivation: Selects the fixed slot while preserving an explicit invalid sentinel. */
-	std::uint16_t Index{InvalidIndex};
-
-	/** Motivation: Distinguishes successive schedules that occupy the same slot. */
-	std::uint32_t Generation{0};
-
-	/**
-	 * Motivation: Lets a caller reject a default or stale value before consulting its owning manager.
-	 * Responsibilities: Report true only when the index and generation together look like a live timer.
-	 */
-	constexpr bool IsValid() const noexcept { return Index != InvalidIndex && Generation != 0; }
-
-	/**
-	 * Motivation: Lets containers compare two handles by complete stable identity.
-	 * Responsibilities: Return true only when both index and generation match.
-	 */
-	friend constexpr bool operator==(const FTimerHandle InLeft, const FTimerHandle InRight) noexcept
-	{
-		return InLeft.Index == InRight.Index && InLeft.Generation == InRight.Generation;
-	}
-
-	/**
-	 * Motivation: Lets a caller tell two handles apart by stable identity.
-	 * Responsibilities: Return true whenever the slot or generation identity differs.
-	 */
-	friend constexpr bool operator!=(const FTimerHandle InLeft, const FTimerHandle InRight) noexcept { return !(InLeft == InRight); }
-};
-
-/**
- * Motivation: Confirms that one more live generation can be published without wrapping.
- * Responsibilities: Report whether the generation is below its maximum, so a manager can retire a slot before
- *   wrapping would make an old handle valid again.
- */
-constexpr bool CanAdvanceTimerGeneration(const std::uint32_t InCurrentGeneration) noexcept
-{
-	return InCurrentGeneration < std::numeric_limits<std::uint32_t>::max();
-}
 
 /**
  * Motivation: Owns a bounded set of caller-scheduled timers and dispatches them deterministically.

@@ -11,7 +11,9 @@
 #include <MicroWorld/Engine/Object.h>
 #include <MicroWorld/Engine/ObjectStore.h>
 #include <MicroWorld/Core/Time.h>
-#include <MicroWorld/Core/Timer.h>
+#include <MicroWorld/Core/TimerHandle.h>
+#include <MicroWorld/Core/TimerMode.h>
+#include <MicroWorld/Core/TimerResult.h>
 
 #include <cstddef>
 #include <cstdint>

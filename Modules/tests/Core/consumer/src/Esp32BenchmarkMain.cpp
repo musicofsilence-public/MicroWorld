@@ -35,7 +35,9 @@
 #include <MicroWorld/Platform/Esp32/Esp32TimeSource.h>
 #include <MicroWorld/Platform/Esp32/Esp32WifiDevice.h>
 #include <MicroWorld/Core/Time.h>
-#include <MicroWorld/Core/Timer.h>
+#include <MicroWorld/Core/TimerHandle.h>
+#include <MicroWorld/Core/TimerMode.h>
+#include <MicroWorld/Core/TimerResult.h>
 
 #include <esp_event.h>
 #include <esp_heap_caps.h>
