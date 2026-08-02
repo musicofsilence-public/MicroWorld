@@ -1,7 +1,9 @@
 #pragma once
 
 #include <MicroWorld/Core/ByteCodecConstants.h>
+#include <MicroWorld/Core/Memory/MemoryBlock.h>
 #include <MicroWorld/Core/Memory/MemoryResource.h>
+#include <MicroWorld/Core/Memory/MemoryResult.h>
 
 #include <array>
 #include <cstddef>
