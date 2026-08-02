@@ -2,6 +2,7 @@
 
 #include <MicroWorld/Core/Time.h>
 #include <MicroWorld/Core/TickConfiguration.h>
+#include <MicroWorld/Core/TickDecision.h>
 
 namespace MicroWorld::Core
 {

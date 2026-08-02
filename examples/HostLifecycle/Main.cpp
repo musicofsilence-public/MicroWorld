@@ -1,3 +1,4 @@
+#include <MicroWorld/Core/TickContext.h>
 #include <MicroWorld/Engine/Actor.h>
 #include <MicroWorld/Engine/ActorComponent.h>
 #include <MicroWorld/Engine/EngineHost.h>

@@ -2,6 +2,7 @@
 #include "TestSupport.h"
 
 #include <MicroWorld/Core/Delegates/Delegate.h>
+#include <MicroWorld/Core/TickContext.h>
 #include <MicroWorld/Engine/EngineClassIds.h>
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Engine/EngineResult.h>

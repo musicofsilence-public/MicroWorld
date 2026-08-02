@@ -2,6 +2,7 @@
 
 #include <MicroWorld/Core/Containers/Span.h>
 #include <MicroWorld/Core/Log.h>
+#include <MicroWorld/Core/TickContext.h>
 #include <MicroWorld/Engine/Actor.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Engine/EngineHost.h>

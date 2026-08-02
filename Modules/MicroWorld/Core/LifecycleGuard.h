@@ -1,6 +1,7 @@
 #pragma once
 
 #include <MicroWorld/Core/LifecycleState.h>
+#include <MicroWorld/Core/RuntimeResult.h>
 #include <MicroWorld/Core/Time.h>
 
 namespace MicroWorld::Core

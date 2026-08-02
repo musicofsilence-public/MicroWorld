@@ -9,6 +9,7 @@
 #include <MicroWorld/Engine/ObjectStore.h>
 #include <MicroWorld/Engine/ObjectPtr.h>
 #include <MicroWorld/Core/TickConfiguration.h>
+#include <MicroWorld/Core/TickDecision.h>
 
 namespace MicroWorld::Engine
 {

@@ -1,6 +1,7 @@
 #include "EngineTestSupport.h"
 #include "TestSupport.h"
 
+#include <MicroWorld/Core/TickContext.h>
 #include <MicroWorld/Engine/Actor.h>
 #include <MicroWorld/Engine/ActorComponent.h>
 #include <MicroWorld/Engine/EngineResult.h>

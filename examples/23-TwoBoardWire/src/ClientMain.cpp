@@ -7,6 +7,7 @@
 #include <MicroWorld/Engine/EngineResult.h>
 #include <MicroWorld/Engine/World.h>
 #include <MicroWorld/Core/Log.h>
+#include <MicroWorld/Core/TickContext.h>
 #include <MicroWorld/Messaging/MessageTypes.h>
 #include <MicroWorld/Messaging/MessagingSystem.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>

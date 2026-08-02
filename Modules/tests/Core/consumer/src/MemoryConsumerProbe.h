@@ -6,6 +6,7 @@
 #include <MicroWorld/Core/Memory/FixedArena.h>
 #include <MicroWorld/Core/Memory/TSharedPointerDefinitions.h>
 #include <MicroWorld/Core/Memory/UniquePointerResult.h>
+#include <MicroWorld/Core/TickDecision.h>
 #include <MicroWorld/Core/TickFunction.h>
 #include <MicroWorld/Core/Version.h>
 
