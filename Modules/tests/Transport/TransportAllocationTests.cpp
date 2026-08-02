@@ -10,7 +10,9 @@
 #include <MicroWorld/Transport/HostLoopback.h>
 #include <MicroWorld/Transport/TransportManager.h>
 #include <MicroWorld/Transport/TransportPacketStorage.h>
-#include <MicroWorld/Transport/TransportProtocol.h>
+#include <MicroWorld/Transport/EControlMessageType.h>
+#include <MicroWorld/Transport/FControlMessage.h>
+#include <MicroWorld/Transport/FMessageHeader.h>
 
 #include <cstddef>
 #include <cstdint>
