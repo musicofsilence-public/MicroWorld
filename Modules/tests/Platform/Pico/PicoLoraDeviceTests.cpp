@@ -2,7 +2,8 @@
 
 #include <MicroWorld/Transport/Lora/E32Lora.h>
 #include <MicroWorld/Transport/FrameCodec.h>
-#include <MicroWorld/Core/IO/TransportDevice.h>
+#include <MicroWorld/Core/IO/DeviceAddress.h>
+#include <MicroWorld/Core/IO/TransportResult.h>
 #include <MicroWorld/Platform/Pico/Internal/PicoE32LoraPlatform.h>
 #include <MicroWorld/Platform/Pico/Internal/PicoUartPlatform.h>
 #include <MicroWorld/Platform/Pico/PicoLoraDevice.h>

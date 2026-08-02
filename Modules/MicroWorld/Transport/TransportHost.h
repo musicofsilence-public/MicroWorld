@@ -3,7 +3,9 @@
 #include <MicroWorld/Core/Containers/Span.h>
 #include <MicroWorld/Core/Delegates/Delegate.h>
 #include <MicroWorld/Core/IO/DeviceAddress.h>
+#include <MicroWorld/Core/IO/ReceiveResult.h>
 #include <MicroWorld/Core/IO/TransportDevice.h>
+#include <MicroWorld/Core/IO/TransportResult.h>
 #include <MicroWorld/Core/Log.h>
 #include <MicroWorld/Core/Time.h>
 #include <MicroWorld/Transport/ByteWriter.h>

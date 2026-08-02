@@ -15,7 +15,8 @@
 #include <MicroWorld/Platform/Esp32/Esp32WifiDevice.h>
 #include <MicroWorld/Platform/Esp32/Esp32WifiLink.h>
 #include <MicroWorld/Transport/PacketDropDevice.h>
-#include <MicroWorld/Core/IO/TransportDevice.h>
+#include <MicroWorld/Core/IO/DeviceAddress.h>
+#include <MicroWorld/Core/IO/TransportResult.h>
 #include <MicroWorld/Transport/Wifi/UdpAddressCodec.h>
 
 #include <cstdint>

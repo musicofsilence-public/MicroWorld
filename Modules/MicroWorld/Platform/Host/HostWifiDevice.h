@@ -1,7 +1,9 @@
 #pragma once
 
 #include <MicroWorld/Core/IO/DeviceAddress.h>
+#include <MicroWorld/Core/IO/ReceiveResult.h>
 #include <MicroWorld/Core/IO/TransportDevice.h>
+#include <MicroWorld/Core/IO/TransportResult.h>
 #include <MicroWorld/Platform/Host/UdpAddress.h>
 #include <MicroWorld/Platform/Host/WinSockScope.h>
 #include <MicroWorld/Core/Time.h>

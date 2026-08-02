@@ -2,7 +2,7 @@
 
 #include <MicroWorld/Core/ByteCodecConstants.h>
 #include <MicroWorld/Core/Containers/Span.h>
-#include <MicroWorld/Core/IO/TransportDevice.h>
+#include <MicroWorld/Core/IO/TransportResult.h>
 #include <MicroWorld/Transport/ByteReader.h>
 #include <MicroWorld/Transport/ByteWriter.h>
 

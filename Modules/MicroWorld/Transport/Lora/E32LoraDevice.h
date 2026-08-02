@@ -1,6 +1,8 @@
 #pragma once
 
+#include <MicroWorld/Core/IO/ReceiveResult.h>
 #include <MicroWorld/Core/IO/TransportDevice.h>
+#include <MicroWorld/Core/IO/TransportResult.h>
 #include <MicroWorld/Core/IO/UartByteStream.h>
 #include <MicroWorld/Transport/Lora/Internal/E32LoraTransportState.h>
 

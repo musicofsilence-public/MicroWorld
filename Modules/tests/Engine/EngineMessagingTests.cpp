@@ -1,5 +1,9 @@
 #include "TestSupport.h"
 
+#include <MicroWorld/Core/IO/DeviceAddress.h>
+#include <MicroWorld/Core/IO/ReceiveResult.h>
+#include <MicroWorld/Core/IO/TransportDevice.h>
+#include <MicroWorld/Core/IO/TransportResult.h>
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Messaging/MessageTypes.h>
 #include <MicroWorld/Messaging/MessagingSystem.h>

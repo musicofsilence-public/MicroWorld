@@ -7,7 +7,8 @@
 #include <MicroWorld/Transport/ByteWriter.h>
 #include <MicroWorld/Transport/HostLoopback.h>
 #include <MicroWorld/Core/IO/DeviceAddress.h>
-#include <MicroWorld/Core/IO/TransportDevice.h>
+#include <MicroWorld/Core/IO/ReceiveResult.h>
+#include <MicroWorld/Core/IO/TransportResult.h>
 #include <MicroWorld/Transport/TransportManager.h>
 #include <MicroWorld/Transport/TransportPacketStorage.h>
 #include <MicroWorld/Core/Version.h>

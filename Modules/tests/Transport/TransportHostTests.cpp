@@ -3,7 +3,9 @@
 
 #include <MicroWorld/Core/Containers/Span.h>
 #include <MicroWorld/Core/IO/DeviceAddress.h>
+#include <MicroWorld/Core/IO/ReceiveResult.h>
 #include <MicroWorld/Core/IO/TransportDevice.h>
+#include <MicroWorld/Core/IO/TransportResult.h>
 #include <MicroWorld/Core/Time.h>
 #include <MicroWorld/Transport/HostLoopback.h>
 #include <MicroWorld/Transport/TransportHost.h>

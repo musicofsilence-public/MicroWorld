@@ -1,6 +1,8 @@
 #include "TestSupport.h"
 
-#include <MicroWorld/Core/IO/TransportDevice.h>
+#include <MicroWorld/Core/IO/DeviceAddress.h>
+#include <MicroWorld/Core/IO/ReceiveResult.h>
+#include <MicroWorld/Core/IO/TransportResult.h>
 #include <MicroWorld/Core/IO/UartByteStream.h>
 #include <MicroWorld/Core/IO/UartByteStreamResult.h>
 #include <MicroWorld/Transport/FrameCodec.h>

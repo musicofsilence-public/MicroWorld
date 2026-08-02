@@ -10,7 +10,7 @@
 #include <MicroWorld/Engine/World.h>
 #include <MicroWorld/Core/Log.h>
 #include <MicroWorld/Transport/TransportHost.h>
-#include <MicroWorld/Core/IO/TransportDevice.h>
+#include <MicroWorld/Core/IO/TransportResult.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Engine/GarbageCollector.h>
 #include <MicroWorld/Engine/ObjectPtr.h>

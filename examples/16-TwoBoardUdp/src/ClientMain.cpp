@@ -4,7 +4,8 @@
 #include <MicroWorld/Core/Delegates/Delegate.h>
 #include <MicroWorld/Core/Log.h>
 #include <MicroWorld/Transport/TransportHost.h>
-#include <MicroWorld/Core/IO/TransportDevice.h>
+#include <MicroWorld/Core/IO/DeviceAddress.h>
+#include <MicroWorld/Core/IO/TransportResult.h>
 #include <MicroWorld/Transport/Wifi/UdpAddressCodec.h>
 #include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
 #include <MicroWorld/Platform/Esp32/Esp32TimeSource.h>

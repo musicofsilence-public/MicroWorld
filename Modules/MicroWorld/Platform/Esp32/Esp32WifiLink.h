@@ -1,6 +1,6 @@
 #pragma once
 
-#include <MicroWorld/Core/IO/TransportDevice.h>
+#include <MicroWorld/Core/IO/TransportResult.h>
 #include <MicroWorld/Core/Time.h>
 
 #include <cstdint>

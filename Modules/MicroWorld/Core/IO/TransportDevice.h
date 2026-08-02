@@ -1,7 +1,7 @@
 #pragma once
 
 #include <MicroWorld/Core/Containers/Span.h>
-#include <MicroWorld/Core/IO/DeviceAddress.h>
+#include <MicroWorld/Core/IO/TransportResult.h>
 #include <MicroWorld/Core/PlaySystem.h>
 
 #include <cstddef>
@@ -10,38 +10,8 @@
 namespace MicroWorld::Core
 {
 
-/**
- * Motivation: Gives each non-blocking packet transport one result vocabulary that distinguishes acceptance from
- *   backpressure, invalid requests, and unavailable devices.
- * Responsibilities: Report the outcome of one whole packet operation without exposing device-specific failures.
- * Example:
- *   if (Device.TrySend(To, Packet) == ETransportResult::Full) { RetryLater(); }
- */
-enum class ETransportResult : std::uint8_t
-{
-	/** Motivation: Reports that the whole requested operation completed. */
-	Success,
-	/** Motivation: Reports that the device has no capacity now and the caller may retry later. */
-	Full,
-	/** Motivation: Reports a malformed, oversize, or unroutable request that retrying unchanged cannot repair. */
-	Invalid,
-	/** Motivation: Reports that no packet is available or the device cannot be used yet. */
-	Unavailable,
-};
-
-/**
- * Motivation: Carries the byte count produced by one non-blocking receive so a caller distinguishes a short successful
- *   read from a failed one without inspecting destination bytes.
- * Responsibilities: Report bytes written only on Success and remain unchanged on every non-success result.
- * Example:
- *   FReceiveResult Result;
- *   if (Device.TryReceive(From, Destination, Result) == ETransportResult::Success) { Use(Result.BytesReceived); }
- */
-struct FReceiveResult
-{
-	/** Motivation: Counts bytes written to the caller-owned destination, set only on Success. */
-	std::size_t BytesReceived{0};
-};
+struct FDeviceAddress;
+struct FReceiveResult;
 
 /**
  * Motivation: Bounds one non-blocking addressed packet transport behind one reference-held interface so Messaging can
