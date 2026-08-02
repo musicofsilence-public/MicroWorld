@@ -8,7 +8,7 @@
 #include <MicroWorld/Engine/Object.h>
 #include <MicroWorld/Engine/ObjectStore.h>
 #include <MicroWorld/Engine/ObjectPtr.h>
-#include <MicroWorld/Core/TickFunction.h>
+#include <MicroWorld/Core/TickConfiguration.h>
 
 namespace MicroWorld::Engine
 {
