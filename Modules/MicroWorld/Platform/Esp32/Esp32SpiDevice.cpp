@@ -1,6 +1,12 @@
-#include <MicroWorld/Platform/Esp32/Esp32SpiDevice.h>
+#include <MicroWorld/Platform/Esp32/Esp32SpiMasterConfig.h>
+#include <MicroWorld/Platform/Esp32/Esp32SpiMasterDevice.h>
+#include <MicroWorld/Platform/Esp32/Esp32SpiSlaveConfig.h>
+#include <MicroWorld/Platform/Esp32/Esp32SpiSlaveDevice.h>
+#include <MicroWorld/Platform/Esp32/SpiAddress.h>
 
-#include "Internal/SpiPlatformImplementation.h"
+#include "Internal/OpenedSpiMaster.h"
+#include "Internal/OpenedSpiSlave.h"
+#include "Internal/SpiTransmitOutcome.h"
 
 #include <MicroWorld/Core/Log.h>
 #include <MicroWorld/Transport/EFrameEvent.h>

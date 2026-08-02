@@ -5,7 +5,10 @@
 #include <MicroWorld/Core/IO/TransportResult.h>
 #include <MicroWorld/Platform/Esp32/Esp32OutputDevice.h>
 #include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
-#include <MicroWorld/Platform/Esp32/Esp32SpiDevice.h>
+#include <MicroWorld/Platform/Esp32/Esp32SpiMasterConfig.h>
+#include <MicroWorld/Platform/Esp32/Esp32SpiMasterDevice.h>
+#include <MicroWorld/Platform/Esp32/Esp32SpiSlaveConfig.h>
+#include <MicroWorld/Platform/Esp32/Esp32SpiSlaveDevice.h>
 #include <MicroWorld/Platform/Esp32/Esp32TimeSource.h>
 #include <MicroWorld/Platform/Esp32/SpiAddress.h>
 
