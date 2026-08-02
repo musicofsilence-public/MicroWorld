@@ -6,6 +6,7 @@
 #include <MicroWorld/Core/IO/TransportResult.h>
 #include <MicroWorld/Platform/Pico/Internal/PicoE32LoraPlatform.h>
 #include <MicroWorld/Platform/Pico/Internal/PicoUartPlatform.h>
+#include <MicroWorld/Platform/Pico/PicoE32LoraConfig.h>
 #include <MicroWorld/Platform/Pico/PicoLoraDevice.h>
 
 #include <cstddef>

@@ -3,6 +3,7 @@
 #include <MicroWorld/Core/IO/DeviceAddress.h>
 #include <MicroWorld/Core/IO/ReceiveResult.h>
 #include <MicroWorld/Core/IO/TransportResult.h>
+#include <MicroWorld/Platform/Pico/PicoE32LoraConfig.h>
 #include <MicroWorld/Platform/Pico/PicoLoraDevice.h>
 
 #include <FreeRTOS.h>

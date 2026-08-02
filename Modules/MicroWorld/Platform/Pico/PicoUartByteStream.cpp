@@ -1,4 +1,5 @@
 #include <MicroWorld/Platform/Pico/Internal/PicoUartByteStream.h>
+#include <MicroWorld/Platform/Pico/Internal/PicoUartConfig.h>
 
 #include <cstdint>
 

@@ -1,3 +1,5 @@
+#include <MicroWorld/Platform/Pico/Internal/PicoUartConfig.h>
+#include <MicroWorld/Platform/Pico/PicoE32LoraConfig.h>
 #include <MicroWorld/Platform/Pico/PicoLoraDevice.h>
 
 namespace MicroWorld::Platform::Pico
