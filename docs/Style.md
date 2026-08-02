@@ -150,12 +150,12 @@ rule. Each file already meets Rules N, F, and W.
 
 | Module | Exemplary files |
 | --- | --- |
-| Core | `Lifecycle.h` (the single best file in the repo), `TickFunction.h`, `Containers/Span.h`, `Memory/MemoryResource.h`, the enums in `Timer.h` |
+| Core | `LifecycleGuard.h` (the single best file in the repo), `TickFunction.h`, `Containers/Span.h`, `Memory/MemoryResource.h`, the enums in `TimerResult.h` |
 | Object | `ObjectHandle.h`, `Object.h` |
 | Engine | `EngineStorage.h` (member-level ownership docs), `HostPlaySystem.h`, `PlaySystemSet.h`, the enums in `EngineResult.h` |
 | Transport | `ByteReader.h`, `ByteWriter.h` |
 | Application | `Application/Application.h` — the class comment explains why every lifecycle call is sealed |
-| Platform | `WinSockScope.h`, `HostTimeSource.h`, `Esp32TimeSource.h`, and the boundary documentation in `src/UdpSocketPlatformImplementation.h` |
+| Platform | `WinSockScope.h`, `HostTimeSource.h`, `Esp32TimeSource.h`, and the boundary documentation in the `Platform/Host/Internal/` socket headers |
 
 ### Worked example — `FTickFunction::Advance`
 

@@ -53,12 +53,12 @@ adapter owns its concrete encoding and provides helpers to build/inspect it.
   same `MicroWorld/Transport/FrameCodec.h` framing over a 1-byte point-to-point
   [`UartAddress`](../Modules/MicroWorld/Platform/Esp32/UartAddress.h).
 - ESP32 wired I2C reference (master/slave pair):
-  [`FEsp32I2cMasterDevice` / `FEsp32I2cSlaveDevice`](../Modules/MicroWorld/Platform/Esp32/Esp32I2cDevice.h)
+  [`FEsp32I2cMasterDevice` / `FEsp32I2cSlaveDevice`](../Modules/MicroWorld/Platform/Esp32/Esp32I2cMasterDevice.h)
   over one I2C bus — the master clocks whole-frame transactions, the slave receives
   through an `on_receive` ISR inbox — with a 1-byte
   [`I2cAddress`](../Modules/MicroWorld/Platform/Esp32/I2cAddress.h).
 - ESP32 wired SPI reference (master/slave pair):
-  [`FEsp32SpiMasterDevice` / `FEsp32SpiSlaveDevice`](../Modules/MicroWorld/Platform/Esp32/Esp32SpiDevice.h)
+  [`FEsp32SpiMasterDevice` / `FEsp32SpiSlaveDevice`](../Modules/MicroWorld/Platform/Esp32/Esp32SpiMasterDevice.h)
   over one full-duplex SPI bus — the master clocks fixed-size transactions, the
   slave keeps one queued — with a 1-byte
   [`SpiAddress`](../Modules/MicroWorld/Platform/Esp32/SpiAddress.h).

@@ -21,8 +21,9 @@ table.
 - `FWinSockScope` is a reference-counted RAII guard: the first construction
   performs `WSAStartup`, the last destruction performs `WSACleanup`, and both
   are no-ops on POSIX.
-- All OS socket headers are confined to the `Internal/UdpSocketPlatformImplementation.h`
-  private header; public declarations stay platform-neutral.
+- All OS socket headers are confined to the `Internal/` socket-platform headers
+  (`SocketHandle.h`, `SendOutcome.h`, `PeekProbe.h`, `ConsumeResult.h`, `OpenedSocket.h`);
+  public declarations stay platform-neutral.
 
 ## Verification
 

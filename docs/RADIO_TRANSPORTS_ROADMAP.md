@@ -146,7 +146,7 @@ join the allowed industry vocabulary alongside `Udp`/`Uart`), format with
 - **Devices implement the full `Core::ITransportDevice` contract** (`Core/IO/TransportDevice.h`):
   non-blocking, at most one transport operation per call, transactional
   receives, `IsOpen()` guard after a `noexcept` constructor — mirror
-  `Esp32UartDevice.h` / `Esp32I2cDevice.h` shape for shape.
+  `Esp32UartDevice.h` / `Esp32I2cMasterDevice.h` shape for shape.
 - **Antenna rule (safety, goes in every LoRa README):** never power an E32
   module without its antenna attached — transmitting into no load can damage
   the RF stage. Keep the two antennas ≥ 0.5 m apart on the bench.
@@ -219,8 +219,8 @@ join the allowed industry vocabulary alongside `Udp`/`Uart`), format with
 
 | Concern | Imitate |
 | --- | --- |
-| UART-attached radio transport | `Modules/MicroWorld/Transport/.../E32LoraDevice.h` + `Modules/MicroWorld/Platform/Esp32/.../Esp32LoraDevice.h` facade + `src/UartPlatformImplementation.h` |
-| Role-asymmetric device pair + ISR-side inbox ring | `Modules/MicroWorld/Platform/Esp32/.../Esp32I2cDevice.h` (`FI2cReceiveInbox`) |
+| UART-attached radio transport | `Modules/MicroWorld/Transport/.../E32LoraDevice.h` + `Modules/MicroWorld/Platform/Esp32/.../Esp32LoraDevice.h` facade + `Internal/Esp32UartByteStream.h` |
+| Role-asymmetric device pair + ISR-side inbox ring | `Modules/MicroWorld/Platform/Esp32/.../Esp32I2cMasterDevice.h` / `Esp32I2cSlaveDevice.h` + `I2cReceiveInbox.h` (`FI2cReceiveInbox`) |
 | Per-device 1-byte address codec | `Modules/MicroWorld/Platform/Esp32/.../LoraAddress.h`, `UartAddress.h` |
 | Design-spike ADR with header-derived answers | `docs/architecture/decisions/0003-wired-transports.md` Appendices A/B |
 | Device volley example | `examples/18-TwoBoardUart` |
