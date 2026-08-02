@@ -12,7 +12,7 @@
 #include <MicroWorld/Engine/Actor.h>
 #include <MicroWorld/Engine/ActorComponent.h>
 #include <MicroWorld/Engine/EngineHost.h>
-#include <MicroWorld/Engine/EngineSystem.h>
+#include <MicroWorld/Engine/HostPlaySystem.h>
 #include <MicroWorld/Engine/EngineStorage.h>
 #include <MicroWorld/Core/Log.h>
 #include <MicroWorld/Transport/NetworkMode.h>

@@ -24,7 +24,7 @@
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Engine/EngineResult.h>
 #include <MicroWorld/Engine/EngineStorage.h>
-#include <MicroWorld/Engine/EngineSystem.h>
+#include <MicroWorld/Engine/HostPlaySystem.h>
 #include <MicroWorld/Core/Log.h>
 #include <MicroWorld/Transport/NetworkMode.h>
 #include <MicroWorld/Transport/TransportHost.h>

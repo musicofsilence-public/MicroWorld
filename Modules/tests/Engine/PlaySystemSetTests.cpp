@@ -5,7 +5,7 @@
 #include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Engine/EngineResult.h>
-#include <MicroWorld/Engine/EngineSystem.h>
+#include <MicroWorld/Engine/PlaySystemSet.h>
 #include <MicroWorld/Engine/GarbageCollectionBudget.h>
 #include <MicroWorld/Engine/ObjectPtr.h>
 #include <MicroWorld/Engine/World.h>
