@@ -2,6 +2,7 @@
 
 #include <MicroWorld/Engine/ObjectHandle.h>
 #include <MicroWorld/Engine/ObjectPtr.h>
+#include <MicroWorld/Core/RuntimeResult.h>
 #include <MicroWorld/Core/Time.h>
 
 #include <cstdint>

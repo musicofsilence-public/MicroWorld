@@ -1,6 +1,6 @@
 #pragma once
 
-#include <MicroWorld/Engine/ObjectHandle.h>
+#include <MicroWorld/Engine/ClassDescriptor.h>
 
 namespace MicroWorld::Engine
 {
