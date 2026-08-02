@@ -8,7 +8,11 @@
 #include <MicroWorld/Core/IO/TransportResult.h>
 #include <MicroWorld/Core/Time.h>
 #include <MicroWorld/Transport/HostLoopback.h>
+#include <MicroWorld/Transport/NetworkMode.h>
+#include <MicroWorld/Transport/PeerId.h>
 #include <MicroWorld/Transport/TransportHost.h>
+#include <MicroWorld/Transport/TransportHostConfig.h>
+#include <MicroWorld/Transport/TransportHostState.h>
 
 #include <cstddef>
 #include <cstdint>

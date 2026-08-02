@@ -1,6 +1,6 @@
 #pragma once
 
-#include <MicroWorld/Transport/TransportHost.h>
+#include <MicroWorld/Transport/TransportHostConfig.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
 
 #include <cstdint>

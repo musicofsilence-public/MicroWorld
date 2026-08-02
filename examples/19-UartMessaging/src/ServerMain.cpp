@@ -9,6 +9,8 @@
 #include <MicroWorld/Engine/EngineSystem.h>
 #include <MicroWorld/Engine/World.h>
 #include <MicroWorld/Core/Log.h>
+#include <MicroWorld/Transport/NetworkMode.h>
+#include <MicroWorld/Transport/PeerId.h>
 #include <MicroWorld/Transport/TransportHost.h>
 #include <MicroWorld/Core/IO/TransportResult.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>

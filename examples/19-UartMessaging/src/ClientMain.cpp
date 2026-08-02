@@ -3,7 +3,11 @@
 #include <MicroWorld/Core/Containers/Span.h>
 #include <MicroWorld/Core/Delegates/DelegateHandle.h>
 #include <MicroWorld/Core/Log.h>
+#include <MicroWorld/Transport/NetworkMode.h>
+#include <MicroWorld/Transport/PeerId.h>
 #include <MicroWorld/Transport/TransportHost.h>
+#include <MicroWorld/Transport/TransportHostConfig.h>
+#include <MicroWorld/Transport/TransportHostState.h>
 #include <MicroWorld/Core/IO/TransportResult.h>
 #include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
 #include <MicroWorld/Platform/Esp32/Esp32TimeSource.h>

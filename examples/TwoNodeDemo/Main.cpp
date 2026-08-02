@@ -15,7 +15,11 @@
 #include <MicroWorld/Engine/EngineSystem.h>
 #include <MicroWorld/Engine/World.h>
 #include <MicroWorld/Core/IO/DeviceAddress.h>
+#include <MicroWorld/Transport/NetworkMode.h>
+#include <MicroWorld/Transport/PeerId.h>
 #include <MicroWorld/Transport/TransportHost.h>
+#include <MicroWorld/Transport/TransportHostConfig.h>
+#include <MicroWorld/Transport/TransportHostState.h>
 #include <MicroWorld/Core/IO/TransportResult.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Engine/GarbageCollector.h>

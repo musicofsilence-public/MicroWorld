@@ -8,6 +8,10 @@
 #include <MicroWorld/Core/IO/TransportResult.h>
 #include <MicroWorld/Core/Log.h>
 #include <MicroWorld/Core/Time.h>
+#include <MicroWorld/Transport/NetworkMode.h>
+#include <MicroWorld/Transport/PeerId.h>
+#include <MicroWorld/Transport/TransportHostConfig.h>
+#include <MicroWorld/Transport/TransportHostState.h>
 #include <MicroWorld/Transport/ByteWriter.h>
 #include <MicroWorld/Transport/TransportManager.h>
 #include <MicroWorld/Transport/TransportPacketStorage.h>
@@ -23,115 +27,6 @@
 
 namespace MicroWorld::Transport
 {
-
-/**
- * Motivation: Names the UE5-style role this host plays so session traffic it originates and accepts reads as one value.
- * Responsibilities: Distinguish standalone, client, listen server, and dedicated server roles.
- * Example:
- *   if (Host.GetMode() == ENetworkMode::ListenServer) { Admit(); }
- */
-enum class ENetworkMode : std::uint8_t
-{
-	Standalone, ///< Motivation: Runs no device traffic; every send reports Unavailable.
-
-	Client, ///< Motivation: Holds exactly one peer (the server) and sends Hello until admitted.
-
-	ListenServer, ///< Motivation: Admits remote peers and additionally owns a directly dispatched local peer.
-
-	DedicatedServer, ///< Motivation: Admits remote peers with no local peer of its own.
-};
-
-/**
- * Motivation: Names the observable session state so a client can track admission and a server can report readiness.
- * Responsibilities: Distinguish idle, connecting, connected, and listening states.
- * Example:
- *   if (Host.GetState() == ETransportHostState::Connected) { Send(); }
- */
-enum class ETransportHostState : std::uint8_t
-{
-	Idle, ///< Motivation: Marks that no session is in progress (not started, standalone, or stopped).
-
-	Connecting, ///< Motivation: Marks that a client has sent Hello and is awaiting Welcome.
-
-	Connected, ///< Motivation: Marks that a client has been admitted and heartbeats are flowing.
-
-	Listening, ///< Motivation: Marks that a server is started and accepting Hello up to its peer capacity.
-};
-
-/** Motivation: Supplies the default heartbeat cadence when a caller does not override FTransportHostConfig. */
-inline constexpr Core::DurationMilliseconds DefaultHeartbeatIntervalMilliseconds = 1000;
-
-/** Motivation: Supplies the default peer eviction window when a caller does not override FTransportHostConfig. */
-inline constexpr Core::DurationMilliseconds DefaultPeerTimeoutMilliseconds = 5000;
-
-/** Motivation: Supplies the default protocol version advertised in Hello/Welcome when a caller does not override it. */
-inline constexpr std::uint8_t DefaultProtocolVersion = 1;
-
-/**
- * Motivation: Bundles the session timing and identity a host needs so it can be supplied once before Start.
- * Responsibilities: Carry the heartbeat interval, peer timeout, server address, and protocol version as one value.
- * Example:
- *   FTransportHostConfig Config;
- *   Config.ServerAddress = MakeUdpAddress(192, 168, 1, 10, 1234);
- *   Host.Configure(ENetworkMode::Client, Config);
- */
-struct FTransportHostConfig
-{
-	/** Motivation: Paces outgoing heartbeats (and client Hello retries while connecting). */
-	Core::DurationMilliseconds HeartbeatIntervalMilliseconds{DefaultHeartbeatIntervalMilliseconds};
-
-	/** Motivation: Defines the silence window after which a peer is evicted; must exceed the heartbeat interval. */
-	Core::DurationMilliseconds PeerTimeoutMilliseconds{DefaultPeerTimeoutMilliseconds};
-
-	/** Motivation: Names the server a client greets with Hello; ignored by every non-client mode. */
-	Core::FDeviceAddress ServerAddress{};
-
-	/** Motivation: Pins the protocol version advertised in Hello/Welcome; a mismatch is ignored, not admitted. */
-	std::uint8_t ProtocolVersion{DefaultProtocolVersion};
-};
-
-/**
- * Motivation: Carries one peer's generation-checked identity so a reused slot never answers to a stale id.
- * Responsibilities: Pair a slot index with a generation and report validity; a handle is local to the host that issued it.
- * Example:
- *   FPeerId Peer = Host.GetServerPeer();
- *   if (Peer.IsValid()) { Host.SendTo(Peer, Channel, Payload); }
- */
-struct FPeerId
-{
-	/** Motivation: Reserves the index that names no peer so the default identity is deliberately invalid. */
-	static constexpr std::uint8_t InvalidIndex = 0xFF;
-
-	/** Motivation: Holds the peer slot index, or InvalidIndex; the host also reserves 0xFE for a local peer. */
-	std::uint8_t Index{InvalidIndex};
-
-	/** Motivation: Holds the slot generation at issue time; a later eviction bumps it so this id goes stale. */
-	std::uint8_t Generation{0};
-
-	/**
-	 * Motivation: Lets a caller reject a default or stale value before consulting its host.
-	 * Responsibilities: Report whether the identity names a routable peer rather than the invalid default.
-	 */
-	constexpr bool IsValid() const noexcept { return Index != InvalidIndex; }
-};
-
-/**
- * Motivation: Lets containers compare two peer ids by complete stable identity.
- * Responsibilities: Return true only when both index and generation match.
- */
-constexpr bool operator==(const FPeerId InLeft, const FPeerId InRight) noexcept
-{
-	return InLeft.Index == InRight.Index && InLeft.Generation == InRight.Generation;
-}
-
-/**
- * Motivation: Lets callers test peer inequality directly rather than negating operator== by hand.
- * Responsibilities: Return the negation of operator==.
- */
-constexpr bool operator!=(const FPeerId InLeft, const FPeerId InRight) noexcept
-{
-	return !(InLeft == InRight);
-}
 
 /**
  * Motivation: Delivers the UE5 dedicated/listen/client roles over one bounded session host so an application runs a networked

@@ -26,7 +26,9 @@
 #include <MicroWorld/Engine/EngineStorage.h>
 #include <MicroWorld/Engine/EngineSystem.h>
 #include <MicroWorld/Core/Log.h>
+#include <MicroWorld/Transport/NetworkMode.h>
 #include <MicroWorld/Transport/TransportHost.h>
+#include <MicroWorld/Transport/TransportHostConfig.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Engine/GarbageCollector.h>
 #include <MicroWorld/Engine/Object.h>
