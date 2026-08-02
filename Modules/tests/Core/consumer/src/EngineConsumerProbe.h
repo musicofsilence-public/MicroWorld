@@ -8,8 +8,13 @@
 #include <MicroWorld/Engine/EngineClassIds.h>
 #include <MicroWorld/Engine/EngineStorage.h>
 #include <MicroWorld/Engine/World.h>
+#include <MicroWorld/Engine/ClassRegistryView.h>
 #include <MicroWorld/Engine/GarbageCollector.h>
+#include <MicroWorld/Engine/ObjectRootEntry.h>
+#include <MicroWorld/Engine/ObjectSlotMetadata.h>
 #include <MicroWorld/Engine/ObjectStore.h>
+#include <MicroWorld/Engine/ObjectStoreStats.h>
+#include <MicroWorld/Engine/ObjectStoreStorage.h>
 #include <MicroWorld/Core/TimerManager.h>
 #include <MicroWorld/Core/Version.h>
 

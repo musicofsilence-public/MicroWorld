@@ -5,6 +5,7 @@
 #include <MicroWorld/Engine/EngineRegistryView.h>
 #include <MicroWorld/Engine/EngineResult.h>
 #include <MicroWorld/Core/LifecycleGuard.h>
+#include <MicroWorld/Engine/ClassRegistryRegistrationView.h>
 #include <MicroWorld/Engine/Object.h>
 #include <MicroWorld/Engine/ObjectPtr.h>
 #include <MicroWorld/Core/Time.h>

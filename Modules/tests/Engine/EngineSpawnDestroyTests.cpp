@@ -9,10 +9,16 @@
 #include <MicroWorld/Engine/World.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Engine/ClassRegistry.h>
+#include <MicroWorld/Engine/ClassRegistryView.h>
 #include <MicroWorld/Engine/GarbageCollector.h>
 #include <MicroWorld/Engine/Object.h>
+#include <MicroWorld/Engine/ObjectMutationResult.h>
 #include <MicroWorld/Engine/ObjectPtr.h>
+#include <MicroWorld/Engine/ObjectRootEntry.h>
+#include <MicroWorld/Engine/ObjectSlotMetadata.h>
 #include <MicroWorld/Engine/ObjectStore.h>
+#include <MicroWorld/Engine/ObjectStoreStats.h>
+#include <MicroWorld/Engine/ObjectStoreStorage.h>
 #include <MicroWorld/Engine/StrongObjectPtr.h>
 #include <MicroWorld/Engine/WeakObjectPtr.h>
 

@@ -9,7 +9,9 @@
 #include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Engine/GarbageCollector.h>
 #include <MicroWorld/Engine/Object.h>
+#include <MicroWorld/Engine/ObjectCreationResult.h>
 #include <MicroWorld/Engine/ObjectStore.h>
+#include <MicroWorld/Engine/ObjectStoreStats.h>
 #include <MicroWorld/Core/Time.h>
 #include <MicroWorld/Core/TimerHandle.h>
 #include <MicroWorld/Core/TimerMode.h>

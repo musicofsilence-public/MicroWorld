@@ -1,4 +1,6 @@
+#include <MicroWorld/Engine/ObjectRootEntry.h>
 #include <MicroWorld/Engine/ObjectStore.h>
+#include <MicroWorld/Engine/ObjectStoreDispatchGuard.h>
 
 #include <limits>
 

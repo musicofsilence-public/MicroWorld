@@ -1,8 +1,10 @@
 #pragma once
 
 #include <MicroWorld/Engine/Actor.h>
+#include <MicroWorld/Engine/ClassRegistryRegistrationView.h>
 #include <MicroWorld/Engine/EngineClassIds.h>
 #include <MicroWorld/Engine/GarbageCollector.h>
+#include <MicroWorld/Engine/ObjectCreationResult.h>
 #include <MicroWorld/Engine/ObjectStore.h>
 
 #include <array>

@@ -1,5 +1,11 @@
+#include <MicroWorld/Engine/ClassRegistryView.h>
 #include <MicroWorld/Engine/GarbageCollector.h>
+#include <MicroWorld/Engine/ObjectCreationResult.h>
+#include <MicroWorld/Engine/ObjectRootEntry.h>
+#include <MicroWorld/Engine/ObjectSlotMetadata.h>
 #include <MicroWorld/Engine/ObjectStore.h>
+#include <MicroWorld/Engine/ObjectStoreStats.h>
+#include <MicroWorld/Engine/ObjectStoreStorage.h>
 
 #include <array>
 #include <chrono>
