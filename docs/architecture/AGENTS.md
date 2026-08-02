@@ -146,8 +146,8 @@ C1 is the product boundary and its purpose. C2 is six contract-defined systems.
 C3 exists in exactly three of them, because these are where a contributor
 reliably guesses wrong:
 
-- **Engine** — the deferred spawn barrier and generation-checked handles, plus
-  where the `Engine + Object` merge gets unpacked.
+- **Engine** — the application-facing runtime boundary, deferred spawn barrier and
+  generation-checked handles, plus where the `Engine + Object` merge gets unpacked.
 - **Messaging System** — local delivery, reliable delivery, and the Core
   `IPlaySystem` lifecycle contract.
 - **Transport** — the one device shape, and the media that realise it.
@@ -225,11 +225,12 @@ at all.
 
 ### An interface is its own kind, and it replaced a tag
 
-`Play System Interface` and `Device Interface` could be mistaken for `component`
-elements and once carried a `#contract` tag. Neither representation was honest. A
-`component` does work; an interface only declares the shape others satisfy. `entity`
-is no better: that kind means a stateful concept with identity and a lifetime, which
-an interface has neither of.
+`Play System Interface`, `Transport Device Interface` and `Engine Runtime Interface`
+could be mistaken for `component` elements. The first two once carried a `#contract`
+tag; the third arrived after the kind replaced that tag. None is honestly a
+`component`: a component does work, while an interface only declares the shape others
+satisfy. `entity` is no better: that kind means a stateful concept with identity and a
+lifetime, which an interface has neither of.
 
 So `interface` is a kind. It cost nothing to add, because `#contract` marked exactly
 those two elements — identical membership means the tag and the kind were one
@@ -242,8 +243,12 @@ something false.
 
 The Engine component is the counter-example that keeps the boundary sharp: it does
 work — owns the world, the object store and the timers — so it is a `component`
-(`[component: TEngine<TTraits>]`), not an interface. The `IEngine` shape an
-application holds is a fact of the Engine system's contract, not a box of its own.
+(`[component: TEngine<TTraits>]`), not an interface. `IEngineRuntime` is a box because
+it owns the narrow begin/tick/end contract Application is written against; world,
+storage, messaging and typed creation remain on the concrete component.
+The C2 `Application` to `Engine` edge names `EngineRuntime` as what crosses the
+boundary, and the C3 `realisedBy` edge uses the model's deliberate reversed
+realisation direction to place declaration above implementation.
 
 ### The kind is `component`, not `domainService`
 
@@ -400,7 +405,7 @@ They render in `export png` with no network, the same as the bundled sets.
 | Networking | two lines merging into one | the only place Messaging and Transport meet |
 | Wi-Fi / Wired / LoRa Device | network, cable, antenna | the physical medium, the one thing they differ by |
 | Bluetooth Device | the Bluetooth rune | the medium has a real mark; one path, no interior detail |
-| Play System / Device Interface | ball-and-socket connector | the standard notation for a provided interface; shared by both because they are one kind |
+| Play System / Transport Device / Engine Runtime Interface | ball-and-socket connector | the standard notation for a provided interface; shared because all three are one kind |
 | every `component` | the UML component symbol | the standard notation for one. Set on the **kind** in `specification.c4` rather than on each element, so a new component carries it for free — `interface` predates that and still sets its icon twice |
 
 Two rules learned by looking at exports rather than at SVGs:

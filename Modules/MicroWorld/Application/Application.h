@@ -1,6 +1,6 @@
 #pragma once
 
-#include <MicroWorld/Engine/EngineHost.h>
+#include <MicroWorld/Engine/EngineRuntime.h>
 #include <MicroWorld/Core/Lifecycle.h>
 #include <MicroWorld/Core/RuntimeResult.h>
 #include <MicroWorld/Core/Time.h>
@@ -18,13 +18,10 @@ namespace MicroWorld::Application
 using FSleepFunction = void (*)(Core::DurationMilliseconds InSleepDurationMilliseconds) noexcept;
 
 /**
- * Motivation: Owns one engine and seals its lifecycle order so a subclass cannot get begin/tick/end wrong; the subclass supplies only what
- *   happens when startup fails (OnBeginPlayFailed) and may override what runs once at configure (OnConfigure).
- * Responsibilities: Run BeginPlay once, Advance each frame, and EndPlay once; reject backward time; drive the engine through private non-virtual
- *   forwarders so the per-frame order is fixed.
- * Example:
- *   FMyApplication App(Engine);
- *   App.Run(TimeSource, &Platform::SleepMilliseconds, 16);
+ * Motivation: Holds a non-owning IEngineRuntime reference and seals lifecycle order against subclass mistakes.
+ * Responsibilities: Runtime outlives
+ * this application.
+ * Example: FMyApplication App(Engine); App.Run(TimeSource, &Platform::SleepMilliseconds, 16);
  */
 class FApplication
 {
@@ -42,14 +39,16 @@ public:
 	FApplication& operator=(const FApplication&) = delete;
 
 	/**
-	 * Motivation: Keeps this application's IEngine& and any retained FApplication& valid for life.
-	 * Responsibilities: Reject move construction so every reference stays at one address.
+	 * Motivation: Keeps this application's IEngineRuntime& and any retained FApplication& valid for life.
+	 * Responsibilities: Preserve stable
+	 * references by rejecting move construction.
 	 */
 	FApplication(FApplication&&) = delete;
 
 	/**
-	 * Motivation: Keeps this application's IEngine& and any retained FApplication& valid for life.
-	 * Responsibilities: Reject move assignment so every reference stays at one address.
+	 * Motivation: Keeps this application's IEngineRuntime& and any retained FApplication& valid for life.
+	 * Responsibilities: Preserve stable
+	 * references by rejecting move assignment.
 	 */
 	FApplication& operator=(FApplication&&) = delete;
 
@@ -108,16 +107,22 @@ public:
 
 protected:
 	/**
-	 * Motivation: Binds this application to the one engine it will drive for its lifetime.
-	 * Responsibilities: Store the engine reference; no configuration or lifecycle change happens here.
+	 * Motivation: Binds this application to the one runtime it will drive for its lifetime.
+	 * Responsibilities: Store the runtime reference
+	 * without changing lifecycle state.
 	 */
-	explicit FApplication(::MicroWorld::Engine::IEngine& InEngine) noexcept : Engine(InEngine) {}
+	explicit FApplication(::MicroWorld::Engine::IEngineRuntime& InEngineRuntime) noexcept : EngineRuntime(InEngineRuntime) {}
 
 	/**
-	 * Motivation: Gives a subclass its one chance to spawn actors and configure systems into a world that exists but has not begun.
-	 * Responsibilities: Run once at BeginPlay before the engine begins; return non-success to abort the start.
+	 * Motivation: Lets a subclass configure retained concrete dependencies before the runtime begins.
+	 * Responsibilities: Receive
+	 * BeginPlay's timestamp before runtime begin and return non-success to abort startup.
 	 */
-	virtual Core::ERuntimeResult OnConfigure(::MicroWorld::Engine::IEngine&, Core::TimePointMilliseconds) { return Core::ERuntimeResult::Success; }
+	virtual Core::ERuntimeResult OnConfigure(Core::TimePointMilliseconds InNowMilliseconds)
+	{
+		(void)InNowMilliseconds;
+		return Core::ERuntimeResult::Success;
+	}
 
 	/**
 	 * Motivation: Lets a subclass react to a failed startup after BeginPlay has already latched the failure.
@@ -128,19 +133,19 @@ protected:
 private:
 	/**
 	 * Motivation: Runs the subclass configure hook before the engine begins, surfacing the first failure.
-	 * Responsibilities: Call OnConfigure then Engine.BeginPlay and return the first non-success result.
+	 * Responsibilities: Call OnConfigure then EngineRuntime.BeginPlay and return the first non-success result.
 	 */
 	Core::ERuntimeResult OnBeginPlay(Core::TimePointMilliseconds InNowMilliseconds) noexcept;
 
 	/**
 	 * Motivation: Forwards one framed step to the engine.
-	 * Responsibilities: Call Engine.Tick with the accepted time.
+	 * Responsibilities: Call EngineRuntime.Tick with the accepted time.
 	 */
 	Core::ERuntimeResult OnAdvance(Core::TimePointMilliseconds InNowMilliseconds) noexcept;
 
 	/**
 	 * Motivation: Forwards the stop to the engine once the lifecycle has moved to Ended.
-	 * Responsibilities: Call Engine.EndPlay.
+	 * Responsibilities: Call EngineRuntime.EndPlay.
 	 */
 	Core::ERuntimeResult OnEndPlay() noexcept;
 
@@ -150,8 +155,8 @@ private:
 	/** Motivation: The last time Advance accepted; a smaller one is rejected before the engine sees it. */
 	Core::TimePointMilliseconds LastUpdateMilliseconds{0};
 
-	/** Motivation: The one engine this application drives; bound at construction and never rebound. */
-	::MicroWorld::Engine::IEngine& Engine;
+	/** Motivation: The one runtime this application drives; bound at construction and never rebound. */
+	::MicroWorld::Engine::IEngineRuntime& EngineRuntime;
 };
 
 } // namespace MicroWorld::Application

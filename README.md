@@ -29,10 +29,10 @@ or inspect the
 | System | CMake target | PlatformIO package | Role |
 | --- | --- | --- | --- |
 | Core | `MicroWorld::Core` | `MicroWorld` | Lifecycle, tick, containers, delegates, smart pointers, timers, `IPlaySystem` |
-| Engine | `MicroWorld::Engine` | `MicroWorld` | `UWorld` / `AActor` / `UActorComponent`, `TEngine`, `IEngine`, plus the object store, garbage collector, and handles |
+| Engine | `MicroWorld::Engine` | `MicroWorld` | `UWorld` / `AActor` / `UActorComponent`, `TEngine`, `IEngineRuntime`, plus the object store, garbage collector, and handles |
 | Messaging | `MicroWorld::Messaging` | `MicroWorld` | `FMessagingSystem` — named channels, subscriptions, reliable delivery (header-only) |
 | Transport | `MicroWorld::Transport` | `MicroWorld` | Byte I/O, frame codec, `TTransportHost`, and the optional portable E32 `FE32LoraDevice` |
-| Application | `MicroWorld::Application` | `MicroWorld` | `FApplication` — owns one engine and its frame loop |
+| Application | `MicroWorld::Application` | `MicroWorld` | `FApplication` — holds one non-owning `IEngineRuntime` reference and owns its frame loop |
 | Platform/Host | `MicroWorld::PlatformHost` | `MicroWorldPlatformHost` | Host UDP transport and `steady_clock` time source (non-portable) |
 | Platform/Esp32 | — | `MicroWorldPlatformEsp32` | ESP32 UDP + wired transports, UART SDK bindings, E32 facade (PlatformIO/ESP-IDF only) |
 | Platform/Pico | `MicroWorld::PlatformPico` | `MicroWorldPlatformPico` | RP2040 UART SDK binding and E32 facade (native Pico SDK only) |

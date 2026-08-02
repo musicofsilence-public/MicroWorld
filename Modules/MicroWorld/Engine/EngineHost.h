@@ -4,6 +4,7 @@
 #include <MicroWorld/Engine/ActorComponent.h>
 #include <MicroWorld/Engine/DeferredActorSpawn.h>
 #include <MicroWorld/Engine/EngineClassIds.h>
+#include <MicroWorld/Engine/EngineRuntime.h>
 #include <MicroWorld/Engine/EngineStorage.h>
 #include <MicroWorld/Core/PlaySystem.h>
 #include <MicroWorld/Messaging/MessagingSystem.h>
@@ -24,68 +25,6 @@
 
 namespace MicroWorld::Engine
 {
-
-/**
- * Motivation: Lets an application hold and drive an engine without naming its compile-time traits, so a subclass-free app
- *   composes a TEngine<TTraits> and reaches it through this interface.
- * Responsibilities: Expose the lifecycle, world, and messaging methods that do not depend on a compile-time capacity,
- *   leaving capacity-dependent operations (such as the templated timer manager) off this interface.
- * Example:
- *   IEngine& Engine = MakeEngine();
- *   (void)Engine.BeginPlay(Now); Engine.Tick(Now + 16);
- */
-class IEngine
-{
-public:
-	/**
-	 * Motivation: Lets a TEngine be destroyed through this interface.
-	 * Responsibilities: Default the virtual destructor so derived teardown runs.
-	 */
-	virtual ~IEngine() noexcept = default;
-
-	/**
-	 * Motivation: Starts the bound system then the world at one canonical time so every subsystem shares one baseline.
-	 * Responsibilities: Record the time as the tick baseline and return success or a lifecycle error.
-	 */
-	virtual Core::ERuntimeResult BeginPlay(Core::TimePointMilliseconds InNowMilliseconds) noexcept = 0;
-
-	/**
-	 * Motivation: Runs one canonical frame in the documented fixed order and surfaces the authoritative per-frame outcome.
-	 * Responsibilities: Drive system and world turns and return the world's advance/apply result.
-	 */
-	virtual Core::ERuntimeResult Tick(Core::TimePointMilliseconds InNowMilliseconds) noexcept = 0;
-
-	/**
-	 * Motivation: Ends the world then the bound system so shutdown mirrors startup order.
-	 * Responsibilities: End in reverse registration order and stay idempotent after a successful first call.
-	 */
-	virtual Core::ERuntimeResult EndPlay() noexcept = 0;
-
-	/**
-	 * Motivation: Lets a caller reach the rooted world after CreateWorld has succeeded.
-	 * Responsibilities: Return a reference to the single world.
-	 */
-	virtual UWorld& GetWorld() noexcept = 0;
-
-	/**
-	 * Motivation: Lets callers query stats or manage roots directly against the backing store.
-	 * Responsibilities: Return the object store.
-	 */
-	virtual FObjectStore& GetObjectStore() noexcept = 0;
-
-	/**
-	 * Motivation: Lets an application reach messaging without composing and driving a second runtime object of its own.
-	 * Responsibilities: Construct the engine's one messaging system, and report Duplicate leaving the existing system
-	 *   untouched when one already exists.
-	 */
-	virtual Core::ERuntimeResult CreateMessagingSystem(const Messaging::FMessagingSystemInformation& InInformation) noexcept = 0;
-
-	/**
-	 * Motivation: Lets a caller open channels and subscribe on the system the engine created and drives.
-	 * Responsibilities: Return the one live messaging system, or null until a creation has succeeded.
-	 */
-	virtual Messaging::FMessagingSystem* GetMessagingSystem() noexcept = 0;
-};
 
 /**
  * Motivation: Gives TEngine one starting set of compile-time capacities sized for an ESP32-S3, so a consumer whose needs
@@ -144,7 +83,7 @@ struct FDefaultEngineTraits
  *   (void)Engine.BeginPlay(Now); Engine.Tick(Now + 16);
  */
 template<typename TTraits = FDefaultEngineTraits>
-class TEngine final : public IEngine
+class TEngine final : public IEngineRuntime
 {
 public:
 	/** Motivation: Pulls the eight capacities out of the traits type so the body reads as compile-time constants. */
@@ -324,13 +263,13 @@ public:
 	 * Motivation: Lets a caller reach the rooted world after CreateWorld has succeeded.
 	 * Responsibilities: Return a reference to the single world.
 	 */
-	UWorld& GetWorld() noexcept override { return *WorldRoot.Get(); }
+	UWorld& GetWorld() noexcept { return *WorldRoot.Get(); }
 
 	/**
 	 * Motivation: Lets callers query stats or manage roots directly against the backing store.
 	 * Responsibilities: Return the object store.
 	 */
-	FObjectStore& GetObjectStore() noexcept override { return Store; }
+	FObjectStore& GetObjectStore() noexcept { return Store; }
 
 	/**
 	 * Motivation: Lets callers schedule and cancel bounded timers against the engine's timer manager.
@@ -343,7 +282,7 @@ public:
 	 * Responsibilities: Construct the system in the reserved slot, and report Duplicate leaving the existing system and
 	 *   its channels and subscriptions untouched when the slot is already filled.
 	 */
-	Core::ERuntimeResult CreateMessagingSystem(const Messaging::FMessagingSystemInformation& InInformation) noexcept override
+	Core::ERuntimeResult CreateMessagingSystem(const Messaging::FMessagingSystemInformation& InInformation) noexcept
 	{
 		if (!MessagingSystems.IsEmpty())
 		{
@@ -357,7 +296,7 @@ public:
 	 * Motivation: Lets a caller open channels and subscribe on the system the engine created and drives.
 	 * Responsibilities: Return the one live messaging system, or null until a creation has succeeded.
 	 */
-	Messaging::FMessagingSystem* GetMessagingSystem() noexcept override { return MessagingSystems.Data(); }
+	Messaging::FMessagingSystem* GetMessagingSystem() noexcept { return MessagingSystems.Data(); }
 
 	/**
 	 * Motivation: Starts the bound system then the world at one canonical time and records it as the tick baseline.

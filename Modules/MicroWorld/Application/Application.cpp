@@ -54,25 +54,25 @@ Core::ERuntimeResult FApplication::EndPlay() noexcept
 
 Core::ERuntimeResult FApplication::OnBeginPlay(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 {
-	// OnConfigure runs before the engine begins so a subclass can spawn actors and
-	// configure systems into a world that exists but has not yet started; either
-	// failure short-circuits the engine begin and surfaces the first cause.
-	const Core::ERuntimeResult ConfigureResult = OnConfigure(Engine, InNowMilliseconds);
+	// Configuration runs before runtime begin so concrete dependencies can be prepared
+	// without broadening the runtime contract. A configuration failure skips runtime
+	// begin; otherwise the runtime's BeginPlay result is returned unchanged.
+	const Core::ERuntimeResult ConfigureResult = OnConfigure(InNowMilliseconds);
 	if (ConfigureResult != Core::ERuntimeResult::Success)
 	{
 		return ConfigureResult;
 	}
-	return Engine.BeginPlay(InNowMilliseconds);
+	return EngineRuntime.BeginPlay(InNowMilliseconds);
 }
 
 Core::ERuntimeResult FApplication::OnAdvance(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 {
-	return Engine.Tick(InNowMilliseconds);
+	return EngineRuntime.Tick(InNowMilliseconds);
 }
 
 Core::ERuntimeResult FApplication::OnEndPlay() noexcept
 {
-	return Engine.EndPlay();
+	return EngineRuntime.EndPlay();
 }
 
 } // namespace MicroWorld::Application

@@ -1,8 +1,6 @@
 #include "TestSupport.h"
 
 #include <MicroWorld/Application/Application.h>
-#include <MicroWorld/Engine/ObjectStore.h>
-#include <MicroWorld/Messaging/MessagingSystem.h>
 
 #include <cstddef>
 #include <initializer_list>
@@ -100,17 +98,16 @@ namespace
 	};
 
 	/**
-	 * Motivation: IEngine double whose Tick stops the runner on a configured frame and records observed timestamps.
-	 *   Tick returns non-Success once TickCount reaches the configured stop frame, so Run returns instead of
-	 *   looping forever; the observed-timestamp vector is what RunnerFeedsClockValuesIntoTick inspects.
-	 *   BeginPlay can also be configured to fail so a failed-begin run is reachable from a test. This double
-	 *   reserves no messaging capacity, so creating a messaging system always reports CapacityExceeded and the
-	 *   getter stays null.
+	 * Motivation: Runtime double whose Tick stops the runner on a configured frame and records observed timestamps.
+	 *   Tick returns non-Success
+	 * once TickCount reaches the configured stop frame, so Run returns instead of looping forever; the observed-timestamp vector is what
+	 * RunnerFeedsClockValuesIntoTick inspects. BeginPlay can also be configured to fail so a failed-begin run is reachable from a test.
+	 *
 	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
-	 * Example:
-	 *   // Construct and exercise the type in one behavior test.
+	 *
+	 * Example: FScriptedEngineRuntime Runtime;
 	 */
-	class FScriptedEngine final : public MicroWorld::Engine::IEngine
+	class FScriptedEngineRuntime final : public MicroWorld::Engine::IEngineRuntime
 	{
 	public:
 		/**
@@ -164,29 +161,12 @@ namespace
 			return MicroWorld::Core::ERuntimeResult::Success;
 		}
 
-		MicroWorld::Engine::UWorld& GetWorld() noexcept override { return *reinterpret_cast<MicroWorld::Engine::UWorld*>(&WorldStorage); }
-		MicroWorld::Engine::FObjectStore& GetObjectStore() noexcept override
-		{
-			return *reinterpret_cast<MicroWorld::Engine::FObjectStore*>(&StoreStorage);
-		}
-
-		MicroWorld::Core::ERuntimeResult CreateMessagingSystem(const MicroWorld::Messaging::FMessagingSystemInformation&) noexcept override
-		{
-			return MicroWorld::Core::ERuntimeResult::CapacityExceeded;
-		}
-
-		MicroWorld::Messaging::FMessagingSystem* GetMessagingSystem() noexcept override { return nullptr; }
-
 	private:
 		/** Motivation: Holds the frame index at which Tick stops the run, so Run always returns in tests. */
 		int StopOnFrameIndex{0};
 
 		/** Motivation: Holds the result BeginPlay returns, seeded to Success so the happy-path runs need no setup. */
 		MicroWorld::Core::ERuntimeResult ConfiguredBeginPlayResult{MicroWorld::Core::ERuntimeResult::Success};
-
-		/** Motivation: Raw storage for the world/store pointers the contract requires but these tests never use. */
-		std::uint64_t WorldStorage{0};
-		std::uint64_t StoreStorage{0};
 	};
 
 	/**
@@ -199,14 +179,16 @@ namespace
 	class FRunnerApplication final : public MicroWorld::Application::FApplication
 	{
 	public:
-		explicit FRunnerApplication(MicroWorld::Engine::IEngine& InEngine) noexcept : MicroWorld::Application::FApplication(InEngine) {}
+		explicit FRunnerApplication(MicroWorld::Engine::IEngineRuntime& InEngineRuntime) noexcept
+			: MicroWorld::Application::FApplication(InEngineRuntime)
+		{
+		}
 
 		int BeginPlayFailedCount{0};
 
 	protected:
-		MicroWorld::Core::ERuntimeResult OnConfigure(MicroWorld::Engine::IEngine& InEngine, MicroWorld::Core::TimePointMilliseconds) noexcept override
+		MicroWorld::Core::ERuntimeResult OnConfigure(MicroWorld::Core::TimePointMilliseconds) noexcept override
 		{
-			(void)InEngine;
 			return MicroWorld::Core::ERuntimeResult::Success;
 		}
 
@@ -223,9 +205,9 @@ MW_TEST_CASE(RunnerStopsOnFirstNonSuccessFrameAndReturnsIt)
 {
 	// Arrange
 	FScriptedClock Clock{10, 20, 30};
-	FScriptedEngine Engine;
-	Engine.ConfigureStopOnFrame(1);
-	FRunnerApplication Application{Engine};
+	FScriptedEngineRuntime EngineRuntime;
+	EngineRuntime.ConfigureStopOnFrame(1);
+	FRunnerApplication Application{EngineRuntime};
 
 	// Act
 	const MicroWorld::Core::ERuntimeResult StopResult = Application.Run(Clock, &CountingSleepFunction, 1);
@@ -242,15 +224,15 @@ MW_TEST_CASE(RunnerEndsPlayAfterAStoppingFrame)
 {
 	// Arrange
 	FScriptedClock Clock{10, 20, 30};
-	FScriptedEngine Engine;
-	Engine.ConfigureStopOnFrame(0);
-	FRunnerApplication Application{Engine};
+	FScriptedEngineRuntime EngineRuntime;
+	EngineRuntime.ConfigureStopOnFrame(0);
+	FRunnerApplication Application{EngineRuntime};
 
 	// Act
 	(void)Application.Run(Clock, &CountingSleepFunction, 1);
 
 	// Assert
-	MW_EXPECT_EQ(Test, 1, Engine.EndPlayCount, "Runner should invoke EndPlay once after a stopping frame");
+	MW_EXPECT_EQ(Test, 1, EngineRuntime.EndPlayCount, "Runner should invoke EndPlay once after a stopping frame");
 }
 
 /**
@@ -261,16 +243,16 @@ MW_TEST_CASE(RunnerDoesNotEndPlayAfterFailedBeginPlay)
 {
 	// Arrange
 	FScriptedClock Clock{10, 20, 30};
-	FScriptedEngine Engine;
-	Engine.ConfigureBeginPlayResult(MicroWorld::Core::ERuntimeResult::CapacityExceeded);
-	FRunnerApplication Application{Engine};
+	FScriptedEngineRuntime EngineRuntime;
+	EngineRuntime.ConfigureBeginPlayResult(MicroWorld::Core::ERuntimeResult::CapacityExceeded);
+	FRunnerApplication Application{EngineRuntime};
 
 	// Act
 	const MicroWorld::Core::ERuntimeResult StopResult = Application.Run(Clock, &CountingSleepFunction, 1);
 
 	// Assert
 	MW_EXPECT_EQ(Test, MicroWorld::Core::ERuntimeResult::CapacityExceeded, StopResult, "Runner should return the begin failure result");
-	MW_EXPECT_EQ(Test, 0, Engine.EndPlayCount, "Runner must not invoke EndPlay after a failed begin");
+	MW_EXPECT_EQ(Test, 0, EngineRuntime.EndPlayCount, "Runner must not invoke EndPlay after a failed begin");
 }
 
 /**
@@ -282,9 +264,9 @@ MW_TEST_CASE(RunnerSleepsOncePerSuccessfulFrameOnly)
 	// Arrange
 	ResetPacingCounter();
 	FScriptedClock Clock{10, 20, 30, 40};
-	FScriptedEngine Engine;
-	Engine.ConfigureStopOnFrame(2);
-	FRunnerApplication Application{Engine};
+	FScriptedEngineRuntime EngineRuntime;
+	EngineRuntime.ConfigureStopOnFrame(2);
+	FRunnerApplication Application{EngineRuntime};
 
 	// Act
 	(void)Application.Run(Clock, &CountingSleepFunction, 1);
@@ -302,16 +284,16 @@ MW_TEST_CASE(RunnerFeedsClockValuesIntoTick)
 {
 	// Arrange
 	FScriptedClock Clock{10, 20, 30};
-	FScriptedEngine Engine;
-	Engine.ConfigureStopOnFrame(1);
-	FRunnerApplication Application{Engine};
+	FScriptedEngineRuntime EngineRuntime;
+	EngineRuntime.ConfigureStopOnFrame(1);
+	FRunnerApplication Application{EngineRuntime};
 
 	// Act
 	(void)Application.Run(Clock, &CountingSleepFunction, 1);
 
 	// Assert
-	const bool bFirstFrameSawSecondClockValue = Engine.ObservedTickTimestamps[0] == MicroWorld::Core::TimePointMilliseconds{20};
-	const bool bSecondFrameSawThirdClockValue = Engine.ObservedTickTimestamps[1] == MicroWorld::Core::TimePointMilliseconds{30};
+	const bool bFirstFrameSawSecondClockValue = EngineRuntime.ObservedTickTimestamps[0] == MicroWorld::Core::TimePointMilliseconds{20};
+	const bool bSecondFrameSawThirdClockValue = EngineRuntime.ObservedTickTimestamps[1] == MicroWorld::Core::TimePointMilliseconds{30};
 	MW_EXPECT_TRUE(Test, bFirstFrameSawSecondClockValue, "First Tick should see the second clock value (begin consumed the first)");
 	MW_EXPECT_TRUE(Test, bSecondFrameSawThirdClockValue, "Second Tick should see the third clock value");
 }

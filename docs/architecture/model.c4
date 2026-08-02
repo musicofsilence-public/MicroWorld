@@ -107,8 +107,16 @@ model {
                 icon ./icon-engine.svg
             }
             metadata {
-                contract 'IEngine, UWorld, AActor, UActorComponent, FObjectStore'
+                contract 'IEngineRuntime, UWorld, AActor, UActorComponent, FObjectStore'
                 boundary 'Object owns identity, Engine owns the lifetime built on it. Neither is a responsibility anything wants alone, so they are one system'
+            }
+
+            engineRuntimeInterface = interface 'Engine Runtime Interface' {
+                technology '[interface: IEngineRuntime]'
+                description 'Defines begin, tick and end turns.'
+                style {
+                    icon ./icon-interface.svg
+                }
             }
 
             engineObject = component 'Engine' {
@@ -289,7 +297,7 @@ model {
 
     microworld.app -[dependsOn]-> microworld.core 'takes Lifecycle, RuntimeResult, Time'
 
-    microworld.app -[dependsOn]-> microworld.engine 'holds one engine for its lifetime'
+    microworld.app -[dependsOn]-> microworld.engine 'takes EngineRuntime'
 
     // 'uses' not 'dependsOn': the application entry point reaches messaging through the
     // engine and names a concrete device only to configure it.
@@ -298,6 +306,7 @@ model {
     microworld.app -[uses]-> microworld.transport 'constructs and configures the concrete medium devices channels send through'
 
 
+    microworld.engine.engineRuntimeInterface -[realisedBy]-> microworld.engine.engineObject
     microworld.engine.engineObject -[uses]-> microworld.engine.world 'owns and advances'
     microworld.engine.engineObject -[dependsOn]-> microworld.engine.objectStore 'resolves handles through'
     microworld.engine.objectStore -[dependsOn]-> microworld.core 'takes Time'

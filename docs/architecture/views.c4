@@ -34,7 +34,7 @@ views {
 
     view c3Engine of microworld.engine {
         title '[C3] Engine'
-        description 'C3, because the deferred spawn barrier and generation-checked handles are the two things a new contributor reliably gets wrong. The identity-versus-lifetime split is deliberately not repeated on these seven children - it is a C2 fact and the C2 subtitle carries it.'
+        description 'C3, because three boundaries are easy to get wrong. The application drives only the Engine Runtime Interface, so world, storage, messaging and typed creation stay concrete. The deferred spawn barrier constructs actors only at safe points, and generation-checked handles detect stale identities. The identity-versus-lifetime split is deliberately not repeated on these eight children - it is a C2 fact and the C2 subtitle carries it.'
         include *
         autoLayout TopBottom
     }

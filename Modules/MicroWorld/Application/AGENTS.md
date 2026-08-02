@@ -11,7 +11,7 @@ depend on Core and Engine, plus the C++17 standard library. It must not depend
 on Transport directly — a networked application receives its already-bound engine
 the same way a standalone one does.
 
-The system owns `FApplication` (a base class that binds one `IEngine&`, seals the
+The system owns `FApplication` (a base class that binds one `IEngineRuntime&`, seals the
 begin/tick/end forwarding, and supplies the begin-then-advance-then-sleep `Run`
 member template a platform entry point would otherwise hand-roll). It does not
 own the engine, the world, actors, components, networking, a clock, or a sleep
@@ -19,15 +19,15 @@ implementation — the clock and sleep arrive from the caller.
 
 ## Concepts and boundaries
 
-- `FApplication` takes `IEngine&` at construction and never rebinds it. The
+- `FApplication` takes `IEngineRuntime&` at construction and never rebinds it. The
   per-frame `BeginPlay`/`Advance`/`EndPlay` calls are public but their work is
-  sealed: private non-virtual forwarders call `IEngine::BeginPlay`/`Tick`/`EndPlay`.
+  sealed: private non-virtual forwarders call `IEngineRuntime::BeginPlay`/`Tick`/`EndPlay`.
 - A subclass must override `OnBeginPlayFailed`, the rollback hook on the failure
-  path, and may override `OnConfigure(IEngine&, TimePoint)`, which runs once
-  during `BeginPlay` before the engine begins so a subclass spawns actors and
-  configures systems into a world that exists but has not started. `OnConfigure`
-  defaults to success, so an application with nothing to configure writes no body.
-- `BeginPlay` calls `OnConfigure` first and `IEngine::BeginPlay` second with the
+  path, and may override `OnConfigure(TimePoint)`, which runs once during
+  `BeginPlay` before the runtime begins. A subclass retains any concrete engine or
+  collaborator it configures explicitly; `OnConfigure` defaults to success, so an
+  application with nothing to configure writes no body.
+- `BeginPlay` calls `OnConfigure` first and `IEngineRuntime::BeginPlay` second with the
   same timestamp and returns the first failure; a failed configure fires
   `OnBeginPlayFailed` and latches the lifecycle terminal.
 - `Advance` still rejects a backward clock before the engine sees it; the engine

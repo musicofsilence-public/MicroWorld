@@ -1,9 +1,9 @@
 #include "TestSupport.h"
 
 #include <MicroWorld/Application/Application.h>
-#include <MicroWorld/Engine/ObjectStore.h>
-#include <MicroWorld/Messaging/MessagingSystem.h>
+#include <MicroWorld/Engine/EngineHost.h>
 
+#include <cstdint>
 #include <utility>
 
 namespace MicroWorld::Tests
@@ -15,18 +15,33 @@ namespace
 	/** Motivation: Dispatcher timestamp every lifecycle test passes to BeginPlay and Advance. */
 	constexpr MicroWorld::Core::TimePointMilliseconds DispatcherStartTime{100};
 
+	/** Motivation: Bounds root scans when the concrete-engine configuration test begins its one world. */
+	constexpr std::uint32_t ConcreteEngineMaxRootOperations{1};
+
+	/** Motivation: Bounds marking work when the concrete-engine configuration test begins its one world. */
+	constexpr std::uint32_t ConcreteEngineMaxMarkOperations{4};
+
+	/** Motivation: Bounds reclamation scans when the concrete-engine configuration test begins its one world. */
+	constexpr std::uint32_t ConcreteEngineMaxSweepOperations{8};
+
+	/** Motivation: Names the bounded collector work used only by the concrete-engine configuration fixture. */
+	constexpr MicroWorld::Engine::FGarbageCollectionBudget ConcreteEngineCollectionBudget{
+		ConcreteEngineMaxRootOperations,
+		ConcreteEngineMaxMarkOperations,
+		ConcreteEngineMaxSweepOperations,
+	};
+
 	/**
-	 * Motivation: Records every IEngine call so FApplication's sealed forwarding is observed behaviourally. Carries
-	 *   configurable BeginPlay/OnConfigure results so a test can drive the failed-begin path without
-	 *   duplicating the application base's own state machine. GetWorld/GetObjectStore return references to
-	 *   backing storage so the IEngine contract is satisfied even though these tests never exercise the
-	 *   world or store. This double reserves no messaging capacity, so creating a messaging system always
-	 *   reports CapacityExceeded and the getter stays null.
+	 * Motivation: Records every runtime call so FApplication's sealed forwarding is observed behaviourally.
+	 *   Carries configurable BeginPlay
+	 * and OnConfigure results so a test can drive failure paths without
+	 *   duplicating the application base's own state machine.
+	 *
 	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
-	 * Example:
-	 *   // Construct and exercise the type in one behavior test.
+	 *
+	 * Example: FRecordingEngineRuntime Runtime;
 	 */
-	class FRecordingEngine final : public MicroWorld::Engine::IEngine
+	class FRecordingEngineRuntime final : public MicroWorld::Engine::IEngineRuntime
 	{
 	public:
 		/**
@@ -62,26 +77,9 @@ namespace
 			return MicroWorld::Core::ERuntimeResult::Success;
 		}
 
-		MicroWorld::Engine::UWorld& GetWorld() noexcept override { return *reinterpret_cast<MicroWorld::Engine::UWorld*>(&WorldStorage); }
-		MicroWorld::Engine::FObjectStore& GetObjectStore() noexcept override
-		{
-			return *reinterpret_cast<MicroWorld::Engine::FObjectStore*>(&StoreStorage);
-		}
-
-		MicroWorld::Core::ERuntimeResult CreateMessagingSystem(const MicroWorld::Messaging::FMessagingSystemInformation&) noexcept override
-		{
-			return MicroWorld::Core::ERuntimeResult::CapacityExceeded;
-		}
-
-		MicroWorld::Messaging::FMessagingSystem* GetMessagingSystem() noexcept override { return nullptr; }
-
 	private:
 		/** Motivation: Holds the result BeginPlay will return, seeded to Success so the happy path needs no setup. */
 		MicroWorld::Core::ERuntimeResult ConfiguredBeginPlayResult{MicroWorld::Core::ERuntimeResult::Success};
-
-		/** Motivation: Raw storage for the world/store pointers the contract requires but these tests never use. */
-		std::uint64_t WorldStorage{0};
-		std::uint64_t StoreStorage{0};
 	};
 
 	/**
@@ -95,7 +93,10 @@ namespace
 	class FConfiguringApplication final : public MicroWorld::Application::FApplication
 	{
 	public:
-		explicit FConfiguringApplication(MicroWorld::Engine::IEngine& InEngine) noexcept : MicroWorld::Application::FApplication(InEngine) {}
+		explicit FConfiguringApplication(MicroWorld::Engine::IEngineRuntime& InEngineRuntime) noexcept
+			: MicroWorld::Application::FApplication(InEngineRuntime)
+		{
+		}
 
 		/**
 		 * Motivation: The failed-configure path is reachable from a test.
@@ -110,9 +111,8 @@ namespace
 		int BeginPlayFailedCount{0};
 
 	protected:
-		MicroWorld::Core::ERuntimeResult OnConfigure(MicroWorld::Engine::IEngine& InEngine, MicroWorld::Core::TimePointMilliseconds) noexcept override
+		MicroWorld::Core::ERuntimeResult OnConfigure(MicroWorld::Core::TimePointMilliseconds) noexcept override
 		{
-			(void)InEngine;
 			++ConfigureCount;
 			return ConfiguredConfigureResult;
 		}
@@ -124,6 +124,53 @@ namespace
 		MicroWorld::Core::ERuntimeResult ConfiguredConfigureResult{MicroWorld::Core::ERuntimeResult::Success};
 	};
 
+	/**
+	 * Motivation: Proves configuration can retain the concrete engine without widening FApplication's runtime dependency.
+	 *
+	 * Responsibilities: Create the world before the runtime begins and report whether the concrete setup succeeded.
+	 * Example: Construct with a
+	 * concrete engine and call BeginPlay.
+	 */
+	class FWorldConfiguringApplication final : public MicroWorld::Application::FApplication
+	{
+	public:
+		/**
+		 * Motivation: Binds runtime forwarding while retaining the concrete engine for configuration.
+		 * Responsibilities: Keep the
+		 * concrete engine valid for OnConfigure without widening the base-class dependency.
+		 */
+		explicit FWorldConfiguringApplication(MicroWorld::Engine::TEngine<>& InConcreteEngine) noexcept
+			: MicroWorld::Application::FApplication(InConcreteEngine), ConcreteEngine(InConcreteEngine)
+		{
+		}
+
+		/** Motivation: Observes whether concrete configuration created the required world before runtime begin. */
+		bool bCreatedWorld{false};
+
+	protected:
+		/**
+		 * Motivation: Creates the world before runtime begin because TEngine requires it for a successful start.
+		 *
+		 * Responsibilities: Record whether creation succeeded and return the matching runtime result.
+		 */
+		MicroWorld::Core::ERuntimeResult OnConfigure(MicroWorld::Core::TimePointMilliseconds) noexcept override
+		{
+			bCreatedWorld = ConcreteEngine.CreateWorld().Get() != nullptr;
+			return bCreatedWorld ? MicroWorld::Core::ERuntimeResult::Success : MicroWorld::Core::ERuntimeResult::CapacityExceeded;
+		}
+
+		/**
+		 * Motivation: Fulfills the failure-hook contract for configuration with no additional rollback work.
+		 * Responsibilities:
+		 * Make no additional state change when the test configuration fails.
+		 */
+		void OnBeginPlayFailed() noexcept override {}
+
+	private:
+		/** Motivation: Retains the concrete dependency configuration needs while the base holds only its runtime contract. */
+		MicroWorld::Engine::TEngine<>& ConcreteEngine;
+	};
+
 } // namespace
 
 /**
@@ -133,8 +180,8 @@ namespace
 MW_TEST_CASE(ApplicationBeginPlayInvokesOnConfigureThenEngineBeginPlay)
 {
 	// Arrange
-	FRecordingEngine Engine;
-	FConfiguringApplication Application{Engine};
+	FRecordingEngineRuntime EngineRuntime;
+	FConfiguringApplication Application{EngineRuntime};
 
 	// Act
 	const MicroWorld::Core::ERuntimeResult BeginResult = Application.BeginPlay(DispatcherStartTime);
@@ -142,7 +189,7 @@ MW_TEST_CASE(ApplicationBeginPlayInvokesOnConfigureThenEngineBeginPlay)
 	// Assert
 	MW_EXPECT_EQ(Test, MicroWorld::Core::ERuntimeResult::Success, BeginResult, "First BeginPlay should succeed");
 	MW_EXPECT_EQ(Test, 1, Application.ConfigureCount, "First BeginPlay should invoke OnConfigure once");
-	MW_EXPECT_EQ(Test, 1, Engine.BeginPlayCount, "First BeginPlay should invoke the engine BeginPlay once");
+	MW_EXPECT_EQ(Test, 1, EngineRuntime.BeginPlayCount, "First BeginPlay should invoke runtime BeginPlay once");
 }
 
 /**
@@ -153,8 +200,8 @@ MW_TEST_CASE(ApplicationBeginPlayInvokesOnConfigureThenEngineBeginPlay)
 MW_TEST_CASE(ApplicationFailedConfigureInvokesFailureHookAndLatchesTerminal)
 {
 	// Arrange
-	FRecordingEngine Engine;
-	FConfiguringApplication Application{Engine};
+	FRecordingEngineRuntime EngineRuntime;
+	FConfiguringApplication Application{EngineRuntime};
 	Application.ConfigureConfigureResult(MicroWorld::Core::ERuntimeResult::CapacityExceeded);
 
 	// Act
@@ -164,11 +211,11 @@ MW_TEST_CASE(ApplicationFailedConfigureInvokesFailureHookAndLatchesTerminal)
 
 	// Assert
 	MW_EXPECT_EQ(Test, MicroWorld::Core::ERuntimeResult::CapacityExceeded, BeginResult, "Failed configure should surface the OnConfigure result");
-	MW_EXPECT_EQ(Test, 0, Engine.BeginPlayCount, "Failed configure must not reach the engine BeginPlay");
+	MW_EXPECT_EQ(Test, 0, EngineRuntime.BeginPlayCount, "Failed configure must not reach runtime BeginPlay");
 	MW_EXPECT_EQ(Test, 1, Application.BeginPlayFailedCount, "Failed configure should invoke the rollback hook once");
 	MW_EXPECT_EQ(
 		Test, MicroWorld::Core::ERuntimeResult::InvalidLifecycle, AdvanceAfterFailedBeginResult, "Advance after a failed begin should be rejected");
-	MW_EXPECT_EQ(Test, 0, Engine.TickCount, "Advance after a failed begin must not reach the engine Tick");
+	MW_EXPECT_EQ(Test, 0, EngineRuntime.TickCount, "Advance after a failed begin must not reach runtime Tick");
 	MW_EXPECT_EQ(
 		Test, MicroWorld::Core::ERuntimeResult::InvalidLifecycle, EndAfterFailedBeginResult, "EndPlay after a failed begin should be rejected");
 }
@@ -181,8 +228,8 @@ MW_TEST_CASE(ApplicationFailedConfigureInvokesFailureHookAndLatchesTerminal)
 MW_TEST_CASE(ApplicationSecondBeginPlayIsRejected)
 {
 	// Arrange
-	FRecordingEngine Engine;
-	FConfiguringApplication Application{Engine};
+	FRecordingEngineRuntime EngineRuntime;
+	FConfiguringApplication Application{EngineRuntime};
 	Application.BeginPlay(DispatcherStartTime);
 
 	// Act
@@ -191,7 +238,7 @@ MW_TEST_CASE(ApplicationSecondBeginPlayIsRejected)
 	// Assert
 	MW_EXPECT_EQ(Test, MicroWorld::Core::ERuntimeResult::InvalidLifecycle, SecondBeginResult, "Second BeginPlay should be rejected");
 	MW_EXPECT_EQ(Test, 1, Application.ConfigureCount, "Second BeginPlay should not re-invoke OnConfigure");
-	MW_EXPECT_EQ(Test, 1, Engine.BeginPlayCount, "Second BeginPlay should not re-invoke the engine BeginPlay");
+	MW_EXPECT_EQ(Test, 1, EngineRuntime.BeginPlayCount, "Second BeginPlay should not re-invoke runtime BeginPlay");
 }
 
 /**
@@ -201,15 +248,15 @@ MW_TEST_CASE(ApplicationSecondBeginPlayIsRejected)
 MW_TEST_CASE(ApplicationAdvanceBeforeBeginPlayIsRejected)
 {
 	// Arrange
-	FRecordingEngine Engine;
-	FConfiguringApplication Application{Engine};
+	FRecordingEngineRuntime EngineRuntime;
+	FConfiguringApplication Application{EngineRuntime};
 
 	// Act
 	const MicroWorld::Core::ERuntimeResult AdvanceResult = Application.Advance(DispatcherStartTime);
 
 	// Assert
 	MW_EXPECT_EQ(Test, MicroWorld::Core::ERuntimeResult::InvalidLifecycle, AdvanceResult, "Advance before BeginPlay should be rejected");
-	MW_EXPECT_EQ(Test, 0, Engine.TickCount, "Advance before BeginPlay should not invoke the engine Tick");
+	MW_EXPECT_EQ(Test, 0, EngineRuntime.TickCount, "Advance before BeginPlay should not invoke runtime Tick");
 }
 
 /**
@@ -220,8 +267,8 @@ MW_TEST_CASE(ApplicationAdvanceBeforeBeginPlayIsRejected)
 MW_TEST_CASE(ApplicationAdvanceRejectsBackwardTime)
 {
 	// Arrange
-	FRecordingEngine Engine;
-	FConfiguringApplication Application{Engine};
+	FRecordingEngineRuntime EngineRuntime;
+	FConfiguringApplication Application{EngineRuntime};
 	Application.BeginPlay(DispatcherStartTime);
 	Application.Advance(DispatcherStartTime);
 
@@ -230,7 +277,7 @@ MW_TEST_CASE(ApplicationAdvanceRejectsBackwardTime)
 
 	// Assert
 	MW_EXPECT_EQ(Test, MicroWorld::Core::ERuntimeResult::NonMonotonicTime, BackwardResult, "Backward time should be rejected");
-	MW_EXPECT_EQ(Test, 1, Engine.TickCount, "Backward Advance should not invoke the engine Tick");
+	MW_EXPECT_EQ(Test, 1, EngineRuntime.TickCount, "Backward Advance should not invoke runtime Tick");
 }
 
 /**
@@ -240,8 +287,8 @@ MW_TEST_CASE(ApplicationAdvanceRejectsBackwardTime)
 MW_TEST_CASE(ApplicationAdvanceAcceptsRepeatedSameTimestamp)
 {
 	// Arrange
-	FRecordingEngine Engine;
-	FConfiguringApplication Application{Engine};
+	FRecordingEngineRuntime EngineRuntime;
+	FConfiguringApplication Application{EngineRuntime};
 	Application.BeginPlay(DispatcherStartTime);
 	Application.Advance(DispatcherStartTime);
 
@@ -250,7 +297,7 @@ MW_TEST_CASE(ApplicationAdvanceAcceptsRepeatedSameTimestamp)
 
 	// Assert
 	MW_EXPECT_EQ(Test, MicroWorld::Core::ERuntimeResult::Success, RepeatedTimeResult, "Repeated timestamp should be accepted as monotonic");
-	MW_EXPECT_EQ(Test, 2, Engine.TickCount, "Repeated-timestamp Advance should still invoke the engine Tick");
+	MW_EXPECT_EQ(Test, 2, EngineRuntime.TickCount, "Repeated-timestamp Advance should still invoke runtime Tick");
 }
 
 /**
@@ -260,8 +307,8 @@ MW_TEST_CASE(ApplicationAdvanceAcceptsRepeatedSameTimestamp)
 MW_TEST_CASE(ApplicationEndPlayIsIdempotent)
 {
 	// Arrange
-	FRecordingEngine Engine;
-	FConfiguringApplication Application{Engine};
+	FRecordingEngineRuntime EngineRuntime;
+	FConfiguringApplication Application{EngineRuntime};
 	Application.BeginPlay(DispatcherStartTime);
 
 	// Act
@@ -271,7 +318,7 @@ MW_TEST_CASE(ApplicationEndPlayIsIdempotent)
 	// Assert
 	MW_EXPECT_EQ(Test, MicroWorld::Core::ERuntimeResult::Success, FirstEndResult, "First EndPlay should succeed");
 	MW_EXPECT_EQ(Test, MicroWorld::Core::ERuntimeResult::Success, SecondEndResult, "Second EndPlay should remain successful");
-	MW_EXPECT_EQ(Test, 1, Engine.EndPlayCount, "Idempotent EndPlay should invoke the engine EndPlay once");
+	MW_EXPECT_EQ(Test, 1, EngineRuntime.EndPlayCount, "Idempotent EndPlay should invoke runtime EndPlay once");
 }
 
 /**
@@ -281,8 +328,8 @@ MW_TEST_CASE(ApplicationEndPlayIsIdempotent)
 MW_TEST_CASE(ApplicationAdvanceAfterEndPlayIsRejected)
 {
 	// Arrange
-	FRecordingEngine Engine;
-	FConfiguringApplication Application{Engine};
+	FRecordingEngineRuntime EngineRuntime;
+	FConfiguringApplication Application{EngineRuntime};
 	Application.BeginPlay(DispatcherStartTime);
 	Application.EndPlay();
 
@@ -291,7 +338,26 @@ MW_TEST_CASE(ApplicationAdvanceAfterEndPlayIsRejected)
 
 	// Assert
 	MW_EXPECT_EQ(Test, MicroWorld::Core::ERuntimeResult::InvalidLifecycle, AdvanceResult, "Advance after EndPlay should be rejected");
-	MW_EXPECT_EQ(Test, 0, Engine.TickCount, "Advance after EndPlay should not invoke the engine Tick");
+	MW_EXPECT_EQ(Test, 0, EngineRuntime.TickCount, "Advance after EndPlay should not invoke runtime Tick");
+}
+
+/**
+ * Motivation: Begin an application that needs concrete engine access while configuring its world.
+ * Responsibilities: Create the world before
+ * runtime begin, allowing the application to start successfully.
+ */
+MW_TEST_CASE(ApplicationConfiguresRetainedConcreteEngineBeforeRuntimeBegin)
+{
+	// Arrange
+	MicroWorld::Engine::TEngine<> ConcreteEngine{ConcreteEngineCollectionBudget};
+	FWorldConfiguringApplication Application{ConcreteEngine};
+
+	// Act
+	const MicroWorld::Core::ERuntimeResult BeginResult = Application.BeginPlay(DispatcherStartTime);
+
+	// Assert
+	MW_EXPECT_EQ(Test, MicroWorld::Core::ERuntimeResult::Success, BeginResult, "Concrete configuration should create the world before runtime begin");
+	MW_EXPECT_TRUE(Test, Application.bCreatedWorld, "Concrete configuration should create the retained engine world");
 }
 
 } // namespace MicroWorld::Tests

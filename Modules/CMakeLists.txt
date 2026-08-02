@@ -8,7 +8,7 @@ cmake_minimum_required(VERSION 3.16)
 # evidence (CheckProfileMap.py) and the dependency-boundary gate still hold. The
 # single include root is this directory: headers live at
 # MicroWorld/<System>/<Name>.h and resolve as <MicroWorld/<System>/<Name>.h>.
-project(MicroWorld VERSION 0.4.0 LANGUAGES CXX)
+project(MicroWorld VERSION 0.5.0 LANGUAGES CXX)
 
 option(MICROWORLD_BUILD_TESTS "Build MicroWorld host tests" ON)
 option(MICROWORLD_BUILD_BENCHMARKS "Build MicroWorld host benchmarks" OFF)
