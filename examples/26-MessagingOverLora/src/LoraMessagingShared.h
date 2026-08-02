@@ -2,7 +2,7 @@
 
 #include <MicroWorld/Transport/TransportHostConfig.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
-#include <MicroWorld/Platform/Esp32/Esp32LoraDevice.h>
+#include <MicroWorld/Platform/Esp32/Esp32E32LoraConfig.h>
 
 #include <cstdint>
 

@@ -1,3 +1,4 @@
+#include <MicroWorld/Platform/Esp32/Esp32E32LoraConfig.h>
 #include <MicroWorld/Platform/Esp32/Esp32LoraDevice.h>
 
 #include <cstdint>
