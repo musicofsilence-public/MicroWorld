@@ -2,6 +2,7 @@
 
 #include <MicroWorld/Core/WeakOwner.h>
 #include <MicroWorld/Messaging/ChannelInformation.h>
+#include <MicroWorld/Messaging/DefaultMessagingTraits.h>
 #include <MicroWorld/Messaging/Message.h>
 #include <MicroWorld/Messaging/MessagingResult.h>
 #include <MicroWorld/Messaging/MessagingSystem.h>

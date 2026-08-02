@@ -7,6 +7,7 @@
 #include <MicroWorld/Core/Time.h>
 #include <MicroWorld/Core/WeakOwner.h>
 #include <MicroWorld/Messaging/ChannelInformation.h>
+#include <MicroWorld/Messaging/DefaultMessagingTraits.h>
 #include <MicroWorld/Messaging/Message.h>
 #include <MicroWorld/Messaging/MessagingResult.h>
 #include <MicroWorld/Messaging/MessagingSystemInformation.h>
@@ -21,30 +22,6 @@ namespace MicroWorld::Messaging
 
 /** Motivation: Reserves the protocol message name used only for reliable-delivery acknowledgements. */
 inline constexpr FNameId MessageAcknowledgementNameId = MakeNameId("__MessageAck");
-
-/**
- * Motivation: Defines the complete default fixed memory footprint for one Messaging system.
- * Responsibilities: Bound every channel, subscription, frame, and reliable-pending allocation at compile time.
- * Example:
- *   FMessagingSystem System;
- */
-struct FDefaultMessagingTraits
-{
-	/** Motivation: Bounds how many named channels one Messaging system may store. */
-	static constexpr std::size_t MaxChannels = 4;
-
-	/** Motivation: Bounds how many subscriber registrations one Messaging system may store. */
-	static constexpr std::size_t MaxSubscriptions = 16;
-
-	/** Motivation: Bounds the inline storage one subscriber callable may occupy before Messaging rejects it without allocating. */
-	static constexpr std::size_t MaxSubscriberCallableBytes = 32;
-
-	/** Motivation: Bounds the application bytes one complete Messaging frame may carry. */
-	static constexpr std::size_t MaxMessageBytes = 96;
-
-	/** Motivation: Bounds how many reliable messages one Messaging system may retain awaiting acknowledgement. */
-	static constexpr std::size_t MaxReliablePendingMessages = 8;
-};
 
 /**
  * Motivation: Owns the bounded set of named channels and carries their messages to local subscribers and, where a channel holds a device, the wire.
