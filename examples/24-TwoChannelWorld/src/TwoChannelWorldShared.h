@@ -5,7 +5,6 @@
 #include <MicroWorld/Messaging/NameId.h>
 #include <MicroWorld/Platform/Esp32/Esp32UartDevice.h>
 #include <MicroWorld/Platform/Esp32/Esp32WifiDevice.h>
-#include <MicroWorld/Platform/Esp32/Esp32WifiLink.h>
 
 #include <cstdint>
 

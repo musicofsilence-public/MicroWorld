@@ -6,6 +6,7 @@
 #include <MicroWorld/Core/IO/ReceiveResult.h>
 #include <MicroWorld/Core/IO/TransportResult.h>
 #include <MicroWorld/Transport/Wifi/UdpAddressCodec.h>
+#include <MicroWorld/Platform/Esp32/Esp32AccessPointConfig.h>
 #include <MicroWorld/Platform/Esp32/Esp32OutputDevice.h>
 #include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
 #include <MicroWorld/Platform/Esp32/Esp32WifiDevice.h>

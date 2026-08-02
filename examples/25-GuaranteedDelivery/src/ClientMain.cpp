@@ -16,6 +16,7 @@
 #include <MicroWorld/Messaging/MessagingSystem.h>
 #include <MicroWorld/Messaging/MessagingSystemInformation.h>
 #include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
+#include <MicroWorld/Platform/Esp32/Esp32StationConfig.h>
 #include <MicroWorld/Platform/Esp32/Esp32TimeSource.h>
 #include <MicroWorld/Platform/Esp32/Esp32WifiDevice.h>
 #include <MicroWorld/Platform/Esp32/Esp32WifiLink.h>

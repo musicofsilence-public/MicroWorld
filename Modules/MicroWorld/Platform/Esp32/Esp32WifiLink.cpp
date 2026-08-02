@@ -1,3 +1,5 @@
+#include <MicroWorld/Platform/Esp32/Esp32AccessPointConfig.h>
+#include <MicroWorld/Platform/Esp32/Esp32StationConfig.h>
 #include <MicroWorld/Platform/Esp32/Esp32WifiLink.h>
 
 #include "Internal/Esp32WifiPlatformImplementation.h"
