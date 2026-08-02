@@ -6,6 +6,7 @@
 #include <MicroWorld/Platform/Esp32/Esp32OutputDevice.h>
 #include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
 #include <MicroWorld/Platform/Esp32/Esp32TimeSource.h>
+#include <MicroWorld/Platform/Esp32/Esp32UartConfig.h>
 #include <MicroWorld/Platform/Esp32/Esp32UartDevice.h>
 #include <MicroWorld/Platform/Esp32/UartAddress.h>
 

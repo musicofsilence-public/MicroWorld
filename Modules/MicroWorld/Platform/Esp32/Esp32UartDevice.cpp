@@ -1,4 +1,6 @@
+#include <MicroWorld/Platform/Esp32/Esp32UartConfig.h>
 #include <MicroWorld/Platform/Esp32/Esp32UartDevice.h>
+#include <MicroWorld/Platform/Esp32/UartAddress.h>
 
 #include "Internal/OpenedUart.h"
 #include "Internal/UartPort.h"

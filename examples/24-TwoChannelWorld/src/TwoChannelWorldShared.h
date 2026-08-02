@@ -3,7 +3,7 @@
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Messaging/NameId.h>
-#include <MicroWorld/Platform/Esp32/Esp32UartDevice.h>
+#include <MicroWorld/Platform/Esp32/Esp32UartConfig.h>
 #include <MicroWorld/Platform/Esp32/Esp32WifiDevice.h>
 
 #include <cstdint>
