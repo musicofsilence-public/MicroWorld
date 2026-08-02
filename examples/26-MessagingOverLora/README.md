@@ -6,7 +6,7 @@ client — running over an E32 LoRa radio. **Same application protocol as
 example 19 — only the device construction and the D8 session profile differ.**
 
 `TTransportHost` already advances queued device transmission after outbound FIFO
-progress, so this example has no direct `AdvanceTransmit` call.
+progress, so this example has no direct `PreAdvance` call.
 
 > Status: hardware-verified 2026-07-24 (EBYTE E32-433T20D, 433 MHz).
 

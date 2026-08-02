@@ -12,7 +12,7 @@ environments share one source file.
 
 ## Concepts
 
-- Makes the `IDevice` interface observable over radio: the volley loop is
+- Makes the `Core::ITransportDevice` interface observable over radio: the volley loop is
   transport-agnostic, so this is example 18 with only the device construction
   line changed.
 - LoRa is a broadcast, half-duplex medium: the destination

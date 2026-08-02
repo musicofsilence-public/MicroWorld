@@ -7,8 +7,8 @@ version of familiar UE5 engine concepts. It lets UE5 developers build small
 applications, interactive software, and games for constrained devices (ESP32,
 STM32, RP2040-class) without first learning every hardware detail. It keeps only
 essential, bounded features — lifecycle, World/Actor/Component, GC, smart
-pointers, a simple `TTransportManager`/`IDevice` networking layer, and explicit
-hardware boundaries. Platform support is verified one target at a time, not
+pointers, a simple messaging and transport layer over `Core::ITransportDevice`,
+and explicit hardware boundaries. Platform support is verified one target at a time, not
 claimed for every board.
 
 `docs/RADIO_TRANSPORTS_ROADMAP.md` is the one plan in this repository, and the
@@ -37,10 +37,10 @@ MicroWorld/
 │   │   │               pointers, timers, IPlaySystem
 │   │   ├── Engine/     UWorld / AActor / UActorComponent + the folded Object
 │   │   │               store, GC, handles, TEngine, IEngine
-│   │   ├── Messaging/  message router, channel bindings (header-only)
+│   │   ├── Messaging/  FMessagingSystem — named channels, subscriptions,
+│   │   │               reliable delivery (header-only)
 │   │   ├── Transport/  byte I/O, frame codec, TTransportHost + the optional E32
 │   │   │               portable framing and device (was Net + RadioE32)
-│   │   ├── Networking/ TNetworking — Messaging + Transport behind IPlaySystem
 │   │   ├── Application/ FApplication (including the Run template)
 │   │   └── Platform/   non-portable edges, each its own library.json
 │   │       ├── Host/    host UDP transport
@@ -64,18 +64,19 @@ is one more copy to leave stale.
 Dependencies point inward:
 
 ```text
-Core <- Engine
 Core <- Messaging
 Core <- Transport
-Core, Messaging, Transport <- Networking
+Core, Messaging <- Engine
 Core, Engine <- Application
 ```
 
-Object folded into Engine; Net and RadioE32 folded into Transport. Transport
-never pulls Engine, and no portable system sees both Engine and Transport —
-Networking reaches the engine only through Core's `IPlaySystem`, so joining the
-two is the application entry point's job. Platform/Host, Platform/Esp32, and Platform/Pico
-are the non-portable edges; only they may reach OS/SDK headers.
+Object folded into Engine; Net and RadioE32 folded into Transport; Networking
+dissolved into Messaging. Transport never pulls Engine, and no portable system
+sees both Engine and Transport. Messaging and Transport meet only at Core's
+`ITransportDevice`: a channel sends through the interface, each medium realises
+it, and a concrete device is named only at the application entry point.
+Platform/Host, Platform/Esp32, and Platform/Pico are the non-portable edges;
+only they may reach OS/SDK headers.
 
 `CLAUDE.md` at this level carries the architecture overview and each module's
 responsibility in one place.

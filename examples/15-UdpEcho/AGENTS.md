@@ -11,7 +11,7 @@ holds the one copy of the demo AP config (SSID/password) and the echo port.
 
 ## Concepts
 
-- Proves the `IDevice` UDP transport hosting its own network with **no router**: this
+- Proves the `Core::ITransportDevice` UDP transport hosting its own network with **no router**: this
   board is the SoftAP and echoes via `FEsp32WifiDevice`. No `TTransportHost`, no engine — the device
   only.
 - **Ordering + storage invariants:** the device is constructed only after

@@ -98,7 +98,7 @@ package:
 - is **excluded from `CheckDependencyBoundaries.py`** — it has no module key in
   that tool's portable table;
 - **depends inward** on any portable package (Core, Engine, Messaging, Transport,
-  Application, Networking) it needs; the reverse dependency is forbidden.
+  Application) it needs; the reverse dependency is forbidden.
 
 The portable packages themselves stay free of OS/vendor headers and remain
 under the dependency checker.

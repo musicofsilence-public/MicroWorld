@@ -19,7 +19,6 @@ inspect the
 | Engine | `MicroWorld::Engine` | `MicroWorld` |
 | Messaging | `MicroWorld::Messaging` | `MicroWorld` |
 | Transport | `MicroWorld::Transport` | `MicroWorld` |
-| Networking | `MicroWorld::Networking` | `MicroWorld` |
 | Application | `MicroWorld::Application` | `MicroWorld` |
 | Platform/Host | `MicroWorld::Platform::Host` | `MicroWorldPlatformHost` |
 | Platform/Esp32 | — (ESP-IDF only) | `MicroWorldPlatformEsp32` |
@@ -42,16 +41,17 @@ Dependencies point inward, and `tools/CheckDependencyBoundaries.py` fails
 `ctest` on any violation:
 
 ```text
-Core <- Engine, Messaging, Transport
-Core + Messaging + Transport <- Networking
+Core <- Messaging, Transport
+Core + Messaging <- Engine
 Core + Engine <- Application
 ```
 
-Transport never sees Engine and Engine never sees Transport; `Networking` is the
-only system that composes messaging with a transport, and it does so behind
-Core's `IPlaySystem` without naming a world or an actor. CMake links the named
-targets; local PlatformIO development uses one `symlink://../../Modules`
-dependency plus one per platform edge in use.
+Transport never sees Engine and Engine never sees Transport. Messaging and
+Transport never see each other either: they meet at `Core::ITransportDevice`, so
+a channel sends through the interface while each medium realises it, and the
+application entry point is the only place that names a concrete device. CMake
+links the named targets; local PlatformIO development uses one
+`symlink://../../Modules` dependency plus one per platform edge in use.
 
 ## Verification
 

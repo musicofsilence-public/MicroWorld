@@ -2,7 +2,7 @@
 
 **Feature:** the same ping-pong counter volley as example 18, over an E32 LoRa
 radio link instead of a wire — a `FEsp32LoraDevice` swapped in for
-`FEsp32UartDevice` on the `IDevice` interface, with the volley loop, frame codec,
+`FEsp32UartDevice` on the `Core::ITransportDevice` interface, with the volley loop, frame codec,
 and address helpers unchanged. This is the wireless twin of example 18.
 
 > Status: hardware-verified 2026-07-24 (EBYTE E32-433T20D, 433 MHz).
@@ -15,7 +15,7 @@ and address helpers unchanged. This is the wireless twin of example 18.
 2. Node 1 seeds the volley: one second after boot it sends a 5-byte payload
    (sender node id + a big-endian `std::uint32_t` counter) to the peer and
    logs `tx n=<counter> result=<text>`.
-3. Both boards poll `TryReceive` on a 10 ms pace and call `AdvanceTransmit` on
+3. Both boards poll `TryReceive` on a 10 ms pace and call `PreAdvance` on
    every loop iteration. `TrySend(Success)` means the frame was queued, not that
    UART emission completed. On a received frame they log
    `rx n=<counter> from=<node-id>` (the sender id comes from the frame,
@@ -217,7 +217,7 @@ I (36446336) ex17: tx n=40 result=Success
 ```
 
 The same hardware was rechecked after moving UART SDK calls behind the
-SDK-free `IUartByteStream` interface and wiring transmit progress into `IDevice`. The rebuilt
+SDK-free `IUartByteStream` interface and wiring transmit progress into the device's `PreAdvance` turn. The rebuilt
 UF2 SHA-256 was
 `9d85c3cc2ce14cd099730779d0323f1bfd135b4cc61fdbf6aa50a717bf91e288`.
 After upload through `D:\`, COM5 showed an uninterrupted node-1/node-2 volley:

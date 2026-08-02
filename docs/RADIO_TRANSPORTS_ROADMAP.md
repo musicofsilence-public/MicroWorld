@@ -3,8 +3,8 @@
 **Version:** 1.0 · **Date:** 2026-07-24 · **Owner:** Mykola
 **Baseline:** `main` at `b4973be` (clean tree), Windows 11 root superbuild + PlatformIO for examples, ESP-IDF 6.0.1 via PlatformIO.
 **Scope:** `Modules/MicroWorld/Platform/Esp32`, `examples/`, `docs/architecture/decisions/`. Portable
-packages (`Core`, `Engine`, `Messaging`, `Transport`, `Application`, `Networking`) are **untouched** —
-a radio is just another `IDevice` (ADR 0003 logic applies unchanged).
+packages (`Core`, `Engine`, `Messaging`, `Transport`, `Application`) are **untouched** —
+a radio is just another `Core::ITransportDevice` (ADR 0003 logic applies unchanged).
 
 **Mission.** Give MicroWorld two working radio links and prove them the same
 way the wired links were proven:
@@ -13,7 +13,7 @@ way the wired links were proven:
    example exists and it has never run on hardware. Finish it: volley example,
    hardware verification, full client/server messaging example.
 2. **Bluetooth LE** — nothing exists. Design spike (ADR), a
-   central/peripheral `IDevice` pair, volley + messaging examples.
+   central/peripheral `Core::ITransportDevice` pair, volley + messaging examples.
 3. **Capstone** — a fully wireless two-board world: BLE + LoRa as two
    channels of one actor-messaging world (gated on the messaging roadmap).
 
@@ -143,7 +143,7 @@ join the allowed industry vocabulary alongside `Udp`/`Uart`), format with
   only config structs and plain types
   (`rg -n "esp_|nimble|freertos|host/ble" Modules/MicroWorld/Platform/Esp32/include` must
   stay 0).
-- **Devices implement the full `IDevice` contract** (`Device.h:40`):
+- **Devices implement the full `Core::ITransportDevice` contract** (`Core/IO/TransportDevice.h`):
   non-blocking, at most one transport operation per call, transactional
   receives, `IsOpen()` guard after a `noexcept` constructor — mirror
   `Esp32UartDevice.h` / `Esp32I2cDevice.h` shape for shape.
@@ -166,7 +166,7 @@ join the allowed industry vocabulary alongside `Udp`/`Uart`), format with
 - **D1 — "Bluetooth" means Bluetooth LE.** The ESP32-S3 has **no Bluetooth
   Classic radio** — BLE 5.0 only. Classic (SPP, A2DP…) is permanently out of
   scope for this target. Anyone asking for "Bluetooth serial" gets BLE.
-- **D2 — A radio is just another `IDevice`** (ADR 0003 reasoning).
+- **D2 — A radio is just another `Core::ITransportDevice`** (ADR 0003 reasoning).
   Framing reuses the shipped `FrameCodec` byte-pump decoder; sessions reuse
   `TTransportHost`; nothing portable changes. That reuse is the entire payoff.
 - **D3 — NimBLE is the working assumption for the BLE host stack** (lighter
@@ -198,11 +198,12 @@ join the allowed industry vocabulary alongside `Udp`/`Uart`), format with
   (26 LoraMessaging, 27 TwoBoardBle, 28 BleMessaging, 29 WirelessWorld).
   Registration happens only in `examples/README.md` (§1.5).
 - **D10 — Phase 5's messaging gate is satisfied.** It required actor messaging
-  over a wire plus `TPlaySystemSet`, because example 29 always composes two
-  channels. `TMessageRouter`, `TMessageChannelBinding`, `TPlaySystemSet` and
-  `TReliableChannel` all shipped, and examples 22–25 exercise them. Everything
-  in Phases 0–4 here uses only shipped API (`TTransportHost`, `THostPlaySystem`,
-  `TEngine`).
+  over a wire, because example 29 always composes two channels.
+  `FMessagingSystem` ships that as two channels on one engine-owned system. The
+  router, bindings, reliable wrapper and play-system set this plan originally
+  named were deleted in the Networking dissolution; examples 22–25 exercise the
+  replacement. Everything in Phases 0–4 here uses only shipped API
+  (`TTransportHost`, `THostPlaySystem`, `TEngine`).
 - **D11 — BLE builds extend sdkconfig additively.** The shared
   `examples/esp32-common/sdkconfig.defaults` is frozen; BLE examples pass a
   **second** defaults file (`examples/esp32-common/sdkconfig.ble.defaults`,
@@ -246,7 +247,7 @@ only: **no example uses it, it has never been flashed**, and the catalog row
 modules on the rig support BLE 5.0 (and only BLE — D1). No extra hardware is
 needed for BLE.
 
-**Everything above the `IDevice` interface is ready and battle-tested** on UDP, UART,
+**Everything above the `Core::ITransportDevice` interface is ready and battle-tested** on UDP, UART,
 I2C, and SPI: `FrameCodec` (CRC-16, resync), `TTransportManager`, `TTransportHost`
 (roles/peers/channels/heartbeats), `THostPlaySystem` → `TEngine`, and four
 verified two-board examples (18–21) plus two WiFi ones (15–16) to copy from.
@@ -306,25 +307,25 @@ struct FEsp32BleCentralConfig
 };
 
 /** Peripheral-role BLE transport: advertises, accepts one central. */
-class FEsp32BlePeripheralDevice final : public IDevice
+class FEsp32BlePeripheralDevice final : public Core::ITransportDevice
 {
 public:
     explicit FEsp32BlePeripheralDevice(const FEsp32BlePeripheralConfig& Config) noexcept;
     bool IsOpen() const noexcept;        // stack up, service registered, advertising
     bool IsConnected() const noexcept;   // a central is connected and MTU covers one frame
-    // IDevice: TrySend = one notify of one encoded frame (Unavailable until connected);
+    // ITransportDevice: TrySend = one notify of one encoded frame (Unavailable until connected);
     //             TryReceive = drain inbox ring through the decoder, one frame max;
     //             MaxPacketBytes = BleMaxPayloadBytes.
 };
 
 /** Central-role BLE transport: scans, connects to one named peripheral. */
-class FEsp32BleCentralDevice final : public IDevice
+class FEsp32BleCentralDevice final : public Core::ITransportDevice
 {
 public:
     explicit FEsp32BleCentralDevice(const FEsp32BleCentralConfig& Config) noexcept;
     bool IsOpen() const noexcept;
     bool IsConnected() const noexcept;
-    // IDevice: TrySend = one write-without-response; TryReceive as above.
+    // ITransportDevice: TrySend = one write-without-response; TryReceive as above.
 };
 ```
 
@@ -652,17 +653,16 @@ bench, first as a raw volley, then under the full engine.
 ### Phase 5 — Wireless actor-messaging world ⬜
 
 **Gate (open):** the messaging API this phase needs has shipped —
-`TMessageRouter`, `TMessageChannelBinding`, `TPlaySystemSet`, and
-`TReliableChannel`, all exercised by examples 22–25. Nothing blocks 5.x but the
-BLE work in Phases 2–4.
+`FMessagingSystem`, its named channels and its `bIsReliable` flag, all exercised
+by examples 22–25. Nothing blocks 5.x but the BLE work in Phases 2–4.
 
 - [ ] **5.1 Example `29-WirelessWorld` (capstone: two radios, zero wires).**
   Two boards, no wire between them (D12 keeps WiFi out): **channel 1
   telemetry over BLE** (`TTransportHost<2, 120>`), **channel 2 commands over LoRa**
-  (`TTransportHost<2, 58>`, D8 profile). One world per board, one `TMessageRouter`
+  (`TTransportHost<2, 58>`, D8 profile). One world per board, one `FMessagingSystem`
   per board with `MaxMessageBytes = 48` (§4.1 — the LoRa channel is the
-  binding constraint), frame-set composition per the `Modules/MicroWorld/Messaging/AGENTS.md`
-  recipes (host play systems first, router last). Client
+  binding constraint), channel composition per the `Modules/MicroWorld/Messaging/AGENTS.md`
+  recipes. Client
   board: sensor actor streams readings on telemetry; server board: control
   actor sends a targeted rate-change command on the LoRa channel every 15 s.
   Tag `[ex29]`. README: both radios' safety/security blocks, the

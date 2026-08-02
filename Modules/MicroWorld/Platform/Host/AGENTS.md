@@ -6,7 +6,7 @@ Inherits `../../../AGENTS.md`.
 
 `MicroWorldPlatformHost` is the non-portable host platform adapter. It supplies
 real host UDP transport over OS sockets (WinSock on Windows, BSD on POSIX) and a
-`steady_clock`-based time source behind the portable `IDevice` /
+`steady_clock`-based time source behind the portable `Core::ITransportDevice` /
 `TimePointMilliseconds` interfaces described in `../../../docs/Porting.md`. It
 ships the two-node UDP demo as its worked acceptance evidence. It depends inward
 on Core and Transport as needed and never the reverse, and it is excluded from
@@ -16,7 +16,7 @@ table.
 ## Concepts
 
 - The two adapter interfaces are `MicroWorld::Platform::Host::FHostTimeSource` (clock) and `MicroWorld::Platform::Host::FHostWifiDevice`
-  (`IDevice` transport); portable code never reaches WinSock/BSD headers
+  (`Core::ITransportDevice` transport); portable code never reaches WinSock/BSD headers
   directly.
 - `FWinSockScope` is a reference-counted RAII guard: the first construction
   performs `WSAStartup`, the last destruction performs `WSACleanup`, and both

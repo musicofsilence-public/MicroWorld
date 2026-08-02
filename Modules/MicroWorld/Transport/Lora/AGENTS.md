@@ -5,7 +5,7 @@ Inherits `../AGENTS.md`.
 ## Architecture
 
 This directory holds the portable half of the LoRa medium: the E32 node-address
-shape, the `IDevice` realisation over a UART byte stream, and the fixed frame
+shape, the `Core::ITransportDevice` realisation over a UART byte stream, and the fixed frame
 state beneath it. LoRa is the one medium whose protocol MicroWorld owns end to
 end, which is why a single implementation here serves every board instead of one
 per platform family.
@@ -28,14 +28,14 @@ on the public device and address headers only.
 
 - The medium underneath is a byte stream, not a datagram service. Packet
   boundaries are recovered with `FrameCodec` magic/length/CRC framing, while the
-  `IDevice` contract above still hands out whole packets.
+  `Core::ITransportDevice` contract above still hands out whole packets.
 - `FE32LoraDevice` performs no I/O while constructing. `Initialize` is
   single-shot — `Success` on the first call, `Unavailable` after — and stamps
   the local node id into every frame later queued.
 - One transmit slot. A `TrySend` arriving while a frame is still queued returns
   `Full` rather than buffering a second packet.
-- `AdvanceTransmit` exists because this device accepts a packet before it is on
-  air. Each call moves a fixed encoded-frame byte budget; a byte commits only
+- The device uses its `PreAdvance` turn because it accepts a packet before it is
+  on air. Each call moves a fixed encoded-frame byte budget; a byte commits only
   after UART `Success`, `Unavailable` retains it for the next turn, and `Error`
   discards the queued frame so a dead UART cannot leave later sends `Full`
   forever.

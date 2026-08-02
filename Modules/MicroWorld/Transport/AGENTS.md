@@ -9,9 +9,11 @@ Transport is the portable byte-I/O system. Its dependency direction is
 Transport must not depend on Engine, Messaging, or Application, and no portable
 system may see both Engine and Transport — only the application entry point joins them.
 
-The system owns a bounded byte reader/writer, one non-blocking `IDevice`
-contract, one caller-storage-backed fixed-capacity `TTransportManager`, the `TTransportHost`
-session layer above it, wire framing, explicit `ETransportResult` outcomes, a
+Core owns the device contract itself — `Core::ITransportDevice`, `Core::FDeviceAddress`
+and `Core::ETransportResult` — so that Messaging can send through a device without
+depending on Transport. What Transport owns is everything built on that contract:
+a bounded byte reader/writer, one caller-storage-backed fixed-capacity
+`TTransportManager`, the `TTransportHost` session layer above it, wire framing, a
 deterministic host loopback device, the one-byte E32 node-address shape, and the
 portable RadioE32 transport over `IUartByteStream`. It does not own sequence
 numbers, retries, reliability, message routing, authentication, replication,
@@ -30,7 +32,7 @@ portable E32 transport state); consumers must not depend on those headers.
 
 ## Concepts and boundaries
 
-- `ETransportResult` keeps every byte, queue, packet, and device outcome explicit
+- `Core::ETransportResult` keeps every byte, queue, packet, and device outcome explicit
   with one normalized meaning per value: `Success` (complete operation),
   `Full` (valid operation lacks destination/queue/transport capacity),
   `Invalid` (invalid span/configuration, oversized packet, or truncated
@@ -48,22 +50,24 @@ portable E32 transport state); consumers must not depend on those headers.
 - `Lora/E32Lora.h` owns the one-byte E32 node-address shape and payload limit;
   `Lora/Internal/E32LoraTransportState.h` owns the portable E32 state, and
   `Lora/E32LoraDevice.h` owns the device that uses it over `IUartByteStream`.
-- `IDevice` exposes one bounded non-blocking `TrySend` and one bounded
-  non-blocking `TryReceive`. Every receive is transactional: on `Full`,
-  `Invalid`, or `Unavailable` the destination and `FReceiveResult::BytesReceived`
-  are unchanged. `AdvanceTransmit` is a no-op by default and lets staged devices
-  make one bounded physical transmit step after a host FIFO drain.
+- Every device here realises `Core::ITransportDevice`: one bounded non-blocking
+  `TrySend` and one bounded non-blocking `TryReceive`. Every receive is
+  transactional — on `Full`, `Invalid`, or `Unavailable` the destination and
+  `Core::FReceiveResult::BytesReceived` are unchanged. A device that accepts a
+  packet before it is physically sent makes one bounded transmit step per
+  `PreAdvance`, which its owner calls; a device with nothing staged leaves that
+  turn empty.
 - `TTransportManager<MaxPackets, MaxPacketBytes>` holds exactly one externally
-  referenced `IDevice` and one externally referenced `TTransportPacketStorage`,
-  maintains one deterministic outbound FIFO, and performs at most one direct
-  device receive.
+  referenced `Core::ITransportDevice` and one externally referenced
+  `TTransportPacketStorage`, maintains one deterministic outbound FIFO, and
+  performs at most one direct device receive.
 - `TTransportHost<MaxPeers, MaxPacketBytes>` is the session layer above `TTransportManager`.
   One `ENetworkMode` role — Standalone, Client, ListenServer, or DedicatedServer —
   selects which traffic the host originates and accepts; a fixed peer table
   carries `Hello`/`Welcome` admission, heartbeats, and timeout eviction; and
   channel 0 is reserved for control.
-- `THostLoopback` is a deterministic fixed-capacity `IDevice` for host tests.
-- `FPacketDropDevice` is a test/demo `IDevice` decorator that wraps another
+- `THostLoopback` is a deterministic fixed-capacity `Core::ITransportDevice` for host tests.
+- `FPacketDropDevice` is a test/demo `Core::ITransportDevice` decorator that wraps another
   device by reference and silently drops every Nth outgoing send; it is a loss
   injector, not reliability or a real transport.
 - RadioE32 operations are non-blocking, bounded, fixed-capacity, and explicit

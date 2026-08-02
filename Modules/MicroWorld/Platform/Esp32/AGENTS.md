@@ -8,7 +8,7 @@ Inherits `../../../AGENTS.md`.
 supplies real transports (lwIP UDP, an optional E32 compatibility facade over
 UART, a wired point-to-point UART, a wired point-to-point I2C master/slave pair,
 and a wired point-to-point SPI master/slave pair), a time source (`esp_timer`),
-and an output device (`ESP_LOG*`) behind the portable `IDevice` /
+and an output device (`ESP_LOG*`) behind the portable `Core::ITransportDevice` /
 `TimePointMilliseconds` / `FOutputDeviceFunction` interfaces described in
 `../../../docs/Porting.md`. It depends inward on Core, Engine, Transport, and
 optional RadioE32 as needed and never the reverse, and it is excluded from
@@ -17,7 +17,7 @@ table.
 
 ## Concepts
 
-- The adapter interfaces are `FEsp32TimeSource` (clock), the `IDevice`
+- The adapter interfaces are `FEsp32TimeSource` (clock), the `Core::ITransportDevice`
   transports (`FEsp32WifiDevice`, `FEsp32LoraDevice`, `FEsp32UartDevice`,
   `FEsp32I2cMasterDevice`/`FEsp32I2cSlaveDevice`, `FEsp32SpiMasterDevice`/
   `FEsp32SpiSlaveDevice`), and `WriteEsp32LogRecord` (the log output device); the

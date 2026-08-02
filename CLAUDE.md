@@ -64,9 +64,7 @@ Five portable systems plus three platform edges. The folder tree under
 `Modules/MicroWorld/` states these systems directly: one directory per system,
 header and source side by side. Object folded into Engine, Net + RadioE32 folded
 into Transport, and Networking dissolved into Messaging, so the build package
-count equals the architecture system count — the two are reconciled. (Code is
-mid-migration: `Modules/MicroWorld/Networking` still exists until the dissolution
-refactor lands; this document and the model describe the target.)
+count equals the architecture system count — the two are reconciled.
 
 ---
 
