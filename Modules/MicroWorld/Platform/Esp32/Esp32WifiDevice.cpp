@@ -1,6 +1,10 @@
 #include <MicroWorld/Platform/Esp32/Esp32WifiDevice.h>
 
-#include "Internal/Esp32SocketPlatformImplementation.h"
+#include "Internal/ConsumeResult.h"
+#include "Internal/OpenedSocket.h"
+#include "Internal/PeekProbe.h"
+#include "Internal/SendOutcome.h"
+#include "Internal/SocketHandle.h"
 
 #include <cstdint>
 

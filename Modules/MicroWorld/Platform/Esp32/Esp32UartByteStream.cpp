@@ -1,6 +1,9 @@
 #include <MicroWorld/Platform/Esp32/Internal/Esp32UartByteStream.h>
 
-#include "Internal/UartPlatformImplementation.h"
+#include "Internal/OpenedUart.h"
+#include "Internal/UartPort.h"
+#include "Internal/UartReadStatus.h"
+#include "Internal/UartWriteOutcome.h"
 
 namespace MicroWorld::Platform::Esp32
 {

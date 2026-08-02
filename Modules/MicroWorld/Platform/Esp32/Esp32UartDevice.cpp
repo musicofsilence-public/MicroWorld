@@ -1,6 +1,9 @@
 #include <MicroWorld/Platform/Esp32/Esp32UartDevice.h>
 
-#include "Internal/UartPlatformImplementation.h"
+#include "Internal/OpenedUart.h"
+#include "Internal/UartPort.h"
+#include "Internal/UartReadStatus.h"
+#include "Internal/UartWriteOutcome.h"
 
 #include <MicroWorld/Core/Log.h>
 #include <MicroWorld/Transport/EFrameEvent.h>

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <MicroWorld/Platform/Esp32/Internal/Esp32UartByteStream.h>
+#include <MicroWorld/Platform/Esp32/Internal/Esp32UartByteStreamConfig.h>
 #include <MicroWorld/Transport/Lora/E32LoraDevice.h>
 
 #include <cstddef>
