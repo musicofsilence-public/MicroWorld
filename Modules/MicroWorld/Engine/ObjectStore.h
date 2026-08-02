@@ -2,6 +2,8 @@
 
 #include <MicroWorld/Core/WeakOwner.h>
 #include <MicroWorld/Engine/ObjectPtr.h>
+#include <MicroWorld/Engine/StrongObjectPtr.h>
+#include <MicroWorld/Engine/StrongObjectPointerResult.h>
 
 #include <cstddef>
 #include <cstdint>

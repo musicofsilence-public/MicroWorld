@@ -5,7 +5,6 @@
 #include <MicroWorld/Core/LifecycleState.h>
 #include <MicroWorld/Engine/Object.h>
 #include <MicroWorld/Engine/ObjectHandle.h>
-#include <MicroWorld/Engine/ObjectPtr.h>
 #include <MicroWorld/Core/Tickable.h>
 #include <MicroWorld/Core/TickContext.h>
 #include <MicroWorld/Core/Time.h>

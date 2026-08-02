@@ -4,6 +4,7 @@
 
 #include <MicroWorld/Engine/GarbageCollector.h>
 #include <MicroWorld/Engine/ObjectStore.h>
+#include <MicroWorld/Engine/WeakObjectPtr.h>
 #include <MicroWorld/Core/Version.h>
 
 #include <cstddef>

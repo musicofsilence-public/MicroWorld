@@ -12,6 +12,8 @@
 #include <MicroWorld/Engine/Object.h>
 #include <MicroWorld/Engine/ObjectPtr.h>
 #include <MicroWorld/Engine/ObjectStore.h>
+#include <MicroWorld/Engine/StrongObjectPtr.h>
+#include <MicroWorld/Engine/WeakObjectPtr.h>
 
 #include <array>
 #include <cstddef>

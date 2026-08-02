@@ -8,6 +8,7 @@
 #include <MicroWorld/Engine/EngineStorage.h>
 #include <MicroWorld/Engine/World.h>
 #include <MicroWorld/Engine/GarbageCollector.h>
+#include <MicroWorld/Engine/WeakObjectPtr.h>
 
 #include <cstddef>
 #include <cstdint>
