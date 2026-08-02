@@ -23,18 +23,18 @@ Generated previews go to `build/`, never beside the source.
 
 ### Systems carry the team's words, not the build's
 
-`Core`, `Engine`, `Transport`, `Messaging System`, `Application`, `Networking`. Four
-are the module names, because there the module name **is** the domain vocabulary. An
-earlier revision replaced all six with invented abstractions ("Runtime Substrate",
-"Engine-Network Integration") and forced every reader to translate before they could
-find anything. Do not reintroduce a private vocabulary.
+`Core`, `Engine`, `Transport`, `Messaging System`, `Application`. Every one is a module
+name, because there the module name **is** the domain vocabulary. An earlier revision
+replaced them all with invented abstractions ("Runtime Substrate", "Engine-Network
+Integration") and forced every reader to translate before they could find anything.
+Do not reintroduce a private vocabulary.
 
-Two are renamed, and the trigger was the **name**, not the boundary: `Net` beside
-`Net System` differed only by a generic suffix, so the pair read as one wrapping the
-other and kept producing "shouldn't we merge these?" about the one boundary the model
-exists to protect. `Transport` and `Networking` share no word, so the two altitudes are
-legible before any metadata is read. Neither title came from the code — `TNetSystem`
-named the packaging, `Integration` named where the code sits.
+One rename survives from an earlier layout, and the trigger was the **name**, not the
+boundary: `Net` beside `Net System` differed only by a generic suffix, so the pair read
+as one wrapping the other and kept producing "shouldn't we merge these?" about the one
+boundary the model exists to protect. `Transport` carries no shared word with anything
+else here. The title did not come from the code either — `TNetSystem` named the
+packaging.
 
 The architectural content is the **boundary**, not the name. But if the name hides the
 boundary, readers will not see it.
@@ -57,17 +57,12 @@ implies and never states.
 | --- | --- |
 | Core | `[system: foundation]` |
 | Engine | `[system: managed runtime]` |
-| Messaging System | `[system: play service]` |
+| Messaging System | `[system: engine service]` |
 | Transport | `[system: byte I/O]` |
 | Application | `[system: entry point]` |
-| Networking | `[system: play service]` |
 
-The two `play service` lines are identical on purpose: it is how the model already shows
-kinship, exactly as the two boards both read `device: microcontroller`. What separates
-those two systems is their edges, which the diagram draws.
-
-Both say `play service` because both implement `IPlaySystem` — the Core contract with four
-turns: `BeginPlay`, `PreAdvance`, `PostAdvance`, `EndPlay`. It was called `IEngineSystem`,
+`Messaging System` says `engine service` because it implements `IPlaySystem` — the Core
+contract with four turns: `BeginPlay`, `PreAdvance`, `PostAdvance`, `EndPlay`. It was called `IEngineSystem`,
 which said Engine while the whole point is that implementers must not need Engine. The new
 name was chosen for closeness to the UE5 API, not because it is the nicest word; the owner
 said as much when picking it. `ITickableSystem` was rejected because Core's `FTickable`
@@ -82,7 +77,7 @@ in the model at all; see **The code is not the authority** below.
 `Transport`'s detail is `byte I/O`, not `transport`: after the rename the old detail
 merely restated the title, which is the defect this section exists to prevent. The role
 it names is the altitude — raw bytes, no semantics — which is exactly what separates it
-from `Networking` one layer up.
+from `Messaging System`, which carries named messages over the same devices.
 
 ### The code is not the authority — none of it
 
@@ -96,10 +91,15 @@ argument from an `#include` list or from "there is already a class called that" 
 same error as an argument from `target_link_libraries`. It reasons from the artifact
 to the design, and the arrow only runs the other way.
 
-Three things here disagree with the packaging on purpose, which is the check that the
-rule is real: **Engine** is one system over two modules, **Transport** holds every
-medium including the separately packaged radio, and neither **Transport** nor
-**Networking** is named after the module it contains.
+Two things here disagree with the packaging on purpose, which is the check that the
+rule is real: **Transport** holds every medium, including the three platform families
+that ship as their own PlatformIO packages; and **Core** owns the device contract while
+every realisation of it lives in Transport or a platform package, so the contract and
+its implementations are deliberately on opposite sides of a package line.
+
+A third disagreement closed, and closing is what should happen: **Engine** was one
+system over two modules until `Object` folded into it. The code moved to the model, not
+the model to the code.
 
 **File references do not stay** (owner, 2026-07-30): *"We must not care about the code,
 the goal is well defined architecture, everything else will be updated later."* A
@@ -120,9 +120,9 @@ class name as a *reason* — naming a type as vocabulary is fine, naming one as 
 is the error this section exists to prevent.
 
 `standalone` exists because the capability and the verdict get cited separately and read
-badly crammed together — see `messagingSystem`, where "usable with no networking at all"
-is the decision and "so it is not part of networking" is what follows from it. Both are
-architecture, and neither needs a header to back it up.
+badly crammed together — see `messagingSystem`, where "usable with no transport at all"
+is the capability and "so no medium is named here" is the verdict that follows from it.
+Both are architecture, and neither needs a header to back it up.
 
 ### Boundary verdicts for this repository
 
@@ -132,17 +132,18 @@ Recorded because they are the decisions someone will otherwise re-litigate:
 | --- | --- | --- |
 | `Object` + `Engine` | **one** system, titled Engine | Object owns identity, Engine owns the lifetime built on it; neither is a responsibility anything wants alone |
 | `Net` + every medium | **one** system, titled Transport | it sits below the engine; a named medium — Wi-Fi, a wire, a radio — only *satisfies* the device contract and declares nothing outward, which makes it an implementation |
-| `Transport` + `Networking` | **two** systems | merged, one element would own both the byte contract and the message types, and nothing would forbid a device from knowing a message type. Asked and re-decided once already — the reason to merge came from the old names, not from the structure |
-| `Messaging System` | **own** system | it is **usable with no networking at all** — a message between two actors on one board must not travel through a transport, so its contract names neither actors nor transports. Folding it into Networking would assert the opposite |
+| `Transport` + `Messaging System` | **two** systems | merged, one element would own both the byte contract and the message types, and nothing would forbid a device from knowing a message type. They meet at Core's device contract instead, which is what keeps either usable without the other. Asked and re-decided more than once — the reason to merge has each time come from the names, not from the structure |
+| `Messaging System` | **own** system | it is **usable with no transport at all** — a message between two actors on one board must not travel through a device, so its contract names neither actors nor media. A channel with no device is the local mode, not a degraded one |
+| `Networking` | **deleted**, its parts absorbed | it existed only to join Messaging and Transport without letting them see each other. Once the device contract moved into Core they could meet there, and the joining element had nothing left to own but composition — which is the application entry point's job. See ADR 0007 |
 | `Core` + `Engine` | **two** systems | Core is the shared vocabulary that lets independent systems interoperate. Merge it and Transport → Core becomes Transport → Engine, collapsing the graph |
 | `Platform*` | **outside the product** | not ours to own, so position says so; they are elements at C3 Transport, drawn outside the `microworld` boundary. An earlier verdict kept them out of the model entirely and named them in subtitles instead — overruled, see below |
-| Who pumps a device | **its owner** — an application or Networking, never both | a callback cannot fire itself, so `Device Interface` carries the four `IPlaySystem` turns alongside its three operations. The owner's usage holds a device directly with no Networking anywhere, which is precisely the case Networking cannot cover — hence Application's `uses` edge to Transport, matching the one it already has to Messaging |
-| Delivery guarantees | **Networking**, not Transport or Messaging | an acknowledgement is a message from the peer, so a byte layer that read one would have stopped carrying payload opaquely — which rules Transport out on its own contract. Messaging keeps the *declaration* only: a binding says it wants reliable delivery, and locally the call satisfies that for free. Sequencing, acknowledgement and retransmit are Networking's because they mean nothing without a wire, and Messaging must stay usable with none |
-| Splitting an oversized message | **Networking**; a device publishes its limit and refuses | E32 frames are small, so this will happen. A device that reassembles holds state about traffic it was told to carry opaquely — the same argument that moved reliability out, and this is the exact spot where that machinery would otherwise creep back in. Networking already sequences, so it is the cheapest place for it |
+| Who pumps a device | **whoever composed it**, never a system that merely sends through it | a callback cannot fire itself, so `Device Interface` carries the four `IPlaySystem` turns alongside its three operations. `Messaging System` deliberately does not drive them: one device may back several channels, and a device ticked twice a frame is the bug this rule exists to prevent. Hence Application's `uses` edge to Transport, matching the one it already has to Messaging |
+| Delivery guarantees | **Messaging System**, not Transport | an acknowledgement is a message from the peer, so a byte layer that read one would have stopped carrying payload opaquely — which rules Transport out on its own contract. That leaves the system that already owns message identity. It is one flag on a channel, and locally the synchronous call satisfies it for free, so Messaging stays usable with no wire |
+| Splitting an oversized message | **Messaging System**; a device publishes its limit and refuses | E32 frames are small, so this will happen. A device that reassembles holds state about traffic it was told to carry opaquely — the same argument that keeps reliability out of Transport, and this is the exact spot where that machinery would otherwise creep back in. Messaging already sequences reliable traffic, so it is the cheapest place for it |
 
 ### Depth
 
-C1 is the product boundary and its purpose. C2 is six contract-defined systems.
+C1 is the product boundary and its purpose. C2 is five contract-defined systems.
 C3 exists in exactly three of them, because these are where a contributor
 reliably guesses wrong:
 
@@ -181,7 +182,7 @@ Two responsibilities left C3 Transport with that stack, and neither should retur
 | Dropped | Why it is not Transport |
 | --- | --- |
 | the outbound queue | how a device holds what it cannot send yet is beneath this level; the *contract* promises a send that never blocks, and that promise is on the contract |
-| peer sessions — roles, admission, heartbeat, eviction | `SendDataTo(Address, Data)` has no handshake and no peer table. Admission is semantics, and Transport is byte I/O — it belongs to `Networking` if it is wanted at all |
+| peer sessions — roles, admission, heartbeat, eviction | `SendDataTo(Address, Data)` has no handshake and no peer table, and this level draws the device shape and the media that realise it. ADR 0008 keeps a session layer in Transport as an **opt-in** feature above the contract, not as part of it; a caller who wants only the contract must not inherit a peer table |
 
 ### One contract, uniform in its data path and deliberately not in Setup
 
@@ -353,16 +354,21 @@ delete Bluetooth as speculative — it is a stated requirement, not a guessed on
 ### The invariant the model must keep visible
 
 Engine and Transport never reference each other, and **no system joins them** — only
-the application entry point does. `PlaySystem.h` in Core is what lets a play service extend a
-frame loop it cannot see, which is why neither `Messaging System` nor `Networking` needs
-Engine in order to be installed in one.
+the application entry point does. `PlaySystem.h` in Core is what lets an engine service extend a
+frame loop it cannot see, which is why `Messaging System` does not need Engine in order to
+be installed in one.
 
-`Networking` was once drawn as the sanctioned exception, with an edge to Engine labelled
-"advances the world each frame". That inverted control — an engine service is *called by*
-the loop, it does not drive it — and `Messaging System` had already shown the dependency
-was unnecessary, delivering messages between actors on Core alone. Networking sits further
-from actors than Messaging does, so it cannot need more. Removing the edge made the absence
-total, which is the stronger statement.
+`Messaging System` and `Transport` never reference each other either, and that absence is
+the newer half of the same invariant. They meet at Core's device contract: a channel sends
+through the interface, each medium realises it, and only the application entry point names
+a concrete device.
+
+An earlier revision drew a `Networking` element as the sanctioned exception, with an edge to
+Engine labelled "advances the world each frame". That inverted control — an engine service is
+*called by* the loop, it does not drive it — and `Messaging System` had already shown the
+dependency was unnecessary, delivering messages between actors on Core alone. Removing the
+edge made the absence total, which is the stronger statement; ADR 0007 then removed the
+element, because once the two systems could meet in Core it had nothing left to join.
 
 This is stated in the `c2Systems` description — **not** in a view of its own. A filtered
 view of C2 would be the same diagram minus two boxes, and an absent edge is exactly as
@@ -392,7 +398,7 @@ that needs no key.**
 
 ### Our own icons
 
-Twelve `icon-*.svg` files sit beside the `.c4` files, referenced as `icon ./icon-transport.svg`.
+Eleven `icon-*.svg` files sit beside the `.c4` files, referenced as `icon ./icon-transport.svg`.
 They render in `export png` with no network, the same as the bundled sets.
 
 | Element | Glyph | Why it is honest |
@@ -402,7 +408,6 @@ They render in `export png` with no network, the same as the bundled sets.
 | Messaging System | envelope | typed messages, delivered |
 | Transport | frames on a wire | "moves framed bytes" drawn |
 | Application | loop with an arrowhead | it owns the `Run` frame loop |
-| Networking | two lines merging into one | the only place Messaging and Transport meet |
 | Wi-Fi / Wired / LoRa Device | network, cable, antenna | the physical medium, the one thing they differ by |
 | Bluetooth Device | the Bluetooth rune | the medium has a real mark; one path, no interior detail |
 | Play System / Transport Device / Engine Runtime Interface | ball-and-socket connector | the standard notation for a provided interface; shared because all three are one kind |
