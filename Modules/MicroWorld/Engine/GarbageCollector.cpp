@@ -1,4 +1,5 @@
 #include <MicroWorld/Engine/GarbageCollector.h>
+#include <MicroWorld/Engine/ReferenceCollector.h>
 
 #include <MicroWorld/Engine/ObjectStore.h>
 

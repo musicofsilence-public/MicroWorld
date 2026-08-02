@@ -1,7 +1,9 @@
 #include "TestSupport.h"
 
 #include <MicroWorld/Engine/ClassRegistryView.h>
+#include <MicroWorld/Engine/GarbageCollectionBudget.h>
 #include <MicroWorld/Engine/GarbageCollector.h>
+#include <MicroWorld/Engine/GarbageCollectorStorage.h>
 #include <MicroWorld/Engine/ObjectCreationResult.h>
 #include <MicroWorld/Engine/ObjectMutationResult.h>
 #include <MicroWorld/Engine/ObjectRootEntry.h>

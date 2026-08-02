@@ -7,7 +7,7 @@
 #include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Engine/EngineResult.h>
-#include <MicroWorld/Engine/GarbageCollector.h>
+#include <MicroWorld/Engine/GarbageCollectionBudget.h>
 #include <MicroWorld/Engine/ObjectPtr.h>
 #include <MicroWorld/Engine/World.h>
 #include <MicroWorld/Messaging/ChannelInformation.h>

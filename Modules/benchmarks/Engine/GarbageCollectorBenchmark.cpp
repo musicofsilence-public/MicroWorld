@@ -1,6 +1,11 @@
 #include <MicroWorld/Engine/ClassRegistryView.h>
+#include <MicroWorld/Engine/GarbageCollectionBudget.h>
+#include <MicroWorld/Engine/GarbageCollectionPhase.h>
+#include <MicroWorld/Engine/GarbageCollectionResult.h>
 #include <MicroWorld/Engine/GarbageCollector.h>
+#include <MicroWorld/Engine/GarbageCollectorStorage.h>
 #include <MicroWorld/Engine/ObjectCreationResult.h>
+#include <MicroWorld/Engine/ReferenceCollector.h>
 #include <MicroWorld/Engine/ObjectRootEntry.h>
 #include <MicroWorld/Engine/ObjectSlotMetadata.h>
 #include <MicroWorld/Engine/ObjectStore.h>

@@ -22,7 +22,7 @@
 #include <MicroWorld/Transport/TransportHostState.h>
 #include <MicroWorld/Core/IO/TransportResult.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
-#include <MicroWorld/Engine/GarbageCollector.h>
+#include <MicroWorld/Engine/GarbageCollectionBudget.h>
 #include <MicroWorld/Engine/ObjectPtr.h>
 #include <MicroWorld/Platform/Host/HostWifiDevice.h>
 #include <MicroWorld/Platform/Host/UdpAddress.h>

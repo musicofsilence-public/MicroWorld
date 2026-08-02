@@ -14,7 +14,10 @@
 #include <MicroWorld/Engine/ClassRegistry.h>
 #include <MicroWorld/Engine/ClassRegistryRegistrationView.h>
 #include <MicroWorld/Engine/ClassRegistryView.h>
+#include <MicroWorld/Engine/GarbageCollectionBudget.h>
+#include <MicroWorld/Engine/GarbageCollectionPhase.h>
 #include <MicroWorld/Engine/GarbageCollector.h>
+#include <MicroWorld/Engine/GarbageCollectorStorage.h>
 #include <MicroWorld/Engine/Object.h>
 #include <MicroWorld/Engine/ObjectCreationResult.h>
 #include <MicroWorld/Engine/ObjectPtr.h>

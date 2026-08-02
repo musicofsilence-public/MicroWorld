@@ -3,7 +3,9 @@
 #include "MemoryConsumerProbe.h"
 
 #include <MicroWorld/Engine/ClassRegistryView.h>
+#include <MicroWorld/Engine/GarbageCollectionResult.h>
 #include <MicroWorld/Engine/GarbageCollector.h>
+#include <MicroWorld/Engine/GarbageCollectorStorage.h>
 #include <MicroWorld/Engine/ObjectCreationResult.h>
 #include <MicroWorld/Engine/ObjectRootEntry.h>
 #include <MicroWorld/Engine/ObjectSlotMetadata.h>

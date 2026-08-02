@@ -1,9 +1,12 @@
 #pragma once
 
-#include <MicroWorld/Engine/ObjectHandle.h>
-#include <MicroWorld/Engine/ObjectPtr.h>
 #include <MicroWorld/Core/RuntimeResult.h>
-#include <MicroWorld/Core/Time.h>
+#include <MicroWorld/Engine/GarbageCollectionBudget.h>
+#include <MicroWorld/Engine/GarbageCollectionPhase.h>
+#include <MicroWorld/Engine/GarbageCollectionResult.h>
+#include <MicroWorld/Engine/GarbageCollectionStats.h>
+#include <MicroWorld/Engine/GarbageCollectorStorage.h>
+#include <MicroWorld/Engine/ObjectHandle.h>
 
 #include <cstdint>
 
@@ -11,176 +14,7 @@ namespace MicroWorld::Engine
 {
 
 class FObjectStore;
-
-/**
- * Motivation: Names the current bounded stage of one explicit mark/sweep cycle so the collector and its callers branch
- *   on progress without re-deriving it from internal state.
- * Responsibilities: Distinguish idle, root-seeding, mark, and sweep phases.
- * Example:
- *   if (Collector.Phase() == EGarbageCollectionPhase::Idle) { Collector.RequestCollection(); }
- */
-enum class EGarbageCollectionPhase : std::uint8_t
-{
-	/** Motivation: Reports that no collection is requested or in progress. */
-	Idle,
-
-	/** Motivation: Scans fixed root-table entries before graph traversal begins. */
-	SeedRoots,
-
-	/** Motivation: Iteratively traces reachable objects through caller-owned worklist storage. */
-	Mark,
-
-	/** Motivation: Inspects fixed object slots and reclaims each unreachable live object. */
-	Sweep,
-};
-
-/**
- * Motivation: Supplies caller-owned iterative bookkeeping with no collector heap fallback, so collection stays
- *   allocation-free and bounded.
- * Responsibilities: Carry the worklist buffer and its capacity, which must cover the configured object-slot count.
- * Example:
- *   FGarbageCollectorStorage Storage{Worklist.data(), N};
- */
-struct FGarbageCollectorStorage
-{
-	/** Motivation: Holds generation-checked reachable identities awaiting one finite visitor run. */
-	FObjectHandle* Worklist{nullptr};
-
-	/** Motivation: Bounds worklist occupancy and must cover the configured object-slot count. */
-	std::uint32_t WorklistCapacity{0};
-};
-
-/**
- * Motivation: Limits one incremental call by semantic operations rather than hidden time, so collection progress stays
- *   predictable and caller-driven.
- * Responsibilities: Bound root entries scanned, reachable-object visitor executions, and object slots inspected;
- *   reference enqueue and deduplication stay inside the bounded class visitor.
- * Example:
- *   FGarbageCollectionBudget Budget{8, 8, 16};
- *   Collector.Advance(Budget);
- */
-struct FGarbageCollectionBudget
-{
-	/** Motivation: Limits root-table entries inspected while seeding reachability. */
-	std::uint32_t MaxRootOperations{0};
-
-	/** Motivation: Limits complete reachable-object visitor executions. */
-	std::uint32_t MaxMarkOperations{0};
-
-	/** Motivation: Limits object slots inspected for reclamation. */
-	std::uint32_t MaxSweepOperations{0};
-};
-
-/**
- * Motivation: Reports exact work and reclamation performed by one collector call so a caller can observe incremental
- *   progress without logging or hidden clocks.
- * Responsibilities: Carry the result, current phase, per-phase and total operation counts, reclaimed count, and
- *   cycle-complete signal for the call.
- * Example:
- *   FGarbageCollectionResult R = Collector.Advance(Budget);
- *   if (R.bCycleComplete) { Done(); }
- */
-struct FGarbageCollectionResult
-{
-	/** Motivation: Reports invalid lifecycle or caller-storage capacity without throwing. */
-	Core::ERuntimeResult Result{Core::ERuntimeResult::Success};
-
-	/** Motivation: Exposes the phase waiting for the next caller-provided budget. */
-	EGarbageCollectionPhase Phase{EGarbageCollectionPhase::Idle};
-
-	/** Motivation: Reports the sum of root, mark, and sweep operations performed this call. */
-	std::uint32_t OperationsPerformed{0};
-
-	/** Motivation: Reports root-table entries inspected during this call. */
-	std::uint32_t RootOperations{0};
-
-	/** Motivation: Reports reachable objects whose finite visitor completed during this call. */
-	std::uint32_t MarkOperations{0};
-
-	/** Motivation: Reports object slots inspected during this call. */
-	std::uint32_t SweepOperations{0};
-
-	/** Motivation: Reports objects reclaimed during this call rather than over the whole cycle. */
-	std::uint32_t ObjectsReclaimed{0};
-
-	/** Motivation: Signals the exact call that returned the collector to Idle. */
-	bool bCycleComplete{false};
-};
-
-/**
- * Motivation: Exposes cumulative collector outcomes without logging or hidden clocks so a caller can observe collector
- *   health over many cycles.
- * Responsibilities: Count completed cycles, reclaimed objects, rejected requests, and worklist overflows.
- * Example:
- *   FGarbageCollectionStats S = Collector.Stats();
- *   if (S.WorklistOverflows > 0) { GrowWorklist(); }
- */
-struct FGarbageCollectionStats
-{
-	/** Motivation: Counts complete explicit collection cycles. */
-	std::uint32_t CompletedCycles{0};
-
-	/** Motivation: Counts objects reclaimed across complete and incremental calls. */
-	std::uint32_t ReclaimedObjects{0};
-
-	/** Motivation: Counts requests rejected because a cycle was active or storage was invalid. */
-	std::uint32_t RejectedRequests{0};
-
-	/** Motivation: Counts traces that could not enqueue a reachable object in caller storage. */
-	std::uint32_t WorklistOverflows{0};
-};
-
-class FGarbageCollector;
-
-/**
- * Motivation: Presents descriptor-visible handles to the active non-recursive mark traversal so traced references reach
- *   the collector through one narrow type.
- * Responsibilities: Mark and enqueue same-store referenced handles during the active mark phase without exposing a raw
- *   public bypass.
- * Example:
- *   Collector.VisitReferences(RefCollector);
- *   RefCollector.AddReferencedObject(Child);
- */
-class FReferenceCollector final
-{
-public:
-	/**
-	 * Motivation: Marks one typed traced reference while preserving its generation identity.
-	 * Responsibilities: Enqueue the reference's handle only when it belongs to the expected store.
-	 */
-	template<typename T>
-	void AddReferencedObject(const TObjectPtr<T> InObject) noexcept
-	{
-		if (ExpectedStore != nullptr && InObject.BelongsTo(*ExpectedStore))
-		{
-			AddReferencedHandle(InObject.Handle());
-		}
-	}
-
-private:
-	friend class FGarbageCollector;
-
-	/**
-	 * Motivation: Marks one validated same-store identity without exposing a raw public bypass.
-	 * Responsibilities: Forward the handle to the active collector's discovery path.
-	 */
-	void AddReferencedHandle(FObjectHandle InHandle) noexcept;
-
-	/**
-	 * Motivation: Restricts discovery to one active visitor and its owning object store.
-	 * Responsibilities: Bind the collector and expected store for the visitor's lifetime.
-	 */
-	FReferenceCollector(FGarbageCollector& InGarbageCollector, FObjectStore& InStore) noexcept
-		: Collector(&InGarbageCollector), ExpectedStore(&InStore)
-	{
-	}
-
-	/** Motivation: Identifies the collector that owns mark state and worklist capacity. */
-	FGarbageCollector* Collector{nullptr};
-
-	/** Motivation: Prevents same-valued handles from another object store entering this graph. */
-	FObjectStore* ExpectedStore{nullptr};
-};
+class FReferenceCollector;
 
 /**
  * Motivation: Performs explicit-root, non-moving mark/sweep through caller-budgeted slices so collection reclaims

@@ -4,7 +4,7 @@
 #include <MicroWorld/Engine/World.h>
 
 #include <MicroWorld/Engine/ClassDescriptor.h>
-#include <MicroWorld/Engine/GarbageCollector.h>
+#include <MicroWorld/Engine/ReferenceCollector.h>
 #include <MicroWorld/Engine/Object.h>
 #include <MicroWorld/Engine/ObjectStore.h>
 #include <MicroWorld/Engine/ObjectPtr.h>

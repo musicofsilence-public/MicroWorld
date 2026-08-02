@@ -7,7 +7,10 @@
 #include <MicroWorld/Engine/EngineResult.h>
 #include <MicroWorld/Engine/EngineStorage.h>
 #include <MicroWorld/Engine/World.h>
+#include <MicroWorld/Engine/GarbageCollectionBudget.h>
+#include <MicroWorld/Engine/GarbageCollectionResult.h>
 #include <MicroWorld/Engine/GarbageCollector.h>
+#include <MicroWorld/Engine/GarbageCollectorStorage.h>
 #include <MicroWorld/Engine/WeakObjectPtr.h>
 
 #include <cstddef>

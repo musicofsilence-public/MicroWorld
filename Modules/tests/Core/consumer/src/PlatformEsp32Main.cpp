@@ -18,7 +18,7 @@
 #include <MicroWorld/Transport/NetworkMode.h>
 #include <MicroWorld/Transport/TransportHost.h>
 #include <MicroWorld/Transport/TransportHostConfig.h>
-#include <MicroWorld/Engine/GarbageCollector.h>
+#include <MicroWorld/Engine/GarbageCollectionBudget.h>
 #include <MicroWorld/Engine/ObjectStore.h>
 #include <MicroWorld/Platform/Esp32/Esp32OutputDevice.h>
 #include <MicroWorld/Platform/Esp32/Esp32Sleep.h>

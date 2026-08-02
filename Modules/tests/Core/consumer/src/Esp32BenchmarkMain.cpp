@@ -32,7 +32,10 @@
 #include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Engine/ClassRegistry.h>
 #include <MicroWorld/Engine/ClassRegistryView.h>
+#include <MicroWorld/Engine/GarbageCollectionBudget.h>
+#include <MicroWorld/Engine/GarbageCollectionResult.h>
 #include <MicroWorld/Engine/GarbageCollector.h>
+#include <MicroWorld/Engine/GarbageCollectorStorage.h>
 #include <MicroWorld/Engine/Object.h>
 #include <MicroWorld/Engine/ObjectCreationResult.h>
 #include <MicroWorld/Engine/ObjectRootEntry.h>
