@@ -1,6 +1,10 @@
 #include <MicroWorld/Platform/Host/HostWifiDevice.h>
 
-#include "Internal/UdpSocketPlatformImplementation.h"
+#include "Internal/ConsumeResult.h"
+#include "Internal/OpenedSocket.h"
+#include "Internal/PeekProbe.h"
+#include "Internal/SendOutcome.h"
+#include "Internal/SocketHandle.h"
 
 #include <cstdint>
 
