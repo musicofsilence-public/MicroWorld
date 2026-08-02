@@ -3,7 +3,7 @@
 #include <MicroWorld/Core/Containers/Span.h>
 #include <MicroWorld/Core/Containers/StaticVector.h>
 #include <MicroWorld/Core/Memory/FixedArena.h>
-#include <MicroWorld/Core/Memory/SharedPtr.h>
+#include <MicroWorld/Core/Memory/TSharedPointerDefinitions.h>
 #include <MicroWorld/Core/Memory/UniquePtr.h>
 
 #include <array>
