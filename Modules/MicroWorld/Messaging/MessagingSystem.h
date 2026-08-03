@@ -2,12 +2,10 @@
 
 #include <MicroWorld/Core/Containers/StaticVector.h>
 #include <MicroWorld/Core/Delegates/Delegate.h>
-#include <MicroWorld/Core/IO/ReceiveResult.h>
 #include <MicroWorld/Core/PlaySystem.h>
 #include <MicroWorld/Core/Time.h>
 #include <MicroWorld/Core/WeakOwner.h>
 #include <MicroWorld/Messaging/ChannelInformation.h>
-#include <MicroWorld/Messaging/DefaultMessagingTraits.h>
 #include <MicroWorld/Messaging/Message.h>
 #include <MicroWorld/Messaging/MessagingResult.h>
 #include <MicroWorld/Messaging/MessagingSystemInformation.h>
@@ -15,7 +13,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <utility>
 
 namespace MicroWorld::Messaging
 {
@@ -28,10 +25,9 @@ inline constexpr FNameId MessageAcknowledgementNameId = MakeNameId("__MessageAck
  * Responsibilities: Create valid unique channels without allocating, deliver local messages, and move complete best-effort and reliable frames
  *   through externally driven transport devices; never call a device's own PreAdvance or PostAdvance, because the application entry point owns those
  *   turns and a shared device must not be ticked twice.
- * Example: TMessagingSystem<> System; System.CreateChannel({"Telemetry", false, nullptr, {}});
+ * Example: FMessagingSystem System; System.CreateChannel({"Telemetry", false, nullptr, {}});
  */
-template<typename TTraits = FDefaultMessagingTraits>
-class TMessagingSystem final : public Core::IPlaySystem
+class FMessagingSystem final : public Core::IPlaySystem
 {
 	/** Motivation: Fixes the count of bytes in one 32-bit name id on the wire. */
 	static constexpr std::size_t NameIdBytes = sizeof(std::uint32_t);
@@ -49,24 +45,39 @@ class TMessagingSystem final : public Core::IPlaySystem
 	static constexpr std::size_t MessageNameIdByteIndex = ChannelNameIdByteIndex + NameIdBytes;
 
 public:
+	/** Motivation: Bounds how many named channels one Messaging system may store. */
+	static constexpr std::size_t MaxChannels = 4;
+
+	/** Motivation: Bounds how many subscriber registrations one Messaging system may store. */
+	static constexpr std::size_t MaxSubscriptions = 16;
+
+	/** Motivation: Bounds the inline storage one subscriber callable may occupy before Messaging rejects it without allocating. */
+	static constexpr std::size_t MaxSubscriberCallableBytes = 32;
+
+	/** Motivation: Bounds the application bytes one complete Messaging frame may carry. */
+	static constexpr std::size_t MaxMessageBytes = 96;
+
+	/** Motivation: Bounds how many reliable messages one Messaging system may retain awaiting acknowledgement. */
+	static constexpr std::size_t MaxReliablePendingMessages = 8;
+
 	/** Motivation: Fixes where the two name ids end, which is also where application payload bytes begin. */
 	static constexpr std::size_t FrameHeaderBytes = MessageNameIdByteIndex + NameIdBytes;
 
 	/** Motivation: Exposes the largest complete wire frame this Messaging system can construct without dynamic allocation. */
-	static constexpr std::size_t MaxFrameBytes = FrameHeaderBytes + TTraits::MaxMessageBytes;
+	static constexpr std::size_t MaxFrameBytes = FrameHeaderBytes + MaxMessageBytes;
 
 	// An acknowledgement frame is a header plus one sequence number, so a payload budget below that width could not hold one.
-	static_assert(TTraits::MaxMessageBytes >= SequenceNumberBytes, "MaxMessageBytes must leave room for a reliable sequence number.");
+	static_assert(MaxMessageBytes >= SequenceNumberBytes, "MaxMessageBytes must leave room for a reliable sequence number.");
 
 	// A zero-slot reliable system could never track its first reliable send.
-	static_assert(TTraits::MaxReliablePendingMessages > 0, "MaxReliablePendingMessages must reserve at least one reliable pending slot.");
+	static_assert(MaxReliablePendingMessages > 0, "MaxReliablePendingMessages must reserve at least one reliable pending slot.");
 
 	/**
 	 * Motivation: Gives channel subscribers one bounded callable type that keeps local delivery allocation-free.
 	 * Responsibilities: Receive a message by const reference and treat its payload span as valid only for the duration of the call; subscribers that
 	 * retain bytes must copy them.
 	 */
-	using FSubscriberDelegate = Core::TDelegate<void(const FMessage&), TTraits::MaxSubscriberCallableBytes>;
+	using FSubscriberDelegate = Core::TDelegate<void(const FMessage&), MaxSubscriberCallableBytes>;
 
 	/**
 	 * Motivation: Lets callers retain one optional identity for a subscription without exposing its storage slot.
@@ -91,37 +102,37 @@ public:
 	 * Motivation: Gives callers an empty Messaging system when the default reliability policy is sufficient.
 	 * Responsibilities: Initialize no live channels and retain default system information without allocation.
 	 */
-	TMessagingSystem() noexcept = default;
+	FMessagingSystem() noexcept = default;
 
 	/**
 	 * Motivation: Lets the application entry point configure reliability policy before it creates channels.
 	 * Responsibilities: Retain the supplied system information and initialize no live channels without allocation.
 	 */
-	explicit TMessagingSystem(const FMessagingSystemInformation& InInformation) noexcept;
+	explicit FMessagingSystem(const FMessagingSystemInformation& InInformation) noexcept;
 
 	/**
 	 * Motivation: Prevents copying a system whose future channel references must remain stable.
 	 * Responsibilities: Reject copy construction because the engine owns this object in place.
 	 */
-	TMessagingSystem(const TMessagingSystem&) = delete;
+	FMessagingSystem(const FMessagingSystem&) = delete;
 
 	/**
 	 * Motivation: Prevents assignment from replacing a system whose future channel references must remain stable.
 	 * Responsibilities: Reject copy assignment because the engine owns this object in place.
 	 */
-	TMessagingSystem& operator=(const TMessagingSystem&) = delete;
+	FMessagingSystem& operator=(const FMessagingSystem&) = delete;
 
 	/**
 	 * Motivation: Prevents relocation of a system whose future channel references must remain stable.
 	 * Responsibilities: Reject move construction because the engine owns this object in place.
 	 */
-	TMessagingSystem(TMessagingSystem&&) = delete;
+	FMessagingSystem(FMessagingSystem&&) = delete;
 
 	/**
 	 * Motivation: Prevents relocation through assignment of a system whose future channel references must remain stable.
 	 * Responsibilities: Reject move assignment because the engine owns this object in place.
 	 */
-	TMessagingSystem& operator=(TMessagingSystem&&) = delete;
+	FMessagingSystem& operator=(FMessagingSystem&&) = delete;
 
 	/**
 	 * Motivation: Lets later messaging operations read their shared reliability policy without mutating the system.
@@ -483,14 +494,14 @@ private:
 	Core::TimePointMilliseconds MostRecentTimeMilliseconds{0};
 
 	/** Motivation: Owns each live channel's configuration and reliable sequence state within the compile-time channel limit. */
-	Core::TStaticVector<FChannel, TTraits::MaxChannels> Channels;
+	Core::TStaticVector<FChannel, MaxChannels> Channels;
 
 	/** Motivation: Owns fixed removable subscription slots; each carries an owner token, sequence stamp, generation, and occupancy flag, so sixteen
 	 * default subscriptions cost roughly four hundred bytes more than the former append-only storage. */
-	FSubscriptionSlot SubscriptionSlots[TTraits::MaxSubscriptions]{};
+	FSubscriptionSlot SubscriptionSlots[MaxSubscriptions]{};
 
 	static_assert(
-		TTraits::MaxSubscriptions < FSubscriptionHandle::InvalidIndex,
+		MaxSubscriptions < FSubscriptionHandle::InvalidIndex,
 		"MaxSubscriptions must leave InvalidIndex unused, so no live slot index can be mistaken for an empty handle.");
 
 	/** Motivation: Stamps each successful registration so active delivery skips newer subscriptions even when they reuse an earlier slot. */
@@ -501,7 +512,7 @@ private:
 
 	/** Motivation: Owns the largest Messaging allocation: MaxReliablePendingMessages slots, each retaining one MaxFrameBytes encoded frame plus
 	 * retry metadata, so increasing pending capacity multiplies the system's frame-sized memory cost. */
-	FPendingReliableMessage ReliablePendingMessages[TTraits::MaxReliablePendingMessages]{};
+	FPendingReliableMessage ReliablePendingMessages[MaxReliablePendingMessages]{};
 
 	/** Motivation: Counts inbound frames this Messaging system could not route, whatever the reason, so a misconfigured peer stays observable. */
 	std::uint32_t DroppedFrameCount{0};
@@ -509,16 +520,5 @@ private:
 	/** Motivation: Counts reliable frames whose bounded retry ownership ended without an acknowledgement. */
 	std::uint32_t AbandonedReliableMessageCount{0};
 };
-
-// Out-of-class member definitions live in flat .inl partitions included here, after
-// the class body closes. Each definition is written as TMessagingSystem<TTraits>::Method
-// so the public API in the class body stays compact while every method body stays
-// visible at instantiation (the .inl files are never included directly).
-#include "MessagingSystem_ReliableRetry.inl"
-#include "MessagingSystem_WireReceive.inl"
-#include "MessagingSystem_FrameCodec.inl"
-
-/** Motivation: Names the default fixed-capacity Messaging system used by engine-facing code. */
-using FMessagingSystem = TMessagingSystem<>;
 
 } // namespace MicroWorld::Messaging

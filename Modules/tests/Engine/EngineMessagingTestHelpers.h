@@ -14,7 +14,6 @@
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Engine/EngineResult.h>
 #include <MicroWorld/Engine/GarbageCollectionBudget.h>
-#include <MicroWorld/Messaging/DefaultMessagingTraits.h>
 #include <MicroWorld/Messaging/Message.h>
 #include <MicroWorld/Messaging/MessagingResult.h>
 #include <MicroWorld/Messaging/MessagingSystem.h>

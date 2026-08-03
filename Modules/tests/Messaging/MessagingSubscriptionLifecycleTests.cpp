@@ -26,11 +26,11 @@ MW_TEST_CASE(MessagingSubscription_OwnerlessSubscriberStillDelivers)
 	const FNameId MessageNameId{"TemperatureUpdated"};
 	/** Motivation: States the single delivery expected for a live ownerless registration. */
 	const std::size_t ExpectedDeliveryCount{1};
-	FDefaultMessagingSystem System;
+	FMessagingSystem System;
 	const FChannelInformation ChannelInformation{ChannelNameId, false, nullptr, {}};
 	const EMessagingResult CreateResult = System.CreateChannel(ChannelInformation);
 	std::size_t DeliveryCount{0};
-	FDefaultSubscriberDelegate Subscriber;
+	FSubscriberDelegate Subscriber;
 	const EDelegateResult BindingResult = Subscriber.Bind([&DeliveryCount](const FMessage&) noexcept { ++DeliveryCount; });
 	const EMessagingResult SubscribeResult = System.SubscribeToChannel(ChannelNameId, std::move(Subscriber));
 	FMessage Message;
@@ -62,28 +62,29 @@ MW_TEST_CASE(MessagingSubscription_WritesRequestedHandleAndAllowsNoHandle)
 	const FNameId SecondMessageNameId{"PressureUpdated"};
 	/** Motivation: Names the generation no occupied slot ever holds, so a written handle must differ from it. */
 	const std::uint16_t InvalidHandleGeneration{0};
-	FSmallSubscriptionMessagingSystem System;
+	FMessagingSystem System;
 	const FChannelInformation ChannelInformation{ChannelNameId, false, nullptr, {}};
 	const EMessagingResult CreateResult = System.CreateChannel(ChannelInformation);
-	FSmallSubscriptionMessagingSystem::FSubscriberDelegate FirstSubscriber;
-	FSmallSubscriptionMessagingSystem::FSubscriberDelegate SecondSubscriber;
+	FSubscriberDelegate FirstSubscriber;
+	FSubscriberDelegate SecondSubscriber;
 	const EDelegateResult FirstBindingResult = FirstSubscriber.Bind([](const FMessage&) noexcept {});
 	const EDelegateResult SecondBindingResult = SecondSubscriber.Bind([](const FMessage&) noexcept {});
-	FSmallSubscriptionMessagingSystem::FSubscriptionHandle Handle{};
+	FMessagingSystem::FSubscriptionHandle Handle{};
 
 	// Act
 	const EMessagingResult FirstSubscribeResult =
 		System.SubscribeToChannel(ChannelNameId, FirstMessageNameId, std::move(FirstSubscriber), {}, &Handle);
 	const EMessagingResult SecondSubscribeResult = System.SubscribeToChannel(ChannelNameId, SecondMessageNameId, std::move(SecondSubscriber));
+	const bool bHandleIdentifiesSlot = Handle.Index != FMessagingSystem::FSubscriptionHandle::InvalidIndex;
+	const bool bHandleHasLiveGeneration = Handle.Generation != InvalidHandleGeneration;
 
 	// Assert
 	MW_EXPECT_EQ(Test, EMessagingResult::Success, CreateResult, "The handle channel should be created");
 	MW_EXPECT_EQ(Test, EDelegateResult::Success, FirstBindingResult, "The handle subscriber should bind");
 	MW_EXPECT_EQ(Test, EDelegateResult::Success, SecondBindingResult, "The no-handle subscriber should bind");
 	MW_EXPECT_EQ(Test, EMessagingResult::Success, FirstSubscribeResult, "A requested handle should be written on successful subscription");
-	MW_EXPECT_TRUE(
-		Test, Handle.Index != FSmallSubscriptionMessagingSystem::FSubscriptionHandle::InvalidIndex, "A successful handle should identify a slot");
-	MW_EXPECT_TRUE(Test, Handle.Generation != InvalidHandleGeneration, "A successful handle should have a live generation");
+	MW_EXPECT_TRUE(Test, bHandleIdentifiesSlot, "A successful handle should identify a slot");
+	MW_EXPECT_TRUE(Test, bHandleHasLiveGeneration, "A successful handle should have a live generation");
 	MW_EXPECT_EQ(Test, EMessagingResult::Success, SecondSubscribeResult, "A caller may omit the optional handle");
 }
 
@@ -104,13 +105,13 @@ MW_TEST_CASE(MessagingSubscription_LiveOwnerReceivesMessage)
 	const bool bHasOwner{true};
 	/** Motivation: States the one expected delivery while the owner generation remains unchanged. */
 	const std::size_t ExpectedDeliveryCount{1};
-	FDefaultMessagingSystem System;
+	FMessagingSystem System;
 	const FChannelInformation ChannelInformation{ChannelNameId, false, nullptr, {}};
 	const EMessagingResult CreateResult = System.CreateChannel(ChannelInformation);
 	std::uint32_t OwnerGenerationCounter = LiveOwnerGeneration;
 	const FWeakOwner LiveOwner{&OwnerGenerationCounter, LiveOwnerGeneration, bHasOwner};
 	std::size_t DeliveryCount{0};
-	FDefaultSubscriberDelegate Subscriber;
+	FSubscriberDelegate Subscriber;
 	const EDelegateResult BindingResult = Subscriber.Bind([&DeliveryCount](const FMessage&) noexcept { ++DeliveryCount; });
 	const EMessagingResult SubscribeResult = System.SubscribeToChannel(ChannelNameId, std::move(Subscriber), LiveOwner);
 	FMessage Message;
@@ -129,70 +130,59 @@ MW_TEST_CASE(MessagingSubscription_LiveOwnerReceivesMessage)
 
 /**
  * Motivation: Makes fixed subscription capacity visible when every configured slot is occupied by a live subscriber.
- * Responsibilities: Verify the first two subscriptions succeed and the third reports Full without changing the live slots.
+ * Responsibilities: Fill every concrete subscription slot and verify one additional registration reports Full.
  */
 MW_TEST_CASE(MessagingSubscription_ReportsFullAfterEverySlotIsOccupied)
 {
 	// Arrange
 	/** Motivation: Names the local route used to fill every configured subscription slot. */
 	const FNameId ChannelNameId{"Telemetry"};
-	FSmallSubscriptionMessagingSystem System;
+	FMessagingSystem System;
 	const FChannelInformation ChannelInformation{ChannelNameId, false, nullptr, {}};
 	const EMessagingResult CreateResult = System.CreateChannel(ChannelInformation);
-	FSmallSubscriptionMessagingSystem::FSubscriberDelegate FirstSubscriber;
-	FSmallSubscriptionMessagingSystem::FSubscriberDelegate SecondSubscriber;
-	FSmallSubscriptionMessagingSystem::FSubscriberDelegate OverflowSubscriber;
-	const EDelegateResult FirstBindingResult = FirstSubscriber.Bind([](const FMessage&) noexcept {});
-	const EDelegateResult SecondBindingResult = SecondSubscriber.Bind([](const FMessage&) noexcept {});
+	const EMessagingResult FillResult = FillSubscriptionSlots(System, ChannelNameId, FMessagingSystem::MaxSubscriptions);
+	FSubscriberDelegate OverflowSubscriber;
 	const EDelegateResult OverflowBindingResult = OverflowSubscriber.Bind([](const FMessage&) noexcept {});
-	const EMessagingResult FirstSubscribeResult = System.SubscribeToChannel(ChannelNameId, std::move(FirstSubscriber));
-	const EMessagingResult SecondSubscribeResult = System.SubscribeToChannel(ChannelNameId, std::move(SecondSubscriber));
 
 	// Act
 	const EMessagingResult OverflowSubscribeResult = System.SubscribeToChannel(ChannelNameId, std::move(OverflowSubscriber));
 
 	// Assert
 	MW_EXPECT_EQ(Test, EMessagingResult::Success, CreateResult, "The full-capacity channel should be created");
-	MW_EXPECT_EQ(Test, EDelegateResult::Success, FirstBindingResult, "The first full-capacity subscriber should bind");
-	MW_EXPECT_EQ(Test, EDelegateResult::Success, SecondBindingResult, "The second full-capacity subscriber should bind");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, FillResult, "Every concrete subscription slot should be occupied");
 	MW_EXPECT_EQ(Test, EDelegateResult::Success, OverflowBindingResult, "The overflow subscriber should bind");
-	MW_EXPECT_EQ(Test, EMessagingResult::Success, FirstSubscribeResult, "The first slot should register");
-	MW_EXPECT_EQ(Test, EMessagingResult::Success, SecondSubscribeResult, "The second slot should register");
 	MW_EXPECT_EQ(Test, EMessagingResult::Full, OverflowSubscribeResult, "A subscriber beyond every occupied slot should report Full");
 }
 
 /**
  * Motivation: Preserves capacity failure when ownership checks find no dead subscriber to reclaim.
- * Responsibilities: Verify a full one-slot system with a live owner still reports Full.
+ * Responsibilities: Verify a concrete-capacity system filled by live owners still reports Full.
  */
 MW_TEST_CASE(MessagingSubscription_ReportsFullWhenEveryOwnerIsLive)
 {
 	// Arrange
-	/** Motivation: Names the only route in the one-slot system. */
+	/** Motivation: Names the local route whose concrete subscription capacity is filled. */
 	const FNameId ChannelNameId{"Telemetry"};
 	/** Motivation: Identifies the live owner generation retained by the occupied slot. */
 	const std::uint32_t LiveOwnerGeneration{43};
 	/** Motivation: Marks the occupied token as lifecycle-bound. */
 	const bool bHasOwner{true};
-	FOneSubscriptionMessagingSystem System;
+	FMessagingSystem System;
 	const FChannelInformation ChannelInformation{ChannelNameId, false, nullptr, {}};
 	const EMessagingResult CreateResult = System.CreateChannel(ChannelInformation);
 	std::uint32_t OwnerGenerationCounter = LiveOwnerGeneration;
 	const FWeakOwner LiveOwner{&OwnerGenerationCounter, LiveOwnerGeneration, bHasOwner};
-	FOneSubscriptionMessagingSystem::FSubscriberDelegate LiveOwnerSubscriber;
-	FOneSubscriptionMessagingSystem::FSubscriberDelegate OverflowSubscriber;
-	const EDelegateResult LiveOwnerBindingResult = LiveOwnerSubscriber.Bind([](const FMessage&) noexcept {});
+	const EMessagingResult FillResult = FillSubscriptionSlots(System, ChannelNameId, FMessagingSystem::MaxSubscriptions, LiveOwner);
+	FSubscriberDelegate OverflowSubscriber;
 	const EDelegateResult OverflowBindingResult = OverflowSubscriber.Bind([](const FMessage&) noexcept {});
-	const EMessagingResult LiveOwnerSubscribeResult = System.SubscribeToChannel(ChannelNameId, std::move(LiveOwnerSubscriber), LiveOwner);
 
 	// Act
 	const EMessagingResult OverflowSubscribeResult = System.SubscribeToChannel(ChannelNameId, std::move(OverflowSubscriber));
 
 	// Assert
 	MW_EXPECT_EQ(Test, EMessagingResult::Success, CreateResult, "The live-owner-full channel should be created");
-	MW_EXPECT_EQ(Test, EDelegateResult::Success, LiveOwnerBindingResult, "The live-owner subscriber should bind");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, FillResult, "Every concrete subscription slot should hold a live owner");
 	MW_EXPECT_EQ(Test, EDelegateResult::Success, OverflowBindingResult, "The overflow subscriber should bind");
-	MW_EXPECT_EQ(Test, EMessagingResult::Success, LiveOwnerSubscribeResult, "The live owner should occupy the only slot");
 	MW_EXPECT_EQ(Test, EMessagingResult::Full, OverflowSubscribeResult, "A live owner should not be reclaimed to make capacity");
 }
 

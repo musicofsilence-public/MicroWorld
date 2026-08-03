@@ -4,6 +4,10 @@ Status: Accepted
 
 Date: 2026-08-01
 
+Partial supersession: [ADR 0012](0012-fixed-capacity-compiled-messaging.md)
+replaces only the traits-held capacity decision and its related consequence. All
+other decisions remain accepted.
+
 ## Context
 
 Networking existed to join Messaging and Transport without letting them see each

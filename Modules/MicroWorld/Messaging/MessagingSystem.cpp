@@ -1,9 +1,13 @@
-// Out-of-class member definitions: reliable-delivery tracking and retry policy for
-// TMessagingSystem<TTraits>. Included from MessagingSystem.h after the class body
-// closes; never include this file directly.
+#include <MicroWorld/Messaging/MessagingSystem.h>
 
-template<typename TTraits>
-typename TMessagingSystem<TTraits>::FChannel* TMessagingSystem<TTraits>::FindChannel(const FNameId InChannelNameId) noexcept
+#include <MicroWorld/Core/RuntimeResult.h>
+
+#include <utility>
+
+namespace MicroWorld::Messaging
+{
+
+FMessagingSystem::FChannel* FMessagingSystem::FindChannel(const FNameId InChannelNameId) noexcept
 {
 	for (FChannel& Channel : Channels)
 	{
@@ -16,8 +20,7 @@ typename TMessagingSystem<TTraits>::FChannel* TMessagingSystem<TTraits>::FindCha
 	return nullptr;
 }
 
-template<typename TTraits>
-typename TMessagingSystem<TTraits>::FPendingReliableMessage* TMessagingSystem<TTraits>::FindFreeReliablePendingMessage() noexcept
+FMessagingSystem::FPendingReliableMessage* FMessagingSystem::FindFreeReliablePendingMessage() noexcept
 {
 	for (FPendingReliableMessage& PendingMessage : ReliablePendingMessages)
 	{
@@ -30,8 +33,7 @@ typename TMessagingSystem<TTraits>::FPendingReliableMessage* TMessagingSystem<TT
 	return nullptr;
 }
 
-template<typename TTraits>
-typename TMessagingSystem<TTraits>::FPendingReliableMessage* TMessagingSystem<TTraits>::FindReliablePendingMessage(
+FMessagingSystem::FPendingReliableMessage* FMessagingSystem::FindReliablePendingMessage(
 	const FNameId InChannelNameId, const std::uint16_t InSequenceNumber) noexcept
 {
 	for (FPendingReliableMessage& PendingMessage : ReliablePendingMessages)
@@ -46,8 +48,7 @@ typename TMessagingSystem<TTraits>::FPendingReliableMessage* TMessagingSystem<TT
 	return nullptr;
 }
 
-template<typename TTraits>
-void TMessagingSystem<TTraits>::TrackReliableMessage(
+void FMessagingSystem::TrackReliableMessage(
 	FPendingReliableMessage& OutPendingMessage,
 	const FNameId InChannelNameId,
 	const std::uint16_t InSequenceNumber,
@@ -63,14 +64,12 @@ void TMessagingSystem<TTraits>::TrackReliableMessage(
 	OutPendingMessage.bAwaitingAcknowledgement = true;
 }
 
-template<typename TTraits>
-void TMessagingSystem<TTraits>::ReleaseReliablePendingMessage(FPendingReliableMessage& InOutPendingMessage) noexcept
+void FMessagingSystem::ReleaseReliablePendingMessage(FPendingReliableMessage& InOutPendingMessage) noexcept
 {
 	InOutPendingMessage.bAwaitingAcknowledgement = false;
 }
 
-template<typename TTraits>
-void TMessagingSystem<TTraits>::ReleaseSubscriptionSlot(FSubscriptionSlot& InSlot) noexcept
+void FMessagingSystem::ReleaseSubscriptionSlot(FSubscriptionSlot& InSlot) noexcept
 {
 	InSlot.bIsOccupied = false;
 	++InSlot.Generation;
@@ -80,8 +79,7 @@ void TMessagingSystem<TTraits>::ReleaseSubscriptionSlot(FSubscriptionSlot& InSlo
 	}
 }
 
-template<typename TTraits>
-typename TMessagingSystem<TTraits>::FSubscriptionSlot* TMessagingSystem<TTraits>::FindFreeSubscriptionSlot() noexcept
+FMessagingSystem::FSubscriptionSlot* FMessagingSystem::FindFreeSubscriptionSlot() noexcept
 {
 	for (FSubscriptionSlot& Slot : SubscriptionSlots)
 	{
@@ -94,15 +92,13 @@ typename TMessagingSystem<TTraits>::FSubscriptionSlot* TMessagingSystem<TTraits>
 	return nullptr;
 }
 
-template<typename TTraits>
-void TMessagingSystem<TTraits>::ReclaimDeadOwnerSubscriptionSlot(FSubscriptionSlot& InSlot) noexcept
+void FMessagingSystem::ReclaimDeadOwnerSubscriptionSlot(FSubscriptionSlot& InSlot) noexcept
 {
 	ReleaseSubscriptionSlot(InSlot);
 	++ReclaimedDeadOwnerSubscriptionCount;
 }
 
-template<typename TTraits>
-void TMessagingSystem<TTraits>::ProcessReliablePendingMessage(
+void FMessagingSystem::ProcessReliablePendingMessage(
 	FPendingReliableMessage& InOutPendingMessage, const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 {
 	if (!InOutPendingMessage.bAwaitingAcknowledgement)
@@ -144,13 +140,9 @@ void TMessagingSystem<TTraits>::ProcessReliablePendingMessage(
 	InOutPendingMessage.LastAttemptMilliseconds = InNowMilliseconds;
 }
 
-template<typename TTraits>
-TMessagingSystem<TTraits>::TMessagingSystem(const FMessagingSystemInformation& InInformation) noexcept : Information(InInformation)
-{
-}
+FMessagingSystem::FMessagingSystem(const FMessagingSystemInformation& InInformation) noexcept : Information(InInformation) {}
 
-template<typename TTraits>
-EMessagingResult TMessagingSystem<TTraits>::CreateChannel(const FChannelInformation& InChannelInformation) noexcept
+EMessagingResult FMessagingSystem::CreateChannel(const FChannelInformation& InChannelInformation) noexcept
 {
 	if (InChannelInformation.ChannelNameId == InvalidNameId)
 	{
@@ -166,15 +158,13 @@ EMessagingResult TMessagingSystem<TTraits>::CreateChannel(const FChannelInformat
 	return Channels.Emplace(InChannelInformation) == Core::ERuntimeResult::Success ? EMessagingResult::Success : EMessagingResult::Full;
 }
 
-template<typename TTraits>
-EMessagingResult TMessagingSystem<TTraits>::SubscribeToChannel(
+EMessagingResult FMessagingSystem::SubscribeToChannel(
 	const FNameId InChannelNameId, FSubscriberDelegate&& InSubscriber, Core::FWeakOwner InOwner, FSubscriptionHandle* OutHandle) noexcept
 {
 	return SubscribeToChannel(InChannelNameId, InvalidNameId, std::move(InSubscriber), InOwner, OutHandle);
 }
 
-template<typename TTraits>
-EMessagingResult TMessagingSystem<TTraits>::SubscribeToChannel(
+EMessagingResult FMessagingSystem::SubscribeToChannel(
 	const FNameId InChannelNameId,
 	const FNameId InMessageNameFilter,
 	FSubscriberDelegate&& InSubscriber,
@@ -231,10 +221,9 @@ EMessagingResult TMessagingSystem<TTraits>::SubscribeToChannel(
 	return EMessagingResult::Success;
 }
 
-template<typename TTraits>
-EMessagingResult TMessagingSystem<TTraits>::Unsubscribe(const FSubscriptionHandle InHandle) noexcept
+EMessagingResult FMessagingSystem::Unsubscribe(const FSubscriptionHandle InHandle) noexcept
 {
-	if (InHandle.Index >= TTraits::MaxSubscriptions)
+	if (InHandle.Index >= MaxSubscriptions)
 	{
 		return EMessagingResult::NotFound;
 	}
@@ -249,8 +238,7 @@ EMessagingResult TMessagingSystem<TTraits>::Unsubscribe(const FSubscriptionHandl
 	return EMessagingResult::Success;
 }
 
-template<typename TTraits>
-void TMessagingSystem<TTraits>::UnsubscribeAll(const Core::FWeakOwner InOwner) noexcept
+void FMessagingSystem::UnsubscribeAll(const Core::FWeakOwner InOwner) noexcept
 {
 	for (FSubscriptionSlot& Slot : SubscriptionSlots)
 	{
@@ -261,14 +249,13 @@ void TMessagingSystem<TTraits>::UnsubscribeAll(const Core::FWeakOwner InOwner) n
 	}
 }
 
-template<typename TTraits>
-void TMessagingSystem<TTraits>::DeliverToMatchingSubscribers(const FMessage& InMessage, const FNameId InChannelNameId) noexcept
+void FMessagingSystem::DeliverToMatchingSubscribers(const FMessage& InMessage, const FNameId InChannelNameId) noexcept
 {
 	const std::uint32_t SequenceAtDispatchStart = NextSubscriptionSequence;
-	for (std::size_t SlotIndex = 0; SlotIndex < TTraits::MaxSubscriptions; ++SlotIndex)
+	for (std::size_t SlotIndex = 0; SlotIndex < MaxSubscriptions; ++SlotIndex)
 	{
 		FSubscriptionSlot& Slot = SubscriptionSlots[SlotIndex];
-		if (!Slot.bIsOccupied)
+		if (!Slot.bIsOccupied || Slot.bIsBeingDispatched)
 		{
 			continue;
 		}
@@ -296,8 +283,7 @@ void TMessagingSystem<TTraits>::DeliverToMatchingSubscribers(const FMessage& InM
 	}
 }
 
-template<typename TTraits>
-EMessagingResult TMessagingSystem<TTraits>::SendMessageToChannel(const FMessage& InMessage, const FNameId InChannelNameId) noexcept
+EMessagingResult FMessagingSystem::SendMessageToChannel(const FMessage& InMessage, const FNameId InChannelNameId) noexcept
 {
 	if (InMessage.GetMessageNameId() == InvalidNameId || InMessage.GetMessageNameId() == MessageAcknowledgementNameId)
 	{
@@ -362,8 +348,7 @@ EMessagingResult TMessagingSystem<TTraits>::SendMessageToChannel(const FMessage&
 	return MapTransportSendResult(TransportSendResult);
 }
 
-template<typename TTraits>
-void TMessagingSystem<TTraits>::PreAdvance(Core::TimePointMilliseconds InNowMilliseconds) noexcept
+void FMessagingSystem::PreAdvance(Core::TimePointMilliseconds InNowMilliseconds) noexcept
 {
 	MostRecentTimeMilliseconds = InNowMilliseconds;
 
@@ -379,8 +364,7 @@ void TMessagingSystem<TTraits>::PreAdvance(Core::TimePointMilliseconds InNowMill
 	}
 }
 
-template<typename TTraits>
-void TMessagingSystem<TTraits>::PostAdvance(Core::TimePointMilliseconds InNowMilliseconds) noexcept
+void FMessagingSystem::PostAdvance(Core::TimePointMilliseconds InNowMilliseconds) noexcept
 {
 	MostRecentTimeMilliseconds = InNowMilliseconds;
 	for (FPendingReliableMessage& PendingMessage : ReliablePendingMessages)
@@ -388,3 +372,5 @@ void TMessagingSystem<TTraits>::PostAdvance(Core::TimePointMilliseconds InNowMil
 		ProcessReliablePendingMessage(PendingMessage, InNowMilliseconds);
 	}
 }
+
+} // namespace MicroWorld::Messaging

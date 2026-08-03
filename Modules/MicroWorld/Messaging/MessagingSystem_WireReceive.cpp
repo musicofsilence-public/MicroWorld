@@ -1,11 +1,11 @@
-// Out-of-class member definitions: subscriber dispatch and the inbound wire
-// receive path for TMessagingSystem<TTraits>. Included from MessagingSystem.h after
-// the class body closes; never include this file directly. Depends on declarations
-// from MessagingSystem_ReliableRetry.inl (FindChannel) and MessagingSystem_FrameCodec.inl
-// (EncodeFrameHeader, Read/WriteUnsignedLittleEndian, ReadNameIdLittleEndian).
+#include <MicroWorld/Messaging/MessagingSystem.h>
 
-template<typename TTraits>
-void TMessagingSystem<TTraits>::DrainDevice(Core::ITransportDevice& InTransportDevice) noexcept
+#include <MicroWorld/Core/IO/ReceiveResult.h>
+
+namespace MicroWorld::Messaging
+{
+
+void FMessagingSystem::DrainDevice(Core::ITransportDevice& InTransportDevice) noexcept
 {
 	std::uint8_t FrameBytes[MaxFrameBytes]{};
 	Core::FDeviceAddress Sender;
@@ -17,7 +17,7 @@ void TMessagingSystem<TTraits>::DrainDevice(Core::ITransportDevice& InTransportD
 		if (ReceiveStatus == Core::ETransportResult::Full)
 		{
 			// The device keeps a packet larger than this system's frame budget, so the same packet is counted again every
-			// turn. A count rising with no delivery means a peer sends frames larger than this system's traits allow.
+			// turn. A count rising with no delivery means a peer sends frames larger than this system's fixed frame budget allows.
 			++DroppedFrameCount;
 			return;
 		}
@@ -31,8 +31,7 @@ void TMessagingSystem<TTraits>::DrainDevice(Core::ITransportDevice& InTransportD
 	}
 }
 
-template<typename TTraits>
-void TMessagingSystem<TTraits>::ProcessReceivedFrame(
+void FMessagingSystem::ProcessReceivedFrame(
 	const Core::FDeviceAddress& InSender, const std::uint8_t* const InFrameBytes, const std::size_t InFrameSize) noexcept
 {
 	if (InFrameSize < FrameHeaderBytes)
@@ -67,8 +66,7 @@ void TMessagingSystem<TTraits>::ProcessReceivedFrame(
 	DeliverReceivedMessage(InSender, ChannelNameId, MessageNameId, PayloadBytes, PayloadSize);
 }
 
-template<typename TTraits>
-void TMessagingSystem<TTraits>::ProcessAcknowledgement(
+void FMessagingSystem::ProcessAcknowledgement(
 	const FNameId InChannelNameId, const std::uint8_t* const InPayloadBytes, const std::size_t InPayloadSize) noexcept
 {
 	if (InPayloadSize != SequenceNumberBytes)
@@ -86,8 +84,7 @@ void TMessagingSystem<TTraits>::ProcessAcknowledgement(
 	// No matching slot is normal: an acknowledgement may be duplicated or may arrive after this bounded system already abandoned its frame.
 }
 
-template<typename TTraits>
-void TMessagingSystem<TTraits>::ProcessReliableMessage(
+void FMessagingSystem::ProcessReliableMessage(
 	const FChannel& InChannel,
 	const Core::FDeviceAddress& InSender,
 	const FNameId InMessageNameId,
@@ -106,8 +103,7 @@ void TMessagingSystem<TTraits>::ProcessReliableMessage(
 	SendAcknowledgement(InChannel, SequenceNumber);
 }
 
-template<typename TTraits>
-void TMessagingSystem<TTraits>::DeliverReceivedMessage(
+void FMessagingSystem::DeliverReceivedMessage(
 	const Core::FDeviceAddress& InSender,
 	const FNameId InChannelNameId,
 	const FNameId InMessageNameId,
@@ -122,8 +118,7 @@ void TMessagingSystem<TTraits>::DeliverReceivedMessage(
 	DeliverToMatchingSubscribers(Message, InChannelNameId);
 }
 
-template<typename TTraits>
-void TMessagingSystem<TTraits>::SendAcknowledgement(const FChannel& InChannel, const std::uint16_t InSequenceNumber) noexcept
+void FMessagingSystem::SendAcknowledgement(const FChannel& InChannel, const std::uint16_t InSequenceNumber) noexcept
 {
 	if (InChannel.Information.TransportDevice == nullptr)
 	{
@@ -133,13 +128,13 @@ void TMessagingSystem<TTraits>::SendAcknowledgement(const FChannel& InChannel, c
 	std::uint8_t FrameBytes[MaxFrameBytes]{};
 	EncodeFrameHeader(InChannel.Information.ChannelNameId, MessageAcknowledgementNameId, FrameBytes);
 	WriteUnsignedLittleEndian(InSequenceNumber, &FrameBytes[FrameHeaderBytes], SequenceNumberBytes);
-	// Device refusal is intentionally ignored: B6b's sender retry makes a lost acknowledgement recoverable.
+	// Acknowledgements are best-effort control frames: a refused send leaves the peer's reliable frame pending, so its retry can produce another
+	// acknowledgement.
 	(void)InChannel.Information.TransportDevice->TrySend(
 		InChannel.Information.Address, Core::TSpan<const std::uint8_t>(FrameBytes, FrameHeaderBytes + SequenceNumberBytes));
 }
 
-template<typename TTraits>
-bool TMessagingSystem<TTraits>::IsDeviceUsedByEarlierChannel(
+bool FMessagingSystem::IsDeviceUsedByEarlierChannel(
 	const Core::ITransportDevice* const InTransportDevice, const std::size_t InChannelIndex) const noexcept
 {
 	for (std::size_t EarlierChannelIndex = 0; EarlierChannelIndex < InChannelIndex; ++EarlierChannelIndex)
@@ -152,3 +147,5 @@ bool TMessagingSystem<TTraits>::IsDeviceUsedByEarlierChannel(
 
 	return false;
 }
+
+} // namespace MicroWorld::Messaging

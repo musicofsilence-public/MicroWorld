@@ -20,28 +20,31 @@ drives its turns. It never drives a device's own `PreAdvance` or `PostAdvance`:
 those belong to whoever composed the device, so a device shared by several
 channels is not ticked twice.
 
-There is no production translation unit: every primitive is a template or an
-inline codec whose caller-selected capacities must stay visible at instantiation.
-Any source file added later may depend only on Messaging's public headers and
-Core, and must introduce no hidden transport, engine, clock, heap, or SDK
-dependency.
+`FMessagingSystem` is one fixed-capacity compiled system. Its declarations live
+in `MessagingSystem.h`, while its definitions are split across exactly three
+source partitions: `MessagingSystem.cpp`, `MessagingSystem_WireReceive.cpp`, and
+`MessagingSystem_FrameCodec.cpp`. The `microworld_messaging` static target
+compiles those partitions and depends only on Core. They must introduce no
+hidden Transport, Engine, clock, heap, platform, or SDK dependency.
 
-`TMessagingSystem`'s private implementation is partitioned into flat `.inl`
-files (`MessagingSystem_ReliableRetry.inl`, `MessagingSystem_WireReceive.inl`,
-`MessagingSystem_FrameCodec.inl`) included in order after the class body closes; they
-are never included directly. Declarations stay inside the class body, while each
-definition is written out-of-class as `TMessagingSystem<TTraits>::Method`, so the
-public API stays compact while every body remains visible at instantiation. The
-codec and retry/receive partitions stay header-only because Messaging owns no
-translation unit. The `.inl` suffix is gated by `tools/CheckFormatting.py` and
-`tools/CheckDocumentationStyle.py`, so each partition carries the same
-Motivation/Responsibilities contract as the public header.
+### Fixed-capacity rationale
+
+The values preserve the shipped contract; they are not claims that every limit
+is optimal or measured.
+
+| Capacity | Value | Current rationale | Revisit trigger |
+| --- | ---: | --- | --- |
+| `MaxChannels` | 4 | Preserves the shipped contract; current repository scenarios use no more than two simultaneous channels, so four is compatibility headroom rather than a measured minimum. | A supported application needs more than four, or resource measurement justifies reducing it. |
+| `MaxSubscriptions` | 16 | Preserves the shipped subscription/storage contract; no measured minimum currently justifies sixteen. | Measured RAM pressure or a supported world requiring more than sixteen live registrations. |
+| `MaxSubscriberCallableBytes` | 32 | Preserves the callable shapes accepted by current examples/tests without heap allocation; the exact margin is not measured. | A supported callable is rejected, or object-size measurement shows the inline storage is excessive. |
+| `MaxMessageBytes` | 96 | Preserves the general Messaging payload contract; narrower transports such as LoRa enforce their own smaller packet limit. | A supported transport/application needs a different common payload contract, backed by measurement. |
+| `MaxReliablePendingMessages` | 8 | Preserves the shipped reliable in-flight budget; no measured concurrency requirement currently proves eight. | Observed reliable-send exhaustion or measured RAM pressure in pending-frame storage. |
 
 ## Concepts and boundaries
 
 - All channel, subscription, message-size, and reliable-pending capacities are
-  caller selected and fixed at compile time; steady-state message work allocates
-  nothing and reads no hidden clock.
+  fixed compile-time constants on `FMessagingSystem`; steady-state message work
+  allocates nothing and reads no hidden clock.
 - **Local delivery is synchronous.** `SendMessageToChannel` runs matching local
   subscribers inside the send call, before it touches any device. A subscriber
   may send from inside its own callback: the slot being dispatched is marked, so
@@ -100,7 +103,8 @@ Messaging.SubscribeToChannel("App", "SetLampState", std::move(Subscriber),
 
 ## Verification
 
-Build the engine from the repo root; Messaging is the `microworld_messaging`
-INTERFACE target. Run the dependency-boundary checker with the Messaging system
-root and the Messaging behavior tests after changes. This guide owns durable
-boundaries; the system's headers and tests define its current behavior.
+Build the engine from the repo root; Messaging is the compiled
+`microworld_messaging` static target. Run the dependency-boundary checker with
+the Messaging system root and the Messaging behavior tests after changes. This
+guide owns durable boundaries; the system's headers and tests define its current
+behavior.

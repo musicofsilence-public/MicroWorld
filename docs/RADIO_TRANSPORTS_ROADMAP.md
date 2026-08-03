@@ -272,8 +272,8 @@ messaging plan's table):
 | Encoded actor message, best-effort (Phase 5) | 54 (payload ≤ 48) |
 | Encoded actor message, guaranteed (−3) | 51 (payload ≤ 45) |
 
-Phase 5 therefore uses `MaxMessageBytes = 48` on any router whose world
-includes a LoRa channel.
+Phase 5 therefore caps application payloads at 48 bytes on best-effort LoRa
+channels and 45 bytes on guaranteed LoRa channels.
 
 ### 4.2 BLE — target shape (spike-confirmed; only ADR 0004 may change it)
 
@@ -659,9 +659,10 @@ by examples 22–25. Nothing blocks 5.x but the BLE work in Phases 2–4.
 - [ ] **5.1 Example `29-WirelessWorld` (capstone: two radios, zero wires).**
   Two boards, no wire between them (D12 keeps WiFi out): **channel 1
   telemetry over BLE** (`TTransportHost<2, 120>`), **channel 2 commands over LoRa**
-  (`TTransportHost<2, 58>`, D8 profile). One world per board, one `FMessagingSystem`
-  per board with `MaxMessageBytes = 48` (§4.1 — the LoRa channel is the
-  binding constraint), channel composition per the `Modules/MicroWorld/Messaging/AGENTS.md`
+  (`TTransportHost<2, 58>`, D8 profile). One world and one `FMessagingSystem`
+  per board; the LoRa command channel applies the §4.1 application-payload
+  budget (at most 48 bytes best-effort or 45 bytes guaranteed) as the binding
+  constraint. Compose channels per the `Modules/MicroWorld/Messaging/AGENTS.md`
   recipes. Client
   board: sensor actor streams readings on telemetry; server board: control
   actor sends a targeted rate-change command on the LoRa channel every 15 s.

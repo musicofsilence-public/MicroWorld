@@ -7,7 +7,8 @@ Inherits `../../AGENTS.md`.
 Engine is the managed-runtime system: it owns object identity (the folded Object
 store and garbage collector) and the actor lifetime built on it
 (`UWorld` / `AActor` / `UActorComponent`). Its dependency direction is
-`Core <- Engine`: it may depend only on Core and the C++17 standard library.
+`Core, Messaging <- Engine`: it may depend only on Core, Messaging, and the C++17
+standard library.
 
 The system owns `UWorld`, `AActor`, `UActorComponent`, the object store, the
 generation-checked handles, the bounded incremental collector, and a bounded

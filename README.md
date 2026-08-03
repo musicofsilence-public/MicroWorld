@@ -30,7 +30,7 @@ or inspect the
 | --- | --- | --- | --- |
 | Core | `MicroWorld::Core` | `MicroWorld` | Lifecycle, tick, containers, delegates, smart pointers, timers, `IPlaySystem` |
 | Engine | `MicroWorld::Engine` | `MicroWorld` | `UWorld` / `AActor` / `UActorComponent`, `TEngine`, `IEngineRuntime`, plus the object store, garbage collector, and handles |
-| Messaging | `MicroWorld::Messaging` | `MicroWorld` | `FMessagingSystem` — named channels, subscriptions, reliable delivery (header-only) |
+| Messaging | `MicroWorld::Messaging` | `MicroWorld` | `FMessagingSystem` — named channels, subscriptions, and reliable delivery in a compiled static module |
 | Transport | `MicroWorld::Transport` | `MicroWorld` | Byte I/O, frame codec, `TTransportHost`, and the optional portable E32 `FE32LoraDevice` |
 | Application | `MicroWorld::Application` | `MicroWorld` | `FApplication` — holds one non-owning `IEngineRuntime` reference and owns its frame loop |
 | Platform/Host | `MicroWorld::PlatformHost` | `MicroWorldPlatformHost` | Host UDP transport and `steady_clock` time source (non-portable) |

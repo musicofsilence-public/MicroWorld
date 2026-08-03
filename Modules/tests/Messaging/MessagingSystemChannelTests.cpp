@@ -16,17 +16,14 @@ using MicroWorld::Messaging::FChannelInformation;
 using MicroWorld::Messaging::FMessagingSystemInformation;
 using MicroWorld::Messaging::InvalidNameId;
 
-/**
- * Motivation: Makes capacity behavior testable without depending on the production channel limit.
- * Responsibilities: Bound this test system to two channel creation slots.
- * Example:
- *   TMessagingSystem<FSmallMessagingTraits> System;
- */
-struct FSmallMessagingTraits : FDefaultMessagingTraits
-{
-	/** Motivation: Bounds this test system to two channels while every other capacity stays at its default. */
-	static constexpr std::size_t MaxChannels = 2;
-};
+/** Motivation: Names the first deterministic channel created by FillChannelSlots. */
+constexpr std::uint32_t FirstCapacityChannelValue = FirstGeneratedChannelValue;
+
+/** Motivation: Names the last channel identity within the concrete fixed channel capacity. */
+constexpr std::uint32_t FinalCapacityChannelValue = static_cast<std::uint32_t>(FirstCapacityChannelValue + FMessagingSystem::MaxChannels - 1);
+
+/** Motivation: Names the first channel identity beyond the concrete fixed channel capacity. */
+constexpr std::uint32_t OverflowCapacityChannelValue = static_cast<std::uint32_t>(FMessagingSystem::MaxChannels + 1);
 
 /**
  * Motivation: Confirms a valid named channel starts an empty system successfully.
@@ -35,7 +32,7 @@ struct FSmallMessagingTraits : FDefaultMessagingTraits
 MW_TEST_CASE(MessagingSystem_CreatesAValidChannel)
 {
 	// Arrange
-	TMessagingSystem<> System;
+	FMessagingSystem System;
 	const FChannelInformation Information{"Telemetry", false, nullptr, {}};
 
 	// Act
@@ -52,7 +49,7 @@ MW_TEST_CASE(MessagingSystem_CreatesAValidChannel)
 MW_TEST_CASE(MessagingSystem_CreatesTwoChannelsWithDifferentNames)
 {
 	// Arrange
-	TMessagingSystem<> System;
+	FMessagingSystem System;
 	const FChannelInformation FirstInformation{"Telemetry", false, nullptr, {}};
 	const FChannelInformation SecondInformation{"Commands", false, nullptr, {}};
 
@@ -72,7 +69,7 @@ MW_TEST_CASE(MessagingSystem_CreatesTwoChannelsWithDifferentNames)
 MW_TEST_CASE(MessagingSystem_RejectsAnUnsetChannelName)
 {
 	// Arrange
-	TMessagingSystem<> System;
+	FMessagingSystem System;
 	FChannelInformation Information{};
 	Information.ChannelNameId = InvalidNameId;
 
@@ -90,7 +87,7 @@ MW_TEST_CASE(MessagingSystem_RejectsAnUnsetChannelName)
 MW_TEST_CASE(MessagingSystem_RejectsDuplicateChannelNames)
 {
 	// Arrange
-	TMessagingSystem<> System;
+	FMessagingSystem System;
 	const FChannelInformation Information{"Telemetry", false, nullptr, {}};
 	System.CreateChannel(Information);
 
@@ -103,46 +100,48 @@ MW_TEST_CASE(MessagingSystem_RejectsDuplicateChannelNames)
 
 /**
  * Motivation: Confirms a rejected duplicate never consumes bounded channel capacity.
- * Responsibilities: Verify a full system still reports Duplicate for an existing name and Full for a new name.
+ * Responsibilities: Fill all but one slot, reject a duplicate, then verify the final distinct channel still succeeds.
  */
 MW_TEST_CASE(MessagingSystem_DuplicateDoesNotConsumeChannelCapacity)
 {
 	// Arrange
-	TMessagingSystem<FSmallMessagingTraits> System;
-	const FChannelInformation FirstInformation{"Telemetry", false, nullptr, {}};
-	const FChannelInformation SecondInformation{"Commands", false, nullptr, {}};
-	const FChannelInformation ThirdInformation{"Status", false, nullptr, {}};
-	System.CreateChannel(FirstInformation);
-	System.CreateChannel(SecondInformation);
+	FMessagingSystem System;
+	const EMessagingResult FillResult = FillChannelSlots(System, FMessagingSystem::MaxChannels - 1);
+	const FChannelInformation ExistingInformation{FNameId{FirstCapacityChannelValue}, false, nullptr, {}};
+	const FChannelInformation FinalInformation{FNameId{FinalCapacityChannelValue}, false, nullptr, {}};
 
 	// Act
-	const EMessagingResult DuplicateResult = System.CreateChannel(FirstInformation);
-	const EMessagingResult FullResult = System.CreateChannel(ThirdInformation);
+	const EMessagingResult DuplicateResult = System.CreateChannel(ExistingInformation);
+	const EMessagingResult FinalCreateResult = System.CreateChannel(FinalInformation);
 
 	// Assert
-	MW_EXPECT_EQ(Test, EMessagingResult::Duplicate, DuplicateResult, "A duplicate should remain distinguishable after capacity is full");
-	MW_EXPECT_EQ(Test, EMessagingResult::Full, FullResult, "A new channel should still observe the original full capacity");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, FillResult, "All but one concrete channel slot should be filled");
+	MW_EXPECT_EQ(Test, EMessagingResult::Duplicate, DuplicateResult, "A duplicate should be rejected before the final slot is used");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, FinalCreateResult, "The duplicate should leave the final channel slot available");
 }
 
 /**
  * Motivation: Makes fixed channel storage exhaustion visible to callers.
- * Responsibilities: Verify one valid channel beyond the configured capacity reports Full.
+ * Responsibilities: Verify one valid channel beyond the concrete capacity reports Full while a previously created channel still sends.
  */
-MW_TEST_CASE(MessagingSystem_RejectsAChannelPastCapacity)
+MW_TEST_CASE(MessagingSystem_RejectsAChannelPastCapacityAndPreservesExistingChannels)
 {
 	// Arrange
-	TMessagingSystem<FSmallMessagingTraits> System;
-	const FChannelInformation FirstInformation{"Telemetry", false, nullptr, {}};
-	const FChannelInformation SecondInformation{"Commands", false, nullptr, {}};
-	const FChannelInformation ThirdInformation{"Status", false, nullptr, {}};
-	System.CreateChannel(FirstInformation);
-	System.CreateChannel(SecondInformation);
+	FMessagingSystem System;
+	const EMessagingResult FillResult = FillChannelSlots(System, FMessagingSystem::MaxChannels);
+	const FNameId ExistingChannelNameId{FirstCapacityChannelValue};
+	const FChannelInformation OverflowInformation{FNameId{OverflowCapacityChannelValue}, false, nullptr, {}};
+	FMessage Message;
+	Message.SetMessageNameId("CapacityProbe");
 
 	// Act
-	const EMessagingResult Result = System.CreateChannel(ThirdInformation);
+	const EMessagingResult OverflowResult = System.CreateChannel(OverflowInformation);
+	const EMessagingResult ExistingSendResult = System.SendMessageToChannel(Message, ExistingChannelNameId);
 
 	// Assert
-	MW_EXPECT_EQ(Test, EMessagingResult::Full, Result, "A channel beyond capacity should be rejected");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, FillResult, "Every concrete channel slot should be filled before overflow");
+	MW_EXPECT_EQ(Test, EMessagingResult::Full, OverflowResult, "A channel beyond concrete capacity should be rejected");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, ExistingSendResult, "An existing channel should remain usable after overflow rejection");
 }
 
 /**
@@ -152,7 +151,7 @@ MW_TEST_CASE(MessagingSystem_RejectsAChannelPastCapacity)
 MW_TEST_CASE(MessagingSystem_AcceptsALocalOnlyChannel)
 {
 	// Arrange
-	TMessagingSystem<> System;
+	FMessagingSystem System;
 	const FChannelInformation Information{"Telemetry", false, nullptr, {}};
 
 	// Act
@@ -169,7 +168,7 @@ MW_TEST_CASE(MessagingSystem_AcceptsALocalOnlyChannel)
 MW_TEST_CASE(MessagingSystem_AcceptsAChannelWithDeviceAndAddress)
 {
 	// Arrange
-	TMessagingSystem<> System;
+	FMessagingSystem System;
 	FTestTransportDevice Device;
 	FDeviceAddress Address{};
 	Address.Bytes[0] = 7;
@@ -190,7 +189,7 @@ MW_TEST_CASE(MessagingSystem_AcceptsAChannelWithDeviceAndAddress)
 MW_TEST_CASE(MessagingSystem_AcceptsTwoAddressesOnOneDevice)
 {
 	// Arrange
-	TMessagingSystem<> System;
+	FMessagingSystem System;
 	FTestTransportDevice Device;
 	FDeviceAddress FirstAddress{};
 	FirstAddress.Bytes[0] = 3;
@@ -220,7 +219,7 @@ MW_TEST_CASE(MessagingSystem_ReturnsSuppliedSystemInformation)
 	FMessagingSystemInformation Information{};
 	Information.ReliableRetryIntervalMilliseconds = 400;
 	Information.MaxReliableSendAttempts = 3;
-	TMessagingSystem<> System{Information};
+	FMessagingSystem System{Information};
 
 	// Act
 	const FMessagingSystemInformation& ReturnedInformation = System.GetInformation();
@@ -241,7 +240,7 @@ MW_TEST_CASE(MessagingSystem_ReturnsSuppliedSystemInformation)
 MW_TEST_CASE(MessagingSystem_LifecycleTurnsPreserveChannels)
 {
 	// Arrange
-	TMessagingSystem<> System;
+	FMessagingSystem System;
 	const FChannelInformation Information{"Telemetry", false, nullptr, {}};
 	System.CreateChannel(Information);
 

@@ -38,7 +38,7 @@ MicroWorld/
 │   │   ├── Engine/     UWorld / AActor / UActorComponent + the folded Object
 │   │   │               store, GC, handles, TEngine, IEngineRuntime
 │   │   ├── Messaging/  FMessagingSystem — named channels, subscriptions,
-│   │   │               reliable delivery (header-only)
+│   │   │               reliable delivery (compiled static module)
 │   │   ├── Transport/  byte I/O, frame codec, TTransportHost + the optional E32
 │   │   │               portable framing and device (was Net + RadioE32)
 │   │   ├── Application/ FApplication (including the Run template)

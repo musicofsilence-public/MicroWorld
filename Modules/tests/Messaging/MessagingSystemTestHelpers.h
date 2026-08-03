@@ -4,7 +4,6 @@
 #include <MicroWorld/Core/IO/ReceiveResult.h>
 #include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Core/IO/TransportResult.h>
-#include <MicroWorld/Messaging/DefaultMessagingTraits.h>
 #include <MicroWorld/Messaging/Message.h>
 #include <MicroWorld/Messaging/MessagingResult.h>
 #include <MicroWorld/Messaging/MessagingSystem.h>
@@ -22,15 +21,53 @@ using MicroWorld::Core::ITransportDevice;
 using MicroWorld::Core::TimePointMilliseconds;
 using MicroWorld::Core::TSpan;
 using MicroWorld::Messaging::EMessagingResult;
-using MicroWorld::Messaging::FDefaultMessagingTraits;
+using MicroWorld::Messaging::FChannelInformation;
 using MicroWorld::Messaging::FMessage;
-using MicroWorld::Messaging::TMessagingSystem;
+using MicroWorld::Messaging::FNameId;
 
-/** Motivation: Names the default Messaging system for reusable local-delivery test recorders. */
-using FDefaultMessagingSystem = TMessagingSystem<>;
+/** Motivation: Names the concrete Messaging system used by host behavior tests. */
+using FMessagingSystem = MicroWorld::Messaging::FMessagingSystem;
 
-/** Motivation: Names the bounded default subscriber delegate without repeating its system-qualified declaration. */
-using FDefaultSubscriberDelegate = FDefaultMessagingSystem::FSubscriberDelegate;
+/** Motivation: Names the bounded subscriber delegate without repeating its system-qualified declaration. */
+using FSubscriberDelegate = FMessagingSystem::FSubscriberDelegate;
+
+static_assert(FMessagingSystem::MaxChannels == 4);
+static_assert(FMessagingSystem::MaxSubscriptions == 16);
+static_assert(FMessagingSystem::MaxSubscriberCallableBytes == 32);
+static_assert(FMessagingSystem::MaxMessageBytes == 96);
+static_assert(FMessagingSystem::MaxReliablePendingMessages == 8);
+
+/** Motivation: Names the first generated channel identity used by empty-system capacity setup. */
+constexpr std::uint32_t FirstGeneratedChannelValue = 1;
+
+/**
+ * Motivation: Gives capacity setup distinct deterministic channel identities without embedding arithmetic in its loop.
+ * Responsibilities: Return the generated name at InChannelIndex, starting with FirstGeneratedChannelValue.
+ */
+constexpr FNameId MakeGeneratedChannelNameId(const std::size_t InChannelIndex) noexcept
+{
+	return FNameId{static_cast<std::uint32_t>(FirstGeneratedChannelValue + InChannelIndex)};
+}
+
+/**
+ * Motivation: Reaches the concrete channel boundary without duplicating names or setup loops across capacity tests.
+ * Responsibilities: Starting with an empty system, create InCount distinct local channels and return the first failure or Success.
+ */
+inline EMessagingResult FillChannelSlots(FMessagingSystem& InSystem, const std::size_t InCount) noexcept
+{
+	for (std::size_t ChannelIndex = 0; ChannelIndex < InCount; ++ChannelIndex)
+	{
+		const FNameId ChannelNameId = MakeGeneratedChannelNameId(ChannelIndex);
+		const FChannelInformation Information{ChannelNameId, false, nullptr, {}};
+		const EMessagingResult CreateResult = InSystem.CreateChannel(Information);
+		if (CreateResult != EMessagingResult::Success)
+		{
+			return CreateResult;
+		}
+	}
+
+	return EMessagingResult::Success;
+}
 
 /**
  * Motivation: Provides a non-owning device pointer for channel creation tests.

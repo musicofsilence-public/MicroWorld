@@ -1,5 +1,5 @@
 #include "TestSupport.h"
-#include "MessagingSystemTestHelpers.h"
+#include "MessagingSubscriptionTestHelpers.h"
 
 #include <MicroWorld/Messaging/ChannelInformation.h>
 #include <MicroWorld/Messaging/Message.h>
@@ -16,31 +16,16 @@ using namespace ::MicroWorld::Tests;
 using MicroWorld::Messaging::FChannelInformation;
 
 /**
- * Motivation: Makes the subscription capacity boundary independently testable.
- * Responsibilities: Bound this test system to two subscriptions while keeping one valid channel available.
- * Example:
- *   TMessagingSystem<FSmallSubscriptionTraits> System;
- */
-struct FSmallSubscriptionTraits : FDefaultMessagingTraits
-{
-	/** Motivation: Keeps one channel slot available for subscription capacity tests. */
-	static constexpr std::size_t MaxChannels = 1;
-
-	/** Motivation: Limits this test system to two stored subscriber registrations. */
-	static constexpr std::size_t MaxSubscriptions = 2;
-};
-
-/**
  * Motivation: Makes a local-only channel useful by allowing one bound subscriber to register successfully.
  * Responsibilities: Verify a valid subscriber on an existing channel reports Success.
  */
 MW_TEST_CASE(MessagingSystem_SubscribesToAnExistingChannel)
 {
 	// Arrange
-	FDefaultMessagingSystem System;
+	FMessagingSystem System;
 	const FChannelInformation ChannelInformation{"Telemetry", false, nullptr, {}};
 	const EMessagingResult CreateResult = System.CreateChannel(ChannelInformation);
-	FDefaultSubscriberDelegate Subscriber;
+	FSubscriberDelegate Subscriber;
 	const EDelegateResult BindingResult = Subscriber.Bind([](const FMessage&) noexcept {});
 
 	// Act
@@ -59,8 +44,8 @@ MW_TEST_CASE(MessagingSystem_SubscribesToAnExistingChannel)
 MW_TEST_CASE(MessagingSystem_RejectsSubscriptionToAnUnknownChannel)
 {
 	// Arrange
-	FDefaultMessagingSystem System;
-	FDefaultSubscriberDelegate Subscriber;
+	FMessagingSystem System;
+	FSubscriberDelegate Subscriber;
 	const EDelegateResult BindingResult = Subscriber.Bind([](const FMessage&) noexcept {});
 
 	// Act
@@ -72,35 +57,27 @@ MW_TEST_CASE(MessagingSystem_RejectsSubscriptionToAnUnknownChannel)
 }
 
 /**
- * Motivation: Makes system-wide subscriber capacity exhaustion visible without depending on production trait limits.
- * Responsibilities: Verify the first subscriber beyond a small configured limit reports Full.
+ * Motivation: Makes the concrete system-wide subscriber capacity boundary visible to callers.
+ * Responsibilities: Fill every concrete subscription slot, then verify one additional bound subscriber reports Full.
  */
 MW_TEST_CASE(MessagingSystem_RejectsSubscriptionPastCapacity)
 {
 	// Arrange
-	TMessagingSystem<FSmallSubscriptionTraits> System;
+	FMessagingSystem System;
 	const FChannelInformation ChannelInformation{"Telemetry", false, nullptr, {}};
 	const EMessagingResult CreateResult = System.CreateChannel(ChannelInformation);
-	TMessagingSystem<FSmallSubscriptionTraits>::FSubscriberDelegate FirstSubscriber;
-	TMessagingSystem<FSmallSubscriptionTraits>::FSubscriberDelegate SecondSubscriber;
-	TMessagingSystem<FSmallSubscriptionTraits>::FSubscriberDelegate ThirdSubscriber;
-	const EDelegateResult FirstBindingResult = FirstSubscriber.Bind([](const FMessage&) noexcept {});
-	const EDelegateResult SecondBindingResult = SecondSubscriber.Bind([](const FMessage&) noexcept {});
-	const EDelegateResult ThirdBindingResult = ThirdSubscriber.Bind([](const FMessage&) noexcept {});
-	const EMessagingResult FirstSubscribeResult = System.SubscribeToChannel("Telemetry", std::move(FirstSubscriber));
-	const EMessagingResult SecondSubscribeResult = System.SubscribeToChannel("Telemetry", std::move(SecondSubscriber));
+	const EMessagingResult FillResult = FillSubscriptionSlots(System, "Telemetry", FMessagingSystem::MaxSubscriptions);
+	FSubscriberDelegate OverflowSubscriber;
+	const EDelegateResult OverflowBindingResult = OverflowSubscriber.Bind([](const FMessage&) noexcept {});
 
 	// Act
-	const EMessagingResult ThirdSubscribeResult = System.SubscribeToChannel("Telemetry", std::move(ThirdSubscriber));
+	const EMessagingResult OverflowSubscribeResult = System.SubscribeToChannel("Telemetry", std::move(OverflowSubscriber));
 
 	// Assert
 	MW_EXPECT_EQ(Test, EMessagingResult::Success, CreateResult, "The capacity-test channel should be created");
-	MW_EXPECT_EQ(Test, EDelegateResult::Success, FirstBindingResult, "The first subscriber should bind within inline storage");
-	MW_EXPECT_EQ(Test, EDelegateResult::Success, SecondBindingResult, "The second subscriber should bind within inline storage");
-	MW_EXPECT_EQ(Test, EDelegateResult::Success, ThirdBindingResult, "The overflow subscriber should bind within inline storage");
-	MW_EXPECT_EQ(Test, EMessagingResult::Success, FirstSubscribeResult, "The first subscriber should consume the first available slot");
-	MW_EXPECT_EQ(Test, EMessagingResult::Success, SecondSubscribeResult, "The second subscriber should consume the final available slot");
-	MW_EXPECT_EQ(Test, EMessagingResult::Full, ThirdSubscribeResult, "A subscriber beyond the configured capacity should be rejected");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, FillResult, "Every concrete subscription slot should be filled");
+	MW_EXPECT_EQ(Test, EDelegateResult::Success, OverflowBindingResult, "The overflow subscriber should bind within inline storage");
+	MW_EXPECT_EQ(Test, EMessagingResult::Full, OverflowSubscribeResult, "A subscriber beyond concrete capacity should be rejected");
 }
 
 /**
@@ -110,10 +87,10 @@ MW_TEST_CASE(MessagingSystem_RejectsSubscriptionPastCapacity)
 MW_TEST_CASE(MessagingSystem_RejectsAnUnboundSubscriber)
 {
 	// Arrange
-	FDefaultMessagingSystem System;
+	FMessagingSystem System;
 	const FChannelInformation ChannelInformation{"Telemetry", false, nullptr, {}};
 	const EMessagingResult CreateResult = System.CreateChannel(ChannelInformation);
-	FDefaultSubscriberDelegate Subscriber;
+	FSubscriberDelegate Subscriber;
 
 	// Act
 	const EMessagingResult SubscribeResult = System.SubscribeToChannel("Telemetry", std::move(Subscriber));

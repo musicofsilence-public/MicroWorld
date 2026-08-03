@@ -20,8 +20,8 @@ MW_TEST_CASE(MessagingSystem_RoutesWireMessagesAfterReceiverPreAdvanceWithoutEch
 {
 	// Arrange
 	TLoopbackNetwork<TwoPorts, OneMailboxSlot, StandardPacketBytes> Network;
-	FDefaultMessagingSystem SendingSystem;
-	FDefaultMessagingSystem ReceivingSystem;
+	FMessagingSystem SendingSystem;
+	FMessagingSystem ReceivingSystem;
 	const FDeviceAddress ReceivingAddress = MakeLoopbackAddress(ReceivingPort);
 	const FDeviceAddress SendingAddress = MakeLoopbackAddress(SendingPort);
 	const FChannelInformation SendingChannel{"Telemetry", false, &Network.Port(SendingPort), ReceivingAddress};
@@ -30,8 +30,8 @@ MW_TEST_CASE(MessagingSystem_RoutesWireMessagesAfterReceiverPreAdvanceWithoutEch
 	const EMessagingResult ReceivingCreateResult = ReceivingSystem.CreateChannel(ReceivingChannel);
 	FWireMessageRecorder SendingRecorder;
 	FWireMessageRecorder ReceivingRecorder;
-	FDefaultSubscriberDelegate SendingSubscriber;
-	FDefaultSubscriberDelegate ReceivingSubscriber;
+	FSubscriberDelegate SendingSubscriber;
+	FSubscriberDelegate ReceivingSubscriber;
 	const EDelegateResult SendingBindingResult =
 		SendingSubscriber.Bind([&SendingRecorder](const FMessage& InMessage) noexcept { SendingRecorder.Record(InMessage); });
 	const EDelegateResult ReceivingBindingResult =
@@ -77,14 +77,14 @@ MW_TEST_CASE(MessagingSystem_AppliesMessageNameFiltersToWireMessages)
 {
 	// Arrange
 	TLoopbackNetwork<TwoPorts, OneMailboxSlot, StandardPacketBytes> Network;
-	FDefaultMessagingSystem ReceivingSystem;
+	FMessagingSystem ReceivingSystem;
 	const FDeviceAddress SendingAddress = MakeLoopbackAddress(SendingPort);
 	const FChannelInformation ReceivingChannel{"Telemetry", false, &Network.Port(ReceivingPort), SendingAddress};
 	const EMessagingResult CreateResult = ReceivingSystem.CreateChannel(ReceivingChannel);
 	std::size_t MatchingDeliveryCount = NoDeliveries;
 	std::size_t MismatchedDeliveryCount = NoDeliveries;
-	FDefaultSubscriberDelegate MatchingSubscriber;
-	FDefaultSubscriberDelegate MismatchedSubscriber;
+	FSubscriberDelegate MatchingSubscriber;
+	FSubscriberDelegate MismatchedSubscriber;
 	const EDelegateResult MatchingBindingResult =
 		MatchingSubscriber.Bind([&MatchingDeliveryCount](const FMessage&) noexcept { ++MatchingDeliveryCount; });
 	const EDelegateResult MismatchedBindingResult =
@@ -121,7 +121,7 @@ MW_TEST_CASE(MessagingSystem_RoutesEachEncodedChannelFromOneSharedDevice)
 {
 	// Arrange
 	TLoopbackNetwork<TwoPorts, TwoMailboxSlots, StandardPacketBytes> Network;
-	FDefaultMessagingSystem ReceivingSystem;
+	FMessagingSystem ReceivingSystem;
 	const FDeviceAddress SendingAddress = MakeLoopbackAddress(SendingPort);
 	const FChannelInformation FirstReceivingChannel{"Telemetry", false, &Network.Port(ReceivingPort), SendingAddress};
 	const FChannelInformation SecondReceivingChannel{"Commands", false, &Network.Port(ReceivingPort), SendingAddress};
@@ -129,8 +129,8 @@ MW_TEST_CASE(MessagingSystem_RoutesEachEncodedChannelFromOneSharedDevice)
 	const EMessagingResult SecondCreateResult = ReceivingSystem.CreateChannel(SecondReceivingChannel);
 	std::size_t FirstDeliveryCount = NoDeliveries;
 	std::size_t SecondDeliveryCount = NoDeliveries;
-	FDefaultSubscriberDelegate FirstSubscriber;
-	FDefaultSubscriberDelegate SecondSubscriber;
+	FSubscriberDelegate FirstSubscriber;
+	FSubscriberDelegate SecondSubscriber;
 	const EDelegateResult FirstBindingResult = FirstSubscriber.Bind([&FirstDeliveryCount](const FMessage&) noexcept { ++FirstDeliveryCount; });
 	const EDelegateResult SecondBindingResult = SecondSubscriber.Bind([&SecondDeliveryCount](const FMessage&) noexcept { ++SecondDeliveryCount; });
 	const EMessagingResult FirstSubscribeResult = ReceivingSystem.SubscribeToChannel("Telemetry", std::move(FirstSubscriber));
@@ -169,12 +169,12 @@ MW_TEST_CASE(MessagingSystem_CountsUnknownWireChannelsAsDroppedFrames)
 {
 	// Arrange
 	TLoopbackNetwork<TwoPorts, OneMailboxSlot, StandardPacketBytes> Network;
-	FDefaultMessagingSystem ReceivingSystem;
+	FMessagingSystem ReceivingSystem;
 	const FDeviceAddress SendingAddress = MakeLoopbackAddress(SendingPort);
 	const FChannelInformation ReceivingChannel{"Telemetry", false, &Network.Port(ReceivingPort), SendingAddress};
 	const EMessagingResult CreateResult = ReceivingSystem.CreateChannel(ReceivingChannel);
 	std::size_t DeliveryCount = NoDeliveries;
-	FDefaultSubscriberDelegate Subscriber;
+	FSubscriberDelegate Subscriber;
 	const EDelegateResult BindingResult = Subscriber.Bind([&DeliveryCount](const FMessage&) noexcept { ++DeliveryCount; });
 	const EMessagingResult SubscribeResult = ReceivingSystem.SubscribeToChannel("Telemetry", std::move(Subscriber));
 	FRawWireFrame Frame;
@@ -184,6 +184,7 @@ MW_TEST_CASE(MessagingSystem_CountsUnknownWireChannelsAsDroppedFrames)
 	// Act
 	const ETransportResult RawSendResult = Network.Port(SendingPort).TrySend(ReceivingAddress, TSpan<const std::uint8_t>(Frame.Bytes, Frame.Size));
 	ReceivingSystem.PreAdvance(FirstReceiveTurnMilliseconds);
+	const std::uint32_t DroppedFrameCount = ReceivingSystem.GetDroppedFrameCount();
 
 	// Assert
 	MW_EXPECT_EQ(Test, EMessagingResult::Success, CreateResult, "The live receiver channel should be created");
@@ -191,8 +192,7 @@ MW_TEST_CASE(MessagingSystem_CountsUnknownWireChannelsAsDroppedFrames)
 	MW_EXPECT_EQ(Test, EMessagingResult::Success, SubscribeResult, "The live receiver subscriber should register");
 	MW_EXPECT_EQ(Test, ETransportResult::Success, RawSendResult, "The unknown-channel frame should reach the receiver device");
 	MW_EXPECT_EQ(Test, NoDeliveries, DeliveryCount, "An unknown encoded channel should deliver to no live subscriber");
-	MW_EXPECT_EQ(
-		Test, OneDroppedFrame, ReceivingSystem.GetDroppedFrameCount(), "An unknown encoded channel should increment the dropped frame count");
+	MW_EXPECT_EQ(Test, OneDroppedFrame, DroppedFrameCount, "An unknown encoded channel should increment the dropped frame count");
 }
 
 /**
@@ -203,7 +203,7 @@ MW_TEST_CASE(MessagingSystem_CountsTooShortWireFramesAsDropped)
 {
 	// Arrange
 	TLoopbackNetwork<TwoPorts, OneMailboxSlot, StandardPacketBytes> Network;
-	FDefaultMessagingSystem ReceivingSystem;
+	FMessagingSystem ReceivingSystem;
 	const FDeviceAddress SendingAddress = MakeLoopbackAddress(SendingPort);
 	const FChannelInformation ReceivingChannel{"Telemetry", false, &Network.Port(ReceivingPort), SendingAddress};
 	const EMessagingResult CreateResult = ReceivingSystem.CreateChannel(ReceivingChannel);
@@ -213,27 +213,81 @@ MW_TEST_CASE(MessagingSystem_CountsTooShortWireFramesAsDropped)
 	const ETransportResult RawSendResult =
 		Network.Port(SendingPort).TrySend(ReceivingAddress, TSpan<const std::uint8_t>(TooShortFrame, TooShortFrameByteCount));
 	ReceivingSystem.PreAdvance(FirstReceiveTurnMilliseconds);
+	const std::uint32_t DroppedFrameCount = ReceivingSystem.GetDroppedFrameCount();
 
 	// Assert
 	MW_EXPECT_EQ(Test, EMessagingResult::Success, CreateResult, "The malformed-frame receiver channel should be created");
 	MW_EXPECT_EQ(Test, ETransportResult::Success, RawSendResult, "The raw short frame should reach the receiver device");
-	MW_EXPECT_EQ(Test, OneDroppedFrame, ReceivingSystem.GetDroppedFrameCount(), "A frame shorter than the header should be counted as dropped");
+	MW_EXPECT_EQ(Test, OneDroppedFrame, DroppedFrameCount, "A frame shorter than the header should be counted as dropped");
 }
 
 /**
- * Motivation: Guarantees local composition remains reliable to subscribers even when the outbound wire frame cannot fit Messaging's own buffer.
- * Responsibilities: Send a payload one byte beyond a small system's frame budget and verify local delivery, Full, and no device packet.
+ * Motivation: Pins the concrete best-effort application payload boundary at the largest accepted message.
+ * Responsibilities: Send exactly MaxMessageBytes and verify synchronous local delivery plus one complete device packet.
+ */
+MW_TEST_CASE(MessagingSystem_AcceptsExactMaximumBestEffortPayload)
+{
+	// Arrange
+	TLoopbackNetwork<TwoPorts, OneMailboxSlot, StandardPacketBytes> Network;
+	FMessagingSystem SendingSystem;
+	const FDeviceAddress ReceivingAddress = MakeLoopbackAddress(ReceivingPort);
+	const FChannelInformation SendingChannel{"Telemetry", false, &Network.Port(SendingPort), ReceivingAddress};
+	const EMessagingResult CreateResult = SendingSystem.CreateChannel(SendingChannel);
+	FWireMessageRecorder Recorder;
+	FSubscriberDelegate Subscriber;
+	const EDelegateResult BindingResult = Subscriber.Bind([&Recorder](const FMessage& InMessage) noexcept { Recorder.Record(InMessage); });
+	const EMessagingResult SubscribeResult = SendingSystem.SubscribeToChannel("Telemetry", std::move(Subscriber));
+	FMessage Message;
+	Message.SetMessageNameId("TemperatureUpdated");
+	Message.SetPayload(TSpan<const std::uint8_t>(MaximumPayload.data(), MaximumPayload.size()));
+	std::uint8_t FrameBytes[FMessagingSystem::MaxFrameBytes]{};
+	FDeviceAddress FrameSender;
+	FReceiveResult FrameReceiveResult;
+
+	// Act
+	const EMessagingResult SendResult = SendingSystem.SendMessageToChannel(Message, "Telemetry");
+	const std::size_t QueuedAfterSend = Network.QueuedCount(ReceivingPort);
+	const ETransportResult FrameReceiveStatus =
+		Network.Port(ReceivingPort).TryReceive(FrameSender, TSpan<std::uint8_t>(FrameBytes, FMessagingSystem::MaxFrameBytes), FrameReceiveResult);
+	bool bWirePayloadMatches = true;
+	for (std::size_t PayloadByteIndex = 0; PayloadByteIndex < MaximumPayloadByteCount; ++PayloadByteIndex)
+	{
+		if (FrameBytes[WireHeaderBytes + PayloadByteIndex] != MaximumPayload[PayloadByteIndex])
+		{
+			bWirePayloadMatches = false;
+			break;
+		}
+	}
+	const std::uint8_t FinalPayloadByte = FrameBytes[WireHeaderBytes + MaximumPayloadByteCount - 1];
+
+	// Assert
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, CreateResult, "The maximum-payload channel should be created");
+	MW_EXPECT_EQ(Test, EDelegateResult::Success, BindingResult, "The maximum-payload local subscriber should bind");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, SubscribeResult, "The maximum-payload local subscriber should register");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, SendResult, "A payload exactly MaxMessageBytes should send successfully");
+	MW_EXPECT_EQ(Test, OneDelivery, Recorder.DeliveryCount, "The exact maximum payload should deliver locally once");
+	MW_EXPECT_EQ(Test, MaximumPayloadByteCount, Recorder.PayloadSize, "The local subscriber should receive the exact maximum payload size");
+	MW_EXPECT_EQ(Test, OneQueuedPacket, QueuedAfterSend, "The exact maximum payload should reach the device once");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, FrameReceiveStatus, "The exact maximum frame should be available for wire inspection");
+	MW_EXPECT_EQ(Test, FMessagingSystem::MaxFrameBytes, FrameReceiveResult.BytesReceived, "The exact maximum payload should fill the wire frame");
+	MW_EXPECT_TRUE(Test, bWirePayloadMatches, "The wire frame should contain every maximum-payload byte");
+	MW_EXPECT_EQ(Test, MaximumPayloadFinalByte, FinalPayloadByte, "The wire frame should retain the maximum payload's final sentinel byte");
+}
+
+/**
+ * Motivation: Guarantees local composition remains reliable to subscribers when the payload is one byte beyond the concrete frame budget.
+ * Responsibilities: Send MaxMessageBytes plus one and verify local delivery, Full, and no device packet.
  */
 MW_TEST_CASE(MessagingSystem_DeliversLocallyWhenPayloadExceedsMessagingFrameCapacity)
 {
 	// Arrange
 	TLoopbackNetwork<TwoPorts, OneMailboxSlot, StandardPacketBytes> Network;
-	TMessagingSystem<FSmallFrameMessagingTraits> SendingSystem;
+	FMessagingSystem SendingSystem;
 	const FDeviceAddress ReceivingAddress = MakeLoopbackAddress(ReceivingPort);
 	const FChannelInformation SendingChannel{"Telemetry", false, &Network.Port(SendingPort), ReceivingAddress};
 	const EMessagingResult CreateResult = SendingSystem.CreateChannel(SendingChannel);
 	FWireMessageRecorder Recorder;
-	TMessagingSystem<FSmallFrameMessagingTraits>::FSubscriberDelegate Subscriber;
+	FSubscriberDelegate Subscriber;
 	const EDelegateResult BindingResult = Subscriber.Bind([&Recorder](const FMessage& InMessage) noexcept { Recorder.Record(InMessage); });
 	const EMessagingResult SubscribeResult = SendingSystem.SubscribeToChannel("Telemetry", std::move(Subscriber));
 	FMessage Message;
@@ -245,10 +299,10 @@ MW_TEST_CASE(MessagingSystem_DeliversLocallyWhenPayloadExceedsMessagingFrameCapa
 	const std::size_t QueuedAfterSend = Network.QueuedCount(ReceivingPort);
 
 	// Assert
-	MW_EXPECT_EQ(Test, EMessagingResult::Success, CreateResult, "The small-frame sending channel should be created");
-	MW_EXPECT_EQ(Test, EDelegateResult::Success, BindingResult, "The small-frame local subscriber should bind");
-	MW_EXPECT_EQ(Test, EMessagingResult::Success, SubscribeResult, "The small-frame local subscriber should register");
-	MW_EXPECT_EQ(Test, EMessagingResult::Full, SendResult, "A payload beyond MaxFrameBytes should report Full");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, CreateResult, "The payload-boundary sending channel should be created");
+	MW_EXPECT_EQ(Test, EDelegateResult::Success, BindingResult, "The payload-boundary local subscriber should bind");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, SubscribeResult, "The payload-boundary local subscriber should register");
+	MW_EXPECT_EQ(Test, EMessagingResult::Full, SendResult, "A payload one byte beyond MaxMessageBytes should report Full");
 	MW_EXPECT_EQ(Test, OneDelivery, Recorder.DeliveryCount, "The oversized wire payload should still deliver locally");
 	MW_EXPECT_EQ(Test, OversizedLocalPayloadByteCount, Recorder.PayloadSize, "The local subscriber should receive every oversized payload byte");
 	MW_EXPECT_EQ(Test, NoQueuedPackets, QueuedAfterSend, "A frame beyond MaxFrameBytes should not reach the device");
@@ -262,12 +316,12 @@ MW_TEST_CASE(MessagingSystem_ReturnsFullWhenDevicePacketCapacityIsSmallerThanFra
 {
 	// Arrange
 	TLoopbackNetwork<TwoPorts, OneMailboxSlot, SmallerThanFramePacketBytes> Network;
-	FDefaultMessagingSystem SendingSystem;
+	FMessagingSystem SendingSystem;
 	const FDeviceAddress ReceivingAddress = MakeLoopbackAddress(ReceivingPort);
 	const FChannelInformation SendingChannel{"Telemetry", false, &Network.Port(SendingPort), ReceivingAddress};
 	const EMessagingResult CreateResult = SendingSystem.CreateChannel(SendingChannel);
 	std::size_t LocalDeliveryCount = NoDeliveries;
-	FDefaultSubscriberDelegate Subscriber;
+	FSubscriberDelegate Subscriber;
 	const EDelegateResult BindingResult = Subscriber.Bind([&LocalDeliveryCount](const FMessage&) noexcept { ++LocalDeliveryCount; });
 	const EMessagingResult SubscribeResult = SendingSystem.SubscribeToChannel("Telemetry", std::move(Subscriber));
 	FMessage Message;
@@ -296,7 +350,7 @@ MW_TEST_CASE(MessagingSystem_RecountsOversizedInboundPacketOnEachPreAdvance)
 {
 	// Arrange
 	TLoopbackNetwork<TwoPorts, OneMailboxSlot, LargerThanFramePacketBytes> Network;
-	FDefaultMessagingSystem ReceivingSystem;
+	FMessagingSystem ReceivingSystem;
 	const FDeviceAddress SendingAddress = MakeLoopbackAddress(SendingPort);
 	const FChannelInformation ReceivingChannel{"Telemetry", false, &Network.Port(ReceivingPort), SendingAddress};
 	const EMessagingResult CreateResult = ReceivingSystem.CreateChannel(ReceivingChannel);
@@ -325,11 +379,11 @@ MW_TEST_CASE(MessagingSystem_DeliversLocallyWithoutADeviceAndDropsNothingOnPreAd
 {
 	// Arrange
 	TLoopbackNetwork<TwoPorts, OneMailboxSlot, StandardPacketBytes> Network;
-	FDefaultMessagingSystem System;
+	FMessagingSystem System;
 	const FChannelInformation LocalChannel{"Telemetry", false, nullptr, {}};
 	const EMessagingResult CreateResult = System.CreateChannel(LocalChannel);
 	std::size_t DeliveryCount = NoDeliveries;
-	FDefaultSubscriberDelegate Subscriber;
+	FSubscriberDelegate Subscriber;
 	const EDelegateResult BindingResult = Subscriber.Bind([&DeliveryCount](const FMessage&) noexcept { ++DeliveryCount; });
 	const EMessagingResult SubscribeResult = System.SubscribeToChannel("Telemetry", std::move(Subscriber));
 	FMessage Message;
@@ -339,6 +393,7 @@ MW_TEST_CASE(MessagingSystem_DeliversLocallyWithoutADeviceAndDropsNothingOnPreAd
 	const EMessagingResult SendResult = System.SendMessageToChannel(Message, "Telemetry");
 	const std::size_t QueuedAfterSend = Network.QueuedCount(ReceivingPort);
 	System.PreAdvance(FirstReceiveTurnMilliseconds);
+	const std::uint32_t DroppedFrameCount = System.GetDroppedFrameCount();
 
 	// Assert
 	MW_EXPECT_EQ(Test, EMessagingResult::Success, CreateResult, "The local-only channel should be created");
@@ -347,7 +402,7 @@ MW_TEST_CASE(MessagingSystem_DeliversLocallyWithoutADeviceAndDropsNothingOnPreAd
 	MW_EXPECT_EQ(Test, EMessagingResult::Success, SendResult, "A local-only message should succeed");
 	MW_EXPECT_EQ(Test, OneDelivery, DeliveryCount, "A local-only channel should deliver to its subscriber");
 	MW_EXPECT_EQ(Test, NoQueuedPackets, QueuedAfterSend, "A channel with no device should reach no loopback port");
-	MW_EXPECT_EQ(Test, NoDroppedFrames, System.GetDroppedFrameCount(), "Pre-advance with no devices should drop nothing");
+	MW_EXPECT_EQ(Test, NoDroppedFrames, DroppedFrameCount, "Pre-advance with no devices should drop nothing");
 }
 
 } // namespace

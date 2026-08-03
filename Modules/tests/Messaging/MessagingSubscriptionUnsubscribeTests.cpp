@@ -22,10 +22,10 @@ using namespace ::MicroWorld::Tests;
 struct FSelfUnsubscribeContext final
 {
 	/** Motivation: Gives the callback the system that owns its subscription. */
-	FDefaultMessagingSystem* MessagingSystem{nullptr};
+	FMessagingSystem* MessagingSystem{nullptr};
 
 	/** Motivation: Identifies the callback's own subscription after successful registration. */
-	FDefaultMessagingSystem::FSubscriptionHandle Handle{};
+	FMessagingSystem::FSubscriptionHandle Handle{};
 
 	/** Motivation: Counts callback invocations before self-removal prevents later delivery. */
 	std::size_t DeliveryCount{0};
@@ -65,10 +65,10 @@ struct FSelfUnsubscribeSubscriber final
 struct FResubscribeDuringOwnCallbackContext final
 {
 	/** Motivation: Gives the callback the system that owns the slot it is executing in. */
-	FOneSubscriptionMessagingSystem* MessagingSystem{nullptr};
+	FMessagingSystem* MessagingSystem{nullptr};
 
 	/** Motivation: Identifies the callback's own subscription so it can release it while running. */
-	FOneSubscriptionMessagingSystem::FSubscriptionHandle Handle{};
+	FMessagingSystem::FSubscriptionHandle Handle{};
 
 	/** Motivation: Names the channel the callback re-registers on. */
 	FNameId ChannelNameId{};
@@ -99,7 +99,7 @@ struct FResubscribeDuringOwnCallbackSubscriber final
 	{
 		Context->UnsubscribeResult = Context->MessagingSystem->Unsubscribe(Context->Handle);
 
-		FOneSubscriptionMessagingSystem::FSubscriberDelegate ReplacementSubscriber;
+		FSubscriberDelegate ReplacementSubscriber;
 		Context->ReplacementBindingResult = ReplacementSubscriber.Bind([](const FMessage&) noexcept {});
 		if (Context->ReplacementBindingResult != EDelegateResult::Success)
 		{
@@ -128,13 +128,13 @@ MW_TEST_CASE(MessagingSubscription_UnsubscribeStopsDelivery)
 	const std::size_t ExpectedFirstDeliveryCount{1};
 	/** Motivation: States the unchanged count expected after removal. */
 	const std::size_t ExpectedDeliveryCountAfterUnsubscribe{1};
-	FDefaultMessagingSystem System;
+	FMessagingSystem System;
 	const FChannelInformation ChannelInformation{ChannelNameId, false, nullptr, {}};
 	const EMessagingResult CreateResult = System.CreateChannel(ChannelInformation);
 	std::size_t DeliveryCount{0};
-	FDefaultSubscriberDelegate Subscriber;
+	FSubscriberDelegate Subscriber;
 	const EDelegateResult BindingResult = Subscriber.Bind([&DeliveryCount](const FMessage&) noexcept { ++DeliveryCount; });
-	FDefaultMessagingSystem::FSubscriptionHandle Handle{};
+	FMessagingSystem::FSubscriptionHandle Handle{};
 	const EMessagingResult SubscribeResult = System.SubscribeToChannel(ChannelNameId, std::move(Subscriber), {}, &Handle);
 	FMessage Message;
 	Message.SetMessageNameId(MessageNameId);
@@ -171,18 +171,18 @@ MW_TEST_CASE(MessagingSubscription_UnsubscribeTwiceLeavesOtherSubscriberLive)
 	const std::size_t ExpectedRemovedSubscriberDeliveryCount{0};
 	/** Motivation: States that the retained subscriber receives one later delivery. */
 	const std::size_t ExpectedLiveSubscriberDeliveryCount{1};
-	FSmallSubscriptionMessagingSystem System;
+	FMessagingSystem System;
 	const FChannelInformation ChannelInformation{ChannelNameId, false, nullptr, {}};
 	const EMessagingResult CreateResult = System.CreateChannel(ChannelInformation);
 	std::size_t RemovedSubscriberDeliveryCount{0};
 	std::size_t LiveSubscriberDeliveryCount{0};
-	FSmallSubscriptionMessagingSystem::FSubscriberDelegate RemovedSubscriber;
-	FSmallSubscriptionMessagingSystem::FSubscriberDelegate LiveSubscriber;
+	FSubscriberDelegate RemovedSubscriber;
+	FSubscriberDelegate LiveSubscriber;
 	const EDelegateResult RemovedBindingResult =
 		RemovedSubscriber.Bind([&RemovedSubscriberDeliveryCount](const FMessage&) noexcept { ++RemovedSubscriberDeliveryCount; });
 	const EDelegateResult LiveBindingResult =
 		LiveSubscriber.Bind([&LiveSubscriberDeliveryCount](const FMessage&) noexcept { ++LiveSubscriberDeliveryCount; });
-	FSmallSubscriptionMessagingSystem::FSubscriptionHandle RemovedHandle{};
+	FMessagingSystem::FSubscriptionHandle RemovedHandle{};
 	const EMessagingResult RemovedSubscribeResult = System.SubscribeToChannel(ChannelNameId, std::move(RemovedSubscriber), {}, &RemovedHandle);
 	const EMessagingResult LiveSubscribeResult = System.SubscribeToChannel(ChannelNameId, std::move(LiveSubscriber));
 	FMessage Message;
@@ -213,8 +213,8 @@ MW_TEST_CASE(MessagingSubscription_UnsubscribeTwiceLeavesOtherSubscriberLive)
 MW_TEST_CASE(MessagingSubscription_DefaultHandleReportsNotFound)
 {
 	// Arrange
-	FDefaultMessagingSystem System;
-	const FDefaultMessagingSystem::FSubscriptionHandle DefaultHandle{};
+	FMessagingSystem System;
+	const FMessagingSystem::FSubscriptionHandle DefaultHandle{};
 
 	// Act
 	const EMessagingResult UnsubscribeResult = System.Unsubscribe(DefaultHandle);
@@ -230,22 +230,22 @@ MW_TEST_CASE(MessagingSubscription_DefaultHandleReportsNotFound)
 MW_TEST_CASE(MessagingSubscription_StaleHandleCannotRemoveReplacement)
 {
 	// Arrange
-	/** Motivation: Names the only route in the one-slot system. */
+	/** Motivation: Names the local route whose first released slot is reused. */
 	const FNameId ChannelNameId{"Telemetry"};
 	/** Motivation: Names the message used to observe the replacement subscriber. */
 	const FNameId MessageNameId{"TemperatureUpdated"};
 	/** Motivation: States the one delivery expected for the replacement subscriber. */
 	const std::size_t ExpectedReplacementDeliveryCount{1};
-	FOneSubscriptionMessagingSystem System;
+	FMessagingSystem System;
 	const FChannelInformation ChannelInformation{ChannelNameId, false, nullptr, {}};
 	const EMessagingResult CreateResult = System.CreateChannel(ChannelInformation);
-	FOneSubscriptionMessagingSystem::FSubscriberDelegate FirstSubscriber;
+	FSubscriberDelegate FirstSubscriber;
 	const EDelegateResult FirstBindingResult = FirstSubscriber.Bind([](const FMessage&) noexcept {});
-	FOneSubscriptionMessagingSystem::FSubscriptionHandle StaleHandle{};
+	FMessagingSystem::FSubscriptionHandle StaleHandle{};
 	const EMessagingResult FirstSubscribeResult = System.SubscribeToChannel(ChannelNameId, std::move(FirstSubscriber), {}, &StaleHandle);
 	const EMessagingResult FirstUnsubscribeResult = System.Unsubscribe(StaleHandle);
 	std::size_t ReplacementDeliveryCount{0};
-	FOneSubscriptionMessagingSystem::FSubscriberDelegate ReplacementSubscriber;
+	FSubscriberDelegate ReplacementSubscriber;
 	const EDelegateResult ReplacementBindingResult =
 		ReplacementSubscriber.Bind([&ReplacementDeliveryCount](const FMessage&) noexcept { ++ReplacementDeliveryCount; });
 	const EMessagingResult ReplacementSubscribeResult = System.SubscribeToChannel(ChannelNameId, std::move(ReplacementSubscriber));
@@ -258,8 +258,8 @@ MW_TEST_CASE(MessagingSubscription_StaleHandleCannotRemoveReplacement)
 
 	// Assert
 	MW_EXPECT_EQ(Test, EMessagingResult::Success, CreateResult, "The stale-handle channel should be created");
-	MW_EXPECT_EQ(Test, EDelegateResult::Success, FirstBindingResult, "The first one-slot subscriber should bind");
-	MW_EXPECT_EQ(Test, EMessagingResult::Success, FirstSubscribeResult, "The first one-slot subscriber should register");
+	MW_EXPECT_EQ(Test, EDelegateResult::Success, FirstBindingResult, "The first subscriber should bind before slot reuse");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, FirstSubscribeResult, "The first subscriber should register before slot reuse");
 	MW_EXPECT_EQ(Test, EMessagingResult::Success, FirstUnsubscribeResult, "The first handle should release its subscription");
 	MW_EXPECT_EQ(Test, EDelegateResult::Success, ReplacementBindingResult, "The replacement subscriber should bind");
 	MW_EXPECT_EQ(Test, EMessagingResult::Success, ReplacementSubscribeResult, "The replacement should reuse the released slot");
@@ -281,12 +281,12 @@ MW_TEST_CASE(MessagingSubscription_SelfUnsubscribeIsSafeAndStopsLaterDelivery)
 	const FNameId MessageNameId{"TemperatureUpdated"};
 	/** Motivation: States the one callback invocation allowed before self-removal. */
 	const std::size_t ExpectedDeliveryCount{1};
-	FDefaultMessagingSystem System;
+	FMessagingSystem System;
 	const FChannelInformation ChannelInformation{ChannelNameId, false, nullptr, {}};
 	const EMessagingResult CreateResult = System.CreateChannel(ChannelInformation);
 	FSelfUnsubscribeContext Context{&System};
 	FSelfUnsubscribeSubscriber SelfUnsubscribeSubscriber{&Context};
-	FDefaultSubscriberDelegate Subscriber;
+	FSubscriberDelegate Subscriber;
 	const EDelegateResult BindingResult = Subscriber.Bind(std::move(SelfUnsubscribeSubscriber));
 	const EMessagingResult SubscribeResult = System.SubscribeToChannel(ChannelNameId, std::move(Subscriber), {}, &Context.Handle);
 	FMessage Message;
@@ -308,21 +308,22 @@ MW_TEST_CASE(MessagingSubscription_SelfUnsubscribeIsSafeAndStopsLaterDelivery)
 
 /**
  * Motivation: Keeps a self-removing callback from being overwritten by the very subscription it registers next.
- * Responsibilities: Verify the only slot is withheld while its callable runs, so re-registration reports Full instead of reusing it.
+ * Responsibilities: Fill all other concrete slots and verify the running slot is withheld, so re-registration reports Full instead of reusing it.
  */
 MW_TEST_CASE(MessagingSubscription_CallbackCannotReuseTheSlotItIsRunningIn)
 {
 	// Arrange
-	/** Motivation: Names the only route in the one-slot system. */
+	/** Motivation: Names the route whose remaining concrete subscription slots are occupied. */
 	const FNameId ChannelNameId{"Telemetry"};
 	/** Motivation: Names the message that invokes the self-removing callback. */
 	const FNameId MessageNameId{"TemperatureUpdated"};
-	FOneSubscriptionMessagingSystem System;
+	FMessagingSystem System;
 	const FChannelInformation ChannelInformation{ChannelNameId, false, nullptr, {}};
 	const EMessagingResult CreateResult = System.CreateChannel(ChannelInformation);
+	const EMessagingResult FillResult = FillSubscriptionSlots(System, ChannelNameId, FMessagingSystem::MaxSubscriptions - 1);
 	FResubscribeDuringOwnCallbackContext Context{&System, {}, ChannelNameId};
 	FResubscribeDuringOwnCallbackSubscriber ResubscribingSubscriber{&Context};
-	FOneSubscriptionMessagingSystem::FSubscriberDelegate Subscriber;
+	FSubscriberDelegate Subscriber;
 	const EDelegateResult BindingResult = Subscriber.Bind(std::move(ResubscribingSubscriber));
 	const EMessagingResult SubscribeResult = System.SubscribeToChannel(ChannelNameId, std::move(Subscriber), {}, &Context.Handle);
 	FMessage Message;
@@ -333,6 +334,7 @@ MW_TEST_CASE(MessagingSubscription_CallbackCannotReuseTheSlotItIsRunningIn)
 
 	// Assert
 	MW_EXPECT_EQ(Test, EMessagingResult::Success, CreateResult, "The self-reuse channel should be created");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, FillResult, "Every slot except the callback slot should be occupied");
 	MW_EXPECT_EQ(Test, EDelegateResult::Success, BindingResult, "The re-registering subscriber should bind");
 	MW_EXPECT_EQ(Test, EMessagingResult::Success, SubscribeResult, "The re-registering subscriber should register");
 	MW_EXPECT_EQ(Test, EMessagingResult::Success, SendResult, "The self-reuse message should send");
@@ -342,7 +344,7 @@ MW_TEST_CASE(MessagingSubscription_CallbackCannotReuseTheSlotItIsRunningIn)
 		Test,
 		EMessagingResult::Full,
 		Context.ResubscribeResult,
-		"The only slot belongs to the running callable, so re-registration must report Full rather than overwrite it");
+		"The only available slot belongs to the running callable, so re-registration must report Full rather than overwrite it");
 }
 
 /**
@@ -366,7 +368,7 @@ MW_TEST_CASE(MessagingSubscription_UnsubscribeAllKeepsOtherOwnersSubscribed)
 	const std::size_t ExpectedFirstOwnerDeliveryCount{0};
 	/** Motivation: States that the second-owner subscriber remains live for one delivery. */
 	const std::size_t ExpectedSecondOwnerDeliveryCount{1};
-	FDefaultMessagingSystem System;
+	FMessagingSystem System;
 	const FChannelInformation ChannelInformation{ChannelNameId, false, nullptr, {}};
 	const EMessagingResult CreateResult = System.CreateChannel(ChannelInformation);
 	std::uint32_t FirstOwnerGenerationCounter = FirstOwnerGeneration;
@@ -375,9 +377,9 @@ MW_TEST_CASE(MessagingSubscription_UnsubscribeAllKeepsOtherOwnersSubscribed)
 	const FWeakOwner SecondOwner{&SecondOwnerGenerationCounter, SecondOwnerGeneration, bHasOwner};
 	std::size_t FirstOwnerDeliveryCount{0};
 	std::size_t SecondOwnerDeliveryCount{0};
-	FDefaultSubscriberDelegate FirstOwnerSubscriber;
-	FDefaultSubscriberDelegate SecondFirstOwnerSubscriber;
-	FDefaultSubscriberDelegate SecondOwnerSubscriber;
+	FSubscriberDelegate FirstOwnerSubscriber;
+	FSubscriberDelegate SecondFirstOwnerSubscriber;
+	FSubscriberDelegate SecondOwnerSubscriber;
 	const EDelegateResult FirstOwnerBindingResult =
 		FirstOwnerSubscriber.Bind([&FirstOwnerDeliveryCount](const FMessage&) noexcept { ++FirstOwnerDeliveryCount; });
 	const EDelegateResult SecondFirstOwnerBindingResult =
@@ -423,13 +425,13 @@ MW_TEST_CASE(MessagingSubscription_UnsubscribeAllOwnerlessTokenLeavesOwnerlessSu
 	const std::size_t ExpectedFirstDeliveryCount{1};
 	/** Motivation: States the one delivery expected for the second ownerless subscriber. */
 	const std::size_t ExpectedSecondDeliveryCount{1};
-	FSmallSubscriptionMessagingSystem System;
+	FMessagingSystem System;
 	const FChannelInformation ChannelInformation{ChannelNameId, false, nullptr, {}};
 	const EMessagingResult CreateResult = System.CreateChannel(ChannelInformation);
 	std::size_t FirstDeliveryCount{0};
 	std::size_t SecondDeliveryCount{0};
-	FSmallSubscriptionMessagingSystem::FSubscriberDelegate FirstSubscriber;
-	FSmallSubscriptionMessagingSystem::FSubscriberDelegate SecondSubscriber;
+	FSubscriberDelegate FirstSubscriber;
+	FSubscriberDelegate SecondSubscriber;
 	const EDelegateResult FirstBindingResult = FirstSubscriber.Bind([&FirstDeliveryCount](const FMessage&) noexcept { ++FirstDeliveryCount; });
 	const EDelegateResult SecondBindingResult = SecondSubscriber.Bind([&SecondDeliveryCount](const FMessage&) noexcept { ++SecondDeliveryCount; });
 	const EMessagingResult FirstSubscribeResult = System.SubscribeToChannel(ChannelNameId, std::move(FirstSubscriber));

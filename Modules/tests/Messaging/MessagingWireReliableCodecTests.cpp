@@ -20,8 +20,8 @@ MW_TEST_CASE(MessagingSystem_ReliableWireMessagesStripSequenceAndAcknowledgeWith
 {
 	// Arrange
 	TLoopbackNetwork<TwoPorts, OneMailboxSlot, StandardPacketBytes> Network;
-	FDefaultMessagingSystem SendingSystem;
-	FDefaultMessagingSystem ReceivingSystem;
+	FMessagingSystem SendingSystem;
+	FMessagingSystem ReceivingSystem;
 	const FDeviceAddress ReceivingAddress = MakeLoopbackAddress(ReceivingPort);
 	const FDeviceAddress SendingAddress = MakeLoopbackAddress(SendingPort);
 	const FChannelInformation SendingChannel{"Telemetry", true, &Network.Port(SendingPort), ReceivingAddress};
@@ -30,8 +30,8 @@ MW_TEST_CASE(MessagingSystem_ReliableWireMessagesStripSequenceAndAcknowledgeWith
 	const EMessagingResult ReceivingCreateResult = ReceivingSystem.CreateChannel(ReceivingChannel);
 	FWireMessageRecorder SendingRecorder;
 	FWireMessageRecorder ReceivingRecorder;
-	FDefaultSubscriberDelegate SendingSubscriber;
-	FDefaultSubscriberDelegate ReceivingSubscriber;
+	FSubscriberDelegate SendingSubscriber;
+	FSubscriberDelegate ReceivingSubscriber;
 	const EDelegateResult SendingBindingResult =
 		SendingSubscriber.Bind([&SendingRecorder](const FMessage& InMessage) noexcept { SendingRecorder.Record(InMessage); });
 	const EDelegateResult ReceivingBindingResult =
@@ -41,7 +41,7 @@ MW_TEST_CASE(MessagingSystem_ReliableWireMessagesStripSequenceAndAcknowledgeWith
 	FMessage Message;
 	Message.SetMessageNameId("TemperatureUpdated");
 	Message.SetPayload(TSpan<const std::uint8_t>(WirePayload, WirePayloadByteCount));
-	std::uint8_t AcknowledgementBytes[FDefaultMessagingSystem::MaxFrameBytes]{};
+	std::uint8_t AcknowledgementBytes[FMessagingSystem::MaxFrameBytes]{};
 	FDeviceAddress AcknowledgementSender;
 	FReceiveResult AcknowledgementReceiveResult;
 
@@ -49,11 +49,10 @@ MW_TEST_CASE(MessagingSystem_ReliableWireMessagesStripSequenceAndAcknowledgeWith
 	const EMessagingResult SendResult = SendingSystem.SendMessageToChannel(Message, "Telemetry");
 	ReceivingSystem.PreAdvance(FirstReceiveTurnMilliseconds);
 	const std::size_t QueuedAcknowledgements = Network.QueuedCount(SendingPort);
-	const ETransportResult AcknowledgementReceiveStatus = Network.Port(SendingPort)
-															  .TryReceive(
-																  AcknowledgementSender,
-																  TSpan<std::uint8_t>(AcknowledgementBytes, FDefaultMessagingSystem::MaxFrameBytes),
-																  AcknowledgementReceiveResult);
+	const ETransportResult AcknowledgementReceiveStatus =
+		Network.Port(SendingPort)
+			.TryReceive(
+				AcknowledgementSender, TSpan<std::uint8_t>(AcknowledgementBytes, FMessagingSystem::MaxFrameBytes), AcknowledgementReceiveResult);
 	const FNameId AcknowledgementChannelNameId = FRawWireFrame::ReadNameId(&AcknowledgementBytes[ChannelNameIdByteIndex]);
 	const FNameId AcknowledgementMessageNameId = FRawWireFrame::ReadNameId(&AcknowledgementBytes[MessageNameIdByteIndex]);
 	const std::uint16_t AcknowledgedSequenceNumber = FRawWireFrame::ReadSequenceNumber(&AcknowledgementBytes[WireHeaderBytes]);
@@ -100,15 +99,15 @@ MW_TEST_CASE(MessagingSystem_ReliableWireMessagesUseConsecutiveSequenceNumbers)
 {
 	// Arrange
 	TLoopbackNetwork<TwoPorts, TwoMailboxSlots, StandardPacketBytes> Network;
-	FDefaultMessagingSystem SendingSystem;
+	FMessagingSystem SendingSystem;
 	const FDeviceAddress ReceivingAddress = MakeLoopbackAddress(ReceivingPort);
 	const FChannelInformation SendingChannel{"Telemetry", true, &Network.Port(SendingPort), ReceivingAddress};
 	const EMessagingResult CreateResult = SendingSystem.CreateChannel(SendingChannel);
 	FMessage Message;
 	Message.SetMessageNameId("TemperatureUpdated");
 	Message.SetPayload(TSpan<const std::uint8_t>(WirePayload, WirePayloadByteCount));
-	std::uint8_t FirstFrameBytes[FDefaultMessagingSystem::MaxFrameBytes]{};
-	std::uint8_t SecondFrameBytes[FDefaultMessagingSystem::MaxFrameBytes]{};
+	std::uint8_t FirstFrameBytes[FMessagingSystem::MaxFrameBytes]{};
+	std::uint8_t SecondFrameBytes[FMessagingSystem::MaxFrameBytes]{};
 	FDeviceAddress FirstFrameSender;
 	FDeviceAddress SecondFrameSender;
 	FReceiveResult FirstFrameReceiveResult;
@@ -119,10 +118,10 @@ MW_TEST_CASE(MessagingSystem_ReliableWireMessagesUseConsecutiveSequenceNumbers)
 	const EMessagingResult SecondSendResult = SendingSystem.SendMessageToChannel(Message, "Telemetry");
 	const ETransportResult FirstReceiveStatus =
 		Network.Port(ReceivingPort)
-			.TryReceive(FirstFrameSender, TSpan<std::uint8_t>(FirstFrameBytes, FDefaultMessagingSystem::MaxFrameBytes), FirstFrameReceiveResult);
+			.TryReceive(FirstFrameSender, TSpan<std::uint8_t>(FirstFrameBytes, FMessagingSystem::MaxFrameBytes), FirstFrameReceiveResult);
 	const ETransportResult SecondReceiveStatus =
 		Network.Port(ReceivingPort)
-			.TryReceive(SecondFrameSender, TSpan<std::uint8_t>(SecondFrameBytes, FDefaultMessagingSystem::MaxFrameBytes), SecondFrameReceiveResult);
+			.TryReceive(SecondFrameSender, TSpan<std::uint8_t>(SecondFrameBytes, FMessagingSystem::MaxFrameBytes), SecondFrameReceiveResult);
 	const std::uint16_t FirstFrameSequenceNumber = FRawWireFrame::ReadSequenceNumber(&FirstFrameBytes[WireHeaderBytes]);
 	const std::uint16_t SecondFrameSequenceNumber = FRawWireFrame::ReadSequenceNumber(&SecondFrameBytes[WireHeaderBytes]);
 
@@ -144,12 +143,12 @@ MW_TEST_CASE(MessagingSystem_DropsReliableFramesWithoutCompleteSequenceNumbers)
 {
 	// Arrange
 	TLoopbackNetwork<TwoPorts, OneMailboxSlot, StandardPacketBytes> Network;
-	FDefaultMessagingSystem ReceivingSystem;
+	FMessagingSystem ReceivingSystem;
 	const FDeviceAddress SendingAddress = MakeLoopbackAddress(SendingPort);
 	const FChannelInformation ReceivingChannel{"Telemetry", true, &Network.Port(ReceivingPort), SendingAddress};
 	const EMessagingResult CreateResult = ReceivingSystem.CreateChannel(ReceivingChannel);
 	std::size_t DeliveryCount = NoDeliveries;
-	FDefaultSubscriberDelegate Subscriber;
+	FSubscriberDelegate Subscriber;
 	const EDelegateResult BindingResult = Subscriber.Bind([&DeliveryCount](const FMessage&) noexcept { ++DeliveryCount; });
 	const EMessagingResult SubscribeResult = ReceivingSystem.SubscribeToChannel("Telemetry", std::move(Subscriber));
 	FRawWireFrame Frame;
@@ -160,6 +159,7 @@ MW_TEST_CASE(MessagingSystem_DropsReliableFramesWithoutCompleteSequenceNumbers)
 	const ETransportResult RawSendResult = Network.Port(SendingPort).TrySend(ReceivingAddress, TSpan<const std::uint8_t>(Frame.Bytes, Frame.Size));
 	ReceivingSystem.PreAdvance(FirstReceiveTurnMilliseconds);
 	const std::size_t QueuedAcknowledgements = Network.QueuedCount(SendingPort);
+	const std::uint32_t DroppedFrameCount = ReceivingSystem.GetDroppedFrameCount();
 
 	// Assert
 	MW_EXPECT_EQ(Test, EMessagingResult::Success, CreateResult, "The malformed reliable receiver channel should be created");
@@ -167,7 +167,7 @@ MW_TEST_CASE(MessagingSystem_DropsReliableFramesWithoutCompleteSequenceNumbers)
 	MW_EXPECT_EQ(Test, EMessagingResult::Success, SubscribeResult, "The malformed reliable subscriber should register");
 	MW_EXPECT_EQ(Test, ETransportResult::Success, RawSendResult, "The short reliable frame should reach the receiver port");
 	MW_EXPECT_EQ(Test, NoDeliveries, DeliveryCount, "A partial sequence number should not reach a subscriber");
-	MW_EXPECT_EQ(Test, OneDroppedFrame, ReceivingSystem.GetDroppedFrameCount(), "A partial reliable sequence should count as dropped");
+	MW_EXPECT_EQ(Test, OneDroppedFrame, DroppedFrameCount, "A partial reliable sequence should count as dropped");
 	MW_EXPECT_EQ(Test, NoQueuedPackets, QueuedAcknowledgements, "A malformed reliable frame should not receive an acknowledgement");
 }
 
@@ -179,12 +179,12 @@ MW_TEST_CASE(MessagingSystem_DropsAcknowledgementsWithoutCompleteSequenceNumbers
 {
 	// Arrange
 	TLoopbackNetwork<TwoPorts, OneMailboxSlot, StandardPacketBytes> Network;
-	FDefaultMessagingSystem ReceivingSystem;
+	FMessagingSystem ReceivingSystem;
 	const FDeviceAddress SendingAddress = MakeLoopbackAddress(SendingPort);
 	const FChannelInformation ReceivingChannel{"Telemetry", false, &Network.Port(ReceivingPort), SendingAddress};
 	const EMessagingResult CreateResult = ReceivingSystem.CreateChannel(ReceivingChannel);
 	std::size_t DeliveryCount = NoDeliveries;
-	FDefaultSubscriberDelegate Subscriber;
+	FSubscriberDelegate Subscriber;
 	const EDelegateResult BindingResult = Subscriber.Bind([&DeliveryCount](const FMessage&) noexcept { ++DeliveryCount; });
 	const EMessagingResult SubscribeResult = ReceivingSystem.SubscribeToChannel("Telemetry", std::move(Subscriber));
 	FRawWireFrame Frame;
@@ -196,6 +196,7 @@ MW_TEST_CASE(MessagingSystem_DropsAcknowledgementsWithoutCompleteSequenceNumbers
 	const ETransportResult RawSendResult = Network.Port(SendingPort).TrySend(ReceivingAddress, TSpan<const std::uint8_t>(Frame.Bytes, Frame.Size));
 	ReceivingSystem.PreAdvance(FirstReceiveTurnMilliseconds);
 	const std::size_t QueuedReplies = Network.QueuedCount(SendingPort);
+	const std::uint32_t DroppedFrameCount = ReceivingSystem.GetDroppedFrameCount();
 
 	// Assert
 	MW_EXPECT_EQ(Test, EMessagingResult::Success, CreateResult, "The acknowledgement receiver channel should be created");
@@ -203,7 +204,7 @@ MW_TEST_CASE(MessagingSystem_DropsAcknowledgementsWithoutCompleteSequenceNumbers
 	MW_EXPECT_EQ(Test, EMessagingResult::Success, SubscribeResult, "The acknowledgement receiver subscriber should register");
 	MW_EXPECT_EQ(Test, ETransportResult::Success, RawSendResult, "The malformed acknowledgement should reach the receiver port");
 	MW_EXPECT_EQ(Test, NoDeliveries, DeliveryCount, "Acknowledgement control traffic should not reach a subscriber");
-	MW_EXPECT_EQ(Test, OneDroppedFrame, ReceivingSystem.GetDroppedFrameCount(), "A malformed acknowledgement should count as dropped");
+	MW_EXPECT_EQ(Test, OneDroppedFrame, DroppedFrameCount, "A malformed acknowledgement should count as dropped");
 	MW_EXPECT_EQ(Test, NoQueuedPackets, QueuedReplies, "An acknowledgement should never receive a reply acknowledgement");
 }
 
@@ -215,12 +216,12 @@ MW_TEST_CASE(MessagingSystem_RejectsApplicationAcknowledgementMessages)
 {
 	// Arrange
 	TLoopbackNetwork<TwoPorts, OneMailboxSlot, StandardPacketBytes> Network;
-	FDefaultMessagingSystem System;
+	FMessagingSystem System;
 	const FDeviceAddress ReceivingAddress = MakeLoopbackAddress(ReceivingPort);
 	const FChannelInformation Channel{"Telemetry", false, &Network.Port(SendingPort), ReceivingAddress};
 	const EMessagingResult CreateResult = System.CreateChannel(Channel);
 	std::size_t DeliveryCount = NoDeliveries;
-	FDefaultSubscriberDelegate Subscriber;
+	FSubscriberDelegate Subscriber;
 	const EDelegateResult BindingResult = Subscriber.Bind([&DeliveryCount](const FMessage&) noexcept { ++DeliveryCount; });
 	const EMessagingResult SubscribeResult = System.SubscribeToChannel("Telemetry", std::move(Subscriber));
 	FMessage Message;
@@ -247,21 +248,21 @@ MW_TEST_CASE(MessagingSystem_RejectsApplicationAcknowledgementMessages)
 MW_TEST_CASE(MessagingSystem_ReliablePayloadBudgetReservesSequenceBytes)
 {
 	// Arrange
-	TLoopbackNetwork<TwoPorts, OneMailboxSlot, StandardPacketBytes> Network;
-	TMessagingSystem<FSmallFrameMessagingTraits> System;
+	TLoopbackNetwork<TwoPorts, TwoMailboxSlots, ReliableBudgetProbePacketBytes> Network;
+	FMessagingSystem System;
 	const FDeviceAddress ReceivingAddress = MakeLoopbackAddress(ReceivingPort);
 	const FChannelInformation BestEffortChannel{"BestEffort", false, &Network.Port(SendingPort), ReceivingAddress};
 	const FChannelInformation ReliableChannel{"Reliable", true, &Network.Port(SendingPort), ReceivingAddress};
 	const EMessagingResult BestEffortCreateResult = System.CreateChannel(BestEffortChannel);
 	const EMessagingResult ReliableCreateResult = System.CreateChannel(ReliableChannel);
 	std::size_t ReliableDeliveryCount = NoDeliveries;
-	TMessagingSystem<FSmallFrameMessagingTraits>::FSubscriberDelegate ReliableSubscriber;
+	FSubscriberDelegate ReliableSubscriber;
 	const EDelegateResult ReliableBindingResult =
 		ReliableSubscriber.Bind([&ReliableDeliveryCount](const FMessage&) noexcept { ++ReliableDeliveryCount; });
 	const EMessagingResult ReliableSubscribeResult = System.SubscribeToChannel("Reliable", std::move(ReliableSubscriber));
 	FMessage Message;
 	Message.SetMessageNameId("TemperatureUpdated");
-	Message.SetPayload(TSpan<const std::uint8_t>(SmallFramePayload, FSmallFrameMessagingTraits::MaxMessageBytes));
+	Message.SetPayload(TSpan<const std::uint8_t>(MaximumPayload.data(), MaximumPayload.size()));
 
 	// Act
 	const EMessagingResult BestEffortSendResult = System.SendMessageToChannel(Message, "BestEffort");
@@ -269,10 +270,10 @@ MW_TEST_CASE(MessagingSystem_ReliablePayloadBudgetReservesSequenceBytes)
 	const std::size_t QueuedAfterSends = Network.QueuedCount(ReceivingPort);
 
 	// Assert
-	MW_EXPECT_EQ(Test, EMessagingResult::Success, BestEffortCreateResult, "The small best-effort channel should be created");
-	MW_EXPECT_EQ(Test, EMessagingResult::Success, ReliableCreateResult, "The small reliable channel should be created");
-	MW_EXPECT_EQ(Test, EDelegateResult::Success, ReliableBindingResult, "The small reliable subscriber should bind");
-	MW_EXPECT_EQ(Test, EMessagingResult::Success, ReliableSubscribeResult, "The small reliable subscriber should register");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, BestEffortCreateResult, "The payload-boundary best-effort channel should be created");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, ReliableCreateResult, "The payload-boundary reliable channel should be created");
+	MW_EXPECT_EQ(Test, EDelegateResult::Success, ReliableBindingResult, "The payload-boundary reliable subscriber should bind");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, ReliableSubscribeResult, "The payload-boundary reliable subscriber should register");
 	MW_EXPECT_EQ(Test, EMessagingResult::Success, BestEffortSendResult, "The exact best-effort payload budget should send");
 	MW_EXPECT_EQ(Test, EMessagingResult::Full, ReliableSendResult, "The same payload should exceed the reliable wire budget by its sequence header");
 	MW_EXPECT_EQ(Test, OneDelivery, ReliableDeliveryCount, "The reliable capacity failure should not undo local delivery");
@@ -287,8 +288,8 @@ MW_TEST_CASE(MessagingSystem_RoundTripsZeroLengthWirePayload)
 {
 	// Arrange
 	TLoopbackNetwork<TwoPorts, OneMailboxSlot, StandardPacketBytes> Network;
-	FDefaultMessagingSystem SendingSystem;
-	FDefaultMessagingSystem ReceivingSystem;
+	FMessagingSystem SendingSystem;
+	FMessagingSystem ReceivingSystem;
 	const FDeviceAddress ReceivingAddress = MakeLoopbackAddress(ReceivingPort);
 	const FDeviceAddress SendingAddress = MakeLoopbackAddress(SendingPort);
 	const FChannelInformation SendingChannel{"Telemetry", false, &Network.Port(SendingPort), ReceivingAddress};
@@ -296,7 +297,7 @@ MW_TEST_CASE(MessagingSystem_RoundTripsZeroLengthWirePayload)
 	const EMessagingResult SendingCreateResult = SendingSystem.CreateChannel(SendingChannel);
 	const EMessagingResult ReceivingCreateResult = ReceivingSystem.CreateChannel(ReceivingChannel);
 	FWireMessageRecorder ReceivingRecorder;
-	FDefaultSubscriberDelegate ReceivingSubscriber;
+	FSubscriberDelegate ReceivingSubscriber;
 	const EDelegateResult ReceivingBindingResult =
 		ReceivingSubscriber.Bind([&ReceivingRecorder](const FMessage& InMessage) noexcept { ReceivingRecorder.Record(InMessage); });
 	const EMessagingResult ReceivingSubscribeResult = ReceivingSystem.SubscribeToChannel("Telemetry", std::move(ReceivingSubscriber));

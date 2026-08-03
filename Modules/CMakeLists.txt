@@ -123,14 +123,22 @@ microworld_enable_strict_portable_options(microworld_engine)
 microworld_disable_exceptions_and_rtti("${MICROWORLD_ENGINE_SOURCES}")
 
 # ---------------------------------------------------------------------------
-# Messaging: header-only named channels, subscriptions, and reliable delivery.
+# Messaging: named channels, subscriptions, and reliable delivery.
 # ---------------------------------------------------------------------------
-add_library(microworld_messaging INTERFACE)
-target_include_directories(microworld_messaging INTERFACE
+set(MICROWORLD_MESSAGING_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Messaging/MessagingSystem.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Messaging/MessagingSystem_WireReceive.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Messaging/MessagingSystem_FrameCodec.cpp"
+)
+
+add_library(microworld_messaging STATIC ${MICROWORLD_MESSAGING_SOURCES})
+target_include_directories(microworld_messaging PUBLIC
     "$<BUILD_INTERFACE:${MICROWORLD_INCLUDE_ROOT}>"
 )
-target_compile_features(microworld_messaging INTERFACE cxx_std_17)
-target_link_libraries(microworld_messaging INTERFACE MicroWorld::Core)
+target_compile_features(microworld_messaging PUBLIC cxx_std_17)
+target_link_libraries(microworld_messaging PUBLIC MicroWorld::Core)
+microworld_enable_strict_portable_options(microworld_messaging)
+microworld_disable_exceptions_and_rtti("${MICROWORLD_MESSAGING_SOURCES}")
 add_library(MicroWorld::Messaging ALIAS microworld_messaging)
 
 # ---------------------------------------------------------------------------

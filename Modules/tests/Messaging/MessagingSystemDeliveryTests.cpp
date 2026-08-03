@@ -100,7 +100,7 @@ struct FDeliveryOrderRecorder final
 struct FReentrantDispatchContext final
 {
 	/** Motivation: Gives the subscriber the system where it may safely add one subscription and send one nested message. */
-	FDefaultMessagingSystem* MessagingSystem{nullptr};
+	FMessagingSystem* MessagingSystem{nullptr};
 
 	/** Motivation: Identifies the one channel used by the outer and nested sends. */
 	FNameId ChannelNameId{};
@@ -123,6 +123,9 @@ struct FReentrantDispatchContext final
 	/** Motivation: Counts nested-message deliveries to prove the controlled reentrant send ran exactly once. */
 	std::size_t NestedDeliveryCount{0};
 
+	/** Motivation: Counts active-subscriber entry to prove a nested send cannot re-enter the callback that initiated it. */
+	std::size_t ActiveSubscriberDeliveryCount{0};
+
 	/** Motivation: Counts outer-message deliveries to the subscriber added during the first dispatch. */
 	std::size_t AddedSubscriberDeliveryCount{0};
 };
@@ -141,13 +144,19 @@ struct FReentrantSubscriber final
 	 */
 	void operator()(const FMessage& InMessage) noexcept
 	{
-		if (Context == nullptr || Context->bHasPerformedReentrantWork || InMessage.GetMessageNameId() != Context->OuterMessageNameId)
+		if (Context == nullptr)
+		{
+			return;
+		}
+
+		++Context->ActiveSubscriberDeliveryCount;
+		if (Context->bHasPerformedReentrantWork || InMessage.GetMessageNameId() != Context->OuterMessageNameId)
 		{
 			return;
 		}
 
 		Context->bHasPerformedReentrantWork = true;
-		FDefaultSubscriberDelegate AddedSubscriber;
+		FSubscriberDelegate AddedSubscriber;
 		const EDelegateResult BindingResult =
 			AddedSubscriber.Bind([InContext = Context](const FMessage&) noexcept { ++InContext->AddedSubscriberDeliveryCount; });
 		if (BindingResult != EDelegateResult::Success)
@@ -175,11 +184,11 @@ struct FReentrantSubscriber final
 MW_TEST_CASE(MessagingSystem_DeliversAnUnfilteredMessageLocally)
 {
 	// Arrange
-	FDefaultMessagingSystem System;
+	FMessagingSystem System;
 	const FChannelInformation ChannelInformation{"Telemetry", false, nullptr, {}};
 	const EMessagingResult CreateResult = System.CreateChannel(ChannelInformation);
 	FMessageRecorder Recorder;
-	FDefaultSubscriberDelegate Subscriber;
+	FSubscriberDelegate Subscriber;
 	const EDelegateResult BindingResult = Subscriber.Bind([&Recorder](const FMessage& InMessage) noexcept { Recorder.Record(InMessage); });
 	const EMessagingResult SubscribeResult = System.SubscribeToChannel("Telemetry", std::move(Subscriber));
 	const std::uint8_t Payload[FMessageRecorder::MaxRecordedPayloadBytes] = {11, 22, 33};
@@ -210,13 +219,13 @@ MW_TEST_CASE(MessagingSystem_DeliversAnUnfilteredMessageLocally)
 MW_TEST_CASE(MessagingSystem_DeliversOnlyToMatchingMessageFilters)
 {
 	// Arrange
-	FDefaultMessagingSystem System;
+	FMessagingSystem System;
 	const FChannelInformation ChannelInformation{"Telemetry", false, nullptr, {}};
 	const EMessagingResult CreateResult = System.CreateChannel(ChannelInformation);
 	std::size_t MatchingDeliveryCount = 0;
 	std::size_t MismatchedDeliveryCount = 0;
-	FDefaultSubscriberDelegate MatchingSubscriber;
-	FDefaultSubscriberDelegate MismatchedSubscriber;
+	FSubscriberDelegate MatchingSubscriber;
+	FSubscriberDelegate MismatchedSubscriber;
 	const EDelegateResult MatchingBindingResult =
 		MatchingSubscriber.Bind([&MatchingDeliveryCount](const FMessage&) noexcept { ++MatchingDeliveryCount; });
 	const EDelegateResult MismatchedBindingResult =
@@ -247,12 +256,12 @@ MW_TEST_CASE(MessagingSystem_DeliversOnlyToMatchingMessageFilters)
 MW_TEST_CASE(MessagingSystem_DeliversSubscribersInRegistrationOrder)
 {
 	// Arrange
-	FDefaultMessagingSystem System;
+	FMessagingSystem System;
 	const FChannelInformation ChannelInformation{"Telemetry", false, nullptr, {}};
 	const EMessagingResult CreateResult = System.CreateChannel(ChannelInformation);
 	FDeliveryOrderRecorder Recorder;
-	FDefaultSubscriberDelegate FirstSubscriber;
-	FDefaultSubscriberDelegate SecondSubscriber;
+	FSubscriberDelegate FirstSubscriber;
+	FSubscriberDelegate SecondSubscriber;
 	const EDelegateResult FirstBindingResult = FirstSubscriber.Bind([&Recorder](const FMessage&) noexcept { Recorder.Record(1); });
 	const EDelegateResult SecondBindingResult = SecondSubscriber.Bind([&Recorder](const FMessage&) noexcept { Recorder.Record(2); });
 	const EMessagingResult FirstSubscribeResult = System.SubscribeToChannel("Telemetry", std::move(FirstSubscriber));
@@ -282,11 +291,11 @@ MW_TEST_CASE(MessagingSystem_DeliversSubscribersInRegistrationOrder)
 MW_TEST_CASE(MessagingSystem_RejectsSendingToAnUnknownChannel)
 {
 	// Arrange
-	FDefaultMessagingSystem System;
+	FMessagingSystem System;
 	const FChannelInformation ChannelInformation{"Telemetry", false, nullptr, {}};
 	const EMessagingResult CreateResult = System.CreateChannel(ChannelInformation);
 	std::size_t DeliveryCount = 0;
-	FDefaultSubscriberDelegate Subscriber;
+	FSubscriberDelegate Subscriber;
 	const EDelegateResult BindingResult = Subscriber.Bind([&DeliveryCount](const FMessage&) noexcept { ++DeliveryCount; });
 	const EMessagingResult SubscribeResult = System.SubscribeToChannel("Telemetry", std::move(Subscriber));
 	FMessage Message;
@@ -310,11 +319,11 @@ MW_TEST_CASE(MessagingSystem_RejectsSendingToAnUnknownChannel)
 MW_TEST_CASE(MessagingSystem_RejectsSendingAnUnnamedMessage)
 {
 	// Arrange
-	FDefaultMessagingSystem System;
+	FMessagingSystem System;
 	const FChannelInformation ChannelInformation{"Telemetry", false, nullptr, {}};
 	const EMessagingResult CreateResult = System.CreateChannel(ChannelInformation);
 	std::size_t DeliveryCount = 0;
-	FDefaultSubscriberDelegate Subscriber;
+	FSubscriberDelegate Subscriber;
 	const EDelegateResult BindingResult = Subscriber.Bind([&DeliveryCount](const FMessage&) noexcept { ++DeliveryCount; });
 	const EMessagingResult SubscribeResult = System.SubscribeToChannel("Telemetry", std::move(Subscriber));
 	FMessage Message;
@@ -337,7 +346,7 @@ MW_TEST_CASE(MessagingSystem_RejectsSendingAnUnnamedMessage)
 MW_TEST_CASE(MessagingSystem_AcceptsSendingToAChannelWithNoSubscribers)
 {
 	// Arrange
-	FDefaultMessagingSystem System;
+	FMessagingSystem System;
 	const FChannelInformation ChannelInformation{"Telemetry", false, nullptr, {}};
 	const EMessagingResult CreateResult = System.CreateChannel(ChannelInformation);
 	FMessage Message;
@@ -358,7 +367,7 @@ MW_TEST_CASE(MessagingSystem_AcceptsSendingToAChannelWithNoSubscribers)
 MW_TEST_CASE(MessagingSystem_DeliversLocallyAndRemotelyOnADeviceBackedChannel)
 {
 	// Arrange
-	FDefaultMessagingSystem System;
+	FMessagingSystem System;
 	FTestTransportDevice Device;
 	FDeviceAddress Address{};
 	Address.Bytes[0] = 7;
@@ -366,7 +375,7 @@ MW_TEST_CASE(MessagingSystem_DeliversLocallyAndRemotelyOnADeviceBackedChannel)
 	const FChannelInformation ChannelInformation{"Telemetry", false, &Device, Address};
 	const EMessagingResult CreateResult = System.CreateChannel(ChannelInformation);
 	std::size_t DeliveryCount = 0;
-	FDefaultSubscriberDelegate Subscriber;
+	FSubscriberDelegate Subscriber;
 	const EDelegateResult BindingResult = Subscriber.Bind([&DeliveryCount](const FMessage&) noexcept { ++DeliveryCount; });
 	const EMessagingResult SubscribeResult = System.SubscribeToChannel("Telemetry", std::move(Subscriber));
 	FMessage Message;
@@ -386,12 +395,12 @@ MW_TEST_CASE(MessagingSystem_DeliversLocallyAndRemotelyOnADeviceBackedChannel)
 
 /**
  * Motivation: Keeps synchronous subscriber composition safe when a callback expands the subscription table and sends once more.
- * Responsibilities: Verify a newly added subscriber is skipped by the active send while one nested send completes without recursion.
+ * Responsibilities: Verify a nested send does not re-enter its active subscriber and a newly added subscriber is skipped by the outer send.
  */
-MW_TEST_CASE(MessagingSystem_SkipsSubscriptionsAddedDuringAnActiveSend)
+MW_TEST_CASE(MessagingSystem_NestedSendDoesNotReenterActiveSubscriberAndSkipsNewSubscription)
 {
 	// Arrange
-	FDefaultMessagingSystem System;
+	FMessagingSystem System;
 	const FChannelInformation ChannelInformation{"Telemetry", false, nullptr, {}};
 	const EMessagingResult CreateResult = System.CreateChannel(ChannelInformation);
 	FReentrantDispatchContext Context{};
@@ -400,8 +409,8 @@ MW_TEST_CASE(MessagingSystem_SkipsSubscriptionsAddedDuringAnActiveSend)
 	Context.OuterMessageNameId = "Outer";
 	Context.NestedMessageNameId = "Nested";
 	FReentrantSubscriber ReentrantSubscriber{&Context};
-	FDefaultSubscriberDelegate ReentrantDelegate;
-	FDefaultSubscriberDelegate NestedDelegate;
+	FSubscriberDelegate ReentrantDelegate;
+	FSubscriberDelegate NestedDelegate;
 	const EDelegateResult ReentrantBindingResult = ReentrantDelegate.Bind(std::move(ReentrantSubscriber));
 	const EDelegateResult NestedBindingResult = NestedDelegate.Bind([&Context](const FMessage&) noexcept { ++Context.NestedDeliveryCount; });
 	const EMessagingResult ReentrantSubscribeResult = System.SubscribeToChannel("Telemetry", std::move(ReentrantDelegate));
@@ -422,6 +431,7 @@ MW_TEST_CASE(MessagingSystem_SkipsSubscriptionsAddedDuringAnActiveSend)
 		Test, EMessagingResult::Success, FirstOuterSendResult, "The outer send should complete while a subscriber adds another subscription");
 	MW_EXPECT_EQ(Test, EMessagingResult::Success, Context.AddedSubscriberResult, "The callback should add its subscriber during outer delivery");
 	MW_EXPECT_EQ(Test, EMessagingResult::Success, Context.NestedSendResult, "The callback should complete one nested send");
+	MW_EXPECT_EQ(Test, std::size_t{1}, Context.ActiveSubscriberDeliveryCount, "The nested send should not re-enter its active subscriber");
 	MW_EXPECT_EQ(Test, std::size_t{1}, Context.NestedDeliveryCount, "The nested send should deliver exactly once without recursive repetition");
 	MW_EXPECT_EQ(
 		Test, std::size_t{0}, Context.AddedSubscriberDeliveryCount, "The subscriber added during dispatch should not receive the active outer send");
@@ -431,6 +441,7 @@ MW_TEST_CASE(MessagingSystem_SkipsSubscriptionsAddedDuringAnActiveSend)
 
 	// Assert
 	MW_EXPECT_EQ(Test, EMessagingResult::Success, SecondOuterSendResult, "The next outer send should complete after subscription growth");
+	MW_EXPECT_EQ(Test, std::size_t{2}, Context.ActiveSubscriberDeliveryCount, "The active subscriber should run once per independent outer send");
 	MW_EXPECT_EQ(
 		Test, std::size_t{1}, Context.AddedSubscriberDeliveryCount, "The newly added subscriber should receive the next outer send exactly once");
 }
@@ -442,13 +453,13 @@ MW_TEST_CASE(MessagingSystem_SkipsSubscriptionsAddedDuringAnActiveSend)
 MW_TEST_CASE(MessagingSystem_SeparatesSubscribersByChannelName)
 {
 	// Arrange
-	FDefaultMessagingSystem System;
+	FMessagingSystem System;
 	const FChannelInformation FirstChannelInformation{"Telemetry", false, nullptr, {}};
 	const FChannelInformation SecondChannelInformation{"Commands", false, nullptr, {}};
 	const EMessagingResult FirstCreateResult = System.CreateChannel(FirstChannelInformation);
 	const EMessagingResult SecondCreateResult = System.CreateChannel(SecondChannelInformation);
 	std::size_t DeliveryCount = 0;
-	FDefaultSubscriberDelegate Subscriber;
+	FSubscriberDelegate Subscriber;
 	const EDelegateResult BindingResult = Subscriber.Bind([&DeliveryCount](const FMessage&) noexcept { ++DeliveryCount; });
 	const EMessagingResult SubscribeResult = System.SubscribeToChannel("Telemetry", std::move(Subscriber));
 	FMessage Message;

@@ -5,13 +5,13 @@
 #include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Core/IO/TransportResult.h>
 #include <MicroWorld/Messaging/ChannelInformation.h>
-#include <MicroWorld/Messaging/DefaultMessagingTraits.h>
 #include <MicroWorld/Messaging/Message.h>
 #include <MicroWorld/Messaging/MessagingResult.h>
 #include <MicroWorld/Messaging/MessagingSystem.h>
 #include <MicroWorld/Messaging/MessagingSystemInformation.h>
 #include <MicroWorld/Transport/LoopbackNetwork.h>
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <utility>
@@ -29,19 +29,17 @@ using MicroWorld::Core::TimePointMilliseconds;
 using MicroWorld::Core::TSpan;
 using MicroWorld::Messaging::EMessagingResult;
 using MicroWorld::Messaging::FChannelInformation;
-using MicroWorld::Messaging::FDefaultMessagingTraits;
 using MicroWorld::Messaging::FMessage;
 using MicroWorld::Messaging::FMessagingSystemInformation;
 using MicroWorld::Messaging::FNameId;
 using MicroWorld::Messaging::MessageAcknowledgementNameId;
-using MicroWorld::Messaging::TMessagingSystem;
 using MicroWorld::Transport::TLoopbackNetwork;
 
-/** Motivation: Names the standard system whose frame limit the wire-path cases exercise. */
-using FDefaultMessagingSystem = TMessagingSystem<>;
+/** Motivation: Names the concrete system whose fixed frame limit the wire-path cases exercise. */
+using FMessagingSystem = MicroWorld::Messaging::FMessagingSystem;
 
-/** Motivation: Names the standard bounded subscriber delegate without repeating its system-qualified declaration. */
-using FDefaultSubscriberDelegate = FDefaultMessagingSystem::FSubscriberDelegate;
+/** Motivation: Names the concrete bounded subscriber delegate without repeating its system-qualified declaration. */
+using FSubscriberDelegate = FMessagingSystem::FSubscriberDelegate;
 
 /** Motivation: Identifies the port that originates cross-system test traffic. */
 constexpr std::uint8_t SendingPort = 0;
@@ -53,12 +51,12 @@ constexpr std::size_t TwoPorts = 2;
 constexpr std::size_t OneMailboxSlot = 1;
 /** Motivation: Retains two raw frames for shared-device draining in one receiver turn. */
 constexpr std::size_t TwoMailboxSlots = 2;
-/** Motivation: Gives ordinary wire cases enough capacity for a complete default Messaging frame. */
-constexpr std::size_t StandardPacketBytes = FDefaultMessagingSystem::MaxFrameBytes;
-/** Motivation: Makes a device reject a valid default Messaging frame that is larger than this transport packet limit. */
-constexpr std::size_t SmallerThanFramePacketBytes = FDefaultMessagingSystem::FrameHeaderBytes + 1;
-/** Motivation: Makes direct inbound traffic exceed the receiving default Messaging frame buffer by one byte. */
-constexpr std::size_t LargerThanFramePacketBytes = FDefaultMessagingSystem::MaxFrameBytes + 1;
+/** Motivation: Gives ordinary wire cases enough capacity for a complete concrete Messaging frame. */
+constexpr std::size_t StandardPacketBytes = FMessagingSystem::MaxFrameBytes;
+/** Motivation: Makes a device reject a valid concrete Messaging frame that is larger than this transport packet limit. */
+constexpr std::size_t SmallerThanFramePacketBytes = FMessagingSystem::FrameHeaderBytes + 1;
+/** Motivation: Makes direct inbound traffic exceed the receiving concrete Messaging frame buffer by one byte. */
+constexpr std::size_t LargerThanFramePacketBytes = FMessagingSystem::MaxFrameBytes + 1;
 // The frame layout below is restated here on purpose, independently of the production constants. A test that imported the encoder's own
 // offsets would agree with any layout the encoder happened to produce, including a wrong one.
 /** Motivation: Names the number of bytes used by one 32-bit encoded name id. */
@@ -73,6 +71,8 @@ constexpr std::size_t MessageNameIdByteIndex = ChannelNameIdByteIndex + NameIdBy
 constexpr std::size_t WireHeaderBytes = MessageNameIdByteIndex + NameIdBytes;
 /** Motivation: Names the two-byte fixed reliable sequence sub-header independently of production constants. */
 constexpr std::size_t SequenceNumberBytes = sizeof(std::uint16_t);
+/** Motivation: Keeps the reliable payload-budget device ceiling above both candidate Messaging frame sizes. */
+constexpr std::size_t ReliableBudgetProbePacketBytes = FMessagingSystem::MaxFrameBytes + SequenceNumberBytes + 1;
 /** Motivation: Names the complete acknowledgement packet length: two ids followed by one acknowledged sequence number. */
 constexpr std::size_t AcknowledgementFrameByteCount = WireHeaderBytes + SequenceNumberBytes;
 /** Motivation: States the number of bytes used by the ordinary cross-system payload. */
@@ -81,8 +81,10 @@ constexpr std::size_t WirePayloadByteCount = 3;
 constexpr std::size_t ShortReliablePayloadByteCount = SequenceNumberBytes - 1;
 /** Motivation: States the one-byte malformed acknowledgement payload that cannot contain one complete sequence number. */
 constexpr std::size_t InvalidAcknowledgementPayloadByteCount = SequenceNumberBytes - 1;
-/** Motivation: States the number of bytes delivered locally before an oversized wire frame is rejected. */
-constexpr std::size_t OversizedLocalPayloadByteCount = 3;
+/** Motivation: States the exact concrete application payload boundary accepted by best-effort framing. */
+constexpr std::size_t MaximumPayloadByteCount = FMessagingSystem::MaxMessageBytes;
+/** Motivation: States the one-byte-over concrete payload rejected before device transmission. */
+constexpr std::size_t OversizedLocalPayloadByteCount = MaximumPayloadByteCount + 1;
 /** Motivation: States the number of bytes accepted locally before a small device rejects the wire frame. */
 constexpr std::size_t DeviceRejectedPayloadByteCount = 3;
 /** Motivation: States the number of bytes in a raw packet that cannot fit the receiver's frame buffer. */
@@ -135,7 +137,7 @@ constexpr TimePointMilliseconds FarAfterAcknowledgementTurnMilliseconds = Reliab
 constexpr TimePointMilliseconds BackwardsReliableTurnMilliseconds = 0;
 /** Motivation: Fixes the exact total sends a budget-exhaustion test permits. */
 constexpr std::uint8_t ReliableAttemptBudget = 3;
-/** Motivation: Names how many packets one exhausted attempt budget produces, which is both the mailbox depth and the expected peer count. */
+/** Motivation: Names the exact peer packet count produced before one reliable attempt budget is exhausted. */
 constexpr std::size_t ReliableAttemptPacketCount = ReliableAttemptBudget;
 /** Motivation: Names one dropped send, which forces exactly one retry. */
 constexpr std::size_t OneDroppedSend = 1;
@@ -150,7 +152,23 @@ constexpr std::uint8_t WirePayload[WirePayloadByteCount] = {11, 22, 33};
 constexpr std::uint8_t ShortReliablePayload[ShortReliablePayloadByteCount] = {71};
 /** Motivation: Supplies an acknowledgement payload that is too short to name a sequence. */
 constexpr std::uint8_t InvalidAcknowledgementPayload[InvalidAcknowledgementPayloadByteCount] = {72};
-/** Motivation: Supplies a payload that exceeds the small test system's wire frame budget by one byte. */
+/** Motivation: Makes the final maximum-payload byte observable in a complete captured wire frame. */
+constexpr std::uint8_t MaximumPayloadFinalByte = 82;
+
+/**
+ * Motivation: Supplies a maximum-sized payload whose final byte proves the encoder copied the complete application boundary.
+ * Responsibilities: Return a zero-filled maximum payload with MaximumPayloadFinalByte in its final position.
+ */
+constexpr std::array<std::uint8_t, MaximumPayloadByteCount> MakeMaximumPayload() noexcept
+{
+	std::array<std::uint8_t, MaximumPayloadByteCount> Payload{};
+	Payload[MaximumPayloadByteCount - 1] = MaximumPayloadFinalByte;
+	return Payload;
+}
+
+/** Motivation: Supplies a payload that exactly fills the concrete best-effort application budget. */
+constexpr std::array<std::uint8_t, MaximumPayloadByteCount> MaximumPayload = MakeMaximumPayload();
+/** Motivation: Supplies a payload that exceeds the concrete Messaging frame budget by one byte. */
 constexpr std::uint8_t OversizedLocalPayload[OversizedLocalPayloadByteCount] = {41, 42, 43};
 /** Motivation: Supplies a payload valid for Messaging but larger than the selected device packet capacity once framed. */
 constexpr std::uint8_t DeviceRejectedPayload[DeviceRejectedPayloadByteCount] = {51, 52, 53};
@@ -162,6 +180,9 @@ constexpr std::uint8_t OversizedInboundFrame[OversizedInboundFrameByteCount] = {
 constexpr std::uint8_t UnmatchedAcknowledgementPayload[SequenceNumberBytes] = {
 	static_cast<std::uint8_t>(UnmatchedAcknowledgementSequenceNumber),
 	static_cast<std::uint8_t>(UnmatchedAcknowledgementSequenceNumber >> BitsPerByte)};
+/** Motivation: Supplies the first reliable sequence in documented little-endian acknowledgement order. */
+constexpr std::uint8_t FirstSequenceAcknowledgementPayload[SequenceNumberBytes] = {
+	static_cast<std::uint8_t>(FirstSequenceNumber), static_cast<std::uint8_t>(FirstSequenceNumber >> BitsPerByte)};
 
 /**
  * Motivation: Captures delivered wire-message facts after Messaging releases its transient inbound payload view.
@@ -275,36 +296,30 @@ struct FRawWireFrame final
 		return static_cast<std::uint16_t>(ReadUnsignedLittleEndian(InSource, SequenceNumberBytes));
 	}
 
-	/** Motivation: Retains the full default-sized frame buffer for direct loopback sends. */
-	std::uint8_t Bytes[FDefaultMessagingSystem::MaxFrameBytes]{};
+	/** Motivation: Retains the full concrete-sized frame buffer for direct loopback sends. */
+	std::uint8_t Bytes[FMessagingSystem::MaxFrameBytes]{};
 
 	/** Motivation: Records how many leading frame bytes are valid for the direct loopback send. */
 	std::size_t Size{0};
 };
 
 /**
- * Motivation: Shrinks the Messaging frame limit so the local-before-wire-failure contract has a compact boundary input.
- * Responsibilities: Override only the message payload capacity while inheriting every future default trait member unchanged.
- * Example:
- *   TMessagingSystem<FSmallFrameMessagingTraits> System;
+ * Motivation: Reaches the concrete reliable-pending boundary without inspecting private retry storage.
+ * Responsibilities: On a new reliable channel with empty pending storage and sufficient device capacity, send exactly the pending limit.
  */
-struct FSmallFrameMessagingTraits : FDefaultMessagingTraits
+inline EMessagingResult FillReliablePendingSlots(FMessagingSystem& InSystem, const FMessage& InMessage, const FNameId InChannelNameId) noexcept
 {
-	/** Motivation: Limits the test system's application payload to two bytes before the wire header is added. */
-	static constexpr std::size_t MaxMessageBytes = 2;
-};
+	for (std::size_t PendingIndex = 0; PendingIndex < FMessagingSystem::MaxReliablePendingMessages; ++PendingIndex)
+	{
+		const EMessagingResult SendResult = InSystem.SendMessageToChannel(InMessage, InChannelNameId);
+		if (SendResult != EMessagingResult::Success)
+		{
+			return SendResult;
+		}
+	}
 
-/**
- * Motivation: Makes reliable pending-capacity behavior observable with one occupied slot.
- * Responsibilities: Override only reliable pending capacity while preserving every other default trait limit.
- * Example:
- *   TMessagingSystem<FSingleReliablePendingMessagingTraits> System;
- */
-struct FSingleReliablePendingMessagingTraits : FDefaultMessagingTraits
-{
-	/** Motivation: Limits the test system to exactly one reliable frame awaiting acknowledgement. */
-	static constexpr std::size_t MaxReliablePendingMessages = 1;
-};
+	return EMessagingResult::Success;
+}
 
 /**
  * Motivation: Simulates deterministic initial packet loss without adding a production-only transport device.
@@ -389,8 +404,5 @@ private:
 	/** Motivation: Records all send calls so bounded retry behavior stays externally observable. */
 	std::size_t SendAttemptCount{0};
 };
-
-/** Motivation: Supplies a payload that exactly fills the small best-effort application budget. */
-constexpr std::uint8_t SmallFramePayload[FSmallFrameMessagingTraits::MaxMessageBytes] = {81, 82};
 
 } // namespace MicroWorld::Tests

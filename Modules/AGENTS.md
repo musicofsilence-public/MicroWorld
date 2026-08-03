@@ -13,9 +13,9 @@ and `benchmarks/`, outside `MicroWorld/` so the library's recursive `srcDir`
 never compiles them. Dependencies point inward:
 
 ```text
-Core <- Engine
 Core <- Messaging
 Core <- Transport
+Core, Messaging <- Engine
 Core, Engine <- Application
 ```
 

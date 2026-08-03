@@ -7,7 +7,6 @@
 #include <MicroWorld/Engine/ObjectPtr.h>
 #include <MicroWorld/Engine/World.h>
 #include <MicroWorld/Messaging/ChannelInformation.h>
-#include <MicroWorld/Messaging/DefaultMessagingTraits.h>
 #include <MicroWorld/Messaging/Message.h>
 #include <MicroWorld/Messaging/MessagingResult.h>
 #include <MicroWorld/Messaging/MessagingSystemInformation.h>
@@ -26,7 +25,6 @@ using MicroWorld::Core::TimePointMilliseconds;
 using MicroWorld::Engine::EEngineResult;
 using MicroWorld::Messaging::EMessagingResult;
 using MicroWorld::Messaging::FChannelInformation;
-using MicroWorld::Messaging::FDefaultMessagingTraits;
 using MicroWorld::Messaging::FMessage;
 using MicroWorld::Messaging::FMessagingSystem;
 using MicroWorld::Messaging::FMessagingSystemInformation;
@@ -127,13 +125,13 @@ MW_TEST_CASE(EngineMessagingDestroyedActorOwnedSubscriptionIsSkippedAndReclaimed
 }
 
 /**
- * Motivation: Fill the engine-owned Messaging system with one actor owner's default-capacity subscriptions, then destroy that owner.
+ * Motivation: Fill the engine-owned Messaging system with one actor owner's concrete-capacity subscriptions, then destroy that owner.
  * Responsibilities: One subsequent delivery pass reclaims every dead-owner subscription and reports the cumulative
  *   reclamation count.
  */
-MW_TEST_CASE(EngineMessagingReclaimsDestroyedOwnerSubscriptionsAtDefaultCapacity)
+MW_TEST_CASE(EngineMessagingReclaimsDestroyedOwnerSubscriptionsAtConcreteCapacity)
 {
-	/** Motivation: Names the channel that holds the default-capacity subscription set. */
+	/** Motivation: Names the channel that holds the concrete-capacity subscription set. */
 	constexpr FNameId CapacityReuseChannelNameId = MakeNameId("CapacityReuseChannel");
 
 	/** Motivation: Names the message that triggers dead-owner reclamation during local routing. */
@@ -142,8 +140,8 @@ MW_TEST_CASE(EngineMessagingReclaimsDestroyedOwnerSubscriptionsAtDefaultCapacity
 	/** Motivation: Keeps capacity reclamation local and free of transport reliability behavior. */
 	constexpr bool bCapacityReuseChannelIsReliable = false;
 
-	/** Motivation: States the fixed subscription capacity of the engine-owned default Messaging alias. */
-	constexpr std::size_t DefaultMessagingSubscriptionCapacity = FDefaultMessagingTraits::MaxSubscriptions;
+	/** Motivation: States the fixed subscription capacity of the engine-owned concrete Messaging system. */
+	constexpr std::size_t MessagingSubscriptionCapacity = FMessagingSystem::MaxSubscriptions;
 
 	/** Motivation: Starts the world before the common subscription owner is destroyed. */
 	constexpr TimePointMilliseconds CapacityReuseBeginPlayMilliseconds{2000};
@@ -151,8 +149,8 @@ MW_TEST_CASE(EngineMessagingReclaimsDestroyedOwnerSubscriptionsAtDefaultCapacity
 	/** Motivation: Applies destruction and reclaims the common actor owner. */
 	constexpr TimePointMilliseconds CapacityReuseDestructionTickMilliseconds{2010};
 
-	/** Motivation: States that every default-capacity owner subscription must be reclaimed. */
-	constexpr std::uint32_t ExpectedReclaimedSubscriptionCount = static_cast<std::uint32_t>(DefaultMessagingSubscriptionCapacity);
+	/** Motivation: States that every concrete-capacity owner subscription must be reclaimed. */
+	constexpr std::uint32_t ExpectedReclaimedSubscriptionCount = static_cast<std::uint32_t>(MessagingSubscriptionCapacity);
 
 	// Arrange
 	FEngine Engine{EngineMessagingCollectionBudget};
@@ -174,7 +172,7 @@ MW_TEST_CASE(EngineMessagingReclaimsDestroyedOwnerSubscriptionsAtDefaultCapacity
 	const FWeakOwner Owner = MicroWorld::Engine::MakeWeakOwner(Engine.GetObjectStore(), ActorCreation.Object.Handle());
 	bool bAllSubscribersBound = true;
 	bool bAllSubscriptionsRegistered = true;
-	for (std::size_t SubscriberIndex = 0; SubscriberIndex < DefaultMessagingSubscriptionCapacity; ++SubscriberIndex)
+	for (std::size_t SubscriberIndex = 0; SubscriberIndex < MessagingSubscriptionCapacity; ++SubscriberIndex)
 	{
 		FSubscriberDelegate Subscriber;
 		const EDelegateResult BindResult = Subscriber.Bind([](const FMessage&) noexcept {});
@@ -206,8 +204,8 @@ MW_TEST_CASE(EngineMessagingReclaimsDestroyedOwnerSubscriptionsAtDefaultCapacity
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, CreateMessagingResult, "The engine should create Messaging for capacity reclamation");
 	MW_EXPECT_TRUE(Test, bMessagingSystemCreated, "The engine should expose Messaging for capacity reclamation");
 	MW_EXPECT_EQ(Test, EMessagingResult::Success, CreateChannelResult, "The capacity reclamation channel should be created");
-	MW_EXPECT_TRUE(Test, bAllSubscribersBound, "Every default-capacity dead-owner subscriber should bind");
-	MW_EXPECT_TRUE(Test, bAllSubscriptionsRegistered, "Every default-capacity dead-owner subscription should register");
+	MW_EXPECT_TRUE(Test, bAllSubscribersBound, "Every concrete-capacity dead-owner subscriber should bind");
+	MW_EXPECT_TRUE(Test, bAllSubscriptionsRegistered, "Every concrete-capacity dead-owner subscription should register");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, RegisterActorResult, "The capacity owner actor should register with the world");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, BeginPlayResult, "The capacity owner world should begin play");
 	MW_EXPECT_EQ(Test, EEngineResult::Success, DestroyResult, "The capacity owner actor should queue for destruction");
@@ -217,7 +215,7 @@ MW_TEST_CASE(EngineMessagingReclaimsDestroyedOwnerSubscriptionsAtDefaultCapacity
 		Test,
 		ExpectedReclaimedSubscriptionCount,
 		ReclaimedSubscriptionCount,
-		"The delivery pass should reclaim every default-capacity dead-owner subscription");
+		"The delivery pass should reclaim every concrete-capacity dead-owner subscription");
 }
 
 /**

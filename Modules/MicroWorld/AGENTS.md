@@ -11,9 +11,9 @@ opening this directory sees the six systems without consulting `.c4` metadata.
 Dependencies point inward:
 
 ```text
-Core <- Engine
 Core <- Messaging
 Core <- Transport
+Core, Messaging <- Engine
 Core, Engine <- Application
 ```
 

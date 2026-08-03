@@ -3,7 +3,8 @@
 MicroWorld ships the portable systems as one package and each non-portable
 platform edge as its own. Boundaries are enforced by the dependency gate and by
 per-system CMake targets, not by splitting the shipped package — so a small
-application still avoids compiling source it does not use.
+application still keeps unreferenced object code out of firmware through static
+archive linking.
 
 ## Architecture view
 
