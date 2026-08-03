@@ -416,9 +416,15 @@ MW_TEST_CASE(EngineHostGarbageCollectorReclaimsUnrootedObjectsInBoundedSlices)
 	MW_EXPECT_EQ(
 		Test, std::uint32_t{6}, Host.GetObjectStore().Stats().OccupiedSlots, "World, actor, component, and three garbage objects occupy six slots");
 
-	// Act - the first bounded GC slice cannot reclaim all garbage at once
+	// Act - the first bounded GC slice cannot complete the mark phase (the {1,1,2} budget traces the
+	// world root then one reachable object before exhausting its mark budget), so no slot is reclaimed yet
+	// and all six occupied slots survive the first tick.
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, Host.Tick(10), "The first bounded GC slice reports success");
-	MW_EXPECT_TRUE(Test, Host.GetObjectStore().Stats().OccupiedSlots > std::uint32_t{3}, "One bounded slice cannot reclaim all garbage at once");
+	MW_EXPECT_EQ(
+		Test,
+		std::uint32_t{6},
+		Host.GetObjectStore().Stats().OccupiedSlots,
+		"One bounded slice cannot complete the mark phase, so no garbage is reclaimed on the first tick");
 
 	// Act - successive bounded slices reclaim the remaining garbage
 	for (MicroWorld::Core::TimePointMilliseconds Now = 20; Now <= 200; Now += 10)

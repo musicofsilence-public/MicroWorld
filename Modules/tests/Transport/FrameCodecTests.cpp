@@ -1,6 +1,6 @@
 #include "TestSupport.h"
 
-#include "TransportAllocationCounters.h"
+#include "CoreAllocationCounters.h"
 
 #include <MicroWorld/Core/Containers/Span.h>
 #include <MicroWorld/Core/IO/TransportResult.h>

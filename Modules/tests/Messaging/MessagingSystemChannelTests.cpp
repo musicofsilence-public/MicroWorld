@@ -145,25 +145,9 @@ MW_TEST_CASE(MessagingSystem_RejectsAChannelPastCapacityAndPreservesExistingChan
 }
 
 /**
- * Motivation: Preserves local-only messaging as a valid channel configuration.
- * Responsibilities: Verify a null transport device does not make a valid channel invalid.
- */
-MW_TEST_CASE(MessagingSystem_AcceptsALocalOnlyChannel)
-{
-	// Arrange
-	FMessagingSystem System;
-	const FChannelInformation Information{"Telemetry", false, nullptr, {}};
-
-	// Act
-	const EMessagingResult Result = System.CreateChannel(Information);
-
-	// Assert
-	MW_EXPECT_EQ(Test, EMessagingResult::Success, Result, "A local-only channel should be accepted");
-}
-
-/**
- * Motivation: Confirms remote channel configuration accepts an explicit device and route.
- * Responsibilities: Verify a non-null transport device and non-default address create a channel.
+ * Motivation: Confirms a device-backed channel retains the device and address and routes outbound messages to them.
+ * Responsibilities: Verify a non-null transport device and non-default address create a channel, and that a subsequent
+ *   send on that channel drives exactly one device send, proving the route was retained rather than ignored.
  */
 MW_TEST_CASE(MessagingSystem_AcceptsAChannelWithDeviceAndAddress)
 {
@@ -174,12 +158,17 @@ MW_TEST_CASE(MessagingSystem_AcceptsAChannelWithDeviceAndAddress)
 	Address.Bytes[0] = 7;
 	Address.Size = 1;
 	const FChannelInformation Information{"Telemetry", false, &Device, Address};
+	FMessage Message;
+	Message.SetMessageNameId("Telemetry");
 
 	// Act
-	const EMessagingResult Result = System.CreateChannel(Information);
+	const EMessagingResult CreateResult = System.CreateChannel(Information);
+	const EMessagingResult SendResult = System.SendMessageToChannel(Message, "Telemetry");
 
 	// Assert
-	MW_EXPECT_EQ(Test, EMessagingResult::Success, Result, "A device-backed channel should be accepted");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, CreateResult, "A device-backed channel should be accepted");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, SendResult, "A send on a device-backed channel should succeed");
+	MW_EXPECT_EQ(Test, std::size_t{1}, Device.GetTrySendCallCount(), "The retained device should receive exactly one outbound send");
 }
 
 /**

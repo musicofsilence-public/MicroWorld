@@ -28,31 +28,10 @@ using MicroWorld::Engine::TClassRegistry;
 using MicroWorld::Engine::TObjectPtr;
 using MicroWorld::Engine::UActorComponent;
 using MicroWorld::Engine::UWorld;
+using MicroWorld::Tests::FEngineEnvironmentSlots16;
+using MicroWorld::Tests::FPlainActor;
+using MicroWorld::Tests::FPlainComponent;
 using MicroWorld::Tests::TEngineEnvironment;
-
-/**
- * Motivation: A minimal component used by registration rejection tests.
- * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
- * Example:
- *   // Construct and exercise the type in one behavior test.
- */
-class FPlainComponent final : public UActorComponent
-{
-public:
-	FPlainComponent() noexcept : UActorComponent() {}
-};
-
-/**
- * Motivation: A minimal actor used by registration rejection tests.
- * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
- * Example:
- *   // Construct and exercise the type in one behavior test.
- */
-class FPlainActor final : public AActor
-{
-public:
-	explicit FPlainActor() noexcept : AActor() {}
-};
 
 constexpr MicroWorld::Engine::FTypeId PlainActorTypeId{0x00020001u};
 constexpr MicroWorld::Engine::FTypeId PlainComponentTypeId{0x00020002u};
@@ -63,8 +42,8 @@ constexpr MicroWorld::Core::TimePointMilliseconds BaselineTimeMilliseconds{0};
 /** Motivation: Fixed capacity of the GC worklist used by the active-collection guard test. */
 constexpr std::uint32_t CollectorWorklistCapacity = 16;
 
-/** Motivation: Environment sized for registration tests with capacity for several actors and components. */
-using FRegistrationEnvironment = TEngineEnvironment<256, 16, 16, 4>;
+/** Motivation: Environment sized for registration tests, aliasing the shared 16-slot shape. */
+using FRegistrationEnvironment = FEngineEnvironmentSlots16;
 
 /**
  * Motivation: Builds a plain actor in the environment through its own derived descriptor.

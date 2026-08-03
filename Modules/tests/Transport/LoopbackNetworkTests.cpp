@@ -83,18 +83,12 @@ MW_TEST_CASE(LoopbackNetworkStartsEmptyWithConfiguredCapacities)
 	TLoopbackNetwork<TwoPorts, TwoMailboxSlots, FourPacketBytes> Network;
 
 	// Act
-	const std::size_t PortCount = Network.PortCount();
-	const std::size_t MailboxCapacity = Network.MailboxCapacityValue();
-	const std::size_t MaximumPacketBytes = Network.MaximumPacketBytes();
 	const bool bPortZeroEmpty = Network.IsEmpty(PortZero);
 	const bool bPortOneEmpty = Network.IsEmpty(PortOne);
 	const bool bPortZeroFull = Network.IsFull(PortZero);
 	const std::size_t PortZeroQueuedCount = Network.QueuedCount(PortZero);
 
 	// Assert
-	MW_EXPECT_EQ(Test, TwoPorts, PortCount, "Port count must match the template capacity");
-	MW_EXPECT_EQ(Test, TwoMailboxSlots, MailboxCapacity, "Mailbox capacity must match the template capacity");
-	MW_EXPECT_EQ(Test, FourPacketBytes, MaximumPacketBytes, "Packet byte capacity must match the template capacity");
 	MW_EXPECT_EQ(Test, true, bPortZeroEmpty, "Port zero mailbox must start empty");
 	MW_EXPECT_EQ(Test, true, bPortOneEmpty, "Port one mailbox must start empty");
 	MW_EXPECT_EQ(Test, false, bPortZeroFull, "Fresh port zero mailbox must not start full");

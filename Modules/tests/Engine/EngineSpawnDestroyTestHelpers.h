@@ -75,14 +75,11 @@ constexpr TimePointMilliseconds BarrierTimeMilliseconds{10};
 /** Motivation: World time used to advance survivors after a destroy barrier in the order-preservation tests. */
 constexpr TimePointMilliseconds SurvivorAdvanceTimeMilliseconds{20};
 
-/** Motivation: Fixed capacity of the GC fixture worklist, large enough for every reachable object in these tests. */
-constexpr std::uint32_t CollectorWorklistCapacity = 16;
-
 /** Motivation: Per-call upper bound on objects the store destruction barrier reclaims in one call. */
 constexpr std::uint32_t MaxObjectsReclaimedPerBarrier = 16;
 
-/** Motivation: Environment sized for spawn/destroy tests with room for several actors and components. */
-using FSpawnDestroyEnvironment = TEngineEnvironment<256, 16, 16, 4>;
+/** Motivation: Environment sized for spawn/destroy tests, aliasing the shared 16-slot shape. */
+using FSpawnDestroyEnvironment = FEngineEnvironmentSlots16;
 
 /**
  * Motivation: A component that records begin/tick/end ordering into per-instance state.
@@ -193,38 +190,6 @@ private:
 };
 
 /**
- * Motivation: A minimal component used where lifetime ordering does not need observing.
- * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
- * Example:
- *   // Construct and exercise the type in one behavior test.
- */
-class FPlainComponent final : public UActorComponent
-{
-public:
-	/**
-	 * Motivation: Constructs a component with the default (non-ticking) configuration.
-	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
-	 */
-	FPlainComponent() noexcept : UActorComponent() {}
-};
-
-/**
- * Motivation: A minimal actor used where lifetime ordering does not need observing.
- * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
- * Example:
- *   // Construct and exercise the type in one behavior test.
- */
-class FPlainActor final : public AActor
-{
-public:
-	/**
-	 * Motivation: Constructs a plain actor with direct fixed component storage.
-	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
-	 */
-	explicit FPlainActor() noexcept : AActor() {}
-};
-
-/**
  * Motivation: Builds one ordering actor through its derived descriptor in the environment.
  * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
  */
@@ -252,34 +217,6 @@ inline TObjectPtr<FPlainActor> MakePlainActor(FSpawnDestroyEnvironment& InEnv) n
 {
 	return InEnv.CreateDerivedObject<FPlainActor>(PlainActorTypeId, "PlainActor");
 }
-
-/**
- * Motivation: Owns a fixed worklist and collector bound to an environment's store for GC assertions.
- * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
- * Example:
- *   // Construct and exercise the type in one behavior test.
- */
-class FCollectorFixture final
-{
-public:
-	/**
-	 * Motivation: Binds a collector to the store using this fixture's caller-owned worklist storage.
-	 * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
-	 */
-	explicit FCollectorFixture(FObjectStore& InStore) noexcept : Collector(InStore, FGarbageCollectorStorage{Worklist, CollectorWorklistCapacity}) {}
-
-	/**
-	 * Motivation: Tests can run a full cycle and read its stats.
-	 * Responsibilities: Exposes the collector.
-	 */
-	FGarbageCollector& GetCollector() noexcept { return Collector; }
-
-private:
-	/** Motivation: Backs the collector's reachable-object queue without heap storage. */
-	FObjectHandle Worklist[CollectorWorklistCapacity]{};
-	/** Motivation: Owns the collector bound to this fixture's worklist for the test's lifetime. */
-	FGarbageCollector Collector;
-};
 
 /**
  * Motivation: Builds a fresh standalone store so cross-store tests can use a foreign owner.

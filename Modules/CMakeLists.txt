@@ -323,7 +323,7 @@ if(MICROWORLD_BUILD_TESTS)
     # --- Engine tests (was Object + Engine) ---
     set(MICROWORLD_ENGINE_TEST_SOURCES
         "${MICROWORLD_TESTS_ROOT}/Core/TestMain.cpp"
-        "${MICROWORLD_TESTS_ROOT}/Engine/EngineAllocationCounters.cpp"
+        "${MICROWORLD_TESTS_ROOT}/Core/CoreAllocationCounters.cpp"
         "${MICROWORLD_TESTS_ROOT}/Engine/EngineLifecycleTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Engine/EngineRegistrationTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Engine/EngineSpawnDestroyBarrierTests.cpp"
@@ -357,7 +357,7 @@ if(MICROWORLD_BUILD_TESTS)
     # --- Messaging tests ---
     set(MICROWORLD_MESSAGING_TEST_SOURCES
         "${MICROWORLD_TESTS_ROOT}/Core/TestMain.cpp"
-        "${MICROWORLD_TESTS_ROOT}/Engine/EngineAllocationCounters.cpp"
+        "${MICROWORLD_TESTS_ROOT}/Core/CoreAllocationCounters.cpp"
         "${MICROWORLD_TESTS_ROOT}/Messaging/NameIdTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Messaging/MessageTypesTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Messaging/MessagingSystemChannelTests.cpp"
@@ -387,7 +387,7 @@ if(MICROWORLD_BUILD_TESTS)
     # --- Transport tests (was Net + RadioE32) ---
     set(microworld_transport_TEST_SOURCES
         "${MICROWORLD_TESTS_ROOT}/Core/TestMain.cpp"
-        "${MICROWORLD_TESTS_ROOT}/Transport/TransportAllocationCounters.cpp"
+        "${MICROWORLD_TESTS_ROOT}/Core/CoreAllocationCounters.cpp"
         "${MICROWORLD_TESTS_ROOT}/Transport/ByteWriterTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Transport/ByteReaderTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Transport/E32LoraTests.cpp"

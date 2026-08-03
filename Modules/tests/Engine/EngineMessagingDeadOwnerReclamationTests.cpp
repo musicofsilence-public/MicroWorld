@@ -219,11 +219,12 @@ MW_TEST_CASE(EngineMessagingReclaimsDestroyedOwnerSubscriptionsAtConcreteCapacit
 }
 
 /**
- * Motivation: Capture a weak owner from an actor handle only after the actor has been reclaimed.
- * Responsibilities: A stale handle produces a dead owner token, so subscription fails without storing a callback that
- *   could later receive a message.
+ * Motivation: A subscription attempted against an already-reclaimed actor handle is rejected up front rather than stored
+ *   as a dead-owner subscription.
+ * Responsibilities: A stale handle resolves to a dead owner token, so SubscribeToChannel rejects with Invalid without
+ *   storing a callback; a later send therefore delivers nothing and requires no dead-owner reclamation.
  */
-MW_TEST_CASE(EngineMessagingStaleActorHandleOwnerSubscriptionIsInvalidAndNeverDelivers)
+MW_TEST_CASE(EngineMessagingStaleActorHandleOwnerSubscriptionIsRejectedAndNeverDelivers)
 {
 	/** Motivation: Names the channel used to exercise stale-owner subscription validation. */
 	constexpr FNameId StaleOwnerChannelNameId = MakeNameId("StaleOwnerChannel");
@@ -296,7 +297,7 @@ MW_TEST_CASE(EngineMessagingStaleActorHandleOwnerSubscriptionIsInvalidAndNeverDe
 	MW_EXPECT_EQ(Test, EEngineResult::Success, DestroyResult, "The stale owner actor should queue for destruction");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, DestructionTickResult, "The stale owner destruction tick should complete");
 	MW_EXPECT_EQ(Test, EDelegateResult::Success, BindResult, "The stale-owner subscriber should bind");
-	MW_EXPECT_EQ(Test, EMessagingResult::Invalid, SubscribeResult, "A stale actor owner should reject subscription");
+	MW_EXPECT_EQ(Test, EMessagingResult::Invalid, SubscribeResult, "A stale actor owner should reject subscription up front");
 	MW_EXPECT_EQ(Test, EMessagingResult::Success, SendResult, "A message after stale-owner rejection should send successfully");
 	MW_EXPECT_EQ(Test, ExpectedStaleOwnerDeliveryCount, DeliveryCount, "A rejected stale-owner subscription should never receive delivery");
 	MW_EXPECT_EQ(

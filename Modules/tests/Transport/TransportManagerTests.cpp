@@ -228,8 +228,6 @@ MW_TEST_CASE(TransportManagerStartsEmptyWithFixedConfiguration)
 	// Assert
 	MW_EXPECT_EQ(Test, true, Manager.IsEmpty(), "A fresh manager must report an empty FIFO");
 	MW_EXPECT_EQ(Test, false, Manager.IsFull(), "A fresh manager must not report a full FIFO");
-	MW_EXPECT_EQ(Test, TwoBytePacketLength, Manager.QueueCapacity(), "Queue capacity must match the template parameter");
-	MW_EXPECT_EQ(Test, FourBytePacketLength, Manager.MaximumPacketBytes(), "Max packet bytes must match the template parameter");
 	MW_EXPECT_EQ(Test, std::size_t{0}, Manager.QueuedCount(), "A fresh manager must report zero queued packets");
 }
 

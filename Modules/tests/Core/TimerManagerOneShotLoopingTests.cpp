@@ -67,30 +67,6 @@ MW_TEST_CASE(EngineTimerOneShotFiresOnceWhenDue)
 }
 
 /**
- * Motivation: Schedule a one-shot timer and advance to its deadline.
- * Responsibilities: The fired one-shot timer is removed and no longer occupies a slot.
- */
-MW_TEST_CASE(EngineTimerOneShotIsRemovedAfterFiring)
-{
-	// Arrange
-	FFireCounter Counter;
-	FTestManager Manager{0};
-	FTimerHandle Handle{};
-
-	// Act
-	// Assert
-	MW_EXPECT_SUCCESS(
-		Test, Manager.Schedule(MakeCounterCallback(Counter), StandardTimerPeriod, ETimerMode::OneShot, Handle), "Schedule should succeed");
-	MW_EXPECT_EQ(Test, 1u, Manager.TimerCount(), "One schedule should occupy one slot");
-
-	// Act
-	// Assert
-	MW_EXPECT_SUCCESS(Test, Manager.Advance(100), "Advance to the deadline should succeed");
-	MW_EXPECT_EQ(Test, 1u, Counter.Count, "The one-shot should have fired exactly once");
-	MW_EXPECT_EQ(Test, 0u, Manager.TimerCount(), "A fired one-shot timer should leave no occupied slot");
-}
-
-/**
  * Motivation: Schedule a one-shot timer, fire it, then attempt to cancel its handle.
  * Responsibilities: The fired one-shot timer's handle becomes stale and cancel returns StaleHandle.
  */

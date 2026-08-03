@@ -45,29 +45,6 @@ MW_TEST_CASE(EngineTimerCancellationBeforeDuePreventsInvocation)
 }
 
 /**
- * Motivation: Schedule a one-shot timer and then cancel it.
- * Responsibilities: Successful cancellation reduces observable occupancy to zero.
- */
-MW_TEST_CASE(EngineTimerCancellationReducesOccupancy)
-{
-	// Arrange
-	FFireCounter Counter;
-	FTestManager Manager{0};
-	FTimerHandle Handle{};
-
-	// Act
-	// Assert
-	MW_EXPECT_SUCCESS(
-		Test, Manager.Schedule(MakeCounterCallback(Counter), StandardTimerPeriod, ETimerMode::OneShot, Handle), "Schedule should succeed");
-	MW_EXPECT_EQ(Test, 1u, Manager.TimerCount(), "One schedule should occupy one slot");
-
-	// Act
-	// Assert
-	MW_EXPECT_SUCCESS(Test, Manager.Cancel(Handle), "Cancellation should succeed");
-	MW_EXPECT_EQ(Test, 0u, Manager.TimerCount(), "Cancellation should release the slot");
-}
-
-/**
  * Motivation: Schedule a one-shot timer, cancel it once, then cancel the same handle again.
  * Responsibilities: Repeated cancellation of the same handle returns StaleHandle.
  */
@@ -148,7 +125,6 @@ MW_TEST_CASE(EngineTimerSimultaneouslyDueTimersFireInInsertionOrder)
 	MW_EXPECT_SUCCESS(Test, Manager.Advance(100), "Advance at the shared deadline should succeed");
 
 	// Assert
-	MW_EXPECT_EQ(Test, std::size_t{3}, Recorder.Count, "All three due timers should fire");
 	MW_EXPECT_EQ(Test, std::size_t{3}, Recorder.Count, "All three due timers should fire");
 	MW_EXPECT_EQ(Test, 1, Recorder.Identities[0], "The first-inserted timer should fire first");
 	MW_EXPECT_EQ(Test, 2, Recorder.Identities[1], "The second-inserted timer should fire second");

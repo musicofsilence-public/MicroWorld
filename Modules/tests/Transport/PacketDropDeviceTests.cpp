@@ -101,11 +101,11 @@ public:
 };
 
 /**
- * Motivation: Wrap an inner recording device with a drop-every-send decorator, then run its pre-advance turn.
- * Responsibilities: Transport progress
- * reaches the wrapped device even when every logical send drops.
+ * Motivation: Wrap an inner recording device with a drop decorator, then run its pre-advance turn.
+ * Responsibilities: PreAdvance forwards the caller-supplied time to the wrapped device unconditionally, independent of
+ *   the configured send-drop cadence (which affects only the TrySend path).
  */
-MW_TEST_CASE(PacketDropDevice_ForwardsPendingTransmitProgress)
+MW_TEST_CASE(PacketDropDevice_PreAdvanceForwardsUnconditionally)
 {
 	// Arrange
 	FAdvanceRecordingDevice InnerDevice;
@@ -119,7 +119,7 @@ MW_TEST_CASE(PacketDropDevice_ForwardsPendingTransmitProgress)
 		Test,
 		static_cast<std::size_t>(1),
 		InnerDevice.AdvanceCount,
-		"Transport progress must reach the wrapped device even when every logical send drops");
+		"PreAdvance must forward to the wrapped device regardless of the configured drop cadence");
 }
 
 /**

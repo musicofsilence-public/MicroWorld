@@ -1,5 +1,7 @@
 #include "TestSupport.h"
 
+#include "MessagingSystemTestHelpers.h"
+
 #include <MicroWorld/Core/IO/DeviceAddress.h>
 #include <MicroWorld/Core/IO/ReceiveResult.h>
 #include <MicroWorld/Core/IO/TransportDevice.h>
@@ -25,46 +27,7 @@ using MicroWorld::Messaging::FChannelInformation;
 using MicroWorld::Messaging::FMessage;
 using MicroWorld::Messaging::FMessagingSystemInformation;
 using MicroWorld::Messaging::FNameId;
-
-/**
- * Motivation: Supplies a non-owning device pointer for channel configuration tests.
- * Responsibilities: Return fixed non-blocking results and record no state.
- * Example:
- *   FTestTransportDevice Device;
- */
-class FTestTransportDevice final : public ITransportDevice
-{
-public:
-	/**
-	 * Motivation: Confirms channel configuration accepts a concrete transport device.
-	 * Responsibilities: Report acceptance without retaining packet data or destination state.
-	 */
-	ETransportResult TrySend(const FDeviceAddress&, const TSpan<const std::uint8_t>) noexcept override { return ETransportResult::Success; }
-
-	/**
-	 * Motivation: Lets configuration tests provide a complete device without inbound packets.
-	 * Responsibilities: Report unavailable without changing any output parameter.
-	 */
-	ETransportResult TryReceive(FDeviceAddress&, TSpan<std::uint8_t>, FReceiveResult&) noexcept override { return ETransportResult::Unavailable; }
-
-	/**
-	 * Motivation: Gives tests a fixed packet limit without involving a hardware transport.
-	 * Responsibilities: Return the fixed maximum packet size.
-	 */
-	std::size_t MaxPacketBytes() const noexcept override { return 64; }
-
-	/**
-	 * Motivation: Satisfies the device lifecycle contract for a no-op test double.
-	 * Responsibilities: Make no progress and retain no time state.
-	 */
-	void PreAdvance(const TimePointMilliseconds) noexcept override {}
-
-	/**
-	 * Motivation: Satisfies the device lifecycle contract for a no-op test double.
-	 * Responsibilities: Make no progress and retain no time state.
-	 */
-	void PostAdvance(const TimePointMilliseconds) noexcept override {}
-};
+using MicroWorld::Tests::FTestTransportDevice;
 
 /**
  * Motivation: Confirms channel configuration retains every supplied field for later system creation.

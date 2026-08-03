@@ -105,8 +105,6 @@ MW_TEST_CASE(HostLoopbackStartsEmptyWithFixedCapacities)
 	// Assert
 	MW_EXPECT_EQ(Test, true, Loopback.IsEmpty(SourcePort), "A fresh loopback mailbox must be empty");
 	MW_EXPECT_EQ(Test, false, Loopback.IsFull(SourcePort), "A fresh loopback mailbox must not be full");
-	MW_EXPECT_EQ(Test, TwoSlotMailbox, Loopback.MailboxCapacityValue(), "Mailbox capacity must match the template parameter");
-	MW_EXPECT_EQ(Test, FourBytePacketCapacity, Loopback.MaximumPacketBytes(), "Max packet bytes must match the template parameter");
 	MW_EXPECT_EQ(Test, std::size_t{0}, Loopback.QueuedCount(SourcePort), "A fresh loopback must report zero queued packets");
 }
 

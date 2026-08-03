@@ -1,4 +1,4 @@
-#include "EngineAllocationCounters.h"
+#include "CoreAllocationCounters.h"
 #include "EngineTestSupport.h"
 #include "TestSupport.h"
 
@@ -39,6 +39,8 @@ using MicroWorld::Engine::TStrongObjectPtr;
 using MicroWorld::Engine::TWeakObjectPtr;
 using MicroWorld::Engine::UActorComponent;
 using MicroWorld::Engine::UWorld;
+using MicroWorld::Tests::FCollectorFixture;
+using MicroWorld::Tests::FEngineEnvironmentSlots8;
 using MicroWorld::Tests::TEngineEnvironment;
 
 /**
@@ -68,11 +70,8 @@ public:
 constexpr MicroWorld::Engine::FTypeId TrackedActorTypeId{0x00030001u};
 constexpr MicroWorld::Engine::FTypeId TrackedComponentTypeId{0x00030002u};
 
-/** Motivation: Environment sized for GC tests with enough slots for world, actors, components, and roots. */
-using FGarbageCollectionEnvironment = TEngineEnvironment<256, 16, 8, 4>;
-
-/** Motivation: Fixed capacity of the GC fixture worklist, large enough for every reachable object in these tests. */
-constexpr std::uint32_t CollectorWorklistCapacity = 16;
+/** Motivation: Environment sized for GC tests, aliasing the shared 8-slot shape. */
+using FGarbageCollectionEnvironment = FEngineEnvironmentSlots8;
 
 /** Motivation: Canonical monotonic baseline every BeginPlay call uses as its starting world time. */
 constexpr MicroWorld::Core::TimePointMilliseconds BaselineTimeMilliseconds{0};
@@ -100,26 +99,6 @@ TObjectPtr<FTrackedComponent> MakeTrackedComponent(FGarbageCollectionEnvironment
 {
 	return InEnv.CreateDerivedObject<FTrackedComponent>(TrackedComponentTypeId, "TrackedComponent");
 }
-
-/**
- * Motivation: Owns a fixed worklist and collector bound to an environment's store for GC tests.
- * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
- * Example:
- *   // Construct and exercise the type in one behavior test.
- */
-class FCollectorFixture final
-{
-public:
-	explicit FCollectorFixture(FObjectStore& InStore) noexcept : Collector(InStore, FGarbageCollectorStorage{Worklist, CollectorWorklistCapacity}) {}
-
-	FGarbageCollector& GetCollector() noexcept { return Collector; }
-
-private:
-	/** Motivation: Backs the collector's reachable-object queue without heap storage. */
-	FObjectHandle Worklist[CollectorWorklistCapacity]{};
-	/** Motivation: Owns the collector bound to this fixture's worklist for the test's lifetime. */
-	FGarbageCollector Collector;
-};
 
 /**
  * Motivation: Root a world with one actor and component via a single strong pointer and run one full collection.

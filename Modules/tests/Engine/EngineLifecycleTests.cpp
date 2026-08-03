@@ -30,6 +30,7 @@ using MicroWorld::Engine::UActorComponent;
 using MicroWorld::Engine::UWorld;
 using MicroWorld::Tests::FActorEventState;
 using MicroWorld::Tests::FComponentEventState;
+using MicroWorld::Tests::FEngineEnvironmentSlots8;
 using MicroWorld::Tests::FSequenceCounter;
 using MicroWorld::Tests::TEngineEnvironment;
 
@@ -204,8 +205,8 @@ TObjectPtr<FOrderingComponent> MakeOrderingComponent(
 	return InEnv.template CreateDerivedObject<FOrderingComponent>(OrderingComponentTypeId, "OrderingComponent", InSequence, InEvents);
 }
 
-/** Motivation: Convenience environment sized for the lifecycle ordering tests. */
-using FLifecycleEnvironment = TEngineEnvironment<256, 16, 8, 4>;
+/** Motivation: Convenience environment for the lifecycle ordering tests, aliasing the shared 8-slot shape. */
+using FLifecycleEnvironment = FEngineEnvironmentSlots8;
 
 /**
  * Motivation: Register two actors (one with two components, one with one) and run BeginPlay on the world.

@@ -250,4 +250,86 @@ private:
 	FObjectStore Store;
 };
 
+/**
+ * Motivation: Names the canonical 16-slot, 4-root engine environment so every suite that needs that shape shares one
+ *   instantiation rather than redeclaring the same alias under a suite-specific name.
+ * Responsibilities: Alias one TEngineEnvironment shape used by the registration and spawn/destroy families.
+ */
+using FEngineEnvironmentSlots16 = TEngineEnvironment<256, 16, 16, 4>;
+
+/**
+ * Motivation: Names the canonical 8-slot, 4-root engine environment so the garbage-collection and lifecycle suites
+ *   share one instantiation rather than redeclaring the same alias under a suite-specific name.
+ * Responsibilities: Alias one TEngineEnvironment shape used by the garbage-collection and lifecycle families.
+ */
+using FEngineEnvironmentSlots8 = TEngineEnvironment<256, 16, 8, 4>;
+
+/**
+ * Motivation: Provides one shared collector-over-store fixture so the garbage-collection and spawn/destroy suites do
+ *   not each redeclare the same worklist-backed FGarbageCollector wrapper.
+ * Responsibilities: Own a fixed-capacity worklist and bind one FGarbageCollector to a caller-supplied store.
+ * Example:
+ *   FCollectorFixture Fixture{Store};
+ *   FGarbageCollector& Collector = Fixture.GetCollector();
+ */
+class FCollectorFixture final
+{
+public:
+	/**
+	 * Motivation: Binds the collector to a caller-owned store over this fixture's fixed worklist storage.
+	 * Responsibilities: Construct the collector referencing the supplied store and this fixture's worklist.
+	 */
+	explicit FCollectorFixture(FObjectStore& InStore) noexcept : Collector(InStore, FGarbageCollectorStorage{Worklist, Capacity}) {}
+
+	/**
+	 * Motivation: Lets a test drive the bound collector without exposing the worklist storage.
+	 * Responsibilities: Return a reference to the owned collector.
+	 */
+	FGarbageCollector& GetCollector() noexcept { return Collector; }
+
+private:
+	/** Motivation: Bounds the worklist backing the fixture's collector; sized to cover every slot in the test stores. */
+	static constexpr std::uint32_t Capacity{16};
+
+	/** Motivation: Holds caller-owned iterative traversal storage without recursion or heap fallback. */
+	FObjectHandle Worklist[Capacity]{};
+
+	/** Motivation: Performs bounded incremental mark/sweep over the bound store. */
+	FGarbageCollector Collector;
+};
+
+/**
+ * Motivation: Provides one shared minimal AActor stub so the registration and spawn/destroy families do not each
+ *   redeclare the same bare default-constructed actor.
+ * Responsibilities: Subclass AActor with no added state or behaviour.
+ * Example:
+ *   const auto Creation = Store.NewObject<FPlainActor>(*Descriptor);
+ */
+class FPlainActor final : public AActor
+{
+public:
+	/**
+	 * Motivation: Constructs a plain actor with the default AActor lifecycle configuration.
+	 * Responsibilities: Forward to the AActor default constructor and add no further state.
+	 */
+	explicit FPlainActor() noexcept : AActor() {}
+};
+
+/**
+ * Motivation: Provides one shared minimal UActorComponent stub so the registration and spawn/destroy families do not
+ *   each redeclare the same bare default-constructed component.
+ * Responsibilities: Subclass UActorComponent with no added state or behaviour.
+ * Example:
+ *   const auto Creation = Store.NewObject<FPlainComponent>(*Descriptor);
+ */
+class FPlainComponent final : public UActorComponent
+{
+public:
+	/**
+	 * Motivation: Constructs a plain component with the default UActorComponent lifecycle configuration.
+	 * Responsibilities: Forward to the UActorComponent default constructor and add no further state.
+	 */
+	FPlainComponent() noexcept : UActorComponent() {}
+};
+
 } // namespace MicroWorld::Tests
