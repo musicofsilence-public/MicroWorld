@@ -70,6 +70,264 @@ MW_TEST_CASE(MessagingSystem_RoutesWireMessagesAfterReceiverPreAdvanceWithoutEch
 }
 
 /**
+ * Motivation: Prevents one device backlog from consuming unbounded receive work in a single Messaging turn.
+ * Responsibilities: With a one-frame budget, deliver two queued frames across two pre-advance turns while retaining the deferred frame in FIFO.
+ */
+MW_TEST_CASE(MessagingSystem_DefersFramesBeyondPerDeviceReceiveBudget)
+{
+	// Arrange
+	TLoopbackNetwork<TwoPorts, TwoMailboxSlots, StandardPacketBytes> Network;
+	FMessagingSystemInformation Information{};
+	Information.MaxReceiveFramesPerDevicePerAdvance = 1;
+	FMessagingSystem ReceivingSystem{Information};
+	const FDeviceAddress SendingAddress = MakeLoopbackAddress(SendingPort);
+	const FDeviceAddress ReceivingAddress = MakeLoopbackAddress(ReceivingPort);
+	const FChannelInformation ReceivingChannel{"Telemetry", false, &Network.Port(ReceivingPort), SendingAddress};
+	const EMessagingResult CreateResult = ReceivingSystem.CreateChannel(ReceivingChannel);
+	FWireMessageRecorder Recorder;
+	FSubscriberDelegate Subscriber;
+	const EDelegateResult BindingResult = Subscriber.Bind([&Recorder](const FMessage& InMessage) noexcept { Recorder.Record(InMessage); });
+	const EMessagingResult SubscribeResult = ReceivingSystem.SubscribeToChannel("Telemetry", std::move(Subscriber));
+	FRawWireFrame FirstFrame;
+	FRawWireFrame SecondFrame;
+	FirstFrame.Set("Telemetry", "TemperatureUpdated", TSpan<const std::uint8_t>(nullptr, ZeroPayloadByteCount));
+	SecondFrame.Set("Telemetry", "CommandReceived", TSpan<const std::uint8_t>(nullptr, ZeroPayloadByteCount));
+	const ETransportResult FirstRawSendResult =
+		Network.Port(SendingPort).TrySend(ReceivingAddress, TSpan<const std::uint8_t>(FirstFrame.Bytes, FirstFrame.Size));
+	const ETransportResult SecondRawSendResult =
+		Network.Port(SendingPort).TrySend(ReceivingAddress, TSpan<const std::uint8_t>(SecondFrame.Bytes, SecondFrame.Size));
+
+	// Act
+	ReceivingSystem.PreAdvance(FirstReceiveTurnMilliseconds);
+	const std::size_t DeliveriesAfterFirstTurn = Recorder.DeliveryCount;
+	const FNameId FirstDeliveredMessageNameId = Recorder.MessageNameId;
+	const std::size_t QueuedAfterFirstTurn = Network.QueuedCount(ReceivingPort);
+	ReceivingSystem.PreAdvance(SecondReceiveTurnMilliseconds);
+	const std::size_t DeliveriesAfterSecondTurn = Recorder.DeliveryCount;
+	const FNameId SecondDeliveredMessageNameId = Recorder.MessageNameId;
+	const std::size_t QueuedAfterSecondTurn = Network.QueuedCount(ReceivingPort);
+
+	// Assert
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, CreateResult, "The backlog receiver channel should be created");
+	MW_EXPECT_EQ(Test, EDelegateResult::Success, BindingResult, "The backlog receiver subscriber should bind");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, SubscribeResult, "The backlog receiver subscriber should register");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, FirstRawSendResult, "The first backlog frame should queue");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, SecondRawSendResult, "The second backlog frame should queue");
+	MW_EXPECT_EQ(Test, OneDelivery, DeliveriesAfterFirstTurn, "The first turn should deliver only one frame from the device");
+	MW_EXPECT_EQ(Test, FNameId{"TemperatureUpdated"}, FirstDeliveredMessageNameId, "The first turn should preserve the first queued frame");
+	MW_EXPECT_EQ(Test, OneQueuedPacket, QueuedAfterFirstTurn, "The first turn should retain one deferred frame in the device queue");
+	MW_EXPECT_EQ(Test, TwoDeliveries, DeliveriesAfterSecondTurn, "The second turn should deliver the retained frame");
+	MW_EXPECT_EQ(Test, FNameId{"CommandReceived"}, SecondDeliveredMessageNameId, "The second turn should deliver the deferred second frame");
+	MW_EXPECT_EQ(Test, NoQueuedPackets, QueuedAfterSecondTurn, "The second turn should leave the device queue empty");
+}
+
+/**
+ * Motivation: Gives independent devices separate bounded opportunities to deliver traffic during the same Messaging turn.
+ * Responsibilities: Queue two frames on each of two devices, apply a one-frame budget, and verify each delivers one while retaining one.
+ */
+MW_TEST_CASE(MessagingSystem_AppliesReceiveBudgetIndependentlyPerDevice)
+{
+	// Arrange
+	TLoopbackNetwork<TwoPorts, TwoMailboxSlots, StandardPacketBytes> FirstNetwork;
+	TLoopbackNetwork<TwoPorts, TwoMailboxSlots, StandardPacketBytes> SecondNetwork;
+	FMessagingSystemInformation Information{};
+	Information.MaxReceiveFramesPerDevicePerAdvance = 1;
+	FMessagingSystem ReceivingSystem{Information};
+	const FDeviceAddress SendingAddress = MakeLoopbackAddress(SendingPort);
+	const FDeviceAddress ReceivingAddress = MakeLoopbackAddress(ReceivingPort);
+	const FChannelInformation FirstChannel{"Telemetry", false, &FirstNetwork.Port(ReceivingPort), SendingAddress};
+	const FChannelInformation SecondChannel{"Commands", false, &SecondNetwork.Port(ReceivingPort), SendingAddress};
+	const EMessagingResult FirstCreateResult = ReceivingSystem.CreateChannel(FirstChannel);
+	const EMessagingResult SecondCreateResult = ReceivingSystem.CreateChannel(SecondChannel);
+	std::size_t FirstDeliveryCount = NoDeliveries;
+	std::size_t SecondDeliveryCount = NoDeliveries;
+	FSubscriberDelegate FirstSubscriber;
+	FSubscriberDelegate SecondSubscriber;
+	const EDelegateResult FirstBindingResult = FirstSubscriber.Bind([&FirstDeliveryCount](const FMessage&) noexcept { ++FirstDeliveryCount; });
+	const EDelegateResult SecondBindingResult = SecondSubscriber.Bind([&SecondDeliveryCount](const FMessage&) noexcept { ++SecondDeliveryCount; });
+	const EMessagingResult FirstSubscribeResult = ReceivingSystem.SubscribeToChannel("Telemetry", std::move(FirstSubscriber));
+	const EMessagingResult SecondSubscribeResult = ReceivingSystem.SubscribeToChannel("Commands", std::move(SecondSubscriber));
+	FRawWireFrame FirstFrame;
+	FRawWireFrame SecondFrame;
+	FirstFrame.Set("Telemetry", "TemperatureUpdated", TSpan<const std::uint8_t>(nullptr, ZeroPayloadByteCount));
+	SecondFrame.Set("Commands", "CommandReceived", TSpan<const std::uint8_t>(nullptr, ZeroPayloadByteCount));
+	const ETransportResult FirstDeviceFirstSendResult =
+		FirstNetwork.Port(SendingPort).TrySend(ReceivingAddress, TSpan<const std::uint8_t>(FirstFrame.Bytes, FirstFrame.Size));
+	const ETransportResult FirstDeviceSecondSendResult =
+		FirstNetwork.Port(SendingPort).TrySend(ReceivingAddress, TSpan<const std::uint8_t>(FirstFrame.Bytes, FirstFrame.Size));
+	const ETransportResult SecondDeviceFirstSendResult =
+		SecondNetwork.Port(SendingPort).TrySend(ReceivingAddress, TSpan<const std::uint8_t>(SecondFrame.Bytes, SecondFrame.Size));
+	const ETransportResult SecondDeviceSecondSendResult =
+		SecondNetwork.Port(SendingPort).TrySend(ReceivingAddress, TSpan<const std::uint8_t>(SecondFrame.Bytes, SecondFrame.Size));
+
+	// Act
+	ReceivingSystem.PreAdvance(FirstReceiveTurnMilliseconds);
+	const std::size_t FirstQueuedAfterTurn = FirstNetwork.QueuedCount(ReceivingPort);
+	const std::size_t SecondQueuedAfterTurn = SecondNetwork.QueuedCount(ReceivingPort);
+
+	// Assert
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, FirstCreateResult, "The first independent-device channel should be created");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, SecondCreateResult, "The second independent-device channel should be created");
+	MW_EXPECT_EQ(Test, EDelegateResult::Success, FirstBindingResult, "The first independent-device subscriber should bind");
+	MW_EXPECT_EQ(Test, EDelegateResult::Success, SecondBindingResult, "The second independent-device subscriber should bind");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, FirstSubscribeResult, "The first independent-device subscriber should register");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, SecondSubscribeResult, "The second independent-device subscriber should register");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, FirstDeviceFirstSendResult, "The first frame for the first device should queue");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, FirstDeviceSecondSendResult, "The second frame for the first device should queue");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, SecondDeviceFirstSendResult, "The first frame for the second device should queue");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, SecondDeviceSecondSendResult, "The second frame for the second device should queue");
+	MW_EXPECT_EQ(Test, OneDelivery, FirstDeliveryCount, "The first device should deliver its independent one-frame budget");
+	MW_EXPECT_EQ(Test, OneDelivery, SecondDeliveryCount, "The second device should deliver its independent one-frame budget");
+	MW_EXPECT_EQ(Test, OneQueuedPacket, FirstQueuedAfterTurn, "The first device should retain one frame after its budget is consumed");
+	MW_EXPECT_EQ(Test, OneQueuedPacket, SecondQueuedAfterTurn, "The second device should retain one frame after its budget is consumed");
+}
+
+/**
+ * Motivation: Makes zero an explicit opt-out from inbound device work rather than an implicit minimum receive allowance.
+ * Responsibilities: Queue one valid frame, run a zero-budget pre-advance, and verify no delivery while the device retains the frame.
+ */
+MW_TEST_CASE(MessagingSystem_ZeroReceiveBudgetLeavesWireFramesQueued)
+{
+	// Arrange
+	TLoopbackNetwork<TwoPorts, OneMailboxSlot, StandardPacketBytes> Network;
+	FMessagingSystemInformation Information{};
+	Information.MaxReceiveFramesPerDevicePerAdvance = 0;
+	FMessagingSystem ReceivingSystem{Information};
+	const FDeviceAddress SendingAddress = MakeLoopbackAddress(SendingPort);
+	const FDeviceAddress ReceivingAddress = MakeLoopbackAddress(ReceivingPort);
+	const FChannelInformation ReceivingChannel{"Telemetry", false, &Network.Port(ReceivingPort), SendingAddress};
+	const EMessagingResult CreateResult = ReceivingSystem.CreateChannel(ReceivingChannel);
+	std::size_t DeliveryCount = NoDeliveries;
+	FSubscriberDelegate Subscriber;
+	const EDelegateResult BindingResult = Subscriber.Bind([&DeliveryCount](const FMessage&) noexcept { ++DeliveryCount; });
+	const EMessagingResult SubscribeResult = ReceivingSystem.SubscribeToChannel("Telemetry", std::move(Subscriber));
+	FRawWireFrame Frame;
+	Frame.Set("Telemetry", "TemperatureUpdated", TSpan<const std::uint8_t>(nullptr, ZeroPayloadByteCount));
+	const ETransportResult RawSendResult = Network.Port(SendingPort).TrySend(ReceivingAddress, TSpan<const std::uint8_t>(Frame.Bytes, Frame.Size));
+	const std::size_t QueuedBeforeTurn = Network.QueuedCount(ReceivingPort);
+
+	// Act
+	ReceivingSystem.PreAdvance(FirstReceiveTurnMilliseconds);
+	const std::size_t QueuedAfterTurn = Network.QueuedCount(ReceivingPort);
+
+	// Assert
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, CreateResult, "The zero-budget receiver channel should be created");
+	MW_EXPECT_EQ(Test, EDelegateResult::Success, BindingResult, "The zero-budget receiver subscriber should bind");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, SubscribeResult, "The zero-budget receiver subscriber should register");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, RawSendResult, "The zero-budget frame should queue before pre-advance");
+	MW_EXPECT_EQ(Test, OneQueuedPacket, QueuedBeforeTurn, "One frame should be waiting before the zero-budget turn");
+	MW_EXPECT_EQ(Test, NoDeliveries, DeliveryCount, "A zero receive budget should deliver no wire frame");
+	MW_EXPECT_EQ(Test, OneQueuedPacket, QueuedAfterTurn, "A zero receive budget should leave the wire frame queued");
+}
+
+/**
+ * Motivation: Prevents invalid traffic from bypassing the per-device receive-work limit.
+ * Responsibilities: With a one-frame budget, consume an unknown-channel frame first, retain a valid frame, then deliver it next turn.
+ */
+MW_TEST_CASE(MessagingSystem_InvalidFramesConsumePerDeviceReceiveBudget)
+{
+	// Arrange
+	TLoopbackNetwork<TwoPorts, TwoMailboxSlots, StandardPacketBytes> Network;
+	FMessagingSystemInformation Information{};
+	Information.MaxReceiveFramesPerDevicePerAdvance = 1;
+	FMessagingSystem ReceivingSystem{Information};
+	const FDeviceAddress SendingAddress = MakeLoopbackAddress(SendingPort);
+	const FDeviceAddress ReceivingAddress = MakeLoopbackAddress(ReceivingPort);
+	const FChannelInformation ReceivingChannel{"Telemetry", false, &Network.Port(ReceivingPort), SendingAddress};
+	const EMessagingResult CreateResult = ReceivingSystem.CreateChannel(ReceivingChannel);
+	std::size_t DeliveryCount = NoDeliveries;
+	FSubscriberDelegate Subscriber;
+	const EDelegateResult BindingResult = Subscriber.Bind([&DeliveryCount](const FMessage&) noexcept { ++DeliveryCount; });
+	const EMessagingResult SubscribeResult = ReceivingSystem.SubscribeToChannel("Telemetry", std::move(Subscriber));
+	FRawWireFrame UnknownChannelFrame;
+	FRawWireFrame ValidFrame;
+	UnknownChannelFrame.Set("Unknown", "Ignored", TSpan<const std::uint8_t>(nullptr, ZeroPayloadByteCount));
+	ValidFrame.Set("Telemetry", "TemperatureUpdated", TSpan<const std::uint8_t>(nullptr, ZeroPayloadByteCount));
+	const ETransportResult UnknownChannelSendResult =
+		Network.Port(SendingPort).TrySend(ReceivingAddress, TSpan<const std::uint8_t>(UnknownChannelFrame.Bytes, UnknownChannelFrame.Size));
+	const ETransportResult ValidSendResult =
+		Network.Port(SendingPort).TrySend(ReceivingAddress, TSpan<const std::uint8_t>(ValidFrame.Bytes, ValidFrame.Size));
+
+	// Act
+	ReceivingSystem.PreAdvance(FirstReceiveTurnMilliseconds);
+	const std::size_t DeliveriesAfterFirstTurn = DeliveryCount;
+	const std::size_t QueuedAfterFirstTurn = Network.QueuedCount(ReceivingPort);
+	const std::uint32_t DroppedFramesAfterFirstTurn = ReceivingSystem.GetDroppedFrameCount();
+	ReceivingSystem.PreAdvance(SecondReceiveTurnMilliseconds);
+	const std::size_t DeliveriesAfterSecondTurn = DeliveryCount;
+	const std::size_t QueuedAfterSecondTurn = Network.QueuedCount(ReceivingPort);
+	const std::uint32_t DroppedFramesAfterSecondTurn = ReceivingSystem.GetDroppedFrameCount();
+
+	// Assert
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, CreateResult, "The invalid-frame budget receiver channel should be created");
+	MW_EXPECT_EQ(Test, EDelegateResult::Success, BindingResult, "The invalid-frame budget subscriber should bind");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, SubscribeResult, "The invalid-frame budget subscriber should register");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, UnknownChannelSendResult, "The unknown-channel frame should queue first");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, ValidSendResult, "The valid frame should queue second");
+	MW_EXPECT_EQ(Test, NoDeliveries, DeliveriesAfterFirstTurn, "The invalid first frame should produce no delivery");
+	MW_EXPECT_EQ(Test, OneQueuedPacket, QueuedAfterFirstTurn, "The invalid frame should consume the first turn's receive budget");
+	MW_EXPECT_EQ(Test, OneDroppedFrame, DroppedFramesAfterFirstTurn, "The invalid frame should count as dropped");
+	MW_EXPECT_EQ(Test, OneDelivery, DeliveriesAfterSecondTurn, "The valid deferred frame should deliver on the second turn");
+	MW_EXPECT_EQ(Test, NoQueuedPackets, QueuedAfterSecondTurn, "The second turn should empty the device queue");
+	MW_EXPECT_EQ(Test, OneDroppedFrame, DroppedFramesAfterSecondTurn, "Delivering the valid frame should not add another drop");
+}
+
+/**
+ * Motivation: Pins the receive budget to an exact device-call bound without allowing an extra empty probe.
+ * Responsibilities: Queue exactly four valid frames, run a four-frame turn, and verify four deliveries, an empty queue, and exactly four receives.
+ */
+MW_TEST_CASE(MessagingSystem_MakesNoExtraReceiveProbeAfterExactBudget)
+{
+	// Arrange
+	constexpr std::uint8_t ExactReceiveFrameCount = 4;
+	TLoopbackNetwork<TwoPorts, ExactReceiveFrameCount, StandardPacketBytes> Network;
+	FReceiveCountingDevice CountingDevice{Network.Port(ReceivingPort)};
+	FMessagingSystemInformation Information{};
+	Information.MaxReceiveFramesPerDevicePerAdvance = ExactReceiveFrameCount;
+	FMessagingSystem ReceivingSystem{Information};
+	const FDeviceAddress SendingAddress = MakeLoopbackAddress(SendingPort);
+	const FDeviceAddress ReceivingAddress = MakeLoopbackAddress(ReceivingPort);
+	const FChannelInformation ReceivingChannel{"Telemetry", false, &CountingDevice, SendingAddress};
+	const EMessagingResult CreateResult = ReceivingSystem.CreateChannel(ReceivingChannel);
+	std::size_t DeliveryCount = NoDeliveries;
+	FSubscriberDelegate Subscriber;
+	const EDelegateResult BindingResult = Subscriber.Bind([&DeliveryCount](const FMessage&) noexcept { ++DeliveryCount; });
+	const EMessagingResult SubscribeResult = ReceivingSystem.SubscribeToChannel("Telemetry", std::move(Subscriber));
+	FRawWireFrame Frame;
+	Frame.Set("Telemetry", "TemperatureUpdated", TSpan<const std::uint8_t>(nullptr, ZeroPayloadByteCount));
+	const ETransportResult FirstRawSendResult =
+		Network.Port(SendingPort).TrySend(ReceivingAddress, TSpan<const std::uint8_t>(Frame.Bytes, Frame.Size));
+	const ETransportResult SecondRawSendResult =
+		Network.Port(SendingPort).TrySend(ReceivingAddress, TSpan<const std::uint8_t>(Frame.Bytes, Frame.Size));
+	const ETransportResult ThirdRawSendResult =
+		Network.Port(SendingPort).TrySend(ReceivingAddress, TSpan<const std::uint8_t>(Frame.Bytes, Frame.Size));
+	const ETransportResult FourthRawSendResult =
+		Network.Port(SendingPort).TrySend(ReceivingAddress, TSpan<const std::uint8_t>(Frame.Bytes, Frame.Size));
+
+	// Act
+	ReceivingSystem.PreAdvance(FirstReceiveTurnMilliseconds);
+	const std::size_t QueuedAfterTurn = Network.QueuedCount(ReceivingPort);
+	const std::size_t ReceiveCallCount = CountingDevice.GetReceiveCallCount();
+
+	// Assert
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, CreateResult, "The exact-budget receiver channel should be created");
+	MW_EXPECT_EQ(Test, EDelegateResult::Success, BindingResult, "The exact-budget receiver subscriber should bind");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, SubscribeResult, "The exact-budget receiver subscriber should register");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, FirstRawSendResult, "The first exact-budget frame should queue");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, SecondRawSendResult, "The second exact-budget frame should queue");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, ThirdRawSendResult, "The third exact-budget frame should queue");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, FourthRawSendResult, "The fourth exact-budget frame should queue");
+	MW_EXPECT_EQ(
+		Test, static_cast<std::size_t>(ExactReceiveFrameCount), DeliveryCount, "The exact four-frame budget should deliver all four queued frames");
+	MW_EXPECT_EQ(Test, NoQueuedPackets, QueuedAfterTurn, "The exact four-frame budget should leave the device queue empty");
+	MW_EXPECT_EQ(
+		Test,
+		static_cast<std::size_t>(ExactReceiveFrameCount),
+		ReceiveCallCount,
+		"The exact four-frame budget should make four receive calls and no empty probe");
+}
+
+/**
  * Motivation: Keeps message-name subscriptions meaningful after the message crosses the transport boundary.
  * Responsibilities: Route one raw frame to the matching receiver subscriber while a different name filter remains silent.
  */
@@ -113,15 +371,17 @@ MW_TEST_CASE(MessagingSystem_AppliesMessageNameFiltersToWireMessages)
 }
 
 /**
- * Motivation: Lets several named channels share one radio, with every frame reaching the channel its own encoded id names.
- * Responsibilities: Queue frames for two encoded channel ids on one shared device, run one receiver turn, and verify each subscriber observes only
- *   its own frame.
+ * Motivation: Lets several named channels share one radio without multiplying that device's bounded receive work.
+ * Responsibilities: Queue frames for two channel ids on one shared device with a one-frame budget, then verify routing across two turns and one
+ *   combined device allowance per turn.
  */
-MW_TEST_CASE(MessagingSystem_RoutesEachEncodedChannelFromOneSharedDevice)
+MW_TEST_CASE(MessagingSystem_RoutesSharedDeviceChannelsWithinOneCombinedReceiveBudget)
 {
 	// Arrange
 	TLoopbackNetwork<TwoPorts, TwoMailboxSlots, StandardPacketBytes> Network;
-	FMessagingSystem ReceivingSystem;
+	FMessagingSystemInformation Information{};
+	Information.MaxReceiveFramesPerDevicePerAdvance = 1;
+	FMessagingSystem ReceivingSystem{Information};
 	const FDeviceAddress SendingAddress = MakeLoopbackAddress(SendingPort);
 	const FChannelInformation FirstReceivingChannel{"Telemetry", false, &Network.Port(ReceivingPort), SendingAddress};
 	const FChannelInformation SecondReceivingChannel{"Commands", false, &Network.Port(ReceivingPort), SendingAddress};
@@ -147,6 +407,11 @@ MW_TEST_CASE(MessagingSystem_RoutesEachEncodedChannelFromOneSharedDevice)
 	const ETransportResult SecondRawSendResult =
 		Network.Port(SendingPort).TrySend(ReceivingAddress, TSpan<const std::uint8_t>(SecondFrame.Bytes, SecondFrame.Size));
 	ReceivingSystem.PreAdvance(FirstReceiveTurnMilliseconds);
+	const std::size_t FirstDeliveriesAfterFirstTurn = FirstDeliveryCount;
+	const std::size_t SecondDeliveriesAfterFirstTurn = SecondDeliveryCount;
+	const std::size_t QueuedAfterFirstTurn = Network.QueuedCount(ReceivingPort);
+	ReceivingSystem.PreAdvance(SecondReceiveTurnMilliseconds);
+	const std::size_t QueuedAfterSecondTurn = Network.QueuedCount(ReceivingPort);
 
 	// Assert
 	MW_EXPECT_EQ(Test, EMessagingResult::Success, FirstCreateResult, "The first shared-device channel should be created");
@@ -157,8 +422,12 @@ MW_TEST_CASE(MessagingSystem_RoutesEachEncodedChannelFromOneSharedDevice)
 	MW_EXPECT_EQ(Test, EMessagingResult::Success, SecondSubscribeResult, "The second shared-device subscriber should register");
 	MW_EXPECT_EQ(Test, ETransportResult::Success, FirstRawSendResult, "The first encoded channel frame should queue");
 	MW_EXPECT_EQ(Test, ETransportResult::Success, SecondRawSendResult, "The second encoded channel frame should queue");
+	MW_EXPECT_EQ(Test, OneDelivery, FirstDeliveriesAfterFirstTurn, "The first queued channel should consume the shared device's first turn budget");
+	MW_EXPECT_EQ(Test, NoDeliveries, SecondDeliveriesAfterFirstTurn, "The second queued channel should remain deferred after the shared budget");
+	MW_EXPECT_EQ(Test, OneQueuedPacket, QueuedAfterFirstTurn, "The shared device should retain one frame after its combined budget is consumed");
 	MW_EXPECT_EQ(Test, OneDelivery, FirstDeliveryCount, "The first encoded channel should reach only its subscriber");
-	MW_EXPECT_EQ(Test, OneDelivery, SecondDeliveryCount, "The second encoded channel should reach only its subscriber");
+	MW_EXPECT_EQ(Test, OneDelivery, SecondDeliveryCount, "The second encoded channel should reach only its subscriber on the next turn");
+	MW_EXPECT_EQ(Test, NoQueuedPackets, QueuedAfterSecondTurn, "The second shared-device turn should empty the retained queue");
 }
 
 /**

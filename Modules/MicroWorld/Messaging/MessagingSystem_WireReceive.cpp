@@ -5,12 +5,12 @@
 namespace MicroWorld::Messaging
 {
 
-void FMessagingSystem::DrainDevice(Core::ITransportDevice& InTransportDevice) noexcept
+void FMessagingSystem::ProcessDeviceReceiveBudget(Core::ITransportDevice& InTransportDevice) noexcept
 {
 	std::uint8_t FrameBytes[MaxFrameBytes]{};
 	Core::FDeviceAddress Sender;
 	Core::FReceiveResult ReceiveResult;
-	for (;;)
+	for (std::size_t ReceivedFrameCount = 0; ReceivedFrameCount < Information.MaxReceiveFramesPerDevicePerAdvance; ++ReceivedFrameCount)
 	{
 		const Core::ETransportResult ReceiveStatus =
 			InTransportDevice.TryReceive(Sender, Core::TSpan<std::uint8_t>(FrameBytes, MaxFrameBytes), ReceiveResult);
@@ -112,7 +112,7 @@ void FMessagingSystem::DeliverReceivedMessage(
 {
 	FMessage Message;
 	Message.SetMessageNameId(InMessageNameId);
-	// The decoded payload points into DrainDevice's local frame buffer, so subscribers retaining it must copy it.
+	// The decoded payload points into ProcessDeviceReceiveBudget's local frame buffer, so subscribers retaining it must copy it.
 	Message.SetPayload(Core::TSpan<const std::uint8_t>(InPayloadBytes, InPayloadSize));
 	Message.SetSender(InSender);
 	DeliverToMatchingSubscribers(Message, InChannelNameId);

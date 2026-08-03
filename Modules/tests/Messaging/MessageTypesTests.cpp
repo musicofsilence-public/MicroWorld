@@ -172,10 +172,10 @@ MW_TEST_CASE(MessageTypes_MessageReturnsTheConfiguredSender)
 }
 
 /**
- * Motivation: Keeps reliable delivery bounded with a visible retry cadence and attempt budget.
- * Responsibilities: Confirm system information uses the documented retry defaults.
+ * Motivation: Keeps reliable delivery and inbound wire work bounded by visible default policies.
+ * Responsibilities: Confirm system information uses the documented retry, attempt, and receive-budget defaults.
  */
-MW_TEST_CASE(MessageTypes_SystemInformationUsesReliableDefaults)
+MW_TEST_CASE(MessageTypes_SystemInformationUsesBoundedPolicyDefaults)
 {
 	// Arrange
 	const FMessagingSystemInformation Information{};
@@ -186,6 +186,8 @@ MW_TEST_CASE(MessageTypes_SystemInformationUsesReliableDefaults)
 	// Assert
 	MW_EXPECT_EQ(Test, DurationMilliseconds{200}, RetryInterval, "The retry interval should default to 200 milliseconds");
 	MW_EXPECT_EQ(Test, std::uint8_t{8}, Information.MaxReliableSendAttempts, "The send attempt limit should default to eight");
+	MW_EXPECT_EQ(
+		Test, std::uint8_t{4}, Information.MaxReceiveFramesPerDevicePerAdvance, "The per-device receive budget should default to four frames");
 }
 
 } // namespace

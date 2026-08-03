@@ -219,6 +219,7 @@ MW_TEST_CASE(MessagingSystem_ReturnsSuppliedSystemInformation)
 	FMessagingSystemInformation Information{};
 	Information.ReliableRetryIntervalMilliseconds = 400;
 	Information.MaxReliableSendAttempts = 3;
+	Information.MaxReceiveFramesPerDevicePerAdvance = 2;
 	FMessagingSystem System{Information};
 
 	// Act
@@ -231,6 +232,11 @@ MW_TEST_CASE(MessagingSystem_ReturnsSuppliedSystemInformation)
 		ReturnedInformation.ReliableRetryIntervalMilliseconds,
 		"The retry interval should be preserved");
 	MW_EXPECT_EQ(Test, Information.MaxReliableSendAttempts, ReturnedInformation.MaxReliableSendAttempts, "The attempt budget should be preserved");
+	MW_EXPECT_EQ(
+		Test,
+		Information.MaxReceiveFramesPerDevicePerAdvance,
+		ReturnedInformation.MaxReceiveFramesPerDevicePerAdvance,
+		"The receive budget should be preserved");
 }
 
 /**

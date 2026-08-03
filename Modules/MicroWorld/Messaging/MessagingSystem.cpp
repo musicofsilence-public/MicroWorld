@@ -360,7 +360,7 @@ void FMessagingSystem::PreAdvance(Core::TimePointMilliseconds InNowMilliseconds)
 			continue;
 		}
 
-		DrainDevice(*TransportDevice);
+		ProcessDeviceReceiveBudget(*TransportDevice);
 	}
 }
 

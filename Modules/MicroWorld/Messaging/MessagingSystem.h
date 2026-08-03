@@ -395,11 +395,11 @@ private:
 	static void EncodeFrameHeader(const FNameId InChannelNameId, const FNameId InMessageNameId, std::uint8_t* const OutFrameBytes) noexcept;
 
 	/**
-	 * Motivation: Lets the inbound turn drain one device without making any channel holding it consume a second time.
-	 * Responsibilities: Receive complete packets until the device reports a non-success result, decoding and routing every successful packet, and
-	 *   count a packet the device refuses to fit in this system's frame budget.
-	 */
-	void DrainDevice(Core::ITransportDevice& InTransportDevice) noexcept;
+	 * Motivation: Lets the inbound turn process one device's receive budget without making any channel holding it consume a second time.
+	 *
+	 * Responsibilities: Bound calls per unique device per PreAdvance; route successes; stop on non-success; count oversized frames as dropped.
+ */
+	void ProcessDeviceReceiveBudget(Core::ITransportDevice& InTransportDevice) noexcept;
 
 	/**
 	 * Motivation: Routes one successfully received device packet through reliable control handling or subscriber delivery.

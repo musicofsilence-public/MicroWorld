@@ -129,6 +129,81 @@ MW_TEST_CASE(MessagingSystem_DoesNotRetryAcknowledgedReliableMessages)
 }
 
 /**
+ * Motivation: Proves a receive-budget-delayed acknowledgement permits one at-least-once retry without keeping the reliable frame pending.
+ * Responsibilities: Consume an unmatched acknowledgement first, retry once, then consume the deferred matching acknowledgement and stop retrying.
+ */
+MW_TEST_CASE(MessagingSystem_ConsumesAcknowledgementDeferredByReceiveBudget)
+{
+	// Arrange
+	TLoopbackNetwork<TwoPorts, TwoMailboxSlots, StandardPacketBytes> Network;
+	FMessagingSystemInformation Information{};
+	Information.ReliableRetryIntervalMilliseconds = ReliableRetryIntervalMilliseconds;
+	Information.MaxReceiveFramesPerDevicePerAdvance = 1;
+	FMessagingSystem SendingSystem{Information};
+	const FDeviceAddress SendingAddress = MakeLoopbackAddress(SendingPort);
+	const FChannelInformation SendingChannel{"Telemetry", true, &Network.Port(SendingPort), MakeLoopbackAddress(ReceivingPort)};
+	const EMessagingResult SendingCreateResult = SendingSystem.CreateChannel(SendingChannel);
+	FMessage Message;
+	Message.SetMessageNameId("TemperatureUpdated");
+	Message.SetPayload(TSpan<const std::uint8_t>(WirePayload, WirePayloadByteCount));
+	FRawWireFrame UnmatchedAcknowledgementFrame;
+	UnmatchedAcknowledgementFrame.Set(
+		"Telemetry", MessageAcknowledgementNameId, TSpan<const std::uint8_t>(UnmatchedAcknowledgementPayload, SequenceNumberBytes));
+	FRawWireFrame ExpectedAcknowledgementFrame;
+	ExpectedAcknowledgementFrame.Set(
+		"Telemetry", MessageAcknowledgementNameId, TSpan<const std::uint8_t>(FirstSequenceAcknowledgementPayload, SequenceNumberBytes));
+	constexpr TimePointMilliseconds InitialReliableSendTurnMilliseconds = 0;
+
+	// Act
+	const EMessagingResult SendResult = SendingSystem.SendMessageToChannel(Message, "Telemetry");
+	const std::size_t QueuedInitialReliableFrameCount = Network.QueuedCount(ReceivingPort);
+	Network.Drain(ReceivingPort);
+	const ETransportResult UnmatchedAcknowledgementSendResult =
+		Network.Port(ReceivingPort)
+			.TrySend(SendingAddress, TSpan<const std::uint8_t>(UnmatchedAcknowledgementFrame.Bytes, UnmatchedAcknowledgementFrame.Size));
+	const ETransportResult ExpectedAcknowledgementSendResult =
+		Network.Port(ReceivingPort)
+			.TrySend(SendingAddress, TSpan<const std::uint8_t>(ExpectedAcknowledgementFrame.Bytes, ExpectedAcknowledgementFrame.Size));
+	const std::size_t QueuedAcknowledgementCountBeforeReceive = Network.QueuedCount(SendingPort);
+	SendingSystem.PreAdvance(InitialReliableSendTurnMilliseconds);
+	const std::size_t QueuedAcknowledgementCountAfterFirstReceive = Network.QueuedCount(SendingPort);
+	SendingSystem.PostAdvance(ReliableRetryTurnMilliseconds);
+	const std::size_t QueuedRetryCountAfterDeferredAcknowledgement = Network.QueuedCount(ReceivingPort);
+	Network.Drain(ReceivingPort);
+	SendingSystem.PreAdvance(RetriedReceiveTurnMilliseconds);
+	const std::size_t QueuedAcknowledgementCountAfterSecondReceive = Network.QueuedCount(SendingPort);
+	SendingSystem.PostAdvance(FarAfterAcknowledgementTurnMilliseconds);
+	const std::size_t QueuedRetryCountAfterDeferredAcknowledgementRelease = Network.QueuedCount(ReceivingPort);
+
+	// Assert
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, SendingCreateResult, "The receive-budget acknowledgement channel should be created");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, SendResult, "The receive-budget reliable frame should send initially");
+	MW_EXPECT_EQ(Test, OneQueuedPacket, QueuedInitialReliableFrameCount, "The initial reliable frame should reach the peer mailbox");
+	MW_EXPECT_EQ(
+		Test, ETransportResult::Success, UnmatchedAcknowledgementSendResult, "The unmatched acknowledgement should enter the sender mailbox first");
+	MW_EXPECT_EQ(
+		Test, ETransportResult::Success, ExpectedAcknowledgementSendResult, "The expected acknowledgement should enter the sender mailbox second");
+	MW_EXPECT_EQ(Test, TwoMailboxSlots, QueuedAcknowledgementCountBeforeReceive, "Both acknowledgements should be queued in FIFO order");
+	MW_EXPECT_EQ(
+		Test, OneQueuedPacket, QueuedAcknowledgementCountAfterFirstReceive, "A receive budget of one should defer the expected acknowledgement");
+	MW_EXPECT_EQ(
+		Test,
+		OneQueuedPacket,
+		QueuedRetryCountAfterDeferredAcknowledgement,
+		"The deferred acknowledgement should permit exactly one at-least-once retry");
+	MW_EXPECT_EQ(
+		Test,
+		NoQueuedPackets,
+		QueuedAcknowledgementCountAfterSecondReceive,
+		"The next receive turn should consume the deferred expected acknowledgement");
+	MW_EXPECT_EQ(
+		Test,
+		NoQueuedPackets,
+		QueuedRetryCountAfterDeferredAcknowledgementRelease,
+		"The consumed deferred acknowledgement should prevent any later retry");
+}
+
+/**
  * Motivation: Makes the maximum reliable attempt count and its visible abandonment outcome exact.
  * Responsibilities: With no receiver turn to acknowledge, verify exactly the configured packet count and one stable abandonment count.
  */

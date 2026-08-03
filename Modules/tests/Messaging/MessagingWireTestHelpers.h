@@ -405,4 +405,70 @@ private:
 	std::size_t SendAttemptCount{0};
 };
 
+/**
+ * Motivation: Makes the exact receive-call work performed by Messaging observable without changing transport behavior.
+ * Responsibilities: Forward every operation to one caller-owned device and count every receive attempt, including non-success results.
+ * Example:
+ *   FReceiveCountingDevice Device{Network.Port(ReceivingPort)};
+ */
+class FReceiveCountingDevice final : public ITransportDevice
+{
+public:
+	/**
+	 * Motivation: Adds receive-call observation around an existing transport device without taking ownership.
+	 * Responsibilities: Retain the wrapped device and initialize the cumulative receive-call count to zero.
+	 */
+	explicit FReceiveCountingDevice(ITransportDevice& InDevice) noexcept : Device(InDevice) {}
+
+	/**
+	 * Motivation: Preserves the wrapped device's receive-side lifecycle behavior.
+	 * Responsibilities: Forward the caller-supplied pre-advance time unchanged.
+	 */
+	void PreAdvance(TimePointMilliseconds InNowMilliseconds) noexcept override { Device.PreAdvance(InNowMilliseconds); }
+
+	/**
+	 * Motivation: Preserves the wrapped device's send-side lifecycle behavior.
+	 * Responsibilities: Forward the caller-supplied post-advance time unchanged.
+	 */
+	void PostAdvance(TimePointMilliseconds InNowMilliseconds) noexcept override { Device.PostAdvance(InNowMilliseconds); }
+
+	/**
+	 * Motivation: Keeps outbound behavior identical while tests observe inbound work.
+	 * Responsibilities: Forward the destination and complete packet unchanged and return the wrapped result.
+	 */
+	ETransportResult TrySend(const FDeviceAddress& InTo, const TSpan<const std::uint8_t> InPacket) noexcept override
+	{
+		return Device.TrySend(InTo, InPacket);
+	}
+
+	/**
+	 * Motivation: Counts every receive probe so an exact Messaging work budget is externally testable.
+	 * Responsibilities: Increment the cumulative count once, then forward all arguments and return the wrapped result unchanged.
+	 */
+	ETransportResult TryReceive(FDeviceAddress& OutFrom, TSpan<std::uint8_t> InDestination, FReceiveResult& OutResult) noexcept override
+	{
+		++ReceiveCallCount;
+		return Device.TryReceive(OutFrom, InDestination, OutResult);
+	}
+
+	/**
+	 * Motivation: Keeps frame-size validation identical to the wrapped transport.
+	 * Responsibilities: Return the wrapped device's packet limit unchanged.
+	 */
+	std::size_t MaxPacketBytes() const noexcept override { return Device.MaxPacketBytes(); }
+
+	/**
+	 * Motivation: Lets tests verify the receive-call bound without inspecting Messaging internals.
+	 * Responsibilities: Return the cumulative number of forwarded receive calls without changing it.
+	 */
+	std::size_t GetReceiveCallCount() const noexcept { return ReceiveCallCount; }
+
+private:
+	/** Motivation: References the caller-owned device receiving every forwarded operation. */
+	ITransportDevice& Device;
+
+	/** Motivation: Counts every receive call forwarded to the wrapped device. */
+	std::size_t ReceiveCallCount{0};
+};
+
 } // namespace MicroWorld::Tests

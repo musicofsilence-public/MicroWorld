@@ -8,8 +8,8 @@ namespace MicroWorld::Messaging
 {
 
 /**
- * Motivation: Supplies the bounded reliability policy shared by one Messaging system.
- * Responsibilities: Define retry timing and the maximum send attempts without owning scheduler state.
+ * Motivation: Supplies the bounded reliability and receive-work policy shared by one Messaging system.
+ * Responsibilities: Define retry timing, the maximum send attempts, and the per-device receive budget without owning scheduler state.
  * Example:
  *   FMessagingSystemInformation Information{};
  */
@@ -20,6 +20,9 @@ struct FMessagingSystemInformation
 
 	/** Motivation: Sets the exact total attempts one reliable message may make before Messaging stops retrying it. */
 	std::uint8_t MaxReliableSendAttempts{8};
+
+	/** Motivation: Limits how many successful wire frames one unique device may contribute during one pre-advance turn. */
+	std::uint8_t MaxReceiveFramesPerDevicePerAdvance{4};
 };
 
 } // namespace MicroWorld::Messaging
