@@ -61,9 +61,9 @@ is optimal or measured.
 
 ## Composition recipes
 
-Every wiring is the same three calls: create the system on the engine, create
-the channels, subscribe. There is no binding, no wrapper, and no frame-order
-rule for the caller to get right.
+Compose Messaging in this order: create the system, register each device link,
+create channels, then subscribe. A local-only channel needs no link; Network
+uses local-only application channels and handles its explicit remote routes.
 
 Local messaging only — a channel with no device:
 
@@ -79,6 +79,8 @@ Over a wire — name the device the channel sends through:
 ```cpp
 static MicroWorld::Platform::Esp32::FEsp32UartDevice Device{{.UartPort = 1, .TxGpio = 17, .RxGpio = 18,
                                 .BaudRate = 115200, .LocalNodeId = 1}};
+MicroWorld::Messaging::FMessagingLinkId LinkId;
+Messaging->RegisterLink(Device, LinkId);
 Messaging->CreateChannel({"App", false, &Device, {}});   // point-to-point ignores the address
 ```
 

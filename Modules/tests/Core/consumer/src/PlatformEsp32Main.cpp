@@ -2,8 +2,8 @@
 //
 // This translation unit composes the full MicroWorld stack on ESP32-S3:
 // FEsp32TimeSource (esp_timer, the single real clock) + FEsp32WifiDevice (lwIP
-// non-blocking UDP) + TTransportHost<4,256> (dedicated server) bound into TEngine
-// via the THostPlaySystem/IPlaySystem interface from Phase 4.4, then ticks it at a
+// non-blocking UDP) + Messaging + Network (dedicated server) bound into TEngine
+// through one caller-owned device frame, then ticks it at a
 // fixed 20 ms cadence from app_main. This is a composition proof: the lwIP
 // stack is initialized so the UDP socket is valid, but no WiFi is associated,
 // so no UDP datagram can flow. A real deployment associates WiFi first and
@@ -13,12 +13,11 @@
 #include <MicroWorld/Engine/ActorComponent.h>
 #include <MicroWorld/Engine/EngineHost.h>
 #include <MicroWorld/Engine/DefaultEngineTraits.h>
-#include <MicroWorld/Engine/HostPlaySystem.h>
 #include <MicroWorld/Engine/EngineStorage.h>
+#include <MicroWorld/Engine/PlaySystemSet.h>
 #include <MicroWorld/Core/Log.h>
-#include <MicroWorld/Transport/NetworkMode.h>
-#include <MicroWorld/Transport/TransportHost.h>
-#include <MicroWorld/Transport/TransportHostConfig.h>
+#include <MicroWorld/Messaging/MessagingSystem.h>
+#include <MicroWorld/Networking/NetworkSystem.h>
 #include <MicroWorld/Engine/GarbageCollectionBudget.h>
 #include <MicroWorld/Engine/ObjectStore.h>
 #include <MicroWorld/Platform/Esp32/Esp32OutputDevice.h>
@@ -141,17 +140,25 @@ extern "C" void app_main()
 	static FEsp32WifiLink WifiLink;
 	(void)WifiLink.IsUp();
 
-	// 4. A dedicated-server session host over that device, started at the current boot time.
-	static TTransportHost<4, 256> Transport(Device);
-	(void)Transport.Configure(ENetworkMode::DedicatedServer, FTransportHostConfig{});
-	Transport.Start(Clock.Now());
+	// 4. Bind the device once; Engine drives it before its Messaging and Network systems.
+	static TPlaySystemSet<1> DeviceFrames;
 
-	// 5. Adapt the host to the engine's `THostPlaySystem` interface (Phase 4.4).
-	static THostPlaySystem<TTransportHost<4, 256>> Frame(Transport);
-
-	// 6. The application entry point: same capacities as the Engine profile probe + the live frame.
+	// 5. The application entry point: same capacities as the Engine profile probe + the live device frame.
 	using FDemoHost = TEngine<FDemoHostTraits>;
-	static FDemoHost Host{FGarbageCollectionBudget{1, 4, 8}, Frame};
+	static FDemoHost Host{FGarbageCollectionBudget{1, 4, 8}, DeviceFrames};
+	if (DeviceFrames.Add(Device) != EEngineResult::Success || Host.CreateMessagingSystem({}) != ERuntimeResult::Success)
+	{
+		PlatformEsp32CompositionResult = 1;
+		return;
+	}
+	MicroWorld::Messaging::FMessagingSystem* const Messaging = Host.GetMessagingSystem();
+	MicroWorld::Messaging::FMessagingLinkId LinkId{};
+	if (Messaging == nullptr || Messaging->RegisterLink(Device, LinkId) != MicroWorld::Messaging::EMessagingResult::Success
+		|| Host.CreateNetworkSystem({MicroWorld::Networking::ENetworkRole::Server}) != MicroWorld::Networking::ENetworkResult::Success)
+	{
+		PlatformEsp32CompositionResult = 1;
+		return;
+	}
 
 	// Register one user actor and component so CreateWorld/CreateObject have real work to do.
 	(void)Host.RegisterClass<FDemoActor>(DemoActorTypeId, "DemoActor");

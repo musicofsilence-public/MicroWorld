@@ -34,6 +34,9 @@ records, not this summary:
   [ESP32-S3 compile evidence](../Modules/Memory/benchmarks/Results/Esp32S3N16R8.md)
 - [Object host](../Modules/benchmarks/Engine/Results/Host.md) and
   [ESP32-S3 compile evidence](../Modules/benchmarks/Engine/Results/Esp32S3N16R8.md)
+- [Networking host evidence](../Modules/benchmarks/Networking/Results/Host.md)
+  (dirty integration snapshot; source-level capacity contracts and host test
+  result only)
 
 Target runtime margins for Memory and Object remain unmeasured. This is a
 qualification for hardware support, not a reason to add speculative allocator

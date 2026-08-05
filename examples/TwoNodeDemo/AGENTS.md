@@ -5,20 +5,19 @@ Inherits `../AGENTS.md`.
 ## Architecture
 
 `Main.cpp` is one executable hosting TWO independent MicroWorld nodes over
-real localhost UDP: a dedicated server built on a full `TEngine` (bound to
-an `IPlaySystem` via `THostPlaySystem`) and a bare client `TTransportHost`. Both
+real localhost UDP: a server built on a full `TEngine` owning Messaging and
+Network, and a client Messaging + Network composition. Both
 nodes are driven from one process through a single deterministic interleaved
 loop, so the printed trace is byte-identical across runs.
 
 ## Concepts
 
-- A client channel-1 input event (`SendTo` the reserved spawn opcode) drives
+- A client channel-1 input event (`SendToServer` with the spawn opcode) drives
   the server to `CreateObject`+`SpawnActor` one `AActor` into its world; the
   server's per-tick channel-2 broadcast reports the resulting world actor
   count back to the client.
-- The server advances only through `TEngine::Tick` (network dispatch is
-  step 1, flush is step 7); the bare client pumps `PumpSend`/`PumpReceive`
-  explicitly since it owns no engine host.
+- The server advances through `TEngine::Tick`; the client drives its owned
+  device, Messaging, and Network in the same documented lifecycle order.
 - The full run — handshake, two spawn requests, three state broadcasts, and
   completion — prints a fixed 14-line transcript.
 - A shared `LogicalClockMilliseconds`, not wall time, advances every

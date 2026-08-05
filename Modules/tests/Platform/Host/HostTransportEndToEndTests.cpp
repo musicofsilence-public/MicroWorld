@@ -2,18 +2,12 @@
 
 #include <MicroWorld/Core/Containers/Span.h>
 #include <MicroWorld/Core/IO/DeviceAddress.h>
-#include <MicroWorld/Core/IO/TransportDevice.h>
-#include <MicroWorld/Transport/NetworkMode.h>
-#include <MicroWorld/Transport/PeerId.h>
-#include <MicroWorld/Transport/TransportHost.h>
-#include <MicroWorld/Transport/TransportHostConfig.h>
-#include <MicroWorld/Transport/TransportHostState.h>
-#include <MicroWorld/Platform/Host/HostTimeSource.h>
+#include <MicroWorld/Core/Time.h>
+#include <MicroWorld/Messaging/ChannelInformation.h>
+#include <MicroWorld/Messaging/MessagingSystem.h>
+#include <MicroWorld/Networking/NetworkSystem.h>
 #include <MicroWorld/Platform/Host/HostWifiDevice.h>
 #include <MicroWorld/Platform/Host/UdpAddress.h>
-#include <MicroWorld/Core/Time.h>
-#include <MicroWorld/Core/Delegates/DelegateHandle.h>
-#include <MicroWorld/Core/Delegates/DelegateResult.h>
 
 #include <array>
 #include <cstddef>
@@ -22,103 +16,128 @@
 namespace
 {
 
-using namespace MicroWorld::Core;
-using namespace MicroWorld::Transport;
-using MicroWorld::Platform::Host::FHostTimeSource;
+using MicroWorld::Core::TimePointMilliseconds;
+using MicroWorld::Messaging::EMessagingResult;
+using MicroWorld::Messaging::FMessage;
+using MicroWorld::Messaging::FMessagingLinkId;
+using MicroWorld::Messaging::FMessagingRoute;
+using MicroWorld::Messaging::FMessagingSystem;
+using MicroWorld::Messaging::FNameId;
+using MicroWorld::Networking::EConnectionState;
+using MicroWorld::Networking::ENetworkResult;
+using MicroWorld::Networking::ENetworkRole;
+using MicroWorld::Networking::FNetworkSystem;
+using MicroWorld::Networking::FPeerId;
 using MicroWorld::Platform::Host::FHostWifiDevice;
+using MicroWorld::Transport::MakeUdpAddress;
 
-/**
- * Motivation: Records the last application message the server handler observed.
- * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
- * Example:
- *   // Construct and exercise the type in one behavior test.
- */
-struct FServerCapture
-{
-	/** Motivation: Number of messages the handler has observed; zero means it never ran. */
-	std::size_t Count{0};
+/** Motivation: Host loopback octets identify the real UDP server endpoint in this test. */
+constexpr std::uint8_t LoopbackOctets[4] = {127, 0, 0, 1};
 
-	/** Motivation: Sender identity from the most recent dispatch. */
-	FPeerId From{};
+/** Motivation: Names the local-only channel that carries application traffic through Network. */
+constexpr FNameId GameplayChannel{"Gameplay"};
 
-	/** Motivation: Channel from the most recent dispatch. */
-	std::uint8_t Channel{0};
+/** Motivation: Names the application payload sent through the client/server Network session. */
+constexpr FNameId GameplayMessage{"Update"};
 
-	/** Motivation: First payload byte from the most recent dispatch, or zero for an empty payload. */
-	std::uint8_t FirstByte{0};
-};
+/** Motivation: Bounds real socket polling while admission datagrams cross localhost. */
+constexpr int PollTimeoutMilliseconds = 100;
 
-/** Motivation: Host loopback octet prefix reused by every endpoint address in the demo. */
-constexpr std::uint8_t OctetA = 127;
-constexpr std::uint8_t OctetB = 0;
-constexpr std::uint8_t OctetC = 0;
-constexpr std::uint8_t OctetD = 1;
-
-/** Motivation: TTransportHost peer capacity shared by the client and server fixtures in the end-to-end demo. */
-constexpr std::size_t TransportHostPeerCapacity = 4;
-
-/** Motivation: TTransportHost per-message scratch capacity the demo's short application payload must stay within. */
-constexpr std::size_t TransportHostScratchBytes = 256;
-
-/** Motivation: Application payload delivered after the handshake; kept short so the host's 256-byte scratch is never exceeded. */
-const std::array<std::uint8_t, 4> AppPayload = {0x10, 0x20, 0x30, 0x40};
-
-/** Motivation: Upper bound on handshake pump iterations before the test gives up waiting for Connected. */
+/** Motivation: Bounds the asynchronous UDP handshake without making the test wait indefinitely. */
 constexpr int HandshakeIterationCap = 20;
 
-/** Motivation: Milliseconds `PollReadable` blocks waiting for a readable datagram during the handshake. */
-constexpr int HandshakePollTimeoutMilliseconds = 500;
-
-/** Motivation: Distinct byte values carried by the four-byte application payload. */
-constexpr std::uint8_t AppPayloadByte0 = 0x10;
-constexpr std::uint8_t AppPayloadByte1 = 0x20;
-
-/** Motivation: Application-message channel the client uses to address the server's handler. */
-constexpr std::uint8_t ApplicationChannel = 1;
+/** Motivation: Supplies a short bounded application payload for addressed and broadcast sends. */
+const std::array<std::uint8_t, 4> ApplicationPayload = {0x10, 0x20, 0x30, 0x40};
 
 /**
- * Motivation: Drives one client and one server through the Hello/Welcome handshake over UDP, bounded by the
- *   iteration cap.
- * Responsibilities: Perform only the documented mutation and leave unrelated state untouched.
+ * Motivation: Records the visible Network application delivery facts needed by the real socket test.
+ * Responsibilities: Count deliveries and preserve the validated logical sender, never retaining caller-owned payload storage.
+ * Example: FDeliveryCapture Capture{};
+ */
+struct FDeliveryCapture final
+{
+	/** Motivation: Counts completed local application deliveries. */
+	std::size_t Count{0};
+
+	/** Motivation: Preserves the resolved logical source from the most recent delivery. */
+	FPeerId Sender{};
+
+	/** Motivation: Preserves the first payload byte for content verification. */
+	std::uint8_t FirstPayloadByte{0};
+};
+
+/**
+ * Motivation: Creates one application message whose storage outlives every synchronous Network send in this test.
+ * Responsibilities: Return a named bounded view over ApplicationPayload without allocating.
+ */
+FMessage MakeGameplayMessage() noexcept
+{
+	FMessage Message;
+	Message.SetMessageNameId(GameplayMessage);
+	Message.SetPayload(MicroWorld::Core::TSpan<const std::uint8_t>(ApplicationPayload.data(), ApplicationPayload.size()));
+	return Message;
+}
+
+/**
+ * Motivation: Pumps device input and Network liveness in the order used by a direct Messaging composition.
+ * Responsibilities: Advance each device once, then let Messaging decode and Network emit any due protocol traffic.
+ */
+void AdvancePair(
+	FHostWifiDevice& InServerDevice,
+	FHostWifiDevice& InClientDevice,
+	FMessagingSystem& InServerMessaging,
+	FMessagingSystem& InClientMessaging,
+	FNetworkSystem& InServerNetwork,
+	FNetworkSystem& InClientNetwork,
+	const TimePointMilliseconds InNow) noexcept
+{
+	InServerDevice.PreAdvance(InNow);
+	InClientDevice.PreAdvance(InNow);
+	InServerMessaging.PreAdvance(InNow);
+	InClientMessaging.PreAdvance(InNow);
+	InServerNetwork.PreAdvance(InNow);
+	InClientNetwork.PreAdvance(InNow);
+	InClientNetwork.PostAdvance(InNow);
+	InServerNetwork.PostAdvance(InNow);
+	InClientMessaging.PostAdvance(InNow);
+	InServerMessaging.PostAdvance(InNow);
+	InClientDevice.PostAdvance(InNow);
+	InServerDevice.PostAdvance(InNow);
+}
+
+/**
+ * Motivation: Waits for a real localhost UDP admission exchange without assuming packet delivery timing.
+ * Responsibilities: Pump both direct compositions until the client is connected or the bounded poll budget is exhausted.
  */
 void PumpHandshake(
-	FHostWifiDevice& ServerDevice,
-	FHostWifiDevice& ClientDevice,
-	TTransportHost<TransportHostPeerCapacity, TransportHostScratchBytes>& Server,
-	TTransportHost<TransportHostPeerCapacity, TransportHostScratchBytes>& Client,
-	const TimePointMilliseconds Now) noexcept
+	FHostWifiDevice& InServerDevice,
+	FHostWifiDevice& InClientDevice,
+	FMessagingSystem& InServerMessaging,
+	FMessagingSystem& InClientMessaging,
+	FNetworkSystem& InServerNetwork,
+	FNetworkSystem& InClientNetwork) noexcept
 {
 	for (int Iteration = 0; Iteration < HandshakeIterationCap; ++Iteration)
 	{
-		(void)Client.PumpSend(Now);
-		const bool bServerReadable = ServerDevice.PollReadable(HandshakePollTimeoutMilliseconds);
-		if (bServerReadable)
+		const TimePointMilliseconds Now{static_cast<std::uint64_t>(Iteration)};
+		AdvancePair(InServerDevice, InClientDevice, InServerMessaging, InClientMessaging, InServerNetwork, InClientNetwork, Now);
+		if (InClientNetwork.GetConnectionState() == EConnectionState::Connected)
 		{
-			(void)Server.PumpReceive(Now);
+			return;
 		}
-		(void)Server.PumpSend(Now);
-		const bool bClientReadable = ClientDevice.PollReadable(HandshakePollTimeoutMilliseconds);
-		if (bClientReadable)
-		{
-			(void)Client.PumpReceive(Now);
-		}
-		const bool bClientConnected = Client.GetState() == ETransportHostState::Connected;
-		if (bClientConnected)
-		{
-			break;
-		}
+		(void)InServerDevice.PollReadable(PollTimeoutMilliseconds);
+		(void)InClientDevice.PollReadable(PollTimeoutMilliseconds);
 	}
 }
 
 } // namespace
 
 /**
- * Motivation: Scenario: Drive a TTransportHost client and dedicated server through the Hello/Welcome handshake
- *   over real UDP localhost, then send one application message.
- * Responsibilities: Expected: The client reaches Connected; the server admits exactly one peer; the server handler
- *   observes one message on the requested channel carrying the sent payload's first byte.
+ * Motivation: Scenario: Compose real host UDP devices through Messaging and Networking instead of a Transport session facade.
+ * Responsibilities: Expected: Client admission, client-to-server delivery with logical source resolution, and server broadcast all cross localhost
+ * UDP.
  */
-MW_TEST_CASE(HostTransportHandshakeAndApplicationMessageCrossRealUdp)
+MW_TEST_CASE(HostNetworkMessagingCompletesApplicationFlowAcrossRealUdp)
 {
 	// Arrange
 	FHostWifiDevice ServerDevice(0);
@@ -126,58 +145,82 @@ MW_TEST_CASE(HostTransportHandshakeAndApplicationMessageCrossRealUdp)
 	MW_EXPECT_TRUE(Test, ServerDevice.IsOpen(), "The server UDP device opened");
 	MW_EXPECT_TRUE(Test, ClientDevice.IsOpen(), "The client UDP device opened");
 
-	TTransportHost<TransportHostPeerCapacity, TransportHostScratchBytes> Server(ServerDevice);
-	TTransportHost<TransportHostPeerCapacity, TransportHostScratchBytes> Client(ClientDevice);
-	FTransportHostConfig ServerConfig{};
+	FMessagingSystem ServerMessaging;
+	FMessagingSystem ClientMessaging;
+	FMessagingLinkId ServerLink{};
+	FMessagingLinkId ClientLink{};
 	MW_EXPECT_EQ(
-		Test, ETransportResult::Success, Server.Configure(ENetworkMode::DedicatedServer, ServerConfig), "The server configures as dedicated");
-	FTransportHostConfig ClientConfig{};
-	ClientConfig.ServerAddress = MakeUdpAddress(OctetA, OctetB, OctetC, OctetD, ServerDevice.BoundPort());
+		Test, EMessagingResult::Success, ServerMessaging.RegisterLink(ServerDevice, ServerLink), "The server device registers with Messaging");
+	MW_EXPECT_EQ(
+		Test, EMessagingResult::Success, ClientMessaging.RegisterLink(ClientDevice, ClientLink), "The client device registers with Messaging");
+
+	FNetworkSystem ServerNetwork(ServerMessaging, {ENetworkRole::Server});
+	FNetworkSystem ClientNetwork(ClientMessaging, {ENetworkRole::Client});
+	MW_EXPECT_EQ(Test, ENetworkResult::Success, ServerNetwork.Initialize(), "The server reserves Network wire channels");
+	MW_EXPECT_EQ(Test, ENetworkResult::Success, ClientNetwork.Initialize(), "The client reserves Network wire channels");
 	MW_EXPECT_EQ(
 		Test,
-		ETransportResult::Success,
-		Client.Configure(ENetworkMode::Client, ClientConfig),
-		"The client configures against the server's UDP address");
+		EMessagingResult::Success,
+		ServerMessaging.CreateChannel({GameplayChannel, false, nullptr, {}}),
+		"The server creates a local gameplay channel");
+	MW_EXPECT_EQ(
+		Test,
+		EMessagingResult::Success,
+		ClientMessaging.CreateChannel({GameplayChannel, false, nullptr, {}}),
+		"The client creates a local gameplay channel");
 
-	FHostTimeSource Clock;
-	const TimePointMilliseconds Now = Clock.Now();
-	MW_EXPECT_EQ(Test, ETransportResult::Success, Server.Start(Now), "The server starts listening");
-	MW_EXPECT_EQ(Test, ETransportResult::Success, Client.Start(Now), "The client starts connecting");
-
-	FServerCapture Capture{};
-	TTransportHost<TransportHostPeerCapacity, TransportHostScratchBytes>::FMessageHandlerBinding Binding;
-	Binding.Bind(
-		[&Capture](const FPeerId From, const std::uint8_t Channel, TSpan<const std::uint8_t> Payload) noexcept
+	FDeliveryCapture ServerCapture{};
+	FDeliveryCapture ClientCapture{};
+	FMessagingSystem::FSubscriberDelegate ServerSubscriber;
+	FMessagingSystem::FSubscriberDelegate ClientSubscriber;
+	(void)ServerSubscriber.Bind(
+		[&ServerCapture, &ServerNetwork](const FMessage& InMessage) noexcept
 		{
-			++Capture.Count;
-			Capture.From = From;
-			Capture.Channel = Channel;
-			Capture.FirstByte = Payload.Size() > 0 ? Payload[0] : std::uint8_t{0};
+			++ServerCapture.Count;
+			ServerCapture.Sender = ServerNetwork.ResolveSenderPeer(InMessage);
+			ServerCapture.FirstPayloadByte = InMessage.GetPayload().IsEmpty() ? 0 : InMessage.GetPayload()[0];
 		});
-	FDelegateHandle ServerHandle{};
-	MW_EXPECT_EQ(Test, EDelegateResult::Success, Server.AddMessageHandler(std::move(Binding), ServerHandle), "The server handler binds");
+	(void)ClientSubscriber.Bind(
+		[&ClientCapture, &ClientNetwork](const FMessage& InMessage) noexcept
+		{
+			++ClientCapture.Count;
+			ClientCapture.Sender = ClientNetwork.ResolveSenderPeer(InMessage);
+			ClientCapture.FirstPayloadByte = InMessage.GetPayload().IsEmpty() ? 0 : InMessage.GetPayload()[0];
+		});
+	MW_EXPECT_EQ(
+		Test,
+		EMessagingResult::Success,
+		ServerMessaging.SubscribeToChannel(GameplayChannel, std::move(ServerSubscriber)),
+		"The server subscribes to application delivery");
+	MW_EXPECT_EQ(
+		Test,
+		EMessagingResult::Success,
+		ClientMessaging.SubscribeToChannel(GameplayChannel, std::move(ClientSubscriber)),
+		"The client subscribes to application delivery");
+
+	const FMessagingRoute ServerRoute{
+		ClientLink, MakeUdpAddress(LoopbackOctets[0], LoopbackOctets[1], LoopbackOctets[2], LoopbackOctets[3], ServerDevice.BoundPort())};
+	const ENetworkResult ConnectResult = ClientNetwork.ConnectToServer(ServerRoute, 0);
+	PumpHandshake(ServerDevice, ClientDevice, ServerMessaging, ClientMessaging, ServerNetwork, ClientNetwork);
+	const FPeerId ServerPeer = ClientNetwork.GetServerPeer();
+	const FMessage Message = MakeGameplayMessage();
 
 	// Act
-	PumpHandshake(ServerDevice, ClientDevice, Server, Client, Now);
-	MW_EXPECT_EQ(Test, ETransportHostState::Connected, Client.GetState(), "The client reached Connected over UDP");
-	MW_EXPECT_EQ(Test, std::size_t{1}, Server.ActivePeerCount(), "The server admitted exactly one peer");
-
-	const FPeerId ServerPeer = Client.GetServerPeer();
-	MW_EXPECT_TRUE(Test, ServerPeer.IsValid(), "The client resolves its server peer after connecting");
-	MW_EXPECT_EQ(
-		Test,
-		ETransportResult::Success,
-		Client.SendTo(ServerPeer, ApplicationChannel, TSpan<const std::uint8_t>(AppPayload.data(), AppPayload.size())),
-		"The client queues one channel-1 message to the server");
-	(void)Client.PumpSend(Now);
-	const bool bServerDelivered = ServerDevice.PollReadable(HandshakePollTimeoutMilliseconds);
-	if (bServerDelivered)
-	{
-		(void)Server.PumpReceive(Now);
-	}
+	const ENetworkResult ClientSendResult = ClientNetwork.SendToServer(GameplayChannel, Message);
+	AdvancePair(ServerDevice, ClientDevice, ServerMessaging, ClientMessaging, ServerNetwork, ClientNetwork, 100);
+	const ENetworkResult BroadcastResult = ServerNetwork.Broadcast(GameplayChannel, Message);
+	AdvancePair(ServerDevice, ClientDevice, ServerMessaging, ClientMessaging, ServerNetwork, ClientNetwork, 101);
 
 	// Assert
-	MW_EXPECT_EQ(Test, std::size_t{1}, Capture.Count, "The server handler observed exactly one message");
-	MW_EXPECT_EQ(Test, ApplicationChannel, Capture.Channel, "The message arrived on the requested channel");
-	MW_EXPECT_EQ(Test, AppPayloadByte0, Capture.FirstByte, "The message carried the sent payload's first byte");
+	MW_EXPECT_EQ(Test, ENetworkResult::Success, ConnectResult, "The client accepts the registered server route");
+	MW_EXPECT_EQ(Test, EConnectionState::Connected, ClientNetwork.GetConnectionState(), "The client reaches Connected over real UDP");
+	MW_EXPECT_TRUE(Test, ServerPeer.IsValid(), "The client exposes its logical server peer after admission");
+	MW_EXPECT_EQ(Test, ENetworkResult::Success, ClientSendResult, "The client sends application traffic only through Network");
+	MW_EXPECT_EQ(Test, std::size_t{1}, ServerCapture.Count, "The server receives one remote application message");
+	MW_EXPECT_TRUE(Test, ServerCapture.Sender.IsValid(), "The server resolves the validated sender peer without an endpoint address");
+	MW_EXPECT_EQ(Test, ApplicationPayload[0], ServerCapture.FirstPayloadByte, "The server receives the client payload");
+	MW_EXPECT_EQ(Test, ENetworkResult::Success, BroadcastResult, "The server broadcasts once through each eligible Network peer");
+	MW_EXPECT_EQ(Test, std::size_t{1}, ClientCapture.Count, "The client receives the server broadcast once");
+	MW_EXPECT_TRUE(Test, ClientCapture.Sender.IsValid(), "The client resolves the server as a logical peer");
+	MW_EXPECT_EQ(Test, ApplicationPayload[0], ClientCapture.FirstPayloadByte, "The client receives the broadcast payload");
 }

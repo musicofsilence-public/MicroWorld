@@ -19,6 +19,7 @@
 #include <MicroWorld/Engine/ObjectStore.h>
 #include <MicroWorld/Engine/ObjectStoreStorage.h>
 #include <MicroWorld/Engine/StrongObjectPtr.h>
+#include <MicroWorld/Engine/WorldSubsystem.h>
 
 #include <array>
 #include <cstddef>
@@ -97,14 +98,11 @@ struct FComponentEventState final
 };
 
 /**
- * Motivation: Owns all fixed object-store, root, worklist, and class-registry storage for one isolated engine
- *   behavior test. The fixture registers the three engine base descriptors so the base types are
- *   constructible through their StaticClassDescriptor overloads. User-derived test types call
- *   RegisterDerivedClass before CreateObject so their explicit descriptors participate in store
- *   validation.
- * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
+ * Motivation: Owns fixed storage for one isolated Engine behavior test and registers the four Engine bases.
+ * Responsibilities: Expose construction,
+ * root, and storage helpers.
  * Example:
- *   // Construct and exercise the type in one behavior test.
+ *   TEngineEnvironment<256, 8, 8, 2> Environment;
  */
 template<std::size_t SlotSizeBytes, std::size_t SlotAlignmentBytes, std::uint32_t SlotCount, std::uint32_t RootCapacity>
 class TEngineEnvironment final
@@ -186,6 +184,10 @@ public:
 		{
 			Parent = Registry.Find(UWorldClassId);
 		}
+		else if constexpr (std::is_base_of<UWorldSubsystem, T>::value)
+		{
+			Parent = Registry.Find(UWorldSubsystemClassId);
+		}
 		const FClassDescriptor Candidate = MakeClassDescriptor<T>(InTypeId, InName, Parent, &TraceManagedObjectReferences);
 		return Registry.Register(Candidate);
 	}
@@ -207,13 +209,14 @@ private:
 
 	/**
 	 * Motivation: The store accepts them.
-	 * Responsibilities: Registers the three engine base descriptors.
+	 * Responsibilities: Registers the four engine base descriptors.
 	 */
 	void RegisterBaseClasses() noexcept
 	{
 		(void)Registry.Register(UActorComponent::StaticClassDescriptor());
 		(void)Registry.Register(AActor::StaticClassDescriptor());
 		(void)Registry.Register(UWorld::StaticClassDescriptor());
+		(void)Registry.Register(UWorldSubsystem::StaticClassDescriptor());
 	}
 
 	/**

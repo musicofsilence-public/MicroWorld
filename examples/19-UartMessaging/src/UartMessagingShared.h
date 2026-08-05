@@ -1,7 +1,8 @@
 #pragma once
 
-#include <MicroWorld/Transport/TransportHostConfig.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
+#include <MicroWorld/Messaging/NameId.h>
+#include <MicroWorld/Networking/NetworkSystemInformation.h>
 #include <MicroWorld/Platform/Esp32/Esp32UartConfig.h>
 
 #include <cstdint>
@@ -27,11 +28,17 @@ constexpr std::int32_t RxGpioNumber = 18;
 /** Motivation: A wire is fast, so 115200 baud. */
 constexpr std::uint32_t UartBaudRate = 115200;
 
-/** Motivation: Application channel carrying the client's spawn request (channel 0 is reserved control). */
-constexpr std::uint8_t InputEventChannel = 1;
+/** Motivation: Identifies the local-only channel carrying client spawn requests through Network. */
+constexpr MicroWorld::Messaging::FNameId InputEventChannel = MicroWorld::Messaging::MakeNameId("Ex19Input");
 
-/** Motivation: Application channel the server broadcasts world state on. */
-constexpr std::uint8_t StateBroadcastChannel = 2;
+/** Motivation: Identifies the local-only channel carrying server state through Network. */
+constexpr MicroWorld::Messaging::FNameId StateBroadcastChannel = MicroWorld::Messaging::MakeNameId("Ex19State");
+
+/** Motivation: Filters the one application message accepted on the input channel. */
+constexpr MicroWorld::Messaging::FNameId SpawnRequestMessageName = MicroWorld::Messaging::MakeNameId("Ex19Spawn");
+
+/** Motivation: Filters the one application message accepted on the state channel. */
+constexpr MicroWorld::Messaging::FNameId StateMessageName = MicroWorld::Messaging::MakeNameId("Ex19StateUpdate");
 
 /** Motivation: One-byte opcode the client sends to request one server-world spawn. */
 constexpr std::uint8_t SpawnRequestOpcode = 0x42;
@@ -39,7 +46,7 @@ constexpr std::uint8_t SpawnRequestOpcode = 0x42;
 /** Motivation: Number of spawn requests the client issues, and pre-allocated server registries. */
 constexpr int MaxSpawns = 2;
 
-/** Motivation: Protocol version both hosts advertise in Hello/Welcome. */
+/** Motivation: Protocol version both Network roles validate during admission. */
 constexpr std::uint8_t ProtocolVersion = 1;
 
 /** Motivation: Stable descriptor id for the actor the server spawns on a client request. */
@@ -69,12 +76,13 @@ inline MicroWorld::Platform::Esp32::FEsp32UartConfig MakeUartConfig(const std::u
  *   the point-to-point peer alive between sends without each role restating the values.
  * Responsibilities: Return a config carrying the shared heartbeat, timeout, and protocol version.
  */
-inline MicroWorld::Transport::FTransportHostConfig MakeHostConfig() noexcept
+inline MicroWorld::Networking::FNetworkSystemInformation MakeNetworkInformation(const MicroWorld::Networking::ENetworkRole Role) noexcept
 {
-	MicroWorld::Transport::FTransportHostConfig Config{};
-	Config.HeartbeatIntervalMilliseconds = 1000;
-	Config.PeerTimeoutMilliseconds = 5000;
-	Config.ProtocolVersion = ProtocolVersion;
-	return Config;
+	MicroWorld::Networking::FNetworkSystemInformation Information{};
+	Information.Role = Role;
+	Information.HeartbeatIntervalMilliseconds = 1000;
+	Information.PeerTimeoutMilliseconds = 5000;
+	Information.ProtocolVersion = ProtocolVersion;
+	return Information;
 }
 } // namespace Ex19

@@ -55,7 +55,7 @@ MW_TEST_CASE(MessagingSystem_ReliableWireMessagesStripSequenceAndAcknowledgeWith
 				AcknowledgementSender, TSpan<std::uint8_t>(AcknowledgementBytes, FMessagingSystem::MaxFrameBytes), AcknowledgementReceiveResult);
 	const FNameId AcknowledgementChannelNameId = FRawWireFrame::ReadNameId(&AcknowledgementBytes[ChannelNameIdByteIndex]);
 	const FNameId AcknowledgementMessageNameId = FRawWireFrame::ReadNameId(&AcknowledgementBytes[MessageNameIdByteIndex]);
-	const std::uint16_t AcknowledgedSequenceNumber = FRawWireFrame::ReadSequenceNumber(&AcknowledgementBytes[WireHeaderBytes]);
+	const std::uint64_t AcknowledgedSequenceNumber = FRawWireFrame::ReadSequenceNumber(&AcknowledgementBytes[WireHeaderBytes]);
 	const ETransportResult RequeueAcknowledgementResult =
 		Network.Port(ReceivingPort)
 			.TrySend(SendingAddress, TSpan<const std::uint8_t>(AcknowledgementBytes, AcknowledgementReceiveResult.BytesReceived));
@@ -122,8 +122,8 @@ MW_TEST_CASE(MessagingSystem_ReliableWireMessagesUseConsecutiveSequenceNumbers)
 	const ETransportResult SecondReceiveStatus =
 		Network.Port(ReceivingPort)
 			.TryReceive(SecondFrameSender, TSpan<std::uint8_t>(SecondFrameBytes, FMessagingSystem::MaxFrameBytes), SecondFrameReceiveResult);
-	const std::uint16_t FirstFrameSequenceNumber = FRawWireFrame::ReadSequenceNumber(&FirstFrameBytes[WireHeaderBytes]);
-	const std::uint16_t SecondFrameSequenceNumber = FRawWireFrame::ReadSequenceNumber(&SecondFrameBytes[WireHeaderBytes]);
+	const std::uint64_t FirstFrameSequenceNumber = FRawWireFrame::ReadSequenceNumber(&FirstFrameBytes[WireHeaderBytes]);
+	const std::uint64_t SecondFrameSequenceNumber = FRawWireFrame::ReadSequenceNumber(&SecondFrameBytes[WireHeaderBytes]);
 
 	// Assert
 	MW_EXPECT_EQ(Test, EMessagingResult::Success, CreateResult, "The reliable sequence channel should be created");

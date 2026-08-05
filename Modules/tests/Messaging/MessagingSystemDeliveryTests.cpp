@@ -15,6 +15,8 @@ namespace
 using namespace ::MicroWorld::Tests;
 
 using MicroWorld::Messaging::FChannelInformation;
+using MicroWorld::Messaging::FMessagingLinkId;
+using MicroWorld::Messaging::FMessagingRoute;
 using MicroWorld::Messaging::FNameId;
 
 /**
@@ -475,6 +477,53 @@ MW_TEST_CASE(MessagingSystem_SeparatesSubscribersByChannelName)
 	MW_EXPECT_EQ(Test, EMessagingResult::Success, SubscribeResult, "The isolated subscriber should register successfully");
 	MW_EXPECT_EQ(Test, EMessagingResult::Success, SendResult, "A send on the second channel should succeed");
 	MW_EXPECT_EQ(Test, std::size_t{0}, DeliveryCount, "A subscriber on the first channel should not receive a second-channel send");
+}
+
+/**
+ * Motivation: Separates Network's addressed wire sends from application-local publication.
+ * Responsibilities: Verify two explicit peer routes send without self-delivery, while the local-only API does not drive a device.
+ */
+MW_TEST_CASE(MessagingSystem_SeparatesExplicitRemoteAndLocalOnlyDelivery)
+{
+	// Arrange
+	FMessagingSystem System;
+	FTestTransportDevice Device;
+	FMessagingLinkId LinkId;
+	const FChannelInformation Channel{"Telemetry", false, nullptr, {}};
+	FDeviceAddress FirstPeer{};
+	FirstPeer.Bytes[0] = 1;
+	FirstPeer.Size = 1;
+	FDeviceAddress SecondPeer{};
+	SecondPeer.Bytes[0] = 2;
+	SecondPeer.Size = 1;
+	std::size_t DeliveryCount = 0;
+	FSubscriberDelegate Subscriber;
+	const EDelegateResult BindingResult = Subscriber.Bind([&DeliveryCount](const FMessage&) noexcept { ++DeliveryCount; });
+	FMessage Message;
+	Message.SetMessageNameId("TemperatureUpdated");
+
+	// Act
+	const EMessagingResult RegisterResult = System.RegisterLink(Device, LinkId);
+	const EMessagingResult CreateResult = System.CreateChannel(Channel);
+	const EMessagingResult SubscribeResult = System.SubscribeToChannel("Telemetry", std::move(Subscriber));
+	const EMessagingResult FirstRemoteResult = System.SendMessageToRemoteChannel(Message, "Telemetry", {LinkId, FirstPeer});
+	const EMessagingResult SecondRemoteResult = System.SendMessageToRemoteChannel(Message, "Telemetry", {LinkId, SecondPeer});
+	const std::size_t DeliveriesAfterRemoteSends = DeliveryCount;
+	const EMessagingResult LocalResult = System.DeliverMessageLocally(Message, "Telemetry");
+
+	// Assert
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, RegisterResult, "The explicit-route device should register");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, CreateResult, "The local-only channel should be created");
+	MW_EXPECT_EQ(Test, EDelegateResult::Success, BindingResult, "The separation subscriber should bind");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, SubscribeResult, "The separation subscriber should register");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, FirstRemoteResult, "The first explicit peer send should succeed");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, SecondRemoteResult, "The second explicit peer send should succeed");
+	MW_EXPECT_EQ(Test, std::size_t{0}, DeliveriesAfterRemoteSends, "Explicit remote sends should never self-deliver");
+	MW_EXPECT_EQ(Test, std::size_t{2}, Device.GetTrySendCallCount(), "Both explicit peers should receive one send attempt");
+	MW_EXPECT_EQ(Test, SecondPeer, Device.GetLastDestination(), "The second explicit send should preserve its selected peer");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, LocalResult, "A local-only publication should succeed");
+	MW_EXPECT_EQ(Test, std::size_t{1}, DeliveryCount, "The local-only publication should deliver once");
+	MW_EXPECT_EQ(Test, std::size_t{2}, Device.GetTrySendCallCount(), "Local-only delivery should never drive the device");
 }
 
 } // namespace

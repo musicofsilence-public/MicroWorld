@@ -19,6 +19,7 @@ inspect the
 | Core | `MicroWorld::Core` | `MicroWorld` |
 | Engine | `MicroWorld::Engine` | `MicroWorld` |
 | Messaging | `MicroWorld::Messaging` | `MicroWorld` |
+| Networking | `MicroWorld::Networking` | `MicroWorld` |
 | Transport | `MicroWorld::Transport` | `MicroWorld` |
 | Application | `MicroWorld::Application` | `MicroWorld` |
 | Platform/Host | `MicroWorld::Platform::Host` | `MicroWorldPlatformHost` |
@@ -43,15 +44,18 @@ Dependencies point inward, and `tools/CheckDependencyBoundaries.py` fails
 
 ```text
 Core <- Messaging, Transport
-Core + Messaging <- Engine
+Core + Messaging <- Networking
+Core + Messaging + Networking <- Engine
 Core + Engine <- Application
 ```
 
-Transport never sees Engine and Engine never sees Transport. Messaging and
-Transport never see each other either: they meet at `Core::ITransportDevice`, so
-a channel sends through the interface while each medium realises it, and the
-application entry point is the only place that names a concrete device. CMake
-links the named targets; local PlatformIO development uses one
+Transport never sees Engine or Networking, and Engine never sees Transport.
+Messaging and Transport never see each other either: they meet at
+`Core::ITransportDevice`, so a Messaging link sends through the interface while
+each medium realises it. Networking depends only on Core and Messaging; it uses
+Messaging routes without accessing a device. The application composition root
+names concrete devices, registers them with Messaging, and advances each once.
+CMake links the named targets; local PlatformIO development uses one
 `symlink://../../Modules` dependency plus one per platform edge in use.
 
 ## Verification

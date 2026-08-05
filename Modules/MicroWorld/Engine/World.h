@@ -14,6 +14,8 @@
 #include <MicroWorld/Engine/ClassRegistryRegistrationView.h>
 #include <MicroWorld/Engine/Object.h>
 #include <MicroWorld/Engine/ObjectPtr.h>
+#include <MicroWorld/Engine/WorldSubsystem.h>
+#include <MicroWorld/Networking/NetworkSystem.h>
 #include <MicroWorld/Core/Time.h>
 
 #include <cstddef>
@@ -82,6 +84,14 @@ public:
 	explicit UWorld(FWorldActorRegistryReference InActorStorage) noexcept;
 
 	/**
+	 * Motivation: Binds actor and optional subsystem storage without requiring deferred-spawn infrastructure.
+	 * Responsibilities: Take both
+	 * move-only registry references while preserving the simple direct-World construction
+	 *   path.
+	 */
+	UWorld(FWorldActorRegistryReference InActorStorage, FWorldSubsystemRegistryReference InSubsystemStorage) noexcept;
+
+	/**
 	 * Motivation: Binds optional caller-owned typed spawn storage and a narrow canonical descriptor capability.
 	 * Responsibilities: Take the registry reference, deferred spawn storage, and class registration view together.
 	 */
@@ -89,6 +99,21 @@ public:
 		FWorldActorRegistryReference InActorStorage,
 		FDeferredActorSpawnStorageReference InSpawnStorage,
 		FClassRegistryRegistrationView InClasses) noexcept;
+
+	/**
+	 * Motivation: Binds the complete Engine-hosted World composition including caller-owned subsystem storage and optional
+	 *   Network
+	 * access.
+	 * Responsibilities: Take actor, deferred-spawn, class, subsystem, and non-owning Network capabilities without
+	 *   retaining their
+	 * owners.
+	 */
+	UWorld(
+		FWorldActorRegistryReference InActorStorage,
+		FDeferredActorSpawnStorageReference InSpawnStorage,
+		FClassRegistryRegistrationView InClasses,
+		FWorldSubsystemRegistryReference InSubsystemStorage,
+		Networking::FNetworkSystem* InNetwork) noexcept;
 
 	/**
 	 * Motivation: Keeps exact derived destruction behind the descriptor/store boundary.
@@ -103,6 +128,44 @@ public:
 	 *   world and actor unchanged on rejection.
 	 */
 	EEngineResult RegisterActor(TObjectPtr<AActor> InActor) noexcept;
+
+	/**
+	 * Motivation: Lets an application register one managed World-scoped service before BeginPlay.
+	 * Responsibilities: Reject invalid,
+	 * duplicate, full, cross-store, already-owned, or lifecycle-locked candidates
+	 *   transactionally and publish exactly one exact concrete type
+	 * on success.
+	 */
+	EEngineResult RegisterSubsystem(TObjectPtr<UWorldSubsystem> InSubsystem) noexcept;
+
+	/**
+	 * Motivation: Lets actors reach the optional Engine-owned Network layer through their owning World.
+	 * Responsibilities: Return the
+	 * captured non-owning Network pointer, or null when this World was created without Network.
+	 */
+	Networking::FNetworkSystem* GetNetwork() noexcept { return Network; }
+
+	/**
+	 * Motivation: Lets actors and application code retrieve one registered service by exact managed C++ type.
+	 * Responsibilities: Return
+	 * the live exact-type subsystem or null without ancestry matching, RTTI, allocation, or
+	 *   mutation.
+	 */
+	template<typename TSubsystem>
+	TSubsystem* GetSubsystem() noexcept
+	{
+		static_assert(std::is_base_of<UWorldSubsystem, TSubsystem>::value, "GetSubsystem requires a UWorldSubsystem-derived type.");
+		const void* TargetTypeToken = ManagedObjectTypeToken<TSubsystem>();
+		for (std::size_t Index = 0; Index < Subsystems.GetCount(); ++Index)
+		{
+			UWorldSubsystem* Subsystem = Subsystems.At(Index).Get();
+			if (Subsystem != nullptr && Subsystem->GetClassDescriptor().TypeToken == TargetTypeToken)
+			{
+				return static_cast<TSubsystem*>(Subsystem);
+			}
+		}
+		return nullptr;
+	}
 
 	/**
 	 * Motivation: Starts registered actors, then pre-play queued actors, from one canonical time.
@@ -254,6 +317,34 @@ private:
 	void PublishActor(TObjectPtr<AActor> InActor) noexcept;
 
 	/**
+	 * Motivation: Reports the first reason a subsystem cannot register before any owner mutation.
+	 * Responsibilities: Return Success or the
+	 * first deterministic rejection reason for the candidate subsystem.
+	 */
+	EEngineResult CheckSubsystemRegistrable(TObjectPtr<UWorldSubsystem> InSubsystem) const noexcept;
+
+	/**
+	 * Motivation: Links a validated subsystem to this World and appends its strong ownership edge.
+	 * Responsibilities: Assign the weak
+	 * World handle and add the subsystem to the external registry.
+	 */
+	void PublishSubsystem(TObjectPtr<UWorldSubsystem> InSubsystem) noexcept;
+
+	/**
+	 * Motivation: Starts subsystems before actors while keeping partial startup atomic.
+	 * Responsibilities: Initialize in registration
+	 * order and deinitialize the initialized prefix on the first failure.
+	 */
+	Core::ERuntimeResult InitializeSubsystemsWithRollback() noexcept;
+
+	/**
+	 * Motivation: Stops every initialized subsystem after actors end while preserving the first error.
+	 * Responsibilities: Deinitialize
+	 * in reverse registration order and continue after individual failures.
+	 */
+	Core::ERuntimeResult DeinitializeSubsystemsReverse() noexcept;
+
+	/**
 	 * Motivation: Begins one actor's lifecycle while letting the world roll back on failure.
 	 * Responsibilities: Begin the actor and propagate its result for rollback decisions.
 	 */
@@ -326,6 +417,14 @@ private:
 	void ConstructDeferredSpawns(FObjectStore& InObjectStore) noexcept;
 
 	/**
+	 * Motivation: Publishes retained deferred actors while the caller's startup dispatch guard remains held.
+	 * Responsibilities: Begin and
+	 * publish every sealed actor, folding the first lifecycle error into FirstError.
+	 */
+	Core::ERuntimeResult BeginDeferredSpawnsWithGuardHeld(
+		FObjectStore& InObjectStore, Core::TimePointMilliseconds InNowMilliseconds, Core::ERuntimeResult& InOutFirstError) noexcept;
+
+	/**
 	 * Motivation: Publishes retained deferred actors under one fresh dispatch guard in FIFO order.
 	 * Responsibilities: Acquire the guard, begin and publish each constructed deferred actor, and fold the first failure.
 	 */
@@ -352,6 +451,12 @@ private:
 
 	/** Motivation: Supplies canonical actor descriptors without exposing the application registry to World. */
 	FClassRegistryRegistrationView Classes;
+
+	/** Motivation: Holds the optional caller-owned subsystem registry capability for this World's lifetime. */
+	FWorldSubsystemRegistryReference Subsystems;
+
+	/** Motivation: Borrows the optional Engine-owned Network system, which outlives this World and its actors. */
+	Networking::FNetworkSystem* Network{nullptr};
 
 	/** Motivation: Guards the forward-only world lifecycle without scattering boolean flags. */
 	Core::FLifecycleGuard Lifecycle;

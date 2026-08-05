@@ -9,8 +9,11 @@ namespace MicroWorld::Engine
 
 class AActor;
 class UWorld;
+class UWorldSubsystem;
 template<std::size_t MaxActors>
 class FWorldActorRegistry;
+template<std::size_t MaxSubsystems>
+class FWorldSubsystemRegistry;
 
 /**
  * Motivation: Lets one world reach a fixed actor registry's storage through a move-only reference so the storage cannot be
@@ -19,7 +22,7 @@ class FWorldActorRegistry;
  *   creatable only by the owning FWorldActorRegistry and inspectable only by UWorld.
  * Example:
  *   FWorldActorRegistryReference Ref = Registry.MakeReference();
- *   if (Ref.IsValid()) { Ref.Add(Actor); }
+ *   Pass Ref to UWorld during construction.
  */
 class FWorldActorRegistryReference final
 {
@@ -244,6 +247,129 @@ private:
 
 	/** Motivation: Points at the private caller-owned pending-destroy count advanced only by UWorld. */
 	std::size_t* PendingDestroyCount{nullptr};
+};
+
+/**
+ * Motivation: Lets one World reach caller-owned subsystem storage without embedding configured capacity in every object slot.
+ *
+ * Responsibilities: Carry one move-only reference to a bounded registry, validate it before access, and permit mutation only
+ *   through UWorld.
+ *
+ * Example:
+ *   FWorldSubsystemRegistryReference Ref = Registry.MakeReference();
+ *   Pass Ref to UWorld during construction.
+ */
+class FWorldSubsystemRegistryReference final
+{
+public:
+	/**
+	 * Motivation: Transfers the only usable registry reference and invalidates its source.
+	 * Responsibilities: Move every pointer and
+	 * leave the source empty.
+	 */
+	FWorldSubsystemRegistryReference(FWorldSubsystemRegistryReference&& Other) noexcept
+		: Subsystems(Other.Subsystems), Capacity(Other.Capacity), Count(Other.Count)
+	{
+		Other.Subsystems = nullptr;
+		Other.Capacity = 0;
+		Other.Count = nullptr;
+	}
+
+	/**
+	 * Motivation: Prevents two Worlds from sharing one mutable subsystem registry reference.
+	 * Responsibilities: Reject copy construction
+	 * so each registry has one holder.
+	 */
+	FWorldSubsystemRegistryReference(const FWorldSubsystemRegistryReference&) = delete;
+
+	/**
+	 * Motivation: Prevents rebinding a World's subsystem registry after construction.
+	 * Responsibilities: Reject copy assignment so the
+	 * registry binding never changes.
+	 */
+	FWorldSubsystemRegistryReference& operator=(const FWorldSubsystemRegistryReference&) = delete;
+
+	/**
+	 * Motivation: Prevents rebinding a World's subsystem registry through move assignment.
+	 * Responsibilities: Reject move assignment so
+	 * the registry binding never changes.
+	 */
+	FWorldSubsystemRegistryReference& operator=(FWorldSubsystemRegistryReference&&) = delete;
+
+private:
+	friend class UWorld;
+
+	template<std::size_t>
+	friend class FWorldSubsystemRegistry;
+
+	/**
+	 * Motivation: Creates an invalid optional capability for legacy World construction or a claimed registry.
+	 * Responsibilities: Produce a
+	 * reference that reports invalid on every query.
+	 */
+	FWorldSubsystemRegistryReference() noexcept = default;
+
+	/**
+	 * Motivation: Lets the fixed registry mint one validated reference over its stable storage.
+	 * Responsibilities: Bind the array,
+	 * capacity, and count without taking ownership.
+	 */
+	FWorldSubsystemRegistryReference(TObjectPtr<UWorldSubsystem>* InSubsystems, const std::size_t InCapacity, std::size_t& InCount) noexcept
+		: Subsystems(InSubsystems), Capacity(InCapacity), Count(&InCount)
+	{
+	}
+
+	/**
+	 * Motivation: Lets UWorld confirm the capability still identifies bounded caller-owned storage.
+	 * Responsibilities: Accept zero
+	 * capacity with no array and otherwise require a present array and bounded count.
+	 */
+	bool IsValid() const noexcept
+	{
+		const bool bArrayPresent = Capacity == 0 || Subsystems != nullptr;
+		return Count != nullptr && bArrayPresent && *Count <= Capacity;
+	}
+
+	/**
+	 * Motivation: Lets UWorld read the subsystem capacity selected by the application.
+	 * Responsibilities: Return the immutable capacity
+	 * captured when the reference was minted.
+	 */
+	std::size_t GetCapacity() const noexcept { return Capacity; }
+
+	/**
+	 * Motivation: Lets UWorld read how many subsystems it currently owns.
+	 * Responsibilities: Return the live count or zero for an invalid
+	 * optional capability.
+	 */
+	std::size_t GetCount() const noexcept { return Count != nullptr ? *Count : 0; }
+
+	/**
+	 * Motivation: Lets UWorld inspect one registered subsystem after validating the internal index.
+	 * Responsibilities: Return the stored
+	 * reference without another bounds check.
+	 */
+	const TObjectPtr<UWorldSubsystem>& At(const std::size_t InIndex) const noexcept { return Subsystems[InIndex]; }
+
+	/**
+	 * Motivation: Lets UWorld publish one fully validated subsystem into stable storage.
+	 * Responsibilities: Store at the live count and
+	 * advance the count exactly once.
+	 */
+	void Add(const TObjectPtr<UWorldSubsystem> InSubsystem) noexcept
+	{
+		Subsystems[*Count] = InSubsystem;
+		++*Count;
+	}
+
+	/** Motivation: Points at the private caller-owned subsystem array. */
+	TObjectPtr<UWorldSubsystem>* Subsystems{nullptr};
+
+	/** Motivation: Records the immutable subsystem capacity selected by the application. */
+	std::size_t Capacity{0};
+
+	/** Motivation: Points at the private caller-owned count advanced only by UWorld. */
+	std::size_t* Count{nullptr};
 };
 
 } // namespace MicroWorld::Engine

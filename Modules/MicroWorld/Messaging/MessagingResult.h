@@ -21,6 +21,9 @@ enum class EMessagingResult : std::uint8_t
 	NotFound,
 	/** Motivation: Reports that fixed channel, subscription, queue, or reliable-send capacity is exhausted and state is unchanged. */
 	Full,
+	/** Motivation: Reports that a reversible operation cannot proceed while synchronous dispatch, subscriptions, or reliable ownership remain live.
+	 */
+	Busy,
 	/** Motivation: Reports an unset or oversize request whose unchanged retry cannot succeed and leaves state unchanged. */
 	Invalid,
 };

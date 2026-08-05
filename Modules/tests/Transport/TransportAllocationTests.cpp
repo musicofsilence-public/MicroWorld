@@ -10,9 +10,6 @@
 #include <MicroWorld/Transport/HostLoopback.h>
 #include <MicroWorld/Transport/TransportManager.h>
 #include <MicroWorld/Transport/TransportPacketStorage.h>
-#include <MicroWorld/Transport/EControlMessageType.h>
-#include <MicroWorld/Transport/FControlMessage.h>
-#include <MicroWorld/Transport/FMessageHeader.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -26,23 +23,14 @@ using MicroWorld::Core::FReceiveResult;
 using MicroWorld::Core::MakeLoopbackAddress;
 using MicroWorld::Core::TSpan;
 using MicroWorld::Tests::GlobalAllocationCount;
-using MicroWorld::Transport::EControlMessageType;
 using MicroWorld::Transport::FByteReader;
 using MicroWorld::Transport::FByteWriter;
-using MicroWorld::Transport::FControlMessage;
-using MicroWorld::Transport::FMessageHeader;
-using MicroWorld::Transport::ReadControlMessage;
-using MicroWorld::Transport::ReadMessage;
 using MicroWorld::Transport::THostLoopback;
 using MicroWorld::Transport::TTransportManager;
 using MicroWorld::Transport::TTransportPacketStorage;
-using MicroWorld::Transport::WriteControlMessage;
-using MicroWorld::Transport::WriteMessage;
 
 /** Motivation: Per-buffer byte capacity of the writer/reader storage exercised by the allocation test. */
 constexpr std::size_t BufferByteCount = 8;
-/** Motivation: Capacity of the framing buffer that lives outside the counted region. */
-constexpr std::size_t FramingBufferCapacity = 16;
 /** Motivation: Sentinel value pre-loaded into BytesReceived so an unchanged failed receive is observable. */
 constexpr std::size_t UntouchedBytesReceivedSentinel = 0xEE;
 /** Motivation: Loopback port index whose mailbox receives the single-link FIFO traffic. */
@@ -57,21 +45,10 @@ constexpr std::size_t LoopbackPacketBytes = 8;
 constexpr std::size_t FullQueueSlotCount = 1;
 /** Motivation: Four-byte packet capacity used by the full-FIFO storage and the unavailable-receive destination. */
 constexpr std::size_t FourBytePacketCapacity = 4;
-/** Motivation: Channel byte the message-framing path writes into the application message header. */
-constexpr std::uint8_t ApplicationChannel = 7;
 /** Motivation: Base value added to each writer index so every written byte is distinct and observable. */
 constexpr std::uint8_t WrittenByteBase = 0xA0;
-/** Motivation: Welcome protocol version the message-framing control path encodes. */
-constexpr std::uint8_t WelcomeProtocolVersion = 1;
-/** Motivation: Welcome peer index the message-framing control path encodes. */
-constexpr std::uint8_t WelcomePeerIndex = 2;
-/** Motivation: Welcome peer generation the message-framing control path encodes. */
-constexpr std::uint8_t WelcomePeerGeneration = 3;
-
 /** Motivation: Eight distinct source bytes the reader consumes in order. */
 constexpr std::uint8_t ReaderSourceBytes[BufferByteCount] = {0x10, 0x20, 0x30, 0x40, 0x50, 0x60, 0x70, 0x80};
-/** Motivation: Three-byte payload the framing path writes as an application message. */
-constexpr std::uint8_t FramingPayloadBytes[3] = {0xC0, 0xC1, 0xC2};
 /** Motivation: Four-byte first packet queued into the manager FIFO. */
 constexpr std::uint8_t FirstManagerPacket[4] = {0x01, 0x02, 0x03, 0x04};
 /** Motivation: Four-byte second packet queued into the manager FIFO. */
@@ -82,7 +59,7 @@ constexpr std::uint8_t FullFifoPacket[2] = {0xAA, 0xBB};
 /**
  * Motivation: Scenario: Capture the allocation counter after construction, then drive byte writer/reader
  *   operations, manager queue/send-advance/receive, loopback delivery, full, unavailable, drain, and
- *   reuse paths, and message-framing control round trips.
+ *   reuse paths.
  * Responsibilities: Expected: Every steady-state Transport path performs no observable heap allocation, proving the
  *   bounded fixed-storage contract holds across the public API.
  */
@@ -98,9 +75,6 @@ MW_TEST_CASE(TransportOperationsPerformNoObservableAllocation)
 	const FDeviceAddress Port0 = MakeLoopbackAddress(SourcePort);
 	TTransportPacketStorage<2, 8> ManagerStorage;
 	TTransportManager<2, 8> Manager(Loopback.Port(SourcePort), ManagerStorage);
-	// Framing buffers live outside the counted region so only steady-state framing work is measured.
-	std::uint8_t FramingBuffer[FramingBufferCapacity] = {};
-
 	// Capture the counter only after every fixed-storage object is constructed.
 	const std::uint32_t AllocationsBefore = GlobalAllocationCount;
 
@@ -147,26 +121,6 @@ MW_TEST_CASE(TransportOperationsPerformNoObservableAllocation)
 	std::uint8_t EmptyDestination[FourBytePacketCapacity] = {};
 	FDeviceAddress EmptyFrom{};
 	(void)Loopback.Port(SourcePort).TryReceive(EmptyFrom, TSpan<std::uint8_t>(EmptyDestination, sizeof(EmptyDestination)), EmptyReceive);
-
-	// Act - exercise the message-framing path: write/read an application message and a control message.
-	FByteWriter FrameWriter(TSpan<std::uint8_t>(FramingBuffer, sizeof(FramingBuffer)));
-	(void)WriteMessage(FrameWriter, ApplicationChannel, TSpan<const std::uint8_t>(FramingPayloadBytes, sizeof(FramingPayloadBytes)));
-	FMessageHeader FrameHeader{};
-	TSpan<const std::uint8_t> FramePayload{};
-	(void)ReadMessage(FrameWriter.WrittenBytes(), FrameHeader, FramePayload);
-
-	FByteWriter ControlWriter(TSpan<std::uint8_t>(FramingBuffer, sizeof(FramingBuffer)));
-	FControlMessage Outgoing{};
-	Outgoing.Type = EControlMessageType::Welcome;
-	Outgoing.ProtocolVersion = WelcomeProtocolVersion;
-	Outgoing.PeerIndex = WelcomePeerIndex;
-	Outgoing.PeerGeneration = WelcomePeerGeneration;
-	(void)WriteControlMessage(ControlWriter, Outgoing);
-	FMessageHeader ControlHeader{};
-	TSpan<const std::uint8_t> ControlPayload{};
-	(void)ReadMessage(ControlWriter.WrittenBytes(), ControlHeader, ControlPayload);
-	FControlMessage DecodedControl{};
-	(void)ReadControlMessage(ControlPayload, DecodedControl);
 
 	const std::uint32_t AllocationsAfter = GlobalAllocationCount;
 	// Assert

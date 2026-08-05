@@ -1,15 +1,16 @@
-# Transport Host Behavior Tests
+# Transport Byte Behavior Tests
 
 Inherits `../../AGENTS.md`.
 
 ## Architecture
 
 The Transport test executable owns byte I/O, Transport's realisations of Core's
-non-blocking `ITransportDevice` contract, `TTransportManager`, `TTransportHost`,
-wire framing, `Core::ETransportResult` outcomes, the
+non-blocking `ITransportDevice` contract, `TTransportManager`, byte frame
+encoding/decoding, `Core::ETransportResult` outcomes, the
 host loopback device, the packet-drop decorator, the E32 node-address codec,
 and the portable RadioE32 device over `IUartByteStream`. Net and RadioE32 tests
-were separate; they folded into one Transport test set.
+were separate; they folded into one Transport test set. Messaging owns message
+framing, delivery, and session-independent reliability tests.
 
 ## Concepts
 

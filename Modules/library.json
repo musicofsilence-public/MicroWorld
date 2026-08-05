@@ -1,7 +1,7 @@
 {
   "name": "MicroWorld",
-  "version": "0.5.0",
-  "description": "MicroWorld: bounded C++17 mini engine for microcontrollers — lifecycle, World/Actor/Component, GC, smart pointers, messaging, and byte I/O transport",
+  "version": "0.6.0",
+  "description": "MicroWorld: bounded C++17 mini engine for microcontrollers — lifecycle, World/Actor/Component, GC, smart pointers, Messaging, Networking, and byte I/O Transport",
   "keywords": [
     "embedded",
     "engine",
@@ -29,6 +29,7 @@
       "+<Core/>",
       "+<Engine/>",
       "+<Messaging/>",
+      "+<Networking/>",
       "+<Transport/>",
       "+<Application/>",
       "-<Platform/>"

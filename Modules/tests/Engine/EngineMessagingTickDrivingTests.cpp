@@ -244,10 +244,10 @@ MW_TEST_CASE(EngineDrivesBoundPlaySystemAndMessagingSystemTogether)
 	std::size_t MessagingDeliveryCount{};
 
 	/**
-	 * Motivation: Observes the engine's documented inbound order — Messaging takes its turn first, so a frame's arriving
-	 *   messages are already delivered when the application's own system runs. Stays false if the subscriber never runs.
+	 * Motivation: Observes the engine's documented inbound order — the bound composition system takes its turn before
+	 *   Messaging delivers arriving frames. Stays false if the subscriber never runs.
 	 */
-	bool bMessagingDeliveredBeforeBoundSystemPreAdvance{false};
+	bool bBoundSystemPreAdvancedBeforeMessagingDelivery{false};
 	const FMessagingSystemInformation Information{};
 	const ERuntimeResult CreateMessagingResult = Engine.CreateMessagingSystem(Information);
 	FMessagingSystem* const MessagingSystem = Engine.GetMessagingSystem();
@@ -256,10 +256,10 @@ MW_TEST_CASE(EngineDrivesBoundPlaySystemAndMessagingSystemTogether)
 		MessagingSystem != nullptr ? MessagingSystem->CreateChannel(ChannelInformation) : EMessagingResult::Invalid;
 	FSubscriberDelegate Subscriber;
 	const EDelegateResult BindResult = Subscriber.Bind(
-		[&MessagingDeliveryCount, &bMessagingDeliveredBeforeBoundSystemPreAdvance, &BoundSystem](const FMessage&) noexcept
+		[&MessagingDeliveryCount, &bBoundSystemPreAdvancedBeforeMessagingDelivery, &BoundSystem](const FMessage&) noexcept
 		{
 			++MessagingDeliveryCount;
-			bMessagingDeliveredBeforeBoundSystemPreAdvance = BoundSystem.PreAdvanceCallCount == 0;
+			bBoundSystemPreAdvancedBeforeMessagingDelivery = BoundSystem.PreAdvanceCallCount > 0;
 		});
 	const EMessagingResult SubscribeResult = MessagingSystem != nullptr
 		? MessagingSystem->SubscribeToChannel(BoundSystemMessagingChannelNameId, std::move(Subscriber))
@@ -293,7 +293,7 @@ MW_TEST_CASE(EngineDrivesBoundPlaySystemAndMessagingSystemTogether)
 	MW_EXPECT_EQ(Test, ExpectedBoundSystemPostAdvanceCallCount, BoundSystem.PostAdvanceCallCount, "The bound system should receive post-advance");
 	MW_EXPECT_EQ(Test, ExpectedBoundSystemEndPlayCallCount, BoundSystem.EndPlayCallCount, "The bound system should receive end play");
 	MW_EXPECT_TRUE(
-		Test, bMessagingDeliveredBeforeBoundSystemPreAdvance, "Messaging should deliver its inbound frame before the bound system pre-advances");
+		Test, bBoundSystemPreAdvancedBeforeMessagingDelivery, "The bound system should pre-advance before Messaging delivers its inbound frame");
 }
 
 } // namespace

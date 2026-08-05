@@ -66,6 +66,8 @@ MW_TEST_CASE(MessagingSystem_RoutesWireMessagesAfterReceiverPreAdvanceWithoutEch
 	MW_EXPECT_EQ(Test, WirePayload[2], ReceivingRecorder.PayloadBytes[2], "The receiver should observe the third wire payload byte");
 	const bool bReceiverObservedSendingPort = ReceivingRecorder.Sender == SendingAddress;
 	MW_EXPECT_EQ(Test, true, bReceiverObservedSendingPort, "The receiver should observe the sending port as the message sender");
+	MW_EXPECT_TRUE(Test, ReceivingRecorder.SenderRoute.LinkId.IsValid(), "The receiver should preserve the registered source link");
+	MW_EXPECT_EQ(Test, SendingAddress, ReceivingRecorder.SenderRoute.Address, "The receiver should preserve the complete sender route address");
 	MW_EXPECT_EQ(Test, OneDelivery, SendingRecorder.DeliveryCount, "The sender pre-advance should not echo the loopback message to itself");
 }
 

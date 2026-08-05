@@ -75,7 +75,7 @@ constexpr std::size_t HostTimerCallbackBytes = 64;
  */
 struct FHostTraits : FDefaultEngineTraits
 {
-	static constexpr std::size_t MaxClasses = 6;
+	static constexpr std::size_t MaxClasses = 7; // Four Engine bases plus three user types.
 	static constexpr std::size_t MaxObjects = 8;
 	static constexpr std::size_t SlotSizeBytes = 256;
 	static constexpr std::size_t MaxRoots = 1;

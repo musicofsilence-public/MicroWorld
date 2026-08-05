@@ -1,114 +1,127 @@
 #include "UdpMessagingShared.h"
 
 #include <MicroWorld/Core/Containers/Span.h>
-#include <MicroWorld/Core/Delegates/DelegateHandle.h>
 #include <MicroWorld/Core/Log.h>
-#include <MicroWorld/Transport/NetworkMode.h>
-#include <MicroWorld/Transport/PeerId.h>
-#include <MicroWorld/Transport/TransportHost.h>
-#include <MicroWorld/Transport/TransportHostConfig.h>
-#include <MicroWorld/Transport/TransportHostState.h>
-#include <MicroWorld/Core/IO/DeviceAddress.h>
-#include <MicroWorld/Core/IO/TransportResult.h>
-#include <MicroWorld/Transport/Wifi/UdpAddressCodec.h>
+#include <MicroWorld/Messaging/ChannelInformation.h>
+#include <MicroWorld/Messaging/Message.h>
+#include <MicroWorld/Messaging/MessagingRoute.h>
+#include <MicroWorld/Messaging/MessagingSystem.h>
+#include <MicroWorld/Networking/ConnectionState.h>
+#include <MicroWorld/Networking/NetworkSystem.h>
 #include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
 #include <MicroWorld/Platform/Esp32/Esp32StationConfig.h>
 #include <MicroWorld/Platform/Esp32/Esp32TimeSource.h>
 #include <MicroWorld/Platform/Esp32/Esp32WifiDevice.h>
 #include <MicroWorld/Platform/Esp32/Esp32WifiLink.h>
+#include <MicroWorld/Transport/Wifi/UdpAddressCodec.h>
 
 #include <cstdint>
 
 using namespace MicroWorld::Core;
+using namespace MicroWorld::Messaging;
+using namespace MicroWorld::Networking;
 using namespace MicroWorld::Platform::Esp32;
-using namespace MicroWorld::Transport;
 using namespace Ex16;
 
 namespace
 {
-/** Motivation: Single real-time source for the client board. */
+/** Motivation: Supplies the client board's monotonic session time. */
 FEsp32TimeSource GTimeSource{};
-
-/** Motivation: Client session host; one peer slot holds the single server. 256-byte packet
- *  capacity matches the server and the host TwoNodeDemo. */
-using FClientTransport = TTransportHost<1, 256>;
-
-/** Motivation: Most recent actor count decoded from a server broadcast; -1 before the first. */
+/** Motivation: Retains the last server actor count delivered through Network. */
 int GLastServerActors = -1;
-} // namespace
 
 /**
- * Motivation: Lets one board act as the bare client half of example 16 over a single UDP socket,
- *   so the client-side transport can be reasoned about without an engine.
- * Responsibilities: Join the demo SoftAP, run a TTransportHost client, issue spawn requests, and
- *   observe the server's broadcast state until the expected actor count appears.
+ * Motivation: Decodes state only after Network has validated the live server session.
+ * Responsibilities: Ignore malformed payloads and record the advertised count.
  */
-void RunClient() noexcept
+void HandleStateUpdate(const FMessage& InMessage) noexcept
 {
-	static FEsp32WifiLink WifiLink;
-	if (WifiLink.JoinAccessPoint(FEsp32StationConfig{DemoApSsid, DemoApPassword, /*ConnectTimeoutMilliseconds*/ 15000}) != ETransportResult::Success)
+	if (InMessage.GetPayload().Size() != 2)
 	{
-		MW_LOG(Error, "ex16", "wifi failed; halting");
 		return;
 	}
-	MW_LOG(Log, "ex16", "wifi joined AP");
+	GLastServerActors = static_cast<int>(InMessage.GetPayload()[1]);
+	MW_LOG(Log, "ex16", "client rx state tick=%d actors=%d", static_cast<int>(InMessage.GetPayload()[0]), GLastServerActors);
+}
 
-	// The client binds an ephemeral local port (0): it only needs to reach the
-	// server, and TTransportHost learns the client's address server-side from its Hello.
-	static FEsp32WifiDevice Device(0);
-	MW_LOG(Log, "ex16", "client open=%d", Device.IsOpen() ? 1 : 0);
-	if (!Device.IsOpen())
+/**
+ * Motivation: Builds the client composition after it joins the demonstration access point.
+ * Responsibilities: Register the device, initialize Networking, and install the application state subscriber.
+ */
+bool SetupClient(FEsp32WifiDevice& Device, FMessagingSystem& Messaging, FNetworkSystem& Network, FMessagingLinkId& OutLinkId) noexcept
+{
+	if (Messaging.RegisterLink(Device, OutLinkId) != EMessagingResult::Success || Network.Initialize() != ENetworkResult::Success
+		|| Messaging.CreateChannel({InputEventChannel, false, nullptr, {}}) != EMessagingResult::Success
+		|| Messaging.CreateChannel({StateBroadcastChannel, false, nullptr, {}}) != EMessagingResult::Success)
 	{
-		MW_LOG(Error, "ex16", "socket failed; halting");
-		return;
+		MW_LOG(Error, "ex16", "client network setup failed; halting");
+		return false;
 	}
 
-	static FClientTransport ClientTransport{Device};
+	FMessagingSystem::FSubscriberDelegate StateSubscriber;
+	if (StateSubscriber.Bind(HandleStateUpdate) != EDelegateResult::Success
+		|| Messaging.SubscribeToChannel(StateBroadcastChannel, StateMessageName, std::move(StateSubscriber)) != EMessagingResult::Success)
+	{
+		MW_LOG(Error, "ex16", "client subscription setup failed; halting");
+		return false;
+	}
 
-	// Channel-2 state handler; the no-capture lambda names the static capture directly.
-	FClientTransport::FMessageHandlerBinding Binding;
-	Binding.Bind(
-		[](const FPeerId, const std::uint8_t Channel, TSpan<const std::uint8_t> Payload) noexcept
-		{
-			if (Channel != StateBroadcastChannel || Payload.Size() < 2)
-			{
-				return;
-			}
-			GLastServerActors = static_cast<int>(Payload[1]);
-			MW_LOG(Log, "ex16", "client rx state tick=%d actors=%d", static_cast<int>(Payload[0]), GLastServerActors);
-		});
-	FDelegateHandle Handle{};
-	(void)ClientTransport.AddMessageHandler(std::move(Binding), Handle);
+	return true;
+}
 
-	FTransportHostConfig Config = MakeHostConfig();
-	Config.ServerAddress = MakeUdpAddress(ServerIpv4[0], ServerIpv4[1], ServerIpv4[2], ServerIpv4[3], ServerPort);
-	(void)ClientTransport.Configure(ENetworkMode::Client, Config);
-	(void)ClientTransport.Start(GTimeSource.Now());
-	MW_LOG(Log, "ex16", "client connecting (udp)");
+/**
+ * Motivation: Starts the composed systems before the client begins its one server session.
+ * Responsibilities: Preserve the device-to-Messaging-to-Network start order and request the fixed server route.
+ */
+bool StartClient(FEsp32WifiDevice& Device, FMessagingSystem& Messaging, FNetworkSystem& Network, const FMessagingLinkId LinkId) noexcept
+{
+	const TimePointMilliseconds StartTime = GTimeSource.Now();
+	const FMessagingRoute ServerRoute{
+		LinkId, MicroWorld::Transport::MakeUdpAddress(ServerIpv4[0], ServerIpv4[1], ServerIpv4[2], ServerIpv4[3], ServerPort)};
+	Device.BeginPlay(StartTime);
+	Messaging.BeginPlay(StartTime);
+	Network.BeginPlay(StartTime);
+	if (Network.ConnectToServer(ServerRoute, StartTime) != ENetworkResult::Success)
+	{
+		MW_LOG(Error, "ex16", "client connect setup failed; halting");
+		return false;
+	}
 
+	return true;
+}
+
+/**
+ * Motivation: Keeps the demonstrated client traffic within its fixed request and pacing limits.
+ * Responsibilities: Advance the composition in order, issue at most MaxSpawns requests, and report the observed completion.
+ */
+void RunClientMessageLoop(FEsp32WifiDevice& Device, FMessagingSystem& Messaging, FNetworkSystem& Network) noexcept
+{
 	bool bConnectedAnnounced = false;
 	bool bDoneAnnounced = false;
 	int SpawnRequestsSent = 0;
-	std::uint64_t NextSpawnDueMilliseconds = 0;
+	TimePointMilliseconds NextSpawnDueMilliseconds = 0;
+
 	for (;;)
 	{
-		const std::uint64_t Now = GTimeSource.Now();
-		(void)ClientTransport.PumpReceive(Now);
-		(void)ClientTransport.PumpSend(Now);
-
-		if (ClientTransport.GetState() == ETransportHostState::Connected)
+		const TimePointMilliseconds Now = GTimeSource.Now();
+		Device.PreAdvance(Now);
+		Messaging.PreAdvance(Now);
+		Network.PreAdvance(Now);
+		if (Network.GetConnectionState() == EConnectionState::Connected)
 		{
 			if (!bConnectedAnnounced)
 			{
 				MW_LOG(Log, "ex16", "client connected");
 				bConnectedAnnounced = true;
-				NextSpawnDueMilliseconds = Now; // first request now, the second one second later
+				NextSpawnDueMilliseconds = Now;
 			}
 			if (SpawnRequestsSent < MaxSpawns && Now >= NextSpawnDueMilliseconds)
 			{
-				const std::uint8_t RequestPayload[1] = {SpawnRequestOpcode};
-				if (ClientTransport.SendTo(ClientTransport.GetServerPeer(), InputEventChannel, TSpan<const std::uint8_t>(RequestPayload, 1))
-					== ETransportResult::Success)
+				const std::uint8_t Payload[1] = {SpawnRequestOpcode};
+				FMessage Request;
+				Request.SetMessageNameId(SpawnRequestMessageName);
+				Request.SetPayload(TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
+				if (Network.SendToServer(InputEventChannel, Request) == ENetworkResult::Success)
 				{
 					++SpawnRequestsSent;
 					MW_LOG(Log, "ex16", "client sent spawn request %d", SpawnRequestsSent);
@@ -116,7 +129,9 @@ void RunClient() noexcept
 				}
 			}
 		}
-
+		Network.PostAdvance(Now);
+		Messaging.PostAdvance(Now);
+		Device.PostAdvance(Now);
 		if (!bDoneAnnounced && GLastServerActors >= MaxSpawns)
 		{
 			MW_LOG(Log, "ex16", "done (observed actor count %d)", GLastServerActors);
@@ -124,4 +139,41 @@ void RunClient() noexcept
 		}
 		SleepMilliseconds(PollPacingMilliseconds);
 	}
+}
+} // namespace
+
+/**
+ * Motivation: Runs the example's client role without giving application code a transport route.
+ * Responsibilities: Join the AP, connect once, issue bounded requests, and report delivered state.
+ */
+void RunClient() noexcept
+{
+	static FEsp32WifiLink WifiLink;
+	if (WifiLink.JoinAccessPoint(FEsp32StationConfig{DemoApSsid, DemoApPassword, 15000}) != ETransportResult::Success)
+	{
+		MW_LOG(Error, "ex16", "wifi failed; halting");
+		return;
+	}
+
+	static FEsp32WifiDevice Device(0);
+	if (!Device.IsOpen())
+	{
+		MW_LOG(Error, "ex16", "socket failed; halting");
+		return;
+	}
+
+	static FMessagingSystem Messaging;
+	static FNetworkSystem Network{Messaging, MakeNetworkInformation(ENetworkRole::Client)};
+	static FMessagingLinkId LinkId{};
+	if (!SetupClient(Device, Messaging, Network, LinkId))
+	{
+		return;
+	}
+
+	if (!StartClient(Device, Messaging, Network, LinkId))
+	{
+		return;
+	}
+
+	RunClientMessageLoop(Device, Messaging, Network);
 }

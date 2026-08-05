@@ -9,23 +9,23 @@ calls `RunServer()` or `RunClient()` by the `-DMICROWORLD_EXAMPLE_SERVER`
 define; `ServerMain.cpp` and `ClientMain.cpp` hold the two roles and are both
 always compiled (matching example 19's structure), and `LoraMessagingShared.h`
 defines the channels, opcode, node ids, and config builders once. The server is
-a full `TEngine` + `THostPlaySystem` + `TTransportHost` (DedicatedServer); the
-client is a bare `TTransportHost` (Client). Both run over `FEsp32LoraDevice`.
+a full `TEngine` + Messaging + server `FNetworkSystem`; the client composes
+Messaging + client `FNetworkSystem`. Both run over `FEsp32LoraDevice`.
 
 ## Concepts
 
 - Same application protocol as example 19 — only the device construction and
   the D8 session profile differ. No `WifiStation`, no `NetworkConfig`, no
   `esp_netif_init`.
-- Server node id 1, client node id 2; the client's `ServerAddress` is
-  `MakeLoraAddress(1)`. LoRa is a broadcast, half-duplex medium, so those ids
-  identify peers for `TTransportHost` bookkeeping but never route on the air.
+- Server node id 1, client node id 2; the client connects through the registered
+  `MakeLoraAddress(1)` Messaging route. LoRa is a broadcast, half-duplex medium;
+  Network validates the route internally and never exposes it to application code.
 - Airtime drives the D8 profile: heartbeat 3000 ms, peer timeout 15000 ms, and
   the server's state broadcast paced at 1 s instead of every tick — a full E32
   frame costs hundreds of milliseconds, so the wired example's per-tick
   broadcast and 1000 ms / 5000 ms heartbeat would congest the channel.
 - The server engine profile is unchanged from example 19 — its 2-byte state
-  payload keeps `TTransportHost` packets trivially within the E32's 58-byte cap
+  payload keeps routed Network messages trivially within the E32's 58-byte cap
   (`E32MaxPayloadBytes`) — and still completes one GC cycle per tick (budget
   `{1,4,8}`), so a spawn arriving inside a tick never hits `LifecycleLocked`.
 - All composition objects are `static` (§2.2). No socket is opened, so no

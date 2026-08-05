@@ -167,8 +167,8 @@ join the allowed industry vocabulary alongside `Udp`/`Uart`), format with
   Classic radio** — BLE 5.0 only. Classic (SPP, A2DP…) is permanently out of
   scope for this target. Anyone asking for "Bluetooth serial" gets BLE.
 - **D2 — A radio is just another `Core::ITransportDevice`** (ADR 0003 reasoning).
-  Framing reuses the shipped `FrameCodec` byte-pump decoder; sessions reuse
-  `TTransportHost`; nothing portable changes. That reuse is the entire payoff.
+  Framing reuses the shipped `FrameCodec` byte-pump decoder; logical sessions use
+  Networking above Messaging. The device remains portable and byte-oriented.
 - **D3 — NimBLE is the working assumption for the BLE host stack** (lighter
   than Bluedroid, BLE-only fits D1). The Phase 2 spike confirms or overturns
   this with header/size evidence in ADR 0004; only the ADR may change it.
@@ -189,7 +189,7 @@ join the allowed industry vocabulary alongside `Udp`/`Uart`), format with
   GND, UART 9600 8N1, factory channel/address. A module-configuration tool
   (AT/command mode) is out of scope; if a module was reconfigured, restore
   factory defaults manually before blaming the device.
-- **D8 — LoRa session profile is `TTransportHost<2, 58>` with relaxed timing**:
+- **D8 — LoRa Network profile uses relaxed timing**:
   `HeartbeatIntervalMilliseconds = 3000`, `PeerTimeoutMilliseconds = 15000`.
   At the E32's default air rate a full frame costs hundreds of milliseconds
   of airtime — the UDP-era 1000/5000 defaults would congest the channel.
@@ -201,9 +201,9 @@ join the allowed industry vocabulary alongside `Udp`/`Uart`), format with
   over a wire, because example 29 always composes two channels.
   `FMessagingSystem` ships that as two channels on one engine-owned system. The
   router, bindings, reliable wrapper and play-system set this plan originally
-  named were deleted in the Networking dissolution; examples 22–25 exercise the
-  replacement. Everything in Phases 0–4 here uses only shipped API
-  (`TTransportHost`, `THostPlaySystem`, `TEngine`).
+  named were superseded by the restored Networking boundary; examples 22–25
+  exercise direct Messaging. Session examples compose device, Messaging, and
+  Networking; Engine owns Messaging and optional Network.
 - **D11 — BLE builds extend sdkconfig additively.** The shared
   `examples/esp32-common/sdkconfig.defaults` is frozen; BLE examples pass a
   **second** defaults file (`examples/esp32-common/sdkconfig.ble.defaults`,
@@ -224,7 +224,7 @@ join the allowed industry vocabulary alongside `Udp`/`Uart`), format with
 | Per-device 1-byte address codec | `Modules/MicroWorld/Platform/Esp32/.../LoraAddress.h`, `UartAddress.h` |
 | Design-spike ADR with header-derived answers | `docs/architecture/decisions/0003-wired-transports.md` Appendices A/B |
 | Device volley example | `examples/18-TwoBoardUart` |
-| Full TTransportHost + engine messaging example | `examples/19-UartMessaging` |
+| Full Networking + engine messaging example | `examples/19-UartMessaging` |
 | Two-link, one-world composition (Phase 5 only) | `Modules/MicroWorld/Messaging/AGENTS.md` composition recipes |
 
 ---
@@ -247,10 +247,10 @@ only: **no example uses it, it has never been flashed**, and the catalog row
 modules on the rig support BLE 5.0 (and only BLE — D1). No extra hardware is
 needed for BLE.
 
-**Everything above the `Core::ITransportDevice` interface is ready and battle-tested** on UDP, UART,
-I2C, and SPI: `FrameCodec` (CRC-16, resync), `TTransportManager`, `TTransportHost`
-(roles/peers/channels/heartbeats), `THostPlaySystem` → `TEngine`, and four
-verified two-board examples (18–21) plus two WiFi ones (15–16) to copy from.
+**Byte I/O through the `Core::ITransportDevice` interface is proven** on UDP, UART,
+I2C, and SPI: `FrameCodec` (CRC-16, resync), `TTransportManager`, and the
+direct-device examples remain available to copy from. Networking hardware behavior
+is recorded only by each migrated example README when it is rerun.
 
 **Hardware on the desk:** 2 × ESP32-S3-WROOM-1-N16R8 boards (USB-JTAG on
 COM5/COM7), 2 × E32 LoRa modules with antennas. BLE needs nothing extra.
@@ -268,9 +268,8 @@ messaging plan's table):
 | Layer | LoRa budget |
 | --- | --- |
 | Device frame payload (`E32MaxPayloadBytes`) | 58 |
-| `TTransportHost` message payload (−4 header) | 54 |
-| Encoded actor message, best-effort (Phase 5) | 54 (payload ≤ 48) |
-| Encoded actor message, guaranteed (−3) | 51 (payload ≤ 45) |
+| Network-routed application payload | Pending measured envelope budget |
+| Reliable Network-routed application payload | Pending measured envelope budget |
 
 Phase 5 therefore caps application payloads at 48 bytes on best-effort LoRa
 channels and 45 bytes on guaranteed LoRa channels.
@@ -344,14 +343,14 @@ headers/docs, imitate ADR 0003's appendices): NimBLE vs Bluedroid final call
 `sdkconfig.ble.defaults`; service/characteristic UUIDs; achievable MTU
 between two S3s and the request sequence; write-without-response vs write
 throughput/backpressure (what does "device `Full`" map to); connection
-supervision timeout vs `TTransportHost` heartbeat profile for BLE; how the consumer
+supervision timeout vs the Networking heartbeat profile for BLE; how the consumer
 compile probe builds with BT enabled without touching the shared profile.
 
 ### 4.3 Session profiles per radio
 
 | | LoRa (D8) | BLE |
 | --- | --- | --- |
-| `TTransportHost` | `TTransportHost<2, 58>` | `TTransportHost<2, 120>` |
+| Networking | one server, up to four peers; LoRa device cap 58 | one server, up to four peers; BLE device cap pending spike |
 | Heartbeat / timeout ms | 3000 / 15000 | 1000 / 5000 (spike may adjust) |
 | Server address | `MakeLoraAddress(<node>)` | `MakeBleAddress(<node>)` |
 
@@ -481,10 +480,9 @@ bench, first as a raw volley, then under the full engine.
   2026-07-24 two-ESP32 traces remain historical pre-refactor evidence.
 
 - [x] **1.3 Example `26-MessagingOverLora` (the payoff demo).** Copy example 19's
-  shape (`examples/19-UartMessaging` — server board: `TEngine` +
-  `TTransportHost` DedicatedServer + `THostPlaySystem`, channel-1 message spawns an
-  actor, channel-2 state broadcast; client board: bare client `TTransportHost`)
-  with the D8/§4.3 LoRa profile: `TTransportHost<2, 58>`, heartbeat 3000 /
+  shape (`examples/19-UartMessaging` — server board: `TEngine` + Messaging +
+  server Networking; client board: Messaging + client Networking)
+  with the D8/§4.3 LoRa profile: heartbeat 3000 /
   timeout 15000, `ServerAddress = MakeLoraAddress(1)`, payloads trimmed to
   the §4.1 budget (state broadcast stays 2 bytes — fits trivially), pacing
   ≥ 1000 ms, tag `[ex26]`. README: same wiring/safety blocks as 17 plus the
@@ -503,9 +501,9 @@ bench, first as a raw volley, then under the full engine.
   Done 2026-07-24 — `examples/26-MessagingOverLora` created (9 tracked files:
   `src/Main.cpp`, `src/ServerMain.cpp`, `src/ClientMain.cpp`,
   `src/LoraMessagingShared.h`, `src/CMakeLists.txt`, `CMakeLists.txt`,
-  `platformio.ini`, `README.md`, `AGENTS.md`) as example 19's `TTransportHost`
+  `platformio.ini`, `README.md`, `AGENTS.md`) as example 19's historical
   client/server protocol with only the transport swapped to
-  `FEsp32LoraDevice` at the D8 airtime profile: `TTransportHost<2, 58>`, heartbeat
+  `FEsp32LoraDevice` at the D8 airtime profile: heartbeat
   3000 / timeout 15000, `ServerAddress = MakeLoraAddress(1)`, 2-byte state
   broadcast paced 1000 ms (server ticks the engine every poll but gates the
   radio broadcast on a deadline — a full E32 frame costs hundreds of ms of
@@ -636,7 +634,7 @@ bench, first as a raw volley, then under the full engine.
 
 - [ ] **4.3 Example `28-BleMessaging`.** Example 19's shape over BLE:
   server world on the **peripheral** board (it is the stationary role),
-  client `TTransportHost` on the central, `TTransportHost<2, 120>` both sides, §4.3
+  client Networking on the central with Messaging on both sides, §4.3
   profile, tag `[ex28]`. README + AGENTS + catalog row.
 
   **Done when:** both envs compile.
@@ -658,8 +656,8 @@ by examples 22–25. Nothing blocks 5.x but the BLE work in Phases 2–4.
 
 - [ ] **5.1 Example `29-WirelessWorld` (capstone: two radios, zero wires).**
   Two boards, no wire between them (D12 keeps WiFi out): **channel 1
-  telemetry over BLE** (`TTransportHost<2, 120>`), **channel 2 commands over LoRa**
-  (`TTransportHost<2, 58>`, D8 profile). One world and one `FMessagingSystem`
+  telemetry over BLE** (Networking over Messaging), **channel 2 commands over LoRa**
+  (Networking over Messaging, D8 profile). One world and one `FMessagingSystem`
   per board; the LoRa command channel applies the §4.1 application-payload
   budget (at most 48 bytes best-effort or 45 bytes guaranteed) as the binding
   constraint. Compose channels per the `Modules/MicroWorld/Messaging/AGENTS.md`

@@ -10,17 +10,16 @@ import tempfile
 from pathlib import Path
 
 
-# The folder tree under Modules/MicroWorld/ names the five contract-defined
+# The folder tree under Modules/MicroWorld/ names the six contract-defined
 # systems directly. Each system may include itself plus only these inward
 # portable dependencies. Object folded into Engine (so Engine owns identity and
-# lifetime); Net and RadioE32 folded into Transport (so one byte-I/O system owns
-# the device contract and every medium). Engine and Transport never name each
-# other: that separation is the invariant the whole shape protects. Messaging
-# and Transport meet only at Core's ITransportDevice, so no system joins them.
+# lifetime). Networking owns logical peers above Messaging; Transport owns only
+# byte I/O and never names Networking, Messaging, or Engine.
 MODULE_DEPENDENCIES = {
     "Core": set(),
-    "Engine": {"Core", "Messaging"},
+    "Engine": {"Core", "Messaging", "Networking"},
     "Messaging": {"Core"},
+    "Networking": {"Core", "Messaging"},
     "Transport": {"Core"},
     "Application": {"Core", "Engine"},
 }
@@ -328,12 +327,14 @@ def run_self_test() -> int:
         root = Path(temporary_directory)
         core = root / "core"
         engine = root / "engine"
+        networking = root / "networking"
         transport = root / "transport"
         # Core owns a folded Containers sub-namespace and a stray Transport-bucket
         # leak fixture (its files resolve to Core, not a foreign system).
         (core / "Containers").mkdir(parents=True)
         (core / "Transport").mkdir(parents=True)
         engine.mkdir(parents=True)
+        networking.mkdir(parents=True)
         (transport / "Detail").mkdir(parents=True)
 
         # A Core header may reach Core; a Containers header using Core/Time passes.
@@ -356,13 +357,23 @@ def run_self_test() -> int:
         # foreign module path even though it lives in Core's tree.
         (core / "Transport" / "Leak.h").write_text("#pragma once\n", encoding="utf-8")
 
-        # Engine may reach Core and Messaging but must never reach Transport.
+        # Engine may reach Core, Messaging, and Networking but never Transport.
         (engine / "World.h").write_text(
             "#include <MicroWorld/Core/Time.h>\n",
             encoding="utf-8",
         )
         (engine / "TransportLeak.h").write_text(
             "#include <MicroWorld/Transport/NetDriver.h>\n",
+            encoding="utf-8",
+        )
+
+        # Networking may reach Core and Messaging but must never reach Transport.
+        (networking / "Session.h").write_text(
+            "#include <MicroWorld/Messaging/MessagingSystem.h>\n",
+            encoding="utf-8",
+        )
+        (networking / "TransportLeak.h").write_text(
+            "#include <MicroWorld/Transport/TransportDevice.h>\n",
             encoding="utf-8",
         )
 
@@ -388,13 +399,14 @@ def run_self_test() -> int:
             )
 
         errors, _ = analyze_packages(
-            [("Core", core), ("Engine", engine), ("Transport", transport)],
+            [("Core", core), ("Engine", engine), ("Networking", networking), ("Transport", transport)],
             {"build", ".pio", "__pycache__"},
         )
         expected_fragments = (
             "Core must not depend on Engine",
             "external header esp_log.h",
             "Engine must not depend on Transport",
+            "Networking must not depend on Transport",
             "Transport must not depend on Engine",
             "Transport must not depend on Host",
             "Transport must not depend on Esp32",
@@ -416,6 +428,7 @@ def run_self_test() -> int:
         # The valid edges must NOT be flagged.
         unexpected_valid_edge_fragments = (
             "Engine must not depend on Core",
+            "Networking must not depend on Messaging",
             "Transport must not depend on Core",
             "Containers.h: Core must not depend",  # sub-namespace self-reach
         )

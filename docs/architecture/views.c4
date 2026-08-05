@@ -16,13 +16,14 @@ views {
 
     view c2Systems {
         title '[C2] MicroWorld'
-        description 'Five systems, each named for the responsibility it owns and carrying a glyph of what it does. The layout stacks them in dependency order - composition on top, foundation at the bottom - so no colour key is needed for either. The boundaries are decisions rather than groupings, and each answers a question someone will ask again. Engine is one system because Object owns identity and Engine owns the lifetime built on it, and neither is a responsibility anything wants alone. Transport holds every medium because a named one - Wi-Fi, a wire, a radio - only satisfies the device contract and declares nothing outward, which makes it an implementation. Two absences are the most important rule in the model: Engine and Transport have no edge between them, and neither do Messaging System and Transport. They meet only at the transport device interface declared in Core - a channel sends through that shape, a medium realises it, and the application entry point is the only place a concrete device is named, because choosing the medium is the point. Messaging System is the one system the engine knows beyond Core: the engine creates it and hands it out, so composing messaging is one call rather than a wiring exercise. A channel without a device delivers locally, which is why Core plus Engine plus Messaging System is already complete local messaging with no Transport and no device. Delivery guarantees live in Messaging System rather than below it: Transport answers that it accepted bytes, never that they arrived, because an acknowledgement is a message from the peer and a byte layer that reads one has stopped carrying payload opaquely. Splitting an oversized message lands there too - a device publishes the largest payload it can take and refuses more. Every dependency label names what actually crosses it.'
+        description 'Six systems, each named for the responsibility it owns. Networking is the session boundary above Messaging: it owns Client/Server roles, peer admission, liveness and logical routing, while Messaging owns links, routes, channels, serialization and reliable delivery. Engine owns optional Messaging and Networking and gives each World a non-owning Network pointer. Networking never sees a device or endpoint; Transport never sees Networking, Messaging or Engine. Messaging and Transport meet only at the Core transport-device interface, and the application composition root registers concrete devices and advances each exactly once. Direct Messaging and direct Transport remain independently usable.'
         include microworld
         include microworld.core
         include espIdf
         include hostOs
         include microworld.engine
         include microworld.messagingSystem
+        include microworld.networking
         include microworld.transport
         include microworld.app
         // The transport device interface is a Core child shown at C3: rolled up to
@@ -45,6 +46,14 @@ views {
         include *
         include microworld.core.playSystemInterface
         include microworld.core.transportDeviceInterface
+        autoLayout TopBottom
+    }
+
+    view c3Networking of microworld.networking {
+        title '[C3] Networking'
+        description 'Networking owns one bounded logical-session policy above Messaging. It has only Client and Server roles, validates a route together with a generation-checked peer id, and exposes peer events without routes. It uses two private Messaging wire channels; accepted routed application messages are republished locally with opaque source metadata. It never accesses or advances a device, and it neither adds authentication nor exposes a public connection object.'
+        include *
+        include microworld.messagingSystem.system
         autoLayout TopBottom
     }
 

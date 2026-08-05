@@ -1,14 +1,14 @@
 cmake_minimum_required(VERSION 3.16)
 
-# One package, five contract-defined systems. The folder tree below MicroWorld/
+# One package, six contract-defined systems. The folder tree below MicroWorld/
 # states the architecture directly: Core, Engine (Object folded in), Messaging,
-# Transport (Net + RadioE32 folded in), Application, and the non-portable
+# Networking, Transport, Application, and the non-portable
 # Platform/{Host,Esp32,Pico} edges. Each system keeps its
 # own STATIC/INTERFACE target and MicroWorld::* alias so the per-module profile
 # evidence (CheckProfileMap.py) and the dependency-boundary gate still hold. The
 # single include root is this directory: headers live at
 # MicroWorld/<System>/<Name>.h and resolve as <MicroWorld/<System>/<Name>.h>.
-project(MicroWorld VERSION 0.5.0 LANGUAGES CXX)
+project(MicroWorld VERSION 0.6.0 LANGUAGES CXX)
 
 option(MICROWORLD_BUILD_TESTS "Build MicroWorld host tests" ON)
 option(MICROWORLD_BUILD_BENCHMARKS "Build MicroWorld host benchmarks" OFF)
@@ -98,13 +98,15 @@ target_compile_features(microworld PUBLIC cxx_std_17)
 microworld_enable_strict_warnings(microworld)
 
 # ---------------------------------------------------------------------------
-# Engine: UWorld / AActor / UActorComponent + the folded Object store and GC.
+# Engine: UWorld / UWorldSubsystem / AActor / UActorComponent + the folded Object store and GC.
 # ---------------------------------------------------------------------------
 set(MICROWORLD_ENGINE_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Engine/Actor.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Engine/ActorComponent.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Engine/World.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Engine/WorldSubsystem.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Engine/World_ActorRegistration.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Engine/World_Subsystems.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Engine/World_Lifecycle.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Engine/World_SpawnDestroy.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Engine/World_GarbageCollection.cpp"
@@ -118,7 +120,7 @@ target_include_directories(microworld_engine PUBLIC
     "$<BUILD_INTERFACE:${MICROWORLD_INCLUDE_ROOT}>"
 )
 target_compile_features(microworld_engine PUBLIC cxx_std_17)
-target_link_libraries(microworld_engine PUBLIC MicroWorld::Core MicroWorld::Messaging)
+target_link_libraries(microworld_engine PUBLIC MicroWorld::Core MicroWorld::Messaging MicroWorld::Networking)
 microworld_enable_strict_portable_options(microworld_engine)
 microworld_disable_exceptions_and_rtti("${MICROWORLD_ENGINE_SOURCES}")
 
@@ -142,7 +144,25 @@ microworld_disable_exceptions_and_rtti("${MICROWORLD_MESSAGING_SOURCES}")
 add_library(MicroWorld::Messaging ALIAS microworld_messaging)
 
 # ---------------------------------------------------------------------------
-# Transport: byte I/O, frame codec, TTransportHost (the former Net package) plus the
+# Networking: bounded logical peers and sessions above Messaging.
+# ---------------------------------------------------------------------------
+set(MICROWORLD_NETWORKING_SOURCES
+    "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Networking/NetworkSystem.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Networking/NetworkSystem_Protocol.cpp"
+)
+
+add_library(microworld_networking STATIC ${MICROWORLD_NETWORKING_SOURCES})
+add_library(MicroWorld::Networking ALIAS microworld_networking)
+target_include_directories(microworld_networking PUBLIC
+    "$<BUILD_INTERFACE:${MICROWORLD_INCLUDE_ROOT}>"
+)
+target_compile_features(microworld_networking PUBLIC cxx_std_17)
+target_link_libraries(microworld_networking PUBLIC MicroWorld::Core MicroWorld::Messaging)
+microworld_enable_strict_portable_options(microworld_networking)
+microworld_disable_exceptions_and_rtti("${MICROWORLD_NETWORKING_SOURCES}")
+
+# ---------------------------------------------------------------------------
+# Transport: byte I/O, frame codec, and the optional portable RadioE32 framing.
 # optional portable RadioE32 framing. The IP and radio subsets are toggled by
 # MICROWORLD_TRANSPORT_IP / MICROWORLD_TRANSPORT_LORA so a Pico build can omit
 # the IP/protocol sources and a radio-less build can omit the E32 sources.
@@ -320,6 +340,58 @@ if(MICROWORLD_BUILD_TESTS)
         )
     endif()
 
+    # --- Public Messaging, Networking, and Application profile probes ---
+    add_executable(microworld_messaging_consumer_probe
+        "${MICROWORLD_TESTS_ROOT}/Core/consumer/src/MessagingNativeMain.cpp"
+    )
+    target_link_libraries(microworld_messaging_consumer_probe PRIVATE MicroWorld::Messaging)
+    microworld_enable_strict_portable_options(microworld_messaging_consumer_probe)
+    microworld_disable_exceptions_and_rtti(
+        "${MICROWORLD_TESTS_ROOT}/Core/consumer/src/MessagingNativeMain.cpp"
+    )
+    set(MICROWORLD_MESSAGING_PROFILE_MAP
+        "${CMAKE_CURRENT_BINARY_DIR}/microworld_messaging_profile.map"
+    )
+    microworld_enable_profile_map(
+        microworld_messaging_consumer_probe
+        "${MICROWORLD_MESSAGING_PROFILE_MAP}"
+    )
+    add_test(NAME microworld_messaging_consumer_probe COMMAND microworld_messaging_consumer_probe)
+
+    add_executable(microworld_networking_consumer_probe
+        "${MICROWORLD_TESTS_ROOT}/Core/consumer/src/NetworkingNativeMain.cpp"
+    )
+    target_link_libraries(microworld_networking_consumer_probe PRIVATE MicroWorld::Networking)
+    microworld_enable_strict_portable_options(microworld_networking_consumer_probe)
+    microworld_disable_exceptions_and_rtti(
+        "${MICROWORLD_TESTS_ROOT}/Core/consumer/src/NetworkingNativeMain.cpp"
+    )
+    set(MICROWORLD_NETWORKING_PROFILE_MAP
+        "${CMAKE_CURRENT_BINARY_DIR}/microworld_networking_profile.map"
+    )
+    microworld_enable_profile_map(
+        microworld_networking_consumer_probe
+        "${MICROWORLD_NETWORKING_PROFILE_MAP}"
+    )
+    add_test(NAME microworld_networking_consumer_probe COMMAND microworld_networking_consumer_probe)
+
+    add_executable(microworld_application_consumer_probe
+        "${MICROWORLD_TESTS_ROOT}/Core/consumer/src/ApplicationNativeMain.cpp"
+    )
+    target_link_libraries(microworld_application_consumer_probe PRIVATE MicroWorld::Application)
+    microworld_enable_strict_portable_options(microworld_application_consumer_probe)
+    microworld_disable_exceptions_and_rtti(
+        "${MICROWORLD_TESTS_ROOT}/Core/consumer/src/ApplicationNativeMain.cpp"
+    )
+    set(MICROWORLD_APPLICATION_PROFILE_MAP
+        "${CMAKE_CURRENT_BINARY_DIR}/microworld_application_profile.map"
+    )
+    microworld_enable_profile_map(
+        microworld_application_consumer_probe
+        "${MICROWORLD_APPLICATION_PROFILE_MAP}"
+    )
+    add_test(NAME microworld_application_consumer_probe COMMAND microworld_application_consumer_probe)
+
     # --- Engine tests (was Object + Engine) ---
     set(MICROWORLD_ENGINE_TEST_SOURCES
         "${MICROWORLD_TESTS_ROOT}/Core/TestMain.cpp"
@@ -333,6 +405,8 @@ if(MICROWORLD_BUILD_TESTS)
         "${MICROWORLD_TESTS_ROOT}/Engine/EngineDeferredSpawnRejectionTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Engine/EngineDeferredSpawnCaptureTracingTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Engine/EngineHostTests.cpp"
+        "${MICROWORLD_TESTS_ROOT}/Engine/EngineNetworkOwnershipTests.cpp"
+        "${MICROWORLD_TESTS_ROOT}/Engine/WorldSubsystemTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Engine/EngineMessagingLifecycleTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Engine/EngineMessagingTickDrivingTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Engine/EngineMessagingDeadOwnerReclamationTests.cpp"
@@ -384,6 +458,24 @@ if(MICROWORLD_BUILD_TESTS)
     microworld_disable_exceptions_and_rtti("${MICROWORLD_MESSAGING_TEST_SOURCES}")
     add_test(NAME microworld_messaging_tests COMMAND microworld_messaging_tests)
 
+    # --- Networking tests ---
+    set(MICROWORLD_NETWORKING_TEST_SOURCES
+        "${MICROWORLD_TESTS_ROOT}/Core/TestMain.cpp"
+        "${MICROWORLD_TESTS_ROOT}/Networking/NetworkProtocolTests.cpp"
+        "${MICROWORLD_TESTS_ROOT}/Networking/NetworkSystemTests.cpp"
+    )
+    add_executable(microworld_networking_tests ${MICROWORLD_NETWORKING_TEST_SOURCES})
+    target_include_directories(microworld_networking_tests PRIVATE
+        "${MICROWORLD_TESTS_ROOT}/Core"
+    )
+    target_link_libraries(microworld_networking_tests PRIVATE
+        MicroWorld::Networking
+        MicroWorld::Transport
+    )
+    microworld_enable_strict_portable_options(microworld_networking_tests)
+    microworld_disable_exceptions_and_rtti("${MICROWORLD_NETWORKING_TEST_SOURCES}")
+    add_test(NAME microworld_networking_tests COMMAND microworld_networking_tests)
+
     # --- Transport tests (was Net + RadioE32) ---
     set(microworld_transport_TEST_SOURCES
         "${MICROWORLD_TESTS_ROOT}/Core/TestMain.cpp"
@@ -396,10 +488,6 @@ if(MICROWORLD_BUILD_TESTS)
         "${MICROWORLD_TESTS_ROOT}/Transport/LoopbackNetworkTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Transport/PacketDropDeviceTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Transport/TransportManagerTests.cpp"
-        "${MICROWORLD_TESTS_ROOT}/Transport/TransportProtocolTests.cpp"
-        "${MICROWORLD_TESTS_ROOT}/Transport/TransportHostAdmissionTests.cpp"
-        "${MICROWORLD_TESTS_ROOT}/Transport/TransportHostLivenessTests.cpp"
-        "${MICROWORLD_TESTS_ROOT}/Transport/TransportHostRoutingTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Transport/TransportAllocationTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Transport/E32LoraDeviceSendTests.cpp"
         "${MICROWORLD_TESTS_ROOT}/Transport/E32LoraDeviceReceiveTests.cpp"
@@ -439,7 +527,7 @@ if(MICROWORLD_BUILD_TESTS)
     target_include_directories(microworld_platform_host_tests PRIVATE
         "${MICROWORLD_TESTS_ROOT}/Core"
     )
-    target_link_libraries(microworld_platform_host_tests PRIVATE MicroWorld::PlatformHost)
+    target_link_libraries(microworld_platform_host_tests PRIVATE MicroWorld::PlatformHost MicroWorld::Networking)
     microworld_enable_strict_portable_options(microworld_platform_host_tests)
     microworld_disable_exceptions_and_rtti("${MICROWORLD_PLATFORM_HOST_TEST_SOURCES}")
     add_test(NAME microworld_platform_host_tests COMMAND microworld_platform_host_tests)
@@ -530,6 +618,7 @@ if(MICROWORLD_BUILD_TESTS)
             --package Core=${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Core
             --package Engine=${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Engine
             --package Messaging=${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Messaging
+            --package Networking=${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Networking
             --package Transport=${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Transport
             --package Application=${CMAKE_CURRENT_SOURCE_DIR}/MicroWorld/Application
     )
@@ -542,6 +631,24 @@ if(MICROWORLD_BUILD_TESTS)
         COMMAND ${Python3_EXECUTABLE} ${MICROWORLD_TOOLS_ROOT}/CheckProfileMap.py
             --map ${MICROWORLD_CORE_PROFILE_MAP}
             --profile Core
+    )
+    add_test(
+        NAME microworld_messaging_profile_map
+        COMMAND ${Python3_EXECUTABLE} ${MICROWORLD_TOOLS_ROOT}/CheckProfileMap.py
+            --map ${MICROWORLD_MESSAGING_PROFILE_MAP}
+            --profile Core+Messaging
+    )
+    add_test(
+        NAME microworld_networking_profile_map
+        COMMAND ${Python3_EXECUTABLE} ${MICROWORLD_TOOLS_ROOT}/CheckProfileMap.py
+            --map ${MICROWORLD_NETWORKING_PROFILE_MAP}
+            --profile Core+Messaging+Networking
+    )
+    add_test(
+        NAME microworld_application_profile_map
+        COMMAND ${Python3_EXECUTABLE} ${MICROWORLD_TOOLS_ROOT}/CheckProfileMap.py
+            --map ${MICROWORLD_APPLICATION_PROFILE_MAP}
+            --profile Application
     )
     add_test(
         NAME microworld_folder_guides_self_test

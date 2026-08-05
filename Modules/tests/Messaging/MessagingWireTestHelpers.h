@@ -69,8 +69,8 @@ constexpr std::size_t ChannelNameIdByteIndex = 0;
 constexpr std::size_t MessageNameIdByteIndex = ChannelNameIdByteIndex + NameIdBytes;
 /** Motivation: Names the complete encoded wire header used by malformed-frame and raw-frame cases. */
 constexpr std::size_t WireHeaderBytes = MessageNameIdByteIndex + NameIdBytes;
-/** Motivation: Names the two-byte fixed reliable sequence sub-header independently of production constants. */
-constexpr std::size_t SequenceNumberBytes = sizeof(std::uint16_t);
+/** Motivation: Names the eight-byte fixed reliable message-id sub-header independently of production constants. */
+constexpr std::size_t SequenceNumberBytes = sizeof(std::uint64_t);
 /** Motivation: Keeps the reliable payload-budget device ceiling above both candidate Messaging frame sizes. */
 constexpr std::size_t ReliableBudgetProbePacketBytes = FMessagingSystem::MaxFrameBytes + SequenceNumberBytes + 1;
 /** Motivation: Names the complete acknowledgement packet length: two ids followed by one acknowledged sequence number. */
@@ -117,10 +117,10 @@ constexpr std::uint32_t NoDroppedFrames = 0;
 constexpr std::uint32_t OneDroppedFrame = 1;
 /** Motivation: Names two cumulative dropped inbound observations of the retained oversized packet. */
 constexpr std::uint32_t TwoDroppedFrames = 2;
-/** Motivation: Names the first sequence a newly created reliable channel writes. */
-constexpr std::uint16_t FirstSequenceNumber = 0;
-/** Motivation: Names the sequence following the first reliable send from one channel. */
-constexpr std::uint16_t SecondSequenceNumber = FirstSequenceNumber + 1;
+/** Motivation: Names the first Messaging-lifetime reliable id written by a new system. */
+constexpr std::uint64_t FirstSequenceNumber = 0;
+/** Motivation: Names the id following the first reliable send, independent of channel identity. */
+constexpr std::uint64_t SecondSequenceNumber = FirstSequenceNumber + 1;
 /** Motivation: Sets the short deterministic interval used to force reliable retries without wall-clock time. */
 constexpr TimePointMilliseconds ReliableRetryIntervalMilliseconds = 50;
 /** Motivation: Offsets a post-advance turn to the last moment still inside the retry interval. */
@@ -143,8 +143,8 @@ constexpr std::size_t ReliableAttemptPacketCount = ReliableAttemptBudget;
 constexpr std::size_t OneDroppedSend = 1;
 /** Motivation: Names one reliable message whose bounded retry policy gave up. */
 constexpr std::uint32_t OneAbandonedReliableMessage = 1;
-/** Motivation: Names a sequence far above any this file sends, so no pending frame can ever match it. */
-constexpr std::uint16_t UnmatchedAcknowledgementSequenceNumber = 4242;
+/** Motivation: Names an id far above any this file sends, so no pending frame can ever match it. */
+constexpr std::uint64_t UnmatchedAcknowledgementSequenceNumber = 4242;
 
 /** Motivation: Supplies known application bytes for the ordinary cross-system round-trip. */
 constexpr std::uint8_t WirePayload[WirePayloadByteCount] = {11, 22, 33};
@@ -179,10 +179,15 @@ constexpr std::uint8_t OversizedInboundFrame[OversizedInboundFrameByteCount] = {
 /** Motivation: Supplies a complete but unmatched acknowledgement payload in little-endian sequence order. */
 constexpr std::uint8_t UnmatchedAcknowledgementPayload[SequenceNumberBytes] = {
 	static_cast<std::uint8_t>(UnmatchedAcknowledgementSequenceNumber),
-	static_cast<std::uint8_t>(UnmatchedAcknowledgementSequenceNumber >> BitsPerByte)};
+	static_cast<std::uint8_t>(UnmatchedAcknowledgementSequenceNumber >> BitsPerByte),
+	static_cast<std::uint8_t>(UnmatchedAcknowledgementSequenceNumber >> (BitsPerByte * 2)),
+	static_cast<std::uint8_t>(UnmatchedAcknowledgementSequenceNumber >> (BitsPerByte * 3)),
+	static_cast<std::uint8_t>(UnmatchedAcknowledgementSequenceNumber >> (BitsPerByte * 4)),
+	static_cast<std::uint8_t>(UnmatchedAcknowledgementSequenceNumber >> (BitsPerByte * 5)),
+	static_cast<std::uint8_t>(UnmatchedAcknowledgementSequenceNumber >> (BitsPerByte * 6)),
+	static_cast<std::uint8_t>(UnmatchedAcknowledgementSequenceNumber >> (BitsPerByte * 7))};
 /** Motivation: Supplies the first reliable sequence in documented little-endian acknowledgement order. */
-constexpr std::uint8_t FirstSequenceAcknowledgementPayload[SequenceNumberBytes] = {
-	static_cast<std::uint8_t>(FirstSequenceNumber), static_cast<std::uint8_t>(FirstSequenceNumber >> BitsPerByte)};
+constexpr std::uint8_t FirstSequenceAcknowledgementPayload[SequenceNumberBytes] = {static_cast<std::uint8_t>(FirstSequenceNumber)};
 
 /**
  * Motivation: Captures delivered wire-message facts after Messaging releases its transient inbound payload view.
@@ -205,6 +210,7 @@ struct FWireMessageRecorder final
 		++DeliveryCount;
 		MessageNameId = InMessage.GetMessageNameId();
 		Sender = InMessage.GetSender();
+		SenderRoute = InMessage.GetSenderRoute();
 		PayloadSize = InMessage.GetPayload().Size();
 
 		const std::size_t CopiedByteCount = PayloadSize < MaxRecordedPayloadBytes ? PayloadSize : MaxRecordedPayloadBytes;
@@ -222,6 +228,9 @@ struct FWireMessageRecorder final
 
 	/** Motivation: Preserves the source device address supplied by an inbound wire frame. */
 	FDeviceAddress Sender{};
+
+	/** Motivation: Preserves the complete link and sender address supplied by an inbound wire frame. */
+	MicroWorld::Messaging::FMessagingRoute SenderRoute{};
 
 	/** Motivation: Preserves the byte length of the most recently delivered application payload. */
 	std::size_t PayloadSize{0};
@@ -289,11 +298,16 @@ struct FRawWireFrame final
 
 	/**
 	 * Motivation: Keeps reliable wire assertions readable when they inspect a fixed sequence sub-header.
-	 * Responsibilities: Decode one two-byte little-endian sequence number from InSource.
+	 * Responsibilities: Decode one eight-byte little-endian reliable message id from InSource.
 	 */
-	static std::uint16_t ReadSequenceNumber(const std::uint8_t* const InSource) noexcept
+	static std::uint64_t ReadSequenceNumber(const std::uint8_t* const InSource) noexcept
 	{
-		return static_cast<std::uint16_t>(ReadUnsignedLittleEndian(InSource, SequenceNumberBytes));
+		std::uint64_t Value = 0;
+		for (std::size_t ByteIndex = 0; ByteIndex < SequenceNumberBytes; ++ByteIndex)
+		{
+			Value |= static_cast<std::uint64_t>(InSource[ByteIndex]) << (ByteIndex * BitsPerByte);
+		}
+		return Value;
 	}
 
 	/** Motivation: Retains the full concrete-sized frame buffer for direct loopback sends. */

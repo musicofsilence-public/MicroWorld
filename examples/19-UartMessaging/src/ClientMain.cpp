@@ -1,14 +1,13 @@
 #include "UartMessagingShared.h"
 
 #include <MicroWorld/Core/Containers/Span.h>
-#include <MicroWorld/Core/Delegates/DelegateHandle.h>
 #include <MicroWorld/Core/Log.h>
-#include <MicroWorld/Transport/NetworkMode.h>
-#include <MicroWorld/Transport/PeerId.h>
-#include <MicroWorld/Transport/TransportHost.h>
-#include <MicroWorld/Transport/TransportHostConfig.h>
-#include <MicroWorld/Transport/TransportHostState.h>
-#include <MicroWorld/Core/IO/TransportResult.h>
+#include <MicroWorld/Messaging/ChannelInformation.h>
+#include <MicroWorld/Messaging/Message.h>
+#include <MicroWorld/Messaging/MessagingRoute.h>
+#include <MicroWorld/Messaging/MessagingSystem.h>
+#include <MicroWorld/Networking/ConnectionState.h>
+#include <MicroWorld/Networking/NetworkSystem.h>
 #include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
 #include <MicroWorld/Platform/Esp32/Esp32TimeSource.h>
 #include <MicroWorld/Platform/Esp32/Esp32UartDevice.h>
@@ -17,92 +16,116 @@
 #include <cstdint>
 
 using namespace MicroWorld::Core;
+using namespace MicroWorld::Messaging;
+using namespace MicroWorld::Networking;
 using namespace MicroWorld::Platform::Esp32;
-using namespace MicroWorld::Transport;
 using namespace Ex19;
 
 namespace
 {
-/** Motivation: Single real-time source for the client board. */
+/** Motivation: Supplies the client board's monotonic session time. */
 FEsp32TimeSource GTimeSource{};
-
-/** Motivation: Client session host; one peer slot holds the single server. */
-using FClientTransport = TTransportHost<1, 120>;
-
-/** Motivation: Most recent actor count decoded from a server broadcast; -1 before the first. */
+/** Motivation: Retains the last server actor count delivered through Network. */
 int GLastServerActors = -1;
-} // namespace
-
 /**
- * Motivation: Lets one board act as the bare client half of example 19 over a single UART, so the
- *   client-side transport can be reasoned about with no engine and no WiFi.
- * Responsibilities: Open the UART, run a TTransportHost client, issue spawn requests, and observe
- *   the server's broadcast state until the expected actor count appears.
+ * Motivation: Decodes state only after Network has validated the live server session.
+ * Responsibilities: Ignore malformed payloads and record the advertised count.
  */
-void RunClient() noexcept
+void HandleStateUpdate(const FMessage& InMessage) noexcept
 {
-	static FEsp32UartDevice Device{MakeUartConfig(ClientNodeId)};
-	MW_LOG(Log, "ex19", "client node=%u open=%d", static_cast<unsigned>(ClientNodeId), Device.IsOpen() ? 1 : 0);
-	if (!Device.IsOpen())
+	if (InMessage.GetPayload().Size() != 2)
 	{
-		MW_LOG(Error, "ex19", "uart failed to open; halting");
 		return;
 	}
+	GLastServerActors = static_cast<int>(InMessage.GetPayload()[1]);
+	MW_LOG(Log, "ex19", "client rx state tick=%d actors=%d", static_cast<int>(InMessage.GetPayload()[0]), GLastServerActors);
+}
 
-	static FClientTransport ClientTransport{Device};
+/**
+ * Motivation: Builds the UART client composition before it starts a server session.
+ * Responsibilities: Register the device, initialize Networking, and install the application state subscriber.
+ */
+bool SetupClient(FEsp32UartDevice& Device, FMessagingSystem& Messaging, FNetworkSystem& Network, FMessagingLinkId& OutLinkId) noexcept
+{
+	if (Messaging.RegisterLink(Device, OutLinkId) != EMessagingResult::Success || Network.Initialize() != ENetworkResult::Success
+		|| Messaging.CreateChannel({InputEventChannel, false, nullptr, {}}) != EMessagingResult::Success
+		|| Messaging.CreateChannel({StateBroadcastChannel, false, nullptr, {}}) != EMessagingResult::Success)
+	{
+		MW_LOG(Error, "ex19", "client network setup failed; halting");
+		return false;
+	}
 
-	// Channel-2 state handler; the no-capture lambda names the static capture directly.
-	FClientTransport::FMessageHandlerBinding Binding;
-	Binding.Bind(
-		[](const FPeerId, const std::uint8_t Channel, TSpan<const std::uint8_t> Payload) noexcept
-		{
-			if (Channel != StateBroadcastChannel || Payload.Size() < 2)
-			{
-				return;
-			}
-			GLastServerActors = static_cast<int>(Payload[1]);
-			MW_LOG(Log, "ex19", "client rx state tick=%d actors=%d", static_cast<int>(Payload[0]), GLastServerActors);
-		});
-	FDelegateHandle Handle{};
-	(void)ClientTransport.AddMessageHandler(std::move(Binding), Handle);
+	FMessagingSystem::FSubscriberDelegate StateSubscriber;
+	if (StateSubscriber.Bind(HandleStateUpdate) != EDelegateResult::Success
+		|| Messaging.SubscribeToChannel(StateBroadcastChannel, StateMessageName, std::move(StateSubscriber)) != EMessagingResult::Success)
+	{
+		MW_LOG(Error, "ex19", "client subscription setup failed; halting");
+		return false;
+	}
 
-	FTransportHostConfig Config = MakeHostConfig();
-	Config.ServerAddress = MakeUartAddress(ServerNodeId);
-	(void)ClientTransport.Configure(ENetworkMode::Client, Config);
-	(void)ClientTransport.Start(GTimeSource.Now());
-	MW_LOG(Log, "ex19", "client connecting (no WiFi -- UART only)");
+	return true;
+}
 
+/**
+ * Motivation: Starts the composed systems before the client begins its one server session.
+ * Responsibilities: Preserve the device-to-Messaging-to-Network start order and request the fixed server route.
+ */
+bool StartClient(FEsp32UartDevice& Device, FMessagingSystem& Messaging, FNetworkSystem& Network, const FMessagingLinkId LinkId) noexcept
+{
+	const TimePointMilliseconds StartTime = GTimeSource.Now();
+	Device.BeginPlay(StartTime);
+	Messaging.BeginPlay(StartTime);
+	Network.BeginPlay(StartTime);
+	if (Network.ConnectToServer({LinkId, MakeUartAddress(ServerNodeId)}, StartTime) != ENetworkResult::Success)
+	{
+		MW_LOG(Error, "ex19", "client connect setup failed; halting");
+		return false;
+	}
+
+	return true;
+}
+
+/**
+ * Motivation: Keeps the demonstrated client traffic within its fixed request and pacing limits.
+ * Responsibilities: Advance the composition in order, issue at most MaxSpawns requests, and report the observed completion.
+ */
+void RunClientMessageLoop(FEsp32UartDevice& Device, FMessagingSystem& Messaging, FNetworkSystem& Network) noexcept
+{
 	bool bConnectedAnnounced = false;
 	bool bDoneAnnounced = false;
 	int SpawnRequestsSent = 0;
-	std::uint64_t NextSpawnDueMilliseconds = 0;
+	TimePointMilliseconds NextSpawnDueMilliseconds = 0;
+
 	for (;;)
 	{
-		const std::uint64_t Now = GTimeSource.Now();
-		(void)ClientTransport.PumpReceive(Now);
-		(void)ClientTransport.PumpSend(Now);
-
-		if (ClientTransport.GetState() == ETransportHostState::Connected)
+		const TimePointMilliseconds Now = GTimeSource.Now();
+		Device.PreAdvance(Now);
+		Messaging.PreAdvance(Now);
+		Network.PreAdvance(Now);
+		if (Network.GetConnectionState() == EConnectionState::Connected)
 		{
 			if (!bConnectedAnnounced)
 			{
 				MW_LOG(Log, "ex19", "client connected");
 				bConnectedAnnounced = true;
-				NextSpawnDueMilliseconds = Now; // first request now, the second one second later
+				NextSpawnDueMilliseconds = Now;
 			}
 			if (SpawnRequestsSent < MaxSpawns && Now >= NextSpawnDueMilliseconds)
 			{
-				const std::uint8_t RequestPayload[1] = {SpawnRequestOpcode};
-				if (ClientTransport.SendTo(ClientTransport.GetServerPeer(), InputEventChannel, TSpan<const std::uint8_t>(RequestPayload, 1))
-					== ETransportResult::Success)
+				const std::uint8_t Payload[1] = {SpawnRequestOpcode};
+				FMessage Request;
+				Request.SetMessageNameId(SpawnRequestMessageName);
+				Request.SetPayload(TSpan<const std::uint8_t>(Payload, sizeof(Payload)));
+				if (Network.SendToServer(InputEventChannel, Request) == ENetworkResult::Success)
 				{
 					++SpawnRequestsSent;
-					MW_LOG(Log, "ex19", "client sent spawn request %d", SpawnRequestsSent);
 					NextSpawnDueMilliseconds = Now + 1000;
 				}
 			}
 		}
-
+		Network.PostAdvance(Now);
+		Messaging.PostAdvance(Now);
+		Device.PostAdvance(Now);
 		if (!bDoneAnnounced && GLastServerActors >= MaxSpawns)
 		{
 			MW_LOG(Log, "ex19", "done (observed actor count %d)", GLastServerActors);
@@ -110,4 +133,34 @@ void RunClient() noexcept
 		}
 		SleepMilliseconds(PollPacingMilliseconds);
 	}
+}
+} // namespace
+
+/**
+ * Motivation: Runs the UART client role without exposing the server route to application operations.
+ * Responsibilities: Connect once, issue bounded requests, and observe state.
+ */
+void RunClient() noexcept
+{
+	static FEsp32UartDevice Device{MakeUartConfig(ClientNodeId)};
+	if (!Device.IsOpen())
+	{
+		MW_LOG(Error, "ex19", "uart failed to open; halting");
+		return;
+	}
+
+	static FMessagingSystem Messaging;
+	static FNetworkSystem Network{Messaging, MakeNetworkInformation(ENetworkRole::Client)};
+	static FMessagingLinkId LinkId{};
+	if (!SetupClient(Device, Messaging, Network, LinkId))
+	{
+		return;
+	}
+
+	if (!StartClient(Device, Messaging, Network, LinkId))
+	{
+		return;
+	}
+
+	RunClientMessageLoop(Device, Messaging, Network);
 }

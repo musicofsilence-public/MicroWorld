@@ -20,11 +20,15 @@ std::size_t UWorld::PendingDestroyCount() const noexcept
 
 void UWorld::VisitReferences(FReferenceCollector& InCollector) noexcept
 {
-	// Every registered actor is a traced downward edge. Pending-spawn actors are
+	// Every registered subsystem and actor is a traced downward edge. Pending-spawn actors are
 	// also reachable so they survive collection until the barrier begins them;
 	// pending-destroy actors are still in the live set until the barrier removes
 	// them, so they need no separate edge here.
 	VisitDeferredSpawnReferences(InCollector);
+	for (std::size_t Index = 0; Index < Subsystems.GetCount(); ++Index)
+	{
+		InCollector.AddReferencedObject(Subsystems.At(Index));
+	}
 	for (std::size_t Index = 0; Index < Actors.GetCount(); ++Index)
 	{
 		InCollector.AddReferencedObject(Actors.At(Index));

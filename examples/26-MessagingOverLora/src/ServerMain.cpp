@@ -1,22 +1,18 @@
 #include "LoraMessagingShared.h"
 
 #include <MicroWorld/Core/Containers/Span.h>
-#include <MicroWorld/Core/Delegates/DelegateHandle.h>
-#include <MicroWorld/Engine/Actor.h>
-#include <MicroWorld/Engine/EngineHost.h>
-#include <MicroWorld/Engine/DefaultEngineTraits.h>
-#include <MicroWorld/Engine/EngineResult.h>
-#include <MicroWorld/Engine/EngineStorage.h>
-#include <MicroWorld/Engine/HostPlaySystem.h>
-#include <MicroWorld/Engine/World.h>
 #include <MicroWorld/Core/Log.h>
-#include <MicroWorld/Transport/NetworkMode.h>
-#include <MicroWorld/Transport/PeerId.h>
-#include <MicroWorld/Transport/TransportHost.h>
-#include <MicroWorld/Core/IO/TransportResult.h>
-#include <MicroWorld/Engine/ClassDescriptor.h>
+#include <MicroWorld/Engine/Actor.h>
+#include <MicroWorld/Engine/DefaultEngineTraits.h>
+#include <MicroWorld/Engine/EngineHost.h>
+#include <MicroWorld/Engine/EngineResult.h>
 #include <MicroWorld/Engine/GarbageCollectionBudget.h>
 #include <MicroWorld/Engine/ObjectPtr.h>
+#include <MicroWorld/Engine/PlaySystemSet.h>
+#include <MicroWorld/Messaging/ChannelInformation.h>
+#include <MicroWorld/Messaging/Message.h>
+#include <MicroWorld/Messaging/MessagingSystem.h>
+#include <MicroWorld/Networking/NetworkSystem.h>
 #include <MicroWorld/Platform/Esp32/Esp32LoraDevice.h>
 #include <MicroWorld/Platform/Esp32/Esp32Sleep.h>
 #include <MicroWorld/Platform/Esp32/Esp32TimeSource.h>
@@ -25,23 +21,20 @@
 #include <cstdint>
 
 using namespace MicroWorld::Core;
-using namespace MicroWorld::Platform::Esp32;
 using namespace MicroWorld::Engine;
-using namespace MicroWorld::Transport;
+using namespace MicroWorld::Messaging;
+using namespace MicroWorld::Networking;
+using namespace MicroWorld::Platform::Esp32;
 using namespace Ex26;
 
 namespace
 {
-/** Motivation: Single real-time source for the server board. */
+/** Motivation: Supplies the server board's monotonic session time. */
 FEsp32TimeSource GTimeSource{};
-
 /**
- * Motivation: Carries the exact capacities FServerEngine sized before the traits refactor, so the
- *   server store is unchanged. Bounds tuned so one GC slice {1,4,8} finishes a full cycle each
- *   tick, so a spawn arriving mid-tick never fails LifecycleLocked (the proven two-node-demo profile).
- * Responsibilities: Name the class, object, slot, root, actor, and timer capacities the server uses.
- * Example:
- *   using FServerEngine = TEngine<FServerEngineTraits>;
+ * Motivation: Bounds the server world around the two requested demo spawns.
+ * Responsibilities: Supply the fixed server-side Engine capacities used by this example.
+ * Example: FServerEngine ServerHost{Budget, Frames};
  */
 struct FServerEngineTraits : FDefaultEngineTraits
 {
@@ -54,127 +47,183 @@ struct FServerEngineTraits : FDefaultEngineTraits
 };
 using FServerEngine = TEngine<FServerEngineTraits>;
 
-/** Motivation: Server session host; two peer slots leave headroom above the single LoRa client. */
-using FServerTransport = TTransportHost<2, 58>;
-
 /**
- * Motivation: Minimal actor spawned on demand so a remote input event visibly changes the world,
- *   keeping the demo's "client request produces a server-side actor" loop observable.
- * Responsibilities: Bump one begin counter when play begins, and stay descriptor-destroyable.
- * Example:
- *   auto Creation = ServerHost.CreateObject<FDemoSpawnedActor>(DemoSpawnedActorTypeId, Count);
- *   ServerHost.GetWorld().SpawnActor(TObjectPtr<AActor>{Creation.Object});
+ * Motivation: Makes each accepted remote request visible in the server world.
+ * Responsibilities: Increment the composition-owned begin counter when the actor enters play.
+ * Example: ServerHost.CreateObject<FDemoSpawnedActor>(DemoSpawnedActorTypeId, BeginCount);
  */
 class FDemoSpawnedActor final : public AActor
 {
 public:
 	/**
-	 * Motivation: Binds the begin counter this actor bumps on play, so the run loop can observe spawns.
-	 * Responsibilities: Store the counter reference and forward to the actor base.
+	 * Motivation: Gives descriptor construction the counter owned by the composition root.
+	 * Responsibilities: Retain the reference.
 	 */
-	FDemoSpawnedActor(int& InBeginCount) noexcept : AActor(), BeginCount(InBeginCount) {}
-
+	explicit FDemoSpawnedActor(int& InBeginCount) noexcept : BeginCount(InBeginCount) {}
 	/**
-	 * Motivation: Keeps exact descriptor-driven destruction publicly instantiable.
-	 * Responsibilities: Default the destructor so descriptor-driven teardown stays available.
+	 * Motivation: Preserves descriptor-driven teardown.
+	 * Responsibilities: Release no owned state.
 	 */
 	~FDemoSpawnedActor() noexcept override = default;
 
 protected:
 	/**
-	 * Motivation: Records that this spawned actor began on the server world exactly once.
-	 * Responsibilities: Bump the bound begin counter on play and do nothing else.
+	 * Motivation: Confirms the spawned actor reached play.
+	 * Responsibilities: Increment the supplied counter once.
 	 */
 	void BeginPlay() noexcept override { ++BeginCount; }
 
 private:
-	/** Motivation: Begin-count reference owned by the run loop; not owned by this actor. */
+	/** Motivation: Records confirmed actor begins outside managed object storage. */
 	int& BeginCount;
 };
-} // namespace
+
+/** Motivation: Counts bounded client requests accepted by the server. */
+int GSpawnSequence = 0;
+/** Motivation: Counts spawned actors that completed BeginPlay. */
+int GSpawnedBeginCount = 0;
+/** Motivation: Reports the world-visible actor count to connected clients. */
+int GWorldActorCount = 0;
+/** Motivation: Lets the static input callback use the composed server without capturing. */
+FServerEngine* GServerHost = nullptr;
+/** Motivation: Lets the static input callback validate its Network-provided sender. */
+FNetworkSystem* GServerNetwork = nullptr;
 
 /**
- * Motivation: Lets one board act as the dedicated server half of example 26 over a single E32 LoRa radio,
- *   so the engine plus transport composition can be reasoned about in one place.
- * Responsibilities: Open the radio, run the engine and a TTransportHost dedicated server, spawn actors
- *   on client requests, and broadcast world state at the airtime-paced period each cycle.
+ * Motivation: Accepts one valid remote spawn request without exposing a device address.
+ * Responsibilities: Resolve the peer and mutate the world only for the declared opcode.
  */
-void RunServer() noexcept
+void HandleSpawnRequest(const FMessage& InMessage) noexcept
 {
-	static FEsp32LoraDevice Device{MakeLoraConfig(ServerNodeId)};
-	MW_LOG(Log, "ex26", "server node=%u open=%d", static_cast<unsigned>(ServerNodeId), Device.IsOpen() ? 1 : 0);
-	if (!Device.IsOpen())
+	if (GServerHost == nullptr || GServerNetwork == nullptr || !GServerNetwork->ResolveSenderPeer(InMessage).IsValid()
+		|| InMessage.GetPayload().Size() != 1 || InMessage.GetPayload()[0] != SpawnRequestOpcode || GSpawnSequence >= MaxSpawns)
 	{
-		MW_LOG(Error, "ex26", "uart failed to open; halting");
 		return;
 	}
+	const TObjectCreationResult<FDemoSpawnedActor> Creation =
+		GServerHost->CreateObject<FDemoSpawnedActor>(DemoSpawnedActorTypeId, GSpawnedBeginCount);
+	if (Creation.Result != EObjectResult::Success
+		|| GServerHost->GetWorld().SpawnActor(TObjectPtr<AActor>{Creation.Object}) != EEngineResult::Success)
+	{
+		return;
+	}
+	++GSpawnSequence;
+	++GWorldActorCount;
+	MW_LOG(Log, "ex26", "server spawned actor -> world actor count=%d", GWorldActorCount);
+}
 
-	// All composition objects are static (the ESP32-S3 stack lesson, §2.2).
-	static FServerTransport ServerTransport{Device};
-	static THostPlaySystem<FServerTransport> ServerFrame{ServerTransport};
-	static FServerEngine ServerHost{FGarbageCollectionBudget{1, 4, 8}, ServerFrame};
-	static int SpawnSequence = 0;
-	static int SpawnedBeginCount = 0;
-	static int WorldActorCount = 0;
+/**
+ * Motivation: Builds the Engine-owned LoRa server composition before it accepts clients.
+ * Responsibilities: Register the device, create systems and world, and install the bounded spawn handler.
+ */
+bool SetupServer(FEsp32LoraDevice& Device, TPlaySystemSet<1>& DeviceFrames, FServerEngine& ServerHost, FNetworkSystem*& OutNetwork) noexcept
+{
+	if (DeviceFrames.Add(Device) != EEngineResult::Success || ServerHost.CreateMessagingSystem({}) != ERuntimeResult::Success)
+	{
+		MW_LOG(Error, "ex26", "server messaging setup failed; halting");
+		return false;
+	}
 
-	if (ServerHost.RegisterClass<FDemoSpawnedActor>(DemoSpawnedActorTypeId, "DemoSpawnedActor") != EObjectResult::Success
+	FMessagingSystem* const Messaging = ServerHost.GetMessagingSystem();
+	FMessagingLinkId LinkId{};
+	if (Messaging == nullptr || Messaging->RegisterLink(Device, LinkId) != EMessagingResult::Success
+		|| ServerHost.CreateNetworkSystem(MakeNetworkInformation(ENetworkRole::Server)) != ENetworkResult::Success
+		|| Messaging->CreateChannel({InputEventChannel, false, nullptr, {}}) != EMessagingResult::Success
+		|| Messaging->CreateChannel({StateBroadcastChannel, false, nullptr, {}}) != EMessagingResult::Success)
+	{
+		MW_LOG(Error, "ex26", "server network setup failed; halting");
+		return false;
+	}
+
+	OutNetwork = ServerHost.GetNetworkSystem();
+	GServerHost = &ServerHost;
+	GServerNetwork = OutNetwork;
+	FMessagingSystem::FSubscriberDelegate SpawnSubscriber;
+	if (OutNetwork == nullptr || SpawnSubscriber.Bind(HandleSpawnRequest) != EDelegateResult::Success
+		|| Messaging->SubscribeToChannel(InputEventChannel, SpawnRequestMessageName, std::move(SpawnSubscriber)) != EMessagingResult::Success
+		|| ServerHost.RegisterClass<FDemoSpawnedActor>(DemoSpawnedActorTypeId, "DemoSpawnedActor") != EObjectResult::Success
 		|| ServerHost.CreateWorld().Get() == nullptr)
 	{
 		MW_LOG(Error, "ex26", "server world setup failed; halting");
-		return;
+		return false;
 	}
 
-	// Channel-1 spawn handler. The lambda captures nothing: it names the static
-	// run-loop state directly, which keeps it inside the delegate's inline budget.
-	FServerTransport::FMessageHandlerBinding Binding;
-	Binding.Bind(
-		[](const FPeerId, const std::uint8_t Channel, TSpan<const std::uint8_t> Payload) noexcept
-		{
-			if (Channel != InputEventChannel || Payload.Size() < 1 || Payload[0] != SpawnRequestOpcode || SpawnSequence >= MaxSpawns)
-			{
-				return;
-			}
-			++SpawnSequence;
-			const auto Creation = ServerHost.CreateObject<FDemoSpawnedActor>(DemoSpawnedActorTypeId, SpawnedBeginCount);
-			if (Creation.Result != EObjectResult::Success
-				|| ServerHost.GetWorld().SpawnActor(TObjectPtr<AActor>{Creation.Object}) != EEngineResult::Success)
-			{
-				return;
-			}
-			++WorldActorCount;
-			MW_LOG(Log, "ex26", "server spawned actor -> world actor count=%d", WorldActorCount);
-		});
-	FDelegateHandle Handle{};
-	(void)ServerTransport.AddMessageHandler(std::move(Binding), Handle);
+	return true;
+}
 
-	(void)ServerTransport.Configure(ENetworkMode::DedicatedServer, MakeHostConfig());
-	(void)ServerTransport.Start(GTimeSource.Now());
-	(void)ServerHost.BeginPlay(GTimeSource.Now());
-	MW_LOG(Log, "ex26", "server listening (no WiFi -- LoRa radio only)");
+/**
+ * Motivation: Starts the complete Engine-owned server lifecycle only after setup succeeds.
+ * Responsibilities: Begin play with caller-supplied time so Networking can admit peers from the message loop.
+ */
+bool StartServer(FServerEngine& ServerHost) noexcept
+{
+	if (ServerHost.BeginPlay(GTimeSource.Now()) != ERuntimeResult::Success)
+	{
+		MW_LOG(Error, "ex26", "server world setup failed; halting");
+		return false;
+	}
 
+	return true;
+}
+
+/**
+ * Motivation: Keeps LoRa state publication within the measured airtime cadence.
+ * Responsibilities: Tick the Engine, broadcast at StateBroadcastPeriodMilliseconds, and announce completion once.
+ */
+void RunServerMessageLoop(FServerEngine& ServerHost, FNetworkSystem& Network) noexcept
+{
 	std::uint8_t StateTick = 0;
+	TimePointMilliseconds NextStateBroadcastDueMilliseconds = GTimeSource.Now();
 	bool bDoneAnnounced = false;
-	std::uint64_t NextStateBroadcastDueMilliseconds = GTimeSource.Now();
+
 	for (;;)
 	{
-		// Tick runs PumpReceive (delivers spawn requests -> handler) then PumpSend
-		// (flushes the Welcome/heartbeats and any broadcast queued below). Ticking the
-		// engine every poll is local and cheap; only the radio broadcast below is paced
-		// (a full LoRa frame costs hundreds of ms of airtime, so it cannot fire every tick).
-		const std::uint64_t Now = GTimeSource.Now();
+		const TimePointMilliseconds Now = GTimeSource.Now();
 		(void)ServerHost.Tick(Now);
 		if (Now >= NextStateBroadcastDueMilliseconds)
 		{
-			++StateTick;
-			const std::uint8_t StatePayload[2] = {StateTick, static_cast<std::uint8_t>(WorldActorCount)};
-			(void)ServerTransport.Broadcast(StateBroadcastChannel, TSpan<const std::uint8_t>(StatePayload, sizeof(StatePayload)));
+			const std::uint8_t StatePayload[2] = {++StateTick, static_cast<std::uint8_t>(GWorldActorCount)};
+			FMessage StateMessage;
+			StateMessage.SetMessageNameId(StateMessageName);
+			StateMessage.SetPayload(TSpan<const std::uint8_t>(StatePayload, sizeof(StatePayload)));
+			(void)Network.Broadcast(StateBroadcastChannel, StateMessage);
 			NextStateBroadcastDueMilliseconds = Now + StateBroadcastPeriodMilliseconds;
 		}
-		if (!bDoneAnnounced && WorldActorCount >= MaxSpawns)
+		if (!bDoneAnnounced && GWorldActorCount >= MaxSpawns)
 		{
-			MW_LOG(Log, "ex26", "done (server spawned %d actors)", WorldActorCount);
+			MW_LOG(Log, "ex26", "done (server spawned %d actors)", GWorldActorCount);
 			bDoneAnnounced = true;
 		}
 		SleepMilliseconds(PollPacingMilliseconds);
 	}
+}
+} // namespace
+
+/**
+ * Motivation: Runs the LoRa server role with device ownership below Messaging and Network.
+ * Responsibilities: Admit clients, spawn bounded actors, and broadcast at the measured airtime pace.
+ */
+void RunServer() noexcept
+{
+	static FEsp32LoraDevice Device{MakeLoraConfig(ServerNodeId)};
+	if (!Device.IsOpen())
+	{
+		MW_LOG(Error, "ex26", "radio failed to open; halting");
+		return;
+	}
+
+	static TPlaySystemSet<1> DeviceFrames;
+	static FServerEngine ServerHost{FGarbageCollectionBudget{1, 4, 8}, DeviceFrames};
+	FNetworkSystem* Network = nullptr;
+	if (!SetupServer(Device, DeviceFrames, ServerHost, Network))
+	{
+		return;
+	}
+
+	if (!StartServer(ServerHost))
+	{
+		return;
+	}
+
+	RunServerMessageLoop(ServerHost, *Network);
 }

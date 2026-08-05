@@ -16,13 +16,33 @@
 namespace MicroWorld::Engine
 {
 
-UWorld::UWorld(FWorldActorRegistryReference InActorStorage) noexcept : UObject(), Actors(std::move(InActorStorage)) {}
+UWorld::UWorld(FWorldActorRegistryReference InActorStorage) noexcept : UObject(), Actors(std::move(InActorStorage)), Subsystems() {}
+
+UWorld::UWorld(FWorldActorRegistryReference InActorStorage, FWorldSubsystemRegistryReference InSubsystemStorage) noexcept
+	: UObject(), Actors(std::move(InActorStorage)), Subsystems(std::move(InSubsystemStorage))
+{
+}
 
 UWorld::UWorld(
 	FWorldActorRegistryReference InActorStorage,
 	FDeferredActorSpawnStorageReference InSpawnStorage,
 	const FClassRegistryRegistrationView InClasses) noexcept
 	: UObject(), Actors(std::move(InActorStorage)), DeferredSpawns(std::move(InSpawnStorage)), Classes(InClasses)
+{
+}
+
+UWorld::UWorld(
+	FWorldActorRegistryReference InActorStorage,
+	FDeferredActorSpawnStorageReference InSpawnStorage,
+	FClassRegistryRegistrationView InClasses,
+	FWorldSubsystemRegistryReference InSubsystemStorage,
+	Networking::FNetworkSystem* const InNetwork) noexcept
+	: UObject()
+	, Actors(std::move(InActorStorage))
+	, DeferredSpawns(std::move(InSpawnStorage))
+	, Classes(InClasses)
+	, Subsystems(std::move(InSubsystemStorage))
+	, Network(InNetwork)
 {
 }
 

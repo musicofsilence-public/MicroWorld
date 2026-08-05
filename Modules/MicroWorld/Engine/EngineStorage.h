@@ -2,6 +2,7 @@
 
 #include <MicroWorld/Engine/Actor.h>
 #include <MicroWorld/Engine/EngineRegistryView.h>
+#include <MicroWorld/Engine/WorldSubsystem.h>
 
 #include <array>
 #include <cstddef>
@@ -106,6 +107,104 @@ private:
 	std::size_t PendingDestroyCount{0};
 
 	/** Motivation: Ensures this storage cannot be shared or rebound to a second world. */
+	bool bReferenceMade{false};
+};
+
+/**
+ * Motivation: Owns one World's bounded subsystem registry outside UWorld so configured capacity is not charged to every
+ *   equal-width object
+ * slot.
+ * Responsibilities: Outlive the World that consumes its one-shot reference, keep a stable address, and store only the
+ *   subsystem
+ * references the World publishes.
+ * Example:
+ *   FWorldSubsystemRegistry<1> Registry;
+ *   FWorldSubsystemRegistryReference Ref =
+ * Registry.MakeReference();
+ */
+template<std::size_t MaxSubsystems>
+class FWorldSubsystemRegistry final
+{
+public:
+	/**
+	 * Motivation: Preserves the stable address a registry reference retains for the World's lifetime.
+	 * Responsibilities: Default-construct
+	 * empty storage without binding it to a World.
+	 */
+	FWorldSubsystemRegistry() noexcept = default;
+
+	/**
+	 * Motivation: Prevents two owners from sharing one subsystem array behind escaped addresses.
+	 * Responsibilities: Reject copy
+	 * construction so storage remains single-owner.
+	 */
+	FWorldSubsystemRegistry(const FWorldSubsystemRegistry&) = delete;
+
+	/**
+	 * Motivation: Prevents replacing subsystem storage behind an existing World reference.
+	 * Responsibilities: Reject copy assignment so
+	 * storage remains stable.
+	 */
+	FWorldSubsystemRegistry& operator=(const FWorldSubsystemRegistry&) = delete;
+
+	/**
+	 * Motivation: Prevents moving subsystem storage after a reference may have escaped.
+	 * Responsibilities: Reject move construction so
+	 * the registry address stays fixed.
+	 */
+	FWorldSubsystemRegistry(FWorldSubsystemRegistry&&) = delete;
+
+	/**
+	 * Motivation: Prevents replacing subsystem storage through move assignment.
+	 * Responsibilities: Reject move assignment so the
+	 * registry address stays fixed.
+	 */
+	FWorldSubsystemRegistry& operator=(FWorldSubsystemRegistry&&) = delete;
+
+	/**
+	 * Motivation: Transfers the only mutable registry capability to one World exactly once.
+	 * Responsibilities: Return a valid reference
+	 * on the first call and an invalid reference thereafter.
+	 */
+	FWorldSubsystemRegistryReference MakeReference() & noexcept
+	{
+		if (bReferenceMade)
+		{
+			return {};
+		}
+		bReferenceMade = true;
+		return FWorldSubsystemRegistryReference{Subsystems.data(), MaxSubsystems, Count};
+	}
+
+	/**
+	 * Motivation: Prevents a reference from outliving a temporary registry owner.
+	 * Responsibilities: Reject MakeReference on an rvalue.
+
+	 */
+	FWorldSubsystemRegistryReference MakeReference() && = delete;
+
+	/**
+	 * Motivation: Lets a caller observe registry occupancy without mutable storage access.
+	 * Responsibilities: Return the number of
+	 * published subsystem references.
+	 */
+	std::size_t GetCount() const noexcept { return Count; }
+
+	/**
+	 * Motivation: Lets a caller compare occupancy with the configured bound.
+	 * Responsibilities: Return the compile-time subsystem
+	 * capacity.
+	 */
+	static constexpr std::size_t GetCapacity() noexcept { return MaxSubsystems; }
+
+private:
+	/** Motivation: Holds traced subsystem references published by the owning World. */
+	std::array<TObjectPtr<UWorldSubsystem>, MaxSubsystems> Subsystems{};
+
+	/** Motivation: Records how many leading subsystem entries are live. */
+	std::size_t Count{0};
+
+	/** Motivation: Ensures storage cannot be shared or rebound to a second World. */
 	bool bReferenceMade{false};
 };
 

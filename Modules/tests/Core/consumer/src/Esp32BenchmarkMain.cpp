@@ -2,7 +2,7 @@
 //
 // This is the COMPILE-ONLY harness for §6.2: it builds the representative world
 // (8 actors / 16 components / 8 timers), a standalone GC probe store, and a
-// no-traffic transport pump, then prints labeled measurement lines over serial at
+// no-traffic device, Messaging, and Network turn, then prints labeled measurement lines over serial at
 // 115200. Part B (a separate, human-authorized flash) captures the real numbers;
 // this image is never flashed or run on hardware as part of Part A.
 //
@@ -10,7 +10,7 @@
 //   1. Tick duration — Host.Tick over 1000 iterations (min/mean/max us).
 //   2. GC pause per budget unit — isolated Advance slice on a standalone
 //      FObjectStore + FGarbageCollector (min/mean/max us per slice).
-//   3. Transport pump cost — PumpReceive + PumpSend with NO netif/traffic (mean us).
+//   3. Network turn cost — device, Messaging, and Network with NO netif/traffic (mean us).
 //   4. Memory — free heap before/after setup, stack high-water mark after setup.
 //
 // GC-slice isolation uses a SEPARATE bounded store + collector, not the host's
@@ -25,11 +25,10 @@
 #include <MicroWorld/Engine/DefaultEngineTraits.h>
 #include <MicroWorld/Engine/EngineResult.h>
 #include <MicroWorld/Engine/EngineStorage.h>
-#include <MicroWorld/Engine/HostPlaySystem.h>
+#include <MicroWorld/Engine/PlaySystemSet.h>
 #include <MicroWorld/Core/Log.h>
-#include <MicroWorld/Transport/NetworkMode.h>
-#include <MicroWorld/Transport/TransportHost.h>
-#include <MicroWorld/Transport/TransportHostConfig.h>
+#include <MicroWorld/Messaging/MessagingSystem.h>
+#include <MicroWorld/Networking/NetworkSystem.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Engine/ClassRegistry.h>
 #include <MicroWorld/Engine/ClassRegistryView.h>
@@ -171,7 +170,7 @@ public:
  */
 struct FBenchmarkHostTraits : MicroWorld::Engine::FDefaultEngineTraits
 {
-	static constexpr std::size_t MaxClasses = 6;					   // UWorld + AActor + UActorComponent + 2 user types + 1 spare.
+	static constexpr std::size_t MaxClasses = 6;					   // Four Engine bases + two user types; exact-fit.
 	static constexpr std::size_t MaxObjects = 32;					   // 1 world + 8 actors + 16 components = 25 live; +7 headroom.
 	static constexpr std::size_t SlotSizeBytes = 256;				   // proven actor slot width (PlatformEsp32Main / EngineHostTests).
 	static constexpr std::size_t MaxRoots = 1;						   // the single rooted world.
@@ -183,7 +182,6 @@ struct FBenchmarkHostTraits : MicroWorld::Engine::FDefaultEngineTraits
 using FBenchmarkHost = MicroWorld::Engine::TEngine<FBenchmarkHostTraits>;
 
 /** Motivation: Dedicated server transport host sized identically to the PlatformEsp32Main proof. */
-using FBenchmarkTransport = MicroWorld::Transport::TTransportHost<4, 256>;
 
 /** Motivation: Delegate type matching the host's timer manager so Schedule accepts a bound callback. */
 using FBenchTimerDelegate = MicroWorld::Core::TDelegate<void(), 64>;
@@ -448,7 +446,7 @@ extern "C" void app_main()
 	// 1. The single real clock; esp_timer feeds the engine's caller-supplied monotonic time.
 	FEsp32TimeSource Clock;
 
-	// The composition objects below (UDP device, transport host, frame, engine, and the GC probe)
+	// The composition objects below (UDP device, device frame, Messaging, Network, engine, and the GC probe)
 	// are placed in STATIC storage, not on the stack. The ESP-IDF main task stack is only 3584
 	// bytes, but TEngine embeds its fixed object storage inline (MaxObjects * SlotBytes) and
 	// the GC probe embeds its own slot bytes, which together far exceed that; a stack frame this
@@ -459,18 +457,28 @@ extern "C" void app_main()
 	//    no WiFi is associated, so the socket binds and polls but no datagram can route.
 	static FEsp32WifiDevice Device(5000);
 
-	// 3. A dedicated-server session host over that device, started at boot time.
-	static FBenchmarkTransport Transport(Device);
-	(void)Transport.Configure(ENetworkMode::DedicatedServer, FTransportHostConfig{});
-	Transport.Start(Clock.Now());
+	// 3. Bind the device once; Engine drives it before Messaging and Network.
+	static MicroWorld::Engine::TPlaySystemSet<1> DeviceFrames;
 
-	// 4. Adapt the host to the engine's `THostPlaySystem` interface.
-	static THostPlaySystem<FBenchmarkTransport> Frame(Transport);
-
-	// 5. Application entry point. Budget {1,4,32}: MaxSweepOperations(32) >= MaxObjects(32) so one
+	// 4. Application entry point. Budget {1,4,32}: MaxSweepOperations(32) >= MaxObjects(32) so one
 	//    Tick completes a full GC cycle each frame — no mid-cycle mutation lock during the
 	//    measured loop (safe because all spawning happens in this setup phase).
-	static FBenchmarkHost Host{FGarbageCollectionBudget{1, 4, 32}, Frame};
+	static FBenchmarkHost Host{FGarbageCollectionBudget{1, 4, 32}, DeviceFrames};
+	if (DeviceFrames.Add(Device) != EEngineResult::Success || Host.CreateMessagingSystem({}) != ERuntimeResult::Success)
+	{
+		ESP_LOGE(BenchmarkTag, "setup FAILED: Messaging creation rejected");
+		BenchmarkSinkResult = 1;
+		return;
+	}
+	MicroWorld::Messaging::FMessagingSystem* const Messaging = Host.GetMessagingSystem();
+	MicroWorld::Messaging::FMessagingLinkId LinkId{};
+	if (Messaging == nullptr || Messaging->RegisterLink(Device, LinkId) != MicroWorld::Messaging::EMessagingResult::Success
+		|| Host.CreateNetworkSystem({MicroWorld::Networking::ENetworkRole::Server}) != MicroWorld::Networking::ENetworkResult::Success)
+	{
+		ESP_LOGE(BenchmarkTag, "setup FAILED: Network creation rejected");
+		BenchmarkSinkResult = 1;
+		return;
+	}
 
 	(void)Host.RegisterClass<FBenchActor>(BenchActorTypeId, "BenchActor");
 	(void)Host.RegisterClass<FBenchComponent>(BenchComponentTypeId, "BenchComponent");
@@ -483,7 +491,7 @@ extern "C" void app_main()
 		return;
 	}
 
-	// 6. Spawn the representative population: 8 actors, each leasing a 2-component view,
+	// 5. Spawn the representative population: 8 actors, each leasing a 2-component view,
 	//    with 16 components attached two-per-actor. All spawning finishes before BeginPlay.
 	for (std::size_t ActorIndex = 0; ActorIndex < RepresentativeActorCount; ++ActorIndex)
 	{
@@ -526,7 +534,7 @@ extern "C" void app_main()
 		}
 	}
 
-	// 7. Schedule the representative timer set (8 looping timers) before BeginPlay.
+	// 6. Schedule the representative timer set (8 looping timers) before BeginPlay.
 	for (std::size_t TimerIndex = 0; TimerIndex < RepresentativeTimerCount; ++TimerIndex)
 	{
 		FBenchTimerDelegate Callback;
@@ -547,7 +555,7 @@ extern "C" void app_main()
 		return;
 	}
 
-	// 8. Construct the standalone GC probe used to isolate one Advance slice.
+	// 7. Construct the standalone GC probe used to isolate one Advance slice.
 	static FGcProbe GcProbe;
 	if (!GcProbe.IsReady())
 	{
@@ -622,24 +630,34 @@ extern "C" void app_main()
 		static_cast<long long>(GcSliceStats.MeanMicroseconds()),
 		static_cast<long long>(GcSliceStats.MaxMicroseconds));
 
-	// --- Measurement 3: transport pump cost (NO netif/traffic — overhead only) ---
+	// --- Measurement 3: Network turn cost (NO netif/traffic — overhead only) ---
 	for (std::uint32_t Warmup = 0; Warmup < TransportPumpWarmupIterations; ++Warmup)
 	{
-		(void)Transport.PumpReceive(Clock.Now());
-		(void)Transport.PumpSend(Clock.Now());
+		const MicroWorld::Core::TimePointMilliseconds Now = Clock.Now();
+		Device.PreAdvance(Now);
+		Messaging->PreAdvance(Now);
+		Host.GetNetworkSystem()->PreAdvance(Now);
+		Host.GetNetworkSystem()->PostAdvance(Now);
+		Messaging->PostAdvance(Now);
+		Device.PostAdvance(Now);
 	}
 	FBenchStats TransportPumpStats;
 	for (std::uint32_t Iteration = 0; Iteration < TransportPumpMeasurementIterations; ++Iteration)
 	{
 		const std::int64_t Begin = esp_timer_get_time();
-		(void)Transport.PumpReceive(Clock.Now());
-		(void)Transport.PumpSend(Clock.Now());
+		const MicroWorld::Core::TimePointMilliseconds Now = Clock.Now();
+		Device.PreAdvance(Now);
+		Messaging->PreAdvance(Now);
+		Host.GetNetworkSystem()->PreAdvance(Now);
+		Host.GetNetworkSystem()->PostAdvance(Now);
+		Messaging->PostAdvance(Now);
+		Device.PostAdvance(Now);
 		const std::int64_t End = esp_timer_get_time();
 		TransportPumpStats.Record(End - Begin);
 	}
 	ESP_LOGI(
 		BenchmarkTag,
-		"net_pump: no_traffic_overhead iterations=%u mean=%lld us (live datagram cost needs a peer — out of scope)",
+		"network_turn: no_traffic_overhead iterations=%u mean=%lld us (live datagram cost needs a peer — out of scope)",
 		static_cast<unsigned>(TransportPumpMeasurementIterations),
 		static_cast<long long>(TransportPumpStats.MeanMicroseconds()));
 

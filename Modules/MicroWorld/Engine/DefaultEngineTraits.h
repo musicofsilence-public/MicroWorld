@@ -8,7 +8,7 @@ namespace MicroWorld::Engine
 /**
  * Motivation: Gives TEngine one starting set of compile-time capacities sized for an ESP32-S3, so a consumer whose needs
  *   match that baseline writes TEngine<> with no args.
- * Responsibilities: Hold the eight capacity members a project overrides in its own traits to grow or shrink the engine;
+ * Responsibilities: Hold the compile-time capacity members a project overrides in its own traits to grow or shrink the engine;
  *   these are a starting point, not a measurement.
  * Example:
  *   TEngine<FDefaultEngineTraits> Engine(Budget);
@@ -16,7 +16,10 @@ namespace MicroWorld::Engine
 struct FDefaultEngineTraits
 {
 	/** Motivation: Maximum registered class descriptors (engine bases plus user types). */
-	static constexpr std::size_t MaxClasses = 8;
+	static constexpr std::size_t MaxClasses = 9;
+
+	/** Motivation: Maximum World subsystems; zero keeps subsystem pointer storage opt-in. */
+	static constexpr std::size_t MaxSubsystems = 0;
 
 	/** Motivation: Maximum live managed objects across the world, actors, and components. */
 	static constexpr std::size_t MaxObjects = 16;

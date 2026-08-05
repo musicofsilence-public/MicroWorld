@@ -1,30 +1,31 @@
 # 26-MessagingOverLora
 
-**Feature:** the full MicroWorld message design — a dedicated-server `TEngine`
-bound to `TTransportHost` through the `THostPlaySystem` interface, and a bare `TTransportHost`
-client — running over an E32 LoRa radio. **Same application protocol as
+**Feature:** the full MicroWorld Networking design — a server `TEngine` owning
+Messaging and Network, and a client Messaging + Network composition — running over
+an E32 LoRa radio. **Same application protocol as
 example 19 — only the device construction and the D8 session profile differ.**
 
-`TTransportHost` already advances queued device transmission after outbound FIFO
-progress, so this example has no direct `PreAdvance` call.
+The application composition advances each registered device exactly once before
+Messaging and Networking on every pre-turn.
 
-> Status: hardware-verified 2026-07-24 (EBYTE E32-433T20D, 433 MHz).
+> Status: built; the migrated Networking path is not yet hardware-verified.
 
 > Post-refactor status (2026-07-28): this example was not rerun because the
 > second ESP32 has no E32 LoRa module. The owner accepted that unavailable
 > rerun as a waiver, not a pass. Current cross-platform RadioE32 evidence is
 > recorded in [example 17's payload-boundary regression](../17-TwoBoardLora/README.md#payload-boundary-regression-hardware-verified-2026-07-28);
-> the verified output below remains historical pre-refactor evidence.
+> the verified output below remains historical pre-Networking evidence. The
+> migrated composition has not been hardware-reverified.
 
 ## What it does
 
-1. The **server** board (`node=1`) composes a `TEngine` + `THostPlaySystem` +
-   `TTransportHost` in `DedicatedServer` mode over one `FEsp32LoraDevice`,
+1. The **server** board (`node=1`) composes a `TEngine` + Messaging + server
+   `FNetworkSystem` over one `FEsp32LoraDevice`,
    registers a spawnable actor class, creates its world, and ticks forever.
    It broadcasts the world actor count on channel 2 **every 1 s** (not every
    tick — see below).
-2. The **client** board (`node=2`) runs a bare `TTransportHost` in `Client` mode over
-   its own `FEsp32LoraDevice`, greeting `MakeLoraAddress(1)` as its server.
+2. The **client** board (`node=2`) composes Messaging + client `FNetworkSystem` over
+   its own `FEsp32LoraDevice`, then connects to `MakeLoraAddress(1)`.
    Once connected it sends two channel-1 spawn requests one second apart and
    logs every channel-2 state broadcast it receives.
 3. Each accepted request spawns one actor in the server world, so the broadcast
@@ -46,10 +47,9 @@ broadcast would congest the channel and time peers out over the air.
 
 ## MicroWorld APIs used
 
-- `TTransportHost` (`Configure` / `Start` / `PumpReceive` / `PumpSend` / `SendTo` /
-  `Broadcast` / `GetState` / `GetServerPeer`, message-handler multicast),
-  `ENetworkMode`, `ETransportHostState`, `FTransportHostConfig`, `FPeerId`
-- `THostPlaySystem` / `IPlaySystem` and the `TEngine` network-frame constructor
+- `FNetworkSystem` (`ConnectToServer` / `SendToServer` / `SendTo` / `Broadcast` /
+  `ResolveSenderPeer`), `ENetworkRole`, `EConnectionState`, `FPeerId`
+- `FMessagingSystem` local application channels, registered device link, and explicit route
 - `TEngine` (`RegisterClass` / `CreateWorld` / `CreateObject` / `BeginPlay` /
   `Tick` / `GetWorld`), `UWorld::SpawnActor`, `AActor`, `FGarbageCollectionBudget`
 - `FEsp32LoraDevice`, `FEsp32E32LoraConfig`, `MakeLoraAddress`
@@ -114,7 +114,7 @@ mw log   COM7                        :: client trace (second terminal)
 on these boards -- its reset-on-open can drop the native-USB port into the ROM
 download loader; `mw log` holds the line steady and reconnects across resets.
 
-## Verified output
+## Historical pre-Networking output
 
 Captured 2026-07-24 on two ESP32-S3-DevKitC-1 boards, each with an EBYTE
 E32-433T20D (433 MHz, FCC ID 2ALPH-E32) in transparent mode, antennas

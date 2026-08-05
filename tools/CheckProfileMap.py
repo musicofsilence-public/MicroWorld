@@ -9,17 +9,14 @@ import tempfile
 from pathlib import Path
 
 
-# Profile names describe package bundles. Transport is an independent overlay above
-# Core: it never pulls Object or Engine, and no Engine-Transport Integration profile
-# is retained because that dependency is deferred until a real application needs
-# it. Memory folded into Core, so no Memory package or archive marker remains.
+# Profile names describe package bundles. Transport is an independent Core-only
+# overlay; Networking depends on Core and Messaging, never Transport.
 PROFILE_MODULES = {
     "Core": {"Core"},
-    "Object": {"Core", "Object"},
+    "Core+Messaging": {"Core", "Messaging"},
+    "Core+Messaging+Networking": {"Core", "Messaging", "Networking"},
     "Core+Transport": {"Core", "Transport"},
-    "Managed": {"Core", "Object", "Engine"},
-    "Managed+Transport": {"Core", "Object", "Engine", "Transport"},
-    "Application": {"Core", "Object", "Engine", "Application"},
+    "Application": {"Core", "Messaging", "Networking", "Engine", "Application"},
 }
 
 # Markers cover planned CMake target/archive names, PlatformIO package archives,
@@ -29,15 +26,6 @@ PROFILE_MODULES = {
 # tfixedarena, tsharedptr) are intentionally absent: those symbols now live in
 # the Core archive after the fold.
 MODULE_MARKERS = {
-    "Object": (
-        "microworld_object",
-        "microworld-object",
-        "/microworld/object/",
-        "fobjectstore",
-        "fgarbagecollector",
-        "tobjectptr",
-        "uobject",
-    ),
     "Engine": (
         "microworld_engine",
         "microworld-engine",
@@ -67,11 +55,11 @@ MODULE_MARKERS = {
         "ttransportmanager",
         "idevice",
     ),
-    "Integration": (
+    "Networking": (
         "microworld_networking",
-        "microworld-integration",
-        "/microworld/integration/",
-        "tnetworking",
+        "microworld-networking",
+        "/microworld/networking/",
+        "fnetworksystem",
     ),
     "Application": (
         "microworld_application",
@@ -88,16 +76,6 @@ CORE_ARCHIVE_MARKERS = (
     "microworld:",
     "microworld.lib",
     "libmicroworld.a",
-)
-
-# Object profiles must link their separate package archive. Public header-only
-# evidence does not prove that object-store or collector code participated.
-OBJECT_ARCHIVE_MARKERS = (
-    "microworld_object:",
-    "microworld_object.lib",
-    "libmicroworld_object.a",
-    "libmicroworld-object.a",
-    "libmicroworldobject.a",
 )
 
 # Transport profiles must link their separate package archive. Header-only byte I/O
@@ -119,6 +97,30 @@ APPLICATION_ARCHIVE_MARKERS = (
     "libmicroworld_application.a",
     "libmicroworld-application.a",
     "libmicroworldapplication.a",
+)
+
+NETWORKING_ARCHIVE_MARKERS = (
+    "microworld_networking:",
+    "microworld_networking.lib",
+    "libmicroworld_networking.a",
+    "libmicroworld-networking.a",
+    "libmicroworldnetworking.a",
+)
+
+MESSAGING_ARCHIVE_MARKERS = (
+    "microworld_messaging:",
+    "microworld_messaging.lib",
+    "libmicroworld_messaging.a",
+    "libmicroworld-messaging.a",
+    "libmicroworldmessaging.a",
+)
+
+ENGINE_ARCHIVE_MARKERS = (
+    "microworld_engine:",
+    "microworld_engine.lib",
+    "libmicroworld_engine.a",
+    "libmicroworld-engine.a",
+    "libmicroworldengine.a",
 )
 
 
@@ -155,12 +157,20 @@ def analyze_map(
         )
 
     selected_modules = PROFILE_MODULES[profile]
-    if "Object" in selected_modules and not any(
-        marker in normalized_text for marker in OBJECT_ARCHIVE_MARKERS
+    if "Messaging" in selected_modules and not any(
+        marker in normalized_text for marker in MESSAGING_ARCHIVE_MARKERS
     ):
         errors.append(
-            "map does not contain the MicroWorld Object archive "
-            f"({', '.join(OBJECT_ARCHIVE_MARKERS)})"
+            "map does not contain the MicroWorld Messaging archive "
+            f"({', '.join(MESSAGING_ARCHIVE_MARKERS)})"
+        )
+
+    if "Engine" in selected_modules and not any(
+        marker in normalized_text for marker in ENGINE_ARCHIVE_MARKERS
+    ):
+        errors.append(
+            "map does not contain the MicroWorld Engine archive "
+            f"({', '.join(ENGINE_ARCHIVE_MARKERS)})"
         )
 
     if "Transport" in selected_modules and not any(
@@ -169,6 +179,14 @@ def analyze_map(
         errors.append(
             "map does not contain the MicroWorld Transport archive "
             f"({', '.join(TRANSPORT_ARCHIVE_MARKERS)})"
+        )
+
+    if "Networking" in selected_modules and not any(
+        marker in normalized_text for marker in NETWORKING_ARCHIVE_MARKERS
+    ):
+        errors.append(
+            "map does not contain the MicroWorld Networking archive "
+            f"({', '.join(NETWORKING_ARCHIVE_MARKERS)})"
         )
 
     if "Application" in selected_modules and not any(
@@ -208,48 +226,6 @@ def run_self_test() -> int:
             print(f"Valid Core-map self-test failed: {error}", file=sys.stderr)
         return 1
 
-    valid_object_map = (
-        f"{valid_core_map}"
-        "libMicroWorldObject.a(ObjectStore.o)\n"
-        "MicroWorld::Engine::FObjectStore\n"
-    )
-    valid_object_errors = analyze_map(
-        valid_object_map,
-        "Object",
-        ["MicroWorld::Engine::FObjectStore"],
-        [],
-    )
-    if valid_object_errors:
-        for error in valid_object_errors:
-            print(
-                f"Valid Object-map self-test failed: {error}",
-                file=sys.stderr,
-            )
-        return 1
-
-    missing_object_errors = analyze_map(valid_core_map, "Object", [], [])
-    if not any("Object archive" in error for error in missing_object_errors):
-        print(
-            "Self-test did not detect missing Object archive evidence.",
-            file=sys.stderr,
-        )
-        return 1
-
-    outward_object_map = (
-        f"{valid_object_map}"
-        "libmicroworld_engine.a(Engine.o)\n"
-        "MicroWorld::Engine::TEngine\n"
-    )
-    outward_object_errors = analyze_map(outward_object_map, "Object", [], [])
-    if not any(
-        "unselected Engine" in error for error in outward_object_errors
-    ):
-        print(
-            "Self-test did not detect Engine code in an Object profile.",
-            file=sys.stderr,
-        )
-        return 1
-
     invalid_map = (
         "microworld.lib\n"
         "libmicroworld_transport.a(TransportManager.o)\n"
@@ -261,6 +237,57 @@ def run_self_test() -> int:
             "Self-test did not detect an unselected Transport module.",
             file=sys.stderr,
         )
+        return 1
+
+    valid_messaging_map = (
+        f"{valid_core_map}"
+        "libmicroworld_messaging.a(MessagingSystem.o)\n"
+        "MicroWorld::Messaging::FMessagingSystem\n"
+    )
+    valid_messaging_errors = analyze_map(valid_messaging_map, "Core+Messaging", [], [])
+    if valid_messaging_errors:
+        for error in valid_messaging_errors:
+            print(f"Valid Core+Messaging-map self-test failed: {error}", file=sys.stderr)
+        return 1
+
+    missing_messaging_errors = analyze_map(valid_core_map, "Core+Messaging", [], [])
+    if not any("Messaging archive" in error for error in missing_messaging_errors):
+        print("Self-test did not detect missing Messaging archive evidence.", file=sys.stderr)
+        return 1
+
+    valid_networking_map = (
+        f"{valid_messaging_map}"
+        "libmicroworld_networking.a(NetworkSystem.o)\n"
+        "MicroWorld::Networking::FNetworkSystem\n"
+    )
+    valid_networking_errors = analyze_map(valid_networking_map, "Core+Messaging+Networking", [], [])
+    if valid_networking_errors:
+        for error in valid_networking_errors:
+            print(f"Valid Networking-map self-test failed: {error}", file=sys.stderr)
+        return 1
+
+    missing_networking_errors = analyze_map(valid_messaging_map, "Core+Messaging+Networking", [], [])
+    if not any("Networking archive" in error for error in missing_networking_errors):
+        print("Self-test did not detect missing Networking archive evidence.", file=sys.stderr)
+        return 1
+
+    valid_application_map = (
+        f"{valid_networking_map}"
+        "libmicroworld_engine.a(EngineHost.o)\n"
+        "libmicroworld_application.a(Application.o)\n"
+        "MicroWorld::Application::FApplication\n"
+    )
+    valid_application_errors = analyze_map(valid_application_map, "Application", [], [])
+    if valid_application_errors:
+        for error in valid_application_errors:
+            print(f"Valid Application-map self-test failed: {error}", file=sys.stderr)
+        return 1
+
+    missing_application_errors = analyze_map(valid_networking_map, "Application", [], [])
+    if not any("Engine archive" in error for error in missing_application_errors) or not any(
+        "Application archive" in error for error in missing_application_errors
+    ):
+        print("Self-test did not detect missing Application profile archive evidence.", file=sys.stderr)
         return 1
 
     missing_errors = analyze_map("consumer.exe\n", "Core", [], [])

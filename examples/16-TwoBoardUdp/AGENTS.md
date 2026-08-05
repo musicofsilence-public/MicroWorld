@@ -14,15 +14,15 @@ config, the fixed server IP (`192.168.4.1`), and the channel/opcode/spawn protoc
 
 ## Concepts
 
-- Proves the **whole message design over WiFi UDP, no router**: `TTransportHost`
-  Hello/Welcome admission, channel-1 spawn requests, channel-2 state broadcasts,
-  and the engine frame's pump steps — identical to example 19, only the device
+- Proves the **whole Networking design over WiFi UDP, no router**: Client/Server
+  admission, channel-1 spawn requests, channel-2 state broadcasts, and the
+  Engine-owned Messaging/Network lifecycle — identical to example 19, only the device
   and the WiFi bring-up differ. The same design rides UART, a bare wire, or WiFi.
 - **SoftAP topology:** the server hosts the AP at the fixed gateway
   `192.168.4.1`, so the client's server address is a constant — no IP discovery
   or copy step, and no real credentials (demo SSID/password in the shared header).
-- **No node id** (unlike example 19): a UDP peer is keyed by its socket address,
-  which `TTransportHost` learns from the datagram.
+- **No node id** (unlike example 19): Networking validates the client through its
+  Messaging route, which remains internal to the application.
 - **Ordering + storage invariants:** device after the WiFi bring-up returns `Success`;
   all composition objects `static`.
 - **Shared-AP caveat:** the server socket binds `INADDR_ANY`, so a stray datagram

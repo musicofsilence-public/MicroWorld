@@ -13,8 +13,8 @@ headers. It is excluded from `CheckDependencyBoundaries.py`.
 
 - Construction is inert; the application entry point initializes one exclusively
   owned UART after entering `main`.
-- `TrySend(Success)` queues a frame; direct callers invoke `PreAdvance`, while
-  `TTransportHost` already advances its device after outbound FIFO progress.
+- `TrySend(Success)` queues a frame; the composition owner invokes
+  `PreAdvance` exactly once after outbound FIFO progress.
 - FreeRTOS, SDK fetching, the complete `pico_stdlib` runtime, task scheduling,
   and upload policy belong to the consuming firmware, not this family.
 - Host tests cover UART validation, ownership, lifecycle, and facade delegation;

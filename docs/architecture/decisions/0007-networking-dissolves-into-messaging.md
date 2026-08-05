@@ -8,6 +8,12 @@ Partial supersession: [ADR 0012](0012-fixed-capacity-compiled-messaging.md)
 replaces only the traits-held capacity decision and its related consequence. All
 other decisions remain accepted.
 
+Further partial supersession: [ADR 0015](0015-networking-restored-above-messaging.md)
+replaces this record's deletion of Networking and its role-derived channel-target
+decision. The Core transport-device contract, Messaging-owned channels and
+delivery guarantees, local-only Messaging mode, and Engine-owned Messaging remain
+accepted.
+
 ## Context
 
 Networking existed to join Messaging and Transport without letting them see each

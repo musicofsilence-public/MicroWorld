@@ -19,9 +19,9 @@
 #include <cstdint>
 
 static_assert(__cplusplus >= 201703L);
-static_assert(MicroWorld::Version.Major == 0);
-static_assert(MicroWorld::Version.Minor == 4);
-static_assert(MicroWorld::Version.Patch == 0);
+static_assert(MicroWorld::Core::Version.Major == 0);
+static_assert(MicroWorld::Core::Version.Minor == 4);
+static_assert(MicroWorld::Core::Version.Patch == 0);
 
 namespace MicroWorldConsumer
 {

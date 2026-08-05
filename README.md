@@ -29,29 +29,33 @@ or inspect the
 | System | CMake target | PlatformIO package | Role |
 | --- | --- | --- | --- |
 | Core | `MicroWorld::Core` | `MicroWorld` | Lifecycle, tick, containers, delegates, smart pointers, timers, `IPlaySystem` |
-| Engine | `MicroWorld::Engine` | `MicroWorld` | `UWorld` / `AActor` / `UActorComponent`, `TEngine`, `IEngineRuntime`, plus the object store, garbage collector, and handles |
+| Engine | `MicroWorld::Engine` | `MicroWorld` | `UWorld` / `UWorldSubsystem` / `AActor` / `UActorComponent`, `TEngine`, `IEngineRuntime`, plus the object store, garbage collector, and handles |
 | Messaging | `MicroWorld::Messaging` | `MicroWorld` | `FMessagingSystem` — named channels, subscriptions, and reliable delivery in a compiled static module |
-| Transport | `MicroWorld::Transport` | `MicroWorld` | Byte I/O, frame codec, `TTransportHost`, and the optional portable E32 `FE32LoraDevice` |
+| Networking | `MicroWorld::Networking` | `MicroWorld` | `FNetworkSystem` — Client/Server sessions, peer admission and liveness, routed messages, and peer events over Messaging |
+| Transport | `MicroWorld::Transport` | `MicroWorld` | Byte I/O, frame codec, and the optional portable E32 `FE32LoraDevice` |
 | Application | `MicroWorld::Application` | `MicroWorld` | `FApplication` — holds one non-owning `IEngineRuntime` reference and owns its frame loop |
 | Platform/Host | `MicroWorld::PlatformHost` | `MicroWorldPlatformHost` | Host UDP transport and `steady_clock` time source (non-portable) |
 | Platform/Esp32 | — | `MicroWorldPlatformEsp32` | ESP32 UDP + wired transports, UART SDK bindings, E32 facade (PlatformIO/ESP-IDF only) |
 | Platform/Pico | `MicroWorld::PlatformPico` | `MicroWorldPlatformPico` | RP2040 UART SDK binding and E32 facade (native Pico SDK only) |
 
 One folder under `Modules/MicroWorld/` per system, one CMake target per system,
-one shipped package for all five. Memory folds into Core, the object store folds
+one shipped package for all six. Memory folds into Core, the object store folds
 into Engine, the E32 radio folds into Transport behind the
-`MICROWORLD_TRANSPORT_LORA` option, and Networking dissolved into Messaging.
+`MICROWORLD_TRANSPORT_LORA` option, and Networking remains a distinct session
+boundary above Messaging.
 Dependencies point inward:
 
 ```text
-Core <- Messaging <- Engine <- Application
+Core <- Messaging <- Networking <- Engine <- Application
 Core <- Transport
 ```
 
-Transport is an independent overlay above Core: it never pulls Engine, so an
+Transport is an independent overlay above Core: it never pulls Engine or
+Networking, so an
 application can use byte I/O without the managed runtime, and the application entry
 point is the only place permitted to see both. Messaging and Transport meet only
-at Core's `ITransportDevice`, so neither names the other. PlatformHost, PlatformEsp32, and PlatformPico are the
+at Core's `ITransportDevice`, so neither names the other. Networking sends only
+through Messaging and never sees a device or endpoint. PlatformHost, PlatformEsp32, and PlatformPico are the
 non-portable edges that supply real transports. `IUartByteStream` is a narrow
 byte-transfer interface, not a universal HAL: RadioE32 owns portable E32 state and framing,
 while ESP32 and Pico facades own UART SDK lifetime. See

@@ -4,8 +4,8 @@
 // Role is chosen at build time: server (=1) or client (=0). Both roles always
 // compile — ServerMain.cpp and ClientMain.cpp are always built — and this define
 // only selects which one runs; never build_src_filter, which ESP-IDF ignores.
-// This is the full TTransportHost message protocol of example 19 carried over WiFi UDP
-// instead of a wire: only the device construction and the server address differ.
+// This is the Messaging and Network application protocol of example 19 carried over WiFi UDP
+// instead of a wire: only the device construction and the server route differ.
 #ifndef MICROWORLD_EXAMPLE_SERVER
 #error "Define MICROWORLD_EXAMPLE_SERVER=1 (server) or 0 (client) via the build environment."
 #endif

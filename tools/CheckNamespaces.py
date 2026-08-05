@@ -14,6 +14,7 @@ SYSTEM_NAMESPACE_RULES = {
     "Core": "MicroWorld::Core",
     "Engine": "MicroWorld::Engine",
     "Messaging": "MicroWorld::Messaging",
+    "Networking": "MicroWorld::Networking",
     "Transport": "MicroWorld::Transport",
     "Application": "MicroWorld::Application",
 }
@@ -163,6 +164,12 @@ def run_self_test() -> int:
             "valid nested Transport frame codec",
             "Modules/MicroWorld/Transport/FrameCodec.h",
             "namespace MicroWorld::Transport::FrameCodec\n{\n}\n",
+            True,
+        ),
+        (
+            "valid Networking system",
+            "Modules/MicroWorld/Networking/NetworkSystem.h",
+            "namespace MicroWorld::Networking\n{\n}\n",
             True,
         ),
         (

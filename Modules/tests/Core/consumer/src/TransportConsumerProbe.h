@@ -17,9 +17,9 @@
 #include <cstdint>
 
 static_assert(__cplusplus >= 201703L);
-static_assert(MicroWorld::Version.Major == 0);
-static_assert(MicroWorld::Version.Minor == 4);
-static_assert(MicroWorld::Version.Patch == 0);
+static_assert(MicroWorld::Core::Version.Major == 0);
+static_assert(MicroWorld::Core::Version.Minor == 4);
+static_assert(MicroWorld::Core::Version.Patch == 0);
 
 #if defined(__cpp_exceptions) || defined(_CPPUNWIND)
 #error "The MicroWorld Transport consumer must compile with exceptions disabled."
@@ -96,6 +96,7 @@ inline constexpr std::size_t EmptyReceiveByteCount = 0;
 inline int RunTransportConsumerProbe() noexcept
 {
 	using namespace MicroWorld::Core;
+	using namespace MicroWorld::Transport;
 	using MicroWorldConsumer::ETransportConsumerExitCode;
 
 	const int MemoryProfileResult = RunMemoryConsumerProbe();

@@ -10,6 +10,9 @@ Documentation is short and tied to current code.
 
 - `RADIO_TRANSPORTS_ROADMAP.md` owns next work; git history owns what changed.
 - Headers and behavior tests own implemented behavior.
+- Current system boundaries are Core, Transport, Messaging, Networking, Engine,
+  and Application. Transport owns byte I/O and byte frame codecs; Messaging owns
+  message framing and reliable delivery; Networking owns peer sessions and routes.
 - Benchmark result files own exact measurements and qualifications.
 - ADRs preserve durable decisions; a later decision supersedes history rather
   than hiding it.

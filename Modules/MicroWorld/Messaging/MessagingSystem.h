@@ -6,7 +6,12 @@
 #include <MicroWorld/Core/Time.h>
 #include <MicroWorld/Core/WeakOwner.h>
 #include <MicroWorld/Messaging/ChannelInformation.h>
+#include <MicroWorld/Messaging/ChannelTraits.h>
 #include <MicroWorld/Messaging/Message.h>
+#include <MicroWorld/Messaging/MessageReader.h>
+#include <MicroWorld/Messaging/MessageWriter.h>
+#include <MicroWorld/Messaging/MessagingLinkId.h>
+#include <MicroWorld/Messaging/MessagingRoute.h>
 #include <MicroWorld/Messaging/MessagingResult.h>
 #include <MicroWorld/Messaging/MessagingSystemInformation.h>
 #include <MicroWorld/Messaging/NameId.h>
@@ -35,8 +40,8 @@ class FMessagingSystem final : public Core::IPlaySystem
 	/** Motivation: Fixes the number of bits in one wire byte for explicit little-endian shifts. */
 	static constexpr std::size_t BitsPerByte = 8;
 
-	/** Motivation: Fixes the byte width of one reliable-message sequence number on the wire. */
-	static constexpr std::size_t SequenceNumberBytes = sizeof(std::uint16_t);
+	/** Motivation: Fixes the byte width of one system-lifetime-unique reliable message id on the wire. */
+	static constexpr std::size_t ReliableMessageIdBytes = sizeof(std::uint64_t);
 
 	/** Motivation: Identifies the first byte of the frame's encoded channel name id. */
 	static constexpr std::size_t ChannelNameIdByteIndex = 0;
@@ -47,6 +52,9 @@ class FMessagingSystem final : public Core::IPlaySystem
 public:
 	/** Motivation: Bounds how many named channels one Messaging system may store. */
 	static constexpr std::size_t MaxChannels = 4;
+
+	/** Motivation: Bounds the externally composed devices Messaging can register for route-aware sending and receiving. */
+	static constexpr std::size_t MaxLinks = 4;
 
 	/** Motivation: Bounds how many subscriber registrations one Messaging system may store. */
 	static constexpr std::size_t MaxSubscriptions = 16;
@@ -60,6 +68,9 @@ public:
 	/** Motivation: Bounds how many reliable messages one Messaging system may retain awaiting acknowledgement. */
 	static constexpr std::size_t MaxReliablePendingMessages = 8;
 
+	/** Motivation: Publishes the payload budget left after a reliable frame reserves its never-reused message id. */
+	static constexpr std::size_t MaxReliableMessagePayloadBytes = MaxMessageBytes - ReliableMessageIdBytes;
+
 	/** Motivation: Fixes where the two name ids end, which is also where application payload bytes begin. */
 	static constexpr std::size_t FrameHeaderBytes = MessageNameIdByteIndex + NameIdBytes;
 
@@ -67,7 +78,7 @@ public:
 	static constexpr std::size_t MaxFrameBytes = FrameHeaderBytes + MaxMessageBytes;
 
 	// An acknowledgement frame is a header plus one sequence number, so a payload budget below that width could not hold one.
-	static_assert(MaxMessageBytes >= SequenceNumberBytes, "MaxMessageBytes must leave room for a reliable sequence number.");
+	static_assert(MaxMessageBytes >= ReliableMessageIdBytes, "MaxMessageBytes must leave room for a reliable message id.");
 
 	// A zero-slot reliable system could never track its first reliable send.
 	static_assert(MaxReliablePendingMessages > 0, "MaxReliablePendingMessages must reserve at least one reliable pending slot.");
@@ -141,10 +152,38 @@ public:
 	const FMessagingSystemInformation& GetInformation() const noexcept { return Information; }
 
 	/**
+	 * Motivation: Gives the composition owner one stable opaque link id for a device shared by default and explicit routes.
+	 *
+	 * Responsibilities: Return an existing id for the identical device, add one device only when capacity remains, and never unregister links.
+ */
+	EMessagingResult RegisterLink(Core::ITransportDevice& InTransportDevice, FMessagingLinkId& OutLinkId) noexcept;
+
+	/**
 	 * Motivation: Gives callers one explicit, bounded operation for adding a named Messaging channel.
 	 * Responsibilities: Reject unset names, preserve existing channels on duplicates or capacity exhaustion, and store each valid unique channel.
 	 */
 	EMessagingResult CreateChannel(const FChannelInformation& InChannelInformation) noexcept;
+
+	/**
+	 * Motivation: Lets Network unwind its private channel creation without leaving a hidden Messaging channel behind.
+	 * Responsibilities:
+	 * Remove only an existing channel with no live or dispatching subscriptions and no pending reliable frame.
+	 */
+	EMessagingResult DestroyChannel(FNameId InChannelNameId) noexcept;
+
+	/**
+	 * Motivation: Lets an owning higher-level session tear down a private reliable channel without retaining retries after that session
+	 * ends.
+	 * Responsibilities: Release every pending reliable frame for one existing channel and leave all other channel state unchanged.
+ */
+	EMessagingResult CancelReliableMessagesForChannel(FNameId InChannelNameId) noexcept;
+
+	/**
+	 * Motivation: Lets routing layers select wire policy without reading channel configuration or default endpoints.
+	 * Responsibilities:
+	 * Return traits only for an existing named channel and leave OutTraits unchanged on failure.
+	 */
+	EMessagingResult GetChannelTraits(FNameId InChannelNameId, FChannelTraits& OutTraits) const noexcept;
 
 	/**
 	 * Motivation: Lets a caller receive every message sent locally through one existing channel.
@@ -192,6 +231,28 @@ public:
 	EMessagingResult SendMessageToChannel(const FMessage& InMessage, const FNameId InChannelNameId) noexcept;
 
 	/**
+	 * Motivation: Lets a higher layer publish an accepted message to local subscribers without an accidental wire echo.
+	 *
+	 * Responsibilities: Validate the message and existing channel, then synchronously deliver only to matching local subscribers.
+	 */
+	EMessagingResult DeliverMessageLocally(const FMessage& InMessage, FNameId InChannelNameId) noexcept;
+
+	/**
+	 * Motivation: Lets routing layers select an explicit peer route without relying on a channel's optional legacy default.
+	 *
+	 * Responsibilities: Validate the named channel and registered route, encode and send only remotely, and never invoke local subscribers.
+	 */
+	EMessagingResult SendMessageToRemoteChannel(const FMessage& InMessage, FNameId InChannelNameId, const FMessagingRoute& InRoute) noexcept;
+
+	/**
+	 * Motivation: Lets typed protocol callers encode one bounded message directly into an explicit remote send.
+	 * Responsibilities: Own
+	 * one MaxMessageBytes stack buffer for the synchronous encode and send, finding the exact codec customization by ADL.
+	 */
+	template<typename MessageType>
+	EMessagingResult SendTypedMessageToRemoteChannel(const MessageType& InMessage, FNameId InChannelNameId, const FMessagingRoute& InRoute) noexcept;
+
+	/**
 	 * Motivation: Pumps inbound best-effort frames before the world advances so this node's subscribers see device input in the current turn.
 	 * Responsibilities: Drain each distinct channel device once, route each complete frame by its encoded channel name, and count malformed or
 	 * unroutable frames without asserting and retain the supplied time for sends occurring between lifecycle turns.
@@ -236,15 +297,25 @@ private:
 	{
 		/**
 		 * Motivation: Initializes both channel configuration and reliable runtime state together when a channel is created.
-		 * Responsibilities: Copy InInformation and initialize the next outgoing sequence number to zero.
+		 * Responsibilities: Copy InInformation and retain its normalized optional default route.
 		 */
-		explicit FChannel(const FChannelInformation& InInformation) noexcept : Information(InInformation) {}
+		FChannel() noexcept = default;
+
+		/**
+		 * Motivation: Constructs one channel with a prevalidated normalized default route.
+		 * Responsibilities: Retain both
+		 * values without allocation.
+		 */
+		FChannel(const FChannelInformation& InInformation, const FMessagingRoute& InDefaultRoute) noexcept
+			: Information(InInformation), DefaultRoute(InDefaultRoute)
+		{
+		}
 
 		/** Motivation: Retains immutable caller-supplied channel configuration beside the state that uses it. */
 		FChannelInformation Information{};
 
-		/** Motivation: Supplies the next unique 16-bit sequence number for this channel's reliable wire message. */
-		std::uint16_t NextOutgoingSequenceNumber{0};
+		/** Motivation: Retains the legacy channel device/address as one registered route for source-compatible sends. */
+		FMessagingRoute DefaultRoute{};
 	};
 
 	/**
@@ -283,7 +354,8 @@ private:
 	};
 
 	/**
-	 * Motivation: Retains exactly one already-sent reliable frame until its peer acknowledges the frame's channel and sequence number.
+	 * Motivation: Retains exactly one already-sent reliable frame until its peer acknowledges the frame's complete route and never-reused id.
+	 *
 	 * Responsibilities: Store explicit occupancy, destination lookup identity, wire bytes, attempt count, and last-attempt time without allocating.
 	 * Example:
 	 *   FPendingReliableMessage PendingMessage{};
@@ -293,11 +365,14 @@ private:
 		/** Motivation: Marks whether this slot is awaiting acknowledgement; false makes the slot free for the next reliable send. */
 		bool bAwaitingAcknowledgement{false};
 
-		/** Motivation: Identifies the channel whose device and address resend this stored frame. */
+		/** Motivation: Identifies the channel whose wire policy owns this stored frame. */
 		FNameId ChannelNameId{};
 
-		/** Motivation: Matches an acknowledgement to this one reliable wire frame. */
-		std::uint16_t SequenceNumber{0};
+		/** Motivation: Preserves the complete destination needed to retry through the original device and peer. */
+		FMessagingRoute Route{};
+
+		/** Motivation: Matches an acknowledgement to this one system-lifetime-unique reliable wire frame. */
+		std::uint64_t ReliableMessageId{0};
 
 		/** Motivation: Retains the already-encoded frame so a resend cannot duplicate framing rules or observe changed caller bytes. */
 		std::uint8_t FrameBytes[MaxFrameBytes]{};
@@ -320,26 +395,50 @@ private:
 	FChannel* FindChannel(const FNameId InChannelNameId) noexcept;
 
 	/**
+	 * Motivation: Lets queries inspect a live channel without permitting state changes.
+	 * Responsibilities: Return its state or null.
+ */
+	const FChannel* FindChannel(FNameId InChannelNameId) const noexcept;
+
+	/**
+	 * Motivation: Resolves an opaque route into its registered caller-owned device.
+	 * Responsibilities: Return null for an invalid or
+	 * unknown link.
+	 */
+	Core::ITransportDevice* FindLinkDevice(FMessagingLinkId InLinkId) noexcept;
+
+	/**
+	 * Motivation: Resolves a device to its stable registration for legacy channel normalization.
+	 * Responsibilities: Return an invalid id
+	 * when absent.
+	 */
+	FMessagingLinkId FindLinkId(const Core::ITransportDevice& InTransportDevice) const noexcept;
+
+	/**
 	 * Motivation: Gives reliable sends a plain fixed-array free-slot lookup without widening Core's append-only static vector.
 	 * Responsibilities: Return the first slot not awaiting acknowledgement, or null when the bounded reliable pending set is full.
 	 */
 	FPendingReliableMessage* FindFreeReliablePendingMessage() noexcept;
 
 	/**
-	 * Motivation: Gives acknowledgement processing one exact channel-and-sequence lookup across the fixed pending set.
-	 * Responsibilities: Return the occupied slot matching both reliable wire identities, or null when the acknowledgement is duplicate or abandoned.
+	 * Motivation: Gives acknowledgement processing one exact channel-route-id lookup across the fixed pending set.
+	 * Responsibilities: Return
+	 * the occupied slot matching complete reliable wire identity, or null when the acknowledgement is duplicate or abandoned.
 	 */
-	FPendingReliableMessage* FindReliablePendingMessage(const FNameId InChannelNameId, const std::uint16_t InSequenceNumber) noexcept;
+	FPendingReliableMessage* FindReliablePendingMessage(
+		FNameId InChannelNameId, const FMessagingRoute& InRoute, std::uint64_t InReliableMessageId) noexcept;
 
 	/**
 	 * Motivation: Makes one reliable-send reservation retain immutable retry inputs before caller-owned frame storage expires.
-	 * Responsibilities: Copy the complete encoded frame and record its initial attempt, channel identity, sequence, and caller-supplied time; the
+	 * Responsibilities: Copy the complete encoded frame and record its initial attempt, channel identity, reliable message id, and caller-supplied
+	 * time; the
 	 *   caller has already checked that InFrame fits one frame buffer.
 	 */
 	static void TrackReliableMessage(
 		FPendingReliableMessage& OutPendingMessage,
 		const FNameId InChannelNameId,
-		const std::uint16_t InSequenceNumber,
+		const FMessagingRoute& InRoute,
+		std::uint64_t InReliableMessageId,
 		const Core::TSpan<const std::uint8_t> InFrame,
 		const Core::TimePointMilliseconds InAttemptTimeMilliseconds) noexcept;
 
@@ -371,7 +470,8 @@ private:
 
 	/**
 	 * Motivation: Applies the retry interval and attempt budget to one occupied reliable slot without making PostAdvance a policy maze.
-	 * Responsibilities: Skip early or backwards time, abandon exhausted or orphaned frames, or resend one retained frame and restamp its attempt.
+	 * Responsibilities: Skip early or backwards time, abandon exhausted or orphaned frames, or resend one retained frame through its original route.
+
 	 */
 	void ProcessReliablePendingMessage(FPendingReliableMessage& InOutPendingMessage, const Core::TimePointMilliseconds InNowMilliseconds) noexcept;
 
@@ -381,6 +481,20 @@ private:
 	 *   added during this in-flight delivery. Order follows the slot array, which is registration order until a released slot is reused.
 	 */
 	void DeliverToMatchingSubscribers(const FMessage& InMessage, const FNameId InChannelNameId) noexcept;
+
+	/**
+	 * Motivation: Centralizes application-message validation for local and remote APIs.
+	 * Responsibilities: Reject unset and
+	 * control-message names.
+	 */
+	static bool IsValidApplicationMessage(const FMessage& InMessage) noexcept;
+
+	/**
+	 * Motivation: Keeps default and explicit wire sends in one bounded framing path.
+	 * Responsibilities: Send only through InRoute without
+	 * local delivery.
+	 */
+	EMessagingResult SendMessageToRoute(const FMessage& InMessage, FChannel& InChannel, const FMessagingRoute& InRoute) noexcept;
 
 	/**
 	 * Motivation: Maps transport acceptance outcomes into the public Messaging result vocabulary in one place.
@@ -399,30 +513,33 @@ private:
 	 *
 	 * Responsibilities: Bound calls per unique device per PreAdvance; route successes; stop on non-success; count oversized frames as dropped.
  */
-	void ProcessDeviceReceiveBudget(Core::ITransportDevice& InTransportDevice) noexcept;
+	void ProcessDeviceReceiveBudget(Core::ITransportDevice& InTransportDevice, FMessagingLinkId InLinkId) noexcept;
 
 	/**
 	 * Motivation: Routes one successfully received device packet through reliable control handling or subscriber delivery.
 	 * Responsibilities: Count and discard frames shorter than the header or naming no channel; consume acknowledgement control traffic; otherwise
 	 *   decode the channel's best-effort or reliable application payload while the local frame buffer remains valid for the whole call.
 	 */
-	void ProcessReceivedFrame(const Core::FDeviceAddress& InSender, const std::uint8_t* const InFrameBytes, const std::size_t InFrameSize) noexcept;
+	void ProcessReceivedFrame(const FMessagingRoute& InSenderRoute, const std::uint8_t* InFrameBytes, std::size_t InFrameSize) noexcept;
 
 	/**
 	 * Motivation: Keeps malformed acknowledgement control traffic observable without exposing it to application subscribers.
-	 * Responsibilities: Count only acknowledgements whose payload is not exactly one sequence number; release the matching reliable pending frame
+	 * Responsibilities: Count only acknowledgements whose payload is not exactly one reliable message id; release the matching reliable pending
+	 * frame
 	 *   when it exists, otherwise consume duplicate or late acknowledgement control traffic without counting it as a drop.
 	 */
-	void ProcessAcknowledgement(const FNameId InChannelNameId, const std::uint8_t* const InPayloadBytes, const std::size_t InPayloadSize) noexcept;
+	void ProcessAcknowledgement(
+		FNameId InChannelNameId, const FMessagingRoute& InSenderRoute, const std::uint8_t* InPayloadBytes, std::size_t InPayloadSize) noexcept;
 
 	/**
 	 * Motivation: Separates reliable frame validation and acknowledgement generation from ordinary inbound delivery.
-	 * Responsibilities: Count a missing sequence sub-header, deliver only application bytes to subscribers, then send one unsequenced acknowledgement
-	 *   for the received sequence number.
+	 * Responsibilities: Count a missing reliable-id sub-header, deliver only application bytes to subscribers, then send one unsequenced
+	 * acknowledgement
+	 *   for the received reliable message id.
 	 */
 	void ProcessReliableMessage(
 		const FChannel& InChannel,
-		const Core::FDeviceAddress& InSender,
+		const FMessagingRoute& InSenderRoute,
 		const FNameId InMessageNameId,
 		const std::uint8_t* const InPayloadBytes,
 		const std::size_t InPayloadSize) noexcept;
@@ -433,40 +550,33 @@ private:
 	 * subscribers.
 	 */
 	void DeliverReceivedMessage(
-		const Core::FDeviceAddress& InSender,
+		const FMessagingRoute& InSenderRoute,
 		const FNameId InChannelNameId,
 		const FNameId InMessageNameId,
 		const std::uint8_t* const InPayloadBytes,
 		const std::size_t InPayloadSize) noexcept;
 
 	/**
-	 * Motivation: Closes one received reliable message with the protocol acknowledgement that lets its peer stop retrying in B6b.
-	 * Responsibilities: Send an unsequenced acknowledgement for InSequenceNumber through InChannel's device and ignore device refusal because the
-	 *   sender's later retry policy recovers a lost acknowledgement.
+	 * Motivation: Closes one received reliable message with the protocol acknowledgement that lets its peer stop retrying.
+	 * Responsibilities:
+	 * Send an unsequenced acknowledgement for InReliableMessageId to the actual sender route and ignore device refusal because the
+	 *   sender's
+	 * later retry policy recovers a lost acknowledgement.
 	 *
-	 * The acknowledgement goes to the channel's configured address, not to whoever sent the message. That is correct for the point-to-point shape
-	 * a reliable channel describes today. A reliable channel hearing several peers would need to answer the actual sender instead, and not every
-	 * medium reports one, so that choice belongs with a real medium rather than here.
 	 */
-	static void SendAcknowledgement(const FChannel& InChannel, const std::uint16_t InSequenceNumber) noexcept;
-
-	/**
-	 * Motivation: Prevents a shared transport device from being drained twice when several channels use different destination addresses on it.
-	 * Responsibilities: Return true only when one channel before InChannelIndex holds the identical transport-device pointer.
-	 */
-	bool IsDeviceUsedByEarlierChannel(const Core::ITransportDevice* const InTransportDevice, const std::size_t InChannelIndex) const noexcept;
+	void SendAcknowledgement(FNameId InChannelNameId, const FMessagingRoute& InRoute, std::uint64_t InReliableMessageId) noexcept;
 
 	/**
 	 * Motivation: Gives every fixed-width wire value one portable, byte-order-independent encoder.
 	 * Responsibilities: Write InValue's InByteCount least-significant bytes first at OutBytes.
 	 */
-	static void WriteUnsignedLittleEndian(const std::uint32_t InValue, std::uint8_t* const OutBytes, const std::size_t InByteCount) noexcept;
+	static void WriteUnsignedLittleEndian(std::uint64_t InValue, std::uint8_t* OutBytes, std::size_t InByteCount) noexcept;
 
 	/**
 	 * Motivation: Gives every fixed-width wire value one portable, byte-order-independent decoder.
 	 * Responsibilities: Read InByteCount least-significant-byte-first bytes from InBytes into one unsigned 32-bit value.
 	 */
-	static std::uint32_t ReadUnsignedLittleEndian(const std::uint8_t* const InBytes, const std::size_t InByteCount) noexcept;
+	static std::uint64_t ReadUnsignedLittleEndian(const std::uint8_t* InBytes, std::size_t InByteCount) noexcept;
 
 	/**
 	 * Motivation: Keeps name-id callers independent of the generic fixed-width wire encoder.
@@ -496,6 +606,9 @@ private:
 	/** Motivation: Owns each live channel's configuration and reliable sequence state within the compile-time channel limit. */
 	Core::TStaticVector<FChannel, MaxChannels> Channels;
 
+	/** Motivation: Owns stable caller-owned device references without granting Messaging lifecycle ownership. */
+	Core::ITransportDevice* Links[MaxLinks]{};
+
 	/** Motivation: Owns fixed removable subscription slots; each carries an owner token, sequence stamp, generation, and occupancy flag, so sixteen
 	 * default subscriptions cost roughly four hundred bytes more than the former append-only storage. */
 	FSubscriptionSlot SubscriptionSlots[MaxSubscriptions]{};
@@ -514,11 +627,41 @@ private:
 	 * retry metadata, so increasing pending capacity multiplies the system's frame-sized memory cost. */
 	FPendingReliableMessage ReliablePendingMessages[MaxReliablePendingMessages]{};
 
+	/** Motivation: Supplies one never-reused reliable frame id across channel destruction and reconnects for this Messaging lifetime. */
+	std::uint64_t NextReliableMessageId{0};
+
 	/** Motivation: Counts inbound frames this Messaging system could not route, whatever the reason, so a misconfigured peer stays observable. */
 	std::uint32_t DroppedFrameCount{0};
 
 	/** Motivation: Counts reliable frames whose bounded retry ownership ended without an acknowledgement. */
 	std::uint32_t AbandonedReliableMessageCount{0};
 };
+
+} // namespace MicroWorld::Messaging
+
+#include <MicroWorld/Messaging/TypedMessageCodec.h>
+
+namespace MicroWorld::Messaging
+{
+
+template<typename MessageType>
+EMessagingResult FMessagingSystem::SendTypedMessageToRemoteChannel(
+	const MessageType& InMessage, const FNameId InChannelNameId, const FMessagingRoute& InRoute) noexcept
+{
+	static_assert(TIsTypedMessageCodec<MessageType>::value, "Typed messages must provide the Messaging ADL codec contract.");
+
+	std::uint8_t PayloadBytes[MaxMessageBytes]{};
+	FMessageWriter Writer(Core::TSpan<std::uint8_t>(PayloadBytes, MaxMessageBytes));
+	const EMessagingResult EncodeResult = EncodeMessagePayload(InMessage, Writer);
+	if (EncodeResult != EMessagingResult::Success)
+	{
+		return EncodeResult;
+	}
+
+	FMessage Message;
+	Message.SetMessageNameId(GetMessageNameId(InMessage));
+	Message.SetPayload(Writer.WrittenBytes());
+	return SendMessageToRemoteChannel(Message, InChannelNameId, InRoute);
+}
 
 } // namespace MicroWorld::Messaging

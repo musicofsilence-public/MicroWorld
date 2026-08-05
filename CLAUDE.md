@@ -13,7 +13,7 @@ Time is always supplied by the caller, never read from a hidden clock.
 
 ## The dependency graph
 
-Five portable systems. Dependencies point inward, and the graph is
+Six portable systems. Dependencies point inward, and the graph is
 machine-enforced by `tools/CheckDependencyBoundaries.py` — a violation fails
 `ctest`, not review.
 
@@ -27,9 +27,13 @@ machine-enforced by `tools/CheckDependencyBoundaries.py` — a violation fails
    │Messaging │     │      │ Transport │
    └────┬─────┘     │      └───────────┘
         │           │
-   ┌────▼───────────▼────┐
-   │       Engine        │
-   └─────────────────────┘
+   ┌────▼─────┐     │
+   │Networking│     │
+   └────┬─────┘     │
+        └───────┬───┘
+          ┌─────▼─────┐
+          │  Engine   │
+          └───────────┘
 
  Application sits beside this on Engine alone:
    Core <- Engine <- Application
@@ -52,26 +56,27 @@ the non-portable edges. Only they may include OS or SDK headers.
 | System | Depends on | Owns |
 | --- | --- | --- |
 | **Core** | — | Result codes, time, logging, `FLifecycleGuard`, tick scheduling, fixed-capacity containers, delegates, smart pointers, timers, `IPlaySystem`, `ITransportDevice` + `FDeviceAddress` |
-| **Engine** | Core, Messaging | The managed runtime and identity: `UWorld`, `AActor`, `UActorComponent`, `TEngine`, the `IEngineRuntime` lifecycle contract, timer manager, the folded Object store, garbage collector, and generation-checked handles — plus creating and handing out `FMessagingSystem` |
-| **Messaging** | Core | `FMessagingSystem` (engine-created): `FMessage` (name id + opaque payload), named channels from `FChannelInformation` (reliability, optional device + address), subscriptions with optional message-name filter. Compiled static module. |
-| **Transport** | Core | Byte I/O: medium devices realising Core's `ITransportDevice`, wire framing, plus the optional portable E32 LoRa transport (`FE32LoraDevice`) over `IUartByteStream`. Link it only for LoRa builds — the RadioE32 sources are toggled by `MICROWORLD_TRANSPORT_LORA` |
+| **Engine** | Core, Messaging, Networking | The managed runtime and identity: `UWorld`, `UWorldSubsystem`, `AActor`, `UActorComponent`, `TEngine`, the `IEngineRuntime` lifecycle contract, timer manager, the folded Object store, garbage collector, and generation-checked handles — plus optional engine-owned Messaging and Networking systems. |
+| **Messaging** | Core | `FMessagingSystem`: fixed links and routes, named channels, subscriptions, frame codecs, and bounded reliable delivery. Compiled static module. |
+| **Networking** | Core, Messaging | `FNetworkSystem`: Client/Server sessions, four generation-checked peers, admission, liveness, validated routed delivery, and peer events. It uses Messaging routes without exposing endpoints to Actors. |
+| **Transport** | Core | Byte I/O: medium devices realising Core's `ITransportDevice`, wire framing, and the optional portable E32 LoRa transport (`FE32LoraDevice`) over `IUartByteStream`. Link it only for LoRa builds — the RadioE32 sources are toggled by `MICROWORLD_TRANSPORT_LORA` |
 | **Application** | Core, Engine | Program entry: `FApplication` holds one `IEngineRuntime` for its lifetime and owns the `Run` frame-loop template |
 | **Platform/Host** | non-portable | Host UDP over OS sockets, `steady_clock` time source |
 | **Platform/Esp32** | non-portable | ESP32-S3 transports (lwIP UDP, E32 LoRa UART, wired UART/I2C/SPI), ESP timer and log |
 | **Platform/Pico** | Transport, non-portable | RP2040 E32 LoRa UART over the native Pico SDK |
 
-Five portable systems plus three platform edges. The folder tree under
+Six portable systems plus three platform edges. The folder tree under
 `Modules/MicroWorld/` states these systems directly: one directory per system,
-header and source side by side. Object folded into Engine, Net + RadioE32 folded
-into Transport, and Networking dissolved into Messaging, so the build package
-count equals the architecture system count — the two are reconciled.
+header and source side by side. Object folded into Engine and RadioE32 folded
+into Transport. Networking is a distinct session boundary above Messaging, while
+Transport remains an independently usable Core-only byte layer.
 
 ---
 
 ## Concepts worth knowing before reading code
 
 **The engine runtime interface.** `TEngine<TTraits>` is the concrete engine; its
-traits struct carries the eight compile-time capacities. `IEngineRuntime` is the
+traits struct carries the compile-time capacities. `IEngineRuntime` is the
 three-turn interface an application holds — `BeginPlay`, `Tick`, and `EndPlay`.
 World, store, messaging, timers, class registration, and object creation remain
 concrete `TEngine` APIs. An application that configures one retains that typed
@@ -83,10 +88,11 @@ typed path: it registers the class on first use, queues a factory, and construct
 at the next safe barrier. It works both before play — draining when `BeginPlay`
 runs — and during play, so composition and gameplay spawn the same way.
 
-**Engine systems.** `IPlaySystem` (in Core, so Messaging and Transport can implement
-it without depending on Engine) has four turns: `BeginPlay`, `PreAdvance`,
-`PostAdvance`, `EndPlay`. `TEngine` holds one; `TPlaySystemSet` composes several
-with add-order start and reverse-order shutdown.
+**Engine systems.** `IPlaySystem` (in Core, so Messaging, Networking, and Transport
+can implement it without depending on Engine) has four turns: `BeginPlay`,
+`PreAdvance`, `PostAdvance`, `EndPlay`. The composition owner advances devices
+once; Engine runs bound devices before Messaging and Networking on pre-turns,
+then reverses that order on post/end turns.
 
 **The application entry point owns everything.** Objects are constructed by the entry point
 and passed by reference inward. On ESP32 targets they must be `static` — the main

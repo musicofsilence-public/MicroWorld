@@ -5,19 +5,17 @@
 namespace MicroWorld::Messaging
 {
 
-void FMessagingSystem::ProcessDeviceReceiveBudget(Core::ITransportDevice& InTransportDevice) noexcept
+void FMessagingSystem::ProcessDeviceReceiveBudget(Core::ITransportDevice& InTransportDevice, const FMessagingLinkId InLinkId) noexcept
 {
 	std::uint8_t FrameBytes[MaxFrameBytes]{};
-	Core::FDeviceAddress Sender;
+	Core::FDeviceAddress SenderAddress;
 	Core::FReceiveResult ReceiveResult;
 	for (std::size_t ReceivedFrameCount = 0; ReceivedFrameCount < Information.MaxReceiveFramesPerDevicePerAdvance; ++ReceivedFrameCount)
 	{
 		const Core::ETransportResult ReceiveStatus =
-			InTransportDevice.TryReceive(Sender, Core::TSpan<std::uint8_t>(FrameBytes, MaxFrameBytes), ReceiveResult);
+			InTransportDevice.TryReceive(SenderAddress, Core::TSpan<std::uint8_t>(FrameBytes, MaxFrameBytes), ReceiveResult);
 		if (ReceiveStatus == Core::ETransportResult::Full)
 		{
-			// The device keeps a packet larger than this system's frame budget, so the same packet is counted again every
-			// turn. A count rising with no delivery means a peer sends frames larger than this system's fixed frame budget allows.
 			++DroppedFrameCount;
 			return;
 		}
@@ -27,12 +25,12 @@ void FMessagingSystem::ProcessDeviceReceiveBudget(Core::ITransportDevice& InTran
 			return;
 		}
 
-		ProcessReceivedFrame(Sender, FrameBytes, ReceiveResult.BytesReceived);
+		ProcessReceivedFrame(FMessagingRoute{InLinkId, SenderAddress}, FrameBytes, ReceiveResult.BytesReceived);
 	}
 }
 
 void FMessagingSystem::ProcessReceivedFrame(
-	const Core::FDeviceAddress& InSender, const std::uint8_t* const InFrameBytes, const std::size_t InFrameSize) noexcept
+	const FMessagingRoute& InSenderRoute, const std::uint8_t* const InFrameBytes, const std::size_t InFrameSize) noexcept
 {
 	if (InFrameSize < FrameHeaderBytes)
 	{
@@ -53,58 +51,64 @@ void FMessagingSystem::ProcessReceivedFrame(
 	const std::size_t PayloadSize = InFrameSize - FrameHeaderBytes;
 	if (MessageNameId == MessageAcknowledgementNameId)
 	{
-		ProcessAcknowledgement(ChannelNameId, PayloadBytes, PayloadSize);
+		ProcessAcknowledgement(ChannelNameId, InSenderRoute, PayloadBytes, PayloadSize);
 		return;
 	}
 
 	if (Channel->Information.bIsReliable)
 	{
-		ProcessReliableMessage(*Channel, InSender, MessageNameId, PayloadBytes, PayloadSize);
+		ProcessReliableMessage(*Channel, InSenderRoute, MessageNameId, PayloadBytes, PayloadSize);
 		return;
 	}
 
-	DeliverReceivedMessage(InSender, ChannelNameId, MessageNameId, PayloadBytes, PayloadSize);
+	DeliverReceivedMessage(InSenderRoute, ChannelNameId, MessageNameId, PayloadBytes, PayloadSize);
 }
 
 void FMessagingSystem::ProcessAcknowledgement(
-	const FNameId InChannelNameId, const std::uint8_t* const InPayloadBytes, const std::size_t InPayloadSize) noexcept
+	const FNameId InChannelNameId,
+	const FMessagingRoute& InSenderRoute,
+	const std::uint8_t* const InPayloadBytes,
+	const std::size_t InPayloadSize) noexcept
 {
-	if (InPayloadSize != SequenceNumberBytes)
+	if (InPayloadSize != ReliableMessageIdBytes)
 	{
 		++DroppedFrameCount;
 		return;
 	}
 
-	const std::uint16_t SequenceNumber = static_cast<std::uint16_t>(ReadUnsignedLittleEndian(InPayloadBytes, SequenceNumberBytes));
-	FPendingReliableMessage* const PendingMessage = FindReliablePendingMessage(InChannelNameId, SequenceNumber);
+	const std::uint64_t ReliableMessageId = ReadUnsignedLittleEndian(InPayloadBytes, ReliableMessageIdBytes);
+	FPendingReliableMessage* const PendingMessage = FindReliablePendingMessage(InChannelNameId, InSenderRoute, ReliableMessageId);
 	if (PendingMessage != nullptr)
 	{
 		ReleaseReliablePendingMessage(*PendingMessage);
 	}
-	// No matching slot is normal: an acknowledgement may be duplicated or may arrive after this bounded system already abandoned its frame.
 }
 
 void FMessagingSystem::ProcessReliableMessage(
 	const FChannel& InChannel,
-	const Core::FDeviceAddress& InSender,
+	const FMessagingRoute& InSenderRoute,
 	const FNameId InMessageNameId,
 	const std::uint8_t* const InPayloadBytes,
 	const std::size_t InPayloadSize) noexcept
 {
-	if (InPayloadSize < SequenceNumberBytes)
+	if (InPayloadSize < ReliableMessageIdBytes)
 	{
 		++DroppedFrameCount;
 		return;
 	}
 
-	const std::uint16_t SequenceNumber = static_cast<std::uint16_t>(ReadUnsignedLittleEndian(InPayloadBytes, SequenceNumberBytes));
+	const std::uint64_t ReliableMessageId = ReadUnsignedLittleEndian(InPayloadBytes, ReliableMessageIdBytes);
 	DeliverReceivedMessage(
-		InSender, InChannel.Information.ChannelNameId, InMessageNameId, &InPayloadBytes[SequenceNumberBytes], InPayloadSize - SequenceNumberBytes);
-	SendAcknowledgement(InChannel, SequenceNumber);
+		InSenderRoute,
+		InChannel.Information.ChannelNameId,
+		InMessageNameId,
+		&InPayloadBytes[ReliableMessageIdBytes],
+		InPayloadSize - ReliableMessageIdBytes);
+	SendAcknowledgement(InChannel.Information.ChannelNameId, InSenderRoute, ReliableMessageId);
 }
 
 void FMessagingSystem::DeliverReceivedMessage(
-	const Core::FDeviceAddress& InSender,
+	const FMessagingRoute& InSenderRoute,
 	const FNameId InChannelNameId,
 	const FNameId InMessageNameId,
 	const std::uint8_t* const InPayloadBytes,
@@ -112,40 +116,24 @@ void FMessagingSystem::DeliverReceivedMessage(
 {
 	FMessage Message;
 	Message.SetMessageNameId(InMessageNameId);
-	// The decoded payload points into ProcessDeviceReceiveBudget's local frame buffer, so subscribers retaining it must copy it.
 	Message.SetPayload(Core::TSpan<const std::uint8_t>(InPayloadBytes, InPayloadSize));
-	Message.SetSender(InSender);
+	Message.SetSenderContext(InSenderRoute);
 	DeliverToMatchingSubscribers(Message, InChannelNameId);
 }
 
-void FMessagingSystem::SendAcknowledgement(const FChannel& InChannel, const std::uint16_t InSequenceNumber) noexcept
+void FMessagingSystem::SendAcknowledgement(
+	const FNameId InChannelNameId, const FMessagingRoute& InRoute, const std::uint64_t InReliableMessageId) noexcept
 {
-	if (InChannel.Information.TransportDevice == nullptr)
+	Core::ITransportDevice* const TransportDevice = FindLinkDevice(InRoute.LinkId);
+	if (TransportDevice == nullptr)
 	{
 		return;
 	}
 
 	std::uint8_t FrameBytes[MaxFrameBytes]{};
-	EncodeFrameHeader(InChannel.Information.ChannelNameId, MessageAcknowledgementNameId, FrameBytes);
-	WriteUnsignedLittleEndian(InSequenceNumber, &FrameBytes[FrameHeaderBytes], SequenceNumberBytes);
-	// Acknowledgements are best-effort control frames: a refused send leaves the peer's reliable frame pending, so its retry can produce another
-	// acknowledgement.
-	(void)InChannel.Information.TransportDevice->TrySend(
-		InChannel.Information.Address, Core::TSpan<const std::uint8_t>(FrameBytes, FrameHeaderBytes + SequenceNumberBytes));
-}
-
-bool FMessagingSystem::IsDeviceUsedByEarlierChannel(
-	const Core::ITransportDevice* const InTransportDevice, const std::size_t InChannelIndex) const noexcept
-{
-	for (std::size_t EarlierChannelIndex = 0; EarlierChannelIndex < InChannelIndex; ++EarlierChannelIndex)
-	{
-		if (Channels[EarlierChannelIndex].Information.TransportDevice == InTransportDevice)
-		{
-			return true;
-		}
-	}
-
-	return false;
+	EncodeFrameHeader(InChannelNameId, MessageAcknowledgementNameId, FrameBytes);
+	WriteUnsignedLittleEndian(InReliableMessageId, &FrameBytes[FrameHeaderBytes], ReliableMessageIdBytes);
+	(void)TransportDevice->TrySend(InRoute.Address, Core::TSpan<const std::uint8_t>(FrameBytes, FrameHeaderBytes + ReliableMessageIdBytes));
 }
 
 } // namespace MicroWorld::Messaging

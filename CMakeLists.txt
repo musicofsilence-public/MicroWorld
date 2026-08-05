@@ -6,7 +6,7 @@ cmake_minimum_required(VERSION 3.16)
 # target, its MicroWorld::* alias, its tests, the profile-map probe, the
 # benchmarks, the example programs, and the five checker gates. Standalone
 # per-module configuration is gone: the superbuild is now the only path.
-project(MicroWorld VERSION 0.5.0 LANGUAGES CXX)
+project(MicroWorld VERSION 0.6.0 LANGUAGES CXX)
 
 enable_testing()
 

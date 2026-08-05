@@ -94,7 +94,7 @@ model {
                 }
                 metadata {
                     contract 'Try-send one packet to an address, try-receive one packet, the largest payload a send accepts, and the four play-system turns, because a callback cannot fire itself. One uniform address value serves every medium: a broadcast address is a value of the same shape rather than a second operation, refused by a medium that cannot reach it. A device publishes the largest payload it can take and refuses anything longer instead of splitting'
-                    boundary 'Declared in Core so Messaging and Transport share it without seeing each other: a channel sends through this shape, a medium realises it, and neither names the other. Configuration stays out on purpose - an SSID and a baud rate have nothing in common - so an application names a concrete device type to configure it and needs nothing concrete afterwards. Whoever owns a device installs it: the messaging system pumps the devices its channels hold, an application pumps one it holds directly, never both for the same device'
+                boundary 'Declared in Core so Messaging and Transport share it without seeing each other: a Messaging link sends through this shape, a medium realises it, and neither names the other. Configuration stays out on purpose - an SSID and a baud rate have nothing in common - so an application names a concrete device type to configure it and needs nothing concrete afterwards. The composition owner advances every device exactly once'
                     standalone 'Uniform in its data path, deliberately not in configuration. What is uniform is the shape, not the meaning - each medium reads the address its own way, and a point-to-point one ignores it entirely'
                 }
             }
@@ -107,7 +107,7 @@ model {
                 icon ./icon-engine.svg
             }
             metadata {
-                contract 'IEngineRuntime, UWorld, AActor, UActorComponent, FObjectStore'
+                contract 'IEngineRuntime, UWorld, AActor, UActorComponent, FObjectStore, optional Messaging and Networking systems'
                 boundary 'Object owns identity, Engine owns the lifetime built on it. Neither is a responsibility anything wants alone, so they are one system'
             }
 
@@ -121,7 +121,7 @@ model {
 
             engineObject = component 'Engine' {
                 technology '[component: TEngine<TTraits>]'
-                description 'Owns the world, object store and timers.'
+                description 'Owns the world, object store, timers, Messaging and optional Networking.'
             }
 
             world = entity 'World' {
@@ -167,9 +167,9 @@ model {
                 icon ./icon-messaging.svg
             }
             metadata {
-                contract 'FMessagingSystem, created and handed out by the engine. FMessage carries a message name id and an opaque payload. A channel is created from FChannelInformation - channel name id, reliability, and an optional transport device plus the address it sends to - and subscriptions attach per channel, with or without a message-name filter'
-                standalone 'Usable with no transport at all: a channel with no device delivers only to this node, and local delivery always happens - a device adds remote reach, never replaces it. Core plus Engine plus this system is complete local messaging with no Transport and no device. A channel may still declare reliable delivery there - locally the call itself satisfies it, which is why declaring it drags in no machinery'
-                boundary 'It reaches bytes only through the transport device interface in Core, so no medium is named here and no message type is named in Transport. Delivery guarantees live here, per channel, because Transport answers acceptance and never delivery - an acknowledgement is a message from the peer, and a byte layer that reads one has stopped carrying payload opaquely. Splitting an oversized message lands here too. This is the one system the engine knows beyond Core, so composing messaging is one call rather than a wiring exercise'
+                contract 'FMessagingSystem: fixed links, explicit routes, named channels, subscriptions, frame codecs and bounded reliable delivery. FMessage carries a name id, bounded payload and local-only source metadata'
+                standalone 'Usable with no transport at all: a local-only channel delivers only to this node. Direct Messaging may also use a known default route without Networking'
+                boundary 'It reaches bytes only through the transport device interface in Core, so no medium is named here and no message type is named in Transport. Delivery guarantees live here, per channel and complete route, because Transport answers acceptance and never delivery. Networking consumes Messaging channels and explicit routes; Messaging does not own peers or roles'
             }
 
             system = entity 'Messaging System' {
@@ -195,6 +195,34 @@ model {
             reliableDelivery = component 'Reliable Delivery' {
                 technology '[component: resend until acknowledged]'
                 description 'Retries unacknowledged messages within a bounded budget.'
+            }
+        }
+
+        networking = system 'Networking' {
+            technology '[system: session boundary]'
+            description 'Owns logical peer sessions and routed application delivery above Messaging.'
+            style {
+                icon ./icon-messaging.svg
+            }
+            metadata {
+                contract 'FNetworkSystem, Client and Server roles, four generation-checked peers, admission, liveness, peer events, addressed sends and broadcast'
+                boundary 'Uses Messaging routes and two private wire channels without naming a device or exposing endpoints to Actors. A World borrows the Engine-owned optional Network'
+                standalone 'Usable without Engine in a direct Messaging composition; it never owns or advances a device'
+            }
+
+            system = entity 'Networking System' {
+                technology '[entity: FNetworkSystem]'
+                description 'Validates peers and republishes accepted application messages locally.'
+            }
+
+            peerRegistry = component 'Peer Registry' {
+                technology '[component: four generation-checked slots]'
+                description 'Admits, validates and retires role-relative remote peers.'
+            }
+
+            protocol = component 'Session Protocol' {
+                technology '[component: routed typed messages]'
+                description 'Carries connection, heartbeat, disconnect and routed application schemas.'
             }
         }
 
@@ -291,7 +319,12 @@ model {
 
     microworld.engine -[dependsOn]-> microworld.messagingSystem 'creates and hands out the messaging system'
 
+    microworld.engine -[dependsOn]-> microworld.networking 'owns the optional Network before World creation'
+
     microworld.messagingSystem -[dependsOn]-> microworld.core 'takes Span, Delegate, Time, PlaySystem, TransportDevice, DeviceAddress'
+
+    microworld.networking -[dependsOn]-> microworld.core 'takes Time, Delegate and PlaySystem'
+    microworld.networking -[dependsOn]-> microworld.messagingSystem 'takes channels, typed messages and explicit routes'
 
     microworld.transport -[dependsOn]-> microworld.core 'takes Span, Delegate, Log, Time, PlaySystem, UartByteStream, TransportDevice, DeviceAddress'
 
@@ -302,6 +335,8 @@ model {
     // 'uses' not 'dependsOn': the application entry point reaches messaging through the
     // engine and names a concrete device only to configure it.
     microworld.app -[uses]-> microworld.messagingSystem 'creates channels and sends through the system the engine hands out'
+
+    microworld.app -[uses]-> microworld.networking 'configures role and uses peers through the system the engine hands out'
 
     microworld.app -[uses]-> microworld.transport 'constructs and configures the concrete medium devices channels send through'
 
@@ -327,6 +362,11 @@ model {
     microworld.messagingSystem.channel -[publishes]-> microworld.messagingSystem.subscription 'delivers matching messages to'
     microworld.messagingSystem.channel -[uses]-> microworld.messagingSystem.reliableDelivery 'resends unacknowledged sends through, when declared reliable'
     microworld.messagingSystem.channel -[uses]-> microworld.core.transportDeviceInterface 'sends to its address through, when it holds a device'
+
+    microworld.networking.system -[uses]-> microworld.networking.peerRegistry 'admits and validates peers through'
+    microworld.networking.system -[uses]-> microworld.networking.protocol 'decodes and sends session traffic through'
+    microworld.networking.system -[uses]-> microworld.messagingSystem.system 'sends private wire messages and locally republishes validated application messages through'
+    microworld.engine.engineObject -[uses]-> microworld.networking.system 'hands a non-owning pointer to World and Actors through'
 
     microworld.transport.loraDevice -[uses]-> microworld.transport.frameCodec 'recovers message boundaries with'
     microworld.transport.wiredDevice -[uses]-> microworld.transport.frameCodec 'recovers message boundaries with'

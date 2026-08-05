@@ -82,9 +82,10 @@ public:
 	 * Motivation: Lets a test count a channel's outbound frames without modelling a medium.
 	 * Responsibilities: Record each send request and report success without retaining the supplied packet or destination.
 	 */
-	ETransportResult TrySend(const FDeviceAddress&, const TSpan<const std::uint8_t>) noexcept override
+	ETransportResult TrySend(const FDeviceAddress& InDestination, const TSpan<const std::uint8_t>) noexcept override
 	{
 		++TrySendCallCount;
+		LastDestination = InDestination;
 		return ETransportResult::Success;
 	}
 
@@ -118,9 +119,18 @@ public:
 	 */
 	std::size_t GetTrySendCallCount() const noexcept { return TrySendCallCount; }
 
+	/**
+	 * Motivation: Lets route tests inspect the last explicit peer selected by Messaging.
+	 * Responsibilities: Return the copied destination unchanged.
+	 */
+	const FDeviceAddress& GetLastDestination() const noexcept { return LastDestination; }
+
 private:
 	/** Motivation: Records every remote transmission this device was asked to make. */
 	std::size_t TrySendCallCount{0};
+
+	/** Motivation: Retains the last requested peer address for direct explicit-route assertions. */
+	FDeviceAddress LastDestination{};
 };
 
 } // namespace MicroWorld::Tests

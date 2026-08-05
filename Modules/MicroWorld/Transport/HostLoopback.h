@@ -40,7 +40,6 @@ class THostLoopback final
 	 * Example:
 	 *   // Internal: driven through the per-port FPort devices, not directly.
 	 */
-	template<std::size_t MaxPorts, std::size_t MailboxCapacity, std::size_t PacketBytes>
 	class TLoopbackMailboxes final
 	{
 		static_assert(MaxPorts > 0, "TLoopbackMailboxes requires at least one port.");
@@ -340,7 +339,7 @@ class THostLoopback final
 		 * Motivation: Wires a port to the shared mailboxes and its own 1-byte address once at construction.
 		 * Responsibilities: Store the mailbox pointer and the port index.
 		 */
-		void Bind(TLoopbackMailboxes<MaxPorts, MailboxCapacity, PacketBytes>* InMailboxes, const std::uint8_t InLocalIndex) noexcept
+		void Bind(TLoopbackMailboxes* InMailboxes, const std::uint8_t InLocalIndex) noexcept
 		{
 			Mailboxes = InMailboxes;
 			LocalIndex = InLocalIndex;
@@ -379,7 +378,7 @@ class THostLoopback final
 
 	private:
 		/** Motivation: References the shared mailboxes owned by the enclosing network. */
-		TLoopbackMailboxes<MaxPorts, MailboxCapacity, PacketBytes>* Mailboxes{nullptr};
+		TLoopbackMailboxes* Mailboxes{nullptr};
 
 		/** Motivation: Holds this port's 1-byte loopback address value. */
 		std::uint8_t LocalIndex{0};
@@ -472,7 +471,7 @@ public:
 
 private:
 	/** Motivation: Owns the shared mailboxes, declared before Ports so it is fully constructed when ports bind. */
-	TLoopbackMailboxes<MaxPorts, MailboxCapacity, PacketBytes> Mailboxes{};
+	TLoopbackMailboxes Mailboxes{};
 
 	/** Motivation: Holds the N embedded per-port devices handed out by Port(). */
 	std::array<FPort, MaxPorts> Ports{};

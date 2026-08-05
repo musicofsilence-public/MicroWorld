@@ -16,9 +16,9 @@
 #include <utility>
 
 static_assert(__cplusplus >= 201703L);
-static_assert(MicroWorld::Version.Major == 0);
-static_assert(MicroWorld::Version.Minor == 4);
-static_assert(MicroWorld::Version.Patch == 0);
+static_assert(MicroWorld::Core::Version.Major == 0);
+static_assert(MicroWorld::Core::Version.Minor == 4);
+static_assert(MicroWorld::Core::Version.Patch == 0);
 static_assert(std::is_nothrow_destructible_v<MicroWorld::Core::TUniquePtr<std::uint32_t>>);
 
 namespace MicroWorldConsumer

@@ -1,20 +1,20 @@
 # 19-UartMessaging
 
-**Feature:** the full MicroWorld message design — a dedicated-server `TEngine`
-bound to `TTransportHost` through the `THostPlaySystem` interface, and a bare `TTransportHost`
-client — running over a plain wire with **zero WiFi**. **Same application
+**Feature:** the full MicroWorld Networking design — a server `TEngine` owning
+Messaging and Network, and a client Messaging + Network composition — running over
+a plain wire with **zero WiFi**. **Same application
 protocol as example 16 — only the device construction changed.**
 
-> Status: not yet verified on hardware.
+> Status: built; the Networking path is not yet hardware-verified.
 
 ## What it does
 
-1. The **server** board (`node=1`) composes a `TEngine` + `THostPlaySystem` +
-   `TTransportHost` in `DedicatedServer` mode over one `FEsp32UartDevice`, registers a
+1. The **server** board (`node=1`) composes a `TEngine` + Messaging + server
+   `FNetworkSystem` over one `FEsp32UartDevice`, registers a
    spawnable actor class, creates its world, and ticks forever. Each tick it
    broadcasts the world actor count on channel 2.
-2. The **client** board (`node=2`) runs a bare `TTransportHost` in `Client` mode over
-   its own `FEsp32UartDevice`, greeting `MakeUartAddress(1)` as its server. Once
+2. The **client** board (`node=2`) composes Messaging + client `FNetworkSystem` over
+   its own `FEsp32UartDevice`, then connects to `MakeUartAddress(1)`. Once
    connected it sends two channel-1 spawn requests one second apart and logs
    every channel-2 state broadcast it receives.
 3. Each accepted request spawns one actor in the server world, so the broadcast
@@ -28,10 +28,9 @@ demonstration.
 
 ## MicroWorld APIs used
 
-- `TTransportHost` (`Configure` / `Start` / `PumpReceive` / `PumpSend` / `SendTo` /
-  `Broadcast` / `GetState` / `GetServerPeer`, message-handler multicast),
-  `ENetworkMode`, `ETransportHostState`, `FTransportHostConfig`, `FPeerId`
-- `THostPlaySystem` / `IPlaySystem` and the `TEngine` network-frame constructor
+- `FNetworkSystem` (`ConnectToServer` / `SendToServer` / `SendTo` / `Broadcast` /
+  `ResolveSenderPeer`), `ENetworkRole`, `EConnectionState`, `FPeerId`
+- `FMessagingSystem` local application channels, registered device link, and explicit route
 - `TEngine` (`RegisterClass` / `CreateWorld` / `CreateObject` / `BeginPlay` /
   `Tick` / `GetWorld`), `UWorld::SpawnActor`, `AActor`, `FGarbageCollectionBudget`
 - `FEsp32UartDevice`, `FEsp32UartConfig`, `MakeUartAddress`
@@ -82,7 +81,7 @@ pio device monitor -d examples/19-UartMessaging -e esp32-s3-client
 
 ## Expected output
 
-Server board (not yet verified on hardware):
+Expected server output (not yet observed on hardware):
 
 ```text
 I (nnnn) ex19: server node=1 open=1
@@ -92,7 +91,7 @@ I (nnnn) ex19: server spawned actor -> world actor count=2
 I (nnnn) ex19: done (server spawned 2 actors)
 ```
 
-Client board (not yet verified on hardware; the `rx state` line repeats as
+Expected client output (not yet observed on hardware; the `rx state` line repeats as
 broadcasts arrive; the count climbs to 2):
 
 ```text

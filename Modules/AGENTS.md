@@ -15,7 +15,8 @@ never compiles them. Dependencies point inward:
 ```text
 Core <- Messaging
 Core <- Transport
-Core, Messaging <- Engine
+Core, Messaging <- Networking
+Core, Messaging, Networking <- Engine
 Core, Engine <- Application
 ```
 

@@ -1,8 +1,13 @@
 # ADR 0008: The Session Layer Survives The Networking Dissolution
 
-Status: Accepted
+Status: Superseded by [ADR 0015](0015-networking-restored-above-messaging.md)
 
 Date: 2026-08-01
+
+Supersession: ADR 0015 moves admission, peer identity, liveness, logical
+routing, and session protocol above Messaging into Networking. It also replaces
+the fixed-address Messaging boundary that made this Transport-owned session
+necessary. This record remains historical context only.
 
 ## Context
 

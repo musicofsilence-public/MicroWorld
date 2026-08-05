@@ -87,7 +87,7 @@ public:
 	 * Motivation: Queues one complete framed packet for later bounded UART progress without blocking the caller.
 	 * Responsibilities: Delegate to FE32LoraDevice.TrySend and forward its outcome unchanged; Success means the
 	 *   complete encoded frame was accepted into the fixed slot, not physically emitted, so direct callers must
-	 *   run the pre-advance turn regularly (TTransportHost already does so).
+	 *   run the pre-advance turn regularly through its composition owner.
 	 */
 	Core::ETransportResult TrySend(const Core::FDeviceAddress& InTo, Core::TSpan<const std::uint8_t> InPacket) noexcept override
 	{

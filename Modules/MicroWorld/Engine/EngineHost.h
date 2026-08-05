@@ -10,7 +10,10 @@
 #include <MicroWorld/Core/PlaySystem.h>
 #include <MicroWorld/Messaging/MessagingSystem.h>
 #include <MicroWorld/Messaging/MessagingSystemInformation.h>
+#include <MicroWorld/Networking/NetworkSystem.h>
+#include <MicroWorld/Networking/NetworkSystemInformation.h>
 #include <MicroWorld/Engine/World.h>
+#include <MicroWorld/Engine/WorldSubsystem.h>
 #include <MicroWorld/Engine/ClassDescriptor.h>
 #include <MicroWorld/Engine/ClassRegistry.h>
 #include <MicroWorld/Engine/ClassRegistryRegistrationView.h>
@@ -53,9 +56,9 @@ namespace MicroWorld::Engine
 /**
  * Motivation: Owns and wires every fixed-capacity runtime subsystem behind one canonical per-frame order, sizing all
  *   storage at compile time and never allocating.
- * Responsibilities: Own the class registry, object store, garbage collector, world actor registry, timer manager, and
- *   the one messaging system; run the documented fixed frame order; and, when a caller-owned system is bound at
- *   construction, drive its lifecycle and per-frame turns.
+ * Responsibilities: Own the class registry, object store, garbage collector, World actor/subsystem registries, timer
+ *   manager, one Messaging system, and one optional Network system; run the documented fixed frame order; and drive
+ *   an optional caller-owned system's lifecycle and per-frame turns.
  * Example:
  *   TEngine<> Engine(Budget);
  *   (void)Engine.CreateWorld();
@@ -65,13 +68,15 @@ template<typename TTraits = FDefaultEngineTraits>
 class TEngine final : public IEngineRuntime
 {
 public:
-	/** Motivation: Pulls the eight capacities out of the traits type so the body reads as compile-time constants. */
+	/** Motivation: Pulls the capacities out of the traits type so the body reads as compile-time constants. */
 	static constexpr std::size_t MaxClasses = TTraits::MaxClasses;
 	static constexpr std::size_t MaxObjects = TTraits::MaxObjects;
 	static constexpr std::size_t SlotSizeBytes = TTraits::SlotSizeBytes;
 	static constexpr std::size_t SlotAlign = TTraits::SlotAlign;
 	static constexpr std::size_t MaxRoots = TTraits::MaxRoots;
 	static constexpr std::size_t MaxActors = TTraits::MaxActors;
+	/** Motivation: Bounds caller-owned subsystem reference storage without charging every object slot. */
+	static constexpr std::size_t MaxSubsystems = TTraits::MaxSubsystems;
 	static constexpr std::size_t MaxTimers = TTraits::MaxTimers;
 	static constexpr std::size_t InlineTimerCallbackBytes = TTraits::InlineTimerCallbackBytes;
 	static constexpr std::size_t InlineDeferredSpawnFactoryBytes = TTraits::InlineDeferredSpawnFactoryBytes;
@@ -80,8 +85,8 @@ public:
 	using FTimerManager = Core::TTimerManager<MaxTimers, InlineTimerCallbackBytes>;
 
 	/**
-	 * Motivation: Builds every subsystem over this host's storage and registers the three engine base descriptors so
-	 *   worlds, actors, and components are constructible.
+	 * Motivation: Builds every subsystem over this host's storage and registers the four Engine base descriptors so
+	 *   Worlds, actors, components, and World subsystems are constructible.
 	 * Responsibilities: Size collection and reclamation budgets (the latter defaulting to every slot so all pending
 	 *   destroys are reclaimed each frame) and register the engine base classes.
 	 */
@@ -173,6 +178,10 @@ public:
 		{
 			Parent = Registry.Find(UWorldClassId);
 		}
+		else if constexpr (std::is_base_of<UWorldSubsystem, TManagedType>::value)
+		{
+			Parent = Registry.Find(UWorldSubsystemClassId);
+		}
 		const FClassDescriptor Candidate = MakeClassDescriptor<TManagedType>(InTypeId, InName, Parent, &TraceManagedObjectReferences);
 		return Registry.Register(Candidate);
 	}
@@ -212,7 +221,12 @@ public:
 		}
 
 		const TObjectCreationResult<UWorld> Creation = Store.NewObject<UWorld>(
-			*Descriptor, ActorRegistry.MakeReference(), DeferredSpawns.MakeReference(), MakeClassRegistryRegistrationView(Registry));
+			*Descriptor,
+			ActorRegistry.MakeReference(),
+			DeferredSpawns.MakeReference(),
+			MakeClassRegistryRegistrationView(Registry),
+			SubsystemRegistry.MakeReference(),
+			GetNetworkSystem());
 		if (Creation.Result != EObjectResult::Success)
 		{
 			return {};
@@ -278,6 +292,43 @@ public:
 	Messaging::FMessagingSystem* GetMessagingSystem() noexcept { return MessagingSystems.Data(); }
 
 	/**
+	 * Motivation: Lets the composition root create the optional Network layer only while Messaging is available and no
+	 *   world has captured the layer pointer.
+	 * Responsibilities: Construct and initialize one Network system transactionally; reject requests without Messaging,
+	 *   after World creation, or after a prior Network creation without changing the existing engine state.
+	 */
+	Networking::ENetworkResult CreateNetworkSystem(const Networking::FNetworkSystemInformation& InInformation = {}) noexcept
+	{
+		Messaging::FMessagingSystem* const MessagingSystem = GetMessagingSystem();
+		if (MessagingSystem == nullptr || WorldRoot.Get() != nullptr || !NetworkSystems.IsEmpty())
+		{
+			return Networking::ENetworkResult::Invalid;
+		}
+
+		const Core::ERuntimeResult StorageResult = NetworkSystems.Emplace(*MessagingSystem, InInformation);
+		if (StorageResult != Core::ERuntimeResult::Success)
+		{
+			return Networking::ENetworkResult::Full;
+		}
+
+		Networking::FNetworkSystem* const NetworkSystem = GetNetworkSystem();
+		const Networking::ENetworkResult InitializeResult = NetworkSystem->Initialize();
+		if (InitializeResult == Networking::ENetworkResult::Success)
+		{
+			return Networking::ENetworkResult::Success;
+		}
+
+		NetworkSystems.Clear();
+		return InitializeResult;
+	}
+
+	/**
+	 * Motivation: Lets World construction and application code reach the optional Engine-owned Network layer.
+	 * Responsibilities: Return the one initialized Network system, or null until creation succeeds.
+	 */
+	Networking::FNetworkSystem* GetNetworkSystem() noexcept { return NetworkSystems.Data(); }
+
+	/**
 	 * Motivation: Starts the bound system then the world at one canonical time and records it as the tick baseline.
 	 * Responsibilities: Reject the start when no world has been created, then record the baseline and begin the system
 	 *   before the world.
@@ -341,19 +392,21 @@ public:
 	}
 
 private:
+	static_assert(MaxClasses >= 4, "TEngine requires class capacity for four Engine base descriptors.");
 	static_assert(MaxObjects > 0, "TEngine needs at least one object slot for the world.");
 	static_assert(MaxRoots > 0, "TEngine roots its world, so it needs at least one root entry.");
 	static_assert(SlotSizeBytes % SlotAlign == 0, "Slot stride must preserve slot alignment.");
 
 	/**
-	 * Motivation: Registers the three engine base descriptors so base types are constructible.
-	 * Responsibilities: Register UActorComponent, AActor, and UWorld descriptors exactly once.
+	 * Motivation: Registers the four engine base descriptors so base types are constructible.
+	 * Responsibilities: Register UActorComponent, AActor, UWorld, and UWorldSubsystem descriptors exactly once.
 	 */
 	void RegisterBaseClasses() noexcept
 	{
 		(void)Registry.Register(UActorComponent::StaticClassDescriptor());
 		(void)Registry.Register(AActor::StaticClassDescriptor());
 		(void)Registry.Register(UWorld::StaticClassDescriptor());
+		(void)Registry.Register(UWorldSubsystem::StaticClassDescriptor());
 	}
 
 	/**
@@ -376,36 +429,46 @@ private:
 
 	/**
 	 * Motivation: Starts the engine's systems before the world's actors receive their BeginPlay turn.
-	 * Responsibilities: Begin the messaging system then the bound system, skipping either when it is absent.
+	 * Responsibilities: Begin the bound system, Messaging, then Network, skipping any absent optional system.
 	 */
 	void BeginPlaySystems(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
+		if (System != nullptr)
+		{
+			System->BeginPlay(InNowMilliseconds);
+		}
+
 		if (Messaging::FMessagingSystem* const MessagingSystem = GetMessagingSystem(); MessagingSystem != nullptr)
 		{
 			MessagingSystem->BeginPlay(InNowMilliseconds);
 		}
 
-		if (System != nullptr)
+		if (Networking::FNetworkSystem* const NetworkSystem = GetNetworkSystem(); NetworkSystem != nullptr)
 		{
-			System->BeginPlay(InNowMilliseconds);
+			NetworkSystem->BeginPlay(InNowMilliseconds);
 		}
 	}
 
 	/**
-	 * Motivation: Frame step 1 — inbound work lands before the world advances, so a frame's arriving messages are already
-	 *   delivered when actors run.
-	 * Responsibilities: Pre-advance the messaging system then the bound system, skipping either when it is absent.
+	 * Motivation: Frame step 1 — device work and inbound messages land before the world advances, so a frame's arriving
+	 *   messages are already delivered when actors run.
+	 * Responsibilities: Pre-advance the bound system, Messaging, then Network, skipping any absent optional system.
 	 */
 	void PreAdvanceSystems(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
+		if (System != nullptr)
+		{
+			System->PreAdvance(InNowMilliseconds);
+		}
+
 		if (Messaging::FMessagingSystem* const MessagingSystem = GetMessagingSystem(); MessagingSystem != nullptr)
 		{
 			MessagingSystem->PreAdvance(InNowMilliseconds);
 		}
 
-		if (System != nullptr)
+		if (Networking::FNetworkSystem* const NetworkSystem = GetNetworkSystem(); NetworkSystem != nullptr)
 		{
-			System->PreAdvance(InNowMilliseconds);
+			NetworkSystem->PreAdvance(InNowMilliseconds);
 		}
 	}
 
@@ -442,37 +505,46 @@ private:
 
 	/**
 	 * Motivation: Frame step 7 — outbound work leaves after the world advanced, so messages an actor sent this frame go
-	 *   out in the same frame; the reverse of the pre-advance order mirrors the repository's add-order start and
-	 *   reverse-order shutdown.
-	 * Responsibilities: Post-advance the bound system then the messaging system, skipping either when it is absent.
+	 *   out in the same frame; the reverse order mirrors startup and shutdown.
+	 * Responsibilities: Post-advance Network, Messaging, then the bound system, skipping any absent optional system.
 	 */
 	void PostAdvanceSystems(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
-		if (System != nullptr)
+		if (Networking::FNetworkSystem* const NetworkSystem = GetNetworkSystem(); NetworkSystem != nullptr)
 		{
-			System->PostAdvance(InNowMilliseconds);
+			NetworkSystem->PostAdvance(InNowMilliseconds);
 		}
 
 		if (Messaging::FMessagingSystem* const MessagingSystem = GetMessagingSystem(); MessagingSystem != nullptr)
 		{
 			MessagingSystem->PostAdvance(InNowMilliseconds);
 		}
+
+		if (System != nullptr)
+		{
+			System->PostAdvance(InNowMilliseconds);
+		}
 	}
 
 	/**
 	 * Motivation: Ends the engine's systems after the world has delivered all actor EndPlay turns.
-	 * Responsibilities: End the bound system then the messaging system, skipping either when it is absent.
+	 * Responsibilities: End Network, Messaging, then the bound system, skipping any absent optional system.
 	 */
 	void EndPlaySystems() noexcept
 	{
-		if (System != nullptr)
+		if (Networking::FNetworkSystem* const NetworkSystem = GetNetworkSystem(); NetworkSystem != nullptr)
 		{
-			System->EndPlay();
+			NetworkSystem->EndPlay();
 		}
 
 		if (Messaging::FMessagingSystem* const MessagingSystem = GetMessagingSystem(); MessagingSystem != nullptr)
 		{
 			MessagingSystem->EndPlay();
+		}
+
+		if (System != nullptr)
+		{
+			System->EndPlay();
 		}
 	}
 
@@ -482,11 +554,14 @@ private:
 	/** Motivation: Bounds the per-tick store slots inspected by the destruction barrier. */
 	std::uint32_t FrameReclamationBudget;
 
-	/** Motivation: Optional caller-owned system started before and stopped after the world, advanced first and last each tick. */
+	/** Motivation: Owns composition-root device turns that start and pre-advance before Engine Messaging. */
 	Core::IPlaySystem* System{nullptr};
 
 	/** Motivation: Holds the one optional messaging system; its storage is reserved whether or not a system is created. */
 	Core::TStaticVector<Messaging::FMessagingSystem, 1> MessagingSystems;
+
+	/** Motivation: Holds the optional Network system after its Messaging-backed initialization succeeds. */
+	Core::TStaticVector<Networking::FNetworkSystem, 1> NetworkSystems;
 
 	/** Motivation: Records the last accepted tick time so a rolled-back clock is rejected. */
 	Core::TimePointMilliseconds LastTickMilliseconds{0};
@@ -517,6 +592,9 @@ private:
 
 	/** Motivation: Owns the fixed actor registry referenced by the single world. */
 	FWorldActorRegistry<MaxActors> ActorRegistry;
+
+	/** Motivation: Owns the fixed subsystem registry referenced by the single world. */
+	FWorldSubsystemRegistry<MaxSubsystems> SubsystemRegistry;
 
 	/** Motivation: Owns the bounded timer set advanced first in every frame. */
 	FTimerManager Timers;

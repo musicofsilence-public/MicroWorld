@@ -6,19 +6,19 @@ Inherits `../../AGENTS.md`.
 
 Transport is the portable byte-I/O system. Its dependency direction is
 `Core <- Transport`: it may depend only on Core and the C++17 standard library.
-Transport must not depend on Engine, Messaging, or Application, and no portable
+Transport must not depend on Engine, Messaging, Networking, or Application, and no portable
 system may see both Engine and Transport — only the application entry point joins them.
 
 Core owns the device contract itself — `Core::ITransportDevice`, `Core::FDeviceAddress`
 and `Core::ETransportResult` — so that Messaging can send through a device without
 depending on Transport. What Transport owns is everything built on that contract:
 a bounded byte reader/writer, one caller-storage-backed fixed-capacity
-`TTransportManager`, the `TTransportHost` session layer above it, wire framing, a
+`TTransportManager`, byte frame encoding/decoding, a
 deterministic host loopback device, the one-byte E32 node-address shape, and the
 portable RadioE32 transport over `IUartByteStream`. It does not own sequence
 numbers, retries, reliability, message routing, authentication, replication,
 real transports, threads, platform adapters, or vendor SDK code: reliability and
-routing belong to Messaging, and real transports to the platform families.
+routing and message framing belong to Messaging, and real transports to the platform families.
 
 Net and RadioE32 were separate packages; they folded into Transport because a
 system is a responsibility and a package is a build target, and the architecture
@@ -29,17 +29,6 @@ radio-less build can omit the E32 framing.
 
 `Lora/Internal/` holds fixed transport state and other implementation mechanics (the
 portable E32 transport state); consumers must not depend on those headers.
-
-`TTransportHost`'s private implementation is partitioned into flat `.inl` files
-(`TransportHost_PeerTable.inl`, `TransportHost_Outbound.inl`,
-`TransportHost_ControlMessages.inl`) included in order after the class body
-closes; they are never included directly. Declarations stay inside the class
-body, while each definition is written out-of-class as
-`TTransportHost<MaxPeers, MaxPacketBytes>::Method`, so the public API stays
-compact while every body remains visible at instantiation. The `.inl` suffix is
-gated by `tools/CheckFormatting.py` and `tools/CheckDocumentationStyle.py`, so
-each partition carries the same Motivation/Responsibilities contract as the
-public header.
 
 ## Concepts and boundaries
 
@@ -72,11 +61,6 @@ public header.
   referenced `Core::ITransportDevice` and one externally referenced
   `TTransportPacketStorage`, maintains one deterministic outbound FIFO, and
   performs at most one direct device receive.
-- `TTransportHost<MaxPeers, MaxPacketBytes>` is the session layer above `TTransportManager`.
-  One `ENetworkMode` role — Standalone, Client, ListenServer, or DedicatedServer —
-  selects which traffic the host originates and accepts; a fixed peer table
-  carries `Hello`/`Welcome` admission, heartbeats, and timeout eviction; and
-  channel 0 is reserved for control.
 - `THostLoopback` is a deterministic fixed-capacity `Core::ITransportDevice` for host tests.
 - `FPacketDropDevice` is a test/demo `Core::ITransportDevice` decorator that wraps another
   device by reference and silently drops every Nth outgoing send; it is a loss

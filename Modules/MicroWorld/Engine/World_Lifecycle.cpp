@@ -51,22 +51,38 @@ Core::ERuntimeResult UWorld::BeginPlay(const Core::TimePointMilliseconds InNowMi
 		ConstructDeferredSpawns(*ObjectStore);
 	}
 
+	FObjectStoreDispatchGuard StartupDispatchGuard(*ObjectStore);
+	if (!StartupDispatchGuard.IsAcquired())
 	{
-		FObjectStoreDispatchGuard DispatchGuard(*ObjectStore);
-		if (!DispatchGuard.IsAcquired())
-		{
-			return Core::ERuntimeResult::LifecycleLocked;
-		}
-
-		const Core::ERuntimeResult BeginResult = BeginRegisteredActorsWithRollback(InNowMilliseconds);
-		if (BeginResult != Core::ERuntimeResult::Success)
-		{
-			return BeginResult;
-		}
+		Lifecycle.Fail();
+		return Core::ERuntimeResult::LifecycleLocked;
 	}
 
-	Core::ERuntimeResult FirstError = Core::ERuntimeResult::Success;
-	return BeginDeferredSpawnsUnderGuard(*ObjectStore, InNowMilliseconds, FirstError);
+	const Core::ERuntimeResult SubsystemResult = InitializeSubsystemsWithRollback();
+	if (SubsystemResult != Core::ERuntimeResult::Success)
+	{
+		Lifecycle.Fail();
+		return SubsystemResult;
+	}
+
+	const Core::ERuntimeResult ActorResult = BeginRegisteredActorsWithRollback(InNowMilliseconds);
+	if (ActorResult != Core::ERuntimeResult::Success)
+	{
+		(void)DeinitializeSubsystemsReverse();
+		return ActorResult;
+	}
+
+	Core::ERuntimeResult DeferredFirstError = Core::ERuntimeResult::Success;
+	const Core::ERuntimeResult DeferredDispatchResult = BeginDeferredSpawnsWithGuardHeld(*ObjectStore, InNowMilliseconds, DeferredFirstError);
+	if (DeferredDispatchResult != Core::ERuntimeResult::Success || DeferredFirstError != Core::ERuntimeResult::Success)
+	{
+		(void)EndRegisteredActorsReverse();
+		(void)DeinitializeSubsystemsReverse();
+		Lifecycle.Fail();
+		return DeferredDispatchResult != Core::ERuntimeResult::Success ? DeferredDispatchResult : DeferredFirstError;
+	}
+
+	return Core::ERuntimeResult::Success;
 }
 
 Core::ERuntimeResult UWorld::Advance(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
@@ -138,7 +154,9 @@ Core::ERuntimeResult UWorld::EndPlay() noexcept
 		return EndResult;
 	}
 
-	return EndRegisteredActorsReverse();
+	const Core::ERuntimeResult ActorEndResult = EndRegisteredActorsReverse();
+	const Core::ERuntimeResult SubsystemEndResult = DeinitializeSubsystemsReverse();
+	return ActorEndResult != Core::ERuntimeResult::Success ? ActorEndResult : SubsystemEndResult;
 }
 
 Core::ERuntimeResult UWorld::BeginRegisteredActorsWithRollback(const Core::TimePointMilliseconds InNowMilliseconds) noexcept

@@ -308,7 +308,12 @@ Core::ERuntimeResult UWorld::BeginDeferredSpawnsUnderGuard(
 		DeferredSpawns.RestoreUnpublishedFrom(0);
 		return Core::ERuntimeResult::LifecycleLocked;
 	}
+	return BeginDeferredSpawnsWithGuardHeld(InObjectStore, InNowMilliseconds, InOutFirstError);
+}
 
+Core::ERuntimeResult UWorld::BeginDeferredSpawnsWithGuardHeld(
+	FObjectStore&, const Core::TimePointMilliseconds InNowMilliseconds, Core::ERuntimeResult& InOutFirstError) noexcept
+{
 	for (std::size_t Index = 0; Index < DeferredSpawns.SealedPublishCount(); ++Index)
 	{
 		const FActorSpawnHandle SpawnHandle = DeferredSpawns.SealedPublishAt(Index);

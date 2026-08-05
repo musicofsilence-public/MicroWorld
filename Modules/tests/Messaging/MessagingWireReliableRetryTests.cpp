@@ -388,4 +388,101 @@ MW_TEST_CASE(MessagingSystem_BestEffortSendsDoNotConsumeReliablePendingSlots)
 	MW_EXPECT_EQ(Test, ExpectedQueuedPacketCount, QueuedAfterSends, "Every reliable frame and the best-effort frame should reach the device");
 }
 
+/**
+ * Motivation: Prevents a valid acknowledgement received through another registered device from releasing a route-owned retry frame.
+ * Responsibilities: Consume a wrong-link acknowledgement and verify the original route still receives its scheduled retry.
+ */
+MW_TEST_CASE(MessagingSystem_IgnoresReliableAcknowledgementsFromAnotherRoute)
+{
+	// Arrange
+	TLoopbackNetwork<TwoPorts, OneMailboxSlot, StandardPacketBytes> MessageNetwork;
+	TLoopbackNetwork<TwoPorts, OneMailboxSlot, StandardPacketBytes> AcknowledgementNetwork;
+	FMessagingSystemInformation Information{};
+	Information.ReliableRetryIntervalMilliseconds = ReliableRetryIntervalMilliseconds;
+	FMessagingSystem System{Information};
+	MicroWorld::Messaging::FMessagingLinkId AlternateLinkId;
+	const FChannelInformation Channel{"Telemetry", true, &MessageNetwork.Port(SendingPort), MakeLoopbackAddress(ReceivingPort)};
+	FMessage Message;
+	Message.SetMessageNameId("TemperatureUpdated");
+	FRawWireFrame AcknowledgementFrame;
+	AcknowledgementFrame.Set(
+		"Telemetry", MessageAcknowledgementNameId, TSpan<const std::uint8_t>(FirstSequenceAcknowledgementPayload, SequenceNumberBytes));
+
+	// Act
+	const EMessagingResult CreateResult = System.CreateChannel(Channel);
+	const EMessagingResult AlternateRegisterResult = System.RegisterLink(AcknowledgementNetwork.Port(SendingPort), AlternateLinkId);
+	const EMessagingResult SendResult = System.SendMessageToChannel(Message, "Telemetry");
+	MessageNetwork.Drain(ReceivingPort);
+	const ETransportResult WrongRouteAcknowledgementResult =
+		AcknowledgementNetwork.Port(ReceivingPort)
+			.TrySend(MakeLoopbackAddress(SendingPort), TSpan<const std::uint8_t>(AcknowledgementFrame.Bytes, AcknowledgementFrame.Size));
+	System.PreAdvance(FirstReceiveTurnMilliseconds);
+	System.PostAdvance(SecondReceiveTurnMilliseconds + ReliableRetryIntervalMilliseconds);
+	const std::size_t QueuedRetryCount = MessageNetwork.QueuedCount(ReceivingPort);
+
+	// Assert
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, CreateResult, "The reliable default-route channel should be created");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, AlternateRegisterResult, "The alternate acknowledgement device should register");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, SendResult, "The initial reliable frame should send");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, WrongRouteAcknowledgementResult, "The wrong-route acknowledgement should reach Messaging");
+	MW_EXPECT_EQ(Test, OneQueuedPacket, QueuedRetryCount, "A wrong-route acknowledgement should leave the original route pending");
+}
+
+/**
+ * Motivation: Prevents a channel's lifecycle from resetting system-lifetime reliable identity or allowing an old acknowledgement to release new work.
+ * Responsibilities: Acknowledge the first frame, recreate its channel, then prove the next id differs and a delayed old acknowledgement leaves it
+ * retrying.
+ */
+MW_TEST_CASE(MessagingSystem_ChannelRecreationDoesNotReuseReliableIdsOrAcceptDelayedOldAcknowledgements)
+{
+	// Arrange
+	TLoopbackNetwork<TwoPorts, TwoMailboxSlots, StandardPacketBytes> Network;
+	FMessagingSystemInformation Information{};
+	Information.ReliableRetryIntervalMilliseconds = ReliableRetryIntervalMilliseconds;
+	FMessagingSystem System{Information};
+	const FChannelInformation Channel{"Telemetry", true, &Network.Port(SendingPort), MakeLoopbackAddress(ReceivingPort)};
+	FMessage Message;
+	Message.SetMessageNameId("TemperatureUpdated");
+	FRawWireFrame FirstAcknowledgementFrame;
+	FirstAcknowledgementFrame.Set(
+		"Telemetry", MessageAcknowledgementNameId, TSpan<const std::uint8_t>(FirstSequenceAcknowledgementPayload, SequenceNumberBytes));
+
+	// Act
+	const EMessagingResult FirstCreateResult = System.CreateChannel(Channel);
+	const EMessagingResult FirstSendResult = System.SendMessageToChannel(Message, "Telemetry");
+	Network.Drain(ReceivingPort);
+	const ETransportResult FirstAcknowledgementResult =
+		Network.Port(ReceivingPort)
+			.TrySend(MakeLoopbackAddress(SendingPort), TSpan<const std::uint8_t>(FirstAcknowledgementFrame.Bytes, FirstAcknowledgementFrame.Size));
+	System.PreAdvance(FirstReceiveTurnMilliseconds);
+	const EMessagingResult DestroyResult = System.DestroyChannel("Telemetry");
+	const EMessagingResult RecreateResult = System.CreateChannel(Channel);
+	const EMessagingResult SecondSendResult = System.SendMessageToChannel(Message, "Telemetry");
+	std::uint8_t SecondFrameBytes[FMessagingSystem::MaxFrameBytes]{};
+	FDeviceAddress SecondFrameSender;
+	FReceiveResult SecondFrameReceiveResult;
+	const ETransportResult SecondFrameReceiveStatus =
+		Network.Port(ReceivingPort)
+			.TryReceive(SecondFrameSender, TSpan<std::uint8_t>(SecondFrameBytes, FMessagingSystem::MaxFrameBytes), SecondFrameReceiveResult);
+	const std::uint64_t RecreatedChannelReliableMessageId = FRawWireFrame::ReadSequenceNumber(&SecondFrameBytes[WireHeaderBytes]);
+	const ETransportResult DelayedAcknowledgementResult =
+		Network.Port(ReceivingPort)
+			.TrySend(MakeLoopbackAddress(SendingPort), TSpan<const std::uint8_t>(FirstAcknowledgementFrame.Bytes, FirstAcknowledgementFrame.Size));
+	System.PreAdvance(SecondReceiveTurnMilliseconds);
+	System.PostAdvance(SecondReceiveTurnMilliseconds + ReliableRetryIntervalMilliseconds);
+	const std::size_t QueuedRetryCount = Network.QueuedCount(ReceivingPort);
+
+	// Assert
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, FirstCreateResult, "The original reliable channel should be created");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, FirstSendResult, "The original reliable frame should send");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, FirstAcknowledgementResult, "The original acknowledgement should reach Messaging");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, DestroyResult, "An acknowledged reliable channel should be destroyable");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, RecreateResult, "The same channel name should be recreatable");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, SecondSendResult, "The recreated channel should send reliably");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, SecondFrameReceiveStatus, "The recreated reliable frame should reach the peer");
+	MW_EXPECT_EQ(Test, SecondSequenceNumber, RecreatedChannelReliableMessageId, "A recreated channel should not reuse its first reliable id");
+	MW_EXPECT_EQ(Test, ETransportResult::Success, DelayedAcknowledgementResult, "The delayed old acknowledgement should reach Messaging");
+	MW_EXPECT_EQ(Test, OneQueuedPacket, QueuedRetryCount, "A delayed old acknowledgement should not release the new reliable frame");
+}
+
 } // namespace

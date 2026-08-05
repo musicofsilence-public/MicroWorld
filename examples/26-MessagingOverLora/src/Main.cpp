@@ -4,7 +4,7 @@
 // Role is chosen at build time: server (=1) or client (=0). Both roles always
 // compile — ServerMain.cpp and ClientMain.cpp are always built — and this
 // define only selects which one runs; never build_src_filter, which ESP-IDF
-// ignores. This is example 19's full TTransportHost message protocol carried over an
+// ignores. This is example 19's Messaging and Network application protocol carried over an
 // E32 LoRa radio instead of a wire: the device is the E32 LoRa device and the
 // session runs the D8 airtime profile (relaxed heartbeat/timeout, paced broadcast).
 #ifndef MICROWORLD_EXAMPLE_SERVER

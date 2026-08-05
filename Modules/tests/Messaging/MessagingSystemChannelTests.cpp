@@ -13,6 +13,8 @@ namespace
 using namespace ::MicroWorld::Tests;
 
 using MicroWorld::Messaging::FChannelInformation;
+using MicroWorld::Messaging::FChannelTraits;
+using MicroWorld::Messaging::FMessagingLinkId;
 using MicroWorld::Messaging::FMessagingSystemInformation;
 using MicroWorld::Messaging::InvalidNameId;
 
@@ -246,6 +248,101 @@ MW_TEST_CASE(MessagingSystem_LifecycleTurnsPreserveChannels)
 
 	// Assert
 	MW_EXPECT_EQ(Test, EMessagingResult::Duplicate, Result, "Lifecycle turns should preserve existing channels");
+}
+
+/**
+ * Motivation: Makes caller-owned device registration stable when several channels and explicit routes share one device.
+ * Responsibilities: Verify duplicate registration returns the original opaque id and all channel creation reuses that one registration.
+ */
+MW_TEST_CASE(MessagingSystem_RegisterLinkIsIdempotentAcrossChannels)
+{
+	// Arrange
+	FMessagingSystem System;
+	FTestTransportDevice Device;
+	FMessagingLinkId FirstLinkId;
+	FMessagingLinkId SecondLinkId;
+	const FChannelInformation FirstChannel{"Telemetry", false, &Device, {}};
+	const FChannelInformation SecondChannel{"Commands", false, &Device, {}};
+
+	// Act
+	const EMessagingResult FirstRegisterResult = System.RegisterLink(Device, FirstLinkId);
+	const EMessagingResult SecondRegisterResult = System.RegisterLink(Device, SecondLinkId);
+	const EMessagingResult FirstCreateResult = System.CreateChannel(FirstChannel);
+	const EMessagingResult SecondCreateResult = System.CreateChannel(SecondChannel);
+
+	// Assert
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, FirstRegisterResult, "The first device registration should succeed");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, SecondRegisterResult, "The same device should register idempotently");
+	MW_EXPECT_EQ(Test, FirstLinkId, SecondLinkId, "Repeated registration should return the stable link id");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, FirstCreateResult, "The first channel should normalize the registered device");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, SecondCreateResult, "The second channel should reuse the registered device");
+}
+
+/**
+ * Motivation: Exposes the fixed link boundary without partially registering a rejected fifth device.
+ * Responsibilities: Fill all link slots, reject one more device, and keep its output id invalid.
+ */
+MW_TEST_CASE(MessagingSystem_RejectsLinkRegistrationPastCapacityWithoutMutation)
+{
+	// Arrange
+	FMessagingSystem System;
+	FTestTransportDevice Devices[FMessagingSystem::MaxLinks + 1];
+	FMessagingLinkId LinkIds[FMessagingSystem::MaxLinks]{};
+	FMessagingLinkId OverflowLinkId;
+
+	// Act
+	EMessagingResult FillResult = EMessagingResult::Success;
+	for (std::size_t LinkIndex = 0; LinkIndex < FMessagingSystem::MaxLinks; ++LinkIndex)
+	{
+		FillResult = System.RegisterLink(Devices[LinkIndex], LinkIds[LinkIndex]);
+		if (FillResult != EMessagingResult::Success)
+		{
+			break;
+		}
+	}
+	const EMessagingResult OverflowResult = System.RegisterLink(Devices[FMessagingSystem::MaxLinks], OverflowLinkId);
+
+	// Assert
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, FillResult, "Every fixed link slot should accept one distinct device");
+	MW_EXPECT_EQ(Test, EMessagingResult::Full, OverflowResult, "A fifth device should not be registered");
+	MW_EXPECT_TRUE(Test, !OverflowLinkId.IsValid(), "A rejected registration should leave its output id invalid");
+}
+
+/**
+ * Motivation: Lets Network safely unwind private channels without exposing channel internals.
+ * Responsibilities: Verify traits report normalized routing and destruction rejects subscribed channels but removes an idle channel.
+ */
+MW_TEST_CASE(MessagingSystem_ReportsTraitsAndDestroysOnlyIdleChannels)
+{
+	// Arrange
+	FMessagingSystem System;
+	FTestTransportDevice Device;
+	const FChannelInformation Channel{"Telemetry", true, &Device, {}};
+	FChannelTraits Traits{};
+	FSubscriberDelegate Subscriber;
+	const EDelegateResult BindingResult = Subscriber.Bind([](const FMessage&) noexcept {});
+	FMessagingSystem::FSubscriptionHandle SubscriptionHandle{};
+
+	// Act
+	const EMessagingResult CreateResult = System.CreateChannel(Channel);
+	const EMessagingResult TraitsResult = System.GetChannelTraits("Telemetry", Traits);
+	const EMessagingResult SubscribeResult = System.SubscribeToChannel("Telemetry", std::move(Subscriber), {}, &SubscriptionHandle);
+	const EMessagingResult BusyDestroyResult = System.DestroyChannel("Telemetry");
+	const EMessagingResult UnsubscribeResult = System.Unsubscribe(SubscriptionHandle);
+	const EMessagingResult DestroyResult = System.DestroyChannel("Telemetry");
+	const EMessagingResult MissingTraitsResult = System.GetChannelTraits("Telemetry", Traits);
+
+	// Assert
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, CreateResult, "The routed reliable channel should be created");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, TraitsResult, "A created channel should expose narrow traits");
+	MW_EXPECT_TRUE(Test, Traits.bIsReliable, "The traits should preserve reliable policy");
+	MW_EXPECT_TRUE(Test, Traits.bHasDefaultRoute, "The traits should report a normalized default route");
+	MW_EXPECT_EQ(Test, EDelegateResult::Success, BindingResult, "The destruction guard subscriber should bind");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, SubscribeResult, "The destruction guard subscriber should register");
+	MW_EXPECT_EQ(Test, EMessagingResult::Busy, BusyDestroyResult, "A subscribed channel must not be destroyed");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, UnsubscribeResult, "The live subscription should be removable");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, DestroyResult, "An idle channel should be removable");
+	MW_EXPECT_EQ(Test, EMessagingResult::NotFound, MissingTraitsResult, "Destroyed channels should expose no traits");
 }
 
 } // namespace
