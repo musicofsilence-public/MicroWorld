@@ -15,6 +15,7 @@ namespace MicroWorld::Engine
 class AActor;
 struct FClassDescriptor;
 class FReferenceCollector;
+class FObjectConstructionTransaction;
 
 /**
  * Motivation: Provides the smallest managed component anchored on UObject and Core's tick mix-in so applications can
@@ -133,6 +134,7 @@ protected:
 
 private:
 	friend class AActor;
+	friend class FObjectConstructionTransaction;
 
 	/**
 	 * Motivation: Begins this component's lifecycle, primary tick, and consumer hook.

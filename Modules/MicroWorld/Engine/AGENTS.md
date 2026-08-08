@@ -7,16 +7,17 @@ Inherits `../../AGENTS.md`.
 Engine is the managed-runtime system: it owns object identity (the folded Object
 store and garbage collector) and the actor lifetime built on it
 (`UWorld` / `UWorldSubsystem` / `AActor` / `UActorComponent`). Its dependency direction is
-`Core, Messaging, Networking <- Engine`: it may depend only on Core, Messaging, Networking, and the C++17
-standard library.
+`Core, Messaging, Networking <- Engine`: it may depend only on Core, Messaging,
+Networking, and the C++17 standard library.
 
 The system owns `UWorld`, `UWorldSubsystem`, `AActor`, `UActorComponent`, the object store, the
 generation-checked handles, the bounded incremental collector, and a bounded
 caller-time timer facility. Downward ownership is traced, parent observations
 are weak, and applications own all fixed registration storage and roots. Engine
 does not own Network policy, runtime spawn/destroy beyond the deferred barrier,
-threads, platform adapters, or hardware APIs. It owns an optional Network only
-after Messaging exists and before World creation; Worlds borrow that Network
+threads, platform adapters, or hardware APIs. `ConfigureNetworking` is the
+high-level composition boundary: it binds one borrowed device, creates Messaging
+and the optional Network, and owns their frame turns. Worlds borrow the Network
 without owning it.
 
 Object and Engine were separate packages; Object folded into Engine because
@@ -29,16 +30,28 @@ architecture model states them as one system.
   registration unchanged.
 - `UWorld` traces Actors; `AActor` traces Components; parent links are weak and
   expire when the parent is reclaimed. Engine creates no hidden roots.
+- An actor constructor may create its own default components only through its
+  construction-only `FObjectInitializer`. The private transaction reserves the
+  actor and components before publication; a sticky construction failure destroys
+  the actor first, then components in reverse order, and releases their slots.
+  Constructors cannot resolve their owner or World, and public object-store
+  mutation remains prohibited.
 - `UWorld` traces explicitly registered subsystems from caller-owned bounded
   storage. Subsystem parent observations are weak, lookup matches exact types,
   and registration closes at `BeginPlay`; Engine does not discover or construct
-application subsystem types automatically.
+  application subsystem types automatically. Default actor components do not
+  create an exception for subsystem construction.
 - Begin and Advance use registration order; End uses reverse registration order.
   Components dispatch before their Actor during Begin and Advance.
 - Subsystems initialize in registration order before Actors begin and
   deinitialize in reverse order after Actors end. Subsystems do not Tick.
 - Caller-owned registries must outlive the objects they back. The application
   also owns the object store, root table, GC worklist, and World root.
+- Networking configuration is pre-World and transactional. On success, Engine
+  advances the bound device, Messaging, Network, then World in `PreAdvance`, and
+  reverses that order in `PostAdvance` and shutdown. On failure it clears
+  Network, then Messaging, then the device binding; application setup does not
+  require a subsystem getter, retained subsystem reference, or connection object.
 - Constructors, destruction hooks, and reference visitors must not perform
   structural object-store or collection work.
 - Each managed C++ type contributes one writable zero-initialized byte whose

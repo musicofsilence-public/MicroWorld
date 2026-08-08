@@ -158,19 +158,43 @@ public:
 	std::size_t MaxPacketBytes() const noexcept override { return MaxTestPacketBytes; }
 
 	/**
-	 * Motivation: Completes IPlaySystem for a device drained directly by Messaging rather than by the engine binding.
-	 * Responsibilities: Perform no independent pre-advance work.
+	 * Motivation: Observes lifecycle ownership without adding device behavior to the transport fake.
+	 * Responsibilities: Count each BeginPlay turn received from the direct owner.
 	 */
-	void PreAdvance(TimePointMilliseconds) noexcept override {}
+	void BeginPlay(TimePointMilliseconds) noexcept override { ++BeginPlayCallCount; }
 
 	/**
-	 * Motivation: Completes IPlaySystem for a device drained directly by Messaging rather than by the engine binding.
-	 * Responsibilities: Perform no independent post-advance work.
+	 * Motivation: Observes the device turn that precedes Engine-owned Messaging and Networking work.
+	 * Responsibilities: Count each PreAdvance turn without receiving or sending test packets.
 	 */
-	void PostAdvance(TimePointMilliseconds) noexcept override {}
+	void PreAdvance(TimePointMilliseconds) noexcept override { ++PreAdvanceCallCount; }
+
+	/**
+	 * Motivation: Observes the device turn that follows Engine-owned Messaging and Networking work.
+	 * Responsibilities: Count each PostAdvance turn without receiving or sending test packets.
+	 */
+	void PostAdvance(TimePointMilliseconds) noexcept override { ++PostAdvanceCallCount; }
+
+	/**
+	 * Motivation: Observes lifecycle cleanup after its owner ends play.
+	 * Responsibilities: Count each EndPlay turn without releasing caller-owned fake state.
+	 */
+	void EndPlay() noexcept override { ++EndPlayCallCount; }
 
 	/** Motivation: Counts outbound frames Messaging asks this fake device to accept. */
 	std::size_t TrySendCallCount{};
+
+	/** Motivation: Counts BeginPlay calls delivered to this fake transport device. */
+	std::size_t BeginPlayCallCount{};
+
+	/** Motivation: Counts PreAdvance calls delivered before Engine-owned Messaging and Networking work. */
+	std::size_t PreAdvanceCallCount{};
+
+	/** Motivation: Counts PostAdvance calls delivered after Engine-owned Messaging and Networking work. */
+	std::size_t PostAdvanceCallCount{};
+
+	/** Motivation: Counts EndPlay cleanup calls delivered to this fake transport device. */
+	std::size_t EndPlayCallCount{};
 
 private:
 	/** Motivation: Owns the bytes of the single inbound frame until Messaging consumes them. */

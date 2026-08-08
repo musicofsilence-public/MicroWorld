@@ -2,6 +2,7 @@
 #include "TestSupport.h"
 
 #include <MicroWorld/Core/Delegates/Delegate.h>
+#include <MicroWorld/Core/PlaySystem.h>
 #include <MicroWorld/Core/TickContext.h>
 #include <MicroWorld/Engine/EngineClassIds.h>
 #include <MicroWorld/Engine/EngineHost.h>
@@ -29,6 +30,7 @@ using MicroWorld::Core::ETimerMode;
 using MicroWorld::Core::ETimerResult;
 using MicroWorld::Core::FTickConfiguration;
 using MicroWorld::Core::FTimerHandle;
+using MicroWorld::Core::IPlaySystem;
 using MicroWorld::Core::TDelegate;
 using MicroWorld::Engine::AActor;
 using MicroWorld::Engine::AActorClassId;
@@ -50,6 +52,8 @@ using MicroWorld::Engine::UWorld;
 
 using MicroWorld::Tests::FActorEventState;
 using MicroWorld::Tests::FComponentEventState;
+using MicroWorld::Tests::FEngineLogCaptureState;
+using MicroWorld::Tests::FScopedNullEngineLogCapture;
 using MicroWorld::Tests::FSequenceCounter;
 
 /** Motivation: Ticks every advance with a zero interval so the lifecycle test counts one tick per frame. */
@@ -64,6 +68,9 @@ constexpr FTypeId HostComponentTypeId{0x00060002u};
 /** Motivation: Stable type id for the plain unrooted component used as true garbage in the GC test. */
 constexpr FTypeId HostPlainComponentTypeId{0x00060003u};
 
+/** Motivation: Stable type id for the actor that observes collection state across frame and teardown callbacks. */
+constexpr FTypeId CollectorDispatchActorTypeId{0x00060004u};
+
 /** Motivation: Inline storage reserved for one timer callback bound through the host's delegate type. */
 constexpr std::size_t HostTimerCallbackBytes = 64;
 
@@ -75,7 +82,7 @@ constexpr std::size_t HostTimerCallbackBytes = 64;
  */
 struct FHostTraits : FDefaultEngineTraits
 {
-	static constexpr std::size_t MaxClasses = 7; // Four Engine bases plus three user types.
+	static constexpr std::size_t MaxClasses = 8; // Four Engine bases plus four user types.
 	static constexpr std::size_t MaxObjects = 8;
 	static constexpr std::size_t SlotSizeBytes = 256;
 	static constexpr std::size_t MaxRoots = 1;
@@ -237,6 +244,148 @@ struct FTimerFireRecord final
 };
 
 /**
+ * Motivation: Records whether every callback runs after prior collection completed and preserves their frame order.
+ * Responsibilities: Hold
+ * only caller-owned observation state shared by one bound system, timer callback, and actor.
+ * Example:
+ *   FCollectorDispatchRecord Record{};
+ */
+struct FCollectorDispatchRecord final
+{
+	/** Motivation: Names the host store queried by each callback; the host owns the store and outlives every callback. */
+	MicroWorld::Engine::FObjectStore* Store{nullptr};
+
+	/** Motivation: Establishes the shared callback order within and across test frames. */
+	FSequenceCounter Sequence{};
+
+	/** Motivation: Records the bound system's pre-advance slot in the current frame. */
+	std::uint32_t PreOrder{0};
+
+	/** Motivation: Records the timer callback slot in the current frame. */
+	std::uint32_t TimerOrder{0};
+
+	/** Motivation: Records the actor tick slot in the current frame. */
+	std::uint32_t ActorOrder{0};
+
+	/** Motivation: Records the bound system's post-advance slot in the current frame. */
+	std::uint32_t PostOrder{0};
+
+	/** Motivation: Records whether pre-advance observed an active collection, which must stay false. */
+	bool bPreObservedActiveCollection{true};
+
+	/** Motivation: Records whether the timer observed an active collection, which must stay false. */
+	bool bTimerObservedActiveCollection{true};
+
+	/** Motivation: Records whether the actor tick observed an active collection, which must stay false. */
+	bool bActorObservedActiveCollection{true};
+
+	/** Motivation: Records whether post-advance observed an active collection, which must stay false. */
+	bool bPostObservedActiveCollection{true};
+
+	/** Motivation: Records whether actor teardown observed an active collection, which must stay false. */
+	bool bEndPlayObservedActiveCollection{true};
+};
+
+/**
+ * Motivation: Observes the public caller-bound system turns around one Engine frame.
+ * Responsibilities: Stamp pre/post order and report only
+ * the store's collection-active state.
+ * Example:
+ *   FCollectorDispatchSystem System(Record);
+ */
+class FCollectorDispatchSystem final : public IPlaySystem
+{
+public:
+	/**
+	 * Motivation: Binds this caller-owned system to the shared observation record it updates.
+	 * Responsibilities: Retain no ownership and
+	 * leave record initialization to the caller.
+	 */
+	explicit FCollectorDispatchSystem(FCollectorDispatchRecord& InRecord) noexcept : Record(InRecord) {}
+
+	/**
+	 * Motivation: Satisfies the play-system lifecycle contract without adding an unrelated observation.
+	 * Responsibilities: Leave the
+	 * record unchanged at play start.
+	 */
+	void BeginPlay(MicroWorld::Core::TimePointMilliseconds) noexcept override {}
+
+	/**
+	 * Motivation: Proves the first callback in a frame never sees the prior collection's store lock.
+	 * Responsibilities: Stamp pre-advance
+	 * order and collection state.
+	 */
+	void PreAdvance(MicroWorld::Core::TimePointMilliseconds) noexcept override
+	{
+		Record.PreOrder = Record.Sequence.Next();
+		Record.bPreObservedActiveCollection = Record.Store != nullptr && Record.Store->IsCollectionActive();
+	}
+
+	/**
+	 * Motivation: Proves the final callback in a frame still runs before the next bounded collection slice starts.
+	 * Responsibilities:
+	 * Stamp post-advance order and collection state.
+	 */
+	void PostAdvance(MicroWorld::Core::TimePointMilliseconds) noexcept override
+	{
+		Record.PostOrder = Record.Sequence.Next();
+		Record.bPostObservedActiveCollection = Record.Store != nullptr && Record.Store->IsCollectionActive();
+	}
+
+	/**
+	 * Motivation: Satisfies the play-system lifecycle contract without adding an unrelated observation.
+	 * Responsibilities: Leave the
+	 * record unchanged at play end.
+	 */
+	void EndPlay() noexcept override {}
+
+private:
+	/** Motivation: Receives this system's observations; it is caller-owned and outlives this system. */
+	FCollectorDispatchRecord& Record;
+};
+
+/**
+ * Motivation: Observes actor dispatch and teardown against the same collection-state record as frame callbacks.
+ * Responsibilities: Stamp only
+ * tick and end-play observations without changing Engine state.
+ * Example:
+ *   FCollectorDispatchActor Actor(Record);
+ */
+class FCollectorDispatchActor final : public AActor
+{
+public:
+	/**
+	 * Motivation: Binds the actor to the shared record that outlives the Engine host.
+	 * Responsibilities: Enable ticking and retain no
+	 * ownership of the record.
+	 */
+	explicit FCollectorDispatchActor(FCollectorDispatchRecord& InRecord) noexcept : AActor(HostTickConfiguration), Record(InRecord) {}
+
+protected:
+	/**
+	 * Motivation: Proves World actor dispatch begins only after the prior collection released the store.
+	 * Responsibilities: Stamp actor
+	 * order and collection state.
+	 */
+	void Tick(const MicroWorld::Core::FTickContext&) noexcept override
+	{
+		Record.ActorOrder = Record.Sequence.Next();
+		Record.bActorObservedActiveCollection = Record.Store != nullptr && Record.Store->IsCollectionActive();
+	}
+
+	/**
+	 * Motivation: Proves Engine cancellation releases the store before World teardown dispatches actor hooks.
+	 * Responsibilities: Record
+	 * only collection state at actor end-play.
+	 */
+	void EndPlay() noexcept override { Record.bEndPlayObservedActiveCollection = Record.Store != nullptr && Record.Store->IsCollectionActive(); }
+
+private:
+	/** Motivation: Receives this actor's observations; it is caller-owned and outlives the Engine host. */
+	FCollectorDispatchRecord& Record;
+};
+
+/**
  * Motivation: Registers the actor, recording component, and plain component descriptors on a fresh host so each
  *   test builds its graph through the host's own descriptor copies.
  * Responsibilities: Honour the contract in Motivation and own no behaviour beyond it.
@@ -251,6 +400,34 @@ bool RegisterHostTypes(FHost& InHost) noexcept
 		HostPlainComponentTypeId, "HostPlainComponent", InHost.FindClass(UActorComponentClassId), &TraceManagedObjectReferences);
 	return InHost.RegisterClass(ActorDescriptor) == EObjectResult::Success && InHost.RegisterClass(ComponentDescriptor) == EObjectResult::Success
 		&& InHost.RegisterClass(PlainComponentDescriptor) == EObjectResult::Success;
+}
+
+/**
+ * Motivation: Builds the smallest world graph that exposes actor frame and teardown callback state.
+ * Responsibilities: Register the observation
+ * actor, create and root the world, construct the actor, and register it once.
+ */
+bool BuildCollectorDispatchWorld(FHost& InHost, FCollectorDispatchRecord& InRecord, TObjectPtr<FCollectorDispatchActor>& OutActor) noexcept
+{
+	const FClassDescriptor ActorDescriptor = MakeClassDescriptor<FCollectorDispatchActor>(
+		CollectorDispatchActorTypeId, "CollectorDispatchActor", InHost.FindClass(AActorClassId), &TraceManagedObjectReferences);
+	if (InHost.RegisterClass(ActorDescriptor) != EObjectResult::Success)
+	{
+		return false;
+	}
+
+	const TObjectPtr<UWorld> World = InHost.CreateWorld();
+	if (World.Get() == nullptr)
+	{
+		return false;
+	}
+
+	OutActor = InHost.NewObject<FCollectorDispatchActor>(*InHost.FindClass(CollectorDispatchActorTypeId), InRecord).Object;
+	if (OutActor.Get() == nullptr)
+	{
+		return false;
+	}
+	return InHost.GetWorld().RegisterActor(TObjectPtr<AActor>{OutActor}) == EEngineResult::Success;
 }
 
 /**
@@ -386,10 +563,12 @@ MW_TEST_CASE(EngineHostFrameOrderRunsTimerBeforeActorTick)
 }
 
 /**
- * Motivation: Build the live graph, create three unreferenced garbage objects, begin play, then drive successive
- *   bounded GC slices.
- * Responsibilities: The host's idle-gated GC slice reclaims unreferenced garbage across multiple bounded ticks rather
- *   than all at once, while never touching.
+ * Motivation: Build the live graph, create three unreferenced garbage objects, and prove the next frame completes a
+ *   prior partial collection
+ * before callbacks run.
+ * Responsibilities: Preserve bounded end-of-frame slices while proving the next frame reclaims unreferenced garbage
+ *
+ * through the completed prior collection.
  */
 MW_TEST_CASE(EngineHostGarbageCollectorReclaimsUnrootedObjectsInBoundedSlices)
 {
@@ -426,23 +605,99 @@ MW_TEST_CASE(EngineHostGarbageCollectorReclaimsUnrootedObjectsInBoundedSlices)
 		Host.GetObjectStore().Stats().OccupiedSlots,
 		"One bounded slice cannot complete the mark phase, so no garbage is reclaimed on the first tick");
 
-	// Act - successive bounded slices reclaim the remaining garbage
-	for (MicroWorld::Core::TimePointMilliseconds Now = 20; Now <= 200; Now += 10)
-	{
-		(void)Host.Tick(Now);
-	}
+	// Act - the second frame first completes the prior collection, then starts the next bounded end-of-frame slice.
+	MW_EXPECT_EQ(Test, ERuntimeResult::Success, Host.Tick(20), "The next frame completes the prior collection before dispatch");
 
 	// Assert
 	MW_EXPECT_EQ(
 		Test,
 		std::uint32_t{3},
 		Host.GetObjectStore().Stats().OccupiedSlots,
-		"Bounded slices reclaim all garbage over successive frames while leaving the live graph intact");
+		"The completed prior collection reclaims all garbage while leaving the live graph intact");
+}
+
+/**
+ * Motivation: A partial end-of-frame collection must complete before the next frame dispatches any caller callback.
+ * Responsibilities: Prove
+ * pre-system, timer, actor, and post-system callbacks run in order with no active collection,
+ *   then prove each frame ends by starting the
+ * configured bounded slice without producing an Engine error log.
+ */
+MW_TEST_CASE(EngineHostCompletesPriorCollectionBeforeCallbacksAndStartsNextSliceLast)
+{
+	// Arrange
+	FCollectorDispatchRecord Record{};
+	FCollectorDispatchSystem System{Record};
+	FHost Host{FGarbageCollectionBudget{1, 1, 1}, System};
+	Record.Store = &Host.GetObjectStore();
+	TObjectPtr<FCollectorDispatchActor> Actor{};
+	MW_EXPECT_TRUE(Test, BuildCollectorDispatchWorld(Host, Record, Actor), "The fixture creates the observation actor under the host");
+	MW_EXPECT_EQ(Test, ERuntimeResult::Success, Host.BeginPlay(0), "BeginPlay reports success before collection starts");
+
+	FHostDelegate TimerCallback;
+	(void)TimerCallback.Bind(
+		[&Record]() noexcept
+		{
+			Record.TimerOrder = Record.Sequence.Next();
+			Record.bTimerObservedActiveCollection = Record.Store != nullptr && Record.Store->IsCollectionActive();
+		});
+	FTimerHandle TimerHandle{};
+	MW_EXPECT_EQ(
+		Test,
+		ETimerResult::Success,
+		Host.GetTimerManager().Schedule(std::move(TimerCallback), 10, ETimerMode::Looping, TimerHandle),
+		"A repeating timer observes each frame before the actor tick");
+
+	// Act - frame A starts the bounded slice only after all callbacks, leaving it active for the next frame.
+	FEngineLogCaptureState CaptureState{};
+	ERuntimeResult FirstFrameResult = ERuntimeResult::InvalidLifecycle;
+	ERuntimeResult SecondFrameResult = ERuntimeResult::InvalidLifecycle;
+	{
+		FScopedNullEngineLogCapture LogCapture{CaptureState};
+		FirstFrameResult = Host.Tick(10);
+	}
+
+	const std::uint32_t FirstPreOrder = Record.PreOrder;
+	const std::uint32_t FirstTimerOrder = Record.TimerOrder;
+	const std::uint32_t FirstActorOrder = Record.ActorOrder;
+	const std::uint32_t FirstPostOrder = Record.PostOrder;
+
+	// Assert - every callback ran before frame A started its final bounded collection slice.
+	MW_EXPECT_EQ(Test, ERuntimeResult::Success, FirstFrameResult, "The first frame completes successfully");
+	MW_EXPECT_TRUE(Test, !Record.bPreObservedActiveCollection, "The pre-system callback runs before collection starts");
+	MW_EXPECT_TRUE(Test, !Record.bTimerObservedActiveCollection, "The timer callback runs before collection starts");
+	MW_EXPECT_TRUE(Test, !Record.bActorObservedActiveCollection, "The actor callback runs before collection starts");
+	MW_EXPECT_TRUE(Test, !Record.bPostObservedActiveCollection, "The post-system callback runs before collection starts");
+	MW_EXPECT_TRUE(Test, FirstPreOrder < FirstTimerOrder, "The pre-system callback runs before the timer");
+	MW_EXPECT_TRUE(Test, FirstTimerOrder < FirstActorOrder, "The timer runs before the actor");
+	MW_EXPECT_TRUE(Test, FirstActorOrder < FirstPostOrder, "The actor runs before the post-system callback");
+	MW_EXPECT_TRUE(Test, Host.GetObjectStore().IsCollectionActive(), "The first frame ends with its configured bounded slice active");
+	MW_EXPECT_EQ(Test, 0, CaptureState.CallCount, "A healthy first frame emits no Engine error log");
+
+	// Act - frame B completes frame A's collection before the same callbacks run again.
+	{
+		FScopedNullEngineLogCapture LogCapture{CaptureState};
+		SecondFrameResult = Host.Tick(20);
+	}
+
+	// Assert - the next frame dispatches safely and starts one new final slice.
+	MW_EXPECT_EQ(Test, ERuntimeResult::Success, SecondFrameResult, "The next frame completes its prior collection and succeeds");
+	MW_EXPECT_TRUE(Test, !Record.bPreObservedActiveCollection, "The next pre-system callback sees an idle store");
+	MW_EXPECT_TRUE(Test, !Record.bTimerObservedActiveCollection, "The next timer callback sees an idle store");
+	MW_EXPECT_TRUE(Test, !Record.bActorObservedActiveCollection, "The next actor callback sees an idle store");
+	MW_EXPECT_TRUE(Test, !Record.bPostObservedActiveCollection, "The next post-system callback sees an idle store");
+	MW_EXPECT_TRUE(Test, FirstPostOrder < Record.PreOrder, "The second frame starts after every first-frame callback");
+	MW_EXPECT_TRUE(Test, Record.PreOrder < Record.TimerOrder, "The next pre-system callback runs before the timer");
+	MW_EXPECT_TRUE(Test, Record.TimerOrder < Record.ActorOrder, "The next timer runs before the actor");
+	MW_EXPECT_TRUE(Test, Record.ActorOrder < Record.PostOrder, "The next actor runs before the post-system callback");
+	MW_EXPECT_TRUE(Test, Host.GetObjectStore().IsCollectionActive(), "The next frame ends with one new bounded slice active");
+	MW_EXPECT_EQ(Test, 0, CaptureState.CallCount, "Healthy callback-safe frames emit no Engine error log");
 }
 
 /**
  * Motivation: Build a graph, advance the baseline to 150 ms, then issue an earlier tick at 149 ms.
- * Responsibilities: A rolled-back tick is rejected transactionally without advancing any observed state.
+ * Responsibilities: A rolled-back tick is
+ * rejected transactionally without advancing any observed state.
  */
 MW_TEST_CASE(EngineHostRejectsNonMonotonicTickTransactionally)
 {
@@ -493,8 +748,35 @@ MW_TEST_CASE(EngineHostEndPlayIsIdempotent)
 }
 
 /**
+ * Motivation: World teardown callbacks must not inherit the store lock from a partial end-of-frame collection.
+ * Responsibilities: Start a
+ * partial collection, end play, and prove the actor hook observes an idle store.
+ */
+MW_TEST_CASE(EngineHostCancelsActiveCollectionBeforeWorldEndPlay)
+{
+	// Arrange
+	FCollectorDispatchRecord Record{};
+	FHost Host{FGarbageCollectionBudget{1, 1, 1}};
+	Record.Store = &Host.GetObjectStore();
+	TObjectPtr<FCollectorDispatchActor> Actor{};
+	MW_EXPECT_TRUE(Test, BuildCollectorDispatchWorld(Host, Record, Actor), "The fixture creates the teardown observation actor");
+	MW_EXPECT_EQ(Test, ERuntimeResult::Success, Host.BeginPlay(0), "BeginPlay reports success before collection starts");
+	MW_EXPECT_EQ(Test, ERuntimeResult::Success, Host.Tick(10), "The first frame starts a partial bounded collection");
+	MW_EXPECT_TRUE(Test, Host.GetObjectStore().IsCollectionActive(), "The first frame leaves its bounded collection active");
+
+	// Act
+	const ERuntimeResult EndResult = Host.EndPlay();
+
+	// Assert
+	MW_EXPECT_EQ(Test, ERuntimeResult::Success, EndResult, "EndPlay succeeds after cancelling the partial collection");
+	MW_EXPECT_TRUE(Test, !Record.bEndPlayObservedActiveCollection, "The actor end-play hook observes an idle store");
+	MW_EXPECT_TRUE(Test, !Host.GetObjectStore().IsCollectionActive(), "EndPlay leaves no active collection behind");
+}
+
+/**
  * Motivation: Construct a host without a world and call BeginPlay, Tick, and EndPlay before CreateWorld.
- * Responsibilities: BeginPlay, Tick, and EndPlay are rejected before CreateWorld constructs the world.
+ * Responsibilities: BeginPlay, Tick,
+ * and EndPlay are rejected before CreateWorld constructs the world.
  */
 MW_TEST_CASE(EngineHostRejectsLifecycleBeforeCreateWorld)
 {

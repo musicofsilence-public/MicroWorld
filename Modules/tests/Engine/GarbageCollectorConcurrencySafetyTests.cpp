@@ -1,5 +1,6 @@
-#include "TestSupport.h"
 #include "GarbageCollectorTestGraph.h"
+#include "EngineTestSupport.h"
+#include "TestSupport.h"
 
 #include <MicroWorld/Engine/GarbageCollectionBudget.h>
 #include <MicroWorld/Engine/GarbageCollectionPhase.h>
@@ -9,12 +10,52 @@
 #include <MicroWorld/Engine/ObjectMutationResult.h>
 
 #include <array>
+#include <cstddef>
 #include <cstdint>
+#include <cstdio>
+#include <cstring>
 
 namespace
 {
 
 using namespace ::MicroWorld::Tests;
+
+/**
+ * Motivation: Run one complete collection through the public request and advance boundaries under scoped capture.
+ * Responsibilities: Successful collector operations emit no Engine records, and destroying capture restores the null sink.
+ */
+MW_TEST_CASE(GarbageCollectorSuccessfulRequestAndAdvanceStaySilentAndScopedCaptureRestoresNullSink)
+{
+	// Arrange
+	TClassRegistry<2> Registry;
+	TGraphStoreFixture<1, 0> Fixture(MakeClassRegistryView(Registry));
+	FObjectStore& Store = Fixture.GetStore();
+	std::array<FObjectHandle, 1> Worklist{};
+	FGarbageCollector Collector(Store, FGarbageCollectorStorage{Worklist.data(), static_cast<std::uint32_t>(Worklist.size())});
+	FEngineLogCaptureState CaptureState{};
+	ERuntimeResult RequestResult = ERuntimeResult::InvalidLifecycle;
+	FGarbageCollectionResult AdvanceResult{};
+
+	{
+		FScopedNullEngineLogCapture LogCapture{CaptureState};
+
+		// Act
+		RequestResult = Collector.RequestCollection();
+		AdvanceResult = Collector.Advance(FGarbageCollectionBudget{1, 1, 1});
+	}
+
+	// Assert
+	MW_EXPECT_EQ(Test, ERuntimeResult::Success, RequestResult, "A healthy collector request should succeed under log capture");
+	MW_EXPECT_EQ(Test, ERuntimeResult::Success, AdvanceResult.Result, "A healthy collector advance should report success under log capture");
+	MW_EXPECT_TRUE(Test, AdvanceResult.bCycleComplete, "A healthy collector advance should complete the empty cycle");
+	MW_EXPECT_EQ(Test, 0, CaptureState.CallCount, "Successful collector requests and advances should emit no Engine records");
+
+	// Act - the scoped capture has restored the null sink, so a probe cannot mutate the prior state
+	MW_LOG_MSG(Error, "Engine", "capture_cleanup_probe");
+
+	// Assert
+	MW_EXPECT_EQ(Test, 0, CaptureState.CallCount, "Destroying scoped capture should restore the null output device");
+}
 
 /**
  * Motivation: Build a parent with two discovered children under one root and run bounded mark slices capped at one
@@ -151,6 +192,8 @@ MW_TEST_CASE(GarbageCollectorLocksMutationAndSecondCollectorBetweenSlices)
 	std::array<FObjectHandle, 2> SecondWorklist{};
 	FGarbageCollector FirstCollector(Store, FGarbageCollectorStorage{FirstWorklist.data(), static_cast<std::uint32_t>(FirstWorklist.size())});
 	FGarbageCollector SecondCollector(Store, FGarbageCollectorStorage{SecondWorklist.data(), static_cast<std::uint32_t>(SecondWorklist.size())});
+	FEngineLogCaptureState CaptureState{};
+	FScopedNullEngineLogCapture LogCapture{CaptureState};
 
 	// Act
 	const ERuntimeResult RequestResult = FirstCollector.RequestCollection();
@@ -165,6 +208,15 @@ MW_TEST_CASE(GarbageCollectorLocksMutationAndSecondCollectorBetweenSlices)
 	const ERuntimeResult CancelResult = FirstCollector.CancelCollection();
 	const TObjectCreationResult<FGraphObject> CreationAfterCancel = Store.NewObject<FGraphObject>(*Descriptor, Lifetime);
 	const FGarbageCollectionResult Cleanup = SecondCollector.CollectFull();
+	char ExpectedMessage[EngineLogCaptureMessageByteCount]{};
+	std::snprintf(
+		ExpectedMessage,
+		sizeof(ExpectedMessage),
+		"gc_failure operation=request result=%u phase=%u",
+		static_cast<unsigned int>(MicroWorld::Core::ERuntimeResult::LifecycleLocked),
+		static_cast<unsigned int>(MicroWorld::Engine::EGarbageCollectionPhase::Idle));
+	const bool bCategoryMatches = CaptureState.Category != nullptr && std::strcmp(CaptureState.Category, "Engine") == 0;
+	const bool bMessageMatches = std::strcmp(CaptureState.Message, ExpectedMessage) == 0;
 
 	// Assert
 	MW_EXPECT_EQ(Test, EObjectResult::Success, RegistrationResult, "The graph class should register");
@@ -180,6 +232,10 @@ MW_TEST_CASE(GarbageCollectorLocksMutationAndSecondCollectorBetweenSlices)
 	MW_EXPECT_EQ(Test, EObjectResult::Success, CreationAfterCancel.Result, "Mutation should resume after cancellation");
 	MW_EXPECT_TRUE(Test, Cleanup.bCycleComplete, "A later collector should complete after cancellation");
 	MW_EXPECT_EQ(Test, 2U, Cleanup.ObjectsReclaimed, "The later cycle should reclaim both now-unrooted objects");
+	MW_EXPECT_EQ(Test, 1, CaptureState.CallCount, "One rejected second-collector request should emit exactly one Engine record");
+	MW_EXPECT_EQ(Test, MicroWorld::Core::ELogLevel::Error, CaptureState.Level, "A rejected collector request should emit at Error level");
+	MW_EXPECT_TRUE(Test, bCategoryMatches, "A rejected collector request should use the Engine category");
+	MW_EXPECT_TRUE(Test, bMessageMatches, "A rejected collector request should report operation, result, and idle phase exactly");
 }
 
 /**
@@ -258,17 +314,33 @@ MW_TEST_CASE(GarbageCollectorRejectsRecursiveAdvanceFromReferenceVisitor)
 	FGarbageCollector Collector(Store, FGarbageCollectorStorage{Worklist.data(), static_cast<std::uint32_t>(Worklist.size())});
 	ERuntimeResult ReentrantResult = ERuntimeResult::InvalidLifecycle;
 	Creation.Object.Get()->SetReentrantAdvance(Collector, ReentrantResult);
+	FEngineLogCaptureState CaptureState{};
+	FScopedNullEngineLogCapture LogCapture{CaptureState};
 
 	// Act
 	const ERuntimeResult RequestResult = Collector.RequestCollection();
 	const FGarbageCollectionResult CollectionResult = Collector.Advance(FGarbageCollectionBudget{1, 1, 1});
+	const bool bObjectRemainsLive = Creation.Object.Get() != nullptr;
+	char ExpectedMessage[EngineLogCaptureMessageByteCount]{};
+	std::snprintf(
+		ExpectedMessage,
+		sizeof(ExpectedMessage),
+		"gc_failure operation=advance result=%u phase=%u",
+		static_cast<unsigned int>(MicroWorld::Core::ERuntimeResult::LifecycleLocked),
+		static_cast<unsigned int>(MicroWorld::Engine::EGarbageCollectionPhase::Mark));
+	const bool bCategoryMatches = CaptureState.Category != nullptr && std::strcmp(CaptureState.Category, "Engine") == 0;
+	const bool bMessageMatches = std::strcmp(CaptureState.Message, ExpectedMessage) == 0;
 
 	// Assert
 	MW_EXPECT_EQ(Test, EObjectResult::Success, RegistrationResult, "The graph class should register");
 	MW_EXPECT_EQ(Test, ERuntimeResult::Success, RequestResult, "The outer collection should start");
 	MW_EXPECT_EQ(Test, ERuntimeResult::LifecycleLocked, ReentrantResult, "A managed visitor cannot recursively advance the active collector");
 	MW_EXPECT_TRUE(Test, CollectionResult.bCycleComplete, "Rejecting reentry must not prevent the outer cycle from completing");
-	MW_EXPECT_TRUE(Test, Creation.Object.Get() != nullptr, "The rooted object must remain live after rejected recursive advance");
+	MW_EXPECT_TRUE(Test, bObjectRemainsLive, "The rooted object must remain live after rejected recursive advance");
+	MW_EXPECT_EQ(Test, 1, CaptureState.CallCount, "One rejected recursive advance should emit exactly one Engine record");
+	MW_EXPECT_EQ(Test, MicroWorld::Core::ELogLevel::Error, CaptureState.Level, "A rejected recursive advance should emit at Error level");
+	MW_EXPECT_TRUE(Test, bCategoryMatches, "A rejected recursive advance should use the Engine category");
+	MW_EXPECT_TRUE(Test, bMessageMatches, "A rejected recursive advance should report operation, result, and mark phase exactly");
 }
 
 /**

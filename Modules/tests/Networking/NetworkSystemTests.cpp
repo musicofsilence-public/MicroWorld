@@ -5,6 +5,7 @@
 #include <MicroWorld/Messaging/MessagingSystem.h>
 #include <MicroWorld/Messaging/TypedMessageCodec.h>
 #include <MicroWorld/Networking/ConnectAccepted.h>
+#include <MicroWorld/Networking/ConnectRejected.h>
 #include <MicroWorld/Networking/ConnectRequest.h>
 #include <MicroWorld/Networking/Heartbeat.h>
 #include <MicroWorld/Networking/NetworkSystem.h>
@@ -24,10 +25,12 @@ using MicroWorld::Messaging::FMessagingLinkId;
 using MicroWorld::Messaging::FMessagingRoute;
 using MicroWorld::Messaging::FMessagingSystem;
 using MicroWorld::Messaging::FNameId;
+using MicroWorld::Networking::EConnectionRejectReason;
 using MicroWorld::Networking::EConnectionState;
 using MicroWorld::Networking::ENetworkResult;
 using MicroWorld::Networking::ENetworkRole;
 using MicroWorld::Networking::FConnectAccepted;
+using MicroWorld::Networking::FConnectRejected;
 using MicroWorld::Networking::FConnectRequest;
 using MicroWorld::Networking::FHeartbeat;
 using MicroWorld::Networking::FNetworkSystem;
@@ -490,7 +493,113 @@ MW_TEST_CASE(NetworkSystemRejectsFifthClientWhenAllPeerSlotsAreAdmitted)
 	MW_EXPECT_EQ(Test, EConnectionState::Connected, SecondClient.GetConnectionState(), "The second client should occupy one server slot");
 	MW_EXPECT_EQ(Test, EConnectionState::Connected, ThirdClient.GetConnectionState(), "The third client should occupy one server slot");
 	MW_EXPECT_EQ(Test, EConnectionState::Connected, FourthClient.GetConnectionState(), "The fourth client should occupy one server slot");
-	MW_EXPECT_EQ(Test, EConnectionState::Disconnected, FifthClient.GetConnectionState(), "A fifth client must receive the full-registry rejection");
+	MW_EXPECT_EQ(
+		Test,
+		EConnectionState::Connecting,
+		FifthClient.GetConnectionState(),
+		"A full rejection must preserve the initial attempt so the client can retry on its heartbeat");
+}
+
+/**
+ * Motivation: Applies the product's one-route admission policy without reducing Network's reusable four-slot storage.
+ * Responsibilities: Admit the configured first route and keep a distinct rejected route connecting for its heartbeat retry.
+ */
+MW_TEST_CASE(NetworkSystemRejectsSecondDistinctRouteAtConfiguredAdmissionLimit)
+{
+	// Arrange
+	THostLoopback<3, MailboxDepth, PacketBytes> Loopback;
+	FMessagingSystem ServerMessaging;
+	FMessagingSystem FirstClientMessaging;
+	FMessagingSystem SecondClientMessaging;
+	FMessagingLinkId ServerLink{};
+	FMessagingLinkId FirstClientLink{};
+	FMessagingLinkId SecondClientLink{};
+	FNetworkSystemInformation ServerInformation{ENetworkRole::Server};
+	ServerInformation.MaximumAdmittedServerPeers = 1;
+	ServerInformation.HeartbeatIntervalMilliseconds = 10;
+	ServerInformation.PeerTimeoutMilliseconds = 100;
+	FNetworkSystemInformation ClientInformation{ENetworkRole::Client};
+	ClientInformation.HeartbeatIntervalMilliseconds = ServerInformation.HeartbeatIntervalMilliseconds;
+	ClientInformation.PeerTimeoutMilliseconds = ServerInformation.PeerTimeoutMilliseconds;
+	FNetworkSystem Server(ServerMessaging, ServerInformation);
+	FNetworkSystem FirstClient(FirstClientMessaging, ClientInformation);
+	FNetworkSystem SecondClient(SecondClientMessaging, ClientInformation);
+	(void)ServerMessaging.RegisterLink(Loopback.Port(ServerPort), ServerLink);
+	(void)FirstClientMessaging.RegisterLink(Loopback.Port(1), FirstClientLink);
+	(void)SecondClientMessaging.RegisterLink(Loopback.Port(2), SecondClientLink);
+	const ENetworkResult ServerInitialize = Server.Initialize();
+	const ENetworkResult FirstInitialize = FirstClient.Initialize();
+	const ENetworkResult SecondInitialize = SecondClient.Initialize();
+	std::size_t PeerConnectedCount = 0;
+	MicroWorld::Core::TDelegate<void(FPeerId), FNetworkSystem::EventCallableBytes> PeerConnectedObserver;
+	const MicroWorld::Core::EDelegateResult BindPeerConnectedObserverResult =
+		PeerConnectedObserver.Bind([&PeerConnectedCount](const FPeerId) noexcept { ++PeerConnectedCount; });
+	MicroWorld::Core::FDelegateHandle PeerConnectedHandle{};
+	const MicroWorld::Core::EDelegateResult AddPeerConnectedObserverResult =
+		Server.OnPeerConnected().Add(std::move(PeerConnectedObserver), PeerConnectedHandle);
+	std::size_t FullRejectionCount = 0;
+	EConnectionRejectReason LastRejectionReason = EConnectionRejectReason::ProtocolMismatch;
+	FMessagingSystem::FSubscriberDelegate RejectionObserver;
+	const MicroWorld::Core::EDelegateResult BindRejectionObserverResult = RejectionObserver.Bind(
+		[&FullRejectionCount, &LastRejectionReason](const FMessage& InMessage) noexcept
+		{
+			FConnectRejected Rejected{};
+			if (MicroWorld::Messaging::DecodeTypedMessage(InMessage, Rejected) == EMessagingResult::Success)
+			{
+				++FullRejectionCount;
+				LastRejectionReason = Rejected.Reason;
+			}
+		});
+	const EMessagingResult SubscribeRejectionObserverResult = SecondClientMessaging.SubscribeToChannel(
+		FNetworkSystem::BestEffortWireChannelNameId, MicroWorld::Networking::GetMessageNameId(FConnectRejected{}), std::move(RejectionObserver));
+
+	// Act
+	const ENetworkResult FirstConnect = FirstClient.ConnectToServer({FirstClientLink, MakeLoopbackAddress(ServerPort)}, 0);
+	ServerMessaging.PreAdvance(0);
+	FirstClientMessaging.PreAdvance(0);
+	const ENetworkResult SecondConnect = SecondClient.ConnectToServer({SecondClientLink, MakeLoopbackAddress(ServerPort)}, 0);
+	ServerMessaging.PreAdvance(0);
+	SecondClientMessaging.PreAdvance(0);
+	SecondClient.PreAdvance(10);
+	ServerMessaging.PreAdvance(10);
+	SecondClientMessaging.PreAdvance(10);
+	const EMessagingResult DuplicateFirstRequest = FirstClientMessaging.SendTypedMessageToRemoteChannel(
+		FConnectRequest{ClientInformation.ProtocolVersion, 1},
+		FNetworkSystem::BestEffortWireChannelNameId,
+		{FirstClientLink, MakeLoopbackAddress(ServerPort)});
+	ServerMessaging.PreAdvance(11);
+	FirstClientMessaging.PreAdvance(11);
+
+	// Assert
+	MW_EXPECT_EQ(Test, ENetworkResult::Success, ServerInitialize, "The limited server should initialize normally");
+	MW_EXPECT_EQ(Test, ENetworkResult::Success, FirstInitialize, "The first client should initialize normally");
+	MW_EXPECT_EQ(Test, ENetworkResult::Success, SecondInitialize, "The second client should initialize normally");
+	MW_EXPECT_EQ(
+		Test,
+		MicroWorld::Core::EDelegateResult::Success,
+		BindPeerConnectedObserverResult,
+		"The server admission observer should bind before either route connects");
+	MW_EXPECT_EQ(
+		Test, MicroWorld::Core::EDelegateResult::Success, AddPeerConnectedObserverResult, "The server should register its admission observer");
+	MW_EXPECT_EQ(
+		Test,
+		MicroWorld::Core::EDelegateResult::Success,
+		BindRejectionObserverResult,
+		"The rejection observer should bind before the limited route connects");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, SubscribeRejectionObserverResult, "The limited client should observe its private full response");
+	MW_EXPECT_EQ(Test, ENetworkResult::Success, FirstConnect, "The configured first route should request admission");
+	MW_EXPECT_EQ(Test, ENetworkResult::Success, SecondConnect, "The rejected route should still issue its initial request");
+	MW_EXPECT_EQ(Test, EConnectionState::Connected, FirstClient.GetConnectionState(), "The first distinct route should become active");
+	MW_EXPECT_EQ(
+		Test,
+		EConnectionState::Connecting,
+		SecondClient.GetConnectionState(),
+		"A full rejection must preserve the connecting state for cadence retries");
+	MW_EXPECT_TRUE(Test, Server.HasActivePeer(), "The server should report its one admitted route as active");
+	MW_EXPECT_EQ(Test, std::size_t{2}, FullRejectionCount, "The full response must reach the limited client again after its cadence retry request");
+	MW_EXPECT_EQ(Test, EConnectionRejectReason::Full, LastRejectionReason, "The limited client must observe Full rather than an unrelated rejection");
+	MW_EXPECT_EQ(Test, EMessagingResult::Success, DuplicateFirstRequest, "A duplicate request on the admitted route should reach the server");
+	MW_EXPECT_EQ(Test, std::size_t{1}, PeerConnectedCount, "The first route must be admitted exactly once despite a same-route duplicate request");
 }
 
 /**

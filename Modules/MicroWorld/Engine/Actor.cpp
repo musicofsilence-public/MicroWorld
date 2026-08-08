@@ -16,6 +16,8 @@ namespace MicroWorld::Engine
 
 AActor::AActor(const Core::FTickConfiguration InTickConfiguration) noexcept : UObject(), Core::FTickable(InTickConfiguration) {}
 
+AActor::AActor(FObjectInitializer&) noexcept : AActor() {}
+
 AActor::~AActor() noexcept = default;
 
 const FClassDescriptor& AActor::StaticClassDescriptor() noexcept

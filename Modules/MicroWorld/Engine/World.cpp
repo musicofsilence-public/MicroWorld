@@ -54,4 +54,9 @@ const FClassDescriptor& UWorld::StaticClassDescriptor() noexcept
 	return Descriptor;
 }
 
+bool UWorld::HasActiveNetworkPeer() const noexcept
+{
+	return Network != nullptr && Network->HasActivePeer();
+}
+
 } // namespace MicroWorld::Engine

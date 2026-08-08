@@ -7,6 +7,7 @@
 #include <MicroWorld/Engine/EngineClassIds.h>
 #include <MicroWorld/Engine/Object.h>
 #include <MicroWorld/Engine/ObjectCreationResult.h>
+#include <MicroWorld/Engine/ObjectInitializer.h>
 #include <MicroWorld/Engine/ObjectPtr.h>
 #include <MicroWorld/Engine/ObjectResult.h>
 #include <MicroWorld/Engine/ObjectStore.h>
@@ -42,10 +43,11 @@ public:
 	 * Motivation: Uses the canonical registered descriptor to construct the actor in the world's store.
 	 * Responsibilities: Forward to InvokeWithArguments with the retained tuple expanded.
 	 */
-	static TObjectCreationResult<AActor> Invoke(void* const InFactory, FObjectStore& InStore, const FClassDescriptor& InDescriptor) noexcept
+	static TObjectCreationResult<AActor> Invoke(
+		void* const InFactory, FObjectStore& InStore, const FClassDescriptor& InDescriptor, const FClassRegistryRegistrationView InClasses) noexcept
 	{
 		TActorFactory& Factory = *static_cast<TActorFactory*>(InFactory);
-		return InvokeWithArguments(Factory, InStore, InDescriptor, std::index_sequence_for<TArguments...>{});
+		return InvokeWithArguments(Factory, InStore, InDescriptor, InClasses, std::index_sequence_for<TArguments...>{});
 	}
 
 	/**
@@ -84,8 +86,7 @@ public:
 		{
 			return EObjectResult::UnknownClass;
 		}
-		const FClassDescriptor Candidate = MakeClassDescriptor<TActor>(0, "DeferredActor", ActorDescriptor, &TraceManagedObjectReferences);
-		return InClasses.RegisterAutomatic(Candidate, OutDescriptor);
+		return FManagedTypeResolver::Resolve<TActor>(InClasses, *ActorDescriptor, "DeferredActor", OutDescriptor);
 	}
 
 private:
@@ -95,10 +96,25 @@ private:
 	 */
 	template<std::size_t... Indices>
 	static TObjectCreationResult<AActor> InvokeWithArguments(
-		TActorFactory& InFactory, FObjectStore& InStore, const FClassDescriptor& InDescriptor, std::index_sequence<Indices...>) noexcept
+		TActorFactory& InFactory,
+		FObjectStore& InStore,
+		const FClassDescriptor& InDescriptor,
+		const FClassRegistryRegistrationView InClasses,
+		std::index_sequence<Indices...>) noexcept
 	{
-		const TObjectCreationResult<TActor> Creation = InStore.NewObject<TActor>(InDescriptor, std::move(std::get<Indices>(InFactory.Arguments))...);
-		return TObjectCreationResult<AActor>{Creation.Result, TObjectPtr<AActor>{Creation.Object}};
+		if constexpr (std::is_nothrow_constructible<TActor, FObjectInitializer&, TArguments&&...>::value)
+		{
+			FObjectConstructionTransaction Transaction{InStore, InClasses};
+			const TObjectCreationResult<TActor> Creation =
+				Transaction.ConstructActor<TActor>(InDescriptor, std::move(std::get<Indices>(InFactory.Arguments))...);
+			return TObjectCreationResult<AActor>{Creation.Result, TObjectPtr<AActor>{Creation.Object}};
+		}
+		else
+		{
+			const TObjectCreationResult<TActor> Creation =
+				InStore.NewObject<TActor>(InDescriptor, std::move(std::get<Indices>(InFactory.Arguments))...);
+			return TObjectCreationResult<AActor>{Creation.Result, TObjectPtr<AActor>{Creation.Object}};
+		}
 	}
 
 	/** Motivation: Holds decayed constructor values across the caller callback and barrier boundary. */

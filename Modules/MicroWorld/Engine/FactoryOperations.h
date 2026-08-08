@@ -20,7 +20,7 @@ namespace MicroWorld::Engine
  */
 struct FFactoryOperations final
 {
-	using FInvoke = TObjectCreationResult<AActor> (*)(void*, FObjectStore&, const FClassDescriptor&) noexcept;
+	using FInvoke = TObjectCreationResult<AActor> (*)(void*, FObjectStore&, const FClassDescriptor&, FClassRegistryRegistrationView) noexcept;
 	using FDestroy = void (*)(void*) noexcept;
 	using FVisitReferences = void (*)(const void*, FReferenceCollector&) noexcept;
 	using FResolveDescriptor = EObjectResult (*)(FClassRegistryRegistrationView, const FClassDescriptor*&) noexcept;

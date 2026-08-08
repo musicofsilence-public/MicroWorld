@@ -96,6 +96,12 @@ public:
 	EConnectionState GetConnectionState() const noexcept { return ConnectionState; }
 
 	/**
+	 * Motivation: Lets a World report live Network availability without retaining a Network pointer or inspecting routes.
+	 * Responsibilities: Return true only for a connected client or a server with at least one admitted peer.
+	 */
+	bool HasActivePeer() const noexcept;
+
+	/**
 	 * Motivation: Lets a connected client address its sole server without carrying routes in application code.
 	 * Responsibilities: Return invalid outside a live client session.
 	 */
@@ -284,6 +290,11 @@ private:
 	 * Responsibilities: Prefer matching route, then the first non-retired free slot.
 	 */
 	FPeerSlot* FindAdmissionSlot(const Messaging::FMessagingRoute& InRoute) noexcept;
+	/**
+	 * Motivation: Enforces a configured server admission policy without changing the fixed peer storage layout.
+	 * Responsibilities: Count only currently admitted server peers.
+	 */
+	std::size_t CountAdmittedPeers() const noexcept;
 	/**
 	 * Motivation: Retires one server peer before callbacks can reuse its old handle.
 	 * Responsibilities: Increment generation or permanently retire on exhaustion.

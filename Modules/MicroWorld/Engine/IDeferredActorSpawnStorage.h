@@ -125,6 +125,12 @@ public:
 	virtual void RestoreUnconstructedFrom(std::size_t InStartIndex) noexcept = 0;
 
 	/**
+	 * Motivation: Lets failed startup discard the sealed batch instead of preserving pre-play work for a runtime retry.
+	 * Responsibilities: Destroy unconstructed factories, release retained unpublished actors, and clear sealed queues.
+	 */
+	virtual void AbortSealedBatch() noexcept = 0;
+
+	/**
 	 * Motivation: Lets the world release exactly the pinned spawned request whose actor leaves the world registry.
 	 * Responsibilities: Find and release the spawned slot whose actor handle matches, leaving others untouched.
 	 */

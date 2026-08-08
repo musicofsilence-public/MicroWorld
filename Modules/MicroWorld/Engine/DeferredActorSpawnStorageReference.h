@@ -211,6 +211,18 @@ public:
 	}
 
 	/**
+	 * Motivation: Lets a failed startup discard all sealed pre-play factory work through the narrow storage capability.
+	 * Responsibilities: Forward the terminal batch abort when configured and otherwise perform no work.
+	 */
+	void AbortSealedBatch() noexcept
+	{
+		if (Storage != nullptr)
+		{
+			Storage->AbortSealedBatch();
+		}
+	}
+
+	/**
 	 * Motivation: Releases the handle state that was pinned by a removed world actor.
 	 * Responsibilities: Forward ReleaseActor to the storage when configured.
 	 */

@@ -1,11 +1,98 @@
 #include <MicroWorld/Engine/ObjectRootEntry.h>
 #include <MicroWorld/Engine/ObjectStore.h>
+#include <MicroWorld/Engine/Actor.h>
+#include <MicroWorld/Engine/ActorComponent.h>
+#include <MicroWorld/Engine/Internal/ObjectConstructionTransaction.h>
 #include <MicroWorld/Engine/ObjectStoreDispatchGuard.h>
 
 #include <limits>
 
 namespace MicroWorld::Engine
 {
+
+FObjectConstructionTransaction::FObjectConstructionTransaction(FObjectStore& InStore, const FClassRegistryRegistrationView InClasses) noexcept
+	: Store(InStore), Classes(InClasses), bPreviousMutationLock(InStore.bMutationLocked)
+{
+	if (Store.IsMutationLocked())
+	{
+		RecordError(EObjectResult::LifecycleLocked);
+		return;
+	}
+	if (Store.StoreConfigurationResult != EObjectResult::Success)
+	{
+		RecordError(Store.StoreConfigurationResult);
+		return;
+	}
+	Store.bMutationLocked = true;
+}
+
+FObjectConstructionTransaction::~FObjectConstructionTransaction() noexcept
+{
+	if (!bCommitted)
+	{
+		Rollback();
+	}
+	Store.bMutationLocked = bPreviousMutationLock;
+}
+
+void FObjectConstructionTransaction::RecordError(const EObjectResult InError) noexcept
+{
+	if (FirstError == EObjectResult::Success)
+	{
+		FirstError = InError;
+	}
+}
+
+FObjectConstructionTransaction::FReservedObject FObjectConstructionTransaction::Reserve(const FClassDescriptor& InDescriptor) noexcept
+{
+	FReservedObject Reserved{};
+	if (FirstError != EObjectResult::Success)
+	{
+		return Reserved;
+	}
+	const ObjectIndex SlotIndex = Store.FindVacantSlot();
+	if (SlotIndex == FObjectHandle::InvalidIndex)
+	{
+		RecordError(Store.RetiredSlotCount == Store.Storage.SlotCount ? EObjectResult::GenerationExhausted : EObjectResult::CapacityExceeded);
+		return Reserved;
+	}
+	FObjectSlotMetadata& Slot = Store.Storage.SlotMetadata[SlotIndex];
+	Slot.State = EObjectSlotState::Constructing;
+	Reserved.SlotIndex = SlotIndex;
+	Reserved.Handle = FObjectHandle{SlotIndex, FObjectStore::NextPublishGeneration(Slot.Generation)};
+	Reserved.Descriptor = &InDescriptor;
+	return Reserved;
+}
+
+void FObjectConstructionTransaction::Publish(FReservedObject& InReserved) noexcept
+{
+	(void)Store.PublishObjectIntoSlot(InReserved.SlotIndex, *InReserved.Descriptor, *InReserved.Object);
+}
+
+void FObjectConstructionTransaction::Rollback() noexcept
+{
+	auto Release = [this](FReservedObject& Reserved) noexcept
+	{
+		if (Reserved.Object != nullptr && Reserved.Descriptor != nullptr)
+		{
+			Reserved.Descriptor->Destroy(*Reserved.Object);
+		}
+		if (Reserved.SlotIndex != FObjectHandle::InvalidIndex)
+		{
+			FObjectSlotMetadata& Slot = Store.Storage.SlotMetadata[Reserved.SlotIndex];
+			Slot.Descriptor = nullptr;
+			Slot.Object = nullptr;
+			Slot.bMarked = false;
+			Slot.State = EObjectSlotState::Vacant;
+		}
+		Reserved = {};
+	};
+	Release(Actor);
+	for (std::size_t Index = ComponentCount; Index > 0; --Index)
+	{
+		Release(Components[Index - 1]);
+	}
+}
 
 namespace
 {

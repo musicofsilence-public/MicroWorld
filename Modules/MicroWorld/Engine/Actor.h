@@ -19,6 +19,8 @@ struct FClassDescriptor;
 class FReferenceCollector;
 class UActorComponent;
 class UWorld;
+class FObjectConstructionTransaction;
+class FObjectInitializer;
 
 /**
  * Motivation: Provides the smallest managed Actor for Object and Engine applications that need generation-checked
@@ -71,6 +73,13 @@ public:
 	 * Responsibilities: Construct the actor with the given primary tick configuration and no components.
 	 */
 	explicit AActor(Core::FTickConfiguration InTickConfiguration = {}) noexcept;
+
+	/**
+	 * Motivation: Lets initializer-aware derived actors preserve the familiar base-constructor shape without gaining store access.
+	 *
+	 * Responsibilities: Initialize the ordinary actor lifecycle and retain none of the construction capability.
+	 */
+	explicit AActor(FObjectInitializer& InInitializer) noexcept;
 
 	/**
 	 * Motivation: Keeps exact derived destruction behind the descriptor/store boundary.
@@ -148,6 +157,7 @@ protected:
 
 private:
 	friend class UWorld;
+	friend class FObjectConstructionTransaction;
 
 	/**
 	 * Motivation: Reports the first reason a component cannot register before any actor or component mutation.

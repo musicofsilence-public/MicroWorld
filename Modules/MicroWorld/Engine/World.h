@@ -28,6 +28,7 @@ namespace MicroWorld::Engine
 
 class AActor;
 struct FClassDescriptor;
+class FObjectInitializer;
 class FObjectStore;
 class FReferenceCollector;
 
@@ -146,6 +147,13 @@ public:
 	Networking::FNetworkSystem* GetNetwork() noexcept { return Network; }
 
 	/**
+	 * Motivation: Gives actors a narrow live-link observation without coupling them to Network routes or lifecycle operations.
+	 *
+	 * Responsibilities: Return false when this World has no Network or that Network has no active peer.
+	 */
+	bool HasActiveNetworkPeer() const noexcept;
+
+	/**
 	 * Motivation: Lets actors and application code retrieve one registered service by exact managed C++ type.
 	 * Responsibilities: Return
 	 * the live exact-type subsystem or null without ancestry matching, RTTI, allocation, or
@@ -206,7 +214,9 @@ public:
 	{
 		static_assert(std::is_base_of<AActor, TActor>::value, "Deferred SpawnActor requires an AActor-derived type.");
 		using TFactory = TActorFactory<TActor, std::decay_t<TArguments>...>;
-		static_assert(std::is_nothrow_constructible<TActor, std::decay_t<TArguments>...>::value, "Deferred actor construction must be noexcept.");
+		constexpr bool bInitializerConstruction = std::is_nothrow_constructible<TActor, FObjectInitializer&, std::decay_t<TArguments>&&...>::value;
+		constexpr bool bLegacyConstruction = std::is_nothrow_constructible<TActor, std::decay_t<TArguments>&&...>::value;
+		static_assert(bInitializerConstruction || bLegacyConstruction, "Deferred actor construction must be noexcept.");
 		static_assert(std::is_nothrow_constructible<TFactory, TArguments...>::value, "Deferred actor factory capture must be noexcept.");
 
 		const EActorSpawnRequestResult PreflightResult = CheckDeferredSpawnRequest();
@@ -415,6 +425,13 @@ private:
 	 * Responsibilities: Seal the barrier and construct each queued factory at the safe point.
 	 */
 	void ConstructDeferredSpawns(FObjectStore& InObjectStore) noexcept;
+
+	/**
+	 * Motivation: Prevents any partially constructed pre-play actor graph from becoming a running World.
+	 * Responsibilities: Mark every
+	 * unpublished actor graph for destruction, discard sealed factories, and reclaim all affected slots.
+	 */
+	void AbortPrePlayConstruction(FObjectStore& InObjectStore) noexcept;
 
 	/**
 	 * Motivation: Publishes retained deferred actors while the caller's startup dispatch guard remains held.

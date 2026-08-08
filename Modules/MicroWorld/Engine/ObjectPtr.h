@@ -12,6 +12,7 @@ namespace MicroWorld::Engine
 {
 
 class FObjectStore;
+class FObjectConstructionTransaction;
 
 template<typename>
 class TWeakObjectPtr;
@@ -96,6 +97,7 @@ public:
 
 private:
 	friend class FObjectStore;
+	friend class FObjectConstructionTransaction;
 	template<typename>
 	friend class TWeakObjectPtr;
 	template<typename>

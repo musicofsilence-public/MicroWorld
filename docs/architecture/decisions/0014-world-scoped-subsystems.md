@@ -23,6 +23,9 @@ need.
 - Lookup selects the exact requested service type.
 - Subsystems add no automatic discovery, dependency resolution, or per-frame
   turn.
+- Actor constructors may create only their own default components through the
+  initializer-only construction transaction described by ADR 0016. This narrow
+  actor-lifetime exception does not allow automatic subsystem construction.
 - Message semantics, transports, and LoRa behavior remain application policy.
 
 ## Consequences
@@ -33,6 +36,8 @@ need.
 - Applications must explicitly compose the services they need.
 - The Engine gains no built-in application messaging vocabulary.
 - Familiarity with UE5 subsystem names does not imply UE5 automatic behavior.
+- Default actor components remain part of their owning actor's construction and
+  lifecycle; they do not become World services.
 
 ## Alternatives considered
 

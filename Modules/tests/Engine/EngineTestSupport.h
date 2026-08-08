@@ -20,10 +20,12 @@
 #include <MicroWorld/Engine/ObjectStoreStorage.h>
 #include <MicroWorld/Engine/StrongObjectPtr.h>
 #include <MicroWorld/Engine/WorldSubsystem.h>
+#include <MicroWorld/Core/Log.h>
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <type_traits>
 #include <utility>
 
@@ -31,6 +33,100 @@ namespace MicroWorld::Tests
 {
 
 using namespace ::MicroWorld::Engine;
+
+/** Motivation: Bounds each captured failure record without allocating test storage. */
+constexpr std::size_t EngineLogCaptureMessageByteCount = 128;
+
+/**
+ * Motivation: Keeps one failure record observable while a test owns Core's process-global output sink.
+ * Responsibilities: Count routed records
+ * and retain the latest severity, category, and bounded message copy.
+ * Example:
+ *   FEngineLogCaptureState CaptureState{};
+ */
+struct FEngineLogCaptureState final
+{
+	/** Motivation: Makes duplicate or missing failure records directly observable. */
+	int CallCount{0};
+
+	/** Motivation: Retains the most recently routed severity for exact assertions. */
+	Core::ELogLevel Level{Core::ELogLevel::Log};
+
+	/** Motivation: Retains the static category pointer supplied by the production log site. */
+	const char* Category{nullptr};
+
+	/** Motivation: Owns the transient formatted message long enough for the test to inspect it. */
+	char Message[EngineLogCaptureMessageByteCount]{};
+};
+
+/** Motivation: Bridges Core's function-pointer output device to the one test that currently owns capture. */
+inline FEngineLogCaptureState* GActiveEngineLogCapture{nullptr};
+
+/**
+ * Motivation: Copies one Core record into the active test's bounded capture state.
+ * Responsibilities: Ignore records without an installed test
+ * capture and mutate only that capture.
+ */
+inline void CaptureEngineLogRecord(const Core::ELogLevel InLevel, const char* const InCategory, const char* const InMessage) noexcept
+{
+	if (GActiveEngineLogCapture == nullptr)
+	{
+		return;
+	}
+
+	++GActiveEngineLogCapture->CallCount;
+	GActiveEngineLogCapture->Level = InLevel;
+	GActiveEngineLogCapture->Category = InCategory;
+	std::snprintf(GActiveEngineLogCapture->Message, sizeof(GActiveEngineLogCapture->Message), "%s", InMessage);
+}
+
+/**
+ * Motivation: Gives a test exclusive scoped ownership of Core's documented null output-sink baseline.
+ * Responsibilities: Install capture only
+ * after its state exists, then restore the null baseline at scope exit.
+ * Example:
+ *   FScopedNullEngineLogCapture Capture(CaptureState);
+ */
+class FScopedNullEngineLogCapture final
+{
+public:
+	/**
+	 * Motivation: Binds the capture state before routing records into it.
+	 * Responsibilities: Require the Engine suite's null sink
+	 * baseline, then install this scope's capture callback.
+	 */
+	explicit FScopedNullEngineLogCapture(FEngineLogCaptureState& InCaptureState) noexcept
+	{
+		Core::SetOutputDevice(nullptr);
+		GActiveEngineLogCapture = &InCaptureState;
+		Core::SetOutputDevice(&CaptureEngineLogRecord);
+	}
+
+	/**
+	 * Motivation: Prevents this test's process-global sink from leaking into later tests.
+	 * Responsibilities: Restore the documented null
+	 * sink baseline and clear the capture bridge.
+	 */
+	~FScopedNullEngineLogCapture() noexcept
+	{
+		Core::SetOutputDevice(nullptr);
+		GActiveEngineLogCapture = nullptr;
+	}
+
+	/**
+	 * Motivation: Keeps one scope responsible for restoring the required null baseline.
+	 * Responsibilities: Reject copying so only one
+	 * scope owns sink cleanup.
+	 */
+	FScopedNullEngineLogCapture(const FScopedNullEngineLogCapture&) = delete;
+
+	/**
+	 * Motivation: Prevents changing the scope responsible for restoring the required null baseline.
+	 * Responsibilities: Reject assignment
+	 * so cleanup ownership cannot move.
+	 */
+	FScopedNullEngineLogCapture& operator=(const FScopedNullEngineLogCapture&) = delete;
+};
 
 /**
  * Motivation: Shares one monotonic event sequence across every observed object in a test so begin/tick/end

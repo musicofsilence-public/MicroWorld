@@ -94,7 +94,7 @@ model {
                 }
                 metadata {
                     contract 'Try-send one packet to an address, try-receive one packet, the largest payload a send accepts, and the four play-system turns, because a callback cannot fire itself. One uniform address value serves every medium: a broadcast address is a value of the same shape rather than a second operation, refused by a medium that cannot reach it. A device publishes the largest payload it can take and refuses anything longer instead of splitting'
-                boundary 'Declared in Core so Messaging and Transport share it without seeing each other: a Messaging link sends through this shape, a medium realises it, and neither names the other. Configuration stays out on purpose - an SSID and a baud rate have nothing in common - so an application names a concrete device type to configure it and needs nothing concrete afterwards. The composition owner advances every device exactly once'
+                boundary 'Declared in Core so Messaging and Transport share it without seeing each other: a Messaging link sends through this shape, a medium realises it, and neither names the other. Configuration stays out on purpose - an SSID and a baud rate have nothing in common - so an application names a concrete device type to configure it and needs nothing concrete afterwards. Engine advances its bound device exactly once'
                     standalone 'Uniform in its data path, deliberately not in configuration. What is uniform is the shape, not the meaning - each medium reads the address its own way, and a point-to-point one ignores it entirely'
                 }
             }
@@ -107,7 +107,7 @@ model {
                 icon ./icon-engine.svg
             }
             metadata {
-                contract 'IEngineRuntime, UWorld, AActor, UActorComponent, FObjectStore, optional Messaging and Networking systems'
+                contract 'IEngineRuntime, UWorld, AActor, UActorComponent, FObjectStore, optional bound TransportDevice, Messaging and Networking systems'
                 boundary 'Object owns identity, Engine owns the lifetime built on it. Neither is a responsibility anything wants alone, so they are one system'
             }
 
@@ -343,6 +343,7 @@ model {
 
     microworld.engine.engineRuntimeInterface -[realisedBy]-> microworld.engine.engineObject
     microworld.engine.engineObject -[uses]-> microworld.engine.world 'owns and advances'
+    microworld.engine.engineObject -[uses]-> microworld.core.transportDeviceInterface 'advances the bound device exactly once'
     microworld.engine.engineObject -[dependsOn]-> microworld.engine.objectStore 'resolves handles through'
     microworld.engine.objectStore -[dependsOn]-> microworld.core 'takes Time'
     microworld.engine.world -[uses]-> microworld.engine.spawnBarrier 'queues spawns through'

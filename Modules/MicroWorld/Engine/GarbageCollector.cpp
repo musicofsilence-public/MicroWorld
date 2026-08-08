@@ -1,6 +1,7 @@
 #include <MicroWorld/Engine/GarbageCollector.h>
 #include <MicroWorld/Engine/ReferenceCollector.h>
 
+#include <MicroWorld/Core/Log.h>
 #include <MicroWorld/Engine/ObjectStore.h>
 
 #include <limits>
@@ -102,6 +103,12 @@ Core::ERuntimeResult FGarbageCollector::RequestCollection() noexcept
 	if (StartFailure != Core::ERuntimeResult::Success)
 	{
 		IncrementSaturated(CollectionStats.RejectedRequests);
+		MW_LOG(
+			Error,
+			"Engine",
+			"gc_failure operation=request result=%u phase=%u",
+			static_cast<unsigned int>(StartFailure),
+			static_cast<unsigned int>(CurrentPhase));
 		return StartFailure;
 	}
 
@@ -144,6 +151,12 @@ FGarbageCollectionResult FGarbageCollector::Advance(const FGarbageCollectionBudg
 	if (PreconditionResult != Core::ERuntimeResult::Success)
 	{
 		CollectionResult.Result = PreconditionResult;
+		MW_LOG(
+			Error,
+			"Engine",
+			"gc_failure operation=advance result=%u phase=%u",
+			static_cast<unsigned int>(PreconditionResult),
+			static_cast<unsigned int>(CollectionResult.Phase));
 		return CollectionResult;
 	}
 

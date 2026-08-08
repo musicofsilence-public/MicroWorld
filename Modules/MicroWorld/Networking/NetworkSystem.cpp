@@ -31,7 +31,8 @@ ENetworkResult FNetworkSystem::Initialize() noexcept
 		return ENetworkResult::Success;
 	}
 
-	if (Information.HeartbeatIntervalMilliseconds == 0 || Information.PeerTimeoutMilliseconds <= Information.HeartbeatIntervalMilliseconds)
+	if (Information.HeartbeatIntervalMilliseconds == 0 || Information.PeerTimeoutMilliseconds <= Information.HeartbeatIntervalMilliseconds
+		|| Information.MaximumAdmittedServerPeers == 0 || Information.MaximumAdmittedServerPeers > MaxPeers)
 	{
 		return ENetworkResult::Invalid;
 	}
@@ -71,6 +72,16 @@ ENetworkResult FNetworkSystem::Initialize() noexcept
 
 	bInitialized = true;
 	return ENetworkResult::Success;
+}
+
+bool FNetworkSystem::HasActivePeer() const noexcept
+{
+	if (Information.Role == ENetworkRole::Client)
+	{
+		return ConnectionState == EConnectionState::Connected && ServerPeer.IsValid();
+	}
+
+	return CountAdmittedPeers() > 0;
 }
 
 void FNetworkSystem::Shutdown() noexcept
@@ -237,6 +248,10 @@ void FNetworkSystem::PreAdvance(const Core::TimePointMilliseconds InNowMilliseco
 	{
 		if (ConnectionState == EConnectionState::Disconnected)
 		{
+			if (Information.InitialServerRoute.IsValid())
+			{
+				(void)ConnectToServer(Information.InitialServerRoute, InNowMilliseconds);
+			}
 			return;
 		}
 		if (InNowMilliseconds - LastClientSendMilliseconds >= Information.HeartbeatIntervalMilliseconds)
@@ -417,7 +432,8 @@ void FNetworkSystem::HandleConnectRejected(const Messaging::FMessage& InMessage)
 		return;
 	}
 	FConnectRejected Rejected{};
-	if (Messaging::DecodeTypedMessage(InMessage, Rejected) == Messaging::EMessagingResult::Success && Rejected.AttemptId == CurrentAttemptId)
+	if (Messaging::DecodeTypedMessage(InMessage, Rejected) == Messaging::EMessagingResult::Success && Rejected.AttemptId == CurrentAttemptId
+		&& Rejected.Reason != EConnectionRejectReason::Full)
 	{
 		RetireServer(EConnectionState::Disconnected);
 	}
@@ -574,19 +590,38 @@ FNetworkSystem::FPeerSlot* FNetworkSystem::FindPeerByRoute(const Messaging::FMes
 
 FNetworkSystem::FPeerSlot* FNetworkSystem::FindAdmissionSlot(const Messaging::FMessagingRoute& InRoute) noexcept
 {
-	FPeerSlot* FreeSlot = nullptr;
 	for (FPeerSlot& Slot : PeerSlots)
 	{
 		if (Slot.bOccupied && Slot.Route == InRoute)
 		{
 			return &Slot;
 		}
-		if (!Slot.bOccupied && !Slot.bRetired && FreeSlot == nullptr)
+	}
+	if (CountAdmittedPeers() >= Information.MaximumAdmittedServerPeers)
+	{
+		return nullptr;
+	}
+	for (FPeerSlot& Slot : PeerSlots)
+	{
+		if (!Slot.bOccupied && !Slot.bRetired)
 		{
-			FreeSlot = &Slot;
+			return &Slot;
 		}
 	}
-	return FreeSlot;
+	return nullptr;
+}
+
+std::size_t FNetworkSystem::CountAdmittedPeers() const noexcept
+{
+	std::size_t Count = 0;
+	for (const FPeerSlot& Slot : PeerSlots)
+	{
+		if (Slot.bOccupied)
+		{
+			++Count;
+		}
+	}
+	return Count;
 }
 
 void FNetworkSystem::RetirePeer(FPeerSlot& InSlot, const EDisconnectReason InReason) noexcept

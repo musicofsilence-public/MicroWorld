@@ -1,0 +1,1450 @@
+{
+  _type: 'element',
+  tags: null,
+  links: null,
+  _stage: 'layouted',
+  sourcePath: 'views.c4',
+  description: {
+    txt: 'Six systems, each named for the responsibility it owns. Networking is the session boundary above Messaging: it owns Client/Server roles, peer admission, liveness and logical routing, while Messaging owns links, routes, channels, serialization and reliable delivery. Engine owns optional Messaging and Networking and gives each World a non-owning Network pointer. Networking never sees a device or endpoint; Transport never sees Networking, Messaging or Engine. Messaging and Transport meet only at the Core transport-device interface, and the application composition root registers concrete devices and advances each exactly once. Direct Messaging and direct Transport remain independently usable.',
+  },
+  title: '[C2] MicroWorld',
+  id: 'c2Systems',
+  autoLayout: {
+    direction: 'TB',
+  },
+  hash: 'K8lHL7HiHx91wOI1eWgdJPpvYuZOM1ANAZMTg2FPFgg',
+  bounds: {
+    x: -53,
+    y: -224,
+    width: 2234,
+    height: 1538,
+  },
+  nodes: [
+    {
+      id: 'microworld',
+      parent: null,
+      level: 0,
+      children: [
+        'microworld.app',
+        'microworld.engine',
+        'microworld.transport',
+        'microworld.networking',
+        'microworld.core',
+        'microworld.messagingSystem',
+      ],
+      inEdges: [],
+      outEdges: [
+        'ndrqzu',
+        'u1rdsr',
+        '1g33muq',
+        '1dau8w3',
+      ],
+      title: 'MicroWorld',
+      modelRef: 'microworld',
+      shape: 'rectangle',
+      color: 'muted',
+      icon: 'tech:cplusplus',
+      style: {
+        opacity: 15,
+        size: 'md',
+      },
+      description: {
+        txt: 'UE5 worlds, actors and lifecycle on microcontrollers.',
+      },
+      tags: [],
+      technology: '[product: C++17 static library]',
+      kind: 'product',
+      depth: 1,
+      x: -33,
+      y: -204,
+      width: 2194,
+      height: 978,
+      labelBBox: {
+        x: 6,
+        y: 0,
+        width: 82,
+        height: 15,
+      },
+      navigateTo: null,
+      links: null,
+    },
+    {
+      id: 'microworld.app',
+      parent: 'microworld',
+      level: 1,
+      children: [],
+      inEdges: [],
+      outEdges: [
+        '1bkelow',
+        'owvtb9',
+        '17fk5c',
+        'mmuwqd',
+        'uvj31k',
+      ],
+      title: 'Application',
+      modelRef: 'microworld.app',
+      shape: 'rectangle',
+      color: 'primary',
+      icon: 'file://./icon-application.svg',
+      style: {
+        opacity: 15,
+        size: 'md',
+      },
+      description: {
+        txt: 'Starts, drives and stops one engine.',
+      },
+      tags: [],
+      metadata: {
+        contract: 'FApplication, Run frame loop',
+      },
+      technology: '[system: entry point]',
+      kind: 'system',
+      x: 1169,
+      y: -144,
+      width: 320,
+      height: 180,
+      labelBBox: {
+        x: 51,
+        y: 46,
+        width: 248,
+        height: 85,
+      },
+      navigateTo: null,
+      links: null,
+    },
+    {
+      id: 'microworld.engine',
+      parent: 'microworld',
+      level: 1,
+      children: [],
+      inEdges: [
+        'owvtb9',
+      ],
+      outEdges: [
+        'tlxi4f',
+        '1tm268f',
+        '1y57pju',
+      ],
+      title: 'Engine',
+      modelRef: 'microworld.engine',
+      shape: 'rectangle',
+      color: 'primary',
+      icon: 'file://./icon-engine.svg',
+      style: {
+        opacity: 15,
+        size: 'md',
+      },
+      description: {
+        txt: 'Owns object identity and actor lifetime.',
+      },
+      tags: [],
+      metadata: {
+        contract: 'IEngineRuntime, UWorld, AActor, UActorComponent, FObjectStore, optional Messaging and Networking systems',
+        boundary: 'Object owns identity, Engine owns the lifetime built on it. Neither is a responsibility anything wants alone, so they are one system',
+      },
+      technology: '[system: managed runtime]',
+      kind: 'system',
+      navigateTo: 'c3Engine',
+      x: 468,
+      y: 196,
+      width: 325,
+      height: 180,
+      labelBBox: {
+        x: 47,
+        y: 46,
+        width: 263,
+        height: 85,
+      },
+      links: null,
+    },
+    {
+      id: 'microworld.transport',
+      parent: 'microworld',
+      level: 1,
+      children: [],
+      inEdges: [
+        'uvj31k',
+      ],
+      outEdges: [
+        'zqjl3m',
+        '1g33muq',
+        '1dau8w3',
+      ],
+      title: 'Transport',
+      modelRef: 'microworld.transport',
+      shape: 'rectangle',
+      color: 'primary',
+      icon: 'file://./icon-transport.svg',
+      style: {
+        opacity: 15,
+        size: 'md',
+      },
+      description: {
+        txt: 'Moves bytes over any medium, reporting acceptance not delivery.',
+      },
+      tags: [],
+      metadata: {
+        contract: 'the transport device shape from Core realised once per medium, each with its own concrete Setup, plus wire framing for the stream media',
+        boundary: 'Transport sits below the engine and takes only time and result codes. Anything that merely realises the device shape belongs inside it - Wi-Fi, Bluetooth, wire and radio alike - and anything needing a world cannot be in here at all',
+        standalone: 'It reports acceptance, never delivery, so no medium here sequences, acknowledges or retries. Reading an acknowledgement would mean opening the payload this system promised to carry opaquely',
+      },
+      technology: '[system: byte I/O]',
+      kind: 'system',
+      navigateTo: 'c3Transport',
+      x: 9,
+      y: 196,
+      width: 349,
+      height: 180,
+      labelBBox: {
+        x: 46,
+        y: 46,
+        width: 288,
+        height: 85,
+      },
+      links: null,
+    },
+    {
+      id: 'microworld.networking',
+      parent: 'microworld',
+      level: 1,
+      children: [],
+      inEdges: [
+        '1y57pju',
+        'mmuwqd',
+      ],
+      outEdges: [
+        'j2tomn',
+        '17spy5b',
+      ],
+      title: 'Networking',
+      modelRef: 'microworld.networking',
+      shape: 'rectangle',
+      color: 'primary',
+      icon: 'file://./icon-messaging.svg',
+      style: {
+        opacity: 15,
+        size: 'md',
+      },
+      description: {
+        txt: 'Owns logical peer sessions and routed application delivery above Messaging.',
+      },
+      tags: [],
+      metadata: {
+        contract: 'FNetworkSystem, Client and Server roles, four generation-checked peers, admission, liveness, peer events, addressed sends and broadcast',
+        boundary: 'Uses Messaging routes and two private wire channels without naming a device or exposing endpoints to Actors. A World borrows the Engine-owned optional Network',
+        standalone: 'Usable without Engine in a direct Messaging composition; it never owns or advances a device',
+      },
+      technology: '[system: session boundary]',
+      kind: 'system',
+      navigateTo: 'c3Networking',
+      x: 1621,
+      y: 201,
+      width: 343,
+      height: 180,
+      labelBBox: {
+        x: 46,
+        y: 37,
+        width: 282,
+        height: 103,
+      },
+      links: null,
+    },
+    {
+      id: 'microworld.core',
+      parent: 'microworld',
+      level: 1,
+      children: [],
+      inEdges: [
+        'tlxi4f',
+        'c1ygl6',
+        'j2tomn',
+        'zqjl3m',
+        '1bkelow',
+      ],
+      outEdges: [
+        'ndrqzu',
+        'u1rdsr',
+        '1hmsguy',
+      ],
+      title: 'Core',
+      modelRef: 'microworld.core',
+      shape: 'rectangle',
+      color: 'primary',
+      icon: 'file://./icon-core.svg',
+      style: {
+        opacity: 15,
+        size: 'md',
+      },
+      description: {
+        txt: 'Sequences work and exposes extension interfaces.',
+      },
+      tags: [],
+      metadata: {
+        contract: 'time, tick scheduling, timers, logging, lifecycle, result codes, the play-system turn points, byte streams, the transport device interface and its address value',
+      },
+      technology: '[system: foundation]',
+      kind: 'system',
+      x: 945,
+      y: 552,
+      width: 324,
+      height: 180,
+      labelBBox: {
+        x: 46,
+        y: 46,
+        width: 262,
+        height: 85,
+      },
+      navigateTo: null,
+      links: null,
+    },
+    {
+      id: 'espIdf',
+      parent: null,
+      level: 0,
+      children: [],
+      inEdges: [
+        'ndrqzu',
+        '1g33muq',
+      ],
+      outEdges: [],
+      title: 'ESP-IDF',
+      modelRef: 'espIdf',
+      shape: 'rectangle',
+      color: 'slate',
+      style: {
+        opacity: 15,
+        size: 'md',
+      },
+      description: {
+        txt: 'Espressif Wi-Fi, Bluetooth and buses.',
+      },
+      tags: [],
+      technology: '[system: platform implementation]',
+      kind: 'system',
+      x: 25,
+      y: 1114,
+      width: 320,
+      height: 180,
+      labelBBox: {
+        x: 33,
+        y: 55,
+        width: 254,
+        height: 67,
+      },
+      navigateTo: null,
+      links: null,
+    },
+    {
+      id: 'hostOs',
+      parent: null,
+      level: 0,
+      children: [],
+      inEdges: [
+        'u1rdsr',
+        '1dau8w3',
+      ],
+      outEdges: [],
+      title: 'Host OS',
+      modelRef: 'hostOs',
+      shape: 'rectangle',
+      color: 'slate',
+      style: {
+        opacity: 15,
+        size: 'md',
+      },
+      description: {
+        txt: 'Desktop sockets and a steady clock.',
+      },
+      tags: [],
+      technology: '[system: platform implementation]',
+      kind: 'system',
+      x: 843,
+      y: 1102,
+      width: 320,
+      height: 180,
+      labelBBox: {
+        x: 37,
+        y: 55,
+        width: 247,
+        height: 67,
+      },
+      navigateTo: null,
+      links: null,
+    },
+    {
+      id: 'microworld.messagingSystem',
+      parent: 'microworld',
+      level: 1,
+      children: [],
+      inEdges: [
+        '1hmsguy',
+        '1tm268f',
+        '17spy5b',
+        '17fk5c',
+      ],
+      outEdges: [
+        'c1ygl6',
+      ],
+      title: 'Messaging System',
+      modelRef: 'microworld.messagingSystem',
+      shape: 'queue',
+      color: 'primary',
+      icon: 'file://./icon-messaging.svg',
+      style: {
+        opacity: 15,
+        size: 'md',
+      },
+      description: {
+        txt: 'Delivers named messages through channels, with or without a device.',
+      },
+      tags: [],
+      metadata: {
+        contract: 'FMessagingSystem: fixed links, explicit routes, named channels, subscriptions, frame codecs and bounded reliable delivery. FMessage carries a name id, bounded payload and local-only source metadata',
+        standalone: 'Usable with no transport at all: a local-only channel delivers only to this node. Direct Messaging may also use a known default route without Networking',
+        boundary: 'It reaches bytes only through the transport device interface in Core, so no medium is named here and no message type is named in Transport. Delivery guarantees live here, per channel and complete route, because Transport answers acceptance and never delivery. Networking consumes Messaging channels and explicit routes; Messaging does not own peers or roles',
+      },
+      technology: '[system: engine service]',
+      kind: 'system',
+      navigateTo: 'c3Messaging',
+      x: 1744,
+      y: 556,
+      width: 375,
+      height: 172,
+      labelBBox: {
+        x: 56,
+        y: 42,
+        width: 304,
+        height: 85,
+      },
+      links: null,
+    },
+  ],
+  edges: [
+    {
+      id: 'ndrqzu',
+      source: 'microworld.core',
+      target: 'espIdf',
+      label: 'Time and Log realised by',
+      points: [
+        [
+          1051,
+          945,
+        ],
+        [
+          965,
+          1025,
+        ],
+        [
+          839,
+          1143,
+        ],
+        [
+          751,
+          1225,
+        ],
+      ],
+      labelBBox: {
+        x: 646,
+        y: 923,
+        width: 161,
+        height: 18,
+      },
+      parent: null,
+      relations: [
+        '1cs70bg',
+      ],
+      color: 'gray',
+      line: 'dashed',
+      head: 'normal',
+      kind: 'dependsOn',
+      navigateTo: null,
+      tags: null,
+      isLabelCustomized: false,
+      controlPoints: [
+        {
+          x: 618,
+          y: 937,
+        },
+      ],
+    },
+    {
+      id: 'u1rdsr',
+      source: 'microworld.core',
+      target: 'hostOs',
+      label: 'Time realised by',
+      points: [
+        [
+          1282,
+          945,
+        ],
+        [
+          1406,
+          1026,
+        ],
+        [
+          1588,
+          1144,
+        ],
+        [
+          1714,
+          1226,
+        ],
+      ],
+      labelBBox: {
+        x: 1057,
+        y: 911,
+        width: 107,
+        height: 18,
+      },
+      parent: null,
+      relations: [
+        'm9clzg',
+      ],
+      color: 'gray',
+      line: 'dashed',
+      head: 'normal',
+      kind: 'dependsOn',
+      navigateTo: null,
+      tags: null,
+      isLabelCustomized: false,
+      controlPoints: [
+        {
+          x: 1045,
+          y: 960,
+        },
+      ],
+    },
+    {
+      id: 'tlxi4f',
+      source: 'microworld.engine',
+      target: 'microworld.core',
+      label: 'takes Time, Timer, Lifecycle, PlaySystem',
+      points: [
+        [
+          699,
+          376,
+        ],
+        [
+          732,
+          415,
+        ],
+        [
+          774,
+          459,
+        ],
+        [
+          817,
+          492,
+        ],
+        [
+          853,
+          520,
+        ],
+        [
+          895,
+          545,
+        ],
+        [
+          936,
+          566,
+        ],
+      ],
+      labelBBox: {
+        x: 818,
+        y: 454,
+        width: 260,
+        height: 18,
+      },
+      parent: 'microworld',
+      relations: [
+        'xulv4a',
+        'k5y7bd',
+      ],
+      color: 'gray',
+      line: 'dashed',
+      head: 'normal',
+      kind: 'dependsOn',
+      navigateTo: null,
+      tags: null,
+      isLabelCustomized: false,
+      controlPoints: [
+        {
+          x: 754,
+          y: 436,
+        },
+        {
+          x: 874,
+          y: 531,
+        },
+      ],
+    },
+    {
+      id: '1hmsguy',
+      source: 'microworld.core',
+      target: 'microworld.messagingSystem',
+      label: 'realised by',
+      points: [
+        [
+          1269,
+          656,
+        ],
+        [
+          1332,
+          661,
+        ],
+        [
+          1404,
+          666,
+        ],
+        [
+          1470,
+          668,
+        ],
+        [
+          1556,
+          671,
+        ],
+        [
+          1652,
+          667,
+        ],
+        [
+          1734,
+          661,
+        ],
+      ],
+      labelBBox: {
+        x: 1471,
+        y: 646,
+        width: 72,
+        height: 18,
+      },
+      parent: 'microworld',
+      relations: [
+        'd2ijls',
+      ],
+      color: 'gray',
+      line: 'dashed',
+      head: 'normal',
+      kind: 'realisedBy',
+      navigateTo: null,
+      tags: null,
+      isLabelCustomized: false,
+      controlPoints: [
+        {
+          x: 1368,
+          y: 663,
+        },
+        {
+          x: 1603,
+          y: 667,
+        },
+      ],
+    },
+    {
+      id: '1tm268f',
+      source: 'microworld.engine',
+      target: 'microworld.messagingSystem',
+      label: 'creates and hands out the messaging \nsystem',
+      points: [
+        [
+          793,
+          322,
+        ],
+        [
+          884,
+          340,
+        ],
+        [
+          999,
+          362,
+        ],
+        [
+          1102,
+          376,
+        ],
+        [
+          1260,
+          397,
+        ],
+        [
+          1684,
+          349,
+        ],
+        [
+          1818,
+          436,
+        ],
+        [
+          1858,
+          461,
+        ],
+        [
+          1885,
+          506,
+        ],
+        [
+          1903,
+          547,
+        ],
+      ],
+      labelBBox: {
+        x: 1203,
+        y: 374,
+        width: 237,
+        height: 35,
+      },
+      parent: 'microworld',
+      relations: [
+        '15ogu7t',
+      ],
+      color: 'gray',
+      line: 'dashed',
+      head: 'normal',
+      kind: 'dependsOn',
+      navigateTo: null,
+      tags: null,
+      isLabelCustomized: true,
+      controlPoints: [
+        {
+          x: 943,
+          y: 350,
+        },
+      ],
+    },
+    {
+      id: 'c1ygl6',
+      source: 'microworld.messagingSystem',
+      target: 'microworld.core',
+      label: 'takes Span, Delegate, Time, PlaySystem, \nTransportDevice, DeviceAddress',
+      points: [
+        [
+          1744,
+          642,
+        ],
+        [
+          1605,
+          642,
+        ],
+        [
+          1415,
+          642,
+        ],
+        [
+          1280,
+          642,
+        ],
+      ],
+      labelBBox: {
+        x: 1385,
+        y: 553,
+        width: 262,
+        height: 34,
+      },
+      parent: 'microworld',
+      relations: [
+        'dtixoi',
+      ],
+      color: 'gray',
+      line: 'dashed',
+      head: 'normal',
+      kind: 'dependsOn',
+      navigateTo: null,
+      tags: null,
+      isLabelCustomized: true,
+      controlPoints: [
+        {
+          x: 1505,
+          y: 609,
+        },
+      ],
+    },
+    {
+      id: '1y57pju',
+      source: 'microworld.engine',
+      target: 'microworld.networking',
+      label: 'owns the optional Network before World \ncreation',
+      points: [
+        [
+          793,
+          286,
+        ],
+        [
+          899,
+          286,
+        ],
+        [
+          1037,
+          286,
+        ],
+        [
+          1147,
+          286,
+        ],
+      ],
+      labelBBox: {
+        x: 891,
+        y: 243,
+        width: 252,
+        height: 35,
+      },
+      parent: 'microworld',
+      relations: [
+        '1elso19',
+        '176flyw',
+      ],
+      color: 'gray',
+      line: 'dashed',
+      head: 'normal',
+      kind: 'dependsOn',
+      navigateTo: null,
+      tags: null,
+      isLabelCustomized: true,
+      controlPoints: [
+        {
+          x: 1192,
+          y: 288,
+        },
+      ],
+    },
+    {
+      id: 'j2tomn',
+      source: 'microworld.networking',
+      target: 'microworld.core',
+      label: 'takes Time, Delegate and PlaySystem',
+      points: [
+        [
+          1245,
+          376,
+        ],
+        [
+          1229,
+          395,
+        ],
+        [
+          1214,
+          415,
+        ],
+        [
+          1201,
+          436,
+        ],
+        [
+          1179,
+          469,
+        ],
+        [
+          1160,
+          508,
+        ],
+        [
+          1145,
+          543,
+        ],
+      ],
+      labelBBox: {
+        x: 1333,
+        y: 467,
+        width: 241,
+        height: 18,
+      },
+      parent: 'microworld',
+      relations: [
+        'lipql2',
+      ],
+      color: 'gray',
+      line: 'dashed',
+      head: 'normal',
+      kind: 'dependsOn',
+      navigateTo: null,
+      tags: null,
+      isLabelCustomized: true,
+      controlPoints: [
+        {
+          x: 1382,
+          y: 507,
+        },
+      ],
+    },
+    {
+      id: '17spy5b',
+      source: 'microworld.networking',
+      target: 'microworld.messagingSystem',
+      label: 'takes channels, typed messages and \nexplicit routes',
+      points: [
+        [
+          1414,
+          376,
+        ],
+        [
+          1455,
+          415,
+        ],
+        [
+          1506,
+          460,
+        ],
+        [
+          1559,
+          492,
+        ],
+        [
+          1613,
+          526,
+        ],
+        [
+          1676,
+          554,
+        ],
+        [
+          1735,
+          577,
+        ],
+      ],
+      labelBBox: {
+        x: 1866,
+        y: 467,
+        width: 234,
+        height: 35,
+      },
+      parent: 'microworld',
+      relations: [
+        'spch2k',
+        'tgaoci',
+      ],
+      color: 'gray',
+      line: 'dashed',
+      head: 'normal',
+      kind: 'dependsOn',
+      navigateTo: null,
+      tags: null,
+      isLabelCustomized: false,
+      controlPoints: [
+        {
+          x: 1859,
+          y: 449,
+        },
+        {
+          x: 1880,
+          y: 502,
+        },
+      ],
+    },
+    {
+      id: 'zqjl3m',
+      source: 'microworld.transport',
+      target: 'microworld.core',
+      label: 'takes Span, Delegate, Log, Time, \nPlaySystem, UartByteStream, \nTransportDevice, DeviceAddress',
+      points: [
+        [
+          306,
+          376,
+        ],
+        [
+          367,
+          416,
+        ],
+        [
+          442,
+          461,
+        ],
+        [
+          514,
+          492,
+        ],
+        [
+          650,
+          550,
+        ],
+        [
+          814,
+          589,
+        ],
+        [
+          935,
+          613,
+        ],
+      ],
+      labelBBox: {
+        x: 515,
+        y: 437,
+        width: 212,
+        height: 51,
+      },
+      parent: 'microworld',
+      relations: [
+        '5t0wsg',
+      ],
+      color: 'gray',
+      line: 'dashed',
+      head: 'normal',
+      kind: 'dependsOn',
+      navigateTo: null,
+      tags: null,
+      isLabelCustomized: false,
+      controlPoints: [
+        {
+          x: 405,
+          y: 437,
+        },
+        {
+          x: 730,
+          y: 565,
+        },
+      ],
+    },
+    {
+      id: '1g33muq',
+      source: 'microworld.transport',
+      target: 'espIdf',
+      label: '[...]',
+      points: [
+        [
+          269,
+          588,
+        ],
+        [
+          349,
+          743,
+        ],
+        [
+          514,
+          1062,
+        ],
+        [
+          597,
+          1223,
+        ],
+      ],
+      labelBBox: {
+        x: 192,
+        y: 846,
+        width: 25,
+        height: 18,
+      },
+      parent: null,
+      relations: [
+        '1mv6yo5',
+        'd210cg',
+        '1jpx3ui',
+        '18kgpc8',
+      ],
+      color: 'gray',
+      line: 'dashed',
+      head: 'normal',
+      kind: 'dependsOn',
+      navigateTo: null,
+      tags: null,
+      isLabelCustomized: false,
+      controlPoints: [
+        {
+          x: 182,
+          y: 666,
+        },
+      ],
+    },
+    {
+      id: '1dau8w3',
+      source: 'microworld.transport',
+      target: 'hostOs',
+      label: 'realised by',
+      points: [
+        [
+          397,
+          574,
+        ],
+        [
+          416,
+          580,
+        ],
+        [
+          434,
+          585,
+        ],
+        [
+          452,
+          589,
+        ],
+        [
+          546,
+          608,
+        ],
+        [
+          2101,
+          591,
+        ],
+        [
+          2177,
+          649,
+        ],
+        [
+          2297,
+          740,
+        ],
+        [
+          2274,
+          847,
+        ],
+        [
+          2214,
+          985,
+        ],
+        [
+          2172,
+          1084,
+        ],
+        [
+          2084,
+          1167,
+        ],
+        [
+          2007,
+          1226,
+        ],
+      ],
+      labelBBox: {
+        x: 572,
+        y: 738,
+        width: 72,
+        height: 18,
+      },
+      parent: null,
+      relations: [
+        '1hpouj9',
+      ],
+      color: 'gray',
+      line: 'dashed',
+      head: 'normal',
+      kind: 'dependsOn',
+      navigateTo: null,
+      tags: null,
+      isLabelCustomized: false,
+      controlPoints: [
+        {
+          x: 236,
+          y: 386,
+        },
+      ],
+    },
+    {
+      id: '1bkelow',
+      source: 'microworld.app',
+      target: 'microworld.core',
+      label: 'takes Lifecycle, RuntimeResult, Time',
+      points: [
+        [
+          1489,
+          -2,
+        ],
+        [
+          1534,
+          20,
+        ],
+        [
+          1579,
+          52,
+        ],
+        [
+          1605,
+          96,
+        ],
+        [
+          1650,
+          171,
+        ],
+        [
+          1765,
+          179,
+        ],
+        [
+          1556,
+          376,
+        ],
+        [
+          1421,
+          503,
+        ],
+        [
+          1276,
+          307,
+        ],
+        [
+          1143,
+          436,
+        ],
+        [
+          1115,
+          463,
+        ],
+        [
+          1104,
+          504,
+        ],
+        [
+          1101,
+          542,
+        ],
+      ],
+      labelBBox: {
+        x: 1110,
+        y: 145,
+        width: 234,
+        height: 18,
+      },
+      parent: 'microworld',
+      relations: [
+        'l2o7tt',
+      ],
+      color: 'gray',
+      line: 'dashed',
+      head: 'normal',
+      kind: 'dependsOn',
+      navigateTo: null,
+      tags: null,
+      isLabelCustomized: true,
+      controlPoints: [
+        {
+          x: 1127,
+          y: 531,
+        },
+      ],
+    },
+    {
+      id: 'owvtb9',
+      source: 'microworld.app',
+      target: 'microworld.engine',
+      label: 'takes EngineRuntime',
+      points: [
+        [
+          1169,
+          24,
+        ],
+        [
+          1060,
+          77,
+        ],
+        [
+          915,
+          148,
+        ],
+        [
+          803,
+          202,
+        ],
+      ],
+      labelBBox: {
+        x: 1002,
+        y: 106,
+        width: 137,
+        height: 18,
+      },
+      parent: 'microworld',
+      relations: [
+        'i1jsol',
+      ],
+      color: 'gray',
+      line: 'dashed',
+      head: 'normal',
+      kind: 'dependsOn',
+      navigateTo: null,
+      tags: null,
+      isLabelCustomized: false,
+      controlPoints: [
+        {
+          x: 1052,
+          y: 80,
+        },
+      ],
+    },
+    {
+      id: '17fk5c',
+      source: 'microworld.app',
+      target: 'microworld.messagingSystem',
+      label: 'creates channels and sends through the \nsystem the engine hands out',
+      points: [
+        [
+          1489,
+          -11,
+        ],
+        [
+          1619,
+          27,
+        ],
+        [
+          1803,
+          95,
+        ],
+        [
+          1940,
+          196,
+        ],
+        [
+          2068,
+          290,
+        ],
+        [
+          2210,
+          351,
+        ],
+        [
+          2138,
+          492,
+        ],
+        [
+          2127,
+          514,
+        ],
+        [
+          2111,
+          533,
+        ],
+        [
+          2094,
+          549,
+        ],
+      ],
+      labelBBox: {
+        x: 1370,
+        y: 183,
+        width: 253,
+        height: 35,
+      },
+      parent: 'microworld',
+      relations: [
+        '18cnouv',
+      ],
+      color: 'gray',
+      line: 'dashed',
+      head: 'normal',
+      kind: 'uses',
+      navigateTo: null,
+      tags: null,
+      isLabelCustomized: true,
+      controlPoints: [
+        {
+          x: 1480,
+          y: 304,
+        },
+      ],
+    },
+    {
+      id: 'mmuwqd',
+      source: 'microworld.app',
+      target: 'microworld.networking',
+      label: 'configures role and uses peers through \nthe system the engine hands out',
+      points: [
+        [
+          1329,
+          36,
+        ],
+        [
+          1329,
+          82,
+        ],
+        [
+          1329,
+          138,
+        ],
+        [
+          1329,
+          186,
+        ],
+      ],
+      labelBBox: {
+        x: 1536,
+        y: 99,
+        width: 247,
+        height: 35,
+      },
+      parent: 'microworld',
+      relations: [
+        '1obmrab',
+      ],
+      color: 'gray',
+      line: 'dashed',
+      head: 'normal',
+      kind: 'uses',
+      navigateTo: null,
+      tags: null,
+      isLabelCustomized: false,
+      controlPoints: [
+        {
+          x: 1552,
+          y: 112,
+        },
+      ],
+    },
+    {
+      id: 'uvj31k',
+      source: 'microworld.app',
+      target: 'microworld.transport',
+      label: 'constructs and configures the concrete \nmedium devices channels send through',
+      points: [
+        [
+          1169,
+          -22,
+        ],
+        [
+          1037,
+          4,
+        ],
+        [
+          844,
+          47,
+        ],
+        [
+          679,
+          96,
+        ],
+        [
+          558,
+          133,
+        ],
+        [
+          531,
+          151,
+        ],
+        [
+          413,
+          196,
+        ],
+        [
+          398,
+          201,
+        ],
+        [
+          383,
+          207,
+        ],
+        [
+          368,
+          213,
+        ],
+      ],
+      labelBBox: {
+        x: 635,
+        y: 53,
+        width: 251,
+        height: 35,
+      },
+      parent: 'microworld',
+      relations: [
+        '17rjkjh',
+      ],
+      color: 'gray',
+      line: 'dashed',
+      head: 'normal',
+      kind: 'uses',
+      navigateTo: null,
+      tags: null,
+      isLabelCustomized: true,
+      controlPoints: [
+        {
+          x: 390,
+          y: 204,
+        },
+      ],
+    },
+  ],
+  _layout: 'manual',
+}

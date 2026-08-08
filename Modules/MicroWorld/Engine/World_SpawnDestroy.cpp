@@ -294,6 +294,23 @@ void UWorld::ConstructDeferredSpawns(FObjectStore& InObjectStore) noexcept
 	}
 }
 
+void UWorld::AbortPrePlayConstruction(FObjectStore& InObjectStore) noexcept
+{
+	for (std::size_t Index = 0; Index < DeferredSpawns.SealedPublishCount(); ++Index)
+	{
+		const TObjectPtr<AActor> ActorReference = DeferredSpawns.GetConstructedActor(DeferredSpawns.SealedPublishAt(Index));
+		AActor* const Actor = ActorReference.Get();
+		if (Actor == nullptr)
+		{
+			continue;
+		}
+		Actor->MarkRegisteredComponentsPendingDestroy();
+		(void)InObjectStore.MarkPendingDestroy(ActorReference.Handle());
+	}
+	DeferredSpawns.AbortSealedBatch();
+	(void)InObjectStore.ApplyPendingDestroy(InObjectStore.Stats().SlotCapacity);
+}
+
 Core::ERuntimeResult UWorld::BeginDeferredSpawnsUnderGuard(
 	FObjectStore& InObjectStore, const Core::TimePointMilliseconds InNowMilliseconds, Core::ERuntimeResult& InOutFirstError) noexcept
 {

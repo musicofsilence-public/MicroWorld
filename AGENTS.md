@@ -39,6 +39,8 @@ MicroWorld/
 │   │   │               store, GC, handles, TEngine, IEngineRuntime
 │   │   ├── Messaging/  FMessagingSystem — named channels, subscriptions,
 │   │   │               reliable delivery (compiled static module)
+│   │   ├── Networking/ client/server peer admission, liveness, and logical
+│   │   │               message routing above Messaging
 │   │   ├── Transport/  byte I/O, frame codec, TTransportHost + the optional E32
 │   │   │               portable framing and device (was Net + RadioE32)
 │   │   ├── Application/ FApplication (including the Run template)
@@ -66,15 +68,18 @@ Dependencies point inward:
 ```text
 Core <- Messaging
 Core <- Transport
-Core, Messaging <- Engine
+Core, Messaging <- Networking
+Core, Messaging, Networking <- Engine
 Core, Engine <- Application
 ```
 
-Object folded into Engine; Net and RadioE32 folded into Transport; Networking
-dissolved into Messaging. Transport never pulls Engine, and no portable system
-sees both Engine and Transport. Messaging and Transport meet only at Core's
-`ITransportDevice`: a channel sends through the interface, each medium realises
-it, and a concrete device is named only at the application entry point.
+Object folded into Engine; Net and RadioE32 folded into Transport. Networking
+is restored above Messaging: it owns logical peer/session policy and never
+depends on Transport, a platform, Engine, or Application. Transport never pulls
+Engine, and no portable system sees both Engine and Transport. Messaging and
+Transport meet only at Core's `ITransportDevice`: a channel sends through the
+interface, each medium realises it, and a concrete device is named only at the
+application entry point.
 Platform/Host, Platform/Esp32, and Platform/Pico are the non-portable edges;
 only they may reach OS/SDK headers.
 

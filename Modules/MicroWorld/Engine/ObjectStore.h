@@ -25,6 +25,7 @@ namespace MicroWorld::Engine
 
 class FGarbageCollector;
 class FObjectStoreDispatchGuard;
+class FObjectConstructionTransaction;
 
 /**
  * Motivation: Invokes the exact public nothrow destructor bound to one managed C++ type so the store can destroy an
@@ -264,6 +265,7 @@ public:
 private:
 	friend class FGarbageCollector;
 	friend class FObjectStoreDispatchGuard;
+	friend class FObjectConstructionTransaction;
 
 	/**
 	 * Motivation: Validates descriptor identity and exact T layout before any slot mutation.

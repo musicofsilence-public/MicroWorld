@@ -29,14 +29,16 @@ initialization, or teardown rules.
   only on Core and Messaging. It never names Transport, a platform, Engine, or
   Application; Engine may depend on Networking, while Transport remains Core-only.
 - **Network has only Client and Server roles.** It supports one server connection
-  per client and at most four admitted server peers. There is no local peer,
-  client-to-client route, authentication state, stable user identity, or public
-  connection object.
+  per client and fixed storage for at most four admitted server peers. An Engine
+  setup may configure a smaller operational server-admission limit; the value
+  cannot exceed fixed storage. There is no local peer, client-to-client route,
+  authentication state, stable user identity, or public connection object.
 - **The fixed capacity contract is retained.** Messaging has four stable links,
   four channels, sixteen subscriptions, and eight reliable pending frames;
   Networking has four peer slots. Its two private wire channels consume two
   Messaging channel and subscription slots, leaving two application channels.
-  Capacity changes require measured evidence and a later ADR.
+  Capacity changes require measured evidence and a later ADR. The configured
+  operational admission limit does not resize this storage.
 - **Messaging owns physical routes; Network owns logical routing.**
   `FMessagingRoute` is exactly `{FMessagingLinkId, FDeviceAddress}` and its link
   ID is an opaque stable slot. Registering the same device is idempotent;
@@ -78,6 +80,17 @@ initialization, or teardown rules.
   Messaging outlives Network, and Network outlives World and Actors. Startup is
   external devices in add order, Messaging, Network, then World; shutdown reverses
   that order. Network never drives a device or performs byte I/O.
+- **Engine configures Network as one high-level transaction.** Before World
+  creation, `ConfigureNetworking` validates its Engine-owned setup, binds one
+  borrowed device, creates Messaging, registers one link, and creates Network.
+  On failure it clears Network, then Messaging, then the device binding. New
+  application setup does not need a subsystem getter or connection object.
+- **Network owns an optional initial server route.** A client starts that route
+  during its first `PreAdvance`, never during setup or `BeginPlay`, and retries
+  it through its heartbeat while Connecting. An established peer that times out
+  is retired; this contract makes no automatic reconnect promise. A server
+  rejects a distinct route above the configured operational limit while retries
+  from an admitted route remain idempotent.
 - **The Transport session protocol is a migration target, not a compatibility
   layer.** All live consumers move to device, Messaging, and Networking
   composition before the old session layer is removed. No facade or duplicate
@@ -93,6 +106,8 @@ initialization, or teardown rules.
   broadcast is absent.
 - Engine gains optional fixed storage even when no Network is created. Resource
   cost must be measured before release; this record makes no size or timing claim.
+- New applications use one setup value instead of constructing or retaining
+  Messaging, Network, routes, or connection objects.
 - Network initialization and teardown must be transactional so failed reserved
   channel or subscription setup leaves no hidden state.
 

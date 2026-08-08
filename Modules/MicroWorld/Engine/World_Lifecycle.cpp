@@ -49,6 +49,16 @@ Core::ERuntimeResult UWorld::BeginPlay(const Core::TimePointMilliseconds InNowMi
 		// play-time work, then use the normal barrier construction path.
 		DeferredSpawns.SealBarrier();
 		ConstructDeferredSpawns(*ObjectStore);
+		for (std::size_t Index = 0; Index < DeferredSpawns.SealedFactoryCount(); ++Index)
+		{
+			const FActorSpawnStatus Status = DeferredSpawns.GetStatus(DeferredSpawns.SealedFactoryAt(Index));
+			if (Status.State == EActorSpawnState::Failed)
+			{
+				AbortPrePlayConstruction(*ObjectStore);
+				Lifecycle.Fail();
+				return Core::ERuntimeResult::InitializationFailed;
+			}
+		}
 	}
 
 	FObjectStoreDispatchGuard StartupDispatchGuard(*ObjectStore);

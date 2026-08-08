@@ -6,8 +6,11 @@
 #include <MicroWorld/Engine/DefaultEngineTraits.h>
 #include <MicroWorld/Engine/EngineClassIds.h>
 #include <MicroWorld/Engine/EngineRuntime.h>
+#include <MicroWorld/Engine/EngineNetworkSetup.h>
 #include <MicroWorld/Engine/EngineStorage.h>
+#include <MicroWorld/Core/Log.h>
 #include <MicroWorld/Core/PlaySystem.h>
+#include <MicroWorld/Core/IO/TransportDevice.h>
 #include <MicroWorld/Messaging/MessagingSystem.h>
 #include <MicroWorld/Messaging/MessagingSystemInformation.h>
 #include <MicroWorld/Networking/NetworkSystem.h>
@@ -271,6 +274,61 @@ public:
 	FTimerManager& GetTimerManager() noexcept { return Timers; }
 
 	/**
+	 * Motivation: Composes one complete Engine-owned network chain without exposing Messaging, routes, or Network construction to an application.
+	 * Responsibilities: Validate the value contract before mutation, bind the device once, then create Messaging, its sole link, and Network; unwind
+	 * every created layer on failure.
+	 */
+	EEngineNetworkSetupResult ConfigureNetworking(Core::ITransportDevice& InDevice, const FEngineNetworkSetup& InSetup) noexcept
+	{
+		if (NetworkDevice != nullptr || !MessagingSystems.IsEmpty() || !NetworkSystems.IsEmpty())
+		{
+			return EEngineNetworkSetupResult::AlreadyConfigured;
+		}
+		if (!IsNetworkSetupValid(InSetup))
+		{
+			return EEngineNetworkSetupResult::InvalidConfiguration;
+		}
+
+		NetworkDevice = &InDevice;
+		if (CreateMessagingSystem(Messaging::FMessagingSystemInformation{}) != Core::ERuntimeResult::Success)
+		{
+			NetworkDevice = nullptr;
+			return EEngineNetworkSetupResult::CapacityExceeded;
+		}
+
+		Messaging::FMessagingSystem* const MessagingSystem = GetMessagingSystem();
+		Messaging::FMessagingLinkId LinkId{};
+		if (MessagingSystem == nullptr || MessagingSystem->RegisterLink(InDevice, LinkId) != Messaging::EMessagingResult::Success)
+		{
+			MessagingSystems.Clear();
+			NetworkDevice = nullptr;
+			return EEngineNetworkSetupResult::CapacityExceeded;
+		}
+
+		Networking::FNetworkSystemInformation NetworkInformation{};
+		NetworkInformation.Role = InSetup.Role;
+		NetworkInformation.ProtocolVersion = InSetup.ProtocolVersion;
+		NetworkInformation.HeartbeatIntervalMilliseconds = InSetup.HeartbeatInterval;
+		NetworkInformation.PeerTimeoutMilliseconds = InSetup.PeerTimeout;
+		NetworkInformation.InitialServerRoute = Messaging::FMessagingRoute{LinkId, InSetup.InitialServerAddress};
+		NetworkInformation.MaximumAdmittedServerPeers = InSetup.MaximumAdmittedServerPeers;
+		if (InSetup.Role == Networking::ENetworkRole::Server)
+		{
+			NetworkInformation.InitialServerRoute = {};
+		}
+
+		if (CreateNetworkSystem(NetworkInformation) == Networking::ENetworkResult::Success)
+		{
+			return EEngineNetworkSetupResult::Success;
+		}
+
+		NetworkSystems.Clear();
+		MessagingSystems.Clear();
+		NetworkDevice = nullptr;
+		return EEngineNetworkSetupResult::CapacityExceeded;
+	}
+
+	/**
 	 * Motivation: Gives the application entry point one bounded messaging system the engine drives, without needing a world first.
 	 * Responsibilities: Construct the system in the reserved slot, and report Duplicate leaving the existing system and
 	 *   its channels and subscriptions untouched when the slot is already filled.
@@ -343,14 +401,20 @@ public:
 
 		LastTickMilliseconds = InNowMilliseconds;
 		BeginPlaySystems(InNowMilliseconds);
-		return World->BeginPlay(InNowMilliseconds);
+		const Core::ERuntimeResult BeginResult = World->BeginPlay(InNowMilliseconds);
+		if (BeginResult == Core::ERuntimeResult::Success)
+		{
+			return BeginResult;
+		}
+		EndPlaySystems();
+		return BeginResult;
 	}
 
 	/**
 	 * Motivation: Runs one canonical frame in the documented fixed order and returns the authoritative per-frame outcome.
-	 * Responsibilities: Reject a rolled-back clock transactionally before any step runs; drive system pre-advance, timers,
-	 *   world advance and apply, bounded reclamation, a GC slice, and system post-advance; the world advance/apply result
-	 *   is authoritative since every other step is bounded best-effort.
+	 * Responsibilities: Reject a rolled-back clock transactionally before any step runs; complete any prior collection before
+	 *   callbacks, then drive system pre-advance, timers, world advance and apply, bounded reclamation, system post-advance,
+	 *   and the next bounded GC slice; the world advance/apply result is authoritative since every other step is bounded best-effort.
 	 */
 	Core::ERuntimeResult Tick(const Core::TimePointMilliseconds InNowMilliseconds) noexcept override
 	{
@@ -365,18 +429,26 @@ public:
 		}
 		LastTickMilliseconds = InNowMilliseconds;
 
+		const Core::ERuntimeResult CatchUpResult = CompletePriorCollectionBeforeCallbacks();
+		if (CatchUpResult != Core::ERuntimeResult::Success)
+		{
+			return CatchUpResult;
+		}
+
 		PreAdvanceSystems(InNowMilliseconds);
 		(void)Timers.Advance(InNowMilliseconds);
 		const Core::ERuntimeResult FrameResult = AdvanceWorldAndApplyBarrier(*World, InNowMilliseconds);
-		ReclaimAndCollect();
+		ReclaimPendingDestroy();
 		PostAdvanceSystems(InNowMilliseconds);
+		StartBudgetedCollectionAfterCallbacks();
 
 		return FrameResult;
 	}
 
 	/**
-	 * Motivation: Ends the world then the bound system so shutdown mirrors startup order.
-	 * Responsibilities: End in reverse registration order and stay idempotent after a successful first call.
+	 * Motivation: Ends an active collection before world teardown, then ends the bound system so shutdown mirrors startup order.
+	 * Responsibilities: Release collection dispatch ownership, end the world, then end systems in reverse registration order and stay
+	 *   idempotent after a successful first call.
 	 */
 	Core::ERuntimeResult EndPlay() noexcept override
 	{
@@ -386,6 +458,7 @@ public:
 			return Core::ERuntimeResult::InvalidLifecycle;
 		}
 
+		CancelActiveCollectionBeforeTeardown();
 		const Core::ERuntimeResult EndResult = World->EndPlay();
 		EndPlaySystems();
 		return EndResult;
@@ -407,6 +480,21 @@ private:
 		(void)Registry.Register(AActor::StaticClassDescriptor());
 		(void)Registry.Register(UWorld::StaticClassDescriptor());
 		(void)Registry.Register(UWorldSubsystem::StaticClassDescriptor());
+	}
+
+	/**
+	 * Motivation: Keeps the all-or-nothing configuration operation free of partial setup for invalid policy values.
+	 * Responsibilities: Accept only a client with one initial address or a server with none, valid timing, and bounded admission.
+	 */
+	static bool IsNetworkSetupValid(const FEngineNetworkSetup& InSetup) noexcept
+	{
+		if (InSetup.HeartbeatInterval == 0 || InSetup.PeerTimeout <= InSetup.HeartbeatInterval || InSetup.MaximumAdmittedServerPeers == 0
+			|| InSetup.MaximumAdmittedServerPeers > Networking::FNetworkSystem::MaxPeers)
+		{
+			return false;
+		}
+		const bool bHasInitialServerAddress = InSetup.InitialServerAddress.Size != 0;
+		return InSetup.Role == Networking::ENetworkRole::Client ? bHasInitialServerAddress : !bHasInitialServerAddress;
 	}
 
 	/**
@@ -433,7 +521,12 @@ private:
 	 */
 	void BeginPlaySystems(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
-		if (System != nullptr)
+		if (NetworkDevice != nullptr)
+		{
+			NetworkDevice->BeginPlay(InNowMilliseconds);
+		}
+
+		if (System != nullptr && !IsConfiguredDeviceBoundAsSystem())
 		{
 			System->BeginPlay(InNowMilliseconds);
 		}
@@ -456,7 +549,12 @@ private:
 	 */
 	void PreAdvanceSystems(const Core::TimePointMilliseconds InNowMilliseconds) noexcept
 	{
-		if (System != nullptr)
+		if (NetworkDevice != nullptr)
+		{
+			NetworkDevice->PreAdvance(InNowMilliseconds);
+		}
+
+		if (System != nullptr && !IsConfiguredDeviceBoundAsSystem())
 		{
 			System->PreAdvance(InNowMilliseconds);
 		}
@@ -481,6 +579,12 @@ private:
 		const Core::ERuntimeResult AdvanceResult = InWorld.Advance(InNowMilliseconds);
 		if (AdvanceResult != Core::ERuntimeResult::Success)
 		{
+			MW_LOG(
+				Error,
+				"Engine",
+				"frame_failure stage=world_advance result=%u gc_phase=%u",
+				static_cast<unsigned int>(AdvanceResult),
+				static_cast<unsigned int>(Collector.Phase()));
 			return AdvanceResult;
 		}
 		const Core::ERuntimeResult PendingResult = InWorld.ApplyPending(InNowMilliseconds);
@@ -488,14 +592,37 @@ private:
 	}
 
 	/**
-	 * Motivation: Frame steps 5-6 — reclaims the slots the barrier marked, then starts a GC cycle when idle and advances
-	 *   one bounded slice.
-	 * Responsibilities: Reclaim pending-destroy slots (which the GC sweep skips) and advance the collector by its budget.
+	 * Motivation: A callback must never run while an incremental collector owns the store, so an unfinished prior cycle completes
+	 *   before the next frame starts dispatching callbacks.
+	 * Responsibilities: Return a collector failure before callbacks, otherwise guarantee the collector is idle before dispatch proceeds.
 	 */
-	void ReclaimAndCollect() noexcept
+	Core::ERuntimeResult CompletePriorCollectionBeforeCallbacks() noexcept
 	{
-		// The GC sweep skips pending-destroy slots, so this bounded slice is what frees them.
-		(void)Store.ApplyPendingDestroy(FrameReclamationBudget);
+		if (Collector.Phase() == EGarbageCollectionPhase::Idle)
+		{
+			return Core::ERuntimeResult::Success;
+		}
+
+		const FGarbageCollectionResult Result = Collector.CollectFull();
+		if (Result.Result != Core::ERuntimeResult::Success)
+		{
+			return Result.Result;
+		}
+		return Collector.Phase() == EGarbageCollectionPhase::Idle ? Core::ERuntimeResult::Success : Core::ERuntimeResult::LifecycleLocked;
+	}
+
+	/**
+	 * Motivation: Pending-destroy slots are excluded from collector sweep and must be released after the World barrier.
+	 * Responsibilities: Reclaim only pending-destroy slots within the configured frame budget.
+	 */
+	void ReclaimPendingDestroy() noexcept { (void)Store.ApplyPendingDestroy(FrameReclamationBudget); }
+
+	/**
+	 * Motivation: The bounded collector slice must start only after every frame callback has released its dispatch turn.
+	 * Responsibilities: Start an idle collection and advance it by the configured budget as the frame's final operation.
+	 */
+	void StartBudgetedCollectionAfterCallbacks() noexcept
+	{
 		if (Collector.Phase() == EGarbageCollectionPhase::Idle)
 		{
 			(void)Collector.RequestCollection();
@@ -504,7 +631,19 @@ private:
 	}
 
 	/**
-	 * Motivation: Frame step 7 — outbound work leaves after the world advanced, so messages an actor sent this frame go
+	 * Motivation: World teardown dispatches callbacks, so it must not inherit a collector-owned store lock.
+	 * Responsibilities: Cancel an active incremental collection before world teardown and leave an idle collector unchanged.
+	 */
+	void CancelActiveCollectionBeforeTeardown() noexcept
+	{
+		if (Collector.Phase() != EGarbageCollectionPhase::Idle)
+		{
+			(void)Collector.CancelCollection();
+		}
+	}
+
+	/**
+	 * Motivation: Frame step 6 — outbound work leaves after the world advanced, so messages an actor sent this frame go
 	 *   out in the same frame; the reverse order mirrors startup and shutdown.
 	 * Responsibilities: Post-advance Network, Messaging, then the bound system, skipping any absent optional system.
 	 */
@@ -520,9 +659,14 @@ private:
 			MessagingSystem->PostAdvance(InNowMilliseconds);
 		}
 
-		if (System != nullptr)
+		if (System != nullptr && !IsConfiguredDeviceBoundAsSystem())
 		{
 			System->PostAdvance(InNowMilliseconds);
+		}
+
+		if (NetworkDevice != nullptr)
+		{
+			NetworkDevice->PostAdvance(InNowMilliseconds);
 		}
 	}
 
@@ -542,9 +686,14 @@ private:
 			MessagingSystem->EndPlay();
 		}
 
-		if (System != nullptr)
+		if (System != nullptr && !IsConfiguredDeviceBoundAsSystem())
 		{
 			System->EndPlay();
+		}
+
+		if (NetworkDevice != nullptr)
+		{
+			NetworkDevice->EndPlay();
 		}
 	}
 
@@ -556,6 +705,18 @@ private:
 
 	/** Motivation: Owns composition-root device turns that start and pre-advance before Engine Messaging. */
 	Core::IPlaySystem* System{nullptr};
+
+	/**
+	 * Motivation: Prevents a composition root from accidentally supplying the configured device through both Engine turn-owner APIs.
+	 * Responsibilities: Report whether the legacy caller-bound system and Engine-owned device name the same IPlaySystem subobject.
+	 */
+	bool IsConfiguredDeviceBoundAsSystem() const noexcept
+	{
+		return NetworkDevice != nullptr && System == static_cast<Core::IPlaySystem*>(NetworkDevice);
+	}
+
+	/** Motivation: Borrows the configured transport so Engine advances it exactly once around Messaging and Network turns. */
+	Core::ITransportDevice* NetworkDevice{nullptr};
 
 	/** Motivation: Holds the one optional messaging system; its storage is reserved whether or not a system is created. */
 	Core::TStaticVector<Messaging::FMessagingSystem, 1> MessagingSystems;

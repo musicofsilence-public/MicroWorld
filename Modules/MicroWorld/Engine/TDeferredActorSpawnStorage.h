@@ -265,7 +265,7 @@ public:
 			return;
 		}
 
-		const TObjectCreationResult<AActor> Creation = Slot->Operations.Invoke(Slot->FactoryBytes.data(), InStore, *Descriptor);
+		const TObjectCreationResult<AActor> Creation = Slot->Operations.Invoke(Slot->FactoryBytes.data(), InStore, *Descriptor, InClasses);
 		DestroyFactory(*Slot);
 		if (Creation.Result != EObjectResult::Success)
 		{
@@ -354,6 +354,31 @@ public:
 			}
 		}
 		SealedFactoryCountValue = 0;
+	}
+
+	/**
+	 * Motivation: Makes a failed World startup terminal for its sealed pre-play composition batch.
+	 * Responsibilities: Destroy queued captures, release unpublished actor references, and make every request slot reusable.
+	 */
+	void AbortSealedBatch() noexcept override
+	{
+		for (FSlot& Slot : Slots)
+		{
+			if (Slot.State == ESlotState::Queued)
+			{
+				DestroyFactory(Slot);
+			}
+			if (Slot.State == ESlotState::Queued || Slot.State == ESlotState::ConstructedPendingPublish)
+			{
+				Slot.Actor = {};
+				Slot.CompletionResult = EObjectResult::LifecycleLocked;
+				Slot.State = ESlotState::Failed;
+			}
+		}
+		FactoryQueueCount = 0;
+		PublishQueueCount = 0;
+		SealedFactoryCountValue = 0;
+		SealedPublishCountValue = 0;
 	}
 
 	/**
